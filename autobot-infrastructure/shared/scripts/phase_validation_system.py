@@ -400,18 +400,21 @@ class PhaseValidator:
                         ran=phase_result["checks_ran"],
                         passed=phase_result["checks_passed"],
                         skipped=tuple(phase_result.get("not_checked", {})),
+                        defers_to=tuple(phase_result.get("authoritative_gates", ())),
                     ),
                     float(criteria.get("weight", 50)),
                 )
             )
 
-            measured = "complete" if phase_result["complete"] else phase_result["status"]
-            logger.info(
-                "%s: %.1f%% structural presence (%s)",
-                phase_name,
-                phase_result["structural_presence_percentage"],
-                measured,
-            )
+            if "structural_presence_percentage" in phase_result:
+                logger.info(
+                    "%s: %.1f%% structural presence (%s)",
+                    phase_name,
+                    phase_result["structural_presence_percentage"],
+                    "complete" if phase_result["complete"] else phase_result["status"],
+                )
+            else:
+                logger.info("%s: not scored here -- %s", phase_name, phase_result["why_no_score"])
 
         # #17089: the aggregate comes from the shared policy, which decides
         # whether the figure may be called maturity at all. `overall_maturity`
@@ -545,11 +548,14 @@ class PhaseValidator:
             total_checks += ft
             passed_checks += fp
 
-        score = PhaseScore(ran=total_checks, passed=passed_checks, skipped=tuple(skipped))
+        score = PhaseScore(
+            ran=total_checks,
+            passed=passed_checks,
+            skipped=tuple(skipped),
+            defers_to=tuple(criteria.get("authoritative_gates", ())),
+        )
         results.update(score.as_report())
         results["weight"] = criteria.get("weight", 50)
-        if "authoritative_gates" in criteria:
-            results["authoritative_gates"] = list(criteria["authoritative_gates"])
         return results
 
     def _validate_files(self, files: List[str]) -> Dict[str, Any]:
@@ -874,6 +880,13 @@ class PhaseValidator:
 
         # Check each phase for issues
         for phase_name, phase_data in phases.items():
+            if "authoritative_gates" in phase_data:
+                recommendations.append(
+                    f"🔵 {phase_name}: verified by "
+                    + ", ".join(phase_data["authoritative_gates"])
+                    + " -- this report does not score it"
+                )
+                continue
             present = phase_data["structural_presence_percentage"]
             # #17089: the noun follows what was measured. Calling 100% structural
             # presence "complete" is the original defect in sentence form.
@@ -892,7 +905,12 @@ class PhaseValidator:
                 )
 
         # Performance recommendations
-        overall_completion = sum(p["structural_presence_percentage"] for p in phases.values()) / len(phases)
+        scored_phases = [p for p in phases.values() if "structural_presence_percentage" in p]
+        overall_completion = (
+            sum(p["structural_presence_percentage"] for p in scored_phases) / len(scored_phases)
+            if scored_phases
+            else 0.0
+        )
 
         if overall_completion < 70:
             recommendations.append("🎯 Focus on completing critical infrastructure phases first")
@@ -935,7 +953,9 @@ def _output_json_results(results: Dict[str, Any], output_file: str = None):
             {
                 "name": phase_name,
                 "status": phase_data.get("status", "unknown"),
-                "structural_presence_percentage": phase_data.get("structural_presence_percentage", 0),
+                # `None`, not 0: a deferring phase has no score, and 0 would
+                # render as "measured and found empty" (#17089).
+                "structural_presence_percentage": phase_data.get("structural_presence_percentage"),
                 "complete": phase_data.get("complete", False),
                 "not_checked": phase_data.get("not_checked", {}),
                 "authoritative_gates": phase_data.get("authoritative_gates", []),
@@ -973,7 +993,10 @@ def _output_summary_results(results: Dict[str, Any]):
 
     for phase_name, phase_data in results.get("phases", {}).items():
         status = phase_data.get("status", "unknown")
-        present = phase_data.get("structural_presence_percentage", 0)
+        present = phase_data.get("structural_presence_percentage")
+        if present is None:
+            logger.info("[%s] %s: no score -- see %s", status, phase_name, phase_data.get("authoritative_gates", []))
+            continue
         noun = "complete" if phase_data.get("complete") else "structural presence"
         logger.info("[%s] %s: %.1f%% %s", status, phase_name, present, noun)
 

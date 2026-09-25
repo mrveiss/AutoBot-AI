@@ -137,6 +137,23 @@ def _lambda_paths() -> list[tuple[int, str]]:
     return sorted(longest.items())
 
 
+def _criteria_gate_lists() -> list[tuple[str, list[str]]]:
+    """``(phase, authoritative_gates)`` for phases that declare them."""
+    block = next(
+        stmt
+        for node in ast.walk(_tree())
+        if isinstance(node, ast.ClassDef)
+        for stmt in node.body
+        if isinstance(stmt, ast.Assign) and any(getattr(t, "id", "") == "PHASE_CRITERIA" for t in stmt.targets)
+    )
+    out: list[tuple[str, list[str]]] = []
+    for phase_key, criteria in zip(block.value.keys, block.value.values):
+        for key, value in zip(criteria.keys, criteria.values):
+            if ast.literal_eval(key) == "authoritative_gates":
+                out.append((ast.literal_eval(phase_key), [ast.literal_eval(e) for e in value.elts]))
+    return out
+
+
 def _policy():
     """``phase_score`` loaded by path -- it imports nothing but the stdlib.
 
@@ -358,3 +375,59 @@ class TestTheProgressionManagerDoesNotPromoteOnPresence:
         assert source.count('["complete"]') >= 2, (
             "both progression decisions must consult `complete`, which is False whenever " "anything was skipped"
         )
+
+
+class TestAPhaseVerifiedElsewhereReportsNoScore:
+    """AC3: the UI/UX phase links to the real gates and reports no percentage.
+
+    Whether a UI is consistent, responsive and internationalised is not a
+    question a file-existence sweep can answer at any percentage. The owner's
+    objection was to a number, so the fix is to stop producing one for that
+    phase rather than to produce a better-labelled one.
+    """
+
+    _UI_PHASE = "Phase 6: Enhanced UI/UX"
+
+    def test_the_ui_phase_declares_the_workflows_that_verify_it(self) -> None:
+        gates = dict(_criteria_gate_lists()).get(self._UI_PHASE)
+
+        assert gates, f"{self._UI_PHASE} declares no authoritative_gates"
+        for gate in gates:
+            assert (repo_root() / gate).exists(), f"{self._UI_PHASE} names a workflow that does not exist: {gate}"
+
+    def test_a_deferring_phase_reports_neither_percentage(self) -> None:
+        report = (
+            _policy()
+            .PhaseScore(ran=2, passed=2, skipped=("endpoints",), defers_to=(".github/workflows/frontend-test.yml",))
+            .as_report()
+        )
+
+        assert not [
+            key for key in report if "percentage" in key
+        ], f"a deferring phase must publish no figure of its own; got {sorted(report)}"
+        assert report["status"] == "deferred-to-dedicated-gates"
+        assert report["complete"] is False
+        assert report["authoritative_gates"] == [".github/workflows/frontend-test.yml"]
+        assert "frontend-test" in report["why_no_score"]
+
+    def test_a_deferring_phase_contributes_nothing_to_the_aggregate(self) -> None:
+        # Otherwise its number still reaches the CI gate through the average,
+        # and "reports no score" would be true of the phase and false of the run.
+        policy = _policy()
+        deferring = policy.PhaseScore(ran=2, passed=2, defers_to=(".github/workflows/frontend-test.yml",))
+        scored = policy.PhaseScore(ran=4, passed=2)
+
+        aggregate = policy.overall([(deferring, 100.0), (scored, 100.0)])
+
+        assert aggregate["structural_presence"] == 50.0, "the scored phase alone, not averaged with a 100"
+        assert aggregate["phases_excluded_from_score"] == 1
+        assert aggregate["verified_by_dedicated_gates"] == [".github/workflows/frontend-test.yml"]
+
+    def test_a_non_deferring_phase_still_contributes(self) -> None:
+        # The control: without it, an `overall` that excluded everything would
+        # satisfy the assertion above.
+        policy = _policy()
+        aggregate = policy.overall([(policy.PhaseScore(ran=4, passed=3), 100.0)])
+
+        assert aggregate["structural_presence"] == 75.0
+        assert aggregate["phases_excluded_from_score"] == 0

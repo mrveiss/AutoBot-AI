@@ -82,6 +82,9 @@ class PhaseScore:
     ran: int
     passed: int
     skipped: Tuple[str, ...] = field(default_factory=tuple)
+    #: Workflows that authoritatively test this phase. When set, the phase
+    #: reports NO figure of its own -- see :meth:`as_report`.
+    defers_to: Tuple[str, ...] = field(default_factory=tuple)
 
     @property
     def percentage(self) -> float:
@@ -124,11 +127,32 @@ class PhaseScore:
     def as_report(self) -> Dict[str, Any]:
         """The fields a report may carry for this phase.
 
+        A phase with ``defers_to`` reports NEITHER percentage. "Phase 6:
+        Enhanced UI/UX" is the case that prompted #17089: whether a UI is
+        consistent, responsive and internationalised is not a question a
+        file-existence sweep can answer at any percentage, and publishing a
+        number beside a phase whose real verdict lives in four other workflows
+        invites exactly the reading the owner objected to. So it names those
+        workflows and stays silent on the score.
+
         ``completion_percentage`` is ABSENT, not zero and not null, when checks
         were skipped. A consumer that reaches for it gets a ``KeyError`` instead
         of a number it would have believed -- the same reason a floor guard
         raises rather than returning an empty set.
         """
+        if self.defers_to:
+            return {
+                "checks_ran": self.ran,
+                "checks_passed": self.passed,
+                "complete": False,
+                "status": "deferred-to-dedicated-gates",
+                "authoritative_gates": list(self.defers_to),
+                "why_no_score": (
+                    "this phase is verified by dedicated workflows, not by file presence; "
+                    "see " + ", ".join(self.defers_to)
+                ),
+            }
+
         report: Dict[str, Any] = {
             "structural_presence_percentage": self.percentage,
             "checks_ran": self.ran,
@@ -154,19 +178,29 @@ def overall(scores: Sequence[Tuple[PhaseScore, float]]) -> Dict[str, Any]:
     phase skipped anything. The CI gate reads the former and says so; before
     #17089 it read a completion figure that no live check had contributed to.
     """
-    total_weight = sum(weight for _, weight in scores)
+    # A phase that reports no figure of its own must not contribute one here
+    # either -- otherwise its number still reaches the gate through the average,
+    # and "reports no score" would be true of the phase and false of the run.
+    counted = [(score, weight) for score, weight in scores if not score.defers_to]
+    deferred = sorted({gate for score, _ in scores if score.defers_to for gate in score.defers_to})
+
+    total_weight = sum(weight for _, weight in counted)
     if total_weight <= 0:
         weighted = 0.0
     else:
-        weighted = sum(score.percentage * weight for score, weight in scores) / total_weight
+        weighted = sum(score.percentage * weight for score, weight in counted) / total_weight
 
-    skipped_groups = sorted({group for score, _ in scores for group in score.skipped})
+    skipped_groups = sorted({group for score, _ in counted for group in score.skipped})
     result: Dict[str, Any] = {
         "structural_presence": round(weighted, 2),
         "measures": "completion" if not skipped_groups else "structural presence only",
         "checks_skipped": len(skipped_groups),
         "skipped_detail": {group: NOT_CHECKED for group in skipped_groups},
         "phases_complete": sum(1 for score, _ in scores if score.complete),
+        # Stated rather than left to inference: the aggregate is over fewer
+        # phases than the run evaluated, and this says which and why.
+        "phases_excluded_from_score": sum(1 for score, _ in scores if score.defers_to),
+        "verified_by_dedicated_gates": deferred,
     }
     if not skipped_groups:
         result["overall_maturity"] = round(weighted, 2)
