@@ -161,3 +161,44 @@ class TestLastRefusal:
 
     def test_an_empty_history_has_no_refusal(self):
         assert last_refusal([]) is None
+
+
+class TestTheHistoryWriteIsAtomic:
+    """`LPUSH`, `LTRIM` and `EXPIRE` go in one transaction (#17380 review).
+
+    Sent separately, a failure after `LPUSH` succeeded left the history key with
+    no TTL -- bounded only by the next `LTRIM` that happens to run. `record`
+    returns `False` and `_record` logs it, but neither caller repairs the
+    partial write, so the bounded-history contract broke quietly.
+
+    Same shape and same fix as `token_budget._increment` on this PR. Asserting
+    the TTL rather than the command list, because `record` goes through the real
+    client here: an immortal key is the property that matters, and it stays the
+    property to assert if this ever moves to a Lua script.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_history_key_always_carries_a_ttl(self, redis):
+        assert await record(build_action(17380, intent="verify", outcome=OUTCOME_RAN, estimated_tokens=1)) is True
+
+        keys = [k for k in await redis.keys("*") if "17380" in k]
+        assert keys, "nothing was written, so this asserts nothing"
+        for key in keys:
+            assert await redis.ttl(key) > 0, f"{key} has no expiry and will outlive the history window"
+
+    @pytest.mark.asyncio
+    async def test_a_second_write_keeps_the_expiry(self, redis):
+        """Redis preserves an existing TTL across LPUSH, so the exposed write is
+        the FIRST one -- the one that creates the key. This pins that the
+        transaction covers it and that a later append does not clear it."""
+        for _ in range(2):
+            await record(build_action(17381, intent="verify", outcome=OUTCOME_RAN, estimated_tokens=1))
+
+        keys = [k for k in await redis.keys("*") if "17381" in k]
+        assert keys
+        # A loop, not `all(await ... for ...)`: an await inside a generator
+        # expression makes it an ASYNC generator, which `all()` cannot consume
+        # -- it raises TypeError rather than evaluating to False, so the
+        # assertion never runs.
+        for key in keys:
+            assert await redis.ttl(key) > 0

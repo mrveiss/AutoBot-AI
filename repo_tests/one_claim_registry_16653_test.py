@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import ast
 import re
+from functools import lru_cache
 from pathlib import Path
 
 from repo_tests._paths import repo_root
@@ -160,8 +161,16 @@ def _iter_sources(root: Path | None = None) -> list[Path]:
     files: list[Path] = []
     for tree in _ROOTS:
         for path in sorted((root / tree).rglob("*.py")):
-            posix = path.as_posix()
-            if "/tests/" in posix or path.name.endswith("_test.py") or path.name.startswith("test_"):
+            # Relative to `root`, not `path.as_posix()` (review finding on
+            # #17380). The absolute form carries the checkout's own location, so
+            # a repo living under a directory called `tests` -- `/srv/tests/AutoBot-AI`
+            # -- matched `/tests/` on EVERY module and excluded the entire sweep.
+            # The floor tests would fail, but their message blames the matcher or
+            # the reach, not the path filter, so the cause would be looked for in
+            # the wrong place. Same family as an exclusion keyed on the wrong
+            # path form silently covering nothing.
+            relative = path.relative_to(root).as_posix()
+            if "/tests/" in f"/{relative}" or path.name.endswith("_test.py") or path.name.startswith("test_"):
                 continue
             files.append(path)
     return files
@@ -208,16 +217,23 @@ def _sites_in_source(source: str, label: str) -> list[str]:
     return found
 
 
-def _unreadable() -> list[str]:
-    """Modules the sweep could not parse, as `path (reason)`.
+@lru_cache(maxsize=1)
+def _sweep() -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """One pass over the tree, shared: `(sites, unreadable)`.
 
-    Returned rather than swallowed (review finding on #17380). Both handlers
-    below used to `continue`, so a module the sweep could not read contributed
-    no findings and said nothing -- the sweep's own blind spots were
-    indistinguishable from a clean file, which is the failure this guard exists
-    to prevent applied to itself.
+    Cached because five tests called `_scan()` and one called `_unreadable()`,
+    and each re-read and re-parsed every module under `_ROOTS` -- nearly 3,000
+    files, six times over (review finding on #17380). That was most of this
+    file's 127-second runtime, and it is exactly the cost that pushes a
+    pre-push selection past its budget and blocks a push for a reason
+    unrelated to the change being pushed.
+
+    Safe to cache because nothing here mutates the tree, and the detector
+    fixtures call `_sites_in_source` directly on inline sources rather than
+    through the sweep -- so a cached result is never stale within a run.
     """
     root = repo_root()
+    sites: list[str] = []
     blind: list[str] = []
     for path in _iter_sources():
         label = path.relative_to(root).as_posix()
@@ -227,25 +243,26 @@ def _unreadable() -> list[str]:
             blind.append(f"{label} (not utf-8)")
             continue
         try:
-            ast.parse(source)
+            sites.extend(_sites_in_source(source, label))
         except SyntaxError as exc:
             blind.append(f"{label} (SyntaxError: {exc.msg})")
-    return blind
+    return tuple(sites), tuple(blind)
+
+
+def _unreadable() -> list[str]:
+    """Modules the sweep could not parse, as `path (reason)`.
+
+    Returned rather than swallowed (review finding on #17380). Both handlers
+    below used to `continue`, so a module the sweep could not read contributed
+    no findings and said nothing -- the sweep's own blind spots were
+    indistinguishable from a clean file, which is the failure this guard exists
+    to prevent applied to itself.
+    """
+    return list(_sweep()[1])
 
 
 def _scan() -> list[str]:
-    root = repo_root()
-    sites: list[str] = []
-    for path in _iter_sources():
-        try:
-            source = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            continue
-        try:
-            sites.extend(_sites_in_source(source, path.relative_to(root).as_posix()))
-        except SyntaxError:
-            continue
-    return sites
+    return list(_sweep()[0])
 
 
 def _files_with_sites() -> set[str]:
@@ -404,8 +421,11 @@ def test_the_sweep_parses_every_module_it_reads() -> None:
     parsed = REACH.examined(repo_root())
     REACH.completed(len(parsed))
 
-    assert len(parsed) >= 2_976, (
-        f"the sweep reached {len(parsed)} modules, expected at least 2,976 -- it has stopped "
+    # `REACH.floor`, not a second literal (review finding on #17380): the
+    # declaration above already holds the number, and two copies are two things
+    # to update. The repo's rule is that a vacuity floor binds to REACH.
+    assert len(parsed) >= REACH.floor, (
+        f"the sweep reached {len(parsed)} modules, expected at least {REACH.floor} -- it has stopped "
         "reading its subject, so every assertion above would pass by matching nothing"
     )
 

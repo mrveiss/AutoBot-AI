@@ -120,6 +120,20 @@ RESERVED_KINDS = MappingProxyType(
 )
 
 
+#: Kinds that name a single thing rather than a tree, so a claim on one is an
+#: exact match and nothing else (#16951, #17091). Enforced at PARSE time
+#: (review finding on #17380): `overlaps` compares segment-aligned prefixes, so
+#: `issue:42/a` and `issue:42/b` are NOT overlapping and BOTH exclusive claims
+#: succeed -- on the same issue, which is precisely the collision the registry
+#: exists to prevent. The module already documented `issue` as "flat ... the
+#: segment is always exactly one"; parsing simply did not enforce it.
+#:
+#: All four flat kinds, not just the one the review named: `provider:x/y` and
+#: `provider:x/z` have the identical hole. Nothing in the tree uses a
+#: multi-segment flat scope, checked before enforcing.
+FLAT_KINDS = frozenset({"issue", "provider", "cpu", "queue"})
+
+
 def _require_kind(kind: str) -> None:
     """Refuse a kind reserved for another module, or one that is not a kind.
 
@@ -203,6 +217,8 @@ class Scope:
                 raise ScopeError(f"scope {raw!r} contains a relative segment {segment!r}")
             if not _SEGMENT.match(segment):
                 raise ScopeError(f"scope {raw!r} has an unusable segment {segment!r}")
+        if kind in FLAT_KINDS and len(segments) > 1:
+            raise ScopeError(f"scope {raw!r} has {len(segments)} segments; {kind!r} is flat and takes exactly one")
         return cls(kind=kind, path="/".join(segments))
 
     def overlaps(self, other: Scope) -> bool:

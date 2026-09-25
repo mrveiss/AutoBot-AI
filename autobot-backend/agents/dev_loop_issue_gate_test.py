@@ -59,6 +59,15 @@ async def redis(monkeypatch):
     # about, so it must not be the test harness's own behaviour.
     monkeypatch.setattr(dev_loop_actions, "get_async_redis_client", _client)
     monkeypatch.setattr(token_budget.TokenBudgetGate, "_get_redis", AsyncMock(return_value=client))
+    # Both dev-loop gates disabled as a PREMISE, not inherited from the
+    # environment (review finding on #17380). Most tests here assume they are
+    # off -- `test_a_successful_action_is_recorded_with_its_cost` passes
+    # `estimated_tokens=1234`, `test_the_history_is_newest_first_across_several_attempts`
+    # runs two actions -- and in a process with either variable set they failed
+    # for a reason that looked like a broken gate. The tests that want a budget
+    # set it themselves afterwards, so their `monkeypatch.setattr` still wins.
+    monkeypatch.setattr(token_budget, "DEV_LOOP_TOKEN_BUDGET", 0)
+    monkeypatch.setattr(token_budget, "DEV_LOOP_RATE_PER_HOUR", 0)
     yield client
     await client.flushall()
 

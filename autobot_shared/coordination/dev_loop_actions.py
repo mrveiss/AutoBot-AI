@@ -141,9 +141,18 @@ async def record(action: DevLoopAction) -> bool:
         if client is None:
             logger.warning("dev-loop actions: Redis unavailable, action on #%s NOT recorded", action.issue)
             return False
-        await client.lpush(key, json.dumps(asdict(action)))
-        await client.ltrim(key, 0, ACTION_LOG_MAX - 1)
-        await client.expire(key, ACTION_LOG_TTL_S)
+        # One transaction, not three round-trips (review finding on #17380).
+        # If `LPUSH` succeeded and `EXPIRE` then failed, the history key was
+        # left with no TTL and unbounded by anything but `LTRIM` -- and
+        # `record` returns False while neither caller repairs the partial
+        # write, so the bounded-history contract broke silently. Same shape,
+        # and the same fix, as `token_budget._increment` in this PR: before
+        # EXEC none of the three has applied, after EXEC all of them have.
+        async with client.pipeline(transaction=True) as pipe:
+            pipe.lpush(key, json.dumps(asdict(action)))
+            pipe.ltrim(key, 0, ACTION_LOG_MAX - 1)
+            pipe.expire(key, ACTION_LOG_TTL_S)
+            await pipe.execute()
         return True
     except Exception:  # noqa: BLE001 -- an audit write must not break the action it describes
         logger.warning("dev-loop actions: failed to record action on #%s", action.issue, exc_info=True)
