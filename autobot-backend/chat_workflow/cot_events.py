@@ -187,24 +187,46 @@ def _causal_payload(causal_chain: List[CausalLink] | None) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _session_channel(payload: dict) -> str | None:
+    """The owning chat session's channel, read from the payload (#17354).
+
+    Every emitter below already puts `session_id` in the payload -- its own
+    docstrings called it "forwarded to frontend for routing", and that is the
+    defect: the routing happened in the CLIENT. `useReasoningTrace` dropped
+    events whose `session_id` did not match its own, so a trace of one
+    operator's tool calls, tool results and streamed LLM text reached every
+    signed-in client and was discarded there out of politeness.
+
+    `session:{id}` is owner-checked by `_authorize_conversation_channel`
+    (`api/live_events.py`), so the filtering now happens where it is enforced.
+    """
+    session_id = payload.get("session_id")
+    return f"session:{session_id}" if session_id else None
+
+
 def _try_publish(event_type: str, payload: dict) -> None:
-    """Fire-and-forget publish to the global EventManager.
+    """Fire-and-forget publish of one chain-of-thought event.
 
     Wraps the publish call in create_task so it never blocks the caller.
-    Silently skips if the event bus is unavailable (e.g. in unit tests).
+    Silently skips if the event bus is unavailable (e.g. in unit tests), and
+    skips an event with no session to address (#17354): a trace with no owner
+    would otherwise have to go to `global`, which every authenticated client
+    receives, and these payloads carry tool arguments and model output.
 
     Args:
         event_type: Dot-namespaced event type string (e.g. "agent.tool.call").
-        payload:    Dict payload that will be broadcast to WebSocket clients.
+        payload:    Dict payload delivered to that session's WebSocket clients.
     """
+    channel = _session_channel(payload)
+    if channel is None:
+        logger.debug("cot_events: %s carries no session_id, not publishing it (#17354)", event_type)
+        return
     try:
         from events.bus import PersistStrategy, get_event_bus
 
         try:
             loop = asyncio.get_running_loop()
-            task = loop.create_task(
-                get_event_bus().publish("global", event_type, payload, persist=PersistStrategy.NONE)
-            )
+            task = loop.create_task(get_event_bus().publish(channel, event_type, payload, persist=PersistStrategy.NONE))
             task.add_done_callback(
                 lambda t: (
                     logger.debug("cot_events: publish error: %s", t.exception())
