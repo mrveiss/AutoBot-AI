@@ -232,9 +232,12 @@ async def push_transcript_to_kb(
         )
 
         if result.get("status") == "success":
+            # add_document returns the id under "fact_id" -- "doc_id" is a key it has
+            # never set, so the response advertised a document identifier that was
+            # always null and gave the caller nothing to find the segment by (#17022).
             return TranscriptKBPushResponse(
                 success=True,
-                doc_id=result.get("doc_id"),
+                doc_id=result.get("fact_id"),
                 message="Transcript segment added to Knowledge Base",
             )
         # Security: log the KB-internal reason; return only a generic message
