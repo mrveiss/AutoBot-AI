@@ -128,7 +128,7 @@ jobs:
         # (e.g. import error). A non-zero exit due to Redis unavailability still
         # writes valid JSON — overwriting it with 0 was the cause of false failures.
         python3 -c 'import json; json.load(open("phase_validation_results.json"))' 2>/dev/null \
-          || echo '{"overall_maturity": 0, "phases": []}' > phase_validation_results.json
+          || echo '{"structural_presence": 0, "overall_maturity": null, "measures": "nothing ran", "skipped_detail": {}, "phases": []}' > phase_validation_results.json
 
         # Display results summary
         echo "## Phase Validation Results" >> "$GITHUB_STEP_SUMMARY"
@@ -136,7 +136,17 @@ jobs:
         # verbatim, and a backslash inside an f-string expression is a
         # SyntaxError on every Python version (#15122). The maturity value is
         # bound to a name first so the format spec needs no nested quoting.
-        python3 -c 'import json; r=json.load(open("phase_validation_results.json")); m=r.get("overall_maturity", 0); print("**Overall System Maturity:** {:.1f}%".format(m))' >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "Results not available" >> "$GITHUB_STEP_SUMMARY"
+        # #17089: this run is --ci-mode, which cannot reach a live stack, so it
+        # measures STRUCTURAL PRESENCE and not completion. Reporting it as
+        # "maturity" was how "Phase 6: Enhanced UI/UX 100%" came to mean
+        # "App.vue and package.json exist". `overall_maturity` is null whenever
+        # a group was skipped, and the summary says so rather than printing a
+        # figure with a name it did not earn.
+        python3 -c 'import json; r=json.load(open("phase_validation_results.json")); print("**Structural presence:** {:.1f}%".format(r.get("structural_presence", 0))); print(""); print("Measures: {}".format(r.get("measures", "unknown"))); print("Completion: {}".format("measured" if r.get("overall_maturity") is not None else "NOT measured in CI (no live stack)"))' >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "Results not available" >> "$GITHUB_STEP_SUMMARY"
+        # One line, and `chr(10)` rather than an escape: a bare newline here made
+        # the `for` start at column 0, which YAML read as a new mapping key, and
+        # a backslash inside an f-string expression is a SyntaxError (#15122).
+        python3 -c 'import json; r=json.load(open("phase_validation_results.json")); d=r.get("skipped_detail", {}); print(chr(10) + ("Not checked:" + chr(10) + chr(10).join("- {}: {}".format(k, v) for k, v in d.items()) if d else "Nothing skipped."))' >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
 
     - name: Generate Validation Dashboard
       env:
@@ -157,10 +167,15 @@ jobs:
         set -euo pipefail
         echo "Checking phase validation gate..."
 
-        # Extract overall maturity from results
-        MATURITY=$(python3 -c 'import json; f=open("phase_validation_results.json"); r=json.load(f); print(r.get("overall_maturity", 0))' 2>/dev/null || echo "0")
+        # #17089: gate on `structural_presence`, which is what a --ci-mode run
+        # actually measures. It reads the same number the old gate did -- the
+        # thresholds below are unchanged -- but under a name that does not claim
+        # the live checks contributed to it. `overall_maturity` is null here by
+        # design, and `.get("overall_maturity", 0)` would have returned None and
+        # broken `bc` rather than failing loudly.
+        MATURITY=$(python3 -c 'import json; f=open("phase_validation_results.json"); r=json.load(f); v=r.get("structural_presence"); print(v if isinstance(v, (int, float)) else 0)' 2>/dev/null || echo "0")
 
-        echo "System maturity: ${MATURITY}%"
+        echo "Structural presence: ${MATURITY}% (completion is NOT measured in CI mode)"
 
         # Set minimum maturity threshold for different branches
         if [ "$GH_REF" == "refs/heads/release" ]; then
@@ -173,11 +188,11 @@ jobs:
 
         # Compare maturity to threshold
         if (( $(echo "$MATURITY >= $THRESHOLD" | bc -l) )); then
-          echo "Phase validation passed: $MATURITY% >= $THRESHOLD%"
+          echo "Structural presence gate passed: $MATURITY% >= $THRESHOLD%"
         else
-          echo "::error::Phase validation below threshold: $MATURITY% < $THRESHOLD%"
-          echo "## Phase Validation Below Threshold" >> "$GITHUB_STEP_SUMMARY"
-          echo "Current maturity ($MATURITY%) is below threshold ($THRESHOLD%)" >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Structural presence below threshold: $MATURITY% < $THRESHOLD%"
+          echo "## Structural Presence Below Threshold" >> "$GITHUB_STEP_SUMMARY"
+          echo "Structural presence ($MATURITY%) is below threshold ($THRESHOLD%)" >> "$GITHUB_STEP_SUMMARY"
           exit 1
         fi
 

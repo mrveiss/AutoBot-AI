@@ -272,3 +272,129 @@ def test_the_checker_needs_no_third_party_import():
         and line.split()[1].split(".")[0] not in {"argparse", "logging", "pathlib", "re", "sys"}
     ]
     assert third_party == [], f"the checker imports non-stdlib modules: {third_party}"
+
+
+# --------------------------------------------------------------------------
+# #17448 — the two planes may both declare a package and still install
+# different releases. #14551 above checks PRESENCE and says so itself.
+# --------------------------------------------------------------------------
+
+
+def test_constraint_of_strips_extras_and_markers():
+    assert checker.constraint_of("sqlalchemy>=2.0.54,<2.1") == ">=2.0.54,<2.1"
+    assert checker.constraint_of("sqlalchemy[asyncio] >= 2.0.54") == ">=2.0.54"
+    assert checker.constraint_of("uvicorn==0.53.0 ; python_version >= '3.12'") == "==0.53.0"
+    assert checker.constraint_of("greenlet") == ""
+
+
+def test_equivalent_spellings_are_not_a_difference():
+    """`packaging` normalises versions, so the same constraint spelled two ways agrees.
+
+    This was the harmless half of what review found: the textual version called
+    `==1.0` and `==1.0.0` different. Noise rather than danger, but noise is how
+    a guard gets ignored.
+    """
+    assert checker.constraints_differ("==1.0", "==1.0.0") is False
+    assert checker.constraints_differ(">=1.0", ">=1.0") is False
+
+
+def test_an_exclusion_is_a_difference():
+    """The dangerous half, and the reason this is not a text comparison.
+
+    `">=1,!=2.1"` and `">=1"` were reported identical. If 2.1 is the newest
+    release they select different versions, and a missed pair here is silent.
+    """
+    assert checker.constraints_differ(">=1,!=2.1", ">=1") is True
+
+
+def test_differing_lower_bounds_are_a_difference():
+    """No carve-out for "both take latest" -- that was an unstated assumption.
+
+    The first version treated two purely lower-bound specifiers as equivalent
+    because both install whatever published last. That holds only while a
+    release exists above both floors: with only 2.0.53 published, `>=2.0.52`
+    installs and `>=2.0.54` does not resolve at all. The guard asserts what it
+    can check -- that the planes DECLARE the same thing.
+    """
+    assert checker.constraints_differ(">=2.0.52", ">=2.0.54") is True
+
+
+def test_a_pin_against_an_unbounded_floor_differs():
+    """The shape that took SQLAlchemy 2.1.0 into one venv and 2.0.54 into another."""
+    assert checker.constraints_differ("==2.0.54", ">=2.0.54") is True
+    assert checker.constraints_differ(">=2.0.54,<2.1", ">=2.0.54") is True
+    assert checker.constraints_differ("==1.0", "==2.0") is True
+
+
+def test_an_unparseable_specifier_is_not_proof_of_sameness():
+    """Failing to parse must not read as "these agree"."""
+    assert checker.constraints_differ("not-a-specifier", ">=1") is True
+
+
+def test_the_comparison_is_per_service_file_not_a_merged_plane():
+    """A deliberate per-service split must not be reported as a conflict.
+
+    `websockets` is capped `<16` in autobot-backend because langgraph-sdk
+    requires it, and floored `>=17.1` in autobot-slm-backend, which has had its
+    own venv since #16394. Both are documented at their own site. A merged
+    "service plane" would either report that as a conflict -- training people to
+    ignore this guard -- or silently discard one of the two constraints through
+    `production_requirement_names`' last-wins update, and then compare the
+    survivor. Entries are keyed by file for exactly that reason.
+    """
+    drift, compared = checker.compute_constraint_drift(REPO_ROOT)
+    assert compared > 0
+    assert all("::" in entry for entry in drift)
+    files = {entry.split("::", 1)[0] for entry in drift}
+    assert files <= set(checker._PRODUCTION_REQUIREMENTS), f"unexpected file keys: {files}"
+
+
+def test_the_constraint_audit_is_clean_on_the_real_tree():
+    """The baseline matches what the tree actually declares, both directions."""
+    compared, problems = checker.audit_constraint_drift(REPO_ROOT)
+    assert compared > 0, "the constraint check compared nothing"
+    assert not problems, "\n".join(problems)
+
+
+def test_the_baseline_never_covers_every_compared_pair() -> None:
+    """A ceiling on the record, and deliberately NO floor.
+
+    An earlier version also asserted the baseline was non-empty. That punishes
+    the person who finishes the work: fixing the last divergent pair means
+    deleting its entry, and the assertion then fails while `audit_constraint_drift`
+    reports a perfectly clean tree (#17502 review). A ratchet that cannot reach
+    zero is a ratchet nobody can finish.
+
+    The ceiling stays. If every compared pair were baselined the guard would
+    permit anything and the number would stop meaning improvement.
+    """
+    baseline = checker.load_constraint_baseline(REPO_ROOT)
+    _, compared = checker.compute_constraint_drift(REPO_ROOT)
+    assert compared > 0, "nothing was compared, so the ceiling below asserts nothing"
+    assert len(baseline) < compared, "every shared pair is baselined -- nothing is being held"
+
+
+def test_both_production_files_are_populated_on_the_real_tree() -> None:
+    """Emptiness is a defect HERE, where a synthetic fixture cannot reach.
+
+    `unreadable_production_files` flags absence only, because
+    `_write_tree` empties the SLM file on purpose to isolate a backend-only
+    case. That leaves one real hazard uncovered: a production file that exists
+    and declares nothing, which the merged set would hide behind the other
+    file (#17502 review). This is where that is checked.
+    """
+    for rel in checker._PRODUCTION_REQUIREMENTS:
+        declared = checker.parse_requirements(REPO_ROOT / rel)
+        assert declared, f"{rel} parsed to zero packages — the guard covers nothing for it"
+
+
+def test_a_missing_production_file_is_not_masked_by_the_other(tmp_path) -> None:
+    """The reviewer's case: one healthy file must not hide an absent one."""
+    _write_tree(tmp_path, prod_pkgs=["widget>=1.0"], ci_pkgs=["widget==1.0"], allowlist=[])
+    (tmp_path / "autobot-slm-backend" / "requirements.txt").unlink()
+
+    _, problems = checker.audit_drift(tmp_path)
+    assert any("autobot-slm-backend/requirements.txt is missing" in p for p in problems)
+
+    _, constraint_problems = checker.audit_constraint_drift(tmp_path)
+    assert any("autobot-slm-backend/requirements.txt is missing" in p for p in constraint_problems)
