@@ -90281,6 +90281,14 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * RedisDatabase
+         * @description Type-safe database enumeration aligned with redis-databases.yaml (#2670).
+         *
+         *     Each value corresponds to a Redis database number (0-15).
+         * @enum {integer}
+         */
+        RedisDatabase: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 13 | 14 | 15 | 8 | 0;
+        /**
          * RedisFileScanRequest
          * @description Request for scanning a single file for Redis optimizations.
          */
@@ -139879,7 +139887,7 @@ export interface operations {
         parameters: {
             query?: {
                 async_client?: boolean;
-                database?: string;
+                database?: components["schemas"]["RedisDatabase"] | string;
             };
             header?: never;
             path?: never;
@@ -140037,7 +140045,7 @@ export interface operations {
                 agent_id?: string | null;
                 conversation_id?: string | null;
                 async_client?: boolean;
-                database?: string;
+                database?: components["schemas"]["RedisDatabase"] | string;
             };
             header?: never;
             path?: never;
@@ -140069,7 +140077,7 @@ export interface operations {
         parameters: {
             query?: {
                 async_client?: boolean;
-                database?: string;
+                database?: components["schemas"]["RedisDatabase"] | string;
             };
             header?: never;
             path?: never;
@@ -140105,7 +140113,7 @@ export interface operations {
         parameters: {
             query?: {
                 async_client?: boolean;
-                database?: string;
+                database?: components["schemas"]["RedisDatabase"] | string;
             };
             header?: never;
             path: {
@@ -140139,7 +140147,7 @@ export interface operations {
         parameters: {
             query?: {
                 async_client?: boolean;
-                database?: string;
+                database?: components["schemas"]["RedisDatabase"] | string;
             };
             header?: never;
             path: {
@@ -140174,7 +140182,7 @@ export interface operations {
             query: {
                 session_id: string;
                 async_client?: boolean;
-                database?: string;
+                database?: components["schemas"]["RedisDatabase"] | string;
             };
             header?: never;
             path?: never;
@@ -140210,7 +140218,7 @@ export interface operations {
         parameters: {
             query?: {
                 async_client?: boolean;
-                database?: string;
+                database?: components["schemas"]["RedisDatabase"] | string;
             };
             header?: never;
             path: {
@@ -140357,7 +140365,7 @@ export interface operations {
         parameters: {
             query?: {
                 async_client?: boolean;
-                database?: string;
+                database?: components["schemas"]["RedisDatabase"] | string;
             };
             header?: never;
             path: {
@@ -140395,7 +140403,7 @@ export interface operations {
         parameters: {
             query?: {
                 async_client?: boolean;
-                database?: string;
+                database?: components["schemas"]["RedisDatabase"] | string;
             };
             header?: never;
             path: {
@@ -140429,7 +140437,7 @@ export interface operations {
         parameters: {
             query?: {
                 async_client?: boolean;
-                database?: string;
+                database?: components["schemas"]["RedisDatabase"] | string;
             };
             header?: never;
             path: {

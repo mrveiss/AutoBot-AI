@@ -399,7 +399,9 @@ onMounted(async () => {
               class="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200"
             >
               <div>
-                <h3 class="font-medium text-gray-900">{{ formatDbName(String(dbName)) }} (DB {{ dbInfo.database }})</h3>
+                <h3 class="font-medium text-gray-900">
+                  {{ $t('settings.cache.databaseLabel', { name: formatDbName(String(dbName)), db: dbInfo.database }) }}
+                </h3>
                 <div class="flex items-center gap-3 mt-2 text-sm">
                   <span class="text-gray-600">{{ $t('settings.admin.cacheSettings.value0Keys', { value0: dbInfo.key_count || 0 }) }}</span>
                   <span class="text-gray-400">|</span>

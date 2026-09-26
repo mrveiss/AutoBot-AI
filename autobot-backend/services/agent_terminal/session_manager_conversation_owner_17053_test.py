@@ -110,12 +110,11 @@ async def test_a_chat_created_session_is_stamped_with_the_conversation_owner(gra
 
 @pytest.mark.asyncio
 async def test_an_explicit_creator_is_never_replaced(grants):
+    """With no conversation to own, the creator stands; binding someone else's is #17422's refusal."""
     manager = SessionManager(chat_history_manager=_ChatHistory(owner="alice"))
     _creatable(manager)
 
-    session = await manager.create_session(
-        agent_id="a", agent_role=AgentRole.CHAT_AGENT, conversation_id="conv-1", owner="carol"
-    )
+    session = await manager.create_session(agent_id="a", agent_role=AgentRole.CHAT_AGENT, owner="carol")
 
     assert session.owner == "carol"
 

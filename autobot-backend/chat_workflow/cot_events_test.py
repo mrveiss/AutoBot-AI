@@ -406,3 +406,65 @@ class TestSensitiveDataRedaction:
             )
             result = link.to_dict()
             assert result["reason"] == expected, f"Failed for {reason}"
+
+
+class TestSessionScopedPublishing:
+    """#17354: a trace belongs to one session, not to every signed-in client.
+
+    These events carry tool names, tool arguments, result summaries and streamed
+    model text. They were published to `global`, which `_authorize_channel`
+    admits every authenticated client to, and `useReasoningTrace` discarded the
+    ones whose `session_id` did not match its own -- filtering in the client,
+    after the bytes had already arrived.
+    """
+
+    def test_the_channel_is_the_owning_session(self):
+        assert cot_events._session_channel({"session_id": "s1"}) == "session:s1"
+
+    def test_no_session_means_no_channel(self):
+        assert cot_events._session_channel({}) is None
+        assert cot_events._session_channel({"session_id": None}) is None
+        assert cot_events._session_channel({"session_id": ""}) is None
+
+    @staticmethod
+    def _publish_calls(**emit_kwargs) -> list:
+        """Every `publish` the emitter made, through a stand-in event bus.
+
+        `_try_publish` imports `events.bus` inside the function, so injecting the
+        module is what makes the publish observable here -- the rest of this file
+        loads `cot_events` standalone, where that import fails and every publish
+        is silently skipped.
+        """
+        import asyncio
+        import types
+
+        calls: list = []
+
+        class _Bus:
+            async def publish(self, channel, event_type, payload, persist=None):
+                calls.append((channel, event_type, payload))
+
+        fake = types.ModuleType("events.bus")
+        fake.PersistStrategy = types.SimpleNamespace(NONE="none")
+        fake.get_event_bus = _Bus
+        events_pkg = types.ModuleType("events")
+        events_pkg.bus = fake
+
+        async def _run():
+            emit_tool_call("shell", {"cmd": "ls"}, **emit_kwargs)
+            await asyncio.sleep(0)
+
+        with patch.dict(sys.modules, {"events": events_pkg, "events.bus": fake}):
+            asyncio.run(_run())
+        return calls
+
+    def test_a_tool_call_publishes_on_its_own_sessions_channel(self):
+        """Positive control: without this, the assertion below proves nothing."""
+        calls = self._publish_calls(session_id="s1")
+
+        assert [c[0] for c in calls] == ["session:s1"]
+        assert calls[0][1] == "agent.tool.call"
+
+    def test_a_tool_call_with_no_session_is_not_published_at_all(self):
+        """Dropped rather than broadcast: an unaddressable trace has no safe channel."""
+        assert self._publish_calls() == []
