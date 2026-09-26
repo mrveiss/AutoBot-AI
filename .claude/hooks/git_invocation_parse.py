@@ -103,6 +103,7 @@ Split there in #15835 for size, along the seam the file already had.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -171,7 +172,7 @@ _VALUE_GLOBALS = frozenset(
 _NEW_BRANCH = frozenset({"-b", "-B", "-c", "--create", "--orphan"})
 
 #: Subcommands this parser reports on.
-_SUBCOMMANDS = ("checkout", "switch", "restore", "reset", "clean")
+_SUBCOMMANDS = ("checkout", "switch", "restore", "reset", "clean", "push")
 
 #: Subcommands that accept a pathspec, so naming a source ref makes the
 #: invocation an overwrite of the working tree rather than a branch move.
@@ -215,6 +216,40 @@ _UNRESOLVED_SUBCOMMAND_MARKERS = ("$", "`")
 #: The ``flags`` value for an invocation reported because its subcommand is
 #: unresolvable, not because it is known to be ``checkout``/``switch``.
 AMBIGUOUS_SUBCOMMAND_FLAG = "ambiguous"
+
+#: ``git push`` options that consume the FOLLOWING word as their value, so it
+#: is neither the remote nor a refspec. Without this, ``-o ci.skip`` makes
+#: ``ci.skip`` a destination and ``git push -o x origin main`` hides ``main``
+#: behind an off-by-one. ``--force-with-lease`` is absent deliberately: it
+#: takes its value attached (``=<ref>``) and consumes nothing.
+_PUSH_VALUE_OPTIONS = frozenset({"-o", "--push-option", "--repo", "--receive-pack", "--exec"})
+
+#: ``git push`` options that send every branch, so a protected ref goes without
+#: ever being named in the command (#14144). ``--tags`` is absent: it sends
+#: tags, and a tag is not a branch this guard protects.
+_PUSH_EVERY_BRANCH = frozenset({"--all", "--mirror"})
+
+#: Separator between the destination refs in a push record's ``arg`` field.
+#: A control character on purpose: ``git check-ref-format`` forbids bytes below
+#: \040 in a ref name, so this cannot occur inside a destination and split one
+#: into two. A comma would -- commas are legal in branch names.
+DESTINATION_SEPARATOR = "\x1e"
+
+#: Flag: the push names no refspec, so what it sends is decided by the current
+#: branch and ``push.default`` rather than by the command. ``git push`` and
+#: ``git push origin`` are both this; the second reached the protected branch
+#: because the old guard's bare-push pattern required nothing after ``push``
+#: (#14144). The caller must resolve HEAD to rule on it.
+PUSH_CURRENT_FLAG = "push-current"
+
+#: Flag: ``--all``/``--mirror``, so every branch is included.
+PUSH_EVERY_BRANCH_FLAG = "push-all"
+
+#: Flag: a force push in any spelling -- ``--force``, ``-f``, a bundled ``-fu``,
+#: or a ``+`` leading a refspec. ``--force-with-lease`` and
+#: ``--force-if-includes`` do NOT set it; they are the safe forms this
+#: repository asks for.
+FORCE_PUSH_FLAG = "force-push"
 
 
 def _join_dir(current: str, value: str) -> str:
@@ -341,8 +376,80 @@ def _collect_args(tokens: list[str], index: int) -> tuple[list[str], int]:
     return args, cursor
 
 
+def _push_positionals(args: list[str]) -> list[str]:
+    """The non-option words of a push, with option values removed.
+
+    An option's value is skipped rather than read as a refspec: otherwise
+    ``git push -o ci.skip origin`` offers ``ci.skip`` as the remote and
+    ``origin`` as a destination, and every later judgement is off by one.
+    """
+    positionals: list[str] = []
+    index = 0
+    while index < len(args):
+        token = args[index]
+        if token == "--":
+            positionals.extend(args[index + 1 :])
+            break
+        if token in _PUSH_VALUE_OPTIONS:
+            index += 2
+            continue
+        if token.startswith("-") and token != "-":
+            index += 1
+            continue
+        positionals.append(token)
+        index += 1
+    return positionals
+
+
+def _destination_of(refspec: str) -> str:
+    """The ref a refspec WRITES TO, normalised to a bare branch name.
+
+    ``src:dst`` writes to ``dst``, and a bare ``src`` writes to the same name
+    on the remote. Reading the destination rather than matching the whole
+    refspec is what separates ``main:feature`` -- legitimate, and refused by
+    the old pattern -- from ``feature:main``, which is the thing to stop.
+
+    A leading ``+`` is the force marker and ``refs/heads/`` is the long
+    spelling of the same branch; both are stripped so one ref has one spelling.
+    """
+    spec = refspec[1:] if refspec.startswith("+") else refspec
+    source, separator, destination = spec.partition(":")
+    ref = destination if separator else source
+    for prefix in ("refs/heads/", "heads/"):
+        if ref.startswith(prefix):
+            return ref[len(prefix) :]
+    return ref
+
+
+def _is_force_push(arg: str) -> bool:
+    """True for a force spelling that is not one of the lease-guarded forms."""
+    if arg.startswith("--force-with-lease") or arg.startswith("--force-if-includes"):
+        return False
+    if arg == "--force":
+        return True
+    return bool(re.fullmatch(r"-[A-Za-z]*f[A-Za-z]*", arg))
+
+
+def _classify_push(args: list[str]) -> tuple[list[str], str]:
+    """``(flags, destinations)`` for a push -- which refs it would write to."""
+    positionals = _push_positionals(args)
+    refspecs = positionals[1:]
+    destinations = [ref for ref in (_destination_of(spec) for spec in refspecs) if ref]
+
+    flags: list[str] = []
+    if any(arg in _PUSH_EVERY_BRANCH for arg in args):
+        flags.append(PUSH_EVERY_BRANCH_FLAG)
+    if not refspecs:
+        flags.append(PUSH_CURRENT_FLAG)
+    if any(_is_force_push(arg) for arg in args) or any(spec.startswith("+") for spec in refspecs):
+        flags.append(FORCE_PUSH_FLAG)
+    return flags, DESTINATION_SEPARATOR.join(destinations)
+
+
 def _classify(subcommand: str, args: list[str]) -> tuple[list[str], str]:
     """``(flags, arg)`` for *subcommand* -- what it does, and to which ref."""
+    if subcommand == "push":
+        return _classify_push(args)
     if subcommand == "reset":
         wipes = any(_abbreviates(arg, "--hard") for arg in args)
         return ([HARD_RESET_FLAG] if wipes else []), _first_positional(args)
