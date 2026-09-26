@@ -512,13 +512,15 @@ def test_an_empty_enumeration_is_absorbed_so_the_floor_can_speak(tmp_path, monke
     (#15962).
     """
     import _scan_helpers
-    import check_git_toplevel_env_scrubbed as checker
 
     def _empty(*_a, **_k):
         raise _scan_helpers.EmptyEnumeration("listed nothing")
 
-    monkeypatch.setattr(checker, "tracked_paths", _empty)
-    assert list(checker.iter_shell_files([], tmp_path)) == []
+    # Patched on `_scan_helpers`, not on the checker: #17035 moved
+    # `iter_shell_files` there so the checker could stay under its 600-line
+    # ceiling while its population widened. The seam moved with the function.
+    monkeypatch.setattr(_scan_helpers, "tracked_paths", _empty)
+    assert list(_scan_helpers.iter_shell_files([], tmp_path)) == []
 
 
 def test_a_git_failure_still_propagates(tmp_path, monkeypatch):
@@ -530,14 +532,18 @@ def test_a_git_failure_still_propagates(tmp_path, monkeypatch):
     whole file exists to prevent, reached through its own remedy.
     """
 
-    import check_git_toplevel_env_scrubbed as checker
+    import _scan_helpers
 
     def _broken(*_a, **_k):
         raise RuntimeError("git ls-files failed: not a git repository")
 
-    monkeypatch.setattr(checker, "tracked_paths", _broken)
+    # Same relocation as the test above (#17035). Worth recording that this one
+    # kept PASSING after the move while its patch had stopped biting: a real
+    # `tracked_paths` raises RuntimeError in a non-git tmp_path anyway, so the
+    # assertion was satisfied by the accident rather than by the contract.
+    monkeypatch.setattr(_scan_helpers, "tracked_paths", _broken)
     with pytest.raises(RuntimeError, match="failed"):
-        list(checker.iter_shell_files([], tmp_path))
+        list(_scan_helpers.iter_shell_files([], tmp_path))
 
 
 # --------------------------------------------------------------------------
