@@ -278,3 +278,12 @@ python:
   # would reverse the trade recorded in `repo_tests/python_filter_uncovered_reads.py`.
   - 'autobot-frontend/src/utils/cacheManagement.ts'
   - 'autobot-frontend/src/composables/useCssVars.ts'
+  # #17567 form 2: the same guard asserts that no component redefines a
+  # design-system token, which means reading the token vocabulary itself. Named
+  # files rather than a `*.css` glob, because a glob declaration into an
+  # uncovered tree must be recorded in `_glob_declared_uncovered.py` and that
+  # record only shrinks. A change to the vocabulary changes the guard's verdict,
+  # so it is a real dependency and belongs here.
+  - 'autobot-frontend/src/assets/css/design-tokens.css'
+  - 'autobot-frontend/src/assets/css/themes/light.css'
+  - 'autobot-frontend/src/assets/css/themes/dark.css'
