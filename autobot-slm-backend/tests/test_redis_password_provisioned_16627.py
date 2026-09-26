@@ -162,8 +162,26 @@ def test_the_role_clients_send_the_client_credential_and_the_server_is_untouched
     defaults = yaml.safe_load((_ROLES / "redis" / "defaults" / "main.yml").read_text(encoding="utf-8"))
     assert defaults["redis_client_password"] == "{{ redis_password }}"
     server = (_ROLES / "redis" / "templates" / "redis-stack.conf.j2").read_text(encoding="utf-8")
-    assert "requirepass {{ redis_password }}" in server
-    assert "redis_client_password" not in server
+    # #17434/#17551 re-keyed this from a literal to the property it guards; the
+    # guarantee is NOT weakened. The template now normalises the credential once
+    # into `_redis_auth`, so `protected-mode` and `requirepass` cannot disagree,
+    # and emits `requirepass {{ _redis_auth }}`. Pinning the old spelling
+    # `requirepass {{ redis_password }}` would pin the BUGGY shape: under it an
+    # empty password rendered a bare `requirepass `, which is #17434's defect.
+    # What #16627 guarantees is that the SERVER credential derives from
+    # `redis_password` and never from `redis_client_password` -- asserted as a
+    # chain, so a future change routing it through the client credential fails.
+    # A Jinja comment cannot reach the rendered config, so the "never the client
+    # credential" check is made against the DIRECTIVES, not the file's prose --
+    # otherwise a comment explaining the redis_password/redis_client_password
+    # split trips a guard about what the server actually sends.
+    directives = re.sub(r"\{#.*?#\}", "", server, flags=re.S)
+    auth = re.search(r"\{%\s*set\s+_redis_auth\s*=\s*(.+?)%\}", directives)
+    assert auth, "the server template no longer normalises its credential into _redis_auth"
+    assert "redis_password" in auth.group(1), "the server credential must derive from redis_password"
+    assert "redis_client_password" not in auth.group(1)
+    assert "requirepass {{ _redis_auth }}" in directives
+    assert "redis_client_password" not in directives
 
 
 def test_the_ai_stack_env_renders_a_username_whenever_it_renders_the_password():
