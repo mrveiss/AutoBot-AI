@@ -156,7 +156,7 @@
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
-import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { computed, ref, onUnmounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { useEventBus } from '@/composables/useEventBus'
@@ -305,27 +305,65 @@ function formatElapsed(wf: ActiveWorkflow): string {
   return `${hr}h ${min % 60}m`;
 }
 
-// Live event subscription for workflow updates
-let unsubGlobal: (() => void) | undefined;
+// Live event subscription, one channel per workflow (#17364).
+//
+// This subscribed to `global`, which carried the workflow publishes until
+// #17358 (`aa2111a0fa`) moved all seven of them to `workflow:{workflow_id}`
+// so a workflow's progress stopped reaching every authenticated client.
+// Nothing subscribed to the new channel, so the events kept arriving on a
+// channel nobody listened to and the list silently stopped refreshing itself
+// on completion. Manual refresh still worked, which is why it went unnoticed.
+//
+// Per workflow rather than a wildcard because the channel IS the authorisation
+// boundary: subscribing to what this client is showing is the same set it is
+// entitled to, and there is no channel that means "every workflow" without
+// re-opening what #17358 closed.
+const WORKFLOW_EVENT_TYPES = new Set([
+  'workflow_status_update',
+  'step_completed',
+  'workflow_completed',
+]);
 
-onMounted(() => {
-  unsubGlobal = subscribe('global', (event: LiveEvent) => {
-    if (
-      event.event_type === 'workflow_status_update' ||
-      event.event_type === 'step_completed' ||
-      event.event_type === 'workflow_completed'
-    ) {
-      logger.info('Received live workflow event:', event.event_type);
-      emit('workflow-update', event.payload);
-      emit('refresh');
+/** workflow_id -> its unsubscribe handle, so a departed workflow is dropped. */
+const unsubByWorkflow = new Map<string, () => void>();
+
+function onWorkflowEvent(event: LiveEvent): void {
+  if (!WORKFLOW_EVENT_TYPES.has(event.event_type)) return;
+  logger.info('Received live workflow event:', event.event_type);
+  emit('workflow-update', event.payload);
+  emit('refresh');
+}
+
+function syncSubscriptions(ids: string[]): void {
+  const wanted = new Set(ids);
+
+  // Unsubscribe first, so a workflow that left the list stops costing a
+  // subscription. Without this the set only ever grows, for the life of the
+  // session -- a leak that a long-lived dashboard would feel rather than show.
+  for (const [id, unsubscribe] of unsubByWorkflow) {
+    if (!wanted.has(id)) {
+      unsubscribe();
+      unsubByWorkflow.delete(id);
     }
-  });
-});
+  }
+  for (const id of wanted) {
+    if (!unsubByWorkflow.has(id)) {
+      unsubByWorkflow.set(id, subscribe(`workflow:${id}`, onWorkflowEvent));
+    }
+  }
+}
+
+watch(
+  () => props.activeWorkflows.map((workflow) => workflow.workflow_id),
+  (ids) => syncSubscriptions(ids),
+  { immediate: true },
+);
 
 onUnmounted(() => {
-  if (unsubGlobal) {
-    unsubGlobal();
+  for (const unsubscribe of unsubByWorkflow.values()) {
+    unsubscribe();
   }
+  unsubByWorkflow.clear();
 });
 </script>
 
