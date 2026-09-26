@@ -265,6 +265,14 @@ class TestTheSharedNotificationSourceStaysShared:
 _STYLE_CONTENT = re.compile(r"<style\b[^>]*>(.*?)</style>", re.DOTALL | re.IGNORECASE)
 _IMPORTANT = re.compile(r"!\s*important", re.IGNORECASE)
 
+#: Where the design system's token vocabulary is declared. Named rather than
+#: globbed -- see the comment in the ownership assertion below.
+_THEME_SOURCES = (
+    "assets/css/design-tokens.css",
+    "assets/css/themes/light.css",
+    "assets/css/themes/dark.css",
+)
+
 
 def _scan_important(root: Path) -> dict[str, int]:
     """``path -> !important declarations`` inside component ``<style>`` blocks.
@@ -353,8 +361,16 @@ class TestFormTwoStaysAbsent:
         root = repo_root() / _FRONTEND
         declaration = re.compile(r"(?:^|[{;])\s*(--[A-Za-z0-9_-]+)\s*:", re.MULTILINE)
         anywhere = re.compile(r"(--[A-Za-z0-9_-]+)\s*:")
+        # Three NAMED files, not a glob. A `*.css` glob declaration into a tree the
+        # python filter does not cover has to be recorded in
+        # `_glob_declared_uncovered.py`, and that record only shrinks -- adding an
+        # entry to make a new dependency pass is the decision it exists to prevent.
+        # These three carry the whole token vocabulary and are covered in
+        # `.github/filters/python-paths.yml` instead, so a change to them runs this.
         owned: set[str] = set()
-        for source in sorted((root / "assets").rglob("*.css")):
+        for name in _THEME_SOURCES:
+            source = root / name
+            assert source.is_file(), f"{name} has moved; this assertion reads it by path"
             owned |= set(anywhere.findall(source.read_text(encoding="utf-8")))
         assert len(owned) > 500, f"only {len(owned)} theme names parsed; the check would be vacuous"
 
