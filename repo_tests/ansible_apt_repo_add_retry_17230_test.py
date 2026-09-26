@@ -19,7 +19,7 @@ not execute Ansible, so the guard reads the task file, as the #16020 and
 
 The checks live in one function, `_violations`, and are exercised on both
 sides: the real task must yield none, and each broken fixture in `_BROKEN` --
-a negated or foreign `until`, a budget below the floor, a swallowed failure --
+a negated or foreign `until`, a budget that is not the documented variable and default, a swallowed failure --
 must yield at least one. The negated `until` (`not (x is succeeded)`) is the
 case a substring match let through: it contains every expected word while
 inverting when the retry stops.
@@ -40,13 +40,13 @@ yaml = pytest.importorskip("yaml")
 _ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
 _HELPER = _ANSIBLE / "roles" / "_shared" / "tasks" / "add_apt_repository_idempotent.yml"
 _MODULES = ("ansible.builtin.apt_repository", "apt_repository")
-_BUDGET_VARS = ("apt_repo_retries", "apt_repo_retry_delay")
+#: Each budget key, the variable it must read, and that variable's documented default.
+_BUDGETS = {"retries": ("apt_repo_retries", 5), "delay": ("apt_repo_retry_delay", 10)}
+_BUDGET_VARS = tuple(var for var, _ in _BUDGETS.values())
 _VAR = "|".join(_BUDGET_VARS)
-#: A YAML (`name:`, incl. a `- name:` list item), JSON (`"name":`) or INI inventory (`name=`) assignment.
-_ASSIGNMENT = re.compile(r"^\s*(?:-\s*)?(?:(?:" + _VAR + r')|"(?:' + _VAR + r')")\s*[:=]', re.MULTILINE)
-#: The only accepted budget template: one of the budget variables -- the ones the override scan
-#: below watches -- with an integer default and nothing else.
-_TEMPLATED_BUDGET = re.compile(r"\{\{\s*(?:" + _VAR + r")\s*\|\s*default\(\s*(\d+)\s*\)\s*\}\}")
+#: A YAML (`name:`, incl. a `- name:` list item), JSON (`"name":`) or INI inventory (`name=`)
+#: assignment, at a line start or after the `{`/`,` of an inline mapping (`vars: {name: 1}`).
+_ASSIGNMENT = re.compile(r"(?:^\s*(?:-\s*)?|[{,]\s*)(?:(?:" + _VAR + r')|"(?:' + _VAR + r')")\s*[:=]', re.MULTILINE)
 #: Files Ansible reads variables from; ``host_group_vars`` accepts .json and extensionless too.
 _VAR_FILE_SUFFIXES = {".yml", ".yaml", ".json", ".ini", ".cfg", ""}
 
@@ -62,15 +62,15 @@ def _add_tasks() -> list[dict]:
     return [t for t in loaded if isinstance(t, dict) and any(m in t for m in _MODULES)]
 
 
-def _budget(value) -> int | None:
-    """The effective integer of a literal or of exactly `{{ var | default(N) }}`, else None.
+def _budget(value, var: str) -> int | None:
+    """The default N of exactly `{{ var | default(N) }}`, else None.
 
-    The whole value must match: a template that goes on to transform the default, such as
-    ``{{ apt_repo_retries | default(5) | int - 4 }}``, is not read as 5.
+    A literal is refused -- it drops the documented override -- and so is a template reading
+    another variable or going on to transform the default, such as
+    ``{{ apt_repo_retries | default(5) | int - 4 }}``, which is not read as 5.
     """
-    if isinstance(value, int) and not isinstance(value, bool):
-        return value
-    match = _TEMPLATED_BUDGET.fullmatch(str(value).strip())
+    pattern = r"\{\{\s*" + re.escape(var) + r"\s*\|\s*default\(\s*(\d+)\s*\)\s*\}\}"
+    match = re.fullmatch(pattern, str(value).strip())
     return int(match.group(1)) if match else None
 
 
@@ -83,10 +83,9 @@ def _violations(task: dict) -> list[str]:
     until = " ".join(str(task.get("until", "")).split())
     if until != f"{registered} is succeeded":
         problems.append(f"`until: {until!r}` is not exactly `{registered} is succeeded`")
-    if (_budget(task.get("retries")) or 0) < 2:
-        problems.append(f"`retries: {task.get('retries')!r}` is below 2, which is no retry at all")
-    if (_budget(task.get("delay")) or 0) < 1:
-        problems.append(f"`delay: {task.get('delay')!r}` hammers a keyserver that just failed")
+    for key, (var, default) in _BUDGETS.items():
+        if _budget(task.get(key), var) != default:
+            problems.append(f"`{key}: {task.get(key)!r}` is not `{{{{ {var} | default({default}) }}}}`")
     if "failed_when" in task:
         problems.append(
             f"`failed_when: {task['failed_when']!r}` is not allowed on this task -- the retry budget is "
@@ -102,7 +101,7 @@ _GOOD = {
     "register": "_r",
     "until": "_r is succeeded",
     "retries": "{{ apt_repo_retries | default(5) }}",
-    "delay": 10,
+    "delay": "{{ apt_repo_retry_delay | default(10) }}",
 }
 _BROKEN = {
     "no-until": {k: v for k, v in _GOOD.items() if k != "until"},
@@ -113,7 +112,13 @@ _BROKEN = {
     "untemplated-retries": {**_GOOD, "retries": "{{ apt_repo_retries }}"},
     "transformed-default": {**_GOOD, "retries": "{{ apt_repo_retries | default(5) | int - 4 }}"},
     "unwatched-variable": {**_GOOD, "retries": "{{ some_other_retries | default(5) }}"},
+    "literal-retries": {**_GOOD, "retries": 5},
+    "retries-read-the-delay": {**_GOOD, "retries": "{{ apt_repo_retry_delay | default(5) }}"},
+    "retries-wrong-default": {**_GOOD, "retries": "{{ apt_repo_retries | default(2) }}"},
     "no-delay": {**_GOOD, "delay": 0},
+    "literal-delay": {**_GOOD, "delay": 10},
+    "delay-reads-the-retries": {**_GOOD, "delay": "{{ apt_repo_retries | default(10) }}"},
+    "delay-wrong-default": {**_GOOD, "delay": "{{ apt_repo_retry_delay | default(1) }}"},
     "failed-when-false": {**_GOOD, "failed_when": False},
     "ignore-errors": {**_GOOD, "ignore_errors": True},
 }
@@ -213,6 +218,9 @@ def test_no_file_overrides_the_retry_budget() -> None:
         ('{\n  "apt_repo_retries": 1\n}\n', ".json", 1),
         ('{"apt_repo_retry_delay": 0}', ".json", 1),
         ('{"other_var": 1}', ".json", 0),
+        ("vars: {apt_repo_retries: 1}\n", ".yml", 1),
+        ("vars: {a: 1, apt_repo_retry_delay: 0}\n", ".yml", 1),
+        ("vars: {other_retries: 1, not_apt_repo_retries: 2}\n", ".yml", 0),
         ("#   apt_repo_retries  (int, opt.) Retry budget (default 5).\n", ".yml", 0),
         ('  retries: "{{ apt_repo_retries | default(5) }}"\n', ".yml", 0),
     ],
@@ -224,6 +232,9 @@ def test_no_file_overrides_the_retry_budget() -> None:
         "json",
         "one-line-json",
         "json-other-key",
+        "inline-mapping",
+        "inline-mapping-later-key",
+        "inline-mapping-other-keys",
         "comment",
         "the-template-reading-it",
     ],
