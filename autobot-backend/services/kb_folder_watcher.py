@@ -207,6 +207,7 @@ class KBFolderWatcherService:
                             "files_ingested": 0,
                             "last_change": None,
                             "errors": 0,
+                            "last_error": None,
                         }
 
                         logger.info("Loaded watch folder config: %s (%s)", folder_id, config.path)
@@ -254,6 +255,7 @@ class KBFolderWatcherService:
                 "files_ingested": 0,
                 "last_change": None,
                 "errors": 0,
+                "last_error": None,
             }
 
             # Start watching if enabled
@@ -441,6 +443,18 @@ class KBFolderWatcherService:
         for file_path, change_type in changes:
             await self._process_single_change(folder_id, file_path, change_type)
 
+    def _record_error(self, folder_id: str, detail: str) -> None:
+        """Count the failure and keep what it was.
+
+        A bare ``errors`` count cannot tell a rejected write from a raised one, and
+        it said the same thing for months while nothing was ingested at all. The
+        count is not the report (#17531).
+        """
+        if folder_id not in self._stats:
+            return
+        self._stats[folder_id]["errors"] += 1
+        self._stats[folder_id]["last_error"] = detail
+
     async def _process_single_change(self, folder_id: str, file_path: Path, change_type: str) -> None:
         """Process a single file change by ingesting into KB."""
         try:
@@ -477,9 +491,9 @@ class KBFolderWatcherService:
             # Ingest into KB
             result = await ingest_watched_file(folder_id, config, file_path, content)
             if not ingest_stored(result):
-                logger.error("KB ingest rejected for %s: %s", file_path.name, result.get("message"))
-                if folder_id in self._stats:
-                    self._stats[folder_id]["errors"] += 1
+                detail = f"knowledge base rejected the write: {result.get('status')}: {result.get('message')}"
+                logger.error("KB ingest rejected for %s -- %s", file_path.name, detail)
+                self._record_error(folder_id, detail)
                 return
 
             # Update stats
@@ -490,9 +504,10 @@ class KBFolderWatcherService:
             logger.info("Successfully ingested file: %s into collection %s", file_path.name, config.collection)
 
         except Exception as e:
-            logger.error("Error processing file change %s: %s", file_path, e)
-            if folder_id in self._stats:
-                self._stats[folder_id]["errors"] += 1
+            # exc_info: without the traceback, two AttributeErrors naming the same
+            # attribute are one indistinguishable log line (#17531).
+            logger.error("Error processing file change %s: %s", file_path, e, exc_info=True)
+            self._record_error(folder_id, f"{type(e).__name__}: {e}")
 
     async def start_all(self) -> bool:
         """Start watching all enabled folders."""
@@ -544,6 +559,11 @@ class KBFolderWatcherService:
             "active_folders": active_folders,
             "total_files_ingested": total_ingested,
             "total_errors": total_errors,
+            # An error count with no cause is what let this service report
+            # thousands of failures and nothing actionable (#17531).
+            "last_errors": {
+                folder_id: stats["last_error"] for folder_id, stats in self._stats.items() if stats.get("last_error")
+            },
             "folders": self.get_watch_folders(),
         }
 
