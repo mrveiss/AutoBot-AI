@@ -42,7 +42,7 @@ from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
-from repo_tests._undefined_css_var_baseline import TOTAL_SITES, UNDEFINED_CSS_VAR_SITES
+from repo_tests._undefined_css_var_baseline import TOTAL_SITES, UNDEFINED_CSS_VAR_NAMES
 
 _SCANNED_SUFFIXES = {".css", ".scss", ".vue", ".ts", ".js"}
 _FRONTEND = Path("autobot-frontend/src")
@@ -63,9 +63,15 @@ _TAILWIND_BUILTINS = frozenset({"--font-weight-bold", "--font-weight-medium", "-
 
 
 def _scan(root: Path) -> dict[str, int]:
-    """``path -> count`` of references naming nothing, with no fallback."""
+    """``property name -> count`` of references that render nothing.
+
+    Keyed by name rather than by file deliberately -- see the baseline's
+    docstring. The name is the unit the rule is about, and a per-file result
+    would have to be pinned as concrete frontend paths inside ``repo_tests``,
+    which changes what CI runs on a frontend edit.
+    """
     declared: set[str] = set()
-    references: list[tuple[str, str]] = []
+    references: list[str] = []
     for path in sorted(root.rglob("*")):
         if path.suffix not in _SCANNED_SUFFIXES or "node_modules" in path.parts:
             continue
@@ -74,16 +80,15 @@ def _scan(root: Path) -> dict[str, int]:
         except (OSError, UnicodeDecodeError):
             continue
         declared |= set(_DECLARATION.findall(text))
-        relative = path.relative_to(root).as_posix()
         for name, fallback in _REFERENCE.findall(text):
             if not fallback:
-                references.append((name, relative))
+                references.append(name)
 
     counts: dict[str, int] = {}
-    for name, relative in references:
+    for name in references:
         if name in declared or name in _TAILWIND_BUILTINS or _TAILWIND_PALETTE.match(name):
             continue
-        counts[relative] = counts.get(relative, 0) + 1
+        counts[name] = counts.get(name, 0) + 1
     return counts
 
 
@@ -91,7 +96,7 @@ def _scan(root: Path) -> dict[str, int]:
 def measured() -> dict[str, int]:
     root = repo_root() / _FRONTEND
     assert root.is_dir(), f"{_FRONTEND} has moved; this guard reads it by path"
-    return {f"{_FRONTEND.as_posix()}/{k}": v for k, v in _scan(root).items()}
+    return _scan(root)
 
 
 class TestTheDetectorWorksBeforeItsOutputIsRead:
@@ -104,7 +109,7 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
 
     def test_it_finds_a_reference_to_nothing(self, tmp_path):
         self._write(tmp_path, "a.css", ".x { color: var(--nowhere-at-all); }")
-        assert _scan(tmp_path) == {"a.css": 1}
+        assert _scan(tmp_path) == {"--nowhere-at-all": 1}
 
     def test_a_fallback_is_not_a_finding(self, tmp_path):
         self._write(tmp_path, "a.css", ".x { color: var(--nowhere-at-all, #333); }")
@@ -126,11 +131,11 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
     def test_a_palette_lookalike_with_a_bad_shade_is_a_finding(self, tmp_path):
         # 550 is not a Tailwind shade; the pattern must not wave it through.
         self._write(tmp_path, "a.css", ".x { color: var(--color-red-550); }")
-        assert _scan(tmp_path) == {"a.css": 1}
+        assert _scan(tmp_path) == {"--color-red-550": 1}
 
-    def test_it_counts_every_site_not_every_name(self, tmp_path):
+    def test_it_counts_every_site_under_one_name(self, tmp_path):
         self._write(tmp_path, "a.css", ".x { color: var(--gone); }\n.y { background: var(--gone); }")
-        assert _scan(tmp_path) == {"a.css": 2}
+        assert _scan(tmp_path) == {"--gone": 2}
 
     def test_an_unreadable_file_costs_a_finding_not_the_run(self, tmp_path):
         (tmp_path / "bin.css").write_bytes(b"\xff\xfe\x00 not utf-8")
@@ -139,40 +144,44 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
 
 class TestTheBaselineIsInternallyConsistent:
     def test_the_total_matches_the_entries(self):
-        assert TOTAL_SITES == sum(UNDEFINED_CSS_VAR_SITES.values())
+        assert TOTAL_SITES == sum(UNDEFINED_CSS_VAR_NAMES.values())
 
     def test_no_entry_is_zero(self):
         # A zero would be an entry that should have been deleted.
-        assert [f for f, n in UNDEFINED_CSS_VAR_SITES.items() if n <= 0] == []
+        assert [f for f, n in UNDEFINED_CSS_VAR_NAMES.items() if n <= 0] == []
 
-    def test_every_entry_names_a_file_that_exists(self):
-        missing = [f for f in UNDEFINED_CSS_VAR_SITES if not (repo_root() / f).is_file()]
-        assert not missing, f"baseline names files that are gone: {missing}"
+    def test_every_entry_is_a_custom_property_name(self):
+        malformed = [n for n in UNDEFINED_CSS_VAR_NAMES if not n.startswith("--")]
+        assert not malformed, f"baseline keys must be property names: {malformed}"
 
 
 class TestThePopulationOnlyShrinks:
-    def test_no_file_gains_a_reference_to_nothing(self, measured):
+    def test_no_name_gains_a_reference_to_nothing(self, measured):
         grew = {
-            f: (UNDEFINED_CSS_VAR_SITES.get(f, 0), n)
-            for f, n in measured.items()
-            if n > UNDEFINED_CSS_VAR_SITES.get(f, 0)
+            name: (UNDEFINED_CSS_VAR_NAMES.get(name, 0), n)
+            for name, n in measured.items()
+            if n > UNDEFINED_CSS_VAR_NAMES.get(name, 0)
         }
         assert not grew, (
-            "these files gained a var() naming a property that does not exist "
-            f"(pinned, now): {grew}. Point it at a token in autobot-frontend/src/assets/css/themes/ "
+            "these properties are referenced more often than pinned and are declared "
+            f"nowhere (pinned, now): {grew}. Point the reference at a token under "
+            "autobot-frontend/src/assets/css/themes/ "
             "-- do not add a fallback to get under this check, because a fallback hard-codes a "
             "colour that then ignores the theme."
         )
 
-    def test_no_new_file_joins_the_population(self, measured):
-        new = sorted(set(measured) - set(UNDEFINED_CSS_VAR_SITES))
-        assert not new, f"new files with undefined var() references: {new}"
+    def test_no_new_name_joins_the_population(self, measured):
+        new = sorted(set(measured) - set(UNDEFINED_CSS_VAR_NAMES))
+        assert not new, (
+            f"these custom properties are referenced but declared nowhere: {new}. "
+            "Declare the token, or reference one that exists."
+        )
 
     def test_the_total_never_rises(self, measured):
         assert sum(measured.values()) <= TOTAL_SITES
 
     def test_a_cleared_file_is_removed_from_the_baseline(self, measured):
-        stale = sorted(f for f in UNDEFINED_CSS_VAR_SITES if f not in measured)
+        stale = sorted(f for f in UNDEFINED_CSS_VAR_NAMES if f not in measured)
         assert not stale, (
             f"these files are clean now -- delete their baseline entries and lower " f"TOTAL_SITES: {stale}"
         )
