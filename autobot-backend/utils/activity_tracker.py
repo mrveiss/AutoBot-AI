@@ -65,7 +65,14 @@ async def track_desktop_activity(
         window_title=window_title,
         input_text=input_text,
         screenshot_path=screenshot_path,
-        metadata=metadata or {},
+        # extra_data, NOT metadata (#16464). `metadata` is reserved on the
+        # declarative Base, which is why the model names the column
+        # `extra_data` -- so passing `metadata=` here raised TypeError before
+        # any SQL was emitted, and `api/vnc_proxy.py` caught it as a non-fatal
+        # audit failure. #16464 ported the table into the live Alembic chain and
+        # the write still could not reach it: the migration was necessary and
+        # not sufficient. The public parameter keeps its name.
+        extra_data=metadata or {},
         timestamp=now_utc(),
     )
 
