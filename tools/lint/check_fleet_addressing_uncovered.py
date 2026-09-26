@@ -42,6 +42,18 @@ removal is a data decision an agent does not get to make on its own (#17038).
 The ratchet makes the COUNT monotone, and the contract is exactly that -- no
 more, because review (#17447) was right that the docstring claimed more.
 
+WHEN THIS GUARD DOES NOT RUN AT ALL (#17542). The sweep below reads EVERY
+tracked file, but the `code-quality` job that runs `--audit` only starts when
+`.github/filters/code-quality-paths.yml` matches a changed path -- a specific
+list, not the whole tree. A pull request touching only a file kind outside that
+list (frontend TypeScript, `.txt`, `.csv`) skips the job, and a skipped required
+check reads as a pass (#14550/#14551). This checker is also absent from
+`_GUARDED_CHECKERS` in `check_code_quality_guard_reach.py`, the meta-guard that
+exists to catch exactly that, so nothing currently reports the gap. It is
+bounded rather than open: the ratchet is whole-tree, so the next PR that does
+trigger the job still sees the count -- it fails the wrong author's PR instead
+of the right one. #17542 carries the fix and the decision it needs.
+
 WHAT THE RATCHET DOES AND DOES NOT CATCH. `audit()` compares per-path counts
 against `BASELINE`. So it catches a new file, a grown count, and an improvement
 left unrecorded. It does **not** catch a baselined file swapping one fleet-range
@@ -209,27 +221,52 @@ def is_covered(rel: str, exts: frozenset[str], dirs: tuple[str, ...], exclude: r
     return not exclude.search(rel)
 
 
-def uncovered_counts(base: pathlib.Path | None = None) -> tuple[dict[str, int], int]:
-    """(path -> fleet-range occurrences, files reached)."""
+def scannable_text(path: pathlib.Path) -> str | None:
+    """The file's text for scanning, or ``None`` when it is binary.
+
+    #17447 review: this used ``read_text(encoding="utf-8")`` inside a bare
+    ``except (OSError, UnicodeDecodeError): continue``, so a file that could not
+    be decoded was dropped from the sweep without a word. A single invalid byte
+    anywhere in a file hid every ASCII fleet address in it -- *did not look*
+    reported as *nothing found*, which is the one thing a guard may not do.
+
+    So a decode failure no longer skips: invalid bytes are replaced and the
+    surrounding ASCII is still matched. Binary files are the genuine exception
+    and are identified the way git identifies them -- a NUL byte -- rather than
+    by having failed to decode, because "not UTF-8" and "not text" are
+    different questions and only the second one justifies not scanning.
+    """
+    raw = path.read_bytes()
+    if b"\x00" in raw:
+        return None
+    return raw.decode("utf-8", errors="replace")
+
+
+def uncovered_counts(base: pathlib.Path | None = None) -> tuple[dict[str, int], int, list[str]]:
+    """(path -> fleet-range occurrences, files reached, unreadable paths)."""
     root = base or repo_root()
     exts = scanned_extensions(root)
     dirs = scanned_dirs(root)
     exclude = exclude_pattern(root)
     pattern = fleet_address_pattern(root)
     counts: dict[str, int] = {}
+    unreadable: list[str] = []
     reached = 0
     for rel in tracked_files(root):
         if is_covered(rel, exts, dirs, exclude) or rel == SELF_REL:
             continue
         try:
-            text = (root / rel).read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
+            text = scannable_text(root / rel)
+        except OSError as exc:
+            unreadable.append(f"{rel}: {type(exc).__name__}")
+            continue
+        if text is None:
             continue
         reached += 1
         found = len(pattern.findall(text))
         if found:
             counts[rel] = found
-    return counts, reached
+    return counts, reached, unreadable
 
 
 #: Files that MUST contain the fleet range, with the reason each one does.
@@ -381,8 +418,14 @@ BASELINE: dict[str, int] = {
 
 def audit(base: pathlib.Path | None = None) -> tuple[list[str], int]:
     """(problems, files reached)."""
-    counts, reached = uncovered_counts(base)
+    counts, reached, unreadable = uncovered_counts(base)
     problems: list[str] = []
+
+    for entry in unreadable:
+        problems.append(
+            f"{entry}: tracked but could not be read, so it was not scanned. An unscanned "
+            "file is not a clean file -- fix the permission or remove the path from the tree."
+        )
 
     if reached < DISCOVERY_FLOOR:
         problems.append(

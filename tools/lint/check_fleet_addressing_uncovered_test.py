@@ -121,7 +121,7 @@ def test_exempt_and_baseline_are_disjoint_and_both_live() -> None:
     assert not overlap, f"these are both exempt and baselined: {overlap}"
     assert all(reason.strip() for reason in hook.EXEMPT.values()), "every exemption states its reason"
 
-    counts, _ = hook.uncovered_counts()
+    counts, _, _ = hook.uncovered_counts()
     stranded = sorted(rel for rel in hook.EXEMPT if rel not in counts)
     assert not stranded, f"exempt but no longer carrying the pattern -- stale claims: {stranded}"
 
@@ -144,3 +144,51 @@ def test_the_tree_is_clean_against_its_baseline() -> None:
     problems, reached = hook.audit()
     assert reached >= hook.DISCOVERY_FLOOR
     assert not problems, "the tree no longer matches BASELINE:\n  " + "\n  ".join(problems)
+
+
+class TestAnUnscannedFileIsNotACleanFile:
+    """#17447 review: the sweep used to drop a file it could not decode.
+
+    `read_text(encoding="utf-8")` inside `except (OSError, UnicodeDecodeError):
+    continue` meant one invalid byte hid every ASCII address after it, and an
+    unreadable path vanished from the audit entirely. Both reported *did not
+    look* as *nothing found*.
+    """
+
+    def test_an_invalid_byte_no_longer_hides_the_address_after_it(self, tmp_path, literal) -> None:
+        """The case that was silently skipped: bad byte, then a real address."""
+        target = tmp_path / "notes.txt"
+        target.write_bytes(b"\xff\xfe " + literal.encode("utf-8"))
+
+        text = hook.scannable_text(target)
+
+        assert text is not None, "a decode failure must not take the file out of the sweep"
+        assert hook.fleet_address_pattern().search(text), "the ASCII after the invalid byte must still match"
+
+    def test_a_binary_file_is_still_not_scanned(self, tmp_path, literal) -> None:
+        """`not UTF-8` and `not text` are different questions; only NUL answers the second."""
+        target = tmp_path / "blob.bin"
+        target.write_bytes(b"\x00\x01\x02" + literal.encode("utf-8"))
+
+        assert hook.scannable_text(target) is None
+
+    def test_an_unreadable_path_raises_rather_than_returning_empty(self, tmp_path) -> None:
+        """An OSError must reach the caller so it can be reported, not swallowed."""
+        with pytest.raises(OSError):
+            hook.scannable_text(tmp_path / "does-not-exist.txt")
+
+    def test_the_audit_reports_an_unreadable_file_instead_of_skipping_it(self, tmp_path, monkeypatch) -> None:
+        """The whole point: a file that cannot be read is a problem, not a pass."""
+        real_pattern = hook.fleet_address_pattern()  # the real one, before the root is faked
+        monkeypatch.setattr(hook, "fleet_address_pattern", lambda base=None: real_pattern)
+        monkeypatch.setattr(hook, "tracked_files", lambda base=None: ["ghost.txt"])
+        monkeypatch.setattr(hook, "is_covered", lambda *a, **k: False)
+        monkeypatch.setattr(hook, "scanned_extensions", lambda base=None: {"py"})
+        monkeypatch.setattr(hook, "scanned_dirs", lambda base=None: set())
+        monkeypatch.setattr(hook, "exclude_pattern", lambda base=None: None)
+
+        counts, reached, unreadable = hook.uncovered_counts(tmp_path)
+
+        assert counts == {}
+        assert reached == 0
+        assert unreadable == ["ghost.txt: FileNotFoundError"], unreadable
