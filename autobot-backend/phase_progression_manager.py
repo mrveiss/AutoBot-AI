@@ -77,7 +77,6 @@ class PhaseProgressionManager:
         self.config = {
             "auto_progression_enabled": True,
             "minimum_phase_duration": 3600,  # 1 hour minimum between progressions
-            "validation_threshold": (95.0),  # Minimum completion percentage for progression
             "rollback_threshold": 75.0,  # Below this, consider rollback
             "max_concurrent_phases": (3),  # Maximum phases that can be active simultaneously
             "progression_cooldown": 1800,  # 30 minutes between progression attempts
@@ -451,12 +450,12 @@ class PhaseProgressionManager:
         """Extract completed phases from validation results."""
         completed_phases = set()
         for phase_name, phase_data in validation_results["phases"].items():
-            if phase_data["completion_percentage"] >= self.config["validation_threshold"]:
+            if phase_data["complete"]:  # #17089: False if any check group was skipped
                 completed_phases.add(phase_name)
                 eligibility_results["completed_phases"].append(
                     {
                         "phase": phase_name,
-                        "completion": phase_data["completion_percentage"],
+                        "completion": phase_data["structural_presence_percentage"],
                         "status": "completed",
                     }
                 )
@@ -598,7 +597,7 @@ class PhaseProgressionManager:
         completed_phases = {
             name
             for name, data in validation_results["phases"].items()
-            if data["completion_percentage"] >= self.config["validation_threshold"]
+            if data["complete"]  # #17089: False if any check group was skipped
         }
         prerequisites = rules.get("prerequisites", [])
         prerequisites_met = all(prereq in completed_phases for prereq in prerequisites)

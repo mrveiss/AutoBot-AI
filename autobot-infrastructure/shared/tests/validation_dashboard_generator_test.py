@@ -101,3 +101,51 @@ def test_recommendations_html_renders_real_values_not_placeholders():
     assert 'class="recommendation-urgency urgency-high">HIGH</span>' in html
     assert "Pool exhaustion observed under load." in html
     assert "Raise REDIS_POOL_MAX_CONNECTIONS." in html
+
+
+def test_phase_html_renders_not_scored_when_a_phase_publishes_no_figure():
+    """#17089: a phase deferring to dedicated gates has no percentage.
+
+    The report omits `completion_percentage` entirely when a check group was
+    skipped, and omits any figure for a phase whose verdict comes from other
+    workflows. Rendering 0.0% there would say "measured and found empty" -- the
+    exact confusion #17089 removed from the report, reintroduced in the HTML.
+    """
+    generator = _bare_generator()
+    phase_details = [
+        {
+            "status_color": "#9E9E9E",
+            "display_name": "Enhanced UI/UX",
+            "requirements_met": 0,
+            "total_requirements": 0,
+            "completion_percentage": None,
+        }
+    ]
+
+    html = generator._generate_phase_html(phase_details)
+
+    assert not _LEFTOVER_PLACEHOLDER_RE.search(html), "un-substituted placeholder in the not-scored path"
+    assert "<strong>not scored</strong>" in html
+    assert "width: 0.0%;" in html
+    assert "0.0%</strong>" not in html, "a phase with no figure must not render as 0.0%"
+
+
+def test_phase_html_still_renders_a_figure_when_one_exists():
+    """The control: without it, a renderer that printed 'not scored' for every
+    phase would satisfy the test above."""
+    generator = _bare_generator()
+
+    html = generator._generate_phase_html(
+        [
+            {
+                "status_color": "#4CAF50",
+                "display_name": "Core Infrastructure",
+                "requirements_met": 9,
+                "total_requirements": 9,
+                "completion_percentage": 100.0,
+            }
+        ]
+    )
+
+    assert "<strong>100.0%</strong>" in html
+    assert "not scored" not in html

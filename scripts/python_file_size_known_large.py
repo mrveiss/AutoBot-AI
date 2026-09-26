@@ -295,7 +295,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/orchestration/workflow_runner.py": 696,
     "autobot-backend/orchestrator.py": 1114,
     "autobot-backend/performance_benchmarks_test.py": 661,
-    "autobot-backend/phase_progression_manager.py": 851,
+    "autobot-backend/phase_progression_manager.py": 850,  # #17089: dedup threshold
     "autobot-backend/planner/planner.py": 877,
     "autobot-backend/plugin_manager.py": 702,
     "autobot-backend/project_state_manager.py": 998,
