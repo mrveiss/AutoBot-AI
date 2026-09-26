@@ -2774,7 +2774,7 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
 .btn-secondary:hover { background: var(--bg-hover); }
 .process-role {
   font-size: 0.75rem;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   font-family: var(--font-family-mono, monospace);
 }
 .process-detach-btn {

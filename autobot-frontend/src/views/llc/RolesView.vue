@@ -871,17 +871,17 @@ onMounted(loadRoles)
 .roles-title {
   margin: 0;
   font-size: var(--font-size-xl);
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .roles-subtitle {
   margin: var(--spacing-xs) 0 0;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .roles-state,
 .roles-section-empty {
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .roles-layout {
@@ -910,7 +910,7 @@ onMounted(loadRoles)
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--color-text-primary);
+  color: var(--text-primary);
   cursor: pointer;
   text-align: start;
 }
@@ -931,12 +931,12 @@ onMounted(loadRoles)
 .roles-detail-name {
   margin: 0;
   font-size: var(--font-size-lg);
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .roles-detail-description {
   margin: var(--spacing-xs) 0 0;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .roles-section {
@@ -946,7 +946,7 @@ onMounted(loadRoles)
 .roles-section-title {
   margin: 0 0 var(--spacing-xs);
   font-size: var(--font-size-md);
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .roles-chip-list {
@@ -965,13 +965,13 @@ onMounted(loadRoles)
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--radius-sm);
   background: var(--color-surface-hover);
-  color: var(--color-text-primary);
+  color: var(--text-primary);
   font-family: var(--font-family-mono, monospace);
   font-size: var(--font-size-sm);
 }
 
 .roles-chip-note {
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   font-family: var(--font-family-base, inherit);
 }
 
@@ -980,7 +980,7 @@ onMounted(loadRoles)
   align-items: center;
   gap: var(--spacing-xs);
   margin-top: var(--spacing-sm);
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .roles-field {
@@ -993,7 +993,7 @@ onMounted(loadRoles)
 .roles-chip-action {
   border: none;
   background: transparent;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: var(--font-size-md);
   line-height: 1;
@@ -1001,7 +1001,7 @@ onMounted(loadRoles)
 }
 
 .roles-chip-action:hover:not(:disabled) {
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .roles-chip-action:disabled {
