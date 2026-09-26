@@ -30,7 +30,6 @@ from autobot_shared.logging_manager import get_logger
 from __future__ import annotations
 
 import asyncio
-import os
 import time
 from typing import Any, Dict, List, Optional
 
@@ -39,8 +38,12 @@ from autobot_shared.credential_gated_registry import (
     gated_registry_singleton,
 )
 from autobot_shared.env_utils import env_float
+from autobot_shared.llm_provider_candidates import (
+    build_candidate_selection,
+    describe_exclusions,
+    describe_exhaustion,
+)
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
 from llm_shared.model_param_registry import apply_model_defaults, apply_prompt_prefix
 from llm_shared.models import LLMRequest
 from prepared_facts import ProviderRuntimeFact
@@ -431,26 +434,22 @@ class ProviderRegistry(CredentialGatedRegistry[BaseProvider]):
         are merged into ``request.metadata["api_kwargs"]`` before returning
         (caller-supplied values always win).  See ``enrich_request()``.
 
-        Returns None only if every registered provider is unreachable.
+        Returns None when every permitted provider is unreachable, or when the
+        configured order permits none of the registered providers -- two different
+        failures, distinguished in the log line rather than in the return value.
         """
-        # Build candidate list in priority order
-        candidates: List[str] = []
-        if provider_name:
-            candidates.append(provider_name)
-        if conversation_id:
-            conv_pref = self._conversation_overrides.get(conversation_id)
-            if conv_pref and conv_pref not in candidates:
-                candidates.append(conv_pref)
-        # Issue #4451: per-org persisted provider preference.
-        org_pref = await self._resolve_org_provider(org_id)
-        if org_pref and org_pref not in candidates:
-            candidates.append(org_pref)
-        for name in self._fallback_chain:
-            if name not in candidates:
-                candidates.append(name)
-        for name in self._providers:
-            if name not in candidates:
-                candidates.append(name)
+        # Build candidate list in priority order (rules in autobot_shared/llm_provider_candidates.py).
+        selection = build_candidate_selection(
+            explicit=provider_name,
+            conversation_preference=(self._conversation_overrides.get(conversation_id) if conversation_id else None),
+            org_preference=await self._resolve_org_provider(org_id),  # Issue #4451
+            chain=self._fallback_chain,
+            registered=self._providers,
+        )
+        candidates: List[str] = list(selection.candidates)
+        held_out = describe_exclusions(selection)
+        if held_out:
+            logger.debug("%s", held_out)
 
         primary = candidates[0] if candidates else None
         model_name: str | None = request.model_name if request else None
@@ -504,7 +503,7 @@ class ProviderRegistry(CredentialGatedRegistry[BaseProvider]):
                     return self._npu_pipeline_dispatcher  # type: ignore[return-value]
                 return provider
 
-        logger.error("All providers unavailable or not configured")
+        logger.error("%s", describe_exhaustion(selection))
         return None
 
     # ------------------------------------------------------------------
@@ -548,221 +547,21 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     Providers are registered only when they are enabled and (for cloud
     providers) when an API key is found.  Missing optional dependencies are
     handled gracefully so the application always starts.
+
+    The chain the registry stores is ``AUTOBOT_LLM_PROVIDER_ORDER`` applied to
+    the registration order, not the registration order itself (#15500): the
+    order a provider is built in must not decide which one serves a request.
+
+    The registrations themselves live in ``llm_shared.providers.bootstrap``,
+    which also records why that module sits under ``providers/`` and why its
+    import placements are the way they are. Imported here at call time, as
+    every provider import in this function always was, so a provider module
+    that cannot import fails the population rather than the module load.
     """
+    from autobot_shared.llm_provider_order import apply_configured_order
+    from llm_shared.providers.bootstrap import register_default_providers
 
-    from autobot_shared.ssot_config import get_config as get_ssot_config
-    from llm_shared.providers.anthropic import AnthropicProvider
-    from llm_shared.providers.bedrock import BedrockProvider
-    from llm_shared.providers.custom_openai import CustomOpenAIProvider
-    from llm_shared.providers.groq import GroqProvider
-    from llm_shared.providers.huggingface import HuggingFaceProvider
-    from llm_shared.providers.mistral import MistralProvider
-    from llm_shared.providers.nous_portal import NousPortalProvider
-    from llm_shared.providers.openai import OpenAIProvider
-    from llm_shared.providers.openrouter import OpenRouterProvider
-    from llm_shared.providers.vertexai import VertexAIProvider
-    from llm_shared.providers.vllm_base import VLLMBaseProvider
-    from services.provider_key_vault import resolve_provider_key
-
-    fallback: List[str] = []
-
-    # Ollama (local) — always registered, highest priority
-    try:
-        ssot = get_ssot_config()
-        ollama_url = ssot.ollama_url if ssot else config.ollama_endpoint
-        from llm_shared.providers.ollama_provider import OllamaProvider
-
-        ollama_provider = OllamaProvider(settings={"base_url": ollama_url})
-        registry.register(ollama_provider)
-        fallback.append(ollama_provider.provider_name)
-    except Exception as exc:
-        logger.debug("Ollama provider not registered: %s", exc)
-
-    # OpenAI — registered when API key is present (env wins; else System vault, #10088 Task 7)
-    openai_key = resolve_provider_key("OPENAI_API_KEY", config.openai_api_key)
-    if openai_key:
-        openai_provider = OpenAIProvider(settings={"api_key": openai_key})
-        registry.register(openai_provider)
-        fallback.append(openai_provider.provider_name)
-    else:
-        logger.debug("OPENAI_API_KEY not set — OpenAI provider not registered")
-
-    # Anthropic — registered when API key is present (env wins; else System vault, #10088 Task 7)
-    anthropic_key = resolve_provider_key("ANTHROPIC_API_KEY", config.anthropic_api_key)
-    if anthropic_key:
-        anthropic_provider = AnthropicProvider(settings={"api_key": anthropic_key})
-        registry.register(anthropic_provider)
-        fallback.append(anthropic_provider.provider_name)
-    else:
-        logger.debug("ANTHROPIC_API_KEY not set — Anthropic provider not registered")
-
-    # Groq — registered when API key is present (env wins; else System vault, #10088 Task 7)
-    groq_key = resolve_provider_key("GROQ_API_KEY", config.groq_api_key)
-    if groq_key:
-        groq_provider = GroqProvider(settings={"api_key": groq_key})
-        registry.register(groq_provider)
-        fallback.append(groq_provider.provider_name)
-    else:
-        logger.debug("GROQ_API_KEY not set — Groq provider not registered")
-
-    # Mistral — registered when API key is present (Issue #10549; env wins else vault, #10088 Task 7)
-    mistral_key = resolve_provider_key("MISTRAL_API_KEY", config.mistral_api_key)
-    if mistral_key:
-        mistral_provider = MistralProvider(
-            settings={
-                "api_key": mistral_key,
-                "base_url": config.mistral_api_base_url or None,
-                "default_model": config.mistral_default_model or None,
-            }
-        )
-        registry.register(mistral_provider)
-        fallback.append(mistral_provider.provider_name)
-    else:
-        logger.debug("MISTRAL_API_KEY not set — Mistral provider not registered")
-
-    # HuggingFace — HF token, reused below as the Nous Portal fallback (env wins; else vault, #15268).
-    hf_token = resolve_provider_key("HF_TOKEN", config.hf_token) or resolve_provider_key(
-        "HUGGINGFACE_API_TOKEN", config.huggingface_api_token
-    )
-    if hf_token:
-        hf_provider = HuggingFaceProvider(settings={"api_token": hf_token})
-        registry.register(hf_provider)
-        fallback.append(hf_provider.provider_name)
-    else:
-        logger.debug("HF_TOKEN not set — HuggingFace provider not registered")
-
-    # Custom OpenAI-compatible endpoint — registered when base URL is configured
-    custom_url = config.custom_openai_base_url
-    if custom_url:
-        custom_provider = CustomOpenAIProvider(
-            settings={
-                "base_url": custom_url,
-                # env wins; else System vault (#10088 Task 7)
-                "api_key": resolve_provider_key("CUSTOM_OPENAI_API_KEY", config.custom_openai_api_key),
-                "default_model": config.custom_openai_default_model,
-            }
-        )
-        registry.register(custom_provider)
-        fallback.append(custom_provider.provider_name)
-    else:
-        logger.debug("CUSTOM_OPENAI_BASE_URL not set — custom OpenAI provider not registered")
-
-    # OpenRouter — registered when API key is present (Issue #4341; env wins else vault, #10088 Task 7)
-    openrouter_key = resolve_provider_key("OPENROUTER_API_KEY", config.openrouter_api_key)
-    if openrouter_key:
-        try:
-            openrouter_provider = OpenRouterProvider(
-                settings={
-                    "api_key": openrouter_key,
-                    "default_model": config.openrouter_default_model,
-                }
-            )
-            registry.register(openrouter_provider)
-            fallback.append(openrouter_provider.provider_name)
-        except Exception as exc:
-            logger.debug("OpenRouter provider not registered: %s", exc)
-    else:
-        logger.debug("OPENROUTER_API_KEY not set — OpenRouter provider not registered")
-
-    # Nous Portal — registered when API key is present (Issue #4341; env wins else vault, #10088 Task 7).
-    nous_key = resolve_provider_key("NOUS_API_KEY", config.nous_api_key) or hf_token
-    if nous_key:
-        try:
-            nous_provider = NousPortalProvider(
-                settings={
-                    "api_key": nous_key,
-                    "default_model": config.misc.nous_default_model or "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO",
-                }
-            )
-            registry.register(nous_provider)
-            fallback.append(nous_provider.provider_name)
-        except Exception as exc:
-            logger.debug("Nous Portal provider not registered: %s", exc)
-    else:
-        logger.debug("NOUS_API_KEY not set — Nous Portal provider not registered")
-
-    # vLLM — registered when model configuration is provided (Issue #4341)
-    vllm_model = config.vllm_model
-    if vllm_model:
-        try:
-            vllm_provider = VLLMBaseProvider(
-                settings={
-                    "model": vllm_model,
-                    "tensor_parallel_size": int(config.vllm_tensor_parallel_size),
-                    "gpu_memory_utilization": float(config.vllm_gpu_memory_utilization),
-                    "dtype": config.vllm_dtype,
-                }
-            )
-            registry.register(vllm_provider)
-            fallback.append(vllm_provider.provider_name)
-        except Exception as exc:
-            logger.debug("vLLM provider not registered: %s", exc)
-    else:
-        logger.debug("VLLM_MODEL not set — vLLM provider not registered")
-
-    # Vertex AI — registered when GCP project is configured (GH#9009)
-    vertex_project = config.vertex_ai_project
-    if vertex_project:
-        try:
-            vertex_provider = VertexAIProvider(
-                settings={
-                    "project": vertex_project,
-                    "location": config.vertex_ai_location,
-                    "service_account_json": config.vertex_ai_service_account_json,
-                    "default_model": config.vertex_ai_default_model,
-                }
-            )
-            registry.register(vertex_provider)
-            fallback.append(vertex_provider.provider_name)
-        except Exception as exc:
-            logger.debug("Vertex AI provider not registered: %s", exc)
-    else:
-        logger.debug("VERTEX_AI_PROJECT not set — Vertex AI provider not registered")
-
-    # AWS Bedrock — registered when AWS credentials are available (GH#9010)
-    # Credentials can come from env vars (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY)
-    # or IAM role (automatic in EC2/ECS). Region defaults to us-east-1.
-    aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
-    aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-    aws_region = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
-
-    # Register if credentials are explicitly provided OR if we're in an AWS environment
-    # (IAM role will be used automatically by boto3)
-    if aws_access_key and aws_secret_key:
-        try:
-            bedrock_provider = BedrockProvider(
-                settings={
-                    "aws_access_key_id": aws_access_key,
-                    "aws_secret_access_key": aws_secret_key,
-                    "region": aws_region,
-                    "default_model": "claude-3-5-sonnet",
-                }
-            )
-            registry.register(bedrock_provider)
-            fallback.append(bedrock_provider.provider_name)
-        except Exception as exc:
-            logger.debug("Bedrock provider not registered: %s", exc)
-    else:
-        # Try IAM role registration (will work in EC2/ECS without explicit credentials)
-        try:
-            bedrock_provider = BedrockProvider(
-                settings={
-                    "region": aws_region,
-                    "default_model": "claude-3-5-sonnet",
-                }
-            )
-            registry.register(bedrock_provider)
-            fallback.append(bedrock_provider.provider_name)
-            logger.debug("Bedrock provider registered with IAM role authentication")
-        except Exception as exc:
-            logger.debug("Bedrock provider not registered (no credentials or IAM role): %s", exc)
-
-    registry.set_fallback_chain(fallback)
-    logger.info(
-        "Provider registry initialised with %d providers: %s",
-        len(fallback),
-        fallback,
-    )
+    registry.set_fallback_chain(apply_configured_order(register_default_providers(registry)))
 
 
 # ---------------------------------------------------------------------------
