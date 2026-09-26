@@ -12,7 +12,14 @@
 
 set -uo pipefail  # NOT -e: we want to capture exit codes and report
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+# #17035: git runs every hook from the top of the working tree (githooks(5)),
+# so $PWD is this checkout's root. The bare `git rev-parse --show-toplevel`
+# that stood here is the #15783 class, and this hook is the worst place for
+# it: the pre-push environment carries GIT_DIR pointing at the pushing
+# worktree's git dir, which outranks the working directory and answers for a
+# different checkout. That is why scripts/install-git-hooks.sh already has to
+# `unset GIT_DIR` (#15246). Same resolution as the commit-msg hook (#17032).
+REPO_ROOT="$PWD"
 
 # Time-box each check. Frontend type-check on the whole project takes ~60s;
 # we'd rather warn than block forever.
