@@ -57,3 +57,61 @@ export function getSeverityColors(severities: string[]): string[] {
     return severityColors[key] || getCssVar('--chart-indigo', '#6366f1')
   })
 }
+
+// ==================== Notification chrome (#17560) ====================
+
+/** The three colours a notification surface needs. */
+export interface NotificationColors {
+  /** Surface fill. */
+  background: string
+  /** 1px border and icon tint. */
+  border: string
+  /** Foreground text. */
+  text: string
+}
+
+/** What a notification is telling the user, independent of who is showing it. */
+export type NotificationKind = 'info' | 'success' | 'warning' | 'error'
+
+//: name -> [background token, border token, text token]
+const _NOTIFICATION_TOKENS: Record<NotificationKind, readonly [string, string, string]> = {
+  info: ['--color-info-bg', '--color-info', '--color-info-hover'],
+  success: ['--color-success-bg', '--color-success', '--color-success-hover'],
+  warning: ['--color-warning-bg', '--color-warning', '--color-warning-hover'],
+  error: ['--color-error-bg', '--color-error', '--color-error-hover'],
+}
+
+//: The literals each token falls back to when the document cannot be read --
+//: SSR, unit tests, or a theme that has not loaded. One palette, so the
+//: fallback path is as consistent as the themed one; before #17560 three
+//: call sites in `utils/cacheManagement.ts` each carried their own.
+const _NOTIFICATION_FALLBACKS: Record<NotificationKind, readonly [string, string, string]> = {
+  info: ['#eff6ff', '#3b82f6', '#1d4ed8'],
+  success: ['#ecfdf5', '#10b981', '#065f46'],
+  warning: ['#fef3cd', '#f59e0b', '#92400e'],
+  error: ['#fef2f2', '#ef4444', '#dc2626'],
+}
+
+/**
+ * Theme-aware colours for a notification surface (#17560).
+ *
+ * `utils/cacheManagement.ts` held **three** severity-to-colour maps, one per
+ * notification function, disagreeing with each other: the same "warning" was
+ * `#ff9800` in one and `#f59e0b` in the other two, and "info" was Material
+ * `#2196f3` in one and Tailwind `#3b82f6` elsewhere. None of the three could
+ * follow the theme, because a literal written in JavaScript cannot change when
+ * `[data-theme]` does.
+ *
+ * Resolved through :func:`getCssVar` rather than restated, so these follow the
+ * active theme. Anything drawing a notification surface should call this
+ * instead of choosing colours: that is the whole point of it existing.
+ */
+export function getNotificationColors(kind: NotificationKind): NotificationColors {
+  const tokens = _NOTIFICATION_TOKENS[kind] ?? _NOTIFICATION_TOKENS.info
+  const fallbacks = _NOTIFICATION_FALLBACKS[kind] ?? _NOTIFICATION_FALLBACKS.info
+  return {
+    background: getCssVar(tokens[0], fallbacks[0]),
+    border: getCssVar(tokens[1], fallbacks[1]),
+    text: getCssVar(tokens[2], fallbacks[2]),
+  }
+}

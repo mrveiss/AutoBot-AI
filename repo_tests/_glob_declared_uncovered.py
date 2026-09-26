@@ -86,6 +86,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     ),
     "*.vue": (
         {
+            "repo_tests/hardcoded_colour_ratchet_17560_test.py",
             "repo_tests/slm_frontend_bare_ui_literals_test.py",
             "repo_tests/slm_frontend_calls_reach_served_routes_test.py",
         },
