@@ -16,6 +16,7 @@ from services.mcp_aggregation import (
     resolve_name_collisions,
     server_id_from_uri,
 )
+from skills.sync.mcp_client import ToolDiscovery
 from type_defs.mcp import MCPToolDefinition
 
 
@@ -53,6 +54,9 @@ class TestDiscoverToolsMultiServer:
     async def test_skips_unreachable_server(self):
         alive = AsyncMock()
         alive.discover_tools = AsyncMock(return_value=[_make_tool("t1")])
+        # #17467: the aggregation requires the detailed form; the accepted
+        # list is the same, so the assertions below are unchanged.
+        alive.discover_tools_detailed = AsyncMock(return_value=ToolDiscovery(accepted=[_make_tool("t1")], rejected=[]))
         alive.__aenter__ = AsyncMock(return_value=alive)
         alive.__aexit__ = AsyncMock(return_value=False)
 
@@ -127,11 +131,21 @@ class TestDiscoverAndResolve:
     async def test_end_to_end_collision_and_skip(self):
         client_a = AsyncMock()
         client_a.discover_tools = AsyncMock(return_value=[_make_tool("shared"), _make_tool("only_a")])
+        # #17467: the aggregation requires the detailed form; the accepted
+        # list is the same, so the assertions below are unchanged.
+        client_a.discover_tools_detailed = AsyncMock(
+            return_value=ToolDiscovery(accepted=[_make_tool("shared"), _make_tool("only_a")], rejected=[])
+        )
         client_a.__aenter__ = AsyncMock(return_value=client_a)
         client_a.__aexit__ = AsyncMock(return_value=False)
 
         client_b = AsyncMock()
         client_b.discover_tools = AsyncMock(return_value=[_make_tool("shared")])
+        # #17467: the aggregation requires the detailed form; the accepted
+        # list is the same, so the assertions below are unchanged.
+        client_b.discover_tools_detailed = AsyncMock(
+            return_value=ToolDiscovery(accepted=[_make_tool("shared")], rejected=[])
+        )
         client_b.__aenter__ = AsyncMock(return_value=client_b)
         client_b.__aexit__ = AsyncMock(return_value=False)
 
