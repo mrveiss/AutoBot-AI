@@ -45,6 +45,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         {
             "repo_tests/doc_sync_hook_resolves_indexer_15845_test.py",
             "repo_tests/documented_playbook_invocations_test.py",
+            "repo_tests/redis_config_path_is_canonical_17434_test.py",
             "repo_tests/sdk_docs_paths_test.py",
         },
         "root-relative `*.md` sweep; the matching files live outside the python filter's trees",
@@ -123,6 +124,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/nginx_sites_enabled_link_enforced_16979_test.py",
             "repo_tests/pip_relative_editable_needs_chdir_test.py",
             "repo_tests/python_interpreter_role_rename_test.py",
+            "repo_tests/redis_config_path_is_canonical_17434_test.py",
             "repo_tests/required_context_complements_test.py",
             "repo_tests/slm_frontend_publish_contract_test.py",
             "repo_tests/sync_deletions_ansible_wiring_16310_test.py",

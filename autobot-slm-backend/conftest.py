@@ -33,13 +33,22 @@ from unittest.mock import MagicMock
 # ---------------------------------------------------------------------------
 # Hollow api package — prevents api/__init__.py from executing
 # ---------------------------------------------------------------------------
+_SLM_ROOT = Path(__file__).resolve().parent
+
+#: name -> the object THIS file put in ``sys.modules``; see the lifetime
+#: manager at the foot of this file (#16069).
+_INSTALLED_STUBS: dict = {}
+
 _API_DIR = str(Path(__file__).parent / "api")
 
 _api_mod = types.ModuleType("api")
 _api_mod.__path__ = [_API_DIR]  # type: ignore[assignment]
 _api_mod.__package__ = "api"
 _api_mod.__spec__ = None  # type: ignore[assignment]
+_api_was_absent = "api" not in sys.modules
 sys.modules.setdefault("api", _api_mod)
+if _api_was_absent:
+    _INSTALLED_STUBS["api"] = _api_mod
 
 
 # ---------------------------------------------------------------------------
@@ -135,6 +144,7 @@ def _stub(name: str) -> MagicMock:
         mod.__package__ = name.split(".")[0]
         mod.__spec__ = None
         sys.modules[name] = mod
+        _INSTALLED_STUBS[name] = mod  # #16069: so it can be taken back out
     mod = sys.modules[name]
     parent_name, _, child = name.rpartition(".")
     if parent_name and parent_name in sys.modules:
@@ -318,6 +328,7 @@ if "services" not in sys.modules:
     _services_pkg.__package__ = "services"
     _services_pkg.__spec__ = None
     sys.modules["services"] = _services_pkg
+    _INSTALLED_STUBS["services"] = _services_pkg  # #16069: not via _stub(), record it here
 
 # Each child stub binds onto the parent as it is created (see _stub docstring).
 for _m in sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_MODULES)):
@@ -545,3 +556,25 @@ for _m in [
     "user_management.services.user_service",
 ]:
     _stub(_m)
+
+
+# ── stub lifetime (#16069) ───────────────────────────────────────────────────
+# Held for the whole process, these stubs made a later `import sqlalchemy` (or
+# models/services/user_management) return a MagicMock, green either way. The
+# withdrawal logic, and why it must be a globally registered plugin rather than
+# a hook in this file, live in `_slm_stub_lifetime.py`.
+
+
+def pytest_configure(config) -> None:
+    """Confine the stubs above to this directory (#16069).
+
+    Loaded by path: this directory is not on ``sys.path`` when pytest configures,
+    so a plain import raises and takes the session down with an INTERNALERROR.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("_slm_stub_lifetime", _SLM_ROOT / "_slm_stub_lifetime.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault("_slm_stub_lifetime", module)
+    spec.loader.exec_module(module)
+    module.register(config, _SLM_ROOT, _INSTALLED_STUBS)
