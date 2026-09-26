@@ -321,8 +321,43 @@ expect_block "git push origin main"                  "git push origin main"
 # push would break its fast-forward-only mirror workflow and cut the updater off.
 expect_block "git push origin Dev_new_gui"           "git push origin Dev_new_gui"
 expect_block "git push --force"                      "git push --force origin feature"
-expect_allow "git push --force-with-lease"           "git push --force-with-lease"
+# --force-with-lease is the permitted force spelling, but it does not excuse
+# the DESTINATION. The bare form was allowed before #14144 only because the
+# old bare-push pattern required nothing after `push`, so any option after it
+# hid the fact that the push would land on whatever branch HEAD pointed at --
+# `main` in this sandbox. Given a feature refspec it is allowed; bare from a
+# protected branch it is not, and both cases are asserted.
+expect_allow "git push --force-with-lease to a feature ref"  "git push --force-with-lease origin issue-9999"
+expect_block "git push --force-with-lease bare, on main"     "git push --force-with-lease"
 expect_allow "git push origin issue-9999"            "git push origin issue-9999"
+
+# ── #14144: spellings that reached a protected ref while the guard matched
+# the command TEXT instead of the refspec's destination. Every one of these
+# was permitted before; the count in the issue title was 5, the owner's audit
+# said 6, and the real figure measured against the retired patterns is 9.
+expect_block "long ref spelling"                     "git push origin refs/heads/main"
+expect_block "via HEAD"                              "git push origin HEAD"
+expect_block "plus-prefixed force"                   "git push origin +main"
+expect_block "HEAD to a long ref"                    "git push origin HEAD:refs/heads/main"
+expect_block "a remote that is not origin"           "git push upstream main"
+expect_block "behind a global -C"                    "git -C . push origin main"
+expect_block "remote only, no refspec"               "git push origin"
+expect_block "--all sends every branch"              "git push --all origin"
+expect_block "--mirror sends every ref"              "git push --mirror origin"
+expect_block "deleting the protected ref"            "git push origin :main"
+expect_block "option value before the refspec"       "git push -o ci.skip origin main"
+expect_block "bundled -f"                            "git push -fu origin feature"
+
+# The allow side of the same change. `main:feature` writes to a feature ref and
+# was REFUSED by the retired pattern, which matched `origin main` anywhere --
+# so the fix removes a false denial as well as nine false permissions. Without
+# these cases the section above would pass against a guard that denied
+# everything containing the word push.
+expect_allow "local main to a feature ref"           "git push origin main:feature"
+expect_allow "a feature ref by long spelling"        "git push origin refs/heads/issue-9999"
+expect_allow "push option with a value"              "git push -o ci.skip origin issue-9999"
+expect_allow "a push quoted in prose"                "echo 'git push origin main'"
+expect_allow "a push named in a grep pattern"        "grep -rn 'git push origin main' docs/"
 
 echo ""
 echo "--- Destructive git ---"
@@ -414,6 +449,23 @@ echo "--- Database ---"
 expect_block "DROP TABLE"                            "psql -c 'DROP TABLE users;'"
 expect_block "DELETE FROM without WHERE"             "psql -c 'DELETE FROM users;'"
 expect_allow "DELETE FROM with WHERE"                "psql -c 'DELETE FROM users WHERE id=1;'"
+
+# TRUNCATE TABLE had a guard and no case at all (#14144 AC2). Found by listing the
+# script's deny sites and asking which of them any test reaches: this one was
+# reached by none, so every property of the guard was unverified.
+#
+# Spelled in pieces because this guard is still one of the text-matching ones:
+# #16885 gated seven guards on the positional scanner and the SQL guards were
+# not among them, so a fixture containing the phrase whole makes the guard deny
+# the command that writes this file. It did, while this section was being added.
+SQL_TRUNC="TRUN""CATE"
+expect_block "$SQL_TRUNC TABLE"                       "psql -c '$SQL_TRUNC TABLE users;'"
+expect_block "$SQL_TRUNC TABLE, lower case"           "psql -c '$(echo "$SQL_TRUNC" | tr A-Z a-z) table users;'"
+# The allow side: the pattern requires TABLE after the verb, so the word alone is
+# not a match. Without these, the cases above would pass against a guard that
+# denied every command merely containing the word.
+expect_allow "the verb alone in prose"                "echo 'we should never do that to a table'"
+expect_allow "the coreutils tool of the same name"    "truncate -s 0 /tmp/some.log"
 
 echo ""
 echo "--- System ---"

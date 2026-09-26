@@ -53,6 +53,7 @@ from .metrics import (
 )
 from .milestones import define_default_milestones, evaluate_milestone_criteria
 from .models import ProjectMilestone, StateChange, StateSnapshot
+from .phase_report import phase_figure, validation_figure
 from .reports import calculate_trends, export_state_data_to_file
 from .tracking import (
     track_api_call_to_redis,
@@ -160,7 +161,10 @@ class ProjectStateTracker:
         phase_states = {}
         for phase_name, phase_data in validation_results["phases"].items():
             phase_states[phase_name] = {
-                "completion_percentage": phase_data["completion_percentage"],
+                "completion_percentage": phase_figure(phase_data),
+                # #17089: carried alongside, because a percentage alone cannot
+                # say whether anything was actually checked.
+                "complete": phase_data.get("complete", False),
                 "status": phase_data["status"],
                 "missing_items": phase_data.get("missing_items", []),
             }
@@ -185,10 +189,12 @@ class ProjectStateTracker:
         """
         return {
             TrackingMetric.PHASE_COMPLETION: len(
-                [p for p in phase_states.values() if p["completion_percentage"] >= 95.0]
+                # The honest flag, not a threshold: False whenever a check group
+                # was skipped, so a CI-mode run cannot inflate this count (#17089).
+                [p for p in phase_states.values() if p.get("complete")]
             ),
             TrackingMetric.CAPABILITY_COUNT: len(capabilities["active_capabilities"]),
-            TrackingMetric.VALIDATION_SCORE: validation_results["overall_assessment"]["system_maturity_score"],
+            TrackingMetric.VALIDATION_SCORE: validation_figure(validation_results["overall_assessment"]),
             TrackingMetric.SYSTEM_MATURITY: capabilities["system_maturity"],
             TrackingMetric.ERROR_RATE: await get_error_rate(self.redis_client, self._error_count),
             TrackingMetric.PROGRESSION_VELOCITY: calculate_progression_velocity(self.state_history),
@@ -212,7 +218,7 @@ class ProjectStateTracker:
             # fall back to an empty validation result instead of failing the
             # snapshot outright.
             if self.validator is None:
-                validation_results = {"phases": {}, "overall_assessment": {"system_maturity_score": 0}}
+                validation_results = {"phases": {}, "overall_assessment": {"structural_presence_score": 0}}
             else:
                 validation_results = await self.validator.validate_all_phases()
             capabilities = self.progression_manager.get_current_system_capabilities()
@@ -264,7 +270,13 @@ class ProjectStateTracker:
             active_capabilities=set(capabilities["active_capabilities"]),
             system_metrics=metrics,
             configuration=config,
-            validation_results={phase: data["completion_percentage"] for phase, data in phase_states.items()},
+            # Only phases that published a figure: a `None` here would be stored
+            # as a score, and an unscored phase is not a zero-scoring one (#17089).
+            validation_results={
+                phase: data["completion_percentage"]
+                for phase, data in phase_states.items()
+                if data["completion_percentage"] is not None
+            },
             metadata={
                 "total_phases": len(phase_states),
                 "completed_phases": metrics[TrackingMetric.PHASE_COMPLETION],

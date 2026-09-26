@@ -31,6 +31,7 @@ Closes GH#7081.
 from __future__ import annotations
 
 from autobot_shared.env_registry import EnvVarSpec, register_env_var
+from autobot_shared.llm_provider_order import DEFAULT_ORDER
 
 register_env_var(
     EnvVarSpec(
@@ -458,5 +459,24 @@ register_env_var(
             "AUTOBOT_PRICING_LOCAL_CACHE_REFRESH_INTERVAL_S by enough to survive a few failed ticks."
         ),
         component="pricing",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_PROVIDER_ORDER",
+        type=str,
+        default=DEFAULT_ORDER,
+        description=(
+            "Comma-separated provider preference order for the registry's fallback chain, in which "
+            "`*` means 'then every other registered provider, in registration order' (#15500). Before "
+            "this existed the order was statement order in _populate_default_providers, so Ollama was "
+            "always primary and an operator's paid provider was reached only once Ollama failed. A list "
+            "without `*` is exhaustive: unnamed providers stay registered and reachable by explicit "
+            "request but are absent from the fallback chain, which is how a provider is held out of the "
+            "generation path rather than merely demoted. The default reproduces the previous order. "
+            "Parsed by autobot_shared/llm_provider_order.py, which owns the default this entry shows."
+        ),
+        component="ai",
     )
 )
