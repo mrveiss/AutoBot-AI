@@ -278,7 +278,7 @@ npm run dev -- --host 0.0.0.0 --port 5173
 
 ```bash
 # Configure Redis to bind to all interfaces
-# In /etc/redis/redis.conf:
+# In /etc/redis-stack.conf:
 bind 0.0.0.0
 
 # Accessed from any VM:

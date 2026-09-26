@@ -21,7 +21,7 @@ from typing import Dict
 import asyncssh
 
 from autobot_shared.logging_manager import get_logger
-from pki.config import VM_DEFINITIONS, TLSConfig
+from pki.config import REDIS_STACK_CONFIG_PATH, VM_DEFINITIONS, TLSConfig
 
 logger = get_logger(__name__)
 
@@ -86,9 +86,14 @@ async def _write_tls_config_to_redis(conn, tls_config: str) -> None:
         async with sftp.open(temp_config, "w", encoding="utf-8") as f:
             await f.write(tls_config)
 
-    # Append to main config (Issue #725: Use correct Redis Stack config path)
+    # #17434 corrects the citation this line used to carry. It read "(Issue #725:
+    # Use correct Redis Stack config path)" over /etc/redis-stack/redis-stack.conf,
+    # and #725 names /etc/redis-stack.conf -- once, in its body, and never the
+    # other spelling. The comment cited a ruling that says the opposite, so the
+    # TLS block was appended to a path whose directory does not exist and the
+    # append silently reached nothing.
     await conn.run(
-        f"sudo cat {temp_config} | sudo tee -a /etc/redis-stack/redis-stack.conf > /dev/null",
+        f"sudo cat {temp_config} | sudo tee -a {REDIS_STACK_CONFIG_PATH} > /dev/null",
         check=True,
     )
     await conn.run(f"rm {temp_config}")
@@ -161,10 +166,10 @@ async def _apply_redis_tls_config(
     Returns:
         ConfigurationResult indicating success/failure and if restart needed.
     """
-    # Check if TLS config already exists (Issue #725: Use correct config path)
-    check_result = await conn.run(
-        "grep -q 'tls-port' /etc/redis-stack/redis-stack.conf 2>/dev/null || echo 'not_found'"
-    )
+    # #17434: same corrected path as the append above. Against the old spelling
+    # this grep always missed, so the configurator re-applied the TLS block on
+    # every run and never reported it as already present.
+    check_result = await conn.run(f"grep -q 'tls-port' {REDIS_STACK_CONFIG_PATH} 2>/dev/null || echo 'not_found'")
 
     if "not_found" in check_result.stdout:
         # Issue #665: Uses extracted helpers
