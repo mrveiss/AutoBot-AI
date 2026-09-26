@@ -12,5 +12,11 @@ redis_timeout: 300
 redis_tcp_keepalive: 60
 redis_backup_retention_days: 30
 
+# #17444 review: the drop-in directory for the packaged Redis Stack unit.
+# Named here because deploy-native-services.yml installs the same drop-in this
+# role does; the literal lived in both, so renaming the unit meant editing two
+# files and the play would have kept writing to the old directory silently.
+redis_systemd_override_dir: "/etc/systemd/system/redis-stack-server.service.d"
+
 # Authentication - vault password with safe fallback
 redis_password: "{{ vault_redis_password | default('') }}"

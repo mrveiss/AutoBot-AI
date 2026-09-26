@@ -455,3 +455,97 @@ class TestLocalVersionSegments:
     )
     def test_local_segment_does_not_demote_the_release(self, installed, operator, required, expected):
         assert checker.satisfies(installed, operator, required) is expected
+
+
+# --------------------------------------------------------------------------
+# #17449 — auditing an interpreter this process is NOT running in, and telling
+# "not installed" apart from "could not read it".
+# --------------------------------------------------------------------------
+
+
+class TestAuditingAnotherInterpreter:
+    def test_resolve_interpreter_accepts_a_venv_directory(self, tmp_path):
+        (tmp_path / "bin").mkdir()
+        binary = tmp_path / "bin" / "python"
+        binary.write_text("", encoding="utf-8")
+        assert checker.resolve_interpreter(tmp_path) == binary
+
+    def test_resolve_interpreter_accepts_a_direct_path(self, tmp_path):
+        binary = tmp_path / "python3.14"
+        binary.write_text("", encoding="utf-8")
+        assert checker.resolve_interpreter(binary) == binary
+
+    def test_a_directory_without_an_interpreter_raises(self, tmp_path):
+        with pytest.raises(checker.InterpreterUnreadable):
+            checker.resolve_interpreter(tmp_path)
+
+    def test_a_missing_interpreter_raises_rather_than_reporting_nothing_installed(self, tmp_path):
+        """The load-bearing refusal.
+
+        Returning {} would make every declared floor read as 'absent', and
+        absence is not a shortfall by default -- so an unreachable venv would
+        report as a clean environment. That is the failure this module exists
+        to prevent, arriving through the new door.
+        """
+        with pytest.raises(checker.InterpreterUnreadable):
+            checker.installed_versions(["anything"], tmp_path / "no-such-python")
+
+    def test_this_interpreter_still_answers_with_one_argument(self):
+        """#17449 is an added capability, not a changed contract.
+
+        Existing callers and test stubs bind `installed_versions(names)`. The
+        second parameter is only ever passed on the --venv path.
+        """
+        assert checker.installed_versions(["pytest"]).get("pytest")
+
+
+class TestUnreadableIsNotAbsent:
+    """Duplicate *.dist-info makes `version()` answer nothing (#15063's append-only venv).
+
+    A deployed venv carried two dist-info directories for one distribution. The
+    old code stored that as `None`, `shortfalls` treated `None` as absent, and
+    absence is not a shortfall by default -- so the floor was silently never
+    checked and the environment reported fully satisfied.
+    """
+
+    def _declaration(self):
+        return checker.Declaration(name="pkg", operator=">=", required="2.0", source="req.txt:1")
+
+    def test_unreadable_is_always_reported_even_without_require_present(self):
+        found = checker.shortfalls([self._declaration()], {"pkg": checker.UNREADABLE}, require_present=False)
+        assert [s.installed for s in found] == [checker.UNREADABLE]
+
+    def test_absent_is_still_silent_without_require_present(self):
+        assert checker.shortfalls([self._declaration()], {}, require_present=False) == []
+
+    def test_the_two_states_describe_differently(self):
+        absent = checker.Shortfall(self._declaration(), checker.ABSENT).describe()
+        unreadable = checker.Shortfall(self._declaration(), checker.UNREADABLE).describe()
+        assert "NOT INSTALLED" in absent
+        assert "UNREADABLE" in unreadable and "NOT checked" in unreadable
+        assert absent != unreadable
+
+
+class TestTheReportNamesItsEnvironment:
+    """A number without its environment is what caused two retractions in one day."""
+
+    def _one(self):
+        return [
+            checker.Shortfall(
+                checker.Declaration(source="req.txt:1", name="pkg", operator=">=", required="2.0"),
+                "1.0",
+            )
+        ]
+
+    def test_the_default_still_names_the_running_interpreter(self):
+        assert "interpreter running this check" in checker.render(self._one(), 1)[0]
+
+    def test_a_named_environment_replaces_it(self):
+        line = checker.render(self._one(), 1, environment="/opt/x/venv/bin/python (python 3.14.6)")[0]
+        assert "/opt/x/venv/bin/python (python 3.14.6)" in line
+        assert "interpreter running this check" not in line
+
+    def test_a_deployed_report_does_not_give_ci_parity_advice(self):
+        lines = checker.render(self._one(), 1, environment="/opt/x/venv/bin/python")
+        assert not any("setup-ci-parity-env.sh" in line for line in lines)
+        assert any("DEPLOYED environment" in line for line in lines)

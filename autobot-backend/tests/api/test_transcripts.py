@@ -43,7 +43,8 @@ async def test_kb_push_success():
 
     # Mock KB
     mock_kb = AsyncMock()
-    mock_kb.add_document = AsyncMock(return_value={"status": "success", "doc_id": "test-doc-123"})
+    # add_document returns the id under "fact_id"; "doc_id" is a key it never sets (#17022).
+    mock_kb.add_document = AsyncMock(return_value={"status": "success", "fact_id": "test-doc-123"})
 
     # Mock request
     request = TranscriptKBPushRequest(
@@ -91,7 +92,8 @@ async def test_kb_push_without_timing():
     from api.transcripts import push_transcript_to_kb
 
     mock_kb = AsyncMock()
-    mock_kb.add_document = AsyncMock(return_value={"status": "success", "doc_id": "test-doc-789"})
+    # add_document returns the id under "fact_id"; "doc_id" is a key it never sets (#17022).
+    mock_kb.add_document = AsyncMock(return_value={"status": "success", "fact_id": "test-doc-789"})
 
     request = TranscriptKBPushRequest(
         segment_text="Segment without timing.",
