@@ -177,3 +177,53 @@ async def test_a_rejection_reason_is_sanitized() -> None:
 
     assert len(discovery.rejected) == 1
     assert "sk-secret-value" not in discovery.rejected[0].reason
+
+
+# ---------------------------------------------------------------------------
+# The contract is required, and a double must be able to fail it.
+#
+# `AsyncMock` auto-creates every attribute, which is why mcp_aggregation states
+# the `discover_tools_detailed` contract instead of probing for it. The same
+# property bites from the other side: two test files kept doubles that stubbed
+# only `discover_tools()`, so the detailed call returned a mock, `.accepted` was
+# a mock, and nine tests failed with empty tool sets several layers away rather
+# than an AttributeError naming the missing method.
+# ---------------------------------------------------------------------------
+
+
+class _OnlyPlainDiscovery:
+    """A client with the old surface and nothing auto-created behind it."""
+
+    async def discover_tools(self):
+        return []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+@pytest.mark.asyncio
+async def test_a_client_without_the_detailed_form_raises_instead_of_yielding_mocks() -> None:
+    """A missing method is our bug, so it must surface as one.
+
+    `AttributeError` is in `_OUR_BUG`, so this is re-raised rather than recorded
+    as an unreachable server -- the laundering #17439 found, where a programming
+    error came back as an operational metric.
+    """
+    from services.mcp_aggregation import discover_tools_multi_server_detailed
+
+    with pytest.raises(AttributeError):
+        await discover_tools_multi_server_detailed(["stdio://one"], lambda uri: _OnlyPlainDiscovery())
+
+
+@pytest.mark.asyncio
+async def test_the_shared_double_satisfies_the_contract_it_stands_in_for() -> None:
+    """Otherwise the helper is the next place a mock leaks in as a tool list."""
+    from testkit.mcp_client_doubles import mcp_client_double
+
+    discovery = await mcp_client_double(["a-tool"]).discover_tools_detailed()
+
+    assert discovery.accepted == ["a-tool"]
+    assert discovery.rejected == []

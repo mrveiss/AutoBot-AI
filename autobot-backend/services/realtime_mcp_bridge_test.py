@@ -24,6 +24,7 @@ from services.realtime_mcp_bridge import (
     _translate_input_schema,
     _translate_property,
 )
+from testkit.mcp_client_doubles import mcp_client_double
 from type_defs.mcp import MCPInputSchema, MCPPropertyDefinition, MCPToolDefinition
 
 
@@ -200,10 +201,7 @@ class TestNameCollisionResolution:
         tool = _make_tool("search")
         bridge = _make_bridge(server_uris=["http://server-a:8200"])
 
-        mock_client = AsyncMock()
-        mock_client.discover_tools = AsyncMock(return_value=[tool])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client = mcp_client_double([tool])
 
         with patch(
             "services.realtime_mcp_bridge._get_mcp_client_class",
@@ -229,16 +227,10 @@ class TestNameCollisionResolution:
         bridge = _make_bridge(server_uris=uris)
 
         # server-a client
-        client_a = AsyncMock()
-        client_a.discover_tools = AsyncMock(return_value=[tool_a])
-        client_a.__aenter__ = AsyncMock(return_value=client_a)
-        client_a.__aexit__ = AsyncMock(return_value=False)
+        client_a = mcp_client_double([tool_a])
 
         # server-b client
-        client_b = AsyncMock()
-        client_b.discover_tools = AsyncMock(return_value=[tool_b])
-        client_b.__aenter__ = AsyncMock(return_value=client_b)
-        client_b.__aexit__ = AsyncMock(return_value=False)
+        client_b = mcp_client_double([tool_b])
 
         call_count = [0]
 
@@ -270,15 +262,9 @@ class TestNameCollisionResolution:
         uris = ["http://server-a:8200", "http://server-b:8200"]
         bridge = _make_bridge(server_uris=uris)
 
-        client_a = AsyncMock()
-        client_a.discover_tools = AsyncMock(return_value=[tool_shared_a, tool_unique])
-        client_a.__aenter__ = AsyncMock(return_value=client_a)
-        client_a.__aexit__ = AsyncMock(return_value=False)
+        client_a = mcp_client_double([tool_shared_a, tool_unique])
 
-        client_b = AsyncMock()
-        client_b.discover_tools = AsyncMock(return_value=[tool_shared_b])
-        client_b.__aenter__ = AsyncMock(return_value=client_b)
-        client_b.__aexit__ = AsyncMock(return_value=False)
+        client_b = mcp_client_double([tool_shared_b])
 
         def _client_factory(uri, **_kwargs):
             return client_a if "server-a" in uri else client_b
@@ -421,10 +407,7 @@ class TestTransportDown:
         dead_client.__aenter__ = AsyncMock(side_effect=ConnectionRefusedError("no connection"))
         dead_client.__aexit__ = AsyncMock(return_value=False)
 
-        alive_client = AsyncMock()
-        alive_client.discover_tools = AsyncMock(return_value=[tool_b])
-        alive_client.__aenter__ = AsyncMock(return_value=alive_client)
-        alive_client.__aexit__ = AsyncMock(return_value=False)
+        alive_client = mcp_client_double([tool_b])
 
         def _client_factory(uri, **_kwargs):
             return dead_client if "dead" in uri else alive_client
