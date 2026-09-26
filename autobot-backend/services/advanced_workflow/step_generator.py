@@ -136,7 +136,18 @@ class StepGenerator:
         if "install" in command:
             if "apt install" in command:
                 package = command.split()[-1]
-                return f"dpkg -l | grep {package}"
+                # `dpkg-query --showformat=${Status}` and `ok installed`, not
+                # `dpkg -l | grep` (#17411). Two separate defects in the old
+                # form: `dpkg -l` exits 0 for a package in `rc` state (removed
+                # but not purged), and an unanchored grep matches that line
+                # anyway -- so a validation step reported success for a package
+                # that is not installed.
+                #
+                # `ok installed` rather than `install ok installed`: Status is
+                # `<want> <error> <status>` and only the third field answers the
+                # question. A held package reads `hold ok installed` and is
+                # installed (#17387).
+                return f"dpkg-query -W --showformat='${{Status}}' {package} 2>/dev/null | grep -q 'ok installed'"
 
         if "systemctl" in command and "start" in command:
             service = command.split()[-1]

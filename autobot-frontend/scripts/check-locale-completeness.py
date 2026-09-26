@@ -16,7 +16,25 @@ import json
 import sys
 from pathlib import Path
 
-LOCALES_DIR = Path(__file__).parent.parent / "src" / "i18n" / "locales"
+
+def _locales_dir() -> Path:
+    """The locale directory to check: this app's, or `--locales <dir>`.
+
+    Parameterised for #14781, the same way `check-i18n-keys.mjs` was for #15665:
+    the SLM console keeps its locales in `src/locales/`, and a forked copy of
+    this checker would drift from this one the first time either changed.
+    """
+    if "--locales" in sys.argv:
+        flag = sys.argv.index("--locales")
+        if flag + 1 >= len(sys.argv):
+            # Without this the flag-as-last-argument case raises IndexError and
+            # the CI step reports a traceback instead of the mistake (#17395).
+            raise SystemExit("--locales requires a directory argument")
+        return Path(sys.argv[flag + 1]).resolve()
+    return Path(__file__).parent.parent / "src" / "i18n" / "locales"
+
+
+LOCALES_DIR = _locales_dir()
 NON_ENGLISH = ["ar", "de", "es", "fa", "fr", "he", "lv", "pl", "pt", "ur"]
 
 quiet = "--quiet" in sys.argv
@@ -46,28 +64,34 @@ def main() -> int:
         missing = _collect_missing(en, locale)
         if missing:
             total_missing += len(missing)
-            print(f"MISSING {len(missing)} key(s) in {lang}.json:", file=sys.stderr)
+            # #14781: these carried no marker while nothing else in this file changed;
+            # touching it for --locales pulled the whole file into the hook's scope.
+            print(
+                f"MISSING {len(missing)} key(s) in {lang}.json:", file=sys.stderr
+            )  # noqa: print -- a checker's report IS its stdout
             if not quiet:
                 for key in missing[:20]:
-                    print(f"  {key}", file=sys.stderr)
+                    print(f"  {key}", file=sys.stderr)  # noqa: print -- a checker's report IS its stdout
                 if len(missing) > 20:
-                    print(f"  ... and {len(missing) - 20} more", file=sys.stderr)
+                    print(
+                        f"  ... and {len(missing) - 20} more", file=sys.stderr
+                    )  # noqa: print -- a checker's report IS its stdout
         elif not quiet:
-            print(f"  {lang}.json: OK")
+            print(f"  {lang}.json: OK")  # noqa: print -- a checker's report IS its stdout
 
     if total_missing:
-        print(
+        print(  # noqa: print -- a checker's report IS its stdout
             f"\nFAIL: {total_missing} key(s) missing across locale files.",
             file=sys.stderr,
         )
-        print(
+        print(  # noqa: print -- a checker's report IS its stdout
             "Fix: run tools/patch_i18n.py or manually add the missing keys.",
             file=sys.stderr,
         )
         return 1
 
     if not quiet:
-        print("All locale files complete.")
+        print("All locale files complete.")  # noqa: print -- a checker's report IS its stdout
     return 0
 
 

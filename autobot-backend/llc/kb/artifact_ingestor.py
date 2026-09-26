@@ -23,7 +23,10 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.security.path_validator import validate_path
+
 from ..models.work_product import LLCWorkProduct
+from ..storage_root import llc_local_storage_root
 from .write_guard import assert_not_writing_to_ancestor_kb
 
 logger = logging.getLogger(__name__)
@@ -61,8 +64,47 @@ _TEXT_EXTENSIONS = {
 
 
 def _is_text_path(path: str) -> bool:
+    """Whether this is a shape we can parse. NOT a containment check (#17302).
+
+    An extension allowlist answers "can we read this", and for a while it was
+    standing in for "are we allowed to read this". The two questions have no
+    overlap: `/etc/anything.yaml` passes this and is not ours to read. Use
+    `_contained_storage_path` for the second question; this one stays exactly
+    as narrow as its name.
+    """
     ext = os.path.splitext(path)[1].lower()
     return ext in _TEXT_EXTENSIONS
+
+
+def _contained_storage_path(raw: str, product_id: object) -> Optional[str]:
+    """*raw* resolved inside the LLC storage root, or None if it escapes (#17302).
+
+    `storage_path` is a free-form string on the agent request model
+    (`llc/api/agent_api.py`), stored unvalidated and opened later. Nothing in
+    this codebase produces one -- the field is only ever set from a caller's
+    body -- so an authenticated agent could name any path on the host with an
+    allowlisted extension and have it read into the knowledge index, where it
+    becomes retrievable. `.yaml`/`.toml` config, `.json` credential files,
+    `.py` source and `.sql` dumps are all in that allowlist.
+
+    Returns the **validated** string, which is the string the caller must open:
+    validating one path and opening something rebuilt from the original input
+    is the bypass this shape invites (THREAT_MODEL.md section 1).
+
+    Fails closed. A path that cannot be proven inside the root is skipped with
+    a warning rather than read, because "we could not establish this is ours"
+    and "this is ours" must not produce the same outcome.
+    """
+    root = llc_local_storage_root()
+    try:
+        return str(validate_path(raw, allowed_roots=(str(root.resolve()),)))
+    except (ValueError, OSError) as exc:
+        logger.warning(
+            "ArtifactIngestor: refusing storage_path outside the LLC storage root " "for product %s: %s (#17302)",
+            product_id,
+            exc,
+        )
+        return None
 
 
 def _split_text(text: str) -> List[str]:
@@ -237,20 +279,48 @@ class ArtifactIngestor:
 
         if product.storage_path:
             if not _is_text_path(product.storage_path):
+                # The product id and nothing derived from the path (#17302).
+                # `storage_path` is agent-supplied, and CLAUDE.md forbids
+                # internal filesystem paths in logs -- doubly so for one an
+                # attacker chooses.
+                #
+                # An earlier version logged `splitext(path)[1][:16]`, reasoning
+                # that a 16-char extension is bounded. Two things were wrong
+                # with that. A bound is not a sanitiser: 16 characters of
+                # attacker-chosen text is still attacker-chosen text, including
+                # newlines and control characters that a log reader renders.
+                # And CodeQL was right to keep flagging it -- taint propagates
+                # through `splitext` and survives a slice, so the sink genuinely
+                # still received data derived from the untrusted string.
+                #
+                # An allowlist does not rescue it here: this branch runs
+                # precisely when the extension is NOT in `_TEXT_EXTENSIONS`, so
+                # "log it if allowlisted else a constant" logs the constant
+                # every time. The message already states the reason, and the
+                # product id is the join key to the row that holds the path.
                 logger.info(
-                    "ArtifactIngestor: skipping binary storage_path %s for product %s",
-                    product.storage_path,
+                    "ArtifactIngestor: skipping product %s -- storage_path is not an indexable text type",
                     product.id,
                 )
                 return None
+            contained = _contained_storage_path(product.storage_path, product.id)
+            if contained is None:
+                return None
             try:
-                with open(product.storage_path, encoding="utf-8", errors="replace") as fh:
+                # `contained`, never `product.storage_path`: the validated
+                # string is the string used (#17302).
+                with open(contained, encoding="utf-8", errors="replace") as fh:
                     return fh.read()
-            except Exception:
-                logger.exception(
-                    "ArtifactIngestor: could not read storage_path %s for product %s",
-                    product.storage_path,
+            except Exception as exc:
+                # Type, not the exception object: an OSError stringifies with
+                # the filename, so `logger.exception` would put the
+                # agent-supplied path back into the log through the traceback
+                # after it was removed from the format string. The cost is the
+                # traceback; the product id recovers the path from the row.
+                logger.warning(
+                    "ArtifactIngestor: unreadable storage_path for product %s (%s)",
                     product.id,
+                    type(exc).__name__,
                 )
                 return None
 

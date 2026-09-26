@@ -167,6 +167,7 @@ from fastapi import APIRouter, Depends, HTTPException
 # terminal_tools under api/terminal.py (#185). Included below so every
 # /agent-terminal/host-selection/* path stays exactly where it was.
 from api.agent_terminal_access import (
+    create_session_for_caller,
     get_agent_terminal_service,
     may_access_session,
     session_decider,
@@ -251,16 +252,15 @@ async def create_agent_terminal_session(
             f"Must be one of: {[role.name.lower() for role in AgentRole]}",
         )
 
-    # owner (#14989/#14960) and tenant_id (#16975) both come from the JWT only --
-    # owner names the WebSocket ownership gate, tenant_id its org_id claim.
-    session = await service.create_session(
+    # owner/tenant_id come from the JWT; conversation_id is the caller's, checked (#17422).
+    session = await create_session_for_caller(
+        service,
+        current_user,
         agent_id=request.agent_id,
         agent_role=agent_role,
         conversation_id=request.conversation_id,
         host=request.host,
         metadata=request.metadata,
-        owner=current_user.get("username"),
-        tenant_id=current_user.get("org_id"),
     )
 
     return {

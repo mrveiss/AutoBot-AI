@@ -16,19 +16,20 @@ from typing import Dict, List
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_1_HOUR
+from services.command_approval_manager import AgentRole
+from type_defs.common import Metadata
+
+from .conversation_owner import ConversationNotOwnedError, conversation_owner, verified_conversation_owner
+from .models import AgentSessionState, AgentTerminalSession
+from .redis_usability import usable_redis
+
+logger = get_logger(__name__)
 
 # #13478: how long a session holding a pending approval survives in Redis.
 # Deliberately long: the thing it is waiting for is a person, and #13481
 # established that an approval does not expire on a timer. This bounds the
 # stored session, not the approval's validity.
 APPROVAL_PENDING_SESSION_TTL: int = env_int("AUTOBOT_APPROVAL_PENDING_SESSION_TTL_SECONDS", default=7 * 24 * 60 * 60)
-from services.command_approval_manager import AgentRole
-from type_defs.common import Metadata
-
-from .conversation_owner import conversation_owner
-from .models import AgentSessionState, AgentTerminalSession
-
-logger = get_logger(__name__)
 
 # O(1) lookup optimization constants (Issue #326)
 APPROVAL_RESPONSE_KEYWORDS = {"approved", "denied", "executed", "rejected"}
@@ -124,6 +125,14 @@ class SessionManager:
             redis_client: Redis client for session persistence
             chat_history_manager: ChatHistoryManager instance for approval restoration
         """
+        if redis_client is not None and not usable_redis(redis_client):
+            # #17436: reached through a process-wide singleton, so a bad client
+            # here poisons every later consumer. Refuse at the boundary.
+            raise TypeError(
+                f"redis_client is not a usable Redis client: {type(redis_client).__name__}. "
+                "An un-awaited get_redis_client(async_client=True) returns a coroutine; "
+                "use `await get_async_redis_client(...)`."
+            )
         self.redis_client = redis_client
         self.chat_history_manager = chat_history_manager
         self.sessions: Dict[str, AgentTerminalSession] = {}
@@ -246,16 +255,19 @@ class SessionManager:
             conversation_id: Optional chat conversation ID to link
             host: Target host for command execution
             metadata: Additional session metadata
-            owner: Authenticated creator's username (#14989/#14960); None = the conversation's owner (#17053)
+            owner: Authenticated creator's username (#14989/#14960); None = the conversation's owner (#17053).
+                An explicit owner must also own ``conversation_id`` (#17422).
             tenant_id: The creator's org_id, from the JWT claim only (#16975).
                 None if it could not be determined -- never guessed here.
 
         Returns:
             Created session
+
+        Raises:
+            ConversationNotOwnedError: ``owner`` was given and does not own ``conversation_id``.
         """
         session_id = str(uuid.uuid4())
-        if owner is None:
-            owner = await self._conversation_owner(conversation_id)
+        owner = await self._owner_for(conversation_id, owner)
         pty_session_id = await self._setup_pty_for_session(session_id, conversation_id, owner)
 
         session = AgentTerminalSession(
@@ -282,7 +294,7 @@ class SessionManager:
         if conversation_id and self.chat_history_manager:
             await self._restore_pending_approval(session, conversation_id)
 
-        if self.redis_client:
+        if usable_redis(self.redis_client):
             await self._persist_session(session)
 
         return session
@@ -357,6 +369,20 @@ class SessionManager:
         # approval message and the GUI button carry), so the restore was
         # unreachable from the one path that needed it.
         return await self._rebuild_session_from_pending_approval(session_id)
+
+    async def _owner_for(self, conversation_id: str | None, owner: str | None) -> str | None:
+        """The session's owner: ``owner`` if it owns the conversation, else the conversation's (#17422).
+
+        ``conversation_id`` is caller-supplied; an explicit owner narrows authority
+        and never stands in for checking it. An unowned conversation is refused
+        too -- it is admin-only (#17053), and binding it would stamp the caller.
+        So is one whose owner record cannot be read (``verified_conversation_owner``).
+        """
+        if owner is None:
+            return await self._conversation_owner(conversation_id)
+        if conversation_id and await verified_conversation_owner(self.chat_history_manager, conversation_id) != owner:
+            raise ConversationNotOwnedError(conversation_id)
+        return owner
 
     async def _conversation_owner(self, conversation_id: str | None) -> str | None:
         """Owner of the conversation driving a session, or None: admin-only (#17053)."""

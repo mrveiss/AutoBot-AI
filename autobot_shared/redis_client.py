@@ -198,7 +198,9 @@ def _get_connection_manager() -> RedisConnectionManager:
 # =============================================================================
 
 
-def get_redis_client(async_client: bool = False, database: str = "main") -> redis.Redis | async_redis.Redis | None:
+def get_redis_client(
+    async_client: bool = False, database: RedisDatabase | str = "main"
+) -> redis.Redis | async_redis.Redis | None:
     """
     Get a Redis client instance with circuit breaker and health monitoring.
 
@@ -296,7 +298,7 @@ def get_main_redis(**kwargs) -> redis.Redis | None:
 
 
 async def get_async_redis_client(
-    database: str = "main",
+    database: RedisDatabase | str = "main",
 ) -> async_redis.Redis | None:
     """Return an async Redis client for *database*, properly awaited.
 
@@ -635,13 +637,11 @@ class RedisDatabaseManager:
 
     def get_connection(self, database: RedisDatabase | str) -> redis.Redis | None:
         """Get synchronous Redis connection (DEPRECATED)."""
-        db_name = database.name.lower() if isinstance(database, RedisDatabase) else database
-        return get_redis_client(async_client=False, database=db_name)
+        return get_redis_client(async_client=False, database=database)
 
     async def get_async_connection(self, database: RedisDatabase | str) -> async_redis.Redis | None:
         """Get asynchronous Redis connection (DEPRECATED)."""
-        db_name = database.name.lower() if isinstance(database, RedisDatabase) else database
-        return await get_redis_client(async_client=True, database=db_name)
+        return await get_redis_client(async_client=True, database=database)
 
 
 # Global instance for backward compatibility (lazy-loaded)
