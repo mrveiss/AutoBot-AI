@@ -1184,7 +1184,7 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
             # Build mesh brain components and register them so every RAGService.initialize()
             # can construct its OWN NeuralMeshRetriever with closures bound to its own
             # optimizer — eliminating the shared-singleton coupling (#4765).
-            wire_neural_mesh_components(app, register_shared_mesh_components)
+            await wire_neural_mesh_components(app, register_shared_mesh_components)
 
             graph_rag_service = GraphRAGService(
                 rag_service=rag_service,

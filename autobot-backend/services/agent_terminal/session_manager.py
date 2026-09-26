@@ -16,19 +16,20 @@ from typing import Dict, List
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_1_HOUR
+from services.command_approval_manager import AgentRole
+from type_defs.common import Metadata
+
+from .conversation_owner import ConversationNotOwnedError, conversation_owner, verified_conversation_owner
+from .models import AgentSessionState, AgentTerminalSession
+from .redis_usability import usable_redis
+
+logger = get_logger(__name__)
 
 # #13478: how long a session holding a pending approval survives in Redis.
 # Deliberately long: the thing it is waiting for is a person, and #13481
 # established that an approval does not expire on a timer. This bounds the
 # stored session, not the approval's validity.
 APPROVAL_PENDING_SESSION_TTL: int = env_int("AUTOBOT_APPROVAL_PENDING_SESSION_TTL_SECONDS", default=7 * 24 * 60 * 60)
-from services.command_approval_manager import AgentRole
-from type_defs.common import Metadata
-
-from .conversation_owner import ConversationNotOwnedError, conversation_owner, verified_conversation_owner
-from .models import AgentSessionState, AgentTerminalSession
-
-logger = get_logger(__name__)
 
 # O(1) lookup optimization constants (Issue #326)
 APPROVAL_RESPONSE_KEYWORDS = {"approved", "denied", "executed", "rejected"}
@@ -124,6 +125,14 @@ class SessionManager:
             redis_client: Redis client for session persistence
             chat_history_manager: ChatHistoryManager instance for approval restoration
         """
+        if redis_client is not None and not usable_redis(redis_client):
+            # #17436: reached through a process-wide singleton, so a bad client
+            # here poisons every later consumer. Refuse at the boundary.
+            raise TypeError(
+                f"redis_client is not a usable Redis client: {type(redis_client).__name__}. "
+                "An un-awaited get_redis_client(async_client=True) returns a coroutine; "
+                "use `await get_async_redis_client(...)`."
+            )
         self.redis_client = redis_client
         self.chat_history_manager = chat_history_manager
         self.sessions: Dict[str, AgentTerminalSession] = {}
@@ -285,7 +294,7 @@ class SessionManager:
         if conversation_id and self.chat_history_manager:
             await self._restore_pending_approval(session, conversation_id)
 
-        if self.redis_client:
+        if usable_redis(self.redis_client):
             await self._persist_session(session)
 
         return session
