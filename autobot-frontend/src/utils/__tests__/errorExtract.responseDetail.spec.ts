@@ -114,16 +114,16 @@ describe('extractResponseErrorDetail — nothing usable means nothing added', ()
     expect(await extractResponseErrorDetail(failing(413, 'Request Entity Too Large', html))).toBe('')
   })
 
-  it('keeps a short plain-text body, which is still a sentence', async () => {
-    expect(await extractResponseErrorDetail(failing(502, 'Bad Gateway', 'upstream connect error'))).toBe(
-      'upstream connect error'
-    )
+  it('adds nothing for a plain-text body', async () => {
+    // #17528's own criterion: a non-JSON response keeps exactly today's message.
+    // Such a body is an upstream's text, not a sentence this API composed, and it
+    // can carry an internal hostname or path that must not reach a toast.
+    expect(await extractResponseErrorDetail(failing(502, 'Bad Gateway', 'upstream connect error'))).toBe('')
   })
 
-  it('caps an unstructured body so a stack trace cannot become the toast', async () => {
-    const detail = await extractResponseErrorDetail(failing(500, 'Internal Server Error', 'x'.repeat(5000)))
-    expect(detail).toHaveLength(301)
-    expect(detail.endsWith('…')).toBe(true)
+  it('adds nothing for a stack trace', async () => {
+    const body = 'Traceback (most recent call last):\n  File "/srv/app/main.py", line 12\nValueError'
+    expect(await extractResponseErrorDetail(failing(500, 'Internal Server Error', body))).toBe('')
   })
 
   it('never throws when the body cannot be read', async () => {

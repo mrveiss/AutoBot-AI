@@ -149,7 +149,6 @@ export class ApiRepository {
         signal: controller.signal
       })
 
-      clearTimeout(timeoutId)
       const endTime = performance.now()
 
       if (!response.ok) {
@@ -158,8 +157,19 @@ export class ApiRepository {
         // the rejection lives there, and this line used to discard all of it -- the
         // knowledge upload endpoint tells a user their PDF is a scan needing OCR, names
         // the 10MB limit and lists the accepted extensions, and none of it ever arrived.
-        throw new Error(await describeFailedResponse(response))
+        //
+        // The abort timer stays ARMED across that read and is cleared after it. Reading
+        // the body is a second trip to the network: a server that sends headers and then
+        // stalls would otherwise hang here forever, because clearing the timer first
+        // disarms the only thing that bounds it. Aborting mid-read rejects response.text(),
+        // which describeFailedResponse catches, so the deadline degrades to the bare
+        // status line instead of a hang.
+        const message = await describeFailedResponse(response)
+        clearTimeout(timeoutId)
+        throw new Error(message)
       }
+
+      clearTimeout(timeoutId)
 
       const contentType = response.headers.get('content-type')
 

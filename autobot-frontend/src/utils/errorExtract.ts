@@ -44,15 +44,6 @@ export function extractErrorMessage(err: unknown, fallback: string): string {
 
 // ==================== Failed-response bodies (#17528) ====================
 
-/**
- * How much of an unrecognised error body is worth showing a user.
- *
- * A recognised shape is already a sentence written for a human, so it is never
- * truncated. This cap applies only to the fallback branch, where the body could
- * be a stack trace or a proxy's diagnostic page.
- */
-const MAX_UNSTRUCTURED_DETAIL = 300
-
 /** Pull a human-readable string out of one of the backend's error shapes. */
 function detailFromPayload(payload: unknown): string {
   if (typeof payload === 'string') return payload.trim()
@@ -100,9 +91,10 @@ function detailFromPayload(payload: unknown): string {
  * "scanned PDF, needs OCR" from "empty file" (#13884), names the 10MB limit and lists the
  * accepted extensions — and a user saw "HTTP 400: Bad Request" for all three.
  *
- * Reads the body as text exactly once, then parses. A proxy that rejects a request before
- * it reaches the app answers in HTML (#12311), which is not a sentence for a user, so it
- * is dropped rather than rendered as markup.
+ * Reads the body as text exactly once, then parses. Only JSON contributes a detail: a
+ * non-JSON body is a proxy page (#12311), an upstream's opaque text or a stack trace,
+ * never a sentence the backend composed, and any of those can carry internal detail that
+ * must not reach a toast.
  *
  * Returns `''` rather than throwing on every failure path: this runs while an error is
  * already being constructed, and a throw here would replace a diagnosable failure with an
@@ -125,11 +117,14 @@ export async function extractResponseErrorDetail(response: Response): Promise<st
   try {
     parsed = JSON.parse(trimmed)
   } catch {
-    // Not JSON — the unstructured branch below is the only one left.
-    if (trimmed.startsWith('<')) return ''
-    return trimmed.length > MAX_UNSTRUCTURED_DETAIL
-      ? `${trimmed.slice(0, MAX_UNSTRUCTURED_DETAIL)}…`
-      : trimmed
+    // Not JSON -- nothing is added, and the caller keeps the bare status line.
+    //
+    // A non-JSON body is not a sentence the backend composed for this user. It is a
+    // proxy's diagnostic page (#12311), an upstream's opaque text, or a stack trace,
+    // and any of those can carry an internal hostname or path -- which must not reach
+    // a toast. The backend's own errors are JSON, so dropping this branch loses no
+    // explanation the API actually wrote.
+    return ''
   }
   return detailFromPayload(parsed)
 }

@@ -91,6 +91,24 @@ describe('a rejected knowledge upload reports the backend reason (#17528)', () =
     await expect(repo.addFileToKnowledge(A_FILE())).rejects.toThrow('HTTP 500: Internal Server Error')
   })
 
+  it('degrades to the status line when the error body cannot be read', async () => {
+    // The abort timer stays armed across the body read, so a stalled body is aborted
+    // rather than hanging. An aborted read rejects text(); the caller must still get a
+    // usable error. (That the read is *bounded* is not asserted here — only that its
+    // failure degrades instead of propagating.)
+    fetchWithAuth.mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      headers: new Headers(),
+      text: async () => {
+        throw new DOMException('The operation was aborted.', 'AbortError')
+      }
+    } as unknown as Response)
+
+    await expect(repo.addFileToKnowledge(A_FILE())).rejects.toThrow('HTTP 500: Internal Server Error')
+  })
+
   it('leaves a successful upload untouched', async () => {
     fetchWithAuth.mockResolvedValue({
       ok: true,
