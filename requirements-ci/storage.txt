@@ -6,3 +6,30 @@ aiosqlite==0.22.1
 greenlet==3.3.2  # SQLAlchemy async engine dependency, mirrored from the backends (#17432). Declared here rather than allowlisted in requirements_ci_drift_baseline.txt: this set declares sqlalchemy AND aiosqlite, so a test opening an async engine against it fails exactly as the SLM container did. "Not observed failing" is not "does not need it" -- that invisibility is what hid #17432 for a day.
 alembic==1.20.0  # migration-gate static tests import migrations.baseline (#10001)
 psycopg2-binary>=2.9.13,<3.0.0  # production dep (autobot-slm-backend/requirements.txt): the sync driver every migrations/*.py uses. migrations/utils.py + migrations/runner.py import it at module level, so migrations/utils_test.py fails collection without it (#13086)
+
+# OpenTelemetry core (#17557) -- pinned HERE, beside chromadb, because chromadb
+# is what drags it. Whoever next bumps chromadb needs to see this constraint in
+# the same file.
+#
+# NOT a new CI dependency. chromadb==1.5.9 requires opentelemetry-api,
+# -sdk and -exporter-otlp-proto-grpc (all >=1.2.0, unbounded above), which pull
+# -proto, -proto-common and -semantic-conventions with them. They were simply
+# never DECLARED, so pip took the newest release while root requirements.txt:51-58
+# pins ==1.44.0. Upstream published 1.45.0 mid-morning 2026-09-26 and
+# check_dependency_floors.py --strict began failing `python-suite shard 1/12` on
+# eight PRs, none of which had touched a requirements file.
+#
+# Safe to pin, checked rather than assumed: chromadb 1.5.9's floors are >=1.2.0,
+# and langsmith (>=1.30.0) and redis (>=1.39.1) are lower bounds too, so ==1.44.0
+# satisfies every requirer and pip has nothing to backtrack.
+#
+# Only the four the root plane also declares are pinned. exporter-otlp,
+# exporter-otlp-proto-http and propagator-b3 stay production-only and stay in the
+# drift allowlist -- nothing in CI installs them, so declaring them would ADD
+# packages rather than constrain existing ones. -proto-common and
+# -semantic-conventions are left to chromadb: the root plane does not name them,
+# so pinning them here would invent a constraint no other plane states.
+opentelemetry-api==1.44.0
+opentelemetry-sdk==1.44.0
+opentelemetry-exporter-otlp-proto-grpc==1.44.0
+opentelemetry-proto==1.44.0
