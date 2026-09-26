@@ -76,6 +76,7 @@ from api.knowledge_search_aggregator import router as knowledge_search_aggregato
 from api.knowledge_search_analytics import router as knowledge_search_analytics_router
 from api.knowledge_search_documentation import router as knowledge_search_documentation_router
 from api.knowledge_search_scoped import router as knowledge_search_scoped_router
+from api.knowledge_source_liveness import router as knowledge_source_liveness_router  # #17545
 from api.knowledge_suggestions import router as knowledge_suggestions_router
 from api.knowledge_sync_queue import router as knowledge_sync_queue_router  # Issue #4453
 from api.knowledge_tags import router as knowledge_tags_router
@@ -210,6 +211,7 @@ def _get_core_knowledge_routers() -> list:
     return [
         (knowledge_router, "/knowledge_base", ["knowledge"], "knowledge"),
         (knowledge_audit_router, "", ["knowledge-audit"], "knowledge_audit"),
+        (knowledge_source_liveness_router, "", ["knowledge"], "knowledge_source_liveness"),  # #17545
         (
             knowledge_chroma_router,
             "",

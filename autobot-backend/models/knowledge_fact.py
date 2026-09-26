@@ -22,7 +22,7 @@ as the durable copy.
 
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, Index, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 
 from user_management.models.base import Base
@@ -60,6 +60,42 @@ class KnowledgeFact(Base):
     #: at deploy: the #16693 backfill's frozen candidate set. Cleared once the backfill
     #: has decided the fact. No write path sets it, so a fact stored later never is one.
     visibility_backfill_candidate = Column(Boolean, nullable=True)
+
+    # ---- Source liveness (#17545) -------------------------------------------
+    # Whether the document a fact was extracted from still resolves. Two kinds
+    # of knowledge live here and must not be merged: four of these columns are
+    # **observations** a probe wrote, and `source_gone_at` is an **event** that
+    # was witnessed. "The source is gone" and "we could not reach the source"
+    # are different facts, and only the first is a reason to act.
+
+    #: When the locator was last probed, whatever the outcome. NULL means
+    #: *never looked*, which is not *looked and could not reach* -- nothing may
+    #: default this to a timestamp, or the state becomes unrepresentable and no
+    #: query can ask for it.
+    source_checked_at = Column(DateTime(timezone=True), nullable=True)
+
+    #: When the locator last resolved. Frozen by definition once probing starts
+    #: failing, which is exactly why `source_checked_at` is separate: without it
+    #: a failure ten seconds old reads identically to one a week old.
+    source_seen_at = Column(DateTime(timezone=True), nullable=True)
+
+    #: The last probe's outcome -- `resolved`, `absent`, `unreadable` or
+    #: `parent_unresolvable`. A bare counter records how many probes failed and
+    #: never why, so it cannot separate repeated "the file is not there"
+    #: (evidence) from repeated "the share is unreachable" (not evidence).
+    source_last_probe = Column(String(32), nullable=True)
+
+    #: Consecutive non-resolving probes, reset to 0 on a resolve. A run length,
+    #: never a verdict: how much evidence is enough belongs to the consumer's
+    #: retention policy (#17538), not to the detector.
+    source_check_failures = Column(Integer, nullable=False, server_default="0")
+
+    #: A deletion that was **witnessed** -- #17546's watchdog events -- never
+    #: inferred from a probe. An event set by inference launders a judgement
+    #: into a fact: everything downstream then treats it as observed while the
+    #: threshold that produced it is no longer visible or re-evaluable, and an
+    #: unmounted share becomes a deleted document. Decision on #17545.
+    source_gone_at = Column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (Index("ix_knowledge_facts_owner_session", "owner_id", "source_session_id"),)
 
