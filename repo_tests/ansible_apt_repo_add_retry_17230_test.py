@@ -27,6 +27,7 @@ inverting when the retry stops.
 
 from __future__ import annotations
 
+import json
 import re
 
 import pytest
@@ -38,8 +39,17 @@ _ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
 _HELPER = _ANSIBLE / "roles" / "_shared" / "tasks" / "add_apt_repository_idempotent.yml"
 _MODULES = ("ansible.builtin.apt_repository", "apt_repository")
 _BUDGET_VARS = ("apt_repo_retries", "apt_repo_retry_delay")
-#: A YAML (`name:`, incl. a `- name:` list item) or INI inventory (`name=`) assignment of a budget var.
-_ASSIGNMENT = re.compile(r"^\s*(?:-\s*)?(?:" + "|".join(_BUDGET_VARS) + r")\s*[:=]", re.MULTILINE)
+_VAR = "|".join(_BUDGET_VARS)
+#: A YAML (`name:`, incl. a `- name:` list item), JSON (`"name":`) or INI inventory (`name=`) assignment.
+_ASSIGNMENT = re.compile(r"^\s*(?:-\s*)?(?:(?:" + _VAR + r')|"(?:' + _VAR + r')")\s*[:=]', re.MULTILINE)
+#: The only accepted budget template: one of the budget variables -- the ones the override scan
+#: below watches -- with an integer default and nothing else.
+_TEMPLATED_BUDGET = re.compile(r"\{\{\s*(?:" + _VAR + r")\s*\|\s*default\(\s*(\d+)\s*\)\s*\}\}")
+#: Files Ansible reads variables from; ``host_group_vars`` accepts .json and extensionless too.
+_VAR_FILE_SUFFIXES = {".yml", ".yaml", ".json", ".ini", ".cfg", ""}
+#: Reach floor for the override scan: 342 such files were measured under the Ansible tree when this
+#: was written. An empty or broken walk must fail here rather than report "no overrides".
+_MIN_FILES_SCANNED = 300
 
 
 def _add_tasks() -> list[dict]:
@@ -54,10 +64,14 @@ def _add_tasks() -> list[dict]:
 
 
 def _budget(value) -> int | None:
-    """The effective integer of a literal or a `{{ var | default(N) }}` template, else None."""
-    if isinstance(value, int):
+    """The effective integer of a literal or of exactly `{{ var | default(N) }}`, else None.
+
+    The whole value must match: a template that goes on to transform the default, such as
+    ``{{ apt_repo_retries | default(5) | int - 4 }}``, is not read as 5.
+    """
+    if isinstance(value, int) and not isinstance(value, bool):
         return value
-    match = re.search(r"default\(\s*(\d+)\s*\)", str(value))
+    match = _TEMPLATED_BUDGET.fullmatch(str(value).strip())
     return int(match.group(1)) if match else None
 
 
@@ -98,6 +112,8 @@ _BROKEN = {
     "no-register": {k: v for k, v in _GOOD.items() if k != "register"},
     "one-retry": {**_GOOD, "retries": "{{ apt_repo_retries | default(1) }}"},
     "untemplated-retries": {**_GOOD, "retries": "{{ apt_repo_retries }}"},
+    "transformed-default": {**_GOOD, "retries": "{{ apt_repo_retries | default(5) | int - 4 }}"},
+    "unwatched-variable": {**_GOOD, "retries": "{{ some_other_retries | default(5) }}"},
     "no-delay": {**_GOOD, "delay": 0},
     "failed-when-false": {**_GOOD, "failed_when": False},
     "ignore-errors": {**_GOOD, "ignore_errors": True},
@@ -131,8 +147,19 @@ def test_the_checker_rejects_a_broken_task(task: dict) -> None:
     assert _violations(task), f"the checker passed a task it must reject: {task}"
 
 
-def _overrides(text: str) -> list[str]:
-    """Lines of ``text`` that assign a retry-budget variable."""
+def _is_var_file(path) -> bool:
+    """Whether Ansible could read variables from a file with this name."""
+    return path.suffix in _VAR_FILE_SUFFIXES
+
+
+def _overrides(text: str, suffix: str = "") -> list[str]:
+    """Assignments of a retry-budget variable in ``text``; a ``.json`` file is parsed, not pattern-matched."""
+    if suffix == ".json":
+        try:
+            values = json.loads(text)
+        except json.JSONDecodeError:
+            return [m.group(0).strip() for m in _ASSIGNMENT.finditer(text)]
+        return [f"{key}:" for key in _BUDGET_VARS if isinstance(values, dict) and key in values]
     return [m.group(0).strip() for m in _ASSIGNMENT.finditer(text)]
 
 
@@ -144,11 +171,15 @@ def test_no_file_overrides_the_retry_budget() -> None:
     effective value: the day an override is needed, this fails and asks for the check to follow it.
     Out of reach by construction: ``-e`` on a command line and inventories outside this tree.
     """
+    scanned = [p for p in sorted(_ANSIBLE.rglob("*")) if p.is_file() and _is_var_file(p)]
+    assert len(scanned) >= _MIN_FILES_SCANNED, (
+        f"the override scan reached only {len(scanned)} files under {_ANSIBLE.relative_to(repo_root())} "
+        f"(floor {_MIN_FILES_SCANNED}); an empty or broken walk would otherwise read as 'no overrides'"
+    )
     hits = [
         f"{path.relative_to(repo_root())}: {line}"
-        for path in sorted(_ANSIBLE.rglob("*"))
-        if path.is_file() and path.suffix in {".yml", ".yaml", ".ini", ".cfg", ""}
-        for line in _overrides(path.read_text(encoding="utf-8", errors="replace"))
+        for path in scanned
+        for line in _overrides(path.read_text(encoding="utf-8", errors="replace"), path.suffix)
     ]
     assert not hits, (
         "these override the #17230 retry budget, so the guard's `default(N)` reading is no longer the "
@@ -157,17 +188,51 @@ def test_no_file_overrides_the_retry_budget() -> None:
 
 
 @pytest.mark.parametrize(
-    "text, expected",
+    "text, suffix, expected",
     [
-        ("apt_repo_retries: 1\n", 1),
-        ("vars:\n  apt_repo_retry_delay: 0\n", 1),
-        ("- apt_repo_retries: 2\n", 1),
-        ("[all:vars]\napt_repo_retries=1\n", 1),
-        ("#   apt_repo_retries  (int, opt.) Retry budget (default 5).\n", 0),
-        ('  retries: "{{ apt_repo_retries | default(5) }}"\n', 0),
+        ("apt_repo_retries: 1\n", ".yml", 1),
+        ("vars:\n  apt_repo_retry_delay: 0\n", ".yml", 1),
+        ("- apt_repo_retries: 2\n", ".yml", 1),
+        ("[all:vars]\napt_repo_retries=1\n", "", 1),
+        ('{\n  "apt_repo_retries": 1\n}\n', ".json", 1),
+        ('{"apt_repo_retry_delay": 0}', ".json", 1),
+        ('{"other_var": 1}', ".json", 0),
+        ("#   apt_repo_retries  (int, opt.) Retry budget (default 5).\n", ".yml", 0),
+        ('  retries: "{{ apt_repo_retries | default(5) }}"\n', ".yml", 0),
     ],
-    ids=["yaml", "nested-yaml", "list-item", "ini-inventory", "comment", "the-template-reading-it"],
+    ids=[
+        "yaml",
+        "nested-yaml",
+        "list-item",
+        "ini-inventory",
+        "json",
+        "one-line-json",
+        "json-other-key",
+        "comment",
+        "the-template-reading-it",
+    ],
 )
-def test_the_override_detector_matches_assignments_only(text: str, expected: int) -> None:
+def test_the_override_detector_matches_assignments_only(text: str, suffix: str, expected: int) -> None:
     """Contrast pair: every assignment form trips it; the helper's own comment and template do not."""
-    assert len(_overrides(text)) == expected, _overrides(text)
+    assert len(_overrides(text, suffix)) == expected, _overrides(text, suffix)
+
+
+@pytest.mark.parametrize(
+    "name, expected",
+    [
+        ("all.yml", True),
+        ("all.yaml", True),
+        ("all.json", True),
+        ("hosts", True),
+        ("inventory.ini", True),
+        ("ansible.cfg", True),
+        ("README.md", False),
+        ("render.py", False),
+        ("site.j2", False),
+    ],
+)
+def test_the_scan_reads_every_variable_file_type_ansible_loads(name: str, expected: bool) -> None:
+    """Contrast pair for the walk's filter: host_group_vars loads .yml/.yaml/.json/extensionless files."""
+    from pathlib import Path
+
+    assert _is_var_file(Path(name)) is expected
