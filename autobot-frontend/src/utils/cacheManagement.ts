@@ -5,6 +5,7 @@
  * Handles browser cache clearing, service worker updates, and chunk reloading
  */
 
+import { getCssVar, getNotificationColors } from '@/composables/useCssVars'
 import { createLogger } from '@/utils/debugUtils'
 import { isChunkLoadError } from '@/utils/chunkLoadError'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
@@ -251,10 +252,14 @@ export function showSubtleUpdateNotification(version: string, buildHash: string,
   const notification = document.createElement('div')
   notification.className = 'subtle-update-notification'
 
-  // Different styling based on whether there are unsaved changes
-  const backgroundColor = hasUnsavedChanges ? 'linear-gradient(135deg, #fef3cd 0%, #fff8e1 100%)' : 'linear-gradient(135deg, #e8f5e8 0%, #f0f9ff 100%)'
-  const borderColor = hasUnsavedChanges ? '#f59e0b' : '#10b981'
-  const textColor = hasUnsavedChanges ? '#92400e' : '#065f46'
+  // #17560: one shared severity mapping, resolved from the theme. The gradient
+  // fills these three used are gone deliberately -- a gradient cannot be a token,
+  // and two of the three notification styles in this file were already flat.
+  const colors = getNotificationColors(hasUnsavedChanges ? 'warning' : 'success')
+  const backgroundColor = colors.background
+  const borderColor = colors.border
+  const textColor = colors.text
+  const mutedColor = getCssVar('--text-muted', '#6b7280')
 
   notification.style.cssText = `
     background: ${backgroundColor};
@@ -275,7 +280,7 @@ export function showSubtleUpdateNotification(version: string, buildHash: string,
   if (hasUnsavedChanges) {
     notification.innerHTML = `
       <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="color: #f59e0b;">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="color: ${borderColor};">
           <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
         </svg>
         <span>
@@ -283,7 +288,7 @@ export function showSubtleUpdateNotification(version: string, buildHash: string,
           <br>
           <span style="font-size: 11px; opacity: 0.9;">
             ⚠️ Unsaved changes detected. Please save your work first.
-            <button onclick="performSafeReload()" style="background: none; border: 1px solid #f59e0b; color: #f59e0b; border-radius: 3px; padding: 2px 6px; margin-left: 8px; font-size: 10px; cursor: pointer;">Refresh anyway</button>
+            <button onclick="performSafeReload()" style="background: none; border: 1px solid ${borderColor}; color: ${borderColor}; border-radius: 3px; padding: 2px 6px; margin-left: 8px; font-size: 10px; cursor: pointer;">Refresh anyway</button>
           </span>
         </span>
       </div>
@@ -292,14 +297,14 @@ export function showSubtleUpdateNotification(version: string, buildHash: string,
     // DISABLED AUTO-REFRESH - Manual refresh only to avoid interruptions during development
     notification.innerHTML = `
       <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="color: #10b981;">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="color: ${borderColor};">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
         </svg>
         <span>
           <strong>Update available</strong> - v${escapeHtml(version)}
           <span style="font-size: 11px; opacity: 0.8; margin-left: 8px;">
-            <button onclick="performSafeReload()" style="background: none; border: 1px solid #059669; color: #059669; border-radius: 3px; padding: 2px 6px; margin-left: 8px; font-size: 10px; cursor: pointer;">Refresh now</button>
-            <button onclick="this.parentElement.parentElement.parentElement.parentElement.remove()" style="background: none; border: 1px solid #6b7280; color: #6b7280; border-radius: 3px; padding: 2px 6px; margin-left: 4px; font-size: 10px; cursor: pointer;">Dismiss</button>
+            <button onclick="performSafeReload()" style="background: none; border: 1px solid ${borderColor}; color: ${borderColor}; border-radius: 3px; padding: 2px 6px; margin-left: 8px; font-size: 10px; cursor: pointer;">Refresh now</button>
+            <button onclick="this.parentElement.parentElement.parentElement.parentElement.remove()" style="background: none; border: 1px solid ${mutedColor}; color: ${mutedColor}; border-radius: 3px; padding: 2px 6px; margin-left: 4px; font-size: 10px; cursor: pointer;">Dismiss</button>
           </span>
         </span>
       </div>
@@ -355,23 +360,12 @@ export function showCacheUpdateNotification(message: string, type: 'info' | 'war
   const notification = document.createElement('div')
   notification.className = 'cache-notification'
 
-  const bgColor = {
-    info: '#e3f2fd',
-    warning: '#fff8e1',
-    error: '#ffebee'
-  }[type]
-
-  const borderColor = {
-    info: '#2196f3',
-    warning: '#ff9800',
-    error: '#f44336'
-  }[type]
-
-  const textColor = {
-    info: '#1565c0',
-    warning: '#e65100',
-    error: '#c62828'
-  }[type]
+  // #17560: was a Material palette here and a Tailwind one in the two functions
+  // below, for the same three severities. One themed source now.
+  const colors = getNotificationColors(type)
+  const bgColor = colors.background
+  const borderColor = colors.border
+  const textColor = colors.text
 
   notification.style.cssText = `
     position: fixed;
@@ -445,29 +439,12 @@ export function showSubtleErrorNotification(title: string, message: string, seve
   notification.className = 'subtle-error-notification'
 
   // Styling based on severity
-  const backgroundColor = {
-    'error': 'linear-gradient(135deg, #fef2f2 0%, #fef8f8 100%)',
-    'warning': 'linear-gradient(135deg, #fef3cd 0%, #fff8e1 100%)',
-    'info': 'linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%)'
-  }[severity]
-
-  const borderColor = {
-    'error': '#ef4444',
-    'warning': '#f59e0b',
-    'info': '#3b82f6'
-  }[severity]
-
-  const textColor = {
-    'error': '#dc2626',
-    'warning': '#92400e',
-    'info': '#1d4ed8'
-  }[severity]
-
-  const iconColor = {
-    'error': '#ef4444',
-    'warning': '#f59e0b',
-    'info': '#3b82f6'
-  }[severity]
+  // #17560: shared themed mapping. iconColor was always the border colour.
+  const colors = getNotificationColors(severity)
+  const backgroundColor = colors.background
+  const borderColor = colors.border
+  const textColor = colors.text
+  const iconColor = colors.border
 
   notification.style.cssText = `
     background: ${backgroundColor};
