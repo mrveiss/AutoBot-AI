@@ -37,6 +37,21 @@ autobot_ssh_key_path: "/etc/autobot/ssh/autobot_key"
 # literals drifted because nothing tied them to it.
 redis_service_name: "redis-stack-server"
 
+# #17434: the canonical Redis config path -- the file the daemon actually reads.
+#
+# Same two blind paths as the unit name above, so every consumer outside a role
+# spells it `{{ redis_config_file | default('/etc/redis-stack.conf') }}`.
+#
+# One path had four spellings. `roles/redis` rendered a 2933-byte config to
+# /etc/redis-stack.conf; the systemd drop-in passed no argument, so the packaged
+# wrapper fell back to its own 23-byte /opt/redis-stack/etc/redis-stack.conf and
+# every directive the role controls was inert -- `maxmemory 6gb` read back as
+# `0`, `appendonly yes` as `no`, `requirepass` empty. Two more spellings existed
+# only on paper: /etc/redis-stack/redis-stack.conf (pki/configurator.py, the
+# unit template) and /etc/redis/redis.conf (the plain-redis path, in nine
+# redis-replication tasks) -- neither directory exists on a provisioned node.
+redis_config_file: "/etc/redis-stack.conf"
+
 autobot:
   version: "2.0.0"
   environment: "production"

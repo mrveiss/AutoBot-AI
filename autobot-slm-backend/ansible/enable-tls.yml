@@ -256,7 +256,10 @@
 
     - name: Configure Redis TLS
       ansible.builtin.blockinfile:
-        path: /etc/redis/redis.conf
+        # #17434: was /etc/redis/redis.conf -- a path the daemon never reads and
+        # whose directory does not exist, so enabling TLS through api/tls.py
+        # created the file, reported success and changed nothing.
+        path: "{{ redis_config_file | default('/etc/redis-stack.conf') }}"
         marker: "# {mark} TLS CONFIGURATION (Issue #164)"
         block: |
           tls-port {{ redis_tls_port }}

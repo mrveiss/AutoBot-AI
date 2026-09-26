@@ -39,7 +39,7 @@
 
 - name: "Redis | Create systemd override directory"
   ansible.builtin.file:
-    path: /etc/systemd/system/redis-stack-server.service.d
+    path: "{{ redis_systemd_override_dir }}"
     state: directory
     mode: '0755'
   become: true
@@ -52,7 +52,7 @@
 - name: "Redis | Configure systemd service override"
   ansible.builtin.template:
     src: redis-stack-override.conf.j2
-    dest: /etc/systemd/system/redis-stack-server.service.d/override.conf
+    dest: "{{ redis_systemd_override_dir }}/override.conf"
     mode: '0644'
   become: true
   notify:
