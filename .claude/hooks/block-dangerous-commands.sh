@@ -50,28 +50,11 @@ deny() {
 # Git push protections
 # ──────────────────────────────────────────────
 
-if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+push'; then
-
-  # Block push to release, master, or main directly
-  # Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
-  if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+push.*(origin[[:space:]]+|:)(release|master|main|Dev_new_gui)\b'; then
-    deny "Blocked: cannot push directly to release/master/main/Dev_new_gui. Use a feature branch and create a PR."
-  fi
-
-  # Block bare git push when on protected branches
-  # Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
-  if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+push[[:space:]]*($|[;&|])'; then
-    CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
-    if [ "$CURRENT_BRANCH" = "release" ] || [ "$CURRENT_BRANCH" = "master" ] || [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "Dev_new_gui" ]; then
-      deny "Blocked: you are on $CURRENT_BRANCH. Use a feature branch and create a PR."
-    fi
-  fi
-
-  # Block force push (allow --force-with-lease)
-  if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+push.*(-[a-zA-Z]*f|--force)([[:space:]]|$)' && ! echo "$COMMAND_TO_CHECK" | grep -q '\-\-force-with-lease'; then
-    deny "Blocked: force push is not allowed. Use --force-with-lease if you need to overwrite remote."
-  fi
-fi
+# Ruled on by the tokenizing parser below, keyed on the refspec's DESTINATION
+# rather than on words found anywhere in the command string (#14144). The
+# regexes that used to live here are gone: they matched `origin <name>` or
+# `:<name>` at any position, which let eight spellings reach a protected ref
+# and refused one that does not. See the `push` section in the invocation loop.
 
 # ──────────────────────────────────────────────
 # Git commit protections
@@ -273,7 +256,7 @@ targets_this_main_tree() {
 # Broader than strictly necessary, on purpose: this only decides whether the
 # already-safe parser runs, never whether a command is denied, so widening it
 # costs a python3 start on more commands, not a new false denial.
-if printf '%s' "$COMMAND" | grep -qF -e checkout -e switch -e restore -e reset -e clean ||
+if printf '%s' "$COMMAND" | grep -qF -e checkout -e switch -e restore -e reset -e clean -e push ||
   { printf '%s' "$COMMAND" | grep -qF git && printf '%s' "$COMMAND" | grep -qE '[$`]'; }; then
   if ! command -v python3 >/dev/null 2>&1; then
     deny "Blocked: the branch-switch guard needs python3 to tell a real invocation from the same words quoted inside an argument (#15296), and python3 is not installed. Install python3 rather than removing the guard."
@@ -295,6 +278,65 @@ if printf '%s' "$COMMAND" | grep -qF -e checkout -e switch -e restore -e reset -
   # WT_DIR and the guard would go looking for a directory by that name (#15296).
   while IFS=$'\x1f' read -r WT_DIR WT_GIT_DIR SUBCOMMAND INVOCATION_FLAGS REF_ARG; do
     [ -n "$WT_DIR$WT_GIT_DIR$SUBCOMMAND$INVOCATION_FLAGS$REF_ARG" ] || continue
+
+    # ── Push destinations (#14144) ────────────────────────────────────────
+    # Keyed on where the refspec WRITES, which is the whole fix. The retired
+    # regex tested the command text for `origin <name>` or `:<name>` at any
+    # position, so it missed `refs/heads/main`, `HEAD`, `+main`,
+    # `HEAD:refs/heads/main`, a remote that is not `origin`, a `git -C <dir>`
+    # prefix, `origin` with no refspec at all, and `--all` -- while refusing
+    # `main:feature`, which writes to a feature ref and is allowed.
+    #
+    # Not gated on the main tree: pushing a protected ref is wrong from
+    # whichever tree it is spelled in.
+    if [ "$SUBCOMMAND" = "push" ]; then
+      case ",$INVOCATION_FLAGS," in
+        *,push-all,*)
+          deny "Blocked: git push --all/--mirror sends every branch, release/master/main among them, without naming one. Push a single feature branch and open a PR."
+          ;;
+      esac
+      case ",$INVOCATION_FLAGS," in
+        *,force-push,*)
+          deny "Blocked: force push is not allowed. Use --force-with-lease if you need to overwrite remote."
+          ;;
+      esac
+
+      # No refspec (`git push`, or `git push origin`): what travels is decided
+      # by the current branch and push.default, so HEAD has to be resolved
+      # before there is anything to rule on. An unreadable branch is denied
+      # rather than allowed -- the same stance as an unresolved directory.
+      case ",$INVOCATION_FLAGS," in
+        *,push-current,*)
+          PUSH_BRANCH=$(git -C "${WT_DIR:-.}" branch --show-current 2>/dev/null)
+          if [ -z "$PUSH_BRANCH" ]; then
+            deny "Blocked: this push names no refspec, so what it sends is whatever HEAD points at, and the current branch could not be read (detached HEAD, or not a checkout). Name the branch explicitly: git push origin <branch>"
+          fi
+          if is_protected_ref "$PUSH_BRANCH"; then
+            deny "Blocked: you are on $PUSH_BRANCH. Use a feature branch and create a PR."
+          fi
+          ;;
+      esac
+
+      # 0x1e between destinations, because a ref name may contain a comma but
+      # never a control character (git check-ref-format). Read into an array
+      # rather than piped into a loop: a `while read` on the right of a pipe
+      # runs in a subshell, where `deny`'s exit 2 would end the subshell and
+      # leave the command permitted -- which is the defect this issue opened on.
+      IFS=$'\x1e' read -r -a PUSH_DESTINATIONS <<<"$REF_ARG"
+      for PUSH_DEST in "${PUSH_DESTINATIONS[@]}"; do
+        [ -n "$PUSH_DEST" ] || continue
+        if [ "$PUSH_DEST" = "HEAD" ]; then
+          PUSH_DEST=$(git -C "${WT_DIR:-.}" branch --show-current 2>/dev/null)
+          if [ -z "$PUSH_DEST" ]; then
+            deny "Blocked: this push writes to HEAD and the current branch could not be read, so the destination is unknown. Name the branch explicitly: git push origin <branch>"
+          fi
+        fi
+        if is_protected_ref "$PUSH_DEST"; then
+          deny "Blocked: cannot push to $PUSH_DEST. Use a feature branch and create a PR."
+        fi
+      done
+      continue
+    fi
 
     # ── Destructive operations ────────────────────────────────────────────
     # Judged in whatever tree they name. Losing uncommitted work is not a
