@@ -115,7 +115,7 @@
           loadmodule /opt/redis-stack/lib/redisbloom.so
 
           # Logging
-          logfile /var/log/redis/redis-server.log
+          logfile /var/log/redis-stack/redis-stack-server.log
           loglevel notice
         # #17434: was the plain-redis path, which the daemon never reads -- so
         # this provisioning mode rendered a full config, requirepass included,
@@ -123,13 +123,35 @@
         dest: "{{ redis_config_file | default('/etc/redis-stack.conf') }}"
         backup: true
 
-    - name: Create Redis log directory
-      file:
-        path: /var/log/redis
+    # #17444 review: this play copied the config and then restarted the service
+    # without ever installing a start-command override, so the packaged wrapper
+    # started with no config argument and the rendered file was ignored -- the
+    # exact defect #17434 fixes for the role, one play over. It worked only by
+    # coincidence, because `redis_config_file` defaults to the path the packaged
+    # unit reads anyway; setting that variable -- which #17434 makes meaningful
+    # -- would have broken it silently.
+    #
+    # The role's template and the role's values are referenced, never copied.
+    # A second inline drop-in here would be a fork of a fork; roles/redis is the
+    # one definition and #17441 tracks collapsing this play into it entirely.
+    # The manual log directory this replaces was also wrong twice over: it named
+    # /var/log/redis, which nothing sweeps, and chowned it to redis:redis while
+    # the unit runs as autobot. `LogsDirectory=` in the drop-in creates it with
+    # the unit's own ownership.
+    - name: Load the redis role's declared values so the drop-in renders identically
+      ansible.builtin.include_vars: ../roles/redis/vars/main.yml
+
+    - name: Create the systemd override directory
+      ansible.builtin.file:
+        path: /etc/systemd/system/redis-stack-server.service.d
         state: directory
-        owner: redis
-        group: redis
         mode: '0755'
+
+    - name: Install the same systemd drop-in the redis role installs
+      ansible.builtin.template:
+        src: ../roles/redis/templates/redis-stack-override.conf.j2
+        dest: /etc/systemd/system/redis-stack-server.service.d/override.conf
+        mode: '0644'
 
     - name: Configure Redis Stack systemd service
       systemd:

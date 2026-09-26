@@ -97,9 +97,10 @@ This runbook provides operational procedures for managing the Redis service with
 │  ┌─────────────────────────────────────────────────┐  │
 │  │  Redis Server Process                           │  │
 │  │  • Port: 6379                                   │  │
-│  │  • Config: /etc/redis-stack.conf               │  │
-│  │  • Data: /var/lib/redis/                       │  │
-│  │  • Logs: /var/log/redis/redis-server.log       │  │
+│  │  • Config: /etc/redis-stack.conf                │  │
+│  │  • Data: /var/lib/redis-stack/                  │  │
+│  │  • Logs: /var/log/redis-stack/                  │  │
+│  │            redis-stack-server.log               │  │
 │  └─────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
 ```

@@ -176,6 +176,37 @@ def _declared_in_python(root: Path) -> str | None:
     return None
 
 
+def scan_text(rel: str, text: str) -> list[str]:
+    """Findings in one file's TEXT. Pure, so it can be shown a fixture.
+
+    Extracted from `_sweep` on review (#17444): the only test of the detector
+    ran it against the live tree, which proves the tree is clean and never that
+    the detector trips. A regression in the `startswith("#")` skip or the `hit`
+    lookup would have passed in silence -- and a detector that fires on
+    everything or on nothing is worse than none. The contrast pair lives in
+    `TestTheDetectorTripsAndStaysQuiet`.
+    """
+    findings: list[str] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        if is_comment_line(line):
+            continue
+        hit = next((wrong for wrong in _WRONG if wrong in line), None)
+        if hit and f"{rel}:{number}" not in _EXEMPT:
+            findings.append(f"{rel}:{number} -> {hit}")
+    return findings
+
+
+def is_comment_line(line: str) -> bool:
+    """A whole-line `#` comment, which the sweep never reports.
+
+    Named rather than inlined because `_EXEMPT`'s liveness check needs the same
+    question: an exemption pointing at a line the sweep skips anyway covers
+    nothing, and used to read as live because the line still contained a
+    `_WRONG` literal (#17444 review).
+    """
+    return line.strip().startswith("#")
+
+
 def _sweep(root: Path) -> list[str]:
     """Non-canonical config-path literals outside `#` comments and exemptions."""
     offenders: list[str] = []
@@ -189,13 +220,7 @@ def _sweep(root: Path) -> list[str]:
             continue
         if not any(wrong in text for wrong in _WRONG):
             continue
-        for number, line in enumerate(text.splitlines(), start=1):
-            stripped = line.strip()
-            if stripped.startswith("#"):
-                continue
-            hit = next((wrong for wrong in _WRONG if wrong in line), None)
-            if hit and f"{rel}:{number}" not in _EXEMPT:
-                offenders.append(f"{rel}:{number} -> {hit}")
+        offenders.extend(scan_text(rel, text))
     REACH.completed(files)
     return offenders
 
@@ -346,8 +371,58 @@ def test_every_exemption_is_still_live() -> None:
         index = int(number) - 1
         if index >= len(lines) or not any(wrong in lines[index] for wrong in _WRONG):
             stale.append(f"{where} (no longer names a non-canonical path) -- {reason}")
+        elif is_comment_line(lines[index]):
+            # The sweep never reports a `#` comment line, so an exemption on one
+            # excuses nothing while reading as live -- the literal is still there,
+            # which is all the old check asked (#17444 review). A dead entry that
+            # looks authoritative is what the bidirectional contract forbids.
+            stale.append(
+                f"{where} points at a `#` comment line, which the sweep skips anyway -- "
+                f"the exemption covers nothing. Delete it. ({reason})"
+            )
 
     assert not stale, (
         "these exemptions no longer describe what is at that line -- delete them so the "
         "sweep covers it again (#17434):\n  " + "\n  ".join(stale)
     )
+
+
+class TestTheDetectorTripsAndStaysQuiet:
+    """The contrast pair `_sweep` never had (#17444 review).
+
+    Every assertion elsewhere in this file runs the detector against the live
+    tree, so all of them pass when the tree is clean -- including if the
+    detector has stopped detecting. These show it on fixtures: one that must
+    trip it, and four that must not.
+    """
+
+    def test_it_trips_on_a_non_canonical_literal(self) -> None:
+        findings = scan_text("fake.yml", "dest: /etc/redis/redis.conf\n")
+        assert findings == ["fake.yml:1 -> /etc/redis/redis.conf"]
+
+    def test_it_reports_every_wrong_spelling(self) -> None:
+        for wrong in _WRONG:
+            assert scan_text("f.yml", f"path: {wrong}\n"), f"{wrong} is not detected"
+
+    def test_it_stays_quiet_on_the_canonical_path(self) -> None:
+        assert scan_text("fake.yml", f"dest: {_CANONICAL}\n") == []
+
+    def test_it_stays_quiet_on_a_comment_line(self) -> None:
+        """#16060's lesson: a guard's own explanation of the bug is not the bug."""
+        assert scan_text("fake.yml", "# was /etc/redis/redis.conf until #17434\n") == []
+        assert scan_text("fake.yml", "   # indented /etc/redis/redis.conf\n") == []
+
+    def test_an_inline_comment_is_not_a_comment_line(self) -> None:
+        """The trap that caught this guard's own first draft.
+
+        `dest: X  # was /etc/redis/redis.conf` starts with `dest:`, so the line
+        is code carrying prose and the literal is still published.
+        """
+        findings = scan_text("fake.yml", "dest: ok  # was /etc/redis/redis.conf\n")
+        assert len(findings) == 1
+
+    def test_an_exempt_line_is_not_reported(self) -> None:
+        rel, number = next(iter(_EXEMPT)).rsplit(":", 1)
+        text = "\n" * (int(number) - 1) + "x = '/etc/redis/redis.conf'\n"
+        assert scan_text(rel, text) == []
+        assert scan_text("some/other/file.py", text) != []
