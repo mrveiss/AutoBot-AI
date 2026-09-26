@@ -86,3 +86,44 @@ HARDCODED_COLOUR_LITERALS: dict[str, int] = {
 
 #: Frozen total, asserted separately so a per-literal edit cannot drift it unseen.
 TOTAL_OCCURRENCES = 45
+
+
+#: ``path under autobot-frontend/src -> `!important` declarations in its <style>``.
+#:
+#: The third local-override form in #17567, and the one that survived checking:
+#: form 1 (bare hex in script/template) is detected by the ratchet above, and
+#: form 2 (redefining a design-system token in a component) has **zero**
+#: instances -- the 34 custom properties declared in component <style> blocks
+#: are component-local aliases assigned FROM tokens, which is the pattern the
+#: design system is for.
+#:
+#: Keyed by path here rather than by value, because `!important` has no value
+#: to key on. The paths are `.vue` files, which the python filter does not
+#: cover -- deliberate: this guard reads them by GLOB, not by concrete literal,
+#: so `python_filter_covers_its_guards_test.py` does not require coverage for
+#: them and the trade in `python_filter_uncovered_reads.py:131` is untouched.
+#:
+#: Shrink-only. Note the top three are chart components, where `!important` is
+#: usually fighting a third-party library's injected styles rather than
+#: overriding the design system -- so these want per-file reasoning at the time
+#: that component is opened, not a sweep. The ratchet stops growth; it does not
+#: claim each one is a defect.
+IMPORTANT_DECLARATIONS: dict[str, int] = {
+    "components/audit/AuditLogTable.vue": 1,
+    "components/charts/BaseChart.vue": 19,
+    "components/charts/FunctionCallGraph.vue": 12,
+    "components/chat/ChatInterface.vue": 5,
+    "components/knowledge/KnowledgeGraph.vue": 10,
+    "components/knowledge/panels/SourcePreviewPanel.vue": 1,
+    "components/knowledge/pipeline/PipelineRunner.vue": 1,
+    "components/operations/OperationsList.vue": 1,
+    "components/security/SecretsManager.vue": 2,
+    "components/terminal/SSHTerminal.vue": 1,
+    "components/ui/ProgressBar.vue": 2,
+    "components/visualizations/ServiceMessageTimeline.vue": 1,
+    "views/AdminUsersView.vue": 1,
+    "views/CustomDashboard.vue": 1,
+}
+
+#: Frozen total, asserted separately.
+TOTAL_IMPORTANT = 58

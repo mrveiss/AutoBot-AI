@@ -37,6 +37,8 @@ import pytest
 from repo_tests._hardcoded_colour_baseline import (
     EXEMPT_BASENAMES,
     HARDCODED_COLOUR_LITERALS,
+    IMPORTANT_DECLARATIONS,
+    TOTAL_IMPORTANT,
     TOTAL_OCCURRENCES,
 )
 from repo_tests._paths import repo_root
@@ -256,3 +258,119 @@ class TestTheSharedNotificationSourceStaysShared:
         assert "getNotificationColors" in source
         # Every literal in the mapping must be a getCssVar fallback, never a direct return.
         assert "return '#" not in source, "the shared source returns a literal instead of resolving one"
+
+
+# ==================== Form 3: !important (#17567) ====================
+
+_STYLE_CONTENT = re.compile(r"<style\b[^>]*>(.*?)</style>", re.DOTALL | re.IGNORECASE)
+_IMPORTANT = re.compile(r"!\s*important", re.IGNORECASE)
+
+
+def _scan_important(root: Path) -> dict[str, int]:
+    """``path -> !important declarations`` inside component ``<style>`` blocks.
+
+    Keyed by path because `!important` has no value to key on. Files are reached
+    by GLOB rather than named as literals, so this does not add a concrete
+    dependency the python path filter would have to cover.
+    """
+    counts: dict[str, int] = {}
+    for path in sorted(root.rglob("*.vue")):
+        if "node_modules" in path.parts:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        css = "\n".join(m.group(1) for m in _STYLE_CONTENT.finditer(text))
+        found = len(_IMPORTANT.findall(css))
+        if found:
+            counts[path.relative_to(root).as_posix()] = found
+    return counts
+
+
+@pytest.fixture(scope="module")
+def measured_important() -> dict[str, int]:
+    return _scan_important(repo_root() / _FRONTEND)
+
+
+class TestTheImportantDetectorWorks:
+    def test_it_finds_one(self, tmp_path):
+        (tmp_path / "a.vue").write_text("<style>.x { color: red !important; }</style>", encoding="utf-8")
+        assert _scan_important(tmp_path) == {"a.vue": 1}
+
+    def test_spacing_does_not_hide_it(self, tmp_path):
+        (tmp_path / "a.vue").write_text("<style>.x { color: red !  important; }</style>", encoding="utf-8")
+        assert _scan_important(tmp_path) == {"a.vue": 1}
+
+    def test_outside_a_style_block_is_not_counted(self, tmp_path):
+        # A template or script mentioning the word is not a CSS override.
+        (tmp_path / "a.vue").write_text("<template><p>this is !important to read</p></template>", encoding="utf-8")
+        assert _scan_important(tmp_path) == {}
+
+    def test_a_scoped_or_lang_attribute_still_matches(self, tmp_path):
+        (tmp_path / "a.vue").write_text('<style scoped lang="scss">.x { top: 0 !important; }</style>', encoding="utf-8")
+        assert _scan_important(tmp_path) == {"a.vue": 1}
+
+
+class TestTheImportantPopulationOnlyShrinks:
+    def test_the_total_matches_the_entries(self):
+        assert TOTAL_IMPORTANT == sum(IMPORTANT_DECLARATIONS.values())
+
+    def test_no_file_gains_an_important(self, measured_important):
+        grew = {
+            f: (IMPORTANT_DECLARATIONS.get(f, 0), n)
+            for f, n in measured_important.items()
+            if n > IMPORTANT_DECLARATIONS.get(f, 0)
+        }
+        assert not grew, (
+            f"these files gained an !important (pinned, now): {grew}. Raise specificity or fix "
+            "the cascade; !important overrides the design system rather than using it."
+        )
+
+    def test_no_new_file_joins_the_population(self, measured_important):
+        new = sorted(set(measured_important) - set(IMPORTANT_DECLARATIONS))
+        assert not new, f"new files using !important: {new}"
+
+    def test_the_total_never_rises(self, measured_important):
+        assert sum(measured_important.values()) <= TOTAL_IMPORTANT
+
+    def test_a_cleared_file_is_removed_from_the_baseline(self, measured_important):
+        stale = sorted(f for f in IMPORTANT_DECLARATIONS if f not in measured_important)
+        assert not stale, f"clean now -- delete their entries and lower TOTAL_IMPORTANT: {stale}"
+
+
+class TestFormTwoStaysAbsent:
+    """#17567 form 2: redefining a design-system token inside a component.
+
+    Measured at **zero**, and asserted so rather than left as a claim in a
+    comment. The discriminator is ownership -- whether the name is one the theme
+    declares -- not whether a component declares any custom property at all. 34
+    component-local aliases exist and are correct: `--rule-accent: var(--color-success)`
+    maps a state to a token once so the rest of the component reads the alias.
+    """
+
+    def test_no_component_redefines_a_design_system_token(self):
+        root = repo_root() / _FRONTEND
+        declaration = re.compile(r"(?:^|[{;])\s*(--[A-Za-z0-9_-]+)\s*:", re.MULTILINE)
+        anywhere = re.compile(r"(--[A-Za-z0-9_-]+)\s*:")
+        owned: set[str] = set()
+        for source in sorted((root / "assets").rglob("*.css")):
+            owned |= set(anywhere.findall(source.read_text(encoding="utf-8")))
+        assert len(owned) > 500, f"only {len(owned)} theme names parsed; the check would be vacuous"
+
+        offenders: dict[str, list[str]] = {}
+        for path in sorted(root.rglob("*.vue")):
+            if "node_modules" in path.parts:
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            css = "\n".join(m.group(1) for m in _STYLE_CONTENT.finditer(text))
+            clashes = sorted({n for n in declaration.findall(css) if n in owned})
+            if clashes:
+                offenders[path.relative_to(root).as_posix()] = clashes
+        assert not offenders, (
+            "these components redefine a design-system token locally, which is the override "
+            f"form #17567 records as absent: {offenders}"
+        )
