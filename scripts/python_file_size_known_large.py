@@ -158,7 +158,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1682,
     "autobot-backend/chat_workflow/llm_handler.py": 1343,
-    "autobot-backend/chat_workflow/manager.py": 4067,
+    "autobot-backend/chat_workflow/manager.py": 3982,  # #17513: markers extracted
     "autobot-backend/chat_workflow/tool_handler.py": 3721,  # #11542: external MCP dispatch merged into MCPDispatcher
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
@@ -447,7 +447,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/api/nodes_execution_test.py": 756,
     "autobot-slm-backend/api/orchestration.py": 900,
     "autobot-slm-backend/api/performance.py": 894,
-    "autobot-slm-backend/api/roles.py": 691,
+    "autobot-slm-backend/api/roles.py": 689,
     "autobot-slm-backend/api/security.py": 962,
     "autobot-slm-backend/api/services.py": 1208,
     "autobot-slm-backend/api/setup_wizard.py": 1352,
@@ -497,7 +497,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/plugin_sdk/plugin_sdk_test.py": 941,
     "autobot_shared/rate_limiter_test.py": 618,
     "autobot_shared/redis_client.py": 679,
-    "autobot_shared/redis_management/connection_manager.py": 1519,
+    "autobot_shared/redis_management/connection_manager.py": 1517,
     "autobot_shared/security/ssrf_guard_test.py": 633,
     "autobot_shared/ssot_config.py": 3307,  # #16974: org_role_bound_enabled feature flag
     "autobot_shared/ssot_config_test.py": 782,

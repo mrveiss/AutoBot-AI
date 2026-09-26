@@ -9,6 +9,8 @@ Verifies all consolidated features work correctly and backward compatibility is 
 import sys
 from pathlib import Path
 
+import pytest
+
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -225,13 +227,19 @@ class TestBackwardCompatibility:
 class TestFeatureIntegration:
     """Test integrated features work together"""
 
-    def test_manager_creates_config_for_unknown_database(self):
-        """Test manager can handle unknown database names"""
+    def test_manager_refuses_an_unknown_database(self):
+        """An unknown database name is a programming error, not a fallback (#17435).
+
+        This test previously asserted the opposite -- "Should not crash, should
+        use fallback" -- and that is why the defect survived: the defaulting was
+        pinned, not overlooked. `DATABASE_MAPPING.get(name, 0)` routed
+        `RedisDatabase.ANALYTICS` into DB 0 behind a warning and two lines of
+        success logging, and because `MAIN` is also 0 it hid six further call
+        sites that looked healthy while agreeing with the failure mode.
+        """
         manager = RedisConnectionManager()
-        # Should not crash, should use fallback
-        db_num = manager._get_database_number("unknown_database")
-        assert isinstance(db_num, int)
-        assert db_num >= 0
+        with pytest.raises(KeyError, match="unknown Redis database"):
+            manager._get_database_number("unknown_database")
 
     def test_statistics_tracking(self):
         """Test statistics are tracked correctly"""

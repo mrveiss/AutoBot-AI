@@ -21,7 +21,8 @@
     "test": "vitest",
     "test:unit": "vitest run",
     "storybook": "VITE_API_URL=/slm storybook dev -p 6007",
-    "build-storybook": "VITE_API_URL=/slm storybook build"
+    "build-storybook": "VITE_API_URL=/slm storybook build",
+    "check:locales": "python3 ../autobot-frontend/scripts/check-locale-completeness.py --locales src/locales"
   },
   "dependencies": {
     "@autobot/terminal": "file:../autobot-plugins/terminal",

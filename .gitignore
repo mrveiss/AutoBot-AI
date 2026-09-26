@@ -553,3 +553,7 @@ autobot-backend/backend
 
 # #14678: generated at CI time from inventory/group_vars/all.yml, never tracked
 autobot-slm-backend/ansible/tests/inventory/group_vars/all.yml
+
+# Session handoffs are working notes, not repository content (owner ruling 2026-09-25).
+# They name branches, worktrees and in-flight state that is false the moment work moves.
+.session/

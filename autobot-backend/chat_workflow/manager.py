@@ -15,7 +15,6 @@ Composes all functionality through mixins:
 import asyncio
 import json
 import os
-import re
 import uuid
 from contextvars import ContextVar
 from typing import Any, Dict, FrozenSet, List
@@ -52,6 +51,7 @@ from .models import (
 )
 from .session_handler import SessionHandlerMixin
 from .session_role import resolve_auth_role
+from .thought_markers import detect_content_type, find_last_tag_positions, find_new_segment_start
 from .tool_handler import ToolHandlerMixin
 
 logger = get_logger(__name__)
@@ -411,12 +411,6 @@ class ChatWorkflowManager(
 
     MAX_CONTINUATION_ITERATIONS = limits.MAX_CONTINUATION_ITERATIONS  # #352, #17468: one shared value
 
-    # Issue #351 Fix: Tag patterns for thought/planning detection
-    THOUGHT_TAG_PATTERN = re.compile(r"\[THOUGHT\]", re.IGNORECASE)
-    THOUGHT_END_PATTERN = re.compile(r"\[/THOUGHT\]", re.IGNORECASE)
-    PLANNING_TAG_PATTERN = re.compile(r"\[PLANNING\]", re.IGNORECASE)
-    PLANNING_END_PATTERN = re.compile(r"\[/PLANNING\]", re.IGNORECASE)
-
     def _normalize_tool_call_text(self, text: str) -> str:
         """Normalize TOOL_CALL spacing in LLM response text (Issue #332)."""
         # Issue #380: Use pre-compiled patterns
@@ -440,53 +434,12 @@ class ChatWorkflowManager(
         return filter_internal_prompts(text)
 
     def _find_last_tag_positions(self, content: str) -> Dict[str, int]:
-        """Find last occurrence positions of thought/planning tags."""
-        positions = {
-            "thought_start": -1,
-            "thought_end": -1,
-            "planning_start": -1,
-            "planning_end": -1,
-        }
-
-        for match in self.THOUGHT_TAG_PATTERN.finditer(content):
-            positions["thought_start"] = match.start()
-        for match in self.THOUGHT_END_PATTERN.finditer(content):
-            positions["thought_end"] = match.start()
-        for match in self.PLANNING_TAG_PATTERN.finditer(content):
-            positions["planning_start"] = match.start()
-        for match in self.PLANNING_END_PATTERN.finditer(content):
-            positions["planning_end"] = match.start()
-
-        return positions
+        """Last marker positions, ignoring quoted ones (#17513; see thought_markers)."""
+        return find_last_tag_positions(content)
 
     def _detect_content_type(self, content: str, current_type: str = "response") -> str:
-        """Detect message type from content tags (Issue #351 Fix)."""
-        positions = self._find_last_tag_positions(content)
-        thought_start = positions["thought_start"]
-        thought_end = positions["thought_end"]
-        planning_start = positions["planning_start"]
-        planning_end = positions["planning_end"]
-
-        if thought_start >= 0:
-            if thought_end > thought_start:
-                # Block is closed - check for planning after
-                if planning_start > thought_end and planning_end < planning_start:
-                    return "planning"
-                return "response"
-            else:
-                return "thought"
-
-        if planning_start >= 0:
-            if planning_end > planning_start:
-                return "response"
-            else:
-                return "planning"
-
-        # No tags - maintain current type if in block
-        if current_type in _BLOCK_CONTENT_TYPES:
-            return current_type
-
-        return "response"
+        """Detect message type from content markers (#351; logic in thought_markers)."""
+        return detect_content_type(content, current_type)
 
     def _build_chunk_message(
         self,
@@ -638,46 +591,8 @@ class ChatWorkflowManager(
         return (None, current_message_id, None, current_message_type)
 
     def _find_new_segment_start(self, llm_response: str, new_type: str, previous_type: str = "response") -> str:
-        """Find content after the relevant tag for the new segment type.
-
-        Issue #680: When type changes, extract only the content AFTER the complete
-        tag, not including partial tag characters like ']'.
-
-        For opening tags (thought/planning), find content after [TYPE].
-        For closing tags (response after thought/planning), find content after [/TYPE].
-        """
-        opening_tag_map = {
-            "thought": r"\[THOUGHT\]",
-            "planning": r"\[PLANNING\]",
-        }
-
-        closing_tag_map = {
-            "thought": r"\[/THOUGHT\]",
-            "planning": r"\[/PLANNING\]",
-        }
-
-        if new_type in opening_tag_map:
-            pattern = opening_tag_map[new_type]
-        elif new_type == "response" and previous_type in closing_tag_map:
-            pattern = closing_tag_map[previous_type]
-        else:
-            return ""
-
-        match = None
-        for m in re.finditer(pattern, llm_response, re.IGNORECASE):
-            match = m
-
-        if match:
-            # Return content after the tag
-            content_after_tag = llm_response[match.end() :]
-            logger.debug(
-                "[Issue #680] New segment for %s starts after tag: '%s...'",
-                new_type,
-                content_after_tag[:50] if content_after_tag else "(empty)",
-            )
-            return content_after_tag
-
-        return ""
+        """Content after the marker opening *new_type* (#680; logic in thought_markers)."""
+        return find_new_segment_start(llm_response, new_type, previous_type)
 
     def _build_stream_chunk_message(
         self,
