@@ -614,7 +614,7 @@ onMounted(loadPolicies)
   padding: var(--spacing-2) var(--spacing-3);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  background: var(--color-bg-input);
+  background: var(--bg-input);
   color: var(--text-primary);
   font-size: var(--text-sm);
   cursor: pointer;
@@ -671,7 +671,7 @@ onMounted(loadPolicies)
 }
 
 .data-table tbody tr:hover {
-  background: var(--color-bg-hover);
+  background: var(--bg-hover);
 }
 
 .name-cell {
@@ -768,7 +768,7 @@ onMounted(loadPolicies)
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-2) var(--spacing-4);
-  background: var(--color-bg-input);
+  background: var(--bg-input);
   color: var(--text-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -817,7 +817,7 @@ onMounted(loadPolicies)
 }
 
 .btn-icon:hover {
-  background: var(--color-bg-hover);
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 
@@ -855,7 +855,7 @@ onMounted(loadPolicies)
   padding: var(--spacing-2) var(--spacing-3);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  background: var(--color-bg-input);
+  background: var(--bg-input);
   color: var(--text-primary);
   font-size: var(--text-sm);
 }

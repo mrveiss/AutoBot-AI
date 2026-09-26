@@ -171,7 +171,7 @@ async function run(): Promise<void> {
   padding: 0.75rem 1rem;
   margin-bottom: var(--spacing-md, 1rem);
   border-left: 4px solid var(--color-warning);
-  background: var(--color-bg-secondary);
+  background: var(--bg-secondary);
   border-radius: 4px;
 }
 

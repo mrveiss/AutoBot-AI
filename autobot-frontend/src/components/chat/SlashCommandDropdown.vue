@@ -68,8 +68,8 @@ watch(
 
 <style scoped>
 .slash-command-dropdown {
-  background: var(--autobot-surface, #1e1e2e);
-  border: 1px solid var(--autobot-border, #313244);
+  background: var(--bg-surface, #1e1e2e);
+  border: 1px solid var(--border-default, #313244);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   max-height: 240px;
@@ -86,19 +86,19 @@ watch(
 
 .slash-command-item:hover,
 .slash-command-item.selected {
-  background: var(--autobot-surface-hover, #313244);
+  background: var(--bg-hover, #313244);
 }
 
 .slash-command-name {
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--autobot-primary, #cba6f7);
+  color: var(--color-primary, #cba6f7);
   font-family: monospace;
 }
 
 .slash-command-desc {
   font-size: 0.75rem;
-  color: var(--autobot-text-secondary, #a6adc8);
+  color: var(--text-secondary, #a6adc8);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

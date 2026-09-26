@@ -138,7 +138,7 @@ defineExpose({ reset })
   flex-direction: column;
   gap: var(--spacing-3, 0.75rem);
   padding: var(--spacing-4, 1rem);
-  background: var(--color-bg-card, var(--mmchat-card-bg));
+  background: var(--bg-card, var(--mmchat-card-bg));
   border-radius: var(--radius-lg, 0.5rem);
   overflow: hidden;
 }
@@ -197,7 +197,7 @@ defineExpose({ reset })
 .multi-model-chat__textarea {
   flex: 1;
   resize: vertical;
-  background: var(--color-bg-input, var(--mmchat-input-bg));
+  background: var(--bg-input, var(--mmchat-input-bg));
   color: var(--text-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md, 0.375rem);
@@ -251,7 +251,7 @@ defineExpose({ reset })
 }
 
 .multi-model-chat__response-card {
-  background: var(--color-bg-secondary, var(--mmchat-response-bg));
+  background: var(--bg-secondary, var(--mmchat-response-bg));
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md, 0.375rem);
   overflow: hidden;

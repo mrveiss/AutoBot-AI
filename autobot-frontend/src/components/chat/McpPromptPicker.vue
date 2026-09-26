@@ -337,16 +337,16 @@ function closeModal() {
 
 .bridge-selector label {
   font-weight: 500;
-  color: var(--autobot-text-primary);
+  color: var(--text-primary);
 }
 
 .bridge-select {
   flex: 1;
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--autobot-border-color);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  background: var(--autobot-bg-primary);
-  color: var(--autobot-text-primary);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   font-size: 0.875rem;
 }
 
@@ -360,15 +360,15 @@ function closeModal() {
 
 .prompt-item {
   padding: 1rem;
-  background: var(--autobot-bg-secondary);
-  border: 1px solid var(--autobot-border-color);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .prompt-item:hover {
-  border-color: var(--autobot-primary);
+  border-color: var(--color-primary);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
@@ -381,11 +381,11 @@ function closeModal() {
 
 .prompt-name {
   font-weight: 600;
-  color: var(--autobot-text-primary);
+  color: var(--text-primary);
 }
 
 .prompt-description {
-  color: var(--autobot-text-secondary);
+  color: var(--text-secondary);
   font-size: 0.875rem;
   margin-bottom: 0.75rem;
 }
@@ -399,17 +399,17 @@ function closeModal() {
 
 .args-label {
   font-size: 0.75rem;
-  color: var(--autobot-text-secondary);
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .arg-badge {
   display: inline-block;
   padding: 0.125rem 0.5rem;
-  background: var(--autobot-bg-tertiary);
+  background: var(--bg-tertiary);
   border-radius: 0.25rem;
   font-size: 0.75rem;
-  color: var(--autobot-text-primary);
+  color: var(--text-primary);
   font-family: 'Monaco', 'Courier New', monospace;
 }
 
@@ -420,7 +420,7 @@ function closeModal() {
   justify-content: center;
   padding: 3rem;
   gap: 1rem;
-  color: var(--autobot-text-secondary);
+  color: var(--text-secondary);
 }
 
 .prompt-form {
@@ -438,14 +438,14 @@ function closeModal() {
 .form-header h4 {
   font-size: 1.125rem;
   font-weight: 600;
-  color: var(--autobot-text-primary);
+  color: var(--text-primary);
 }
 
 .form-description {
   padding: 0.75rem;
-  background: var(--autobot-bg-secondary);
+  background: var(--bg-secondary);
   border-radius: 0.375rem;
-  color: var(--autobot-text-secondary);
+  color: var(--text-secondary);
   font-size: 0.875rem;
   margin-bottom: 1.5rem;
 }
@@ -464,32 +464,32 @@ function closeModal() {
 
 .field-label {
   font-weight: 500;
-  color: var(--autobot-text-primary);
+  color: var(--text-primary);
   font-size: 0.875rem;
 }
 
 .required {
-  color: var(--autobot-error);
+  color: var(--color-error);
 }
 
 .field-description {
   font-size: 0.75rem;
-  color: var(--autobot-text-secondary);
+  color: var(--text-secondary);
   margin-top: -0.25rem;
 }
 
 .field-input {
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--autobot-border-color);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  background: var(--autobot-bg-primary);
-  color: var(--autobot-text-primary);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   font-size: 0.875rem;
 }
 
 .field-input:focus {
   outline: none;
-  border-color: var(--autobot-primary);
+  border-color: var(--color-primary);
 }
 
 .form-error {
@@ -497,10 +497,10 @@ function closeModal() {
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem;
-  background: var(--autobot-error-bg, #fee);
-  border: 1px solid var(--autobot-error, #f44);
+  background: var(--color-error-bg, #fee);
+  border: 1px solid var(--color-error, #f44);
   border-radius: 0.375rem;
-  color: var(--autobot-error);
+  color: var(--color-error);
   font-size: 0.875rem;
   margin-top: 1rem;
 }
