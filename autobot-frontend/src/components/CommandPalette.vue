@@ -270,11 +270,11 @@ defineExpose({
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--autobot-border);
+  background: var(--border-default);
   border-radius: var(--radius-default);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--autobot-text-muted);
+  background: var(--text-muted);
 }
 </style>

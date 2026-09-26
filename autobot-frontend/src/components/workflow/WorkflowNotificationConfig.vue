@@ -357,7 +357,7 @@ watch(saveSuccess, (val) => {
   padding: var(--spacing-2) var(--spacing-3);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  background: var(--color-bg-secondary, var(--wfnotif-input-bg));
+  background: var(--bg-secondary, var(--wfnotif-input-bg));
   color: var(--text-primary);
   font-size: var(--text-sm);
   transition: border-color var(--duration-150);

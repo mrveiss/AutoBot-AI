@@ -221,18 +221,18 @@ function formatExpiry(ts: number): string {
 <style scoped>
 .provider-oauth-connect { display: flex; flex-direction: column; gap: 0.75rem; }
 
-.auth-mode-toggle { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--autobot-border); }
+.auth-mode-toggle { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border-default); }
 .auth-tab {
   padding: 0.4rem 0.85rem;
   font-size: 0.8rem;
   border: none;
   background: transparent;
-  color: var(--autobot-text-muted);
+  color: var(--text-muted);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   transition: all 0.15s;
 }
-.auth-tab.active { color: var(--autobot-accent); border-bottom-color: var(--autobot-accent); }
+.auth-tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
 
 .auth-panel { padding: 0.75rem 0; }
 
@@ -240,16 +240,16 @@ function formatExpiry(ts: number): string {
 .status-dot { width: 8px; height: 8px; border-radius: 50%; }
 .status-dot.connected { background: var(--color-success); }
 .status-dot.disconnected { background: var(--color-error); }
-.status-text { font-size: 0.85rem; color: var(--autobot-text-secondary); }
+.status-text { font-size: 0.85rem; color: var(--text-secondary); }
 .connected-text { color: var(--color-success); }
-.expiry-note { font-size: 0.75rem; color: var(--autobot-text-muted); }
+.expiry-note { font-size: 0.75rem; color: var(--text-muted); }
 
-.tos-notice { font-size: 0.75rem; color: var(--autobot-text-muted); margin-bottom: 0.5rem; }
+.tos-notice { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem; }
 
-.oauth-description { font-size: 0.85rem; color: var(--autobot-text-secondary); margin-bottom: 0.5rem; }
+.oauth-description { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
 
 .device-flow, .oauth-flow { display: flex; flex-direction: column; gap: 0.5rem; }
-.device-instruction { padding: 0.75rem; background: var(--autobot-bg-surface); border-radius: 6px; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.85rem; }
+.device-instruction { padding: 0.75rem; background: var(--bg-surface); border-radius: 6px; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.85rem; }
 .device-code { font-size: 1.4rem; font-weight: 700; letter-spacing: 0.15em; text-align: center; padding: 0.25rem; }
 
 .btn-danger-sm { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid var(--color-error); color: var(--color-error); background: transparent; cursor: pointer; }
