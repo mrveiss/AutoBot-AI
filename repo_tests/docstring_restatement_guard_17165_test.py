@@ -79,7 +79,12 @@ def _public_symbols(root: Path) -> list[tuple[str, str, str | None]]:
 REACH = declare(
     "docstring-restatement-scan",
     discover=_public_symbols,
-    floor=23_000,
+    #: Re-measured on 9ea37f7cb3 (#17517): the live population had reached
+    #: 24,000 -- exactly the old cap of floor+growth -- so main passed with zero
+    #: margin and every PR adding one public symbol went red on an unrelated
+    #: branch. Raising a *floor* tightens the guard; the 1,000 stays as the
+    #: working headroom the note above describes.
+    floor=24_000,
     growth=1_000,
     what="named public non-test symbols (functions, methods, classes)",
 )

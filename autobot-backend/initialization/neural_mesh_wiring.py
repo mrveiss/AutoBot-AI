@@ -20,7 +20,7 @@ from autobot_shared.logging_manager import get_logger
 logger = get_logger(__name__)
 
 
-def build_mesh_components() -> dict[str, Any]:
+async def build_mesh_components() -> dict[str, Any]:
     """Construct the shared mesh components each RAGService builds its retriever from."""
     from autobot_shared.redis_client import get_async_redis_client
     from knowledge.search_components.query_classifier import QueryClassifier
@@ -31,7 +31,10 @@ def build_mesh_components() -> dict[str, Any]:
     from user_management.database import get_async_engine
 
     _mesh_db = create_mesh_db_adapter(get_async_engine())
-    _redis = get_async_redis_client()
+    # #16499: `get_async_redis_client` is `async def`; without the await this was a
+    # coroutine object, and EdgeLearner's `await self.redis.hgetall(...)` raised
+    # AttributeError on it while the coroutine itself was never awaited.
+    _redis = await get_async_redis_client()
     _ppr = PersonalizedPageRank(db=_mesh_db)
     _edge_learner = EdgeLearner(db=_mesh_db, redis=_redis)
 
@@ -69,12 +72,12 @@ def requeue_existing_rag_services(app: FastAPI) -> None:
             logger.info("Queued per-instance NeuralMeshRetriever build for existing RAGService (#4765)")
 
 
-def wire_neural_mesh_components(
+async def wire_neural_mesh_components(
     app: FastAPI, register_shared_mesh_components: Callable[[dict[str, Any]], None]
 ) -> None:
     """Register the mesh components on app.state and requeue existing RAG services; never raises."""
     try:
-        _mesh_components = build_mesh_components()
+        _mesh_components = await build_mesh_components()
 
         # Store on app.state for introspection / health checks.
         app.state.mesh_components = _mesh_components
