@@ -32,6 +32,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.time_utils import utc_timestamp
+from services.kb_watch_ingest import ingest_stored, ingest_watched_file
 
 logger = get_logger(__name__)
 
@@ -459,8 +460,9 @@ class KBFolderWatcherService:
             # Import the KB upload logic
             from api.knowledge import _extract_text_content, _validate_file_upload
 
-            # Read file
-            file_content = file_path.read_bytes()
+            # Read file. Off the event loop: this handler runs inside the watcher's
+            # loop, and a watched folder may sit on a slow or remote filesystem (#7444).
+            file_content = await asyncio.to_thread(file_path.read_bytes)
 
             # Validate
             _validate_file_upload(file_path.name, len(file_content))
@@ -473,26 +475,12 @@ class KBFolderWatcherService:
                 return
 
             # Ingest into KB
-            from knowledge_base import get_knowledge_base
-
-            # get_knowledge_base is a coroutine function. Calling it without
-            # await produced a coroutine, so every ingest raised
-            # AttributeError: 'coroutine' object has no attribute 'add_fact'
-            # into the handler below — watch-folder ingestion never once
-            # succeeded, it only incremented the error counter (#13551).
-            kb = await get_knowledge_base()
-            await kb.add_fact(
-                content=content,
-                category=config.category,
-                tags=config.tags + [f"watch_folder:{folder_id}"],
-                metadata={
-                    "source": "watch_folder",
-                    "folder_id": folder_id,
-                    "filename": file_path.name,
-                    "file_path": str(file_path),
-                    "collection": config.collection,
-                },
-            )
+            result = await ingest_watched_file(folder_id, config, file_path, content)
+            if not ingest_stored(result):
+                logger.error("KB ingest rejected for %s: %s", file_path.name, result.get("message"))
+                if folder_id in self._stats:
+                    self._stats[folder_id]["errors"] += 1
+                return
 
             # Update stats
             if folder_id in self._stats:
