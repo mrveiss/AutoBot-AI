@@ -29,9 +29,11 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 yaml = pytest.importorskip("yaml")
 
@@ -47,9 +49,6 @@ _ASSIGNMENT = re.compile(r"^\s*(?:-\s*)?(?:(?:" + _VAR + r')|"(?:' + _VAR + r')"
 _TEMPLATED_BUDGET = re.compile(r"\{\{\s*(?:" + _VAR + r")\s*\|\s*default\(\s*(\d+)\s*\)\s*\}\}")
 #: Files Ansible reads variables from; ``host_group_vars`` accepts .json and extensionless too.
 _VAR_FILE_SUFFIXES = {".yml", ".yaml", ".json", ".ini", ".cfg", ""}
-#: Reach floor for the override scan: 342 such files were measured under the Ansible tree when this
-#: was written. An empty or broken walk must fail here rather than report "no overrides".
-_MIN_FILES_SCANNED = 300
 
 
 def _add_tasks() -> list[dict]:
@@ -152,6 +151,27 @@ def _is_var_file(path) -> bool:
     return path.suffix in _VAR_FILE_SUFFIXES
 
 
+def _var_files(root: Path) -> list[Path]:
+    """Every file under *root*'s Ansible tree that Ansible could read variables from."""
+    base = root / "autobot-slm-backend" / "ansible"
+    if not base.is_dir():
+        return []
+    return [p for p in sorted(base.rglob("*")) if p.is_file() and _is_var_file(p)]
+
+
+#: The override sweep's reach (#15826): an empty or broken walk must fail here rather than
+#: report "no overrides". 342 variable files measured under the Ansible tree at declaration.
+#: ``growth=40`` (~12%) because ordinary provisioning work adds role task files steadily.
+REACH = declare(
+    "ansible-apt-repo-budget-override-sweep",
+    discover=_var_files,
+    floor=342,
+    growth=40,
+    skips=0,
+    what="Ansible variable files",
+)
+
+
 def _overrides(text: str, suffix: str = "") -> list[str]:
     """Assignments of a retry-budget variable in ``text``; a ``.json`` file is parsed, not pattern-matched."""
     if suffix == ".json":
@@ -171,11 +191,7 @@ def test_no_file_overrides_the_retry_budget() -> None:
     effective value: the day an override is needed, this fails and asks for the check to follow it.
     Out of reach by construction: ``-e`` on a command line and inventories outside this tree.
     """
-    scanned = [p for p in sorted(_ANSIBLE.rglob("*")) if p.is_file() and _is_var_file(p)]
-    assert len(scanned) >= _MIN_FILES_SCANNED, (
-        f"the override scan reached only {len(scanned)} files under {_ANSIBLE.relative_to(repo_root())} "
-        f"(floor {_MIN_FILES_SCANNED}); an empty or broken walk would otherwise read as 'no overrides'"
-    )
+    scanned = REACH.examined(repo_root())
     hits = [
         f"{path.relative_to(repo_root())}: {line}"
         for path in scanned
@@ -233,6 +249,4 @@ def test_the_override_detector_matches_assignments_only(text: str, suffix: str, 
 )
 def test_the_scan_reads_every_variable_file_type_ansible_loads(name: str, expected: bool) -> None:
     """Contrast pair for the walk's filter: host_group_vars loads .yml/.yaml/.json/extensionless files."""
-    from pathlib import Path
-
     assert _is_var_file(Path(name)) is expected
