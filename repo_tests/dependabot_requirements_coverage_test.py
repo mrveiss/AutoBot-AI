@@ -68,6 +68,13 @@ _KNOWN_UNSCANNED = {
         "deliberately loose so the guide keeps working on older hosts. Scanning it "
         "would produce weekly PRs against documentation prose (#14562)."
     ),
+    "repo_tests/requirements_constraint_drift_baseline.txt": (
+        "a record of `<service file>::<package>` PAIRS, not a manifest — it names the "
+        "packages whose CI and service planes declare different constraints, "
+        "for tools/lint/check_requirements_ci_drift.py (#17448). It carries no version "
+        "specifiers and nothing installs from it; like its sibling below it is in this "
+        "population only because its filename contains `requirements` (#14562)."
+    ),
     "repo_tests/requirements_ci_drift_baseline.txt": (
         "an allowlist of PACKAGE NAMES, not a manifest — it records the production "
         "packages CI deliberately omits, for tools/lint/check_requirements_ci_drift.py. "
