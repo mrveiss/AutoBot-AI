@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { ApiResponse, RequestOptions } from '@/types/models'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { extractErrorMessage } from '@/utils/errorExtract'
+import { describeFailedResponse, extractErrorMessage } from '@/utils/errorExtract'
 import { getApiBase } from '@/config/ssot-config'
 
 // Note: Window.rum type is defined in @/utils/RumAgent.ts
@@ -154,7 +154,11 @@ export class ApiRepository {
 
       if (!response.ok) {
         this.trackApiCall(method, endpoint, startTime, endTime, response.status)
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        // #17528: read the body before throwing. Every reason the backend computed for
+        // the rejection lives there, and this line used to discard all of it -- the
+        // knowledge upload endpoint tells a user their PDF is a scan needing OCR, names
+        // the 10MB limit and lists the accepted extensions, and none of it ever arrived.
+        throw new Error(await describeFailedResponse(response))
       }
 
       const contentType = response.headers.get('content-type')

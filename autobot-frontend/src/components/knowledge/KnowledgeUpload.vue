@@ -190,7 +190,7 @@
               ref="fileInput"
               type="file"
               multiple
-              accept=".txt,.md,.pdf,.doc,.docx,.json,.csv,.yaml,.yml,.xml,.html"
+              :accept="KNOWLEDGE_UPLOAD_ACCEPT"
               @change="handleFileSelect"
               style="display: none"
             />
@@ -421,6 +421,12 @@ import { formatFileSize } from '@/utils/formatHelpers'
 import { parseTags } from '@/utils/tagHelpers'
 import { resetFormFields } from '@/utils/formHelpers'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
+import {
+  KNOWLEDGE_UPLOAD_ACCEPT,
+  KNOWLEDGE_UPLOAD_EXTENSIONS,
+  KNOWLEDGE_UPLOAD_MAX_BYTES,
+  KNOWLEDGE_UPLOAD_MAX_MB
+} from '@/constants/knowledgeUpload'
 import { useUploadProgress } from '@/composables/useUploadProgress'
 import { useExpansion } from '@/composables/useExpansion'
 import { useTransientError } from '@/composables/useTransientError'
@@ -506,12 +512,7 @@ const { message: errorMessage, show: showError, clear: clearError } = useTransie
 // Constants
 // =============================================================================
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const PREVIEW_MAX_LENGTH = 2000
-const SUPPORTED_EXTENSIONS = [
-  '.txt', '.md', '.pdf', '.doc', '.docx',
-  '.json', '.csv', '.yaml', '.yml', '.xml', '.html'
-]
 const PREVIEWABLE_EXTENSIONS = ['.txt', '.md', '.json', '.csv', '.yaml', '.yml', '.xml', '.html']
 
 // Category detection patterns
@@ -728,14 +729,14 @@ async function addFiles(files: File[]): Promise<void> {
 
   for (const file of files) {
     // Validate file size
-    if (file.size > MAX_FILE_SIZE) {
-      showError(t('knowledge.upload.errorFileTooLarge', { name: file.name }))
+    if (file.size > KNOWLEDGE_UPLOAD_MAX_BYTES) {
+      showError(t('knowledge.upload.errorFileTooLarge', { name: file.name, max: KNOWLEDGE_UPLOAD_MAX_MB }))
       continue
     }
 
     // Validate file type
     const ext = getFileExtension(file.name).toLowerCase()
-    if (!SUPPORTED_EXTENSIONS.includes(ext)) {
+    if (!KNOWLEDGE_UPLOAD_EXTENSIONS.includes(ext)) {
       showError(t('knowledge.upload.errorUnsupportedFormat', { name: file.name }))
       continue
     }
