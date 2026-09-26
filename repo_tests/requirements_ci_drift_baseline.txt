@@ -70,12 +70,16 @@ typing-extensions
 # grep), so no currently-collected test reaches that import. autobot_shared/
 # itself imports no opentelemetry module unconditionally (verified directly,
 # unlike bcrypt/pydantic-settings above).
-opentelemetry-api
-opentelemetry-sdk
+#
+# #17557: four entries LEFT this list. "No test reaches the import" was true
+# and irrelevant -- chromadb, langsmith and redis pull api, sdk,
+# exporter-otlp-proto-grpc and proto into CI transitively whether a test
+# imports them or not. Undeclared meant unconstrained, not absent, so CI took
+# 1.45.0 against production's ==1.44.0 and failed shard 1/12 on eight PRs.
+# They are now declared in requirements-ci/monitoring.txt at the production
+# pin. The three below stay: nothing in CI installs them at all.
 opentelemetry-exporter-otlp
-opentelemetry-exporter-otlp-proto-grpc
 opentelemetry-exporter-otlp-proto-http
-opentelemetry-proto
 opentelemetry-instrumentation-fastapi
 opentelemetry-instrumentation-redis
 opentelemetry-instrumentation-aiohttp-client

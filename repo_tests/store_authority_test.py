@@ -276,12 +276,31 @@ def test_a_redis_system_of_record_is_justified():
     unjustified = [
         concept.name
         for concept in STORE_AUTHORITY.values()
-        if concept.system_of_record is Store.REDIS and not concept.note.strip()
+        if concept.system_of_record in (Store.REDIS, Store.PROCESS) and not concept.note.strip()
     ]
     assert not unjustified, (
-        "Redis is declared the system of record with no justification -- state why the datum is "
-        f"ephemeral, or give it a durable home (#15663): {unjustified}"
+        "a non-durable store is declared the system of record with no justification -- state why "
+        f"the datum is ephemeral, or give it a durable home (#15663, #17450): {unjustified}"
     )
+
+
+def test_a_process_system_of_record_is_never_silent():
+    """`Store.PROCESS` is a declared inadequacy, so it must say what is lost (#17450).
+
+    A concept held in process memory survives neither a restart nor a second
+    worker. Declaring it is what makes that visible to this registry; a silent
+    `PROCESS` entry would hide the same weakness one level up, having moved it
+    from undeclarable to undiscussed.
+
+    `rebuilt_by` is required too, and for `PROCESS` the honest answer is usually
+    that nothing rebuilds it -- which is the sentence worth having on the record.
+    """
+    silent = [
+        concept.name
+        for concept in STORE_AUTHORITY.values()
+        if concept.system_of_record is Store.PROCESS and not concept.rebuilt_by.strip()
+    ]
+    assert not silent, "a PROCESS system of record must state what is lost when the process ends " f"(#17450): {silent}"
 
 
 def test_the_table_is_reachable_from_a_write_site():
@@ -401,3 +420,48 @@ def test_the_baseline_count_may_not_grow():
         "autobot_shared/store_authority.py instead — lower this ceiling when an "
         "entry leaves, never raise it to let a new one in."
     )
+
+
+def test_the_two_concepts_that_were_invisible_are_declared():
+    """#17450's finding: both were absent, for two DIFFERENT reasons.
+
+    `request_idempotency` writes one store, so `dual_store_modules()` excluded it
+    by design -- correctly, since a single write with no second copy has no
+    authority question. It belongs anyway because Redis is its AUTHORITY, which
+    this registry requires justifying.
+
+    `pre_auth_lockout` was **unrepresentable**: `Store` had no member for process
+    memory, so `stores_written()` correctly reported nothing and nobody could
+    have declared it even wanting to. That is a gap in the type, not the table,
+    and no audit of entries would ever have reached it.
+
+    Neither was findable by a population rule -- ~161 undeclared Redis-only
+    writers means no such rule separates these two from the rest. They are
+    declared by judgement, and this test is what keeps the judgement.
+    """
+    for name in ("request_idempotency", "pre_auth_lockout"):
+        assert name in STORE_AUTHORITY, f"{name} must stay declared (#17450)"
+
+
+def test_process_memory_is_expressible_at_all():
+    """The type change, pinned separately from the entry that motivated it.
+
+    Removing `Store.PROCESS` would make `pre_auth_lockout` undeclarable again --
+    silently, because the concept would simply vanish from the table rather than
+    fail any check. This is the assertion that would notice.
+    """
+    assert Store.PROCESS.value == "process"
+    assert Store.PROCESS in set(Store), "the vocabulary must keep a name for process-local state"
+
+
+def test_the_lockout_declaration_names_what_a_restart_costs():
+    """A declared inadequacy is only useful if it states the inadequacy.
+
+    The weakness is not "it uses memory" -- it is that a restart clears every
+    lockout, and that worker count silently multiplies the threshold. If those
+    sentences leave the note, the entry becomes a rubber stamp.
+    """
+    note = STORE_AUTHORITY["pre_auth_lockout"].note.lower()
+    assert "restart" in note, "the note must say what a restart costs when degraded"
+    assert "worker" in note, "the note must say worker count multiplies the threshold"
+    assert "degrad" in note, "the note must say the shared store degrades rather than failing"

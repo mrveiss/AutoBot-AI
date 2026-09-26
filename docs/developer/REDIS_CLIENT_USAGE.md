@@ -400,11 +400,11 @@ python3 -c "from src.constants.network_constants import NetworkConstants; print(
 ping <database-ip>
 
 # Check Redis configuration
-ssh autobot@<database-ip> "cat /etc/redis/redis.conf | grep bind"
+ssh autobot@<database-ip> "cat /etc/redis-stack.conf | grep bind"
 # Should bind to 0.0.0.0 or <database-ip>
 
 # Check timeout settings
-ssh autobot@<database-ip> "cat /etc/redis/redis.conf | grep timeout"
+ssh autobot@<database-ip> "cat /etc/redis-stack.conf | grep timeout"
 ```
 
 ### Database Number Confusion
