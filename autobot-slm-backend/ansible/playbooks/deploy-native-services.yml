@@ -108,11 +108,9 @@
           maxmemory 6gb
           maxmemory-policy allkeys-lru
 
-          # Search and JSON modules (loaded by redis-stack)
-          loadmodule /opt/redis-stack/lib/redisearch.so
-          loadmodule /opt/redis-stack/lib/rejson.so
-          loadmodule /opt/redis-stack/lib/redistimeseries.so
-          loadmodule /opt/redis-stack/lib/redisbloom.so
+          # No `loadmodule` here: the packaged wrapper appends `--loadmodule`
+          # for every Stack module after this file, and the second load of a
+          # module aborts startup.
 
           # Logging
           logfile /var/log/redis-stack/redis-stack-server.log
@@ -120,6 +118,14 @@
         # #17434: was the plain-redis path, which the daemon never reads -- so
         # this provisioning mode rendered a full config, requirepass included,
         # into a file nothing opened and produced an unauthenticated store.
+        #
+        # #17444 review: that dead path is also why the four `loadmodule` lines
+        # this file used to render were harmless. The packaged wrapper appends
+        # `--loadmodule` for all six Stack modules AFTER the config it is
+        # handed, so naming four of them here loads each twice and Redis exits
+        # at startup. They were inert only while nothing read the file.
+        # Installing the drop-in below is what would have activated them.
+        # roles/redis/templates/redis-stack.conf.j2 has never listed a module.
         dest: "{{ redis_config_file | default('/etc/redis-stack.conf') }}"
         backup: true
 
@@ -143,14 +149,14 @@
 
     - name: Create the systemd override directory
       ansible.builtin.file:
-        path: /etc/systemd/system/redis-stack-server.service.d
+        path: "{{ redis_systemd_override_dir }}"
         state: directory
         mode: '0755'
 
     - name: Install the same systemd drop-in the redis role installs
       ansible.builtin.template:
         src: ../roles/redis/templates/redis-stack-override.conf.j2
-        dest: /etc/systemd/system/redis-stack-server.service.d/override.conf
+        dest: "{{ redis_systemd_override_dir }}/override.conf"
         mode: '0644'
 
     - name: Configure Redis Stack systemd service
