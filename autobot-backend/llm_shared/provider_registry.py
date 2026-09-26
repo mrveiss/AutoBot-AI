@@ -38,6 +38,11 @@ from autobot_shared.credential_gated_registry import (
     gated_registry_singleton,
 )
 from autobot_shared.env_utils import env_float
+from autobot_shared.llm_provider_candidates import (
+    build_candidate_selection,
+    describe_exclusions,
+    describe_exhaustion,
+)
 from autobot_shared.logging_manager import get_logger
 from llm_shared.model_param_registry import apply_model_defaults, apply_prompt_prefix
 from llm_shared.models import LLMRequest
@@ -429,26 +434,22 @@ class ProviderRegistry(CredentialGatedRegistry[BaseProvider]):
         are merged into ``request.metadata["api_kwargs"]`` before returning
         (caller-supplied values always win).  See ``enrich_request()``.
 
-        Returns None only if every registered provider is unreachable.
+        Returns None when every permitted provider is unreachable, or when the
+        configured order permits none of the registered providers -- two different
+        failures, distinguished in the log line rather than in the return value.
         """
-        # Build candidate list in priority order
-        candidates: List[str] = []
-        if provider_name:
-            candidates.append(provider_name)
-        if conversation_id:
-            conv_pref = self._conversation_overrides.get(conversation_id)
-            if conv_pref and conv_pref not in candidates:
-                candidates.append(conv_pref)
-        # Issue #4451: per-org persisted provider preference.
-        org_pref = await self._resolve_org_provider(org_id)
-        if org_pref and org_pref not in candidates:
-            candidates.append(org_pref)
-        for name in self._fallback_chain:
-            if name not in candidates:
-                candidates.append(name)
-        for name in self._providers:
-            if name not in candidates:
-                candidates.append(name)
+        # Build candidate list in priority order (rules in autobot_shared/llm_provider_candidates.py).
+        selection = build_candidate_selection(
+            explicit=provider_name,
+            conversation_preference=(self._conversation_overrides.get(conversation_id) if conversation_id else None),
+            org_preference=await self._resolve_org_provider(org_id),  # Issue #4451
+            chain=self._fallback_chain,
+            registered=self._providers,
+        )
+        candidates: List[str] = list(selection.candidates)
+        held_out = describe_exclusions(selection)
+        if held_out:
+            logger.debug("%s", held_out)
 
         primary = candidates[0] if candidates else None
         model_name: str | None = request.model_name if request else None
@@ -502,7 +503,7 @@ class ProviderRegistry(CredentialGatedRegistry[BaseProvider]):
                     return self._npu_pipeline_dispatcher  # type: ignore[return-value]
                 return provider
 
-        logger.error("All providers unavailable or not configured")
+        logger.error("%s", describe_exhaustion(selection))
         return None
 
     # ------------------------------------------------------------------

@@ -115,3 +115,131 @@ def test_an_exhaustive_order_keeps_ollama_out_of_the_stored_chain(
 
     registered = [call.args[0].provider_name for call in registry.register.call_args_list]
     assert "ollama" in registered, "Ollama must still register; it is out of the CHAIN only"
+
+
+# ---------------------------------------------------------------------------
+# Request selection, not just the stored chain.
+#
+# The chain tests above pin what ``_populate_default_providers`` hands to
+# ``set_fallback_chain``. They cannot see ``get_provider_for_request``, which
+# appended *every* registered provider after the chain -- so an exhaustive order
+# ordered the chain and excluded nobody, and the first time the named provider
+# was unreachable the caller was served the provider they had excluded. That is
+# #15500's own defect surviving inside its own fix.
+# ---------------------------------------------------------------------------
+
+
+class _FakeProvider:
+    def __init__(self, name: str) -> None:
+        self.provider_name = name
+
+
+class _NeverDegraded:
+    async def is_degraded(self, name, model_name=None):  # noqa: ANN001, ANN201
+        return False
+
+
+def _registry(monkeypatch: pytest.MonkeyPatch, registered, chain, unreachable=()):
+    """A registry whose providers are all healthy except those named unreachable.
+
+    ``unreachable`` is how the scenario is set up rather than asserted: a chain
+    whose first provider answers is served by the first candidate and proves
+    nothing about the ones behind it.
+    """
+    from llm_shared import provider_registry as registry_module
+
+    registry = registry_module.ProviderRegistry()
+    registry._providers = {name: _FakeProvider(name) for name in registered}
+    registry._fallback_chain = list(chain)
+
+    async def _no_org_preference(org_id):  # noqa: ANN001, ANN202
+        return None
+
+    async def _get_provider(name):  # noqa: ANN001, ANN202
+        return None if name in unreachable else registry._providers.get(name)
+
+    monkeypatch.setattr(registry, "_resolve_org_provider", _no_org_preference)
+    monkeypatch.setattr(registry, "get_provider", _get_provider)
+    monkeypatch.setattr(registry_module, "get_degradation_store", lambda: _NeverDegraded())
+    return registry
+
+
+@pytest.mark.asyncio
+async def test_an_exhaustive_order_keeps_an_unnamed_provider_out_of_request_selection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The scenario #15494's ``full_provider`` mode is for: the chosen provider only."""
+    monkeypatch.setenv(ORDER_ENV_VAR, "anthropic")
+    registry = _registry(
+        monkeypatch,
+        registered=["ollama", "anthropic"],
+        chain=["anthropic"],
+        unreachable=["anthropic"],
+    )
+
+    assert await registry.get_provider_for_request() is None
+
+
+@pytest.mark.asyncio
+async def test_a_provider_the_order_excludes_is_still_reachable_by_explicit_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An exclusion governs "everything else", never a caller who names a provider."""
+    monkeypatch.setenv(ORDER_ENV_VAR, "anthropic")
+    registry = _registry(
+        monkeypatch,
+        registered=["ollama", "anthropic"],
+        chain=["anthropic"],
+        unreachable=["anthropic"],
+    )
+
+    provider = await registry.get_provider_for_request(provider_name="ollama")
+
+    assert provider is not None
+    assert provider.provider_name == "ollama"
+
+
+@pytest.mark.asyncio
+async def test_the_rest_token_still_admits_every_registered_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The default order must keep behaving as it did before #15500."""
+    monkeypatch.setenv(ORDER_ENV_VAR, "anthropic,*")
+    registry = _registry(
+        monkeypatch,
+        registered=["ollama", "anthropic"],
+        chain=["anthropic", "ollama"],
+        unreachable=["anthropic"],
+    )
+
+    provider = await registry.get_provider_for_request()
+
+    assert provider is not None
+    assert provider.provider_name == "ollama"
+
+
+@pytest.mark.asyncio
+async def test_an_outage_caused_by_the_order_does_not_report_unreachability(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Nothing here is unreachable -- the configuration permitted nothing.
+
+    Reporting "All providers unavailable or not configured" would send an
+    operator to look at network and credentials for a setting they chose.
+    """
+    monkeypatch.setenv(ORDER_ENV_VAR, "anthropic")
+    registry = _registry(
+        monkeypatch,
+        registered=["ollama", "anthropic"],
+        chain=["anthropic"],
+        unreachable=["anthropic"],
+    )
+
+    with caplog.at_level("ERROR"):
+        assert await registry.get_provider_for_request() is None
+
+    errors = " ".join(record.getMessage() for record in caplog.records if record.levelname == "ERROR")
+    assert ORDER_ENV_VAR in errors
+    assert "ollama" in errors
+    assert "All providers unavailable" not in errors
