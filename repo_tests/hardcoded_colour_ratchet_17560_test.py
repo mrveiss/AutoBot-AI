@@ -30,7 +30,6 @@ the one they were quoted for.
 from __future__ import annotations
 
 import re
-from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -85,14 +84,41 @@ _RESOLVED = re.compile(
 )
 
 
-def _is_colour(token: str) -> bool:
+#: A colour sits in a VALUE position: after `:` or opened by a quote. An issue
+#: reference sits in prose. Discriminating by position rather than by "does it
+#: contain a letter" is what lets `#000` and `#1234` -- both valid CSS, both
+#: digit-only -- be counted without also counting `#9909` in a comment.
+#: Deliberately NOT `(` or `,`. Both open a value in CSS -- `rgb(`, a gradient
+#: stop -- and both also occur in prose: `opened via Ctrl/Cmd+K (#8989)` put an
+#: issue number in "value position" and, on a line containing the word palette,
+#: into the count. A digit-only short literal is admitted only after `:` or a
+#: quote, which costs the rare `#abc` inside a gradient and buys precision.
+_VALUE_POSITION = re.compile(r"""(?::|['"`])\s*$""")
+
+#: A hex after a comment marker is prose, whatever else is on the line. `<!--`
+#: is here because the first version missed it and counted an HTML comment.
+_COMMENT_BEFORE = re.compile(r"(?://|/\*|\*|<!--|#)\s")
+
+
+def _is_colour(token: str, line: str = "", start: int = -1) -> bool:
     """Whether *token* is a colour rather than an issue reference.
 
-    `#17552` and `#9909` are issue numbers. A colour either carries a letter
-    `a-f` or has a digit count (6 or 8) no issue number in this repo uses.
+    A hex carrying `a-f`, or of a length no issue number uses, is a colour on
+    its face. A digit-only short literal -- `#000`, `#1234` -- is valid CSS and
+    indistinguishable from an issue number by shape alone, so it is decided by
+    POSITION: counted when it sits where a value goes, ignored when it sits in
+    prose. Rejecting every digit-only short value, as the first version did,
+    silently exempted `color: '#000'`.
     """
     digits = token[1:]
-    return bool(re.search("[a-fA-F]", digits)) or len(digits) in (6, 8)
+    if re.search("[a-fA-F]", digits) or len(digits) in (6, 8):
+        return True
+    if len(digits) not in (3, 4) or start < 0:
+        return False
+    before = line[:start]
+    if _COMMENT_BEFORE.search(before):
+        return False
+    return bool(_VALUE_POSITION.search(before))
 
 
 def _scan(root: Path) -> dict[str, int]:
@@ -120,18 +146,20 @@ def _scan(root: Path) -> dict[str, int]:
         if path.suffix == ".vue":
             # Blank the style block, preserving line count so nothing shifts.
             text = _STYLE_BLOCK.sub(lambda m: "\n" * m.group(0).count("\n"), text)
-        lines = text.splitlines()
-        fallbacks = Counter((a or b).lower() for a, b in _RESOLVED.findall("\n".join(lines)))
-        written = Counter(
-            match.group(0).lower()
-            for line in lines
-            for match in _HEX.finditer(line)
-            if _is_colour(match.group(0)) and _CONTEXT.search(line)
-        )
-        for literal, seen in written.items():
-            bare = seen - fallbacks.get(literal, 0)
-            if bare > 0:
-                counts[literal] = counts.get(literal, 0) + bare
+        # Blank each resolved fallback AT ITS OWN SPAN, preserving length, rather
+        # than counting them file-wide and subtracting. A file-wide subtraction
+        # let `getCssVar('--accent', '#ff00aa')` on one line cancel a bare
+        # `background: '#ff00aa'` on another, so adding a hardcoded colour beside
+        # a correctly-resolved one of the same value passed the ratchet.
+        text = _RESOLVED.sub(lambda m: "_" * len(m.group(0)), text)
+        for line in text.splitlines():
+            if not _CONTEXT.search(line):
+                continue
+            for match in _HEX.finditer(line):
+                if not _is_colour(match.group(0), line, match.start()):
+                    continue
+                literal = match.group(0).lower()
+                counts[literal] = counts.get(literal, 0) + 1
     return counts
 
 
@@ -152,6 +180,25 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
     def test_it_finds_a_bare_literal(self, tmp_path):
         self._w(tmp_path, "a.ts", "const c = { color: '#ef4444' }")
         assert _scan(tmp_path) == {"#ef4444": 1}
+
+    def test_a_digit_only_short_literal_in_a_value_is_a_colour(self, tmp_path):
+        # #000 and #1234 are valid CSS and carry no a-f letter to identify them.
+        self._w(tmp_path, "a.ts", "const a = { color: '#000' }\nconst b = { background: '#1234' }\n")
+        assert _scan(tmp_path) == {"#000": 1, "#1234": 1}
+
+    def test_a_digit_only_issue_ref_in_a_comment_is_not_a_colour(self, tmp_path):
+        # The real false positive this rule produced: the word "palette" supplies
+        # colour context, and `(` looked like a value position.
+        self._w(
+            tmp_path,
+            "a.vue",
+            "<template>\n  <!-- Global command palette - opened via Ctrl/Cmd+K (#8989) -->\n</template>\n",
+        )
+        assert _scan(tmp_path) == {}
+
+    def test_a_digit_only_issue_ref_in_a_line_comment_is_not_a_colour(self, tmp_path):
+        self._w(tmp_path, "a.ts", "// background colour work for #8989 and #1234\n")
+        assert _scan(tmp_path) == {}
 
     def test_an_issue_reference_is_not_a_colour(self, tmp_path):
         # The error that turned 395 into 6555.
@@ -213,15 +260,24 @@ class TestTheBaselineIsInternallyConsistent:
 
 
 class TestThePopulationOnlyShrinks:
-    def test_no_colour_is_written_more_often(self, measured):
-        grew = {
-            f: (HARDCODED_COLOUR_LITERALS.get(f, 0), n)
-            for f, n in measured.items()
-            if n > HARDCODED_COLOUR_LITERALS.get(f, 0)
+    def test_every_pinned_colour_matches_its_measured_count(self, measured):
+        """Equality, not a ceiling.
+
+        A `<=` bound accepts a reduced non-zero count without the baseline
+        moving, and an unpinned reduction is headroom: take `#fff` from 34 to
+        20, leave the pin at 34, and fourteen occurrences can return later with
+        nothing failing. The pin only pins if it has to be lowered.
+        """
+        drifted = {
+            name: (HARDCODED_COLOUR_LITERALS.get(name, 0), n)
+            for name, n in measured.items()
+            if n != HARDCODED_COLOUR_LITERALS.get(name, 0)
         }
-        assert not grew, (
-            f"these colours are written more often than pinned (pinned, now): {grew}. Resolve it from the "
-            "theme -- getCssVar('--color-error', '#ef4444') -- so it follows [data-theme]."
+        assert not drifted, (
+            f"pinned count does not match the tree (pinned, now): {drifted}. Growing is the "
+            "defect; shrinking is welcome and still requires lowering the entry, because an "
+            "unlowered pin is headroom for the occurrence to come back. Resolve colours from "
+            "the theme -- getCssVar('--color-error', '#ef4444') -- so they follow [data-theme]."
         )
 
     def test_no_new_colour_literal_appears(self, measured):
@@ -324,15 +380,17 @@ class TestTheImportantPopulationOnlyShrinks:
     def test_the_total_matches_the_entries(self):
         assert TOTAL_IMPORTANT == sum(IMPORTANT_DECLARATIONS.values())
 
-    def test_no_file_gains_an_important(self, measured_important):
+    def test_every_pinned_important_matches_its_measured_count(self, measured_important):
         grew = {
             f: (IMPORTANT_DECLARATIONS.get(f, 0), n)
             for f, n in measured_important.items()
-            if n > IMPORTANT_DECLARATIONS.get(f, 0)
+            if n != IMPORTANT_DECLARATIONS.get(f, 0)
         }
         assert not grew, (
-            f"these files gained an !important (pinned, now): {grew}. Raise specificity or fix "
-            "the cascade; !important overrides the design system rather than using it."
+            f"pinned count does not match the tree (pinned, now): {grew}. Equality, not a "
+            "ceiling -- an unlowered pin leaves headroom for a removed !important to return. "
+            "Raise specificity or fix the cascade; !important overrides the design system "
+            "rather than using it."
         )
 
     def test_no_new_file_joins_the_population(self, measured_important):
@@ -347,45 +405,104 @@ class TestTheImportantPopulationOnlyShrinks:
         assert not stale, f"clean now -- delete their entries and lower TOTAL_IMPORTANT: {stale}"
 
 
+#: A custom property DECLARATION: the name follows `{`, `;` or a line start.
+#: Position-agnostic matching reads a BEM modifier -- `.wr-btn--primary:hover`
+#: -- as a declaration of `--primary`, which is how one count of this
+#: population came out at 47 instead of 34.
+_DECLARATION = re.compile(r"(?:^|[{;])\s*(--[A-Za-z0-9_-]+)\s*:", re.MULTILINE)
+_ANY_DECLARATION = re.compile(r"(--[A-Za-z0-9_-]+)\s*:")
+
+#: Component `<style>` blocks the sweep must reach before a zero means anything.
+#: Not a count of theme names: those come from three other files, so a floor on
+#: them would still pass if every component were skipped (#17567).
+_STYLE_BLOCK_FLOOR = 300
+
+
+def _owned_token_names(root: Path) -> set[str]:
+    """Every custom property the design system declares."""
+    owned: set[str] = set()
+    for name in _THEME_SOURCES:
+        source = root / name
+        assert source.is_file(), f"{name} has moved; this assertion reads it by path"
+        owned |= set(_ANY_DECLARATION.findall(source.read_text(encoding="utf-8")))
+    return owned
+
+
+def _token_redefinitions(root: Path, owned: set[str]) -> tuple[dict[str, list[str]], int]:
+    """``(component -> theme tokens it redefines, style blocks parsed)``.
+
+    Returns the reach alongside the finding, because "no component redefines a
+    token" and "no component was read" produce the same empty dict.
+    """
+    offenders: dict[str, list[str]] = {}
+    blocks = 0
+    for path in sorted(root.rglob("*.vue")):
+        if "node_modules" in path.parts:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        found = list(_STYLE_CONTENT.finditer(text))
+        blocks += len(found)
+        css = "\n".join(m.group(1) for m in found)
+        clashes = sorted({n for n in _DECLARATION.findall(css) if n in owned})
+        if clashes:
+            offenders[path.relative_to(root).as_posix()] = clashes
+    return offenders, blocks
+
+
 class TestFormTwoStaysAbsent:
     """#17567 form 2: redefining a design-system token inside a component.
 
-    Measured at **zero**, and asserted so rather than left as a claim in a
-    comment. The discriminator is ownership -- whether the name is one the theme
-    declares -- not whether a component declares any custom property at all. 34
-    component-local aliases exist and are correct: `--rule-accent: var(--color-success)`
-    maps a state to a token once so the rest of the component reads the alias.
+    Measured at **zero**, and asserted rather than left as a claim in a comment.
+    The discriminator is ownership -- whether the name is one the theme declares
+    -- not whether a component declares any custom property at all. 34
+    component-local aliases exist and are correct: `--rule-accent:
+    var(--color-success)` maps a state to a token once so the rest of the
+    component reads the alias. A guard on the raw count would flag all 34, and
+    the cheapest way to pass it is to inline or hardcode.
     """
+
+    def test_the_detector_rejects_an_owned_token(self, tmp_path):
+        (tmp_path / "bad.vue").write_text("<style scoped>.x { --text-primary: #f00; }</style>", encoding="utf-8")
+        offenders, blocks = _token_redefinitions(tmp_path, {"--text-primary"})
+        assert offenders == {"bad.vue": ["--text-primary"]}
+        assert blocks == 1
+
+    def test_the_detector_accepts_a_component_local_alias(self, tmp_path):
+        # The real shape, from WorkflowCanvas.vue: a local name assigned FROM a token.
+        (tmp_path / "ok.vue").write_text(
+            "<style scoped>.s { --rule-accent: var(--color-success); }</style>", encoding="utf-8"
+        )
+        offenders, blocks = _token_redefinitions(tmp_path, {"--color-success"})
+        assert offenders == {}
+        assert blocks == 1
+
+    def test_the_detector_ignores_a_bem_modifier_in_a_selector(self, tmp_path):
+        (tmp_path / "bem.vue").write_text("<style>.wr-btn--primary:hover { color: red; }</style>", encoding="utf-8")
+        offenders, _ = _token_redefinitions(tmp_path, {"--primary"})
+        assert offenders == {}
+
+    def test_the_sweep_reaches_the_components(self):
+        """A zero is only a finding if the sweep read something (#17567).
+
+        The theme-name floor below checks a DIFFERENT population -- three CSS
+        files -- so it stays satisfied even if every component were skipped.
+        This floor binds to the sweep's own reach.
+        """
+        root = repo_root() / _FRONTEND
+        _, blocks = _token_redefinitions(root, _owned_token_names(root))
+        assert blocks >= _STYLE_BLOCK_FLOOR, (
+            f"parsed only {blocks} component style blocks, floor {_STYLE_BLOCK_FLOOR} -- "
+            "the zero below would mean 'nothing was read', not 'nothing was found'"
+        )
 
     def test_no_component_redefines_a_design_system_token(self):
         root = repo_root() / _FRONTEND
-        declaration = re.compile(r"(?:^|[{;])\s*(--[A-Za-z0-9_-]+)\s*:", re.MULTILINE)
-        anywhere = re.compile(r"(--[A-Za-z0-9_-]+)\s*:")
-        # Three NAMED files, not a glob. A `*.css` glob declaration into a tree the
-        # python filter does not cover has to be recorded in
-        # `_glob_declared_uncovered.py`, and that record only shrinks -- adding an
-        # entry to make a new dependency pass is the decision it exists to prevent.
-        # These three carry the whole token vocabulary and are covered in
-        # `.github/filters/python-paths.yml` instead, so a change to them runs this.
-        owned: set[str] = set()
-        for name in _THEME_SOURCES:
-            source = root / name
-            assert source.is_file(), f"{name} has moved; this assertion reads it by path"
-            owned |= set(anywhere.findall(source.read_text(encoding="utf-8")))
+        owned = _owned_token_names(root)
         assert len(owned) > 500, f"only {len(owned)} theme names parsed; the check would be vacuous"
-
-        offenders: dict[str, list[str]] = {}
-        for path in sorted(root.rglob("*.vue")):
-            if "node_modules" in path.parts:
-                continue
-            try:
-                text = path.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError):
-                continue
-            css = "\n".join(m.group(1) for m in _STYLE_CONTENT.finditer(text))
-            clashes = sorted({n for n in declaration.findall(css) if n in owned})
-            if clashes:
-                offenders[path.relative_to(root).as_posix()] = clashes
+        offenders, _ = _token_redefinitions(root, owned)
         assert not offenders, (
             "these components redefine a design-system token locally, which is the override "
             f"form #17567 records as absent: {offenders}"

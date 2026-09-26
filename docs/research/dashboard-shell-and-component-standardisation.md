@@ -584,3 +584,60 @@ The comparison was worth running. But **the duplicate sweep, the scope check ("w
 GUIs?"), and the discriminator question ("would more data change this answer?") did more work than
 the comparison did** — and all three are cheap. A future pass should spend its first third there,
 not on the source.
+
+---
+
+## Corrections since publication (added on commit, 2026-09-27)
+
+The audit above is left as written — it is dated evidence, and rewriting its
+findings would destroy the record of what was measured on the day. Three of its
+figures were superseded before it landed. They are corrected here rather than
+in place, and the review threads on PR #17568 raised all three.
+
+**1. `BaseButton` importer counts (§ the canonicality inventory).** The body
+gives 23 shared-kit importers against 66 local. Re-measured by resolved import
+specifier, counting **both** default and named barrel imports:
+
+| | `@autobot/ui` | local fork |
+|---|---|---|
+| `BaseButton` | 3 | 68 |
+| `EmptyState` | 1 | 48 |
+| `BaseBadge` | 3 | 9 |
+| `BaseCard` | 1 | 4 |
+| `BaseModal` | 63 | 0 |
+
+The material point is unchanged and sharper: four components are imported from
+**both** sources in the same application, so which implementation renders
+depends on which line a given file wrote. `BaseModal` at 63/0 shows the
+migration already succeeded once. A first pass at this returned *zero* kit
+importers and nearly concluded the shared library was unused — the kit is
+consumed through its barrel, `import { BaseButton } from '@autobot/ui'`, which
+a default-import pattern does not match.
+
+**2. `assets/tokens.css` is not a token source.** The body counts four base
+token sources including this file. It declares **no tokens at all**: 310 lines,
+zero non-comment lines, and its 106 "tokens" are names written in prose. It
+cannot shadow or drift into anything. The audit's own G9 is accurate — it says
+only that the file claims authority and is imported by nothing — and the
+overstatement is in #14785's body, corrected there. The inventory should read
+**three loaded sources**, plus two files claiming authority that nothing imports
+(`assets/tokens.css`, `assets/main.css`).
+
+**3. The frontend canonical audit is not wired into CI.** The section on
+`canonical-audit.yml` overstates current enforcement. Measured by running it:
+
+- The workflow runs the Python and infrastructure audits and writes a
+  placeholder for the frontend one. It never invokes
+  `autobot-frontend/scripts/canonical_check.mjs`.
+- `canonical_check.mjs --all` reports `0 violations` and exits 0, while the same
+  rule on the same tree finds a violation when handed the file directly
+  (`src/composables/useLocalStorage.ts:531`). `--all` is accepted and the walk
+  is unimplemented — marked *"a Wave 3 task"*.
+- Its file filter admits only `.ts|.vue|.mjs|.js`, so the token layer is out of
+  scope entirely.
+- The run exits non-zero only on `severity === "block"`; the single shipped rule
+  is `warn`.
+
+So the harness exists, is well built, and enforces nothing today. That does not
+weaken the audit's conclusion — it strengthens it, and it is why #17571 is
+harness work before it is rule work.
