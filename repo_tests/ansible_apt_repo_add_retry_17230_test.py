@@ -37,6 +37,9 @@ yaml = pytest.importorskip("yaml")
 _ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
 _HELPER = _ANSIBLE / "roles" / "_shared" / "tasks" / "add_apt_repository_idempotent.yml"
 _MODULES = ("ansible.builtin.apt_repository", "apt_repository")
+_BUDGET_VARS = ("apt_repo_retries", "apt_repo_retry_delay")
+#: A YAML (`name:`, incl. a `- name:` list item) or INI inventory (`name=`) assignment of a budget var.
+_ASSIGNMENT = re.compile(r"^\s*(?:-\s*)?(?:" + "|".join(_BUDGET_VARS) + r")\s*[:=]", re.MULTILINE)
 
 
 def _add_tasks() -> list[dict]:
@@ -72,7 +75,10 @@ def _violations(task: dict) -> list[str]:
     if (_budget(task.get("delay")) or 0) < 1:
         problems.append(f"`delay: {task.get('delay')!r}` hammers a keyserver that just failed")
     if "failed_when" in task:
-        problems.append(f"`failed_when: {task['failed_when']!r}` would swallow a real failure")
+        problems.append(
+            f"`failed_when: {task['failed_when']!r}` is not allowed on this task -- the retry budget is "
+            "the only failure policy here"
+        )
     if task.get("ignore_errors"):
         problems.append("`ignore_errors` lets the play continue without the repo")
     return problems
@@ -123,3 +129,45 @@ def test_the_checker_accepts_a_correct_task() -> None:
 def test_the_checker_rejects_a_broken_task(task: dict) -> None:
     """Contrast half: each way of breaking the retry must be caught, including a negated `until`."""
     assert _violations(task), f"the checker passed a task it must reject: {task}"
+
+
+def _overrides(text: str) -> list[str]:
+    """Lines of ``text`` that assign a retry-budget variable."""
+    return [m.group(0).strip() for m in _ASSIGNMENT.finditer(text)]
+
+
+def test_no_file_overrides_the_retry_budget() -> None:
+    """The budget checks above read ``default(N)``, so they hold only while nothing overrides it.
+
+    Setting ``apt_repo_retries: 1`` in a role, ``group_vars`` or an inventory would switch the retry
+    off while ``_budget`` still reads 5. Rather than evaluate Ansible, pin that the default is the
+    effective value: the day an override is needed, this fails and asks for the check to follow it.
+    Out of reach by construction: ``-e`` on a command line and inventories outside this tree.
+    """
+    hits = [
+        f"{path.relative_to(repo_root())}: {line}"
+        for path in sorted(_ANSIBLE.rglob("*"))
+        if path.is_file() and path.suffix in {".yml", ".yaml", ".ini", ".cfg", ""}
+        for line in _overrides(path.read_text(encoding="utf-8", errors="replace"))
+    ]
+    assert not hits, (
+        "these override the #17230 retry budget, so the guard's `default(N)` reading is no longer the "
+        "effective value -- extend the budget check to the override before keeping it:\n  " + "\n  ".join(hits)
+    )
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("apt_repo_retries: 1\n", 1),
+        ("vars:\n  apt_repo_retry_delay: 0\n", 1),
+        ("- apt_repo_retries: 2\n", 1),
+        ("[all:vars]\napt_repo_retries=1\n", 1),
+        ("#   apt_repo_retries  (int, opt.) Retry budget (default 5).\n", 0),
+        ('  retries: "{{ apt_repo_retries | default(5) }}"\n', 0),
+    ],
+    ids=["yaml", "nested-yaml", "list-item", "ini-inventory", "comment", "the-template-reading-it"],
+)
+def test_the_override_detector_matches_assignments_only(text: str, expected: int) -> None:
+    """Contrast pair: every assignment form trips it; the helper's own comment and template do not."""
+    assert len(_overrides(text)) == expected, _overrides(text)
