@@ -45,12 +45,41 @@ def _emitted_keys() -> set[str]:
     return set().union(*found.values()) | inline_write_site_keys(_writer_source())
 
 
-def _endpoint_filter_keys() -> dict[str, set[str]]:
+#: The writer's collection. A module is a reader of THIS contract when it
+#: obtains that collection -- not when it happens to filter on `source_id`.
+_COLLECTION_ACCESSOR = "get_code_collection"
+
+
+def _reader_filter_keys() -> dict[str, set[str]]:
+    """Filter keys of every module that reads the writer's collection.
+
+    #17672 review (e5): the first version globbed `endpoints/*.py`. The
+    writer's collection is `autobot_code`, and modules outside that directory
+    obtain it too -- `analytics_debt.py`, `analytics_quality.py` and
+    `analytics_code.py` all filter on it. A guard asserting a writer-reader
+    contract that examines only some readers is the defect it was written to
+    catch, one directory along.
+
+    The population is discovered by **obtaining the collection**, which is also
+    what keeps it honest in the other direction: `bug_predictor.py` and
+    `detector.py` both carry `source_id` where-filters and are NOT in scope,
+    because they query `bug_pattern_vectors` and `cross_language_patterns`.
+    One of them even comments that its filter "mirrors the dependencies.py
+    source_id where-filter", which is exactly what makes it look in-scope.
+    **A `source_id` filter is not evidence of this contract; the collection is.**
+    """
+    backend = repo_root() / "autobot-backend"
     found: dict[str, set[str]] = {}
-    for path in sorted((_ANALYTICS / "endpoints").glob("*.py")):
-        keys = filter_keys(path.read_text(encoding="utf-8"))
+    for path in sorted(backend.rglob("*.py")):
+        if "test" in path.name or "/tests/" in str(path):
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if _COLLECTION_ACCESSOR not in text:
+            continue
+        keys = filter_keys(text)
         if keys:
-            found[path.name] = keys
+            found[str(path.relative_to(backend))] = keys
+    assert found, f"no module referencing {_COLLECTION_ACCESSOR} filters on anything — re-derive"
     return found
 
 
@@ -128,7 +157,7 @@ def test_the_filter_detector_finds_keys_it_was_never_told_about() -> None:
 def test_the_writers_emit_every_key_the_endpoints_filter_on() -> None:
     """The gap this closes is not in either side. It is between them."""
     emitted = _emitted_keys()
-    filtered = _endpoint_filter_keys()
+    filtered = _reader_filter_keys()
     assert filtered, "no endpoint filters found — re-derive the population, do not pass vacuously"
 
     gaps = {name: sorted(keys - emitted - set(ENGINE_SUPPLIED)) for name, keys in filtered.items()}
