@@ -165,6 +165,10 @@ def test_control_workflow_404_is_not_masked_as_500(monkeypatch):
         ("get", "/workflow_status/wf-1"),
         ("get", "/pending_approval/wf-1"),
         ("post", "/start_workflow/wf-1"),
+        # present_plan was missing from this list in the first draft, and that is exactly
+        # why its 403 was still being swallowed into a 500 -- an unlisted route is an
+        # unchecked route.
+        ("post", "/present_plan/wf-1"),
     ],
 )
 def test_state_and_control_routes_refuse_another_user(monkeypatch, method, path):
