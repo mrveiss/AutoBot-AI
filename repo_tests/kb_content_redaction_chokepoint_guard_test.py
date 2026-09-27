@@ -455,6 +455,12 @@ def test_create_version_still_only_reachable_with_already_redacted_content():
 #: cannot be answered without following the callee across files -- but it is a list of
 #: *primitives*, not of call sites, so it grows only when a third way to redact is
 #: introduced, and the assertion below is about position rather than spelling.
+#:
+#: This list is safe ONLY while the assertion around it stays positional. Strip the
+#: before-the-loop check and keep the list, and the guard silently becomes a
+#: membership test -- "is one of these two names mentioned" -- which is the shape it
+#: was rewritten to escape (#15826). The list answers a narrow sub-question; it is
+#: not the claim.
 _REDACTING_CALLS = frozenset({"redact_content", "sanitize_fact_content"})
 
 
