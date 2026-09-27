@@ -129,7 +129,22 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 # The mine-only count of 0 is the load-bearing half: had these been line-number
 # shifts rather than suppressions, the same seven would have reappeared at new
 # lines and the total would not have moved.
-_KNOWN_REPO_VIOLATIONS = 301
+# #17623 re-measure: 300, after data/ left the scanned domain. The arithmetic
+# does NOT close, and that is the finding rather than a rounding note:
+#
+#     declared before            301
+#     minus the two data/ fixtures that left the domain    -2
+#     expected                   299
+#     MEASURED                   300
+#
+# The extra one is not from this branch -- no file it touches violates, and the
+# 32 files it restores are yaml/json/config that this scan never reads. So the
+# non-data population was already 300 while 301 was declared, i.e. base has been
+# one violation short of its own pin. Nothing reported it because `python-suite`
+# is SKIPPED on any PR that touches no python path, and reports `success` when it
+# does (#16087) -- the same bypass that let a fixture path become a real file on
+# `bf6ee5583`. Pinned to the measured number, not to the arithmetic.
+_KNOWN_REPO_VIOLATIONS = 300
 
 
 def _test_git_env() -> dict[str, str]:
