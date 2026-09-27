@@ -15,6 +15,32 @@ analysis. Until then the call sites are pinned here.
 Asserted against the AST rather than by behaviour: a bare `is_vnc_running()`
 returns the same boolean as an offloaded one. What differs is whether the event
 loop was free while `pgrep` ran, and only the call site records that.
+
+## Why this file classifies four forms rather than two
+
+The first version of this pin asked one question -- "is the probe called without
+being handed to `to_thread`?" -- and passed on two of the three ways to get it
+wrong. Measured, not assumed:
+
+    1 awaited to_thread(probe)     [correct]           passes   correct
+    2 bare probe()                 [blocks]            FLAGGED  correct
+    3 unawaited to_thread(probe)   [never runs]        passes    MISS
+    4 await to_thread(probe())     [blocks on loop]    passes    MISS
+
+Form 3 leaves a coroutine that is never awaited, so the probe does not run at
+all. Form 4 calls the probe and hands its *result* to `to_thread`, so the
+blocking work happens inline on the loop -- the shape
+`check_no_blocking_io_in_async_test.py` has an explicit test for under
+`Path.read_text()`.
+
+Form 4 passed for a specific and instructive reason: the old matcher built an
+exclusion set from every `to_thread` argument, so that a probe "handed off" would
+not also count as called. For the *correct* form the argument is an `ast.Name`
+and no `Call` node exists, so the exclusion never fired -- dead. For the
+*defective* form the argument **is** a `Call`, so it landed in the exclusion and
+was hidden. The exclusion's only live effect was to conceal the one shape where
+the blocking work runs on the loop. Raised on #17647 by a reviewer checking the
+pin against all four forms rather than against the code it was written for.
 """
 
 from __future__ import annotations
@@ -37,66 +63,120 @@ def _async_functions() -> dict:
     return {n.name: n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef)}
 
 
-def _bare_calls(node: ast.AST, name: str) -> list:
-    """Calls to *name* that are NOT the callable handed to `to_thread`."""
-    offloaded = {
-        id(arg)
-        for sub in ast.walk(node)
-        if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Attribute) and sub.func.attr == "to_thread"
-        for arg in sub.args
-    }
+def _nodes_outside_nested_defs(fn: ast.AST):
+    """Every node in *fn* except those inside a nested function definition.
+
+    A sync helper defined inside an async function is not itself async context --
+    it may have sync callers, and handing it to `to_thread` is the canonical fix
+    shape. Mirrors the depth reset in `check_no_blocking_io_in_async.py`.
+    """
+    stack = list(ast.iter_child_nodes(fn))
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        yield node
+        stack.extend(ast.iter_child_nodes(node))
+
+
+def _to_thread_calls(fn: ast.AST) -> list:
     return [
-        sub
-        for sub in ast.walk(node)
-        if isinstance(sub, ast.Call)
-        and isinstance(sub.func, ast.Name)
-        and sub.func.id == name
-        and id(sub) not in offloaded
+        n
+        for n in _nodes_outside_nested_defs(fn)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "to_thread"
+    ]
+
+
+def _awaited(fn: ast.AST) -> set:
+    """ids of Call nodes that are the operand of an `await`."""
+    return {
+        id(n.value)
+        for n in _nodes_outside_nested_defs(fn)
+        if isinstance(n, ast.Await) and isinstance(n.value, ast.Call)
+    }
+
+
+def executed_on_the_loop(fn: ast.AST, name: str) -> list:
+    """Calls to ``name()`` that run on the event loop (forms 2 and 4).
+
+    No exclusion for `to_thread` arguments: the correct form passes the function
+    *object*, which is an `ast.Name` and produces no `Call` node at all. So any
+    `Call` to this name inside async context executes it there -- including
+    `to_thread(probe())`, where the probe runs before `to_thread` is even entered.
+    """
+    return [
+        n
+        for n in _nodes_outside_nested_defs(fn)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == name
+    ]
+
+
+def offloaded_but_never_awaited(fn: ast.AST, name: str) -> list:
+    """`to_thread(probe)` calls that no `await` consumes (form 3 -- probe never runs)."""
+    awaited = _awaited(fn)
+    return [
+        call
+        for call in _to_thread_calls(fn)
+        if id(call) not in awaited and any(isinstance(a, ast.Name) and a.id == name for a in call.args)
+    ]
+
+
+def properly_offloaded(fn: ast.AST, name: str) -> list:
+    """`await to_thread(probe)` -- the only correct form (form 1)."""
+    awaited = _awaited(fn)
+    return [
+        call
+        for call in _to_thread_calls(fn)
+        if id(call) in awaited and any(isinstance(a, ast.Name) and a.id == name for a in call.args)
     ]
 
 
 @pytest.mark.parametrize("probe", _BLOCKING_PROBES)
-def test_no_async_function_calls_a_blocking_probe_inline(probe: str) -> None:
+def test_no_async_function_executes_a_blocking_probe_on_the_loop(probe: str) -> None:
+    """Forms 2 and 4: the probe runs on the event loop."""
     offenders = {
-        fname: [c.lineno for c in _bare_calls(fn, probe)]
+        fname: [c.lineno for c in executed_on_the_loop(fn, probe)]
         for fname, fn in _async_functions().items()
-        if _bare_calls(fn, probe)
+        if executed_on_the_loop(fn, probe)
     }
-    assert not offenders, f"{probe}() called inline from async: {offenders}"
+    assert not offenders, (
+        f"{probe}() is executed on the event loop: {offenders}. Pass the function "
+        f"object -- `await asyncio.to_thread({probe})` -- not its result."
+    )
 
 
-def _offloaded_calls(node: ast.AST, name: str) -> list:
-    """Calls to *name* handed to `to_thread` as its callable."""
-    return [
-        arg
-        for sub in ast.walk(node)
-        if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Attribute) and sub.func.attr == "to_thread"
-        for arg in sub.args
-        if isinstance(arg, ast.Name) and arg.id == name
-    ]
+@pytest.mark.parametrize("probe", _BLOCKING_PROBES)
+def test_no_offloaded_probe_is_left_unawaited(probe: str) -> None:
+    """Form 3: `to_thread` without `await` returns a coroutine that never runs."""
+    offenders = {
+        fname: [c.lineno for c in offloaded_but_never_awaited(fn, probe)]
+        for fname, fn in _async_functions().items()
+        if offloaded_but_never_awaited(fn, probe)
+    }
+    assert not offenders, (
+        f"{probe} is handed to an unawaited to_thread: {offenders}. The coroutine is "
+        "never scheduled, so the probe does not run at all."
+    )
 
 
 @pytest.mark.parametrize("probe", _BLOCKING_PROBES)
 def test_each_probe_is_actually_reached_from_async(probe: str) -> None:
-    """The sweep above passes trivially if nothing calls the probes at all.
+    """The two sweeps above pass trivially if nothing calls the probes at all.
 
-    `MEASUREMENT_DISCIPLINE.md`: an empty result must not read as a clean one. A
-    "no bad call sites" assertion is satisfied by a file with no call sites, so
-    each probe is separately shown to be *reached*.
-
-    This assertion is checked against the AST, not against the source text. The
-    first version of this test asked whether the probe's name appeared anywhere in
-    the file, which the `import` line alone satisfies -- so it would have passed
+    `MEASUREMENT_DISCIPLINE.md`: an empty result must not read as a clean one. An
+    earlier version of this test asked whether the probe's name appeared anywhere
+    in the file, which the `import` line alone satisfies -- so it would have passed
     with every call deleted, while its name promised the calls were reached from
-    async. That is the same name-claims-more-than-mechanism defect the sweep it
-    guards exists to prevent, so it is worth saying plainly: a non-vacuity check
-    written vacuously buys nothing and reads like coverage.
+    async. A non-vacuity check written vacuously buys nothing and reads like
+    coverage.
     """
     reached = {
-        fname for fname, fn in _async_functions().items() if _offloaded_calls(fn, probe) or _bare_calls(fn, probe)
+        fname
+        for fname, fn in _async_functions().items()
+        if properly_offloaded(fn, probe) or executed_on_the_loop(fn, probe) or offloaded_but_never_awaited(fn, probe)
     }
     assert reached, (
-        f"{probe}() is not called from any `async def` in {_SOURCE.name} -- "
-        "either it moved and the sweep above is now vacuous, or it was renamed "
-        "and this pin needs re-pointing"
+        f"{probe}() is not reached from any `async def` in {_SOURCE.name} -- either it "
+        "moved and the sweeps above are now vacuous, or it was renamed and this pin "
+        "needs re-pointing"
     )
