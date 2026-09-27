@@ -2,161 +2,157 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""The keys analytics endpoints FILTER on must be keys the writer EMITS (#17651).
+"""The keys analytics endpoints FILTER on must be keys the writers EMIT (#17651).
 
 `_prepare_problem_document` added `source_id` only ``if source_id:``. Every
-codebase-analytics endpoint filters ``{"source_id": source_id}``. The two were
-each internally consistent and nobody compared them, so an indexing run that
-supplied no source_id wrote **11,241 rows that no per-source query could ever
-match** -- present, healthy, unreachable -- and the panels rendered an honest
-zero for a year's worth of scans.
+codebase-analytics endpoint filters ``{"source_id": source_id}``. Each side was
+internally consistent and nobody compared them, so an indexing run that supplied
+no source_id wrote **11,241 rows no per-source query could match** -- present,
+healthy, unreachable -- and the panels rendered an honest zero.
 
-This is the fourth instance of the shape in one day (#17643 was the third: a
-frontend filtering on event names the backend never emits). What they share is
-that both sides are correct in isolation; the defect lives only in the gap, so
+Both sides are always correct in isolation; the defect lives only in the gap, so
 no test of either side can see it. That is what this file is for.
+
+EVERY DETECTOR HERE HAS A CONTRAST PAIR (#17672 review). A detector exercised
+only against the live tree is exercised against the one input it is guaranteed
+to agree with -- it can be narrowed later and nothing fails. The fixtures below
+are synthetic source strings: one each detector must recognise, one it must
+reject.
 """
 
 from __future__ import annotations
 
-import ast
-import re
-
+from repo_tests._analytics_metadata_detect import (
+    ENGINE_SUPPLIED,
+    filter_keys,
+    inline_write_site_keys,
+    metadata_binders,
+    preparers,
+)
 from repo_tests._paths import repo_root
 
 _ANALYTICS = repo_root() / "autobot-backend" / "api" / "codebase_analytics"
 _WRITER = _ANALYTICS / "chromadb_storage.py"
 
-#: Keys a reader may filter on that the problem writer is not expected to emit.
-#: Chroma's own document key is supplied by the engine, not by our metadata.
-_ENGINE_SUPPLIED = {"chroma:document"}
+
+def _writer_source() -> str:
+    return _WRITER.read_text(encoding="utf-8")
 
 
-def _preparers() -> dict[str, set[str]]:
-    """Every `_prepare_*_document` function, mapped to the metadata keys it emits.
-
-    ALL of them, not one. The first version of this guard inspected only
-    `_prepare_problem_document` and passed -- while `_prepare_function_document`,
-    `_prepare_class_document`, `_prepare_import_document` and
-    `_prepare_stats_document` carry the identical conditional and were
-    unexamined. A guard that names "the writer" and sees one of five is the same
-    defect it was written to catch, so the population is discovered rather than
-    listed.
-
-    Parsed, not grepped: a key named in a docstring is not a key that is written,
-    and telling those apart is the whole job.
-    """
-    tree = ast.parse(_WRITER.read_text(encoding="utf-8"))
-    found: dict[str, set[str]] = {}
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        if not (node.name.startswith("_prepare_") and node.name.endswith("_document")):
-            continue
-        keys: set[str] = set()
-        for sub in ast.walk(node):
-            if isinstance(sub, ast.Dict):
-                keys |= {k.value for k in sub.keys if isinstance(k, ast.Constant) and isinstance(k.value, str)}
-            if isinstance(sub, ast.Subscript) and isinstance(sub.slice, ast.Constant):
-                if isinstance(sub.slice.value, str):
-                    keys.add(sub.slice.value)
-        found[node.name] = keys
+def _emitted_keys() -> set[str]:
+    found = preparers(_writer_source())
     assert found, "no _prepare_*_document functions found — re-derive, do not pass vacuously"
-    return found
+    return set().union(*found.values()) | inline_write_site_keys(_writer_source())
 
 
-def _emitted_metadata_keys() -> set[str]:
-    """The union of keys every preparer emits."""
-    return set().union(*_preparers().values())
-
-
-def _filtered_keys() -> dict[str, set[str]]:
-    """Metadata keys each endpoint module uses in a Chroma `where` filter."""
+def _endpoint_filter_keys() -> dict[str, set[str]]:
     found: dict[str, set[str]] = {}
     for path in sorted((_ANALYTICS / "endpoints").glob("*.py")):
-        text = path.read_text(encoding="utf-8")
-        # {"key": {"$in": [...]}} and {"key": value} inside a where filter
-        keys = set(re.findall(r'\{\s*"([a-z_]+)"\s*:\s*\{?\s*"?\$?', text))
-        keys &= {"source_id", "type", "problem_type", "severity", "file_path", "file_category"}
+        keys = filter_keys(path.read_text(encoding="utf-8"))
         if keys:
             found[path.name] = keys
     return found
 
 
-def _functions_building_metadata() -> set[str]:
-    """Functions that assign a dict to a variable literally named `metadata`.
+# ---------------------------------------------------------------- contrasts
 
-    A PROPERTY, not a list. `_preparers()` discovers by spelling
-    (`_prepare_*_document`), which finds the five that exist and would miss a
-    sixth called `_build_x_metadata`, or a metadata dict inlined at the upsert
-    site. This asks what a function DOES instead: emitting a row's metadata
-    means building the dict the write consumes.
+_EMITS = """
+def _prepare_thing_document(thing, source_id=None):
+    metadata = {"type": "thing", "file_path": thing["p"]}
+    if source_id:
+        metadata["source_id"] = source_id
+    return metadata
+"""
 
-    It separates the real emitters from the near-misses in this file without an
-    allowlist: `make_problem_dict` builds the upstream problem record (`line`,
-    not `line_number`, and no `problem_type`), `_delete_source_documents`
-    builds a filter, and `_recreate_chromadb_collection` assigns to
-    `collection_meta`. None of the three binds `metadata`, and all five
-    preparers do.
+_MENTIONS_WITHOUT_EMITTING = """
+def _prepare_thing_document(thing, source_id=None):
+    audit = {"source_id": source_id}          # a different dict
+    log(audit["source_id"])
+    metadata = {"type": "thing"}
+    return metadata
+"""
+
+_INLINE_WRITE = """
+async def _store(collection, source_id):
+    await collection.upsert(ids=["a"], metadatas=[{"source_id": source_id, "type": "x"}])
+"""
+
+_FILTERS = """
+def endpoint(source_id):
+    where_filter = {"$and": [{"type": {"$in": ["function"]}}, {"source_id": source_id}]}
+    return get_all(collection, where=where_filter)
+"""
+
+_NO_FILTER = """
+def endpoint():
+    payload = {"total": 0, "rows": []}
+    return payload
+"""
+
+
+def test_the_emitted_key_detector_reads_the_metadata_binding_not_the_function() -> None:
+    """Positive and negative for the #17672 `:62` narrowing.
+
+    The rejected fixture mentions `source_id` in a *different* dict. The first
+    version of this detector counted that and passed, which meant a preparer
+    could stop emitting the key while the test stayed green.
     """
-    tree = ast.parse(_WRITER.read_text(encoding="utf-8"))
-    found: set[str] = set()
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        for sub in ast.walk(node):
-            if isinstance(sub, ast.Assign) and isinstance(sub.value, ast.Dict):
-                if any(isinstance(t, ast.Name) and t.id == "metadata" for t in sub.targets):
-                    found.add(node.name)
-    return found
+    assert preparers(_EMITS)["_prepare_thing_document"] == {"type", "file_path", "source_id"}
+    assert "source_id" not in preparers(_MENTIONS_WITHOUT_EMITTING)["_prepare_thing_document"]
 
 
-def test_every_metadata_builder_is_one_the_name_based_discovery_finds() -> None:
-    """The tripwire for preparer six, whatever it ends up being called.
-
-    `_preparers()` is exhaustive *by spelling* and the five it finds are the
-    five that exist today. That is a fact about now, not a property, so a
-    `_build_*` or an inline metadata dict at the `upsert` site would emit rows
-    this guard never checks -- the same "sees less than it names" failure the
-    guard's own first version had.
-    """
-    by_name = set(_preparers())
-    by_behaviour = _functions_building_metadata()
-
-    unchecked = sorted(by_behaviour - by_name)
-    assert not unchecked, (
-        f"these functions build a row's `metadata` but the name-based discovery does not find "
-        f"them, so the contract above never checks what they emit: {unchecked}. Either rename "
-        "them to `_prepare_*_document` or widen `_preparers()`."
-    )
+def test_the_binder_detector_separates_an_emitter_from_a_near_miss() -> None:
+    assert metadata_binders(_EMITS) == {"_prepare_thing_document"}
+    assert metadata_binders('def f():\n    collection_meta = {"a": 1}\n    return collection_meta\n') == set()
 
 
-def test_the_writer_emits_every_key_the_endpoints_filter_on() -> None:
+def test_the_inline_write_detector_sees_metadata_passed_at_the_call() -> None:
+    """A writer can escape both other populations by inlining at `upsert`."""
+    assert inline_write_site_keys(_INLINE_WRITE) == {"source_id", "type"}
+    assert inline_write_site_keys('await c.upsert(ids=["a"], documents=[{"source_id": 1}])\n') == set()
+
+
+def test_the_filter_detector_finds_keys_it_was_never_told_about() -> None:
+    """The #17672 `:80` fix: no allowlist, so a NEW filter key is still found."""
+    assert filter_keys(_FILTERS) == {"type", "source_id"}
+    assert "$and" not in filter_keys(_FILTERS) and "$in" not in filter_keys(_FILTERS)
+    assert filter_keys(_NO_FILTER) == set()
+    # The property that matters: a key nobody enumerated is discovered.
+    invented = 'def e(x):\n    where_filter = {"tenant_slug": x}\n    return q(where=where_filter)\n'
+    assert filter_keys(invented) == {"tenant_slug"}
+
+
+# ------------------------------------------------------------- the contract
+
+
+def test_the_writers_emit_every_key_the_endpoints_filter_on() -> None:
     """The gap this closes is not in either side. It is between them."""
-    emitted = _emitted_metadata_keys()
-    filtered = _filtered_keys()
+    emitted = _emitted_keys()
+    filtered = _endpoint_filter_keys()
     assert filtered, "no endpoint filters found — re-derive the population, do not pass vacuously"
 
-    gaps = {name: sorted(keys - emitted - _ENGINE_SUPPLIED) for name, keys in filtered.items()}
+    gaps = {name: sorted(keys - emitted - set(ENGINE_SUPPLIED)) for name, keys in filtered.items()}
     gaps = {name: missing for name, missing in gaps.items() if missing}
 
     assert not gaps, (
-        "these endpoints filter on metadata keys the problem writer never emits, so every "
-        f"matching query returns zero against rows that exist: {gaps}. "
-        f"writer emits: {sorted(emitted)}"
+        "these endpoints filter on metadata keys no writer emits, so every matching query "
+        f"returns zero against rows that exist: {gaps}. writers emit: {sorted(emitted)}"
     )
 
 
-def test_source_id_is_among_the_emitted_keys() -> None:
-    """The specific instance, pinned so a refactor cannot quietly drop it again.
+def test_every_metadata_builder_is_one_the_name_based_discovery_finds() -> None:
+    """Tripwire for preparer six, whatever it ends up being called."""
+    unchecked = sorted(metadata_binders(_writer_source()) - set(preparers(_writer_source())))
+    assert not unchecked, (
+        f"these functions build a row's `metadata` but name-based discovery misses them, so the "
+        f"contract never checks what they emit: {unchecked}"
+    )
 
-    `source_id` is emitted conditionally (`if source_id:`), which is why the
-    general test above cannot be the whole guard: the key appears in the source
-    either way. What this asserts is that the writer still knows about it at
-    all -- removing the assignment is the regression that recreates #17651.
-    """
-    missing = sorted(name for name, keys in _preparers().items() if "source_id" not in keys)
+
+def test_source_id_is_emitted_by_every_preparer() -> None:
+    """The specific instance, pinned so a refactor cannot quietly drop it."""
+    missing = sorted(name for name, keys in preparers(_writer_source()).items() if "source_id" not in keys)
     assert not missing, (
-        f"these document preparers no longer emit source_id at all: {missing}. "
-        "Rows they write cannot be reached by any per-source analytics query."
+        f"these preparers no longer emit source_id: {missing}. Rows they write cannot be reached "
+        "by any per-source analytics query."
     )
