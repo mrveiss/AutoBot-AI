@@ -112,6 +112,18 @@ def example_changeset() -> list:
       does not hold is a stale record -- so a fictional path must not appear
       either. That is what the fix for the first one tripped.
 
+    A third constraint arrived after the first two, from the tree rather than
+    from a guard: a *plausible* fictional path can simply become real. These
+    were `Chat.vue`, `useThing.ts`, `RolesView.test.ts`, `Button.vue` --
+    ordinary names in ordinary directories -- and #17616 created
+    `autobot-slm-frontend/src/views/RolesView.test.ts` for unrelated reasons,
+    which made two fixtures resolve and broke both this guard and the coverage
+    detector. Every path now carries the reserved `__prepush_fixture__` segment,
+    which no real component, view, composable or resource would be named, and
+    `test_every_fixture_path_is_reserved_by_name` holds the next one to it. The
+    project prefix and the extension are unchanged, because those are what the
+    hook's filter actually routes on.
+
     These strings are neither: they are sample input to a `grep`, and the hook's
     filter needs them repo-root-shaped (`^autobot-frontend/`) to exercise
     anything. `ledgers_in` inspects `ast.parse(source).body`, i.e. top-level
@@ -121,18 +133,18 @@ def example_changeset() -> list:
     real would re-break the other guard.
     """
     return [
-        "autobot-frontend/src/components/Chat.vue",
-        "autobot-frontend/src/composables/useThing.ts",
-        "autobot-slm-frontend/src/views/RolesView.test.ts",
-        "autobot-slm-frontend/src/composables/usePerformanceMonitoring.test.ts",
-        "libs/autobot-ui/src/components/Button.vue",
-        "libs/autobot-sdk-ts/src/resources/exampleOnly.ts",
+        "autobot-frontend/src/components/__prepush_fixture__.vue",
+        "autobot-frontend/src/composables/__prepush_fixture__.ts",
+        "autobot-slm-frontend/src/views/__prepush_fixture__.test.ts",
+        "autobot-slm-frontend/src/composables/__prepush_fixture__.test.ts",
+        "libs/autobot-ui/src/components/__prepush_fixture__.vue",
+        "libs/autobot-sdk-ts/src/resources/__prepush_fixture__.ts",
     ]
 
 
 def single_project_change() -> list:
     """One project, one file -- the no-remainder case. Fictional, as above."""
-    return ["autobot-frontend/src/ExampleOnlyView.vue"]
+    return ["autobot-frontend/src/__prepush_fixture__.vue"]
 
 
 class TestTheDeclaredProjectsMatchTheTree:
@@ -205,13 +217,16 @@ class TestRouting:
         [
             (
                 "autobot-frontend",
-                ["autobot-frontend/src/components/Chat.vue", "autobot-frontend/src/composables/useThing.ts"],
+                [
+                    "autobot-frontend/src/components/__prepush_fixture__.vue",
+                    "autobot-frontend/src/composables/__prepush_fixture__.ts",
+                ],
             ),
             (
                 "autobot-slm-frontend",
                 [
-                    "autobot-slm-frontend/src/views/RolesView.test.ts",
-                    "autobot-slm-frontend/src/composables/usePerformanceMonitoring.test.ts",
+                    "autobot-slm-frontend/src/views/__prepush_fixture__.test.ts",
+                    "autobot-slm-frontend/src/composables/__prepush_fixture__.test.ts",
                 ],
             ),
         ],
@@ -239,8 +254,8 @@ class TestRouting:
         for project in _declared_projects():
             remainder = _filter(unclaim, project, remainder)
         assert remainder == [
-            "libs/autobot-ui/src/components/Button.vue",
-            "libs/autobot-sdk-ts/src/resources/exampleOnly.ts",
+            "libs/autobot-ui/src/components/__prepush_fixture__.vue",
+            "libs/autobot-sdk-ts/src/resources/__prepush_fixture__.ts",
         ]
 
     def test_a_changeset_inside_one_project_leaves_no_remainder(self) -> None:
@@ -421,17 +436,23 @@ class TestTheComposableSiblingSelector:
         return [line for line in completed.stdout.splitlines() if line.strip()]
 
     def test_the_sibling_is_selected_when_it_exists(self, tmp_path) -> None:
-        sibling = tmp_path.joinpath("src", "composables", "__tests__", "useThing.test.ts")
+        # Built under tmp_path, so the reserved name is only needed to match the
+        # input the selector is given -- nothing here touches the real tree.
+        sibling = tmp_path.joinpath("src", "composables", "__tests__", "__prepush_fixture__.test.ts")
         sibling.parent.mkdir(parents=True)
         sibling.write_text("", encoding="utf-8")
 
-        selected = self._select("autobot-frontend", tmp_path, ["autobot-frontend/src/composables/useThing.ts"])
+        selected = self._select(
+            "autobot-frontend", tmp_path, ["autobot-frontend/src/composables/__prepush_fixture__.ts"]
+        )
 
-        assert selected == ["src/composables/__tests__/useThing.test.ts"]
+        assert selected == ["src/composables/__tests__/__prepush_fixture__.test.ts"]
 
     def test_nothing_is_selected_when_the_sibling_does_not_exist(self, tmp_path) -> None:
         """The correct empty, as opposed to #17575's empty-for-every-input."""
-        selected = self._select("autobot-frontend", tmp_path, ["autobot-frontend/src/composables/useThing.ts"])
+        selected = self._select(
+            "autobot-frontend", tmp_path, ["autobot-frontend/src/composables/__prepush_fixture__.ts"]
+        )
 
         assert selected == []
 
@@ -453,6 +474,20 @@ class TestTheFixturesAreFixtures:
     is not: the remedy is an entry in a **shrink-only** record, which nothing can
     later remove because there is no tree to widen a filter to.
     """
+
+    @pytest.mark.parametrize("path", [*example_changeset(), *single_project_change()])
+    def test_every_fixture_path_is_reserved_by_name(self, path: str) -> None:
+        """Not-resolving must be a property of the name, not a fact about today.
+
+        The test below checks the tree as it stands, which is only ever a
+        statement about the present: it passed for months and then #17616
+        created a file at one of these paths. A reserved segment makes the
+        answer independent of what anyone adds next.
+        """
+        assert "__prepush_fixture__" in path, (
+            f"{path} is a plausible name, and a plausible name can be created. Fixture paths carry "
+            "the reserved `__prepush_fixture__` segment so they cannot collide with a real file."
+        )
 
     @pytest.mark.parametrize("path", [*example_changeset(), *single_project_change()])
     def test_no_fixture_path_names_a_real_file(self, path: str) -> None:
