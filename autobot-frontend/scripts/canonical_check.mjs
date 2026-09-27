@@ -4,7 +4,15 @@
 import { argv, exit, stderr, stdout } from "node:process";
 import { writeFile } from "node:fs/promises";
 
-import { discoverRules, runRules } from "./canonical/registry.mjs";
+import { resolve } from "node:path";
+import { cwd } from "node:process";
+
+import {
+  collectTargetFiles,
+  discoverRules,
+  runRules,
+  unreachableTargets,
+} from "./canonical/registry.mjs";
 import { toJson, toPretty } from "./canonical/reporter.mjs";
 
 function parseArgs(rawArgs) {
@@ -48,8 +56,28 @@ async function main() {
     return 2;
   }
 
-  // Wave 0: only --files mode is supported. --all walking is a Wave 3 task.
-  const files = args.files.filter((f) => /\.(ts|vue|mjs|js)$/.test(f));
+  // A rule's TARGETS are repo-root-relative, so a path given on the command
+  // line -- typically relative to autobot-frontend, which is where CI runs
+  // this -- has to be rebased before it can be matched against them. Without
+  // this every --files invocation would silently match no rule and report a
+  // clean run, which is the failure this change exists to remove, reintroduced
+  // one layer along.
+  // Paths stay as the caller gave them so the rules can open them; runRules
+  // derives the repo-root-relative form itself for TARGETS matching.
+  const files = args.all ? await collectTargetFiles(rules) : args.files.map((f) => resolve(cwd(), f));
+
+  // A TARGETS entry naming a path that does not exist makes its rule inspect
+  // nothing while reporting the same clean run as a rule that found nothing.
+  const missing = await unreachableTargets(rules);
+  for (const { ruleId, target } of missing) {
+    stderr.write(`canonical-check: ${ruleId} targets ${target}, which does not exist\n`);
+  }
+
+  if (files.length === 0) {
+    stderr.write("canonical-check: no files matched — refusing to report a clean run\n");
+    return 2;
+  }
+
   const diagnostics = await runRules(rules, files);
 
   let out;
@@ -71,7 +99,12 @@ async function main() {
     if (!out.endsWith("\n")) sink.write("\n");
   }
 
-  return diagnostics.some((d) => d.severity === "block") ? 1 : 0;
+  // The severity vocabulary is block | warn | audit; `makeDiagnostic` rejects
+  // anything else, so a rule cannot opt into failing by inventing a level --
+  // it says `block` or it is advisory. An unreachable target fails too: a rule
+  // that inspected nothing has not agreed with the tree, it has not looked.
+  const failing = diagnostics.some((d) => d.severity === "block");
+  return failing || missing.length > 0 ? 1 : 0;
 }
 
 main().then((code) => exit(code)).catch((err) => {
