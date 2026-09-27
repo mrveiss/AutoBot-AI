@@ -34,30 +34,58 @@ down_revision: Union[str, None] = "20260919_095"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_TABLE = "knowledge_facts"
-
-#: Column name -> definition. Ordered as the model declares them.
-_COLUMNS = (
-    ("source_checked_at", lambda: sa.Column("source_checked_at", sa.DateTime(timezone=True), nullable=True)),
-    ("source_seen_at", lambda: sa.Column("source_seen_at", sa.DateTime(timezone=True), nullable=True)),
-    ("source_last_probe", lambda: sa.Column("source_last_probe", sa.String(32), nullable=True)),
-    (
-        "source_check_failures",
-        lambda: sa.Column("source_check_failures", sa.Integer(), nullable=False, server_default="0"),
-    ),
-    ("source_gone_at", lambda: sa.Column("source_gone_at", sa.DateTime(timezone=True), nullable=True)),
+#: Dropped in reverse order by `downgrade`. `upgrade` does NOT loop over this:
+#: see its docstring -- the probe ladder reads the call site, not this tuple.
+_COLUMN_NAMES = (
+    "source_checked_at",
+    "source_seen_at",
+    "source_last_probe",
+    "source_check_failures",
+    "source_gone_at",
 )
 
 
 def upgrade() -> None:
-    """Add the five liveness columns, skipping any that already exist."""
-    for name, column in _COLUMNS:
-        if not has_column(_TABLE, name):
-            op.add_column(_TABLE, column())
+    """Add the five liveness columns, skipping any that already exist.
+
+    Written as five literal calls rather than a loop over a table of column
+    definitions (#17125). The probe ladder extracts this revision's artifacts
+    from the AST, and `baseline.extract_artifacts` records a column only when
+    **both** `op.add_column`'s first argument is a string literal **and** its
+    second is a `sa.Column(...)` whose first argument is one. The earlier form
+    passed a `_TABLE` module constant and a `column()` factory, so the ladder
+    extracted **nothing** from this revision: it became one of the
+    "unobservable" revisions, which lets adoption bracket across it and stamp
+    below a revision whose columns already exist.
+
+    A module constant for the table name is better style and defeats the
+    observer, which is the trade this file has to lose: the analysis reads
+    source, not runtime. The marker route was available and refused --
+    extending the allowlist would make this revision unobservable forever and
+    make the next one easier to wave through, while five literals restore the
+    observability for free.
+    """
+    if not has_column("knowledge_facts", "source_checked_at"):
+        op.add_column("knowledge_facts", sa.Column("source_checked_at", sa.DateTime(timezone=True), nullable=True))
+    if not has_column("knowledge_facts", "source_seen_at"):
+        op.add_column("knowledge_facts", sa.Column("source_seen_at", sa.DateTime(timezone=True), nullable=True))
+    if not has_column("knowledge_facts", "source_last_probe"):
+        op.add_column("knowledge_facts", sa.Column("source_last_probe", sa.String(32), nullable=True))
+    if not has_column("knowledge_facts", "source_check_failures"):
+        op.add_column(
+            "knowledge_facts",
+            sa.Column("source_check_failures", sa.Integer(), nullable=False, server_default="0"),
+        )
+    if not has_column("knowledge_facts", "source_gone_at"):
+        op.add_column("knowledge_facts", sa.Column("source_gone_at", sa.DateTime(timezone=True), nullable=True))
 
 
 def downgrade() -> None:
-    """Drop exactly the five columns this migration added."""
-    for name, _column in reversed(_COLUMNS):
-        if has_column(_TABLE, name):
-            op.drop_column(_TABLE, name)
+    """Drop exactly the five columns this migration added.
+
+    A loop is fine here: `drop_column` is not extracted by the ladder, and the
+    reverse order is the property that matters.
+    """
+    for name in reversed(_COLUMN_NAMES):
+        if has_column("knowledge_facts", name):
+            op.drop_column("knowledge_facts", name)
