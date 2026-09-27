@@ -132,7 +132,7 @@
     <!-- A drawn graph can still be missing a whole store. That has to stay on
          screen: the failure notification above is a 5s toast, so without this
          the gap became invisible while the incomplete picture stayed (#17612). -->
-    <div v-if="graphIsPartial && entities.length > 0" class="partial-notice" role="status">
+    <div v-if="graphIsPartial && entities.length > 0" class="error-notification" role="status">
       <Icon name="exclamation-triangle" />
       <span>
         {{ $t('knowledge.graph.partialGraph', {
@@ -158,7 +158,6 @@
     <div
       v-else-if="entities.length === 0 && !isLoading"
       class="empty-state"
-      :class="{ 'empty-state--unreadable': failedSources.length > 0 }"
     >
       <div class="empty-icon">
         <Icon :name="failedSources.length > 0 ? 'exclamation-triangle' : 'project-diagram'" />
@@ -173,16 +172,17 @@
           ? $t('knowledge.graph.noEntitiesHint')
           : $t('knowledge.graph.sourcesUnreadableHint') }}
       </p>
-      <ul v-if="graphSources.length > 0" class="source-outcomes">
-        <li v-for="source in graphSources" :key="source.key" :class="{ 'is-failed': !source.ok }">
-          {{ source.ok
-            ? $t('knowledge.graph.sourceHeld', { source: sourceLabel(source.key), count: source.count })
-            : $t('knowledge.graph.sourceFailed', {
-              source: sourceLabel(source.key),
-              reason: source.error || $t('knowledge.graph.reasonUnknown'),
-            }) }}
-        </li>
-      </ul>
+      <!-- `p`, not a styled list: `.empty-state p` already defines exactly this
+           treatment, and a new class here costs a slot on a shrink-only ratchet
+           that counts class-selector occurrences tree-wide (#12730/#12731). -->
+      <p v-for="source in graphSources" :key="source.key">
+        {{ source.ok
+          ? $t('knowledge.graph.sourceHeld', { source: sourceLabel(source.key), count: source.count })
+          : $t('knowledge.graph.sourceFailed', {
+            source: sourceLabel(source.key),
+            reason: source.error || $t('knowledge.graph.reasonUnknown'),
+          }) }}
+      </p>
       <button
         v-if="failedSources.length > 0"
         @click="refreshGraph"
@@ -1545,33 +1545,6 @@ watch(layoutMode, () => {
    colour, it renders transparent or inherits. `--color-warning-text` and
    `--color-text-secondary` are the plausible names, and neither exists; the
    real ones are `--text-on-warning` and `--text-secondary`. */
-.partial-notice {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-warning-bg);
-  border-left: 4px solid var(--color-warning);
-  color: var(--text-on-warning);
-  font-size: 0.875rem;
-}
-
-.empty-state--unreadable .empty-icon {
-  color: var(--color-warning);
-}
-
-.source-outcomes {
-  list-style: none;
-  margin: var(--spacing-sm) 0;
-  padding: 0;
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
-}
-
-.source-outcomes .is-failed {
-  color: var(--color-error);
-}
-
 /* Empty State */
 .empty-state {
   flex: 1;
