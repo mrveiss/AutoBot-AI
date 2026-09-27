@@ -119,12 +119,20 @@ def example_changeset() -> list:
     construction rather than by dilution -- padding the list with prose to fall
     under the 0.8 rooted share would be gaming a heuristic, and making the paths
     real would re-break the other guard.
+
+    Which is exactly what happened: these were fictional when written, and #17616
+    then created `autobot-slm-frontend/src/views/RolesView.test.ts` and
+    `.../composables/usePerformanceMonitoring.test.ts` for real, so this file's
+    own guard failed and the uncovered-reads record grew by two. Renamed to
+    `ExampleOnly` names, the convention this file already uses -- a fictional path
+    has to be one nobody would plausibly create later, not merely one that does
+    not exist today.
     """
     return [
         "autobot-frontend/src/components/Chat.vue",
         "autobot-frontend/src/composables/useThing.ts",
-        "autobot-slm-frontend/src/views/RolesView.test.ts",
-        "autobot-slm-frontend/src/composables/usePerformanceMonitoring.test.ts",
+        "autobot-slm-frontend/src/views/ExampleOnlyView.test.ts",
+        "autobot-slm-frontend/src/composables/useExampleOnly.test.ts",
         "libs/autobot-ui/src/components/Button.vue",
         "libs/autobot-sdk-ts/src/resources/exampleOnly.ts",
     ]
@@ -210,8 +218,8 @@ class TestRouting:
             (
                 "autobot-slm-frontend",
                 [
-                    "autobot-slm-frontend/src/views/RolesView.test.ts",
-                    "autobot-slm-frontend/src/composables/usePerformanceMonitoring.test.ts",
+                    "autobot-slm-frontend/src/views/ExampleOnlyView.test.ts",
+                    "autobot-slm-frontend/src/composables/useExampleOnly.test.ts",
                 ],
             ),
         ],

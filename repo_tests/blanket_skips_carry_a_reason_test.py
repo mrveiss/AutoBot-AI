@@ -61,10 +61,10 @@ def _test_files(root: Path = REPO) -> list[Path]:
     return out
 
 
-#: MEASURED 2026-09-19 against this tree: 2540 test modules by this walk's own
-#: two patterns (#13708/#16771's redaction feature added ~211 since the prior
-#: 2329 measurement -- #17108 ratchets this up rather than let growth's own
-#: headroom silently absorb it, per this guard's own rule). `growth=200`
+#: MEASURED 2026-09-27 against this tree: 2743 test modules by this walk's own
+#: two patterns (2540 on 2026-09-19; the 203 since then crossed `growth=200`, so
+#: the floor is ratcheted up rather than letting growth's own headroom silently
+#: absorb it -- per this guard's own rule, as #17108 did at 2329 -> 2540). `growth=200`
 #: absorbs ordinary churn -- test files are added constantly -- while staying
 #: far below the size of any collection-root loss this exists to catch.
 #: `skips=0`: every parsed module here IS the population `examined()` bounds,
@@ -72,7 +72,7 @@ def _test_files(root: Path = REPO) -> list[Path]:
 REACH = declare(
     "blanket-skip-test-module-sweep",
     discover=_test_files,
-    floor=2540,
+    floor=2743,
     growth=200,
     skips=0,
     what="test modules",

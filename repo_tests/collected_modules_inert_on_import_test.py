@@ -174,17 +174,17 @@ def _collectable_modules(root: Path = _REPO_ROOT) -> list[Path]:
     )
 
 
-#: MEASURED 2026-09-19 against this tree: 2527 collectable modules
-#: (#13708/#16771's redaction feature added ~211 since the prior 2316
-#: measurement -- #17108 ratchets this up rather than let growth's own
-#: headroom silently absorb it, per this guard's own rule). `growth=200`
+#: MEASURED 2026-09-27 against this tree: 2730 collectable modules
+#: (2527 on 2026-09-19; the 203 since then crossed `growth=200`, so the floor is
+#: ratcheted up rather than letting growth's own headroom silently absorb it --
+#: per this guard's own rule, as #17108 did at 2316 -> 2527). `growth=200`
 #: absorbs ordinary test-file growth; `skips=0` because nothing here is
 #: dropped as unreadable -- `_parse_module` fails loudly instead of skipping
 #: (see its own docstring).
 REACH = declare(
     "collectable-modules-inert-on-import",
     discover=_collectable_modules,
-    floor=2527,
+    floor=2730,
     growth=200,
     skips=0,
     what="modules matching pytest's python_files patterns",
