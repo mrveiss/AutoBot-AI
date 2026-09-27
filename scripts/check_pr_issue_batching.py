@@ -87,6 +87,14 @@ _RUN = rf"({_ONE_REF}(?:{_SEP_RE}{_ONE_REF})*)"
 _CLOSING = re.compile(rf"(?:{_CLOSING_WORDS})\s+{_RUN}", re.IGNORECASE)
 _REFERENCE = re.compile(rf"(?:{_CLOSING_WORDS}|{_MENTION_WORDS})\s+{_RUN}", re.IGNORECASE)
 _SPLIT = re.compile(_SEP_RE, re.IGNORECASE)
+# #17580 AC3: a closing keyword at the START of a line is a deliberate
+# declaration; the same keyword inside a sentence is usually prose. GitHub does
+# not care about the difference and closes on both, which is how #16464 was
+# closed by a body whose sentence read "this PR does not close #16464". The
+# negation blindness is the platform's and cannot be fixed here, so the only
+# defence is telling the author before the merge. Markdown lead-ins are allowed
+# because `- Closes #1`, `> Closes #1` and `**Closes #1**` are all deliberate.
+_LINE_START_CLOSING = re.compile(rf"^[\s>*_#\-]*(?:{_CLOSING_WORDS})\s+{_RUN}", re.IGNORECASE | re.MULTILINE)
 # A reference inside a fenced block or inline code is an EXAMPLE, not a link.
 # Found on this gate's own PR, whose worked examples scored as six extra issues:
 # left in, a PR could satisfy the rule with sample text and never link anything.
@@ -170,6 +178,19 @@ def closing_issues(body: str) -> set[str]:
     a mention links context, only a closing keyword makes a PR batched.
     """
     return _issues_under(body, _CLOSING)
+
+
+def mid_sentence_closings(body: str) -> set[str]:
+    """Issues closed by a keyword that is NOT at the start of its line (#17580).
+
+    These are the dangerous ones. An author writing "this PR does not close #N"
+    has said the opposite of what GitHub will do, and the gate that agreed with
+    the author's intent is exactly what let #16464 close on merge while the check
+    reported "closes nothing". Returned so the author can be warned; the set is
+    deliberately not subtracted from :func:`closing_issues`, because GitHub does
+    close them and the batching count must reflect the platform.
+    """
+    return closing_issues(body) - _issues_under(body, _LINE_START_CLOSING)
 
 
 # #16104: an ATX heading is 1-6 `#` followed by a space, a tab, or end of line.
@@ -322,6 +343,27 @@ def warning_annotation(text: str) -> str:
     return "::warning::" + text.replace("\n", "%0A")
 
 
+def _mid_sentence_warning(body: str) -> str:
+    """The #17580 AC3 notice, or "" when no closing keyword sits mid-sentence.
+
+    Prepended to every verdict rather than returned from one branch: GitHub closes
+    on these regardless of whether the PR is batched, excused or a vehicle, so the
+    warning cannot be gated on this gate's own policy.
+    """
+    risky = mid_sentence_closings(body)
+    if not risky:
+        return ""
+    return (
+        warning_annotation(
+            f"A closing keyword for {_render(risky)} appears mid-sentence. GitHub closes on it and "
+            "does not read negation -- #16464 was closed by a body saying it did not close it. "
+            "Move the keyword to the start of its own line if you mean it, or reword to 'Refs' if "
+            "you do not."
+        )
+        + "\n"
+    )
+
+
 def check(body: str, actor: str = "", branch: str = "", title: str = "") -> tuple[bool, str]:
     """Return (ok, message) for one pull request.
 
@@ -341,6 +383,12 @@ def check(body: str, actor: str = "", branch: str = "", title: str = "") -> tupl
     gate always printed. A vehicle (see :func:`is_vehicle`) short-circuits
     everything else and passes outright, however many issues it closes or refs.
     """
+    ok, message = _verdict(body, actor=actor, branch=branch, title=title)
+    return ok, _mid_sentence_warning(body) + message
+
+
+def _verdict(body: str, actor: str = "", branch: str = "", title: str = "") -> tuple[bool, str]:
+    """The batching verdict itself, unchanged by #17580."""
     if is_vehicle(branch, body):
         return True, _vehicle_notice(closing_issues(body), referenced_issues(body))
 
