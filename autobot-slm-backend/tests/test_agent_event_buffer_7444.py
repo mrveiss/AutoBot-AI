@@ -180,6 +180,36 @@ def _function(tree: ast.Module, name: str) -> ast.AST:
     raise AssertionError(f"{name} not found")
 
 
+def _awaited_to_thread(node: ast.AST) -> list:
+    """`to_thread(...)` calls that are the operand of an `await`.
+
+    Required because `asyncio.to_thread(f)` without `await` returns a coroutine
+    that is never run -- `f` does not execute at all. An assertion that only checks
+    the callable was *passed* to `to_thread` therefore passes on a fix that does
+    nothing, which was proved on this PR by mutating the `await` away and watching
+    both original assertions still pass. Raised as Trivial in review; a pin that
+    certifies an inert fix is not trivial.
+    """
+    return [
+        sub.value
+        for sub in ast.walk(node)
+        if isinstance(sub, ast.Await)
+        and isinstance(sub.value, ast.Call)
+        and isinstance(sub.value.func, ast.Attribute)
+        and sub.value.func.attr == "to_thread"
+    ]
+
+
+def _offloaded(node: ast.AST, name: str) -> list:
+    """Attribute arguments named *name* handed to an **awaited** `to_thread`."""
+    return [
+        arg
+        for call in _awaited_to_thread(node)
+        for arg in call.args
+        if isinstance(arg, ast.Attribute) and arg.attr == name
+    ]
+
+
 def _calls_named(node: ast.AST, name: str) -> list:
     found = []
     for sub in ast.walk(node):
@@ -217,6 +247,31 @@ class TestBufferCallSites:
             c for c in calls if id(c) in guarded
         ], "prune_event_buffer() is inside an `if` in run() -- the cap is gated again"
 
+        # Unconditional is not the same as per-cycle: a call placed before
+        # `while self.running` satisfies every assertion above while pruning once at
+        # startup. Raised in review, and the reason this checks containment.
+        in_loop = {
+            id(c)
+            for node in ast.walk(run)
+            if isinstance(node, ast.While)
+            for c in _calls_named(node, "prune_event_buffer")
+        }
+        assert all(id(c) in in_loop for c in calls), (
+            "a prune_event_buffer() call sits outside the heartbeat loop -- once at "
+            "startup is not the per-cycle cap this claims"
+        )
+
+        # And it must precede the heartbeat. A total request timeout raises
+        # `asyncio.TimeoutError`, which is not an `aiohttp.ClientError`, so it escapes
+        # the heartbeat's handler into the loop's catch-all -- skipping any prune
+        # placed after it, while the code-change endpoint keeps appending.
+        heartbeats = _calls_named(run, "send_heartbeat")
+        assert heartbeats, "run() no longer sends heartbeats -- re-point this pin"
+        assert min(c.lineno for c in calls) < min(c.lineno for c in heartbeats), (
+            "prune_event_buffer() runs after send_heartbeat() -- an exception from the "
+            "heartbeat skips the cap for that cycle"
+        )
+
     def test_the_offline_insert_is_offloaded_not_called_inline(self, rel: str) -> None:
         """The heartbeat failure path writes to sqlite; it must not do so on the loop.
 
@@ -229,13 +284,10 @@ class TestBufferCallSites:
         direct = [c for c in _calls_named(fn, "buffer_event")]
         assert direct == [], "buffer_event(...) is called inline in an async function"
 
-        handed_off = [
-            arg
-            for call in _calls_named(fn, "to_thread")
-            for arg in call.args
-            if isinstance(arg, ast.Attribute) and arg.attr == "buffer_event"
-        ]
-        assert handed_off, "the failure path no longer buffers the heartbeat at all"
+        assert _offloaded(fn, "buffer_event"), (
+            "the failure path either stopped buffering the heartbeat, or hands it to an "
+            "unawaited to_thread -- a coroutine that never runs"
+        )
 
     def test_both_of_buffer_events_async_callers_are_offloaded(self, rel: str) -> None:
         """`buffer_event` has two async paths; a fix that covers one is not a fix.
@@ -254,10 +306,7 @@ class TestBufferCallSites:
         assert (
             _calls_named(fn, "_process_code_change") == []
         ), "_process_code_change(...) is called inline in an async request handler"
-        handed_off = [
-            arg
-            for call in _calls_named(fn, "to_thread")
-            for arg in call.args
-            if isinstance(arg, ast.Attribute) and arg.attr == "_process_code_change"
-        ]
-        assert handed_off, "the code-change handler no longer processes the change at all"
+        assert _offloaded(fn, "_process_code_change"), (
+            "the code-change handler either stopped processing the change, or hands it to "
+            "an unawaited to_thread -- a coroutine that never runs"
+        )

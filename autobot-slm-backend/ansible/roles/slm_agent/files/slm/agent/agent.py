@@ -357,12 +357,12 @@ class SLMAgent:
                 sd_notify("WATCHDOG=1")
 
                 try:
+                    # First, ahead of anything that can raise past it -- why, and
+                    # why not `finally`: `event_buffer.prune` (#17647).
+                    await self.prune_event_buffer()
+
                     # Send heartbeat
                     success = await self.send_heartbeat()
-
-                    # Capped whether or not the admin answered; only the upload
-                    # is gated on being connected (#17647 review).
-                    await self.prune_event_buffer()
 
                     # If connected, try to sync buffered events
                     if success:

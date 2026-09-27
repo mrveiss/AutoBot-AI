@@ -137,6 +137,15 @@ def prune(db_path: str, max_events: int = MAX_BUFFERED_EVENTS) -> None:
     Deliberately *not* enforced inside ``append``: that would put a ``COUNT(*)``
     on every insert and give the cap two enforcement points that could disagree.
 
+    The caller runs it **first** in its cycle, ahead of the heartbeat. A total
+    request timeout raises ``asyncio.TimeoutError``, which is not an
+    ``aiohttp.ClientError``, so it escapes the heartbeat's own handler and lands in
+    the run loop's catch-all -- skipping a prune placed after the heartbeat, while
+    the code-change endpoint keeps appending rows on its own path. A ``finally``
+    would also survive that, but a prune raising inside one would escape the
+    catch-all and kill the loop (#9965); ordering costs nothing and cannot
+    (#17647 review, round 3).
+
     ``db_path`` has no default on purpose. Reaching a defaulted path with no
     argument is exactly how the previous prune came to trim a file the agent was
     not writing to.
