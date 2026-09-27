@@ -265,3 +265,13 @@ python:
   # skips `python_filter_covers_its_guards_test.py`'s own coverage check on
   # that citation, in addition to `Secret Detection`'s path-filter gap.
   - 'autobot-slm-frontend/src/locales/**'
+  # #17528: `knowledge_upload_accept_matches_server_17528_test.py` compares the
+  # upload picker's accepted extensions and size limit against
+  # `autobot-backend/api/knowledge.py`, reading BOTH sides by concrete literal.
+  # The drift it exists to catch can arrive from either direction -- #16775 added
+  # five office types server-side and the picker never learned -- so a change
+  # confined to the frontend half must run it. Without these entries that change
+  # computes `python != 'true'`, the shim publishes `python-suite` green, and the
+  # guard reading the file that just changed never runs.
+  - 'autobot-frontend/src/constants/knowledgeUpload.ts'
+  - 'autobot-frontend/src/components/knowledge/KnowledgeUpload.vue'
