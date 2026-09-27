@@ -20,7 +20,16 @@ _CHECKER = pathlib.Path(__file__).resolve().parent / "check_dependency_floors.py
 _spec = importlib.util.spec_from_file_location("check_dependency_floors", _CHECKER)
 checker = importlib.util.module_from_spec(_spec)
 sys.modules["check_dependency_floors"] = checker
-_spec.loader.exec_module(checker)
+try:
+    _spec.loader.exec_module(checker)
+finally:
+    # Installed only for the duration of exec_module -- a dataclass defined in
+    # the module resolves its own module by name while the body runs. Left
+    # installed, it puts a `pipeline-scripts/` module into the sys.modules of
+    # every test that runs after this one, which is what the leak guard reports
+    # and what it exists to stop. The `checker` reference below stays valid;
+    # only the global registry entry goes.
+    sys.modules.pop("check_dependency_floors", None)
 
 
 def _declaration(name: str = "fastapi", required: str = "0.141.1"):
