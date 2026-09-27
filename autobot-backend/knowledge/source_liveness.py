@@ -314,8 +314,14 @@ async def sweep_source_liveness(*, limit: int = DEFAULT_SWEEP_LIMIT) -> Dict[str
     answer. Reading first, probing outside any transaction, then writing in a
     short one means a stalled filesystem costs no database time.
 
-    Returns the per-outcome counts for this page. Nothing is deleted and no field
-    outside the four observation columns is written.
+    Returns the per-outcome counts for this page, plus ``superseded``: how many
+    probes were discarded because a newer sweep had already recorded a look. That
+    number is reported rather than swallowed -- `probed` counts what was probed,
+    not what was written, and a caller comparing the two would otherwise be
+    reading a silent discrepancy.
+
+    Nothing is deleted and no field outside the four observation columns is
+    written.
     """
     factory = get_async_session_factory()
 
@@ -336,17 +342,50 @@ async def sweep_source_liveness(*, limit: int = DEFAULT_SWEEP_LIMIT) -> Dict[str
         counts[outcome] += 1
         observed.append((fact_id, outcome))
 
-    # 3. Persist in a short write transaction.
+    # 3. Persist in a short write transaction, one row at a time under a lock.
+    #
+    #    Two sweeps can select the same page, and nothing serialises them (#17615
+    #    review). Without the lock and the timestamp comparison a SLOW sweep
+    #    commits after a fast one and writes its OLDER observation on top:
+    #    `source_checked_at` moves backwards, `source_last_probe` reports a probe
+    #    that has since been superseded, and `source_check_failures` -- a
+    #    read-modify-write -- loses an increment, so two consecutive failures
+    #    count as one. `source_seen_at` going backwards is the dangerous one,
+    #    because #17538's retention policy reads it as "last known good".
+    #
+    #    `with_for_update` serialises the read-modify-write; the comparison makes
+    #    the write monotonic even across processes that never contend for the lock
+    #    at the same instant. The SQLite dialect omits FOR UPDATE rather than
+    #    failing on it, so a test database is unaffected.
+    stale = 0
     if observed:
         async with factory() as session:
             for fact_id, outcome in observed:
-                row = await session.get(KnowledgeFact, fact_id)
-                if row is not None:
-                    apply_observation(row, outcome, now=now)
+                row = await session.get(KnowledgeFact, fact_id, with_for_update=True)
+                if row is None:
+                    continue
+                if row.source_checked_at is not None and row.source_checked_at >= now:
+                    # A newer sweep already recorded a look at this fact. Dropping
+                    # the write is correct; dropping it SILENTLY is not, so it is
+                    # counted and returned.
+                    stale += 1
+                    continue
+                apply_observation(row, outcome, now=now)
             await session.commit()
 
-    logger.info("Source-liveness sweep probed %d locator(s): %s", sum(counts.values()), counts)
-    return {"probed": sum(counts.values()), "outcomes": counts, "limit": limit, "checked_at": now.isoformat()}
+    logger.info(
+        "Source-liveness sweep probed %d locator(s): %s (%d superseded by a newer sweep)",
+        sum(counts.values()),
+        counts,
+        stale,
+    )
+    return {
+        "probed": sum(counts.values()),
+        "outcomes": counts,
+        "superseded": stale,
+        "limit": limit,
+        "checked_at": now.isoformat(),
+    }
 
 
 def _census_rows(rows: Iterable[Any]) -> Dict[str, Any]:

@@ -33,6 +33,7 @@ from __future__ import annotations
 import ast
 import asyncio
 import threading
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -145,7 +146,9 @@ class _FakeSession:
     async def execute(self, query):
         return _FakeResult([(fact.id, fact.metadata_json) for fact in self._rows])
 
-    async def get(self, model, fact_id):
+    async def get(self, model, fact_id, with_for_update=False):
+        self._tracker["locked_gets"] += int(bool(with_for_update))
+        self._tracker["gets"] += 1
         return next((fact for fact in self._rows if fact.id == fact_id), None)
 
     async def commit(self):
@@ -169,7 +172,7 @@ class TestTheSweepHoldsNoTransactionWhileProbing:
         ]
 
     def _install(self, monkeypatch, facts):
-        tracker = {"open": 0, "sessions": 0, "probes_with_a_session_open": 0}
+        tracker = {"open": 0, "sessions": 0, "probes_with_a_session_open": 0, "gets": 0, "locked_gets": 0}
         sessions = []
 
         def _factory():
@@ -222,6 +225,85 @@ class TestTheSweepHoldsNoTransactionWhileProbing:
         assert tracker["sessions"] == 1
 
 
+class TestTwoSweepsCannotUndoEachOther:
+    """#17615 review: nothing serialises two sweeps, so the write must order itself.
+
+    Both sweeps order by least-recently-checked, so they select the SAME page. The
+    fast one commits; the slow one -- the one that waited out a dead mount -- then
+    commits its older observation on top. Every observation column moves backwards,
+    and `source_check_failures` is a read-modify-write, so two consecutive failures
+    count as one.
+
+    `source_seen_at` is the dangerous one: #17538's retention policy reads it as
+    "last known good", and a retention decision on a timestamp that moved backwards
+    acts on a fact whose source was seen more recently than the row admits.
+    """
+
+    #: Later than the sweep's own `now`, which is `datetime.now(tz=utc)`. A fixed
+    #: past constant would sort BEFORE it and the test would assert nothing -- the
+    #: fixture has to be able to fail for the reason the test names.
+    LATER = datetime.now(tz=timezone.utc) + timedelta(hours=1)
+
+    def _fact_checked_at(self, when):
+        fact = KnowledgeFact(id="f1", content="c", metadata_json={LOCATOR_KEY: "/srv/a.pdf"})
+        fact.source_checked_at = when
+        fact.source_last_probe = PROBE_RESOLVED
+        fact.source_seen_at = when
+        fact.source_check_failures = 0
+        return fact
+
+    @pytest.mark.asyncio
+    async def test_an_observation_older_than_the_row_is_discarded(self, monkeypatch) -> None:
+        """The row already carries a LATER look, so this sweep must not write."""
+        fact = self._fact_checked_at(self.LATER)
+        tracker, _ = TestTheSweepHoldsNoTransactionWhileProbing()._install(monkeypatch, [fact])
+
+        result = await sweep_source_liveness(limit=10)
+
+        assert result["superseded"] == 1
+        assert fact.source_checked_at == self.LATER
+        assert fact.source_seen_at == self.LATER
+        assert fact.source_last_probe == PROBE_RESOLVED
+
+    @pytest.mark.asyncio
+    async def test_a_discarded_write_is_reported_not_swallowed(self, monkeypatch) -> None:
+        """`probed` counts probes; `superseded` is why it can exceed the writes."""
+        facts = [self._fact_checked_at(self.LATER), self._fact_checked_at(None)]
+        facts[1].id = "f2"
+        TestTheSweepHoldsNoTransactionWhileProbing()._install(monkeypatch, facts)
+
+        result = await sweep_source_liveness(limit=10)
+
+        assert result["probed"] == 2
+        assert result["superseded"] == 1
+        assert facts[0].source_checked_at == self.LATER  # untouched
+        assert facts[1].source_checked_at is not None  # written
+
+    @pytest.mark.asyncio
+    async def test_a_never_checked_row_is_still_written(self, monkeypatch) -> None:
+        """The guard must not turn into "never write": NULL is not a later look."""
+        fact = self._fact_checked_at(None)
+        TestTheSweepHoldsNoTransactionWhileProbing()._install(monkeypatch, [fact])
+
+        result = await sweep_source_liveness(limit=10)
+
+        assert result["superseded"] == 0
+        assert fact.source_checked_at is not None
+
+    @pytest.mark.asyncio
+    async def test_every_write_read_takes_the_row_lock(self, monkeypatch) -> None:
+        """The comparison alone cannot fix `source_check_failures`: incrementing it
+        is a read-modify-write, so the row is locked for the duration."""
+        facts = [self._fact_checked_at(None), self._fact_checked_at(None)]
+        facts[1].id = "f2"
+        tracker, _ = TestTheSweepHoldsNoTransactionWhileProbing()._install(monkeypatch, facts)
+
+        await sweep_source_liveness(limit=10)
+
+        assert tracker["gets"] == 2
+        assert tracker["locked_gets"] == 2
+
+
 class TestTheSweepQueryAsksOneQuestion:
     """Candidacy is `has_key`; usability is `locator_of`. Never both in SQL."""
 
@@ -243,13 +325,31 @@ class TestTheSweepQueryAsksOneQuestion:
         sql = self._sql()
         assert "ORDER BY" in sql and "source_checked_at ASC NULLS FIRST" in sql
 
-    def test_the_sweep_never_skips_a_candidate(self) -> None:
-        """A `continue` in the probe loop is what starved the sweep. Source-level,
-        because the starvation only shows up on the sweep *after* the one tested."""
+    def test_the_probe_loop_never_skips_a_candidate(self) -> None:
+        """A `continue` in the PROBE loop is what starved the sweep. Source-level,
+        because the starvation only shows up on the sweep *after* the one tested.
+
+        Scoped to that loop rather than the whole function: the write phase's
+        `continue`s are recorded decisions -- a row that no longer exists, and an
+        observation a newer sweep superseded, which is returned as `superseded` --
+        while a skip in the probe loop leaves `source_checked_at` NULL and puts the
+        row first in every later sweep forever.
+        """
         source = Path(__file__).with_name("source_liveness.py").read_text(encoding="utf-8")
         sweep = next(
             node
             for node in ast.walk(ast.parse(source))
             if isinstance(node, ast.AsyncFunctionDef) and node.name == "sweep_source_liveness"
         )
-        assert not [node for node in ast.walk(sweep) if isinstance(node, ast.Continue)]
+        probe_loops = [
+            loop
+            for loop in ast.walk(sweep)
+            if isinstance(loop, ast.For)
+            and any(
+                isinstance(call.func, ast.Name) and call.func.id == "probe_path_async"
+                for call in ast.walk(loop)
+                if isinstance(call, ast.Call)
+            )
+        ]
+        assert len(probe_loops) == 1, "the probe loop could not be identified, so nothing was asserted"
+        assert not [node for node in ast.walk(probe_loops[0]) if isinstance(node, ast.Continue)]

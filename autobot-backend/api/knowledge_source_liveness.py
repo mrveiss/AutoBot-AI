@@ -85,5 +85,9 @@ async def post_source_liveness_sweep(
         user_id=admin.get("username") or admin.get("id"),
         probed=result["probed"],
         outcomes=result["outcomes"],
+        # What was probed and what was written can differ when two sweeps overlap
+        # (#17615 review). An audit line carrying only `probed` would claim every
+        # probe reached the row.
+        superseded=result["superseded"],
     )
     return {"success": True, "data": result}
