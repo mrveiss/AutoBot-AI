@@ -36,11 +36,13 @@ so it is deliberately not attempted here.
 
 from __future__ import annotations
 
+import asyncio
 import errno
 import os
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable
+from typing import Any, Dict, Iterable, List, Tuple
 
 from sqlalchemy import select
 
@@ -67,6 +69,54 @@ INGEST_CLASS_KEY = "source"
 #: How many facts one sweep probes. A page size, not a policy: sweeps order by
 #: least-recently-checked so repeated runs make progress through the table.
 DEFAULT_SWEEP_LIMIT = 500
+
+#: Per-probe ceiling. A `stat` on a healthy mount answers in microseconds; this
+#: bound exists entirely for the unhealthy case, which is the case this module is
+#: FOR -- a hard NFS or SMB mount whose server has gone away blocks in the kernel
+#: for minutes. `TimingConstants.SHORT_TIMEOUT` (30s) is the wrong order of
+#: magnitude for one stat, and reusing a "delay" constant as a timeout would be
+#: worse than a local one. Not env-configurable: `ssot_config.py` sits at its
+#: 3307-line ratchet ceiling, so a new key cannot be added without splitting it
+#: -- recorded rather than hidden (#17615 review).
+PROBE_TIMEOUT_SECONDS = 2.0
+
+#: Bounded, module-private, and deliberately NOT the default executor.
+#: `asyncio.wait_for` cancels the *wait*, never an `os.stat` already blocked in
+#: the kernel, so a hung mount leaks one worker until the kernel returns. A
+#: separate bounded pool means those leaks cannot starve unrelated work sharing
+#: the loop's default executor, and the bound caps how many can leak at once.
+_PROBE_WORKERS = 4
+
+_probe_pool: ThreadPoolExecutor | None = None
+
+
+def _pool() -> ThreadPoolExecutor:
+    """The probe pool, created on first use and never shut down on a request.
+
+    Shutting it down with `wait=True` from a request path would block on exactly
+    the hung stat the timeout exists to escape.
+    """
+    global _probe_pool
+    if _probe_pool is None:
+        _probe_pool = ThreadPoolExecutor(max_workers=_PROBE_WORKERS, thread_name_prefix="source-liveness")
+    return _probe_pool
+
+
+async def probe_path_async(path: str | None) -> str:
+    """`probe_path` off the event loop, with a per-probe ceiling.
+
+    The synchronous probe blocks, and the paths it touches are the ones most
+    likely to block -- so running it inline would let one dead mount stall every
+    other request served by that worker. A timeout is reported as `unreadable`:
+    not looking is never evidence of absence.
+    """
+    loop = asyncio.get_running_loop()
+    try:
+        return await asyncio.wait_for(loop.run_in_executor(_pool(), probe_path, path), timeout=PROBE_TIMEOUT_SECONDS)
+    except (asyncio.TimeoutError, TimeoutError):
+        logger.warning("Source-liveness probe timed out after %ss; recording unreadable", PROBE_TIMEOUT_SECONDS)
+        return PROBE_UNREADABLE
+
 
 # ---------------------------------------------------------------------------
 # Probe outcomes -- what a single look at a locator established
@@ -139,16 +189,19 @@ def ingest_class_of(metadata: Dict[str, Any] | None) -> str:
 
 
 def _parent_resolves(path: str) -> bool:
-    """Whether the locator's parent directory can be stat'd at all.
+    """Whether the locator's parent is a resolvable **directory**.
 
     An unmounted or unreachable share reports the child's absence identically to
     a deleted file, so this is what separates the two.
+
+    `isdir`, not a bare `stat` (#17615 review): for `/some-regular-file/child`,
+    `os.stat` on the child raises ENOTDIR -- which is in `_ABSENCE_ERRNOS` -- and
+    a bare stat of the parent then SUCCEEDS, because the parent is a file that
+    exists. That reported `absent`, i.e. positive evidence that a document was
+    deleted, for a locator that was never a valid path. A parent that is not a
+    directory cannot tell us anything about a child, so it is unresolvable.
     """
-    try:
-        os.stat(os.path.dirname(path) or os.sep)
-        return True
-    except OSError:
-        return False
+    return os.path.isdir(os.path.dirname(path) or os.sep)
 
 
 def probe_path(path: str | None) -> str:
@@ -224,17 +277,28 @@ def state_of(row: KnowledgeFact) -> str:
 
 
 def _sweep_query(limit: int):
-    """Least-recently-probed facts that carry a filesystem locator.
+    """Least-recently-probed facts that carry a `file_path` key at all.
 
-    Facts with a witnessed deletion are skipped: re-probing cannot un-witness
-    the event, and letting a later `resolved` probe sit beside `source_gone_at`
-    would make the row say two things. A source that genuinely returns comes
-    back through an ingest, not through this sweep.
+    Selects the id and the RAW metadata, not the ORM object: the read
+    transaction closes before any probing starts, and one rule -- `locator_of` --
+    then decides usability in Python. The SQL narrows candidates; it does not get
+    a second opinion on what counts as a locator (#17615 review).
+
+    `has_key`, not `->> IS NOT NULL`: the two disagreed. The old form selected a
+    row whose `file_path` was `""` or a number, `locator_of` then rejected it, the
+    loop skipped it without writing, `source_checked_at` stayed NULL, and with
+    `nullsfirst` that row sorted first in EVERY later sweep -- a page of them
+    would starve the sweep permanently. Candidacy and usability are now separate
+    questions with one rule each.
+
+    Facts with a witnessed deletion are skipped: re-probing cannot un-witness the
+    event, and letting a later `resolved` probe sit beside `source_gone_at` would
+    make the row say two things. A source that genuinely returns comes back
+    through an ingest, not through this sweep.
     """
-    locator = KnowledgeFact.metadata_json[LOCATOR_KEY].astext
     return (
-        select(KnowledgeFact)
-        .where(locator.isnot(None))
+        select(KnowledgeFact.id, KnowledgeFact.metadata_json)
+        .where(KnowledgeFact.metadata_json.has_key(LOCATOR_KEY))  # noqa: W601 - JSONB `?`, not dict.has_key
         .where(KnowledgeFact.source_gone_at.is_(None))
         .order_by(KnowledgeFact.source_checked_at.asc().nullsfirst())
         .limit(limit)
@@ -244,22 +308,43 @@ def _sweep_query(limit: int):
 async def sweep_source_liveness(*, limit: int = DEFAULT_SWEEP_LIMIT) -> Dict[str, Any]:
     """Probe a page of locators and record what each look established.
 
-    Returns the per-outcome counts for this page. Nothing is deleted and no
-    field outside the four observation columns is written.
+    Three phases on purpose (#17615 review). The earlier version held ONE session
+    across the row query, every probe and the commit -- so a page containing a
+    dead mount kept a database transaction open for as long as the kernel took to
+    answer. Reading first, probing outside any transaction, then writing in a
+    short one means a stalled filesystem costs no database time.
+
+    Returns the per-outcome counts for this page. Nothing is deleted and no field
+    outside the four observation columns is written.
     """
+    factory = get_async_session_factory()
+
+    # 1. Read the candidates, then let the read transaction go.
+    async with factory() as session:
+        candidates: List[Tuple[str, Dict[str, Any]]] = [
+            (fact_id, metadata or {}) for fact_id, metadata in (await session.execute(_sweep_query(limit))).all()
+        ]
+
+    # 2. Probe with no transaction held and no blocking on the event loop. An
+    #    unusable locator is NOT skipped -- `probe_path` reports it `unreadable`,
+    #    which records an observation and lets the page make progress.
     now = datetime.now(tz=timezone.utc)
     counts: Dict[str, int] = {outcome: 0 for outcome in PROBE_OUTCOMES}
-    factory = get_async_session_factory()
-    async with factory() as session:
-        rows = (await session.execute(_sweep_query(limit))).scalars().all()
-        for row in rows:
-            locator = locator_of(row.metadata_json)
-            if locator is None:
-                continue
-            outcome = probe_path(locator)
-            apply_observation(row, outcome, now=now)
-            counts[outcome] += 1
-        await session.commit()
+    observed: List[Tuple[str, str]] = []
+    for fact_id, metadata in candidates:
+        outcome = await probe_path_async(locator_of(metadata))
+        counts[outcome] += 1
+        observed.append((fact_id, outcome))
+
+    # 3. Persist in a short write transaction.
+    if observed:
+        async with factory() as session:
+            for fact_id, outcome in observed:
+                row = await session.get(KnowledgeFact, fact_id)
+                if row is not None:
+                    apply_observation(row, outcome, now=now)
+            await session.commit()
+
     logger.info("Source-liveness sweep probed %d locator(s): %s", sum(counts.values()), counts)
     return {"probed": sum(counts.values()), "outcomes": counts, "limit": limit, "checked_at": now.isoformat()}
 
@@ -267,21 +352,30 @@ async def sweep_source_liveness(*, limit: int = DEFAULT_SWEEP_LIMIT) -> Dict[str
 def _census_rows(rows: Iterable[Any]) -> Dict[str, Any]:
     """Fold selected columns into per-ingest-class state counts.
 
-    The state is derived in Python rather than in SQL on purpose: a CASE
-    expression would be a second copy of ``derive_source_state``, and two
-    spellings of one rule is the defect this subsystem keeps producing.
+    Takes the RAW metadata and applies `locator_of` / `ingest_class_of`, the same
+    predicates `state_of` uses. The earlier version pulled both out in SQL with
+    `.astext`, which coerces a JSON number to a string (#17615 review): a
+    `file_path` of `7` became `"7"`, so the census read it as a locator while
+    `state_of` called the row `no_locator`, and an ingest class of `7` opened a
+    `"7"` bucket while `ingest_class_of` defines non-strings as `"unknown"`. Two
+    rules for one question, in the same module -- the divergence this repository
+    keeps paying for.
+
+    The state is derived in Python rather than in SQL for the same reason: a CASE
+    expression would be a second copy of `derive_source_state`.
     """
     by_class: Dict[str, Dict[str, int]] = defaultdict(lambda: {state: 0 for state in SOURCE_STATES})
     states: Dict[str, int] = {state: 0 for state in SOURCE_STATES}
     total = 0
-    for ingest_class, checked_at, last_probe, gone_at, locator in rows:
+    for metadata, checked_at, last_probe, gone_at in rows:
+        metadata = metadata or {}
         state = derive_source_state(
-            has_locator=bool(locator),
+            has_locator=locator_of(metadata) is not None,
             checked_at=checked_at,
             last_probe=last_probe,
             gone_at=gone_at,
         )
-        by_class[ingest_class or "unknown"][state] += 1
+        by_class[ingest_class_of(metadata)][state] += 1
         states[state] += 1
         total += 1
     return {"total": total, "states": states, "by_ingest_class": dict(by_class)}
@@ -290,16 +384,20 @@ def _census_rows(rows: Iterable[Any]) -> Dict[str, Any]:
 async def source_liveness_census() -> Dict[str, Any]:
     """How many facts have lost their source -- the #17538 measurement.
 
-    ``never_checked`` and ``no_locator`` are reported as their own buckets and
-    are never folded into ``resolved`` or ``absent``: *did not look* and *nothing
-    to look at* are both different from *looked and found nothing*.
+    ``never_checked`` and ``no_locator`` are reported as their own buckets and are
+    never folded into ``resolved`` or ``absent``: *did not look* and *nothing to
+    look at* are both different from *looked and found nothing*.
+
+    Selects whole `metadata_json` rather than two `.astext` projections of it, so
+    the locator and the ingest class are decided by the same predicates the row
+    read uses. That costs reading the metadata for every fact, which is the price
+    of having one rule instead of two.
     """
     query = select(
-        KnowledgeFact.metadata_json[INGEST_CLASS_KEY].astext,
+        KnowledgeFact.metadata_json,
         KnowledgeFact.source_checked_at,
         KnowledgeFact.source_last_probe,
         KnowledgeFact.source_gone_at,
-        KnowledgeFact.metadata_json[LOCATOR_KEY].astext,
     )
     factory = get_async_session_factory()
     async with factory() as session:

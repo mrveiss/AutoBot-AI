@@ -40,6 +40,7 @@ from knowledge.source_liveness import (
     PROBE_PARENT_UNRESOLVABLE,
     PROBE_RESOLVED,
     PROBE_UNREADABLE,
+    SOURCE_STATES,
     STATE_ABSENT,
     STATE_GONE,
     STATE_NEVER_CHECKED,
@@ -47,6 +48,7 @@ from knowledge.source_liveness import (
     STATE_RESOLVED,
     STATE_UNREACHABLE,
     _census_rows,
+    _parent_resolves,
     apply_observation,
     derive_source_state,
     ingest_class_of,
@@ -121,6 +123,24 @@ class TestProbeOutcomes:
     def test_an_unusable_locator_is_never_evidence_of_absence(self, path) -> None:
         """A relative locator would be read against the backend's own cwd."""
         assert probe_path(path) == PROBE_UNREADABLE
+
+    def test_a_child_of_a_regular_file_is_not_evidence_of_absence(self, tmp_path: Path) -> None:
+        """#17615 review: the case a bare parent `stat` called `absent`.
+
+        `/some-file/child` raises ENOTDIR, which is an absence errno, and the
+        parent then stats fine because it exists -- so the old form reported
+        positive evidence that a document had been deleted, for a locator that
+        was simply malformed.
+        """
+        regular = tmp_path / "not-a-dir.pdf"
+        regular.write_text("x", encoding="utf-8")
+        assert probe_path(str(regular / "child.pdf")) == PROBE_PARENT_UNRESOLVABLE
+
+    def test_a_regular_file_is_not_a_resolvable_parent(self, tmp_path: Path) -> None:
+        regular = tmp_path / "f.txt"
+        regular.write_text("x", encoding="utf-8")
+        assert _parent_resolves(str(tmp_path / "child")) is True
+        assert _parent_resolves(str(regular / "child")) is False
 
     def test_a_directory_is_not_absent(self, tmp_path: Path) -> None:
         """A locator that resolves to a directory still resolves."""
@@ -244,13 +264,15 @@ class TestCensus:
     """The #17538 measurement: no two buckets may collapse."""
 
     ROWS = [
-        # (ingest_class, checked_at, last_probe, gone_at, locator)
-        ("watch_folder", NOW, PROBE_RESOLVED, None, "/srv/a.pdf"),
-        ("watch_folder", NOW, PROBE_ABSENT, None, "/srv/b.pdf"),
-        ("watch_folder", NOW, PROBE_PARENT_UNRESOLVABLE, None, "/srv/c.pdf"),
-        ("watch_folder", None, None, None, "/srv/d.pdf"),
-        ("watch_folder", NOW, PROBE_ABSENT, NOW, "/srv/e.pdf"),
-        ("uploads", None, None, None, None),
+        # (metadata, checked_at, last_probe, gone_at) -- the RAW metadata, so the
+        # census decides locator and ingest class with the same predicates the
+        # row read uses (#17615 review).
+        ({"source": "watch_folder", LOCATOR_KEY: "/srv/a.pdf"}, NOW, PROBE_RESOLVED, None),
+        ({"source": "watch_folder", LOCATOR_KEY: "/srv/b.pdf"}, NOW, PROBE_ABSENT, None),
+        ({"source": "watch_folder", LOCATOR_KEY: "/srv/c.pdf"}, NOW, PROBE_PARENT_UNRESOLVABLE, None),
+        ({"source": "watch_folder", LOCATOR_KEY: "/srv/d.pdf"}, None, None, None),
+        ({"source": "watch_folder", LOCATOR_KEY: "/srv/e.pdf"}, NOW, PROBE_ABSENT, NOW),
+        ({"source": "uploads"}, None, None, None),
     ]
 
     def test_every_state_is_counted_once(self) -> None:
@@ -278,8 +300,13 @@ class TestCensus:
         assert census["by_ingest_class"]["watch_folder"][STATE_NO_LOCATOR] == 0
 
     def test_an_unnamed_class_gets_its_own_bucket(self) -> None:
-        census = _census_rows([(None, None, None, None, "/srv/x.pdf")])
+        census = _census_rows([({LOCATOR_KEY: "/srv/x.pdf"}, None, None, None)])
         assert census["by_ingest_class"]["unknown"][STATE_NEVER_CHECKED] == 1
+
+    def test_a_row_with_no_metadata_at_all_is_still_counted(self) -> None:
+        census = _census_rows([(None, None, None, None)])
+        assert census["total"] == 1
+        assert census["by_ingest_class"]["unknown"][STATE_NO_LOCATOR] == 1
 
     def test_an_empty_table_reports_zero_rather_than_nothing(self) -> None:
         """A census over no facts must still name every bucket."""
@@ -293,6 +320,55 @@ class TestCensus:
             STATE_GONE,
             STATE_NO_LOCATOR,
         }
+
+
+class TestTheCensusAgreesWithTheRowRead:
+    """The `.astext` divergence (#17615 review): SQL coerced, Python did not.
+
+    `metadata_json[...].astext` renders a JSON number as a string, so a numeric
+    `file_path` of `7` arrived as `"7"` -- truthy, therefore a locator -- while
+    `locator_of` rejects any non-string and `state_of` called the same row
+    `no_locator`. A numeric `source` opened a `"7"` bucket that `ingest_class_of`
+    defines as `"unknown"`. One question answered two ways, in one module.
+
+    The census now takes raw metadata and applies those two predicates, so every
+    case below is a *table* of the agreement rather than a re-test of SQL.
+    """
+
+    @pytest.mark.parametrize("bad_locator", [7, 0, 1.5, True, [], {}, "", "   ", None])
+    def test_a_non_string_locator_is_no_locator_in_both(self, bad_locator) -> None:
+        metadata = {LOCATOR_KEY: bad_locator, "source": "watch_folder"}
+        census = _census_rows([(metadata, NOW, PROBE_RESOLVED, None)])
+        assert locator_of(metadata) is None
+        assert state_of(_fact(**metadata)) == STATE_NO_LOCATOR
+        assert census["states"][STATE_NO_LOCATOR] == 1
+        assert census["states"][STATE_RESOLVED] == 0
+
+    @pytest.mark.parametrize("bad_class", [7, 0, 1.5, True, [], {}, "", "   ", None])
+    def test_a_non_string_ingest_class_buckets_as_unknown_in_both(self, bad_class) -> None:
+        metadata = {LOCATOR_KEY: "/srv/a.pdf", "source": bad_class}
+        census = _census_rows([(metadata, NOW, PROBE_RESOLVED, None)])
+        assert ingest_class_of(metadata) == "unknown"
+        assert list(census["by_ingest_class"]) == ["unknown"]
+        assert census["by_ingest_class"]["unknown"][STATE_RESOLVED] == 1
+
+    def test_the_census_state_is_the_row_state_for_every_row(self) -> None:
+        """Whatever the census counts, `state_of` says of the same row."""
+        rows = [
+            ({LOCATOR_KEY: "/srv/a.pdf"}, NOW, PROBE_RESOLVED, None),
+            ({LOCATOR_KEY: 7}, NOW, PROBE_RESOLVED, None),
+            ({LOCATOR_KEY: "/srv/b.pdf"}, NOW, PROBE_ABSENT, None),
+            ({LOCATOR_KEY: "/srv/c.pdf"}, None, None, None),
+            ({}, None, None, None),
+        ]
+        tallied = {state: 0 for state in SOURCE_STATES}
+        for metadata, checked_at, last_probe, gone_at in rows:
+            fact = _fact(**metadata)
+            fact.source_checked_at = checked_at
+            fact.source_last_probe = last_probe
+            fact.source_gone_at = gone_at
+            tallied[state_of(fact)] += 1
+        assert _census_rows(rows)["states"] == tallied
 
 
 class TestTheModuleCannotActOnAFact:
