@@ -14,6 +14,7 @@ file and let its own buffer grow past the cap forever.
 from __future__ import annotations
 
 import ast
+import importlib
 import sqlite3
 from pathlib import Path
 
@@ -84,6 +85,37 @@ class TestRoundTrip:
         for i in range(5):
             event_buffer.append(path, "e", {"i": i})
         assert len(event_buffer.read_unsynced(path, limit=2)) == 2
+
+
+class TestEnvBackedLimits:
+    """The cap and the batch size are configuration, not constants (#16056 AC5).
+
+    They were bare literals -- `500` inside a staticmethod default and `100`
+    inline in a SELECT -- so a fleet-wide cap could only be changed by shipping
+    code. Env-backed following `DEFAULT_BUFFER_DB` in `agent.py`.
+
+    Reloading the module is how an import-time `os.getenv` is observed at all; the
+    teardown reload restores the default so no later test sees a 7-row cap.
+    """
+
+    @pytest.mark.parametrize(
+        ("env", "attr"),
+        [
+            ("SLM_MAX_BUFFERED_EVENTS", "MAX_BUFFERED_EVENTS"),
+            ("SLM_SYNC_BATCH_SIZE", "SYNC_BATCH_SIZE"),
+        ],
+    )
+    def test_each_limit_reads_its_env_var(self, monkeypatch, env: str, attr: str) -> None:
+        monkeypatch.setenv(env, "7")
+        try:
+            assert getattr(importlib.reload(event_buffer), attr) == 7
+        finally:
+            monkeypatch.delenv(env)
+            importlib.reload(event_buffer)
+
+    def test_the_default_is_unchanged_without_the_env_var(self) -> None:
+        # Env-backing must not quietly alter behaviour for every existing node.
+        assert (event_buffer.MAX_BUFFERED_EVENTS, event_buffer.SYNC_BATCH_SIZE) == (500, 100)
 
 
 class TestPrune:

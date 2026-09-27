@@ -25,6 +25,7 @@ moving the blocking work here and scheduling it explicitly does.
 
 import json
 import logging
+import os
 import sqlite3
 from pathlib import Path
 
@@ -33,11 +34,18 @@ from autobot_shared import time_utils
 logger = logging.getLogger(__name__)
 
 #: Rows read per sync attempt. One admin POST carries at most this many events.
-SYNC_BATCH_SIZE = 100
+SYNC_BATCH_SIZE = int(os.getenv("SLM_SYNC_BATCH_SIZE", "100"))
 
 #: Cap on buffered rows. Oldest-first pruning keeps an offline node from
 #: filling its disk while the admin is unreachable.
-MAX_BUFFERED_EVENTS = 500
+#:
+#: Env-backed, following ``DEFAULT_BUFFER_DB`` in ``agent.py``: both were bare
+#: literals, and a fleet-wide cap that can only be changed by shipping code is
+#: the shape the project's no-hardcoding rule exists to prevent. #16056 asks for
+#: exactly this and for three further things this module cannot provide -- the
+#: agent must *report* its depth and its cumulative drops, and the SLM must
+#: persist and surface them. Those stay open there; only the literal is settled.
+MAX_BUFFERED_EVENTS = int(os.getenv("SLM_MAX_BUFFERED_EVENTS", "500"))
 
 _SCHEMA = """
     CREATE TABLE IF NOT EXISTS event_buffer (
