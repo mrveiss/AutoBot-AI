@@ -6700,6 +6700,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge/source-liveness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Source Liveness Census
+         * @description Per-ingest-class counts of every source state.
+         *
+         *     ``never_checked`` and ``no_locator`` are their own buckets: *did not look*
+         *     and *nothing to look at* are both different from *looked and found nothing*,
+         *     and a retention decision made on a number that merged them would be acting
+         *     on facts nobody has examined.
+         */
+        get: operations["get_source_liveness_census_api_knowledge_source_liveness_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge/source-liveness/sweep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Source Liveness Sweep
+         * @description Probe the least-recently-checked page of filesystem locators.
+         *
+         *     Records an observation per fact. Deletes nothing and marks nothing gone --
+         *     a witnessed deletion is the only thing that sets ``source_gone_at`` (#17546),
+         *     and acting on a vanished source at all is an approval-gated decision (#17038).
+         */
+        post: operations["post_source_liveness_sweep_api_knowledge_source_liveness_sweep_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge/chroma/collections": {
         parameters: {
             query?: never;
@@ -113544,6 +113593,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KnowledgeComplianceReportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_source_liveness_census_api_knowledge_source_liveness_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    post_source_liveness_sweep_api_knowledge_source_liveness_sweep_post: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
