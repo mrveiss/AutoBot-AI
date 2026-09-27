@@ -62,7 +62,26 @@ _SEP_RE = r"\s*(?:,\s*(?:and\s+)?|and\s+)"
 # *not examined* is worse than an absent one, because the green is read as a
 # judgement. The wider set still answers "is anything linked at all", which is
 # the only question the sibling gate owns.
-_CLOSING_WORDS = "resolves|closes|fixes"
+#
+# #17580: both gates knew three of GitHub's nine closing keywords, and the two
+# agreeing with each other is what hid it -- the invariant they were written to
+# protect ("the two gates cannot disagree about what a reference is") held while
+# both diverged from the platform that does the closing. `Fix #N` read here as no
+# reference at all while GitHub closed the issue on merge, and `Fix #A`/`Fix #B`
+# scored as closing nothing, so a batch was never asked for its rationale. Four
+# merged PRs closed an issue with a body that said "does not close #N" -- GitHub
+# does not parse negation, and neither gate saw a closing keyword to argue with.
+#
+# Longest alternative first per verb, as a CONVENTION rather than a requirement.
+# I wrote it believing `close` ahead of `closes` would match the stem, leave the
+# `s` and fail `\s+`; the mutation test says otherwise -- alphabetical order still
+# recognises all nine, because Python's `re` backtracks into the other
+# alternatives and POSIX ERE (the sibling gate's `grep -E`) is leftmost-longest.
+# The order is kept for readability and to stay diffable against the workflow's
+# copy, and `test_the_longest_inflection_comes_first_in_each_verb` pins the
+# convention, not a behaviour. Recorded because the trap is real in engines that
+# are leftmost-first without backtracking, and a future port would meet it.
+_CLOSING_WORDS = "closes|closed|close|fixes|fixed|fix|resolves|resolved|resolve"
 _MENTION_WORDS = "refs|references|part of"
 _RUN = rf"({_ONE_REF}(?:{_SEP_RE}{_ONE_REF})*)"
 _CLOSING = re.compile(rf"(?:{_CLOSING_WORDS})\s+{_RUN}", re.IGNORECASE)
