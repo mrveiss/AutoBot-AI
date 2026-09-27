@@ -83,6 +83,54 @@ def _filtered_keys() -> dict[str, set[str]]:
     return found
 
 
+def _functions_building_metadata() -> set[str]:
+    """Functions that assign a dict to a variable literally named `metadata`.
+
+    A PROPERTY, not a list. `_preparers()` discovers by spelling
+    (`_prepare_*_document`), which finds the five that exist and would miss a
+    sixth called `_build_x_metadata`, or a metadata dict inlined at the upsert
+    site. This asks what a function DOES instead: emitting a row's metadata
+    means building the dict the write consumes.
+
+    It separates the real emitters from the near-misses in this file without an
+    allowlist: `make_problem_dict` builds the upstream problem record (`line`,
+    not `line_number`, and no `problem_type`), `_delete_source_documents`
+    builds a filter, and `_recreate_chromadb_collection` assigns to
+    `collection_meta`. None of the three binds `metadata`, and all five
+    preparers do.
+    """
+    tree = ast.parse(_WRITER.read_text(encoding="utf-8"))
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Assign) and isinstance(sub.value, ast.Dict):
+                if any(isinstance(t, ast.Name) and t.id == "metadata" for t in sub.targets):
+                    found.add(node.name)
+    return found
+
+
+def test_every_metadata_builder_is_one_the_name_based_discovery_finds() -> None:
+    """The tripwire for preparer six, whatever it ends up being called.
+
+    `_preparers()` is exhaustive *by spelling* and the five it finds are the
+    five that exist today. That is a fact about now, not a property, so a
+    `_build_*` or an inline metadata dict at the `upsert` site would emit rows
+    this guard never checks -- the same "sees less than it names" failure the
+    guard's own first version had.
+    """
+    by_name = set(_preparers())
+    by_behaviour = _functions_building_metadata()
+
+    unchecked = sorted(by_behaviour - by_name)
+    assert not unchecked, (
+        f"these functions build a row's `metadata` but the name-based discovery does not find "
+        f"them, so the contract above never checks what they emit: {unchecked}. Either rename "
+        "them to `_prepare_*_document` or widen `_preparers()`."
+    )
+
+
 def test_the_writer_emits_every_key_the_endpoints_filter_on() -> None:
     """The gap this closes is not in either side. It is between them."""
     emitted = _emitted_metadata_keys()
