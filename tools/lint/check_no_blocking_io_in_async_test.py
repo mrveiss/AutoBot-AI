@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from tools.lint.check_no_blocking_io_in_async import _Violation, check_file, in_scope
+from tools.lint.check_no_blocking_io_in_async import _Violation, check_file, imported_modules, in_scope
 
 
 def _write(tmp_path: Path, source: str) -> Path:
@@ -378,3 +378,80 @@ class TestInScope:
             "autobot-backend/api/some_test.py",
         )
         assert ([v.kind for v in kept], skipped) == (["Path.read/write_text/bytes"], 1)
+
+
+# ---------------------------------------------------------------------------
+# Receiver binding: the name is resolved through the file's imports
+# ---------------------------------------------------------------------------
+
+
+class TestReceiverBinding:
+    """Matching the *name* `subprocess` is not the same as matching the module.
+
+    Raised on #17647 review: the first cut of the (module, attr) table compared
+    `node.func.value.id` to a literal, which let an alias through in the
+    false-negative direction and caught a same-named local in the false-positive
+    direction. Both directions are pinned here.
+    """
+
+    def test_an_aliased_module_is_still_flagged(self, tmp_path: Path) -> None:
+        src = """
+        import subprocess as sp
+
+        async def handler():
+            return sp.run(["ls"], timeout=5)
+        """
+        assert [v.kind for v in check_file(_write(tmp_path, src))] == ["subprocess.*"]
+
+    @pytest.mark.parametrize(
+        ("imp", "call", "kind"),
+        [
+            ("import sqlite3 as db", "db.connect('x.db')", "sqlite3.connect"),
+            ("import time as clock", "clock.sleep(1)", "time.sleep"),
+            ("import os as operating_system", "operating_system.system('ls')", "os.system"),
+        ],
+    )
+    def test_every_aliased_kind_is_flagged(self, tmp_path: Path, imp: str, call: str, kind: str) -> None:
+        src = f"""
+        {imp}
+
+        async def handler():
+            return {call}
+        """
+        assert [v.kind for v in check_file(_write(tmp_path, src))] == [kind]
+
+    def test_a_local_named_like_a_module_is_not_flagged(self, tmp_path: Path) -> None:
+        # `time` here is an argument with a `sleep` method, not the stdlib module.
+        # Before binding resolution this was reported as `time.sleep`.
+        src = """
+        async def handler(time, subprocess, sqlite3):
+            time.sleep(1)
+            subprocess.run(["ls"])
+            return sqlite3.connect("x")
+        """
+        assert check_file(_write(tmp_path, src)) == []
+
+    def test_a_function_local_import_is_resolved(self, tmp_path: Path) -> None:
+        # A blocking call is often written right under a local import.
+        src = """
+        async def handler():
+            import subprocess
+
+            return subprocess.run(["ls"])
+        """
+        assert [v.kind for v in check_file(_write(tmp_path, src))] == ["subprocess.*"]
+
+    def test_a_dotted_import_binds_its_root_package(self, tmp_path: Path) -> None:
+        src = """
+        import os.path
+
+        async def handler():
+            return os.system("ls")
+        """
+        assert [v.kind for v in check_file(_write(tmp_path, src))] == ["os.system"]
+
+    def test_imported_modules_maps_names_to_modules(self) -> None:
+        import ast as _ast
+
+        tree = _ast.parse("import subprocess as sp\nimport os.path\nimport time\n")
+        assert imported_modules(tree) == {"sp": "subprocess", "os": "os", "time": "time"}

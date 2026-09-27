@@ -14,6 +14,13 @@ connection that cannot outlive a single call cannot be held across an await.
 
 ``asyncio`` is deliberately not imported here. This module is the blocking half;
 the scheduling decision belongs to its caller.
+
+Why a wider lint call-list would not have found the original defect: the prune
+call was a *sync* method invoked from async, and a guard that resets its async
+depth inside sync bodies -- correctly, since sync helpers have sync callers --
+cannot see the ``sqlite3.connect`` one frame down. Widening the vocabulary of
+``tools/lint/check_no_blocking_io_in_async.py`` does not reach that shape;
+moving the blocking work here and scheduling it explicitly does.
 """
 
 import json
@@ -97,7 +104,23 @@ def mark_synced(db_path: str, ids: list) -> None:
 
 
 def prune(db_path: str, max_events: int = MAX_BUFFERED_EVENTS) -> None:
-    """Delete oldest rows beyond *max_events* (#1106). Blocking."""
+    """Delete oldest rows beyond *max_events* (#1106). Blocking.
+
+    This is the buffer's only cap enforcement, and the caller decides when it
+    runs -- which is the part that was wrong before. The agent used to prune at
+    the top of its event *sync*, and the run loop calls that only when a
+    heartbeat succeeded, so during an admin outage every failed heartbeat
+    appended a row and nothing ever trimmed: the cap was dead in the one
+    situation it exists for (#17647 review). ``SLMAgent.prune_event_buffer``
+    now runs it on a path no connectivity check gates.
+
+    Deliberately *not* enforced inside ``append``: that would put a ``COUNT(*)``
+    on every insert and give the cap two enforcement points that could disagree.
+
+    ``db_path`` has no default on purpose. Reaching a defaulted path with no
+    argument is exactly how the previous prune came to trim a file the agent was
+    not writing to.
+    """
     conn = sqlite3.connect(db_path)
     try:
         count = conn.execute("SELECT COUNT(*) FROM event_buffer").fetchone()[0]

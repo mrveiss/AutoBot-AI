@@ -31,8 +31,12 @@ backlog of existing violations is migrated separately.
     ``pathlib.Path`` instances). Inside an async path, use ``aiofiles`` for
     streaming or ``await asyncio.to_thread(p.read_text)`` for one-shot reads.
   - ``subprocess.run/call/check_call/check_output/Popen``, ``sqlite3.connect``,
-    ``time.sleep``, ``os.system`` — matched on ``(module, attr)``. See
-    ``_MODULE_BLOCKING_CALLS`` for why the module qualifier is load-bearing.
+    ``time.sleep``, ``os.system`` — matched on ``(module, attr)`` after the
+    receiver name is resolved through the file's own ``import`` statements, so
+    ``import subprocess as sp`` then ``sp.run(...)`` is caught and an argument
+    named ``time`` with a ``sleep`` method is not. See ``_MODULE_BLOCKING_CALLS``
+    for why the module qualifier is load-bearing. Residue, stated: a local name
+    that shadows a module the file *also* imports is read as the module.
 
 ## What the second group is about, and where it is not enforced
 
@@ -193,12 +197,35 @@ def in_scope(violations: List[_Violation], rel_posix: str) -> tuple[List[_Violat
     return kept, len(violations) - len(kept)
 
 
+def imported_modules(tree: ast.AST) -> dict[str, str]:
+    """Map each local name bound by an ``import`` to the module it names.
+
+    ``import subprocess`` -> ``{"subprocess": "subprocess"}``; ``import
+    subprocess as sp`` -> ``{"sp": "subprocess"}``; ``import os.path`` binds
+    ``os``, which is what an ``os.system(...)`` call goes through.
+
+    Collected from the whole file rather than the module level only, because a
+    function-local ``import subprocess`` is exactly where a blocking call tends
+    to be written. `from x import y` is deliberately absent: every pattern here
+    is reached through a module attribute, so a bare imported name is not one of
+    them.
+    """
+    modules: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                modules[alias.asname or alias.name.split(".")[0]] = alias.name.split(".")[0]
+    return modules
+
+
 class _AsyncBlockingIOVisitor(ast.NodeVisitor):
     """Walks the AST and records banned calls inside ``async def`` bodies."""
 
-    def __init__(self, path: Path, source_lines: List[str]) -> None:
+    def __init__(self, path: Path, source_lines: List[str], modules: dict[str, str] | None = None) -> None:
         self.path = path
         self.source_lines = source_lines
+        #: local name -> imported module, from this file's own `import` statements.
+        self.modules = modules or {}
         self.violations: List[_Violation] = []
         # Tracks whether the current node is nested inside an `async def`.
         # We don't ban inside sync `def` (those run synchronously by design).
@@ -243,8 +270,13 @@ class _AsyncBlockingIOVisitor(ast.NodeVisitor):
             self._record(node, "Path.read/write_text/bytes")
             return
         # Pattern 3: blocking stdlib calls, matched on (module, attr) (#7444 follow-up).
+        # The receiver name is resolved through this file's imports first, so an
+        # alias is caught and a same-named local is not mistaken for the module.
         if isinstance(node.func.value, ast.Name):
-            kind = _MODULE_BLOCKING_CALLS.get((node.func.value.id, attr))
+            module = self.modules.get(node.func.value.id)
+            if module is None:
+                return
+            kind = _MODULE_BLOCKING_CALLS.get((module, attr))
             if kind:
                 self._record(node, kind)
 
@@ -279,7 +311,7 @@ def check_file(path: Path) -> List[_Violation]:
     except SyntaxError:
         # Don't fail the hook on unparseable files — flake8 will catch them.
         return []
-    visitor = _AsyncBlockingIOVisitor(path, source.splitlines())
+    visitor = _AsyncBlockingIOVisitor(path, source.splitlines(), imported_modules(tree))
     visitor.visit(tree)
     return visitor.violations
 

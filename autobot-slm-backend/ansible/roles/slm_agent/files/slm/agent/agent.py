@@ -265,7 +265,9 @@ class SLMAgent:
                 return False
         except aiohttp.ClientError as e:
             logger.warning("Failed to send heartbeat: %s", e)
-            self.buffer_event("heartbeat", payload)
+            # Offloaded here, not inside `buffer_event`: its other caller is sync.
+            # Hot path -- every failed heartbeat writes a row (#17647 review).
+            await asyncio.to_thread(self.buffer_event, "heartbeat", payload)
             return False
 
     async def send_heartbeat(self) -> bool:
@@ -283,27 +285,20 @@ class SLMAgent:
         )
         return await self._send_heartbeat_request(payload)
 
+    async def prune_event_buffer(self) -> None:
+        """Cap the buffer every cycle, connected or not -- why: `event_buffer.prune` (#17647)."""
+        await asyncio.to_thread(event_buffer.prune, self.buffer_db)
+
     async def sync_buffered_events(self):
         """Sync buffered events to admin (#1106).
 
         Every sqlite call goes through ``asyncio.to_thread`` (#7444). They ran on
-        the event loop, and one connection was additionally held open across the
-        ``await`` on the POST below -- so a slow admin held both the loop and a
-        database handle for up to that request's 30-second timeout.
-
-        The prune call is the one a call-list detector will not reach: it used to
-        be a *sync* method called from async, and a guard that resets its async
-        depth inside sync bodies -- correctly, since sync helpers have sync callers
-        -- cannot see the ``sqlite3.connect`` one frame down. Widening the guard's
-        vocabulary does not close that shape; moving the blocking work into
-        ``event_buffer`` and scheduling it explicitly here does.
+        the event loop, and one connection was held open across the POST below, so
+        a slow admin held both the loop and a database handle for that request's
+        30-second timeout. Why a wider call-list guard could not have found it:
+        module docstring of ``event_buffer``.
         """
         assert self._session is not None
-        # Was `self._prune_old_events()` with no argument, against a staticmethod
-        # whose `db_path` defaulted to DEFAULT_BUFFER_DB: an agent configured with
-        # a non-default `buffer_db` pruned the default file and let its own buffer
-        # grow past the cap unbounded. The path is now always passed.
-        await asyncio.to_thread(event_buffer.prune, self.buffer_db)
         events = await asyncio.to_thread(event_buffer.read_unsynced, self.buffer_db)
         if not events:
             return
@@ -364,6 +359,10 @@ class SLMAgent:
                 try:
                     # Send heartbeat
                     success = await self.send_heartbeat()
+
+                    # Capped whether or not the admin answered; only the upload
+                    # is gated on being connected (#17647 review).
+                    await self.prune_event_buffer()
 
                     # If connected, try to sync buffered events
                     if success:

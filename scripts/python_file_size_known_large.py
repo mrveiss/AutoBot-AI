@@ -435,7 +435,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/workers/audit_tasks_test.py": 1197,
     "autobot-backend/workflow_scheduler.py": 1070,
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
-    "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 631,
+    "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 630,
     "autobot-slm-backend/api/code_source.py": 719,
     "autobot-slm-backend/api/code_sync.py": 6025,  # #16640: moved to api/_colocated_role_procedures.py
     "autobot-slm-backend/api/errors.py": 866,
@@ -475,7 +475,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/services/role_registry.py": 713,
     "autobot-slm-backend/services/service_orchestrator.py": 955,
     "autobot-slm-backend/services/sync_orchestrator.py": 649,
-    "autobot-slm-backend/slm/agent/agent.py": 631,
+    "autobot-slm-backend/slm/agent/agent.py": 630,
     "autobot-slm-backend/tests/api/test_code_sync_deploy_bugs.py": 2012,  # #16713: containment tests moved out
     "autobot-slm-backend/tests/api/test_drift_resolve.py": 606,
     "autobot-slm-backend/tests/api/test_fleet_node_update_11511.py": 1051,
