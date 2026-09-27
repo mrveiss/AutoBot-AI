@@ -405,9 +405,23 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         changed_ts_files=$(echo "$project_changed" | sed "s|^${project}/||" || true)
         if [ -n "$changed_ts_files" ]; then
           # Show only errors that mention any of the changed files
+          # #17579 review: each changed path was an UNBOUNDED fixed-string
+          # pattern, so a changed `src/Foo.ts` matched a diagnostic for
+          # `src/Foo.tsx` and blocked the push over an error in a file nobody
+          # touched. tsc writes a diagnostic as `<path>(line,col): error TS...`
+          # or `<path>:line:col - error TS...`, so requiring the path to be
+          # followed by `(` or `:` is the filename boundary.
+          #
+          # NOT anchored to column 1, deliberately (the review's suggestion
+          # was): that assumes the diagnostic begins with the path, and an
+          # absolute-path diagnostic would then match nothing -- turning a
+          # false BLOCK into a false PASS, which is the wrong direction for a
+          # gate whose misses are invisible. A delimiter suffix gets the
+          # boundary without assuming where the path sits on the line.
+          boundaried=$(echo "$changed_ts_files" | awk 'NF { print $0 "("; print $0 ":" }')
           relevant=$(echo "$tsc_output" \
             | grep "error TS" \
-            | grep -F -f <(echo "$changed_ts_files") || true)
+            | grep -F -f <(echo "$boundaried") || true)
           if [ -n "$relevant" ]; then
             fail "vue-tsc errors in CHANGED files (${project}, #5142):"
             echo "$relevant" | head -20 >&2

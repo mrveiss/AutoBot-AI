@@ -273,28 +273,112 @@ class TestNodeModulesUsable:
         assert self._ask(tmp_path) is False
 
 
-class TestNoUnexportedVariableInASubshell:
-    """#17575: `$REPO_ROOT` inside a single-quoted `sh -c` is always empty.
+#: A single-quoted `sh -c '...'` body, **across lines**. The #17575 defect can
+#: return wrapped over several lines, and a per-line check would not see it
+#: (#17579 review).
+_SH_C_BODY = re.compile(r"sh\s+-c\s+'(?P<body>[^']*)'", re.DOTALL)
 
-    Nothing in the hook exports it, so the child expands it to nothing and the
-    existence test it guarded was false for every input -- a selector that
-    matched nothing, indistinguishable from one that had nothing to match.
+#: `$NAME` / `${NAME}`. Positional parameters are excluded by the first-character
+#: class: `$1` and `$0` are given to the child by xargs, not inherited.
+_VAR_READ = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?")
+
+_ASSIGNED_IN_BODY = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)=", re.MULTILINE)
+_EXPORTED = re.compile(r"^\s*export\s+([A-Za-z_][A-Za-z0-9_]*)", re.MULTILINE)
+
+
+def exported_names(source: str) -> set:
+    """Variables the parent shell actually exports."""
+    return set(_EXPORTED.findall(source))
+
+
+def subshell_offenders(source: str) -> dict:
+    """`{body: variables it reads that the parent never exports}`.
+
+    A single-quoted body is expanded by the CHILD, so every name in it must
+    reach the child through the environment. `set -u` does not help: the child
+    is a fresh shell without `nounset`, so an unexported name expands to empty
+    and whatever guarded on it silently answers no.
+    """
+    exported = exported_names(source)
+    offenders = {}
+    for match in _SH_C_BODY.finditer(source):
+        body = match.group("body")
+        assigned = set(_ASSIGNED_IN_BODY.findall(body))
+        needed = {name for name in _VAR_READ.findall(body) if name not in assigned and name not in exported}
+        if needed:
+            offenders[body] = needed
+    return offenders
+
+
+class TestTheSubshellDetector:
+    """The detector, against a fixture that must trip it and one that must not.
+
+    #17579 review, and the objection was right twice over: the previous pair
+    checked one line at a time, so a multi-line `sh -c` body would have evaded
+    it, and the second test asked whether `sh -c '` and `$REPO_ROOT` both appear
+    ANYWHERE in the file -- which the hook satisfies by using `$REPO_ROOT` in
+    many legitimate places, so an unrelated single-quoted subshell would have
+    failed it for nothing. Neither had the contrast pair this repository's path
+    instruction requires, which is the same vacuity question I put on my own
+    #17573 fixture an hour earlier.
     """
 
-    def test_no_single_quoted_subshell_reads_repo_root(self) -> None:
-        offenders = [line for line in _source().splitlines() if "sh -c '" in line and "$REPO_ROOT" in line]
-        assert not offenders, offenders
+    def test_it_trips_on_a_single_line_body(self) -> None:
+        """#17575 as it actually shipped."""
+        source = """#!/usr/bin/env bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+echo x | xargs -I{} sh -c '[ -f "$REPO_ROOT/autobot-frontend/{}" ] && echo "{}"'
+"""
+        assert "REPO_ROOT" in next(iter(subshell_offenders(source).values()))
 
-    def test_repo_root_is_either_exported_or_never_needed_downstream(self) -> None:
-        """Belt and braces: if a future edit adds an export, this still holds.
+    def test_it_trips_on_a_body_wrapped_over_several_lines(self) -> None:
+        """The form the previous per-line check could not see."""
+        source = """#!/usr/bin/env bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+echo x | xargs -I{} sh -c '
+    [ -f "$REPO_ROOT/autobot-frontend/{}" ] \\
+        && echo "{}"
+'
+"""
+        offenders = subshell_offenders(source)
+        assert offenders, "a multi-line body reading an unexported variable was not detected"
+        assert "REPO_ROOT" in next(iter(offenders.values()))
 
-        The assertion is the property, not the mechanism -- either the variable
-        travels, or no child shell depends on it.
-        """
-        source = _source()
-        exported = re.search(r"^\s*export\s+REPO_ROOT\b", source, re.MULTILINE) is not None
-        depends = "sh -c '" in source and "$REPO_ROOT" in source
-        assert exported or not depends
+    def test_it_stays_quiet_on_a_body_that_reads_nothing(self) -> None:
+        source = """#!/usr/bin/env bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+echo x | xargs -I{} sh -c '[ -f "{}" ] && echo "{}"'
+"""
+        assert subshell_offenders(source) == {}
+
+    def test_it_stays_quiet_when_the_variable_is_exported(self) -> None:
+        """The other correct fix for #17575, and it must not read as a defect."""
+        source = """#!/usr/bin/env bash
+export REPO_ROOT="$(git rev-parse --show-toplevel)"
+echo x | xargs -I{} sh -c '[ -f "$REPO_ROOT/{}" ] && echo "{}"'
+"""
+        assert subshell_offenders(source) == {}
+
+    def test_a_name_assigned_inside_the_body_is_not_a_read(self) -> None:
+        source = """#!/usr/bin/env bash
+echo x | sh -c 'found=1; echo "$found"'
+"""
+        assert subshell_offenders(source) == {}
+
+    def test_positional_parameters_are_not_reads(self) -> None:
+        """xargs hands those to the child; they are not inherited."""
+        source = """#!/usr/bin/env bash
+echo x | xargs -I{} sh -c 'echo "$0 $1 {}"'
+"""
+        assert subshell_offenders(source) == {}
+
+
+class TestTheHookHasNoSuchSubshell:
+    """The property, asserted against the shipped file by the detector above."""
+
+    def test_no_subshell_reads_a_variable_the_parent_withholds(self) -> None:
+        offenders = subshell_offenders(_source())
+        assert not offenders, f"single-quoted sh -c bodies reading unexported names: {offenders}"
 
 
 class TestTheComposableSiblingSelector:
