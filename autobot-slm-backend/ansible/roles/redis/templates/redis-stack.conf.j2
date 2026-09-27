@@ -63,9 +63,16 @@ tls-auth-clients {{ redis_tls_auth_clients | default('optional') }}
 
 # General
 daemonize no
-pidfile /var/run/redis/redis-stack-server.pid
+# #17434: both were /var/run/redis/ and /var/log/redis/ -- a second spelling of
+# a path everything else writes as redis-stack (/var/lib/redis-stack, the unit's
+# ReadWritePaths, group_vars/database.yml's declared log file). It cost nothing
+# while this file was ignored. Activating it would have logged to a directory
+# the ONLY cleanup does not sweep -- database.yml's nightly
+# `find /var/log/redis-stack -name '*.log' -mtime +30 -delete` -- so the data
+# node would have grown an unrotated log forever.
+pidfile /var/run/redis-stack/redis-stack-server.pid
 loglevel notice
-logfile /var/log/redis/redis-stack-server.log
+logfile /var/log/redis-stack/redis-stack-server.log
 databases 16
 
 # Authentication

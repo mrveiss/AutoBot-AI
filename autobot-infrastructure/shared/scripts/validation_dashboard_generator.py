@@ -38,6 +38,36 @@ from utils.template_loader import load_css, template_exists
 
 logger = logging.getLogger(__name__)
 
+
+def _phase_percentage(phase_data: dict) -> float | None:
+    """The figure a phase publishes, or ``None`` when it publishes none (#17089).
+
+    `completion_percentage` is ABSENT when a check group was skipped, and a phase
+    that defers to dedicated gates publishes no figure at all. Callers branch on
+    ``None`` rather than defaulting to 0, because 0 renders as "measured and
+    found empty" -- the confusion #17089 removed from the report, which this
+    dashboard would otherwise reintroduce one layer out.
+    """
+    if "completion_percentage" in phase_data:
+        return float(phase_data["completion_percentage"])
+    value = phase_data.get("structural_presence_percentage")
+    return float(value) if isinstance(value, (int, float)) else None
+
+
+def _overall_figure(assessment: dict) -> float:
+    """The run's headline number, under whichever key carries it.
+
+    #17089 renamed `system_maturity_score` to `structural_presence_score`,
+    because a `--ci-mode` run measures presence, not maturity. Both keys are
+    read so this renders against either shape.
+    """
+    for key in ("structural_presence_score", "system_maturity_score"):
+        value = assessment.get(key)
+        if isinstance(value, (int, float)):
+            return float(value)
+    return 0.0
+
+
 # Module-level HTML template for the validation dashboard (#825)
 _DASHBOARD_HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -212,9 +242,13 @@ class ValidationDashboardGenerator:
         return {
             "generated_at": datetime.now().isoformat(),
             "system_overview": {
-                "overall_maturity": validation_results["overall_assessment"]["system_maturity_score"],
+                "overall_maturity": _overall_figure(validation_results["overall_assessment"]),
+                "measures": validation_results["overall_assessment"].get("measures", "completion"),
                 "total_phases": len(phases),
-                "completed_phases": len([p for p in phases.values() if p["completion_percentage"] >= 95.0]),
+                # #17089: the honest flag, not a threshold on a percentage. It is
+                # False whenever a check group was skipped, so a CI-mode run can no
+                # longer report phases complete on file presence alone.
+                "completed_phases": len([p for p in phases.values() if p.get("complete")]),
                 "system_health": self._assess_system_health(validation_results),
                 "active_capabilities": state_summary["current_state"]["system_metrics"]["capability_count"],
             },
@@ -265,7 +299,7 @@ class ValidationDashboardGenerator:
         phases = validation_results["phases"]
 
         # Phase completion statistics
-        completion_scores = [p["completion_percentage"] for p in phases.values()]
+        completion_scores = [v for v in (_phase_percentage(p) for p in phases.values()) if v is not None]
 
         metrics = {
             "completion_statistics": {
@@ -276,7 +310,7 @@ class ValidationDashboardGenerator:
                 "phases_above_90": len([s for s in completion_scores if s >= 90.0]),
             },
             "system_maturity": {
-                "overall_score": validation_results["overall_assessment"]["system_maturity_score"],
+                "overall_score": _overall_figure(validation_results["overall_assessment"]),
                 "development_stage": validation_results["overall_assessment"]["development_stage"],
                 "capability_ratio": state_summary["current_state"]["system_metrics"]["capability_count"] / 100.0,
             },
@@ -344,9 +378,11 @@ class ValidationDashboardGenerator:
             formatted_phase = {
                 "name": phase_name,
                 "display_name": phase_name.replace("_", " ").title(),
-                "completion_percentage": phase_data["completion_percentage"],
+                "completion_percentage": _phase_percentage(phase_data),
+                "scored": _phase_percentage(phase_data) is not None,
+                "authoritative_gates": phase_data.get("authoritative_gates", []),
                 "status": phase_data["status"],
-                "status_color": self._get_status_color(phase_data["completion_percentage"]),
+                "status_color": self._get_status_color(_phase_percentage(phase_data) or 0.0),
                 "missing_items": phase_data.get("missing_items", []),
                 "missing_count": len(phase_data.get("missing_items", [])),
                 "requirements_met": len(phase_data.get("requirements", [])) - len(phase_data.get("missing_items", [])),
@@ -359,7 +395,12 @@ class ValidationDashboardGenerator:
             formatted_phases.append(formatted_phase)
 
         # Sort by completion percentage (descending)
-        formatted_phases.sort(key=lambda x: x["completion_percentage"], reverse=True)
+        # Unscored phases sort last rather than as zero: they are not the
+        # worst-performing phases, they are the ones this report does not judge.
+        formatted_phases.sort(
+            key=lambda x: (x["completion_percentage"] is not None, x["completion_percentage"] or 0.0),
+            reverse=True,
+        )
 
         return formatted_phases
 
@@ -458,7 +499,7 @@ class ValidationDashboardGenerator:
 
     def _assess_system_health(self, validation_results: Dict) -> str:
         """Assess overall system health"""
-        maturity_score = validation_results["overall_assessment"]["system_maturity_score"]
+        maturity_score = _overall_figure(validation_results["overall_assessment"])
 
         if maturity_score >= 90.0:
             return "excellent"
@@ -477,7 +518,23 @@ class ValidationDashboardGenerator:
 
         # Find phases that need attention
         for phase_name, phase_data in phases.items():
-            completion = phase_data["completion_percentage"]
+            completion = _phase_percentage(phase_data)
+            if completion is None:
+                gates = phase_data.get("authoritative_gates", [])
+                recommendations.append(
+                    {
+                        "type": "deferred",
+                        "title": f"{phase_name.replace('_', ' ').title()} is verified elsewhere",
+                        "description": (
+                            "This phase publishes no score here; its verdict comes from "
+                            + (", ".join(gates) if gates else "dedicated workflows")
+                            + "."
+                        ),
+                        "action": "Read those workflow results",
+                        "urgency": "info",
+                    }
+                )
+                continue
 
             if completion < 50.0:
                 recommendations.append(
@@ -501,7 +558,7 @@ class ValidationDashboardGenerator:
                 )
 
         # System-level recommendations
-        overall_maturity = validation_results["overall_assessment"]["system_maturity_score"]
+        overall_maturity = _overall_figure(validation_results["overall_assessment"])
 
         if overall_maturity < 70.0:
             recommendations.append(
@@ -521,7 +578,7 @@ class ValidationDashboardGenerator:
         alerts = []
 
         # Critical maturity alert
-        maturity_score = validation_results["overall_assessment"]["system_maturity_score"]
+        maturity_score = _overall_figure(validation_results["overall_assessment"])
         if maturity_score < 30.0:
             alerts.append(
                 {
@@ -534,7 +591,11 @@ class ValidationDashboardGenerator:
 
         # Phase completion alerts
         phases = validation_results["phases"]
-        stalled_phases = [name for name, data in phases.items() if data["completion_percentage"] < 25.0]
+        stalled_phases = [
+            name
+            for name, data in phases.items()
+            if (_phase_percentage(data) or 100.0) < 25.0  # unscored is not stalled
+        ]
 
         if len(stalled_phases) > 3:
             alerts.append(
@@ -692,10 +753,21 @@ class ValidationDashboardGenerator:
         return _DASHBOARD_HTML_TEMPLATE.format(**kwargs)
 
     def _generate_phase_html(self, phase_details: List[Dict]) -> str:
-        """Generate HTML for phase details"""
+        """Generate HTML for phase details.
+
+        #17089: a phase may publish NO figure (it defers to dedicated gates), so
+        the display text and bar width are derived here rather than required as
+        precomputed keys. Deriving them in the caller made this renderer demand
+        keys its own test did not pass, which is the wrong direction for a
+        formatting decision.
+        """
         html_parts = []
 
         for phase in phase_details:
+            percentage = phase.get("completion_percentage")
+            scored = isinstance(percentage, (int, float))
+            percentage_display = f"{percentage:.1f}%" if scored else "not scored"
+            bar_width = float(percentage) if scored else 0.0
             html_parts.append(f"""
                 <div class="phase-item" style="border-color: {phase['status_color']}">
                     <div>
@@ -706,11 +778,11 @@ class ValidationDashboardGenerator:
                     </div>
                     <div>
                         <div style="text-align: right; margin-bottom: 5px;">
-                            <strong>{phase['completion_percentage']:.1f}%</strong>
+                            <strong>{percentage_display}</strong>
                         </div>
                         <div class="phase-progress">
                             <div class="phase-progress-bar"
-                                 style="width: {phase['completion_percentage']}%;
+                                 style="width: {bar_width}%;
                                         background: {phase['status_color']};"></div>
                         </div>
                     </div>

@@ -422,3 +422,68 @@ def logical_lines(text: str) -> List[Tuple[int, str]]:
     if buffer:
         out.append((start, buffer))
     return out
+
+
+#: Directories whose tracked files may be shell scripts WITHOUT a `.sh` suffix.
+#: Git hooks are named for the event they serve -- `pre-push`, `commit-msg` --
+#: so a suffix scan cannot see them, and this gate's whole subject is a call
+#: that a hook environment redirects. `tools/git-hooks/pre-push` carried the
+#: bare `--show-toplevel` for exactly as long as the gate could not read it
+#: (#17035). Globbed rather than listed by filename so a NEW hook is covered
+#: the day it lands, and `test_every_tracked_hook_is_in_the_population` pins
+#: the discovered set against the directory's real contents.
+EXTENSIONLESS_SHELL_GLOBS = ("tools/git-hooks/*",)
+
+
+def has_shell_shebang(path: Path) -> bool:
+    """True when the first line names a shell interpreter.
+
+    The suffix is not available for a git hook, so the file says what it is.
+    Read as bytes and decoded leniently: a binary under one of the globs must
+    answer False rather than raise, and the first line is enough -- no file is
+    read whole to answer this.
+    """
+    try:
+        with path.open("rb") as handle:
+            first = handle.readline(200).decode("utf-8", "replace")
+    except OSError:
+        return False
+    if not first.startswith("#!"):
+        return False
+    return any(shell in first for shell in ("bash", "sh", "zsh", "dash", "ksh"))
+
+
+def iter_shell_files(args: List[str], repo_root: Path) -> Iterable[Path]:
+    """Yield target ``.sh`` files, the same two modes as ``iter_python_files``.
+
+    Lives here rather than in the one caller since #17035: the population is
+    generic, and the caller was at exactly 600 of its 600-line ceiling, so
+    every line added to widen it had to come back out of the same file.
+
+    NOT merged into ``iter_python_files``: that one is hardcoded to ``.py`` and
+    used by several other hooks, so widening it would widen their scans too.
+    """
+    if args:
+        for a in args:
+            candidate = Path(a)
+            if not candidate.is_absolute():
+                candidate = repo_root / candidate
+            if candidate.is_file() and (candidate.suffix == ".sh" or has_shell_shebang(candidate)):
+                yield candidate
+        return
+    # Git-tracked like `iter_python_files`: `rglob` read 215 files from other checkouts (#15926).
+    try:
+        names = tracked_paths(repo_root, "*.sh", *EXTENSIONLESS_SHELL_GLOBS)
+    except EmptyEnumeration:
+        # This checker has its OWN floor and is contracted to refuse AUDIBLY --
+        # `enforce_reach` prints why. Letting the raise through satisfied the
+        # exit code and broke the contract (#15962). A git FAILURE still
+        # propagates: that is an error, not a finding this checker reports.
+        return
+    for rel in names:
+        if any(part in EXCLUDED_DIR_NAMES for part in rel.split("/")):
+            continue
+        path = repo_root / rel
+        if not rel.endswith(".sh") and not has_shell_shebang(path):
+            continue
+        yield path
