@@ -32,7 +32,17 @@ export default mergeConfig(
       setupFiles: ['src/test/vitest-setup.ts'],
 
       // File patterns
-      include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+      // #17571: `src/**` alone left `scripts/canonical/__tests__/runner.test.mjs`
+      // uncollected. It imports from vitest and asserts on the canonical harness,
+      // and nothing ever ran it -- a suite that exists, looks like coverage in a
+      // diff, and is executed by no job. That is the same "clean result from an
+      // inspection that never happened" the harness under it exists to catch.
+      // One file matches the added pattern today; the point is that the next one
+      // is collected rather than silently ignored.
+      include: [
+        'src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
+        'scripts/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
+      ],
       exclude: [
         ...configDefaults.exclude,
         'e2e/**',

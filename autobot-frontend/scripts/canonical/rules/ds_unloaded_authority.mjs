@@ -104,8 +104,12 @@ export async function check(filePath) {
   let text;
   try {
     text = await readFile(filePath, "utf-8");
-  } catch {
-    return [];
+  } catch (err) {
+    // `[]` here is "this stylesheet is fine", returned for a stylesheet nobody
+    // read. That is the exact reading this harness exists to make impossible,
+    // and it was sitting in the one function that does the reading. The two
+    // traversal paths above already throw for this; so does this now.
+    throw new Error(`${RULE_ID}: cannot read ${filePath}: ${err.message}`);
   }
   if (!CLAIMS_AUTHORITY.test(text) || WAIVER.test(text)) return [];
 

@@ -489,6 +489,16 @@ class TestTheFixturesAreFixtures:
             "the reserved `__prepush_fixture__` segment so they cannot collide with a real file."
         )
 
+    def test_the_reserved_check_rejects_a_plausible_name(self) -> None:
+        """The contrast case, without which the assertion above cannot fail.
+
+        Every path it sees is one this file chose, so a check that only ever
+        looks at conforming input proves nothing -- it would pass just as well
+        if the rule were `assert True`. This is the name that actually broke
+        things: #17616 created it, and it carries no reserved segment.
+        """
+        assert "__prepush_fixture__" not in "autobot-slm-frontend/src/views/RolesView.test.ts"
+
     @pytest.mark.parametrize("path", [*example_changeset(), *single_project_change()])
     def test_no_fixture_path_names_a_real_file(self, path: str) -> None:
         assert not (REPO_ROOT / path).exists(), (

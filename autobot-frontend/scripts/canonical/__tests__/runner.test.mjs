@@ -200,7 +200,11 @@ describe("import specifiers are resolved, not pattern-matched (#17608 review)", 
   it("a same-directory @import counts as loaded", async () => {
     // The anchored pattern required a slash and missed this.
     const { isImportedForTest } = await import("../rules/ds_unloaded_authority.mjs");
-    if (!isImportedForTest) return; // exported only for this test
+    // Asserted, not guarded: `return` here made all three tests pass without
+    // creating a fixture or resolving a single specifier if the export were
+    // ever dropped -- a green suite over an uninspected rule, which is the very
+    // reading the rule under test exists to prevent.
+    expect(typeof isImportedForTest).toBe("function");
     const { root, target } = await ruleOn(
       {
         "autobot-frontend/src/assets/tokens.css": "/* Canonical CSS Design Tokens */",
@@ -213,7 +217,7 @@ describe("import specifiers are resolved, not pattern-matched (#17608 review)", 
 
   it("a same-named file in another directory does NOT count", async () => {
     const { isImportedForTest } = await import("../rules/ds_unloaded_authority.mjs");
-    if (!isImportedForTest) return;
+    expect(typeof isImportedForTest).toBe("function");
     const { root, target } = await ruleOn(
       {
         "autobot-frontend/src/assets/tokens.css": "/* Canonical CSS Design Tokens */",
@@ -228,7 +232,7 @@ describe("import specifiers are resolved, not pattern-matched (#17608 review)", 
   it("a prefixed name is not a match", async () => {
     // The unanchored substring matched design-tokens.css for tokens.css.
     const { isImportedForTest } = await import("../rules/ds_unloaded_authority.mjs");
-    if (!isImportedForTest) return;
+    expect(typeof isImportedForTest).toBe("function");
     const { root, target } = await ruleOn(
       {
         "autobot-frontend/src/assets/tokens.css": "/* Canonical CSS Design Tokens */",
