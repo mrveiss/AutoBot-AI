@@ -83,15 +83,46 @@ async def persist_fact(
         await session.commit()
 
 
+#: The metadata key carrying a filesystem locator, as `knowledge/source_liveness`
+#: defines it. Named here because this is where a change to it is detected.
+_LOCATOR_KEY = "file_path"
+
+#: Observations of the source the locator USED to name. Reset together when the
+#: locator moves -- see `update_fact`.
+_SOURCE_OBSERVATIONS = {
+    "source_checked_at": None,
+    "source_seen_at": None,
+    "source_last_probe": None,
+    "source_check_failures": 0,
+}
+
+
 async def update_fact(fact_id: str, content: str, metadata: Dict[str, Any], *, hash_content: str | None = None) -> bool:
-    """Update an existing row. ``False`` when no such fact is recorded."""
+    """Update an existing row. ``False`` when no such fact is recorded.
+
+    When the update moves the fact's ``file_path``, the four source-liveness
+    observations are reset (#17615 review). They are statements about the document
+    the OLD locator named: a `source_seen_at` carried across a relocation says a
+    file nobody has looked at was seen, and #17538's retention policy reads that
+    field as "last known good". *Never checked* is the truthful state for a
+    locator no probe has visited.
+
+    ``source_gone_at`` is deliberately left alone: it is an **event** written only
+    when a deletion was witnessed (#17546), and clearing an event here would be
+    this layer deciding the witnessed deletion did not happen. What a relocation
+    should mean for that event belongs with the code that writes it.
+    """
     factory = get_async_session_factory()
     async with factory() as session:
         row = await session.get(KnowledgeFact, fact_id)
         if row is None:
             return False
+        locator_before = (row.metadata_json or {}).get(_LOCATOR_KEY)
         for column, value in _row_values(content, metadata, hash_content=hash_content).items():
             setattr(row, column, value)
+        if (row.metadata_json or {}).get(_LOCATOR_KEY) != locator_before:
+            for column, value in _SOURCE_OBSERVATIONS.items():
+                setattr(row, column, value)
         await session.commit()
         return True
 

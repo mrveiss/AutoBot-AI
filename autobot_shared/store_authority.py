@@ -90,6 +90,9 @@ STORE_AUTHORITY: dict[str, Concept] = {
         write_sites=(
             _FACTS,
             "autobot-backend/knowledge/fact_store.py",
+            # #17545: writes the source-liveness observation columns only --
+            # never content, and never `source_gone_at`, which is an event.
+            "autobot-backend/knowledge/source_liveness.py",
             "autobot-backend/knowledge/fact_projection.py",
             "autobot-backend/knowledge/ownership.py",
             "autobot-backend/api/knowledge_vectorization.py",
