@@ -79,6 +79,9 @@ def _nodes_outside_nested_defs(fn: ast.AST):
         stack.extend(ast.iter_child_nodes(node))
 
 
+# `to_thread(func, *args)` calls only its FIRST argument, so both matchers below
+# check `args[0]` rather than any position: accepting any position let a probe
+# passed as a later argument satisfy the pin while never being called (#17647).
 def _to_thread_calls(fn: ast.AST) -> list:
     return [
         n
@@ -117,7 +120,7 @@ def offloaded_but_never_awaited(fn: ast.AST, name: str) -> list:
     return [
         call
         for call in _to_thread_calls(fn)
-        if id(call) not in awaited and any(isinstance(a, ast.Name) and a.id == name for a in call.args)
+        if id(call) not in awaited and call.args and isinstance(call.args[0], ast.Name) and call.args[0].id == name
     ]
 
 
@@ -127,7 +130,7 @@ def properly_offloaded(fn: ast.AST, name: str) -> list:
     return [
         call
         for call in _to_thread_calls(fn)
-        if id(call) in awaited and any(isinstance(a, ast.Name) and a.id == name for a in call.args)
+        if id(call) in awaited and call.args and isinstance(call.args[0], ast.Name) and call.args[0].id == name
     ]
 
 
@@ -180,3 +183,31 @@ def test_each_probe_is_actually_reached_from_async(probe: str) -> None:
         "moved and the sweeps above are now vacuous, or it was renamed and this pin "
         "needs re-pointing"
     )
+
+
+class TestTheMatchersThemselves:
+    """Same reason as the agent pin: the matcher is the instrument.
+
+    Its first-argument rule and its await rule were each added in response to a
+    review finding, and neither was pinned -- so reverting either passed the suite.
+    """
+
+    @staticmethod
+    def _fn(body: str):
+        return ast.parse(f"async def h():\n    {body}\n").body[0]
+
+    def test_a_probe_in_a_later_argument_is_not_counted_as_offloaded(self) -> None:
+        # to_thread calls only its first argument; this never runs the probe.
+        fn = self._fn("await asyncio.to_thread(lambda unused: None, is_vnc_running)")
+        assert properly_offloaded(fn, "is_vnc_running") == []
+        assert offloaded_but_never_awaited(fn, "is_vnc_running") == []
+
+    def test_the_probe_as_first_argument_and_awaited_is_the_correct_form(self) -> None:
+        fn = self._fn("await asyncio.to_thread(is_vnc_running)")
+        assert len(properly_offloaded(fn, "is_vnc_running")) == 1
+        assert executed_on_the_loop(fn, "is_vnc_running") == []
+
+    def test_the_probe_as_first_argument_unawaited_is_flagged(self) -> None:
+        fn = self._fn("asyncio.to_thread(is_vnc_running)")
+        assert len(offloaded_but_never_awaited(fn, "is_vnc_running")) == 1
+        assert properly_offloaded(fn, "is_vnc_running") == []

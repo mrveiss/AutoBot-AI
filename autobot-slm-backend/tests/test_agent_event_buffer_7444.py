@@ -14,13 +14,22 @@ file and let its own buffer grow past the cap forever.
 from __future__ import annotations
 
 import ast
+import asyncio
 import importlib
+import logging
+import os
 import sqlite3
+import types
 from pathlib import Path
 
 import pytest
 
 from slm.agent import event_buffer
+from slm.agent.agent import SLMAgent
+
+
+def _raise_disk_full(*_a, **_k):
+    raise sqlite3.OperationalError("disk I/O error")
 
 
 def _db(tmp_path: Path) -> str:
@@ -94,9 +103,32 @@ class TestEnvBackedLimits:
     inline in a SELECT -- so a fleet-wide cap could only be changed by shipping
     code. Env-backed following `DEFAULT_BUFFER_DB` in `agent.py`.
 
-    Reloading the module is how an import-time `os.getenv` is observed at all; the
-    teardown reload restores the default so no later test sees a 7-row cap.
+    Reloading the module is how an import-time `os.getenv` is observed at all.
+    Teardown restores the *original* value rather than deleting the variable: on a
+    machine that already sets a limit, `delenv` + reload left the module holding the
+    default while pytest restored the environment, so the module and its environment
+    disagreed for every later test (#17647 review).
     """
+
+    @staticmethod
+    def _limit_with(monkeypatch, name: str, value: str, attr: str):
+        """`event_buffer.<attr>` as read with *name* set to *value*.
+
+        Returns the **value**, not the module: `importlib.reload` returns the same
+        module object it mutates, so a reference captured before the teardown reload
+        is not a snapshot -- it reads the restored default. The first version of this
+        helper returned the module and every assertion against it saw 500/100.
+        """
+        original = os.environ.get(name)
+        monkeypatch.setenv(name, value)
+        try:
+            return getattr(importlib.reload(event_buffer), attr)
+        finally:
+            if original is None:
+                monkeypatch.delenv(name, raising=False)
+            else:
+                monkeypatch.setenv(name, original)
+            importlib.reload(event_buffer)
 
     @pytest.mark.parametrize(
         ("env", "attr"),
@@ -106,12 +138,7 @@ class TestEnvBackedLimits:
         ],
     )
     def test_each_limit_reads_its_env_var(self, monkeypatch, env: str, attr: str) -> None:
-        monkeypatch.setenv(env, "7")
-        try:
-            assert getattr(importlib.reload(event_buffer), attr) == 7
-        finally:
-            monkeypatch.delenv(env)
-            importlib.reload(event_buffer)
+        assert self._limit_with(monkeypatch, env, "7", attr) == 7
 
     @pytest.mark.parametrize("env", ["SLM_MAX_BUFFERED_EVENTS", "SLM_SYNC_BATCH_SIZE"])
     def test_a_malformed_value_falls_back_instead_of_killing_the_import(self, monkeypatch, env: str) -> None:
@@ -123,18 +150,9 @@ class TestEnvBackedLimits:
         in CI; this pins the behaviour at the site so the shape cannot come back
         quietly with the guard's population ceiling unchanged.
         """
-        monkeypatch.setenv(env, "not-a-number")
-        try:
-            reloaded = importlib.reload(event_buffer)  # must not raise
-            assert getattr(
-                reloaded, {"SLM_MAX_BUFFERED_EVENTS": "MAX_BUFFERED_EVENTS"}.get(env, "SYNC_BATCH_SIZE")
-            ) in (
-                500,
-                100,
-            )
-        finally:
-            monkeypatch.delenv(env)
-            importlib.reload(event_buffer)
+        attr = {"SLM_MAX_BUFFERED_EVENTS": "MAX_BUFFERED_EVENTS"}.get(env, "SYNC_BATCH_SIZE")
+        # Must not raise: a bare cast would have died at import here.
+        assert self._limit_with(monkeypatch, env, "not-a-number", attr) in (500, 100)
 
     @pytest.mark.parametrize(
         ("env", "attr"),
@@ -142,16 +160,41 @@ class TestEnvBackedLimits:
     )
     def test_a_zero_or_negative_limit_is_clamped(self, monkeypatch, env: str, attr: str) -> None:
         """A cap of 0 deletes every row on each prune; a batch of 0 reads nothing, forever."""
-        monkeypatch.setenv(env, "0")
-        try:
-            assert getattr(importlib.reload(event_buffer), attr) == 1
-        finally:
-            monkeypatch.delenv(env)
-            importlib.reload(event_buffer)
+        assert self._limit_with(monkeypatch, env, "0", attr) == 1
 
     def test_the_default_is_unchanged_without_the_env_var(self) -> None:
         # Env-backing must not quietly alter behaviour for every existing node.
+        # Skipped rather than failed where a limit is configured: the assertion is
+        # about the *default*, and an environment that sets one cannot answer it.
+        configured = [v for v in ("SLM_MAX_BUFFERED_EVENTS", "SLM_SYNC_BATCH_SIZE") if os.environ.get(v)]
+        if configured:
+            pytest.skip(f"configured in this environment: {configured}")
         assert (event_buffer.MAX_BUFFERED_EVENTS, event_buffer.SYNC_BATCH_SIZE) == (500, 100)
+
+
+class TestPruneFailureDoesNotSilenceTheNode:
+    """A buffer fault must not cost the heartbeat (#17647 review, round 5).
+
+    Behavioural rather than an AST pin, unlike the ordering assertions: the property
+    is "does not propagate", which is directly observable. The ordering ones are not
+    -- prune trims correctly whether or not the loop reaches it.
+    """
+
+    @staticmethod
+    async def _prune(monkeypatch, buffer_db: str):
+        agent = types.SimpleNamespace(buffer_db=buffer_db)
+        monkeypatch.setattr(event_buffer, "prune", _raise_disk_full)
+        await SLMAgent.prune_event_buffer(agent)
+
+    def test_a_failing_prune_is_logged_and_swallowed(self, tmp_path: Path, monkeypatch, caplog) -> None:
+        # Ordering the prune first closed a timeout escaping past it, and opened
+        # this: the run loop's catch-all wraps both, so an unhandled fault here
+        # skipped the heartbeat and the node went dark while otherwise healthy.
+        with caplog.at_level(logging.WARNING, logger="slm.agent.agent"):
+            asyncio.run(self._prune(monkeypatch, str(tmp_path / "events.db")))  # must not raise
+        assert [
+            r for r in caplog.records if "prune failed" in r.getMessage().lower()
+        ], "the failure was swallowed without a log line -- silent is worse than raising"
 
 
 class TestPrune:
@@ -237,12 +280,18 @@ def _awaited_to_thread(node: ast.AST) -> list:
 
 
 def _offloaded(node: ast.AST, name: str) -> list:
-    """Attribute arguments named *name* handed to an **awaited** `to_thread`."""
+    """*name* handed to an **awaited** `to_thread` as its **first** argument.
+
+    First argument specifically, because `to_thread(func, *args)` only calls its
+    first argument. Accepting any position let
+    `await asyncio.to_thread(lambda unused: None, self.buffer_event)` satisfy the
+    pin while never calling `buffer_event` at all -- the third distinct way this
+    pin has been looser than its name (#17647 review).
+    """
     return [
-        arg
+        call.args[0]
         for call in _awaited_to_thread(node)
-        for arg in call.args
-        if isinstance(arg, ast.Attribute) and arg.attr == name
+        if call.args and isinstance(call.args[0], ast.Attribute) and call.args[0].attr == name
     ]
 
 
@@ -346,3 +395,31 @@ class TestBufferCallSites:
             "the code-change handler either stopped processing the change, or hands it to "
             "an unawaited to_thread -- a coroutine that never runs"
         )
+
+
+class TestTheOffloadMatcherItself:
+    """The matcher is the instrument; an untested instrument is not evidence.
+
+    `_offloaded` was widened three times on #17647 -- awaited-only, then
+    first-argument-only -- and each widening was applied to the production code
+    without a test of the matcher, so reverting it passed the whole suite. These
+    assert the matcher directly against the shapes it must separate.
+    """
+
+    @staticmethod
+    def _fn(body: str):
+        return ast.parse(f"async def h(self):\n    {body}\n").body[0]
+
+    def test_the_target_must_be_the_first_argument(self) -> None:
+        # `to_thread(func, *args)` calls only its first argument, so this awaits a
+        # lambda and never touches buffer_event -- CodeRabbit's counter-example.
+        fn = self._fn("await asyncio.to_thread(lambda unused: None, self.buffer_event)")
+        assert _offloaded(fn, "buffer_event") == []
+
+    def test_the_target_as_first_argument_is_accepted(self) -> None:
+        fn = self._fn("await asyncio.to_thread(self.buffer_event, 'heartbeat', {})")
+        assert len(_offloaded(fn, "buffer_event")) == 1
+
+    def test_an_unawaited_to_thread_is_rejected(self) -> None:
+        fn = self._fn("asyncio.to_thread(self.buffer_event, 'heartbeat', {})")
+        assert _offloaded(fn, "buffer_event") == []

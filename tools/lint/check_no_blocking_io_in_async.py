@@ -31,10 +31,13 @@ backlog of existing violations is migrated separately.
     ``pathlib.Path`` instances). Inside an async path, use ``aiofiles`` for
     streaming or ``await asyncio.to_thread(p.read_text)`` for one-shot reads.
   - ``subprocess.run/call/check_call/check_output/Popen``, ``sqlite3.connect``,
-    ``time.sleep``, ``os.system`` — matched on ``(module, attr)`` after the
-    receiver name is resolved through the file's own ``import`` statements, so
-    ``import subprocess as sp`` then ``sp.run(...)`` is caught and an argument
-    named ``time`` with a ``sleep`` method is not. See ``_MODULE_BLOCKING_CALLS``
+    ``time.sleep``, ``os.system`` — matched on ``(module, attr)`` after the name is
+    resolved through the file's own imports, in both forms. ``import subprocess as
+    sp`` then ``sp.run(...)`` is caught, and so is ``from time import sleep`` then
+    a bare ``sleep(1)``; an argument named ``time`` with a ``sleep`` method is not.
+    The from-import half was missed when the module-qualified half was added, which
+    is the same failure this hook exists to catch, one level up: the fix covered
+    one spelling of the class it named (#17647 review). See ``_MODULE_BLOCKING_CALLS``
     for why the module qualifier is load-bearing. Residue, stated: a local name
     that shadows a module the file *also* imports is read as the module.
 
@@ -218,14 +221,43 @@ def imported_modules(tree: ast.AST) -> dict[str, str]:
     return modules
 
 
+def imported_callables(tree: ast.AST) -> dict[str, tuple[str, str]]:
+    """Map each local name bound by ``from <mod> import <attr>`` to its ``(mod, attr)``.
+
+    ``from time import sleep`` -> ``{"sleep": ("time", "sleep")}``; ``from
+    subprocess import run as child_run`` -> ``{"child_run": ("subprocess", "run")}``.
+
+    Needed because those calls are ``ast.Name`` nodes, not ``ast.Attribute`` ones, so
+    the module-qualified matcher cannot see them at all -- it returns early on any
+    call whose ``func`` is not an attribute. Resolving through this map is what keeps
+    the check narrow: only a name this file bound from a blocking module counts, so
+    an unrelated local ``sleep()`` or ``run()`` is still ignored.
+    """
+    callables: dict[str, tuple[str, str]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            root = node.module.split(".")[0]
+            for alias in node.names:
+                callables[alias.asname or alias.name] = (root, alias.name)
+    return callables
+
+
 class _AsyncBlockingIOVisitor(ast.NodeVisitor):
     """Walks the AST and records banned calls inside ``async def`` bodies."""
 
-    def __init__(self, path: Path, source_lines: List[str], modules: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        path: Path,
+        source_lines: List[str],
+        modules: dict[str, str] | None = None,
+        callables: dict[str, tuple[str, str]] | None = None,
+    ) -> None:
         self.path = path
         self.source_lines = source_lines
         #: local name -> imported module, from this file's own `import` statements.
         self.modules = modules or {}
+        #: local name -> (module, attr), from this file's own `from ... import`s.
+        self.callables = callables or {}
         self.violations: List[_Violation] = []
         # Tracks whether the current node is nested inside an `async def`.
         # We don't ban inside sync `def` (those run synchronously by design).
@@ -254,6 +286,18 @@ class _AsyncBlockingIOVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _maybe_record(self, node: ast.Call) -> None:
+        # Pattern 0: a bare name bound by `from <blocking module> import <attr>`.
+        # Checked first because these calls are never `ast.Attribute`, so the
+        # module-qualified patterns below cannot reach them.
+        if isinstance(node.func, ast.Name):
+            pair = self.callables.get(node.func.id)
+            if pair:
+                kind = _MODULE_BLOCKING_CALLS.get(pair)
+                if kind is None and pair[0] == "requests" and pair[1] in _REQUESTS_FORBIDDEN_ATTRS:
+                    kind = "requests.*"
+                if kind:
+                    self._record(node, kind)
+            return
         if not isinstance(node.func, ast.Attribute):
             return
         attr = node.func.attr
@@ -311,7 +355,7 @@ def check_file(path: Path) -> List[_Violation]:
     except SyntaxError:
         # Don't fail the hook on unparseable files — flake8 will catch them.
         return []
-    visitor = _AsyncBlockingIOVisitor(path, source.splitlines(), imported_modules(tree))
+    visitor = _AsyncBlockingIOVisitor(path, source.splitlines(), imported_modules(tree), imported_callables(tree))
     visitor.visit(tree)
     return visitor.violations
 

@@ -11,7 +11,13 @@ from pathlib import Path
 
 import pytest
 
-from tools.lint.check_no_blocking_io_in_async import _Violation, check_file, imported_modules, in_scope
+from tools.lint.check_no_blocking_io_in_async import (
+    _Violation,
+    check_file,
+    imported_callables,
+    imported_modules,
+    in_scope,
+)
 
 
 def _write(tmp_path: Path, source: str) -> Path:
@@ -455,3 +461,80 @@ class TestReceiverBinding:
 
         tree = _ast.parse("import subprocess as sp\nimport os.path\nimport time\n")
         assert imported_modules(tree) == {"sp": "subprocess", "os": "os", "time": "time"}
+
+
+# ---------------------------------------------------------------------------
+# from-import bindings: the half the module-qualified fix did not reach
+# ---------------------------------------------------------------------------
+
+
+class TestFromImportBindings:
+    """`from time import sleep` then `sleep(1)` is an `ast.Name` call.
+
+    The module-qualified matcher returns early on any call whose `func` is not an
+    `ast.Attribute`, so it could not see these at all -- the alias fix covered
+    `import x as y` and left `from x import y`, which is this hook's own subject
+    matter one level up: a fix that covers one spelling of the class it names.
+    Raised on #17647 review.
+    """
+
+    @pytest.mark.parametrize(
+        ("src", "kind"),
+        [
+            ("from time import sleep", "time.sleep"),
+            ("from subprocess import run", "subprocess.*"),
+            ("from subprocess import Popen", "subprocess.*"),
+            ("from sqlite3 import connect", "sqlite3.connect"),
+            ("from os import system", "os.system"),
+            ("from requests import get", "requests.*"),
+        ],
+    )
+    def test_a_directly_imported_blocking_callable_is_flagged(self, tmp_path: Path, src: str, kind: str) -> None:
+        name = src.rsplit(" ", 1)[-1]
+        body = f"""
+        {src}
+
+        async def handler():
+            return {name}(1)
+        """
+        assert [v.kind for v in check_file(_write(tmp_path, body))] == [kind]
+
+    def test_an_aliased_direct_import_is_flagged(self, tmp_path: Path) -> None:
+        src = """
+        from subprocess import run as child_run
+
+        async def handler():
+            return child_run(["ls"])
+        """
+        assert [v.kind for v in check_file(_write(tmp_path, src))] == ["subprocess.*"]
+
+    def test_a_bare_name_this_file_never_imported_is_not_flagged(self, tmp_path: Path) -> None:
+        # The map is what keeps this narrow: an argument or local named `sleep`
+        # is not the stdlib one, and a same-named function from another module is
+        # not either.
+        src = """
+        from mymod import run
+
+        async def handler(sleep):
+            sleep(1)
+            return run()
+        """
+        assert check_file(_write(tmp_path, src)) == []
+
+    def test_a_direct_import_called_from_sync_is_not_flagged(self, tmp_path: Path) -> None:
+        src = """
+        from time import sleep
+
+        def handler():
+            sleep(1)
+        """
+        assert check_file(_write(tmp_path, src)) == []
+
+    def test_imported_callables_maps_names_to_module_attr_pairs(self) -> None:
+        import ast as _ast
+
+        tree = _ast.parse("from time import sleep\nfrom subprocess import run as child_run\n")
+        assert imported_callables(tree) == {
+            "sleep": ("time", "sleep"),
+            "child_run": ("subprocess", "run"),
+        }

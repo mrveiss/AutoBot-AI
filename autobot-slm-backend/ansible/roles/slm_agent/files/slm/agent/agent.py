@@ -286,17 +286,18 @@ class SLMAgent:
         return await self._send_heartbeat_request(payload)
 
     async def prune_event_buffer(self) -> None:
-        """Cap the buffer every cycle, connected or not -- why: `event_buffer.prune` (#17647)."""
-        await asyncio.to_thread(event_buffer.prune, self.buffer_db)
+        """Cap the buffer every cycle and never raise -- why: `event_buffer.prune` (#17647)."""
+        try:
+            await asyncio.to_thread(event_buffer.prune, self.buffer_db)
+        except Exception as exc:
+            logger.warning("Event buffer prune failed, continuing to heartbeat: %s", exc)
 
     async def sync_buffered_events(self):
         """Sync buffered events to admin (#1106).
 
         Every sqlite call reached from async goes through ``asyncio.to_thread``
-        (#7444) -- here, and on both of ``buffer_event``'s async paths. One
-        connection was also held open across the POST below, so a slow admin held
-        the loop and a database handle for its 30-second timeout. Why no widening
-        of the guard finds these: module docstring of ``event_buffer``.
+        (#7444), and a connection is no longer held across the POST below. Why no
+        widening of the guard finds these: module docstring of ``event_buffer``.
         """
         assert self._session is not None
         events = await asyncio.to_thread(event_buffer.read_unsynced, self.buffer_db)
@@ -357,8 +358,7 @@ class SLMAgent:
                 sd_notify("WATCHDOG=1")
 
                 try:
-                    # First, ahead of anything that can raise past it -- why, and
-                    # why not `finally`: `event_buffer.prune` (#17647).
+                    # First, and never raising -- why: `event_buffer.prune` (#17647).
                     await self.prune_event_buffer()
 
                     # Send heartbeat

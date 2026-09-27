@@ -155,6 +155,14 @@ def prune(db_path: str, max_events: int = MAX_BUFFERED_EVENTS) -> None:
     catch-all and kill the loop (#9965); ordering costs nothing and cannot
     (#17647 review, round 3).
 
+    ``SLMAgent.prune_event_buffer`` swallows and logs any failure from this
+    function rather than letting it propagate. It runs *before* the heartbeat, and
+    the run loop's catch-all wraps both -- so an unhandled buffer fault here would
+    skip health reporting for that cycle and a node with a full disk or a corrupt
+    buffer would go dark while otherwise healthy. Ordering the prune first fixed a
+    timeout escaping past it and introduced that; isolating its exceptions is what
+    makes both orderings safe (#17647 review, round 5).
+
     ``db_path`` has no default on purpose. Reaching a defaulted path with no
     argument is exactly how the previous prune came to trim a file the agent was
     not writing to.
