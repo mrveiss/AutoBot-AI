@@ -21,26 +21,31 @@ import { nextTick } from 'vue'
 import { waitForEmitCount, waitForLastEmit, waitForTicks } from './emitTestUtils'
 
 /** A wrapper stand-in whose emission appears only after `afterTicks` flushes. */
+/**
+ * A component that emits after `afterTicks` REAL ticks, independently of reads.
+ *
+ * #17664 review: the previous version advanced its own clock inside
+ * `emitted()`, so reading was what made time pass and `advance` -- which would
+ * have driven it independently -- was never called. That fixture could not
+ * distinguish a helper that yields to `nextTick` from one that spins in a tight
+ * loop calling `emitted()`: both reach the emission, because the read IS the
+ * clock. The test passed either way, which is the same vacuity that made the
+ * sibling diagnostic test in this file meaningless.
+ *
+ * Reads are pure now. `advance()` runs concurrently on real ticks, so if the
+ * helper under test never awaits, `advance` never progresses and the helper
+ * times out -- which is the property these tests claim to check.
+ */
 function lateEmitter(event: string, payload: unknown, afterTicks: number) {
-  let ticks = 0
   const emissions: unknown[] = []
   const advance = async () => {
-    for (let i = 0; i < afterTicks + 2; i += 1) {
-      ticks += 1
-      if (ticks === afterTicks) emissions.push(payload)
-      await nextTick()
-    }
+    for (let i = 0; i < afterTicks; i += 1) await nextTick()
+    emissions.push(payload)
   }
   return {
     wrapper: {
-      emitted: (name: string) => {
-        // Reading is what drives the clock here, mirroring the real case: the
-        // helper flushes ticks and the component emits during one of them.
-        if (name !== event) return undefined
-        ticks += 1
-        if (ticks === afterTicks) emissions.push(payload)
-        return emissions.length ? [...emissions] : undefined
-      },
+      emitted: (name: string) =>
+        name === event && emissions.length ? [...emissions] : undefined,
     },
     advance,
   }
@@ -115,9 +120,13 @@ describe('the failure diagnostic describes the END of the wait, not the start', 
 
 describe('waitForLastEmit', () => {
   it('waits for an emission that arrives several ticks late', async () => {
-    const { wrapper } = lateEmitter('node-selected', ['n2'], 4)
+    const { wrapper, advance } = lateEmitter('node-selected', ['n2'], 4)
 
+    // Started, not awaited: it and the helper race on the same real ticks. A
+    // helper that does not yield leaves this stalled and times out.
+    const emitting = advance()
     await waitForLastEmit(wrapper, 'node-selected', ['n2'])
+    await emitting
 
     expect(wrapper.emitted('node-selected')?.at(-1)).toEqual(['n2'])
   })
