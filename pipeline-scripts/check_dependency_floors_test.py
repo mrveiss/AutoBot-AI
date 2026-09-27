@@ -536,3 +536,42 @@ class TestComparedCountsDeclarationsNotNames:
         assert result.compared == 0
         assert " of 0 " not in line or "0 of 0" in line, line
         assert "12 of 5" not in line
+
+
+class TestUnreadableIsNeitherComparedNorBelowFloor:
+    """#17610 review: UNREADABLE is a third state, not a low version."""
+
+    def test_an_unreadable_version_is_not_counted_as_compared(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(checker, "DECLARATION_ROOTS", ("r.txt",))
+        _write(tmp_path, "r.txt", "fastapi>=0.141.1\nstarlette>=1.6.0\n")
+        monkeypatch.setattr(
+            checker,
+            "installed_versions",
+            lambda names: {"fastapi": "0.142.0", "starlette": checker.UNREADABLE},
+        )
+        result = checker.audit(tmp_path)
+        assert result.declared == 2
+        assert result.compared == 1, "the unreadable one was never compared"
+        assert result.unreadable == ("starlette",)
+        assert result.not_compared_declarations == 1
+
+    def test_the_headline_does_not_call_an_unverified_version_below_floor(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(checker, "DECLARATION_ROOTS", ("r.txt",))
+        _write(tmp_path, "r.txt", "starlette>=1.6.0\n")
+        monkeypatch.setattr(checker, "installed_versions", lambda names: {"starlette": checker.UNREADABLE})
+        result = checker.audit(tmp_path)
+        report = "\n".join(checker.render(result))
+        assert "0 of 0" in report or "all satisfied" in report, report
+        assert "UNREADABLE" in report, "the unverified state must still be reported"
+
+    def test_the_absence_count_names_both_units(self, tmp_path, monkeypatch):
+        """Two files declaring one absent package: 2 declarations, 1 distinct package."""
+        monkeypatch.setattr(checker, "DECLARATION_ROOTS", ("a.txt", "b.txt"))
+        _write(tmp_path, "a.txt", "fastapi>=0.141.1\n")
+        _write(tmp_path, "b.txt", "fastapi>=0.141.1\n")
+        monkeypatch.setattr(checker, "installed_versions", lambda names: {})
+        result = checker.audit(tmp_path)
+        report = "\n".join(checker.render(result))
+        assert result.not_compared_declarations == 2
+        assert "2 declaration(s) not compared" in report
+        assert "1 distinct package(s) not installed" in report

@@ -48,6 +48,7 @@ def _result(found, declared=206, *, compared=None, not_installed=(), roots=("req
         declared=declared,
         compared=declared if compared is None else compared,
         not_installed=tuple(not_installed),
+        not_compared_declarations=len(not_installed),
         roots=tuple(roots),
         environment=environment
         or f"the interpreter running this check (python {__import__('platform').python_version()})",
@@ -80,8 +81,11 @@ class TestRender:
             checker.render(_result([], declared=128, compared=86, not_installed=tuple(f"p{i}" for i in range(42))))
         )
         assert "86 of 128" in report, "the pass must count comparisons, not declarations read"
-        assert "42 declared but NOT INSTALLED" in report
-        assert "not compared" in report
+        # #17610 review changed the wording to name both units: declarations not
+        # compared, and the distinct packages behind them. The old string counted
+        # packages while reading as declarations.
+        assert "42 declaration(s) not compared" in report
+        assert "42 distinct package(s) not installed" in report
 
     def test_detail_is_capped_and_the_remainder_counted(self):
         found = [checker.Shortfall(_declaration(name=f"pkg{i}"), "0.1") for i in range(25)]

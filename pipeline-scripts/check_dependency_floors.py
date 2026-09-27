@@ -439,18 +439,34 @@ def audit(
     # second argument, and only that path is new.
     installed = installed_versions(names) if python is None else installed_versions(names, python)
     absent = tuple(sorted({d.name for d in declarations if d.name not in installed}))
-    # #17610 review: counted per DECLARATION, not per unique absent name. One
-    # package can be declared several times -- across service files, or through
-    # `-r` includes -- and `absent` is de-duplicated, so
+    unreadable = tuple(sorted({d.name for d in declarations if installed.get(d.name) == UNREADABLE}))
+    # #17610 review, twice over. Counted per DECLARATION, not per unique name:
+    # one package can be declared several times -- across service files, or
+    # through `-r` includes -- and `absent` is de-duplicated, so
     # `len(declarations) - len(absent)` credited the extra declarations of an
-    # uninstalled package as compared. The pass line then reported "N of M
-    # compared" with the wrong N, which is this issue's own defect one layer in.
-    compared = sum(1 for declaration in declarations if declaration.name in installed)
+    # uninstalled package as compared.
+    #
+    # And a declaration is only compared when its installed version is
+    # READABLE. `UNREADABLE` is a value in `installed`, not an absence, so
+    # `name in installed` counted an unreadable package as compared when
+    # nothing was compared at all -- *did not measure* reported as *measured*,
+    # which is the defect this whole change exists to remove.
+    comparable = {
+        declaration.name
+        for declaration in declarations
+        if declaration.name in installed and installed[declaration.name] != UNREADABLE
+    }
+    compared = sum(1 for declaration in declarations if declaration.name in comparable)
+    # Declarations, not names: the complement of `compared` has to be countable
+    # in the same unit, or the two numbers cannot be read together.
+    not_compared_declarations = len(declarations) - compared
     return FloorAudit(
         shortfalls=tuple(shortfalls(declarations, installed, require_present)),
         declared=len(declarations),
         compared=compared,
         not_installed=absent,
+        unreadable=unreadable,
+        not_compared_declarations=not_compared_declarations,
         roots=swept,
         environment=environment or f"the interpreter running this check (python {platform.python_version()})",
         roots_are_the_union=set(swept) == set(DECLARATION_ROOTS),

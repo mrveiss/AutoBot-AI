@@ -30,6 +30,10 @@ if TYPE_CHECKING:  # pragma: no cover - typing only, never imported at runtime
 #: test below pins it against the checker's own value.
 ABSENT = "(absent)"
 
+#: The checker's sentinel for "installed, version unreadable". Same duplication
+#: rationale as ABSENT above.
+UNREADABLE = "(version unreadable)"
+
 #: Per-package detail lines before the report truncates and says it did.
 MAX_REPORTED = 10
 
@@ -63,6 +67,12 @@ class FloorAudit:
     roots: tuple[str, ...]
     #: The interpreter inspected, named.
     environment: str
+    #: Declared names installed but with unreadable metadata. NOT compared and
+    #: NOT below floor -- a third state, kept separate from both (#17610 review).
+    unreadable: tuple[str, ...] = ()
+    #: Declarations, not names, that produced no comparison. The complement of
+    #: `compared` in the same unit so the two can be read together.
+    not_compared_declarations: int = 0
     #: True when ``roots`` is every declaration entry point rather than a
     #: set chosen for this environment. Carried rather than re-derived so
     #: this module needs nothing from the checker -- the banner loads that
@@ -95,17 +105,29 @@ def render(
     """
     role = "GATE" if gating else "report only (informational; nothing here fails this run)"
     scope = f"roots: {', '.join(result.roots)}"
-    uncompared = (
-        f"{len(result.not_installed)} declared but NOT INSTALLED, therefore not compared"
-        if result.not_installed
-        else "every declaration had an installed version to compare"
-    )
+    # #17610 review: `not_installed` is de-duplicated by package name, so the
+    # old wording counted distinct PACKAGES while reading as declarations. Both
+    # units are now named, and unreadable metadata is reported as its own state
+    # rather than folded into either.
+    parts = []
+    if result.not_installed:
+        parts.append(f"{len(result.not_installed)} distinct package(s) not installed")
+    if result.unreadable:
+        parts.append(f"{len(result.unreadable)} installed but version UNREADABLE, so unverified")
+    if parts:
+        uncompared = f"{result.not_compared_declarations} declaration(s) not compared -- " + "; ".join(parts)
+    else:
+        uncompared = "every declaration had a readable installed version to compare"
 
     # #17610 review: with `--require-present` an absent declaration becomes an
     # ABSENT shortfall, but `compared` excludes absent declarations -- so the
     # headline could read "12 of 5". Absences are counted on their own line
     # below; they must not also sit in the numerator of a comparison count.
-    below_floor = tuple(s for s in result.shortfalls if s.installed != ABSENT)
+    # #17610 review: UNREADABLE is excluded too. An installed package whose
+    # metadata cannot be read was never compared, so calling it "below its
+    # declared floor" states a verdict no measurement supports. It is reported
+    # on its own line as unverified.
+    below_floor = tuple(s for s in result.shortfalls if s.installed not in (ABSENT, UNREADABLE))
 
     if not result.shortfalls:
         return [
