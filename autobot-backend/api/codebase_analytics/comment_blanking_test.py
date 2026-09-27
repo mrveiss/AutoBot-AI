@@ -97,6 +97,25 @@ class TestRealCallsSurvive:
         src = "const s = 'it\\\\'s fine'\nawait apiClient.get('/api/after')\n"
         assert "/api/after" in _visible(src)
 
+    def test_a_comment_inside_a_template_interpolation_is_blanked(self) -> None:
+        """`${...}` is code, not template text (#17670 review).
+
+        The literal around it is copied verbatim so a URL survives, which means a
+        comment inside an interpolation survived too until interpolations were
+        processed recursively.
+        """
+        src = "const x = `${/* apiClient.get('/api/hidden') */ ''}`\n"
+        assert _visible(src) == []
+
+    def test_nested_braces_in_an_interpolation_do_not_end_it_early(self) -> None:
+        src = "const y = `${ {a: 1}['a'] /* api.get('/api/gone') */ }`\n"
+        assert _visible(src) == []
+
+    def test_template_text_around_an_interpolation_is_untouched(self) -> None:
+        # The path is template *text*; only the `${...}` is treated as code.
+        src = "await apiClient.get(`/api/items/${id}`)\n"
+        assert "`/api/items/${id}`" in blank_comments(src)
+
     def test_a_template_literal_is_passed_through(self) -> None:
         src = "await apiClient.get(`/api/items/${id}`)\n"
         assert "`/api/items/${id}`" in blank_comments(src)

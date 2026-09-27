@@ -25,6 +25,11 @@ String awareness is not optional here: an ``https`` scheme contains a slash pair
 and a comment stripper without it would blank the rest of that line -- silencing
 genuine calls, which is the failure direction that looks like success.
 
+A backtick literal is *mostly* text, but a `${...}` interpolation is **code** -- it
+can contain comments, and a comment there would otherwise stay visible because the
+surrounding literal is copied verbatim. Interpolations are therefore processed
+recursively while the template text around them is left alone (#17670 review).
+
 **Known limit, stated rather than discovered later.** A JavaScript regex literal
 containing a slash pair is not distinguished from a line comment; a full lexer is
 the only way to separate those, and the scanner's input is API-path string
@@ -65,21 +70,44 @@ def _consume_until(content: str, i: int, closer: str) -> Tuple[str, int]:
     return _blank_like(content[i:stop]), stop
 
 
+def _matching_brace(content: str, open_at: int) -> int:
+    """Index of the `}` closing the `{` at *open_at*, or the end of input."""
+    depth = 0
+    for j in range(open_at, len(content)):
+        if content[j] == "{":
+            depth += 1
+        elif content[j] == "}":
+            depth -= 1
+            if depth == 0:
+                return j
+    return len(content)
+
+
 def _consume_string(content: str, i: int, quote: str) -> Tuple[str, int]:
     """Copy the string literal at *i* verbatim, honouring backslash escapes.
 
     Verbatim because the contents are what the scanner is looking for: an API path
     is a string literal, and a scheme's slash pair must not read as a comment.
+
+    One exception, for backticks only: a `${...}` interpolation is code rather than
+    text, so its contents go back through `blank_comments`. Without that, a comment
+    inside an interpolation survives because the literal around it is copied
+    (#17670 review). Length is preserved either way, so positions still hold.
     """
     out = [content[i]]
     j = i + 1
     while j < len(content):
         ch = content[j]
-        out.append(ch)
         if ch == "\\" and j + 1 < len(content):
-            out.append(content[j + 1])
+            out.append(content[j : j + 2])
             j += 2
             continue
+        if quote == "`" and content.startswith("${", j):
+            end = _matching_brace(content, j + 1)
+            out.append("${" + blank_comments(content[j + 2 : end]) + content[end : end + 1])
+            j = end + 1
+            continue
+        out.append(ch)
         j += 1
         if ch == quote:
             break

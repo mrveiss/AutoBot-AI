@@ -31,7 +31,6 @@ from pathlib import Path
 import pytest
 
 from api.codebase_analytics.api_endpoint_scanner import FrontendAPICallScanner
-from api.codebase_analytics.comment_blanking import blank_comments
 
 #: Each case is (relative path, the JSDoc/comment lines that must go, the real
 #: call lines that must stay). Taken from the live panel's four findings.
@@ -47,19 +46,35 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def _scan(rel: str, *, blank: bool) -> dict[int, str]:
-    """`{line: path}` the scanner reports for *rel*, with comments blanked or not.
+def _scan_production(rel: str) -> dict[int, str]:
+    """`{line: path}` from the **production entry point**, `_scan_file`.
 
-    `blank=False` reproduces the pre-fix behaviour for every shape the prefix test
-    missed, which is all three false positives.
+    Calling `_scan_file` rather than re-running its loop is the whole point: an
+    earlier version of this helper applied `blank_comments` and the call patterns
+    itself, so it would have passed even if `_scan_file` stopped blanking
+    altogether. A verification that reimplements what it verifies tests its own
+    copy -- the same defect as using a private regex instead of the scanner's, one
+    level up (#17670 review).
+    """
+    root = _repo_root()
+    scanner = FrontendAPICallScanner(root)
+    return {call.line_number: call.path for call in scanner._scan_file(root / rel)}
+
+
+def _scan_prefix_era(rel: str) -> dict[int, str]:
+    """`{line: path}` as the pre-fix scanner saw it -- a deliberate reconstruction.
+
+    Kept separate from the production path and named as a reconstruction, because it
+    cannot be taken from `_scan_file` any more: that now blanks unconditionally. It
+    reproduces what the old prefix test did for every shape not starting with a
+    marker, which is all three false positives.
     """
     root = _repo_root()
     scanner = FrontendAPICallScanner(root)
     source = (root / rel).read_text(encoding="utf-8")
-    content = blank_comments(source) if blank else source
 
     found: dict[int, str] = {}
-    for i, line in enumerate(content.splitlines(), 1):
+    for i, line in enumerate(source.splitlines(), 1):
         for pattern in _patterns():
             for match in pattern.finditer(line):
                 call = scanner._parse_api_call(match, line, i, rel)
@@ -76,8 +91,8 @@ def _patterns():
 
 @pytest.mark.parametrize(("rel", "doc_lines", "real_lines"), _CASES)
 def test_documentation_is_silenced_and_real_calls_survive(rel: str, doc_lines: list, real_lines: list) -> None:
-    before = _scan(rel, blank=False)
-    after = _scan(rel, blank=True)
+    before = _scan_prefix_era(rel)
+    after = _scan_production(rel)
 
     for line in doc_lines:
         assert line in before, f"{rel}:{line} was expected to be a pre-fix false positive"
@@ -98,7 +113,7 @@ def test_the_one_real_finding_is_named_and_kept() -> None:
     matching backend route — the only true positive of the four. Naming it here is
     what makes "3 of 4 were false" checkable by hand rather than a claim.
     """
-    after = _scan("autobot-frontend/src/views/slm/ThemeManagerView.vue", blank=True)
+    after = _scan_production("autobot-frontend/src/views/slm/ThemeManagerView.vue")
     assert after.get(35) == "/api/themes"
 
 
@@ -107,5 +122,5 @@ def test_the_comparison_is_not_vacuous() -> None:
 
     `MEASUREMENT_DISCIPLINE.md`: an empty result must not read as a clean one.
     """
-    total_before = sum(len(_scan(rel, blank=False)) for rel, _, _ in _CASES)
+    total_before = sum(len(_scan_prefix_era(rel)) for rel, _, _ in _CASES)
     assert total_before >= 4, f"only {total_before} pre-fix findings -- the fixtures no longer carry the shapes"
