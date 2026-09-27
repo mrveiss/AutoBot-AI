@@ -133,17 +133,46 @@ describe('RolesView transport', () => {
     expect(vm.errorMessage).toBe('Request failed: HTTP 500')
   })
 
-  it('dispatches a failed request ONCE — a retried role write is a second change', async () => {
+  it('dispatches each failed mount read ONCE, inheriting no retry budget', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ detail: 'nope' }, 500))
     mountView()
     await flushPromises()
 
-    // Three mount calls, one attempt each: no retry budget was inherited.
+    // Three mount calls, one attempt each.
     expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('dispatches a failed role WRITE once — a retry is a second attempt at the change', async () => {
+    // The read test above establishes this for GETs only, and a retried GET is
+    // merely wasteful. The property that matters is on the write verbs, so it is
+    // asserted on one: `delete()` would retry a 5xx three times, and the operator
+    // confirmed the deletion once.
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    try {
+      const wrapper = mountView()
+      await flushPromises()
+
+      fetchMock.mockResolvedValue(jsonResponse({ detail: 'role store is locked' }, 500))
+      const beforeWrite = fetchMock.mock.calls.length
+      const vm = wrapper.vm as unknown as { deleteRole: (name: string) => Promise<void> }
+      await vm.deleteRole('worker')
+      await flushPromises()
+
+      const writes = fetchMock.mock.calls
+        .slice(beforeWrite)
+        .filter(([, init]) => (init as RequestInit | undefined)?.method === 'DELETE')
+      expect(writes).toHaveLength(1)
+      expect(writes[0][0]).toBe('/api/roles/worker')
+    } finally {
+      confirmSpy.mockRestore()
+    }
   })
 
   it('leaves a stored session alone when the backend rejects for any other reason', async () => {
     // A 500 is not a session rejection, so the client must not clear the token.
+    // The positive half -- a 401 with a bearer attached DOES clear it -- is pinned
+    // in `utils/ApiClient.test.ts` ('clears session and redirects to /login on 401
+    // when a token was attached'), so it is named here rather than duplicated.
     sessionStorage.setItem(TOKEN_KEY, 'still-valid')
     fetchMock.mockResolvedValue(jsonResponse({ detail: 'internal' }, 500))
     mountView()
