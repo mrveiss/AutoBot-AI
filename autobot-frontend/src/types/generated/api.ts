@@ -31814,8 +31814,10 @@ export interface paths {
          *
          *     Issue #390: Process plan approval before execution.
          *
-         *     Note: Authorization is validated by checking session_id matches the workflow.
-         *     The client must provide the correct session_id that owns the workflow.
+         *     #17014: authorization is the workflow's recorded owner or an admin. It was
+         *     previously described as "session_id matches the workflow", which the client
+         *     supplies -- so it authorised whoever asked, and deferred the real check to an
+         *     API gateway that does not perform it.
          */
         post: operations["approve_plan_api_workflow_automation_approve_plan_post"];
         delete?: never;
