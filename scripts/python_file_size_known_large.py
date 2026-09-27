@@ -82,7 +82,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/code_intelligence.py": 2156,
     "autobot-backend/api/code_search.py": 924,
     "autobot-backend/api/codebase_analytics/analyzers.py": 1684,
-    "autobot-backend/api/codebase_analytics/api_endpoint_scanner.py": 1445,
+    "autobot-backend/api/codebase_analytics/api_endpoint_scanner.py": 1444,
     "autobot-backend/api/codebase_analytics/chromadb_storage.py": 1470,
     "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1326,
     "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 799,

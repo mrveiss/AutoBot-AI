@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Set
 
+from api.codebase_analytics.comment_blanking import blank_comments
 from autobot_shared.api_routing import router_prefixes as _routing
 from autobot_shared.logging_manager import get_logger
 
@@ -1023,15 +1024,13 @@ class FrontendAPICallScanner:
         relative_path = str(file_path.relative_to(self.project_root))
 
         try:
-            content = file_path.read_text(encoding="utf-8")
-            lines = content.splitlines()
+            # Comments are blanked, not skipped by prefix: a JSDoc example lives on
+            # a `*` continuation line and a commented-out call can trail real code,
+            # so neither starts with a marker. #17668 -- three of four findings on
+            # the live panel were documentation. Positions are preserved.
+            lines = blank_comments(file_path.read_text(encoding="utf-8")).splitlines()
 
             for i, line in enumerate(lines, 1):
-                # Skip comments
-                stripped = line.strip()
-                if stripped.startswith("//") or stripped.startswith("/*"):
-                    continue
-
                 # Try each API call pattern
                 for pattern in _API_CALL_PATTERNS:
                     for match in pattern.finditer(line):
@@ -1051,7 +1050,7 @@ class FrontendAPICallScanner:
                                     path=path,
                                     file_path=relative_path,
                                     line_number=i,
-                                    context=stripped[:100],
+                                    context=line.strip()[:100],
                                     is_dynamic=bool(_TEMPLATE_LITERAL_RE.search(line)),
                                 )
                             )
