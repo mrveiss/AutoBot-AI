@@ -3150,7 +3150,17 @@
       "noEntities3D": "Nav entītiju, ko parādīt",
       "loading3dVisualization": "Loading3d visualization",
       "loadingVisualization": "Loading visualization library...",
-      "retry": "Retry"
+      "retry": "Retry",
+      "sourcesUnreadable": "Neizdevās nolasīt zināšanu grafu",
+      "sourcesUnreadableHint": "Nekas netiek rādīts, jo tālāk norādītās krātuves neatbildēja — nevis tāpēc, ka grafs būtu tukšs.",
+      "sourceHeld": "{source}: {held} entītijas",
+      "sourceFailed": "{source}: neizdevās nolasīt — {reason}",
+      "partialGraph": "Šis grafs ir nepilnīgs: neizdevās nolasīt {sources}.",
+      "source": {
+        "unified": "Zināšanu bāzes grafs",
+        "memory": "Atmiņas entītijas"
+      },
+      "reasonUnknown": "iemesls nav norādīts"
     },
     "connectors": {
       "title": "Avotu savienotāji",
