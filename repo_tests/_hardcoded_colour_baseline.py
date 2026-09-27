@@ -101,7 +101,8 @@ TOTAL_OCCURRENCES = 45
 #: to key on. The paths are `.vue` files, which the python filter does not
 #: cover -- deliberate: this guard reads them by GLOB, not by concrete literal,
 #: so `python_filter_covers_its_guards_test.py` does not require coverage for
-#: them and the trade in `python_filter_uncovered_reads.py:131` is untouched.
+#: them and the trade recorded against `MAX_UNCOVERED_READS` in
+#: `python_filter_uncovered_reads.py` is untouched.
 #:
 #: Shrink-only. Note the top three are chart components, where `!important` is
 #: usually fighting a third-party library's injected styles rather than
