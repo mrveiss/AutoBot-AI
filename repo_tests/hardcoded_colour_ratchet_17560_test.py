@@ -2,34 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""A colour written in JavaScript cannot follow the theme (#17560).
+"""A colour written in JavaScript cannot follow the theme (#17560, #17567).
 
-`[data-theme]` swaps CSS custom properties. A hex literal in a `.ts` or a
-component `<script>` is fixed at author time, so every one of them is a
-constant colour on a surface that is not -- #17552's defect arriving through
-JavaScript instead of through CSS.
-
-The fix is not to delete the colour but to resolve it:
-`getCssVar('--color-error', '#ef4444')` reads the theme and keeps the literal
-only for the case where no document exists. This ratchet therefore counts that
-form as **correct**; a guard that flagged it would penalise its own remedy.
-
-**Two measurement errors this detector exists to not repeat**, both made while
-censusing the population and both reported before being caught:
-
-1. `#[0-9a-fA-F]{3,8}` matches `#17552`. Counting issue references as colours
-   turned 395 into 6555 and put `router/index.ts` at the top of the table.
-2. Counting only `var(--` as a token reference scored `useCssVars.ts` -- the
-   file that *defines* the accessor -- at zero tokens, and named the exemplar
-   as the worst offender.
-
-Both were arithmetic, correctly executed, answering a different question than
-the one they were quoted for.
+The detector, its reach declarations and the rationale for every rule it
+applies live in :mod:`repo_tests._hardcoded_colour_detect`; this file holds the
+assertions. Split when the two together passed the 600-line ceiling (#5060) --
+the seam is data and detection on one side, verdicts on the other, which is the
+same seam `_hardcoded_colour_baseline.py` already sits on.
 """
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pytest
@@ -40,128 +23,21 @@ from repo_tests._hardcoded_colour_baseline import (
     TOTAL_IMPORTANT,
     TOTAL_OCCURRENCES,
 )
+from repo_tests._hardcoded_colour_detect import (
+    _FRONTEND,
+    _HEX,
+    REACH_COLOUR_FILES,
+    REACH_IMPORTANT_FILES,
+    REACH_STYLE_BLOCKS,
+    _colour_scanned_files,
+    _important_scanned_files,
+    _is_colour,
+    _owned_token_names,
+    _scan,
+    _scan_important,
+    _token_redefinitions,
+)
 from repo_tests._paths import repo_root
-from repo_tests._reach import declare
-
-_FRONTEND = Path("autobot-frontend/src")
-_SUFFIXES = {".ts", ".vue", ".js"}
-
-#: Theme definitions and generated code are not authored colour decisions.
-_SKIP_FRAGMENTS = (
-    "assets/css/",
-    "assets/tokens.css",
-    "assets/tailwind.css",
-    "design-tokens/",
-    "design-system/",
-    "types/generated/",
-)
-
-#: CSS hex colours are 3, 4, 6 or 8 digits. Nothing else is one.
-_HEX = re.compile(r"#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})\b")
-
-#: Only lines talking about colour. Precision over recall: a missed literal
-#: costs one unratcheted line, a false positive costs someone an argument.
-_CONTEXT = re.compile(
-    r"colou?r|background|fill|stroke|border|shadow|palette|theme|rgb|gradient|swatch|hsl",
-    re.IGNORECASE,
-)
-
-#: `<style>` blocks are stylelint's territory -- `color-no-hex` with
-#: `postcss-html` already fails on a hex there, and its rule deliberately flags
-#: `var(--token, #fallback)` too. Scanning them here would put two guards over
-#: one population with different verdicts. This one owns script and template.
-_STYLE_BLOCK = re.compile(r"<style\b[^>]*>.*?</style>", re.DOTALL | re.IGNORECASE)
-
-#: The correct forms. In both the hex is a fallback for "the token did not
-#: resolve", not a colour decision. TWO spellings, because there are two: the
-#: JS accessor `getCssVar('--t', '#hex')`, and CSS `var(--t, #hex)` written
-#: inside a JS string -- charts and canvas code use the latter heavily. Matching
-#: only the first is the mistake that made this census over-report three times:
-#: once counting issue refs as colours, once scoring `useCssVars.ts` at zero
-#: tokens, and once reading `var(--border-default, #2d3748)` as a raw literal.
-_RESOLVED = re.compile(
-    r"getCssVar\s*\(\s*['\"]--[^'\"]+['\"]\s*,\s*['\"](#[0-9a-fA-F]{3,8})['\"]"
-    r"|var\(\s*--[A-Za-z0-9_-]+\s*,\s*(#[0-9a-fA-F]{3,8})\s*\)"
-)
-
-
-#: A colour sits in a VALUE position: after `:` or opened by a quote. An issue
-#: reference sits in prose. Discriminating by position rather than by "does it
-#: contain a letter" is what lets `#000` and `#1234` -- both valid CSS, both
-#: digit-only -- be counted without also counting `#9909` in a comment.
-#: Deliberately NOT `(` or `,`. Both open a value in CSS -- `rgb(`, a gradient
-#: stop -- and both also occur in prose: `opened via Ctrl/Cmd+K (#8989)` put an
-#: issue number in "value position" and, on a line containing the word palette,
-#: into the count. A digit-only short literal is admitted only after `:` or a
-#: quote, which costs the rare `#abc` inside a gradient and buys precision.
-_VALUE_POSITION = re.compile(r"""(?::|['"`])\s*$""")
-
-#: A hex after a comment marker is prose, whatever else is on the line. `<!--`
-#: is here because the first version missed it and counted an HTML comment.
-_COMMENT_BEFORE = re.compile(r"(?://|/\*|\*|<!--|#)\s")
-
-
-def _is_colour(token: str, line: str = "", start: int = -1) -> bool:
-    """Whether *token* is a colour rather than an issue reference.
-
-    A hex carrying `a-f`, or of a length no issue number uses, is a colour on
-    its face. A digit-only short literal -- `#000`, `#1234` -- is valid CSS and
-    indistinguishable from an issue number by shape alone, so it is decided by
-    POSITION: counted when it sits where a value goes, ignored when it sits in
-    prose. Rejecting every digit-only short value, as the first version did,
-    silently exempted `color: '#000'`.
-    """
-    digits = token[1:]
-    if re.search("[a-fA-F]", digits) or len(digits) in (6, 8):
-        return True
-    if len(digits) not in (3, 4) or start < 0:
-        return False
-    before = line[:start]
-    if _COMMENT_BEFORE.search(before):
-        return False
-    return bool(_VALUE_POSITION.search(before))
-
-
-def _scan(root: Path) -> dict[str, int]:
-    """``lowercased literal -> count`` of colours written instead of resolved.
-
-    Keyed by the literal rather than the file: the repetition is the defect,
-    and a per-file result would put frontend paths into this module, which
-    changes what CI runs on a frontend edit. See the baseline's docstring.
-    """
-    counts: dict[str, int] = {}
-    for path in sorted(root.rglob("*")):
-        if path.suffix not in _SUFFIXES or "node_modules" in path.parts:
-            continue
-        relative = path.relative_to(root).as_posix()
-        if any(fragment in relative for fragment in _SKIP_FRAGMENTS):
-            continue
-        if path.name in EXEMPT_BASENAMES:
-            continue
-        if "__tests__" in path.parts or path.name.endswith((".spec.ts", ".test.ts", ".stories.ts")):
-            continue
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        if path.suffix == ".vue":
-            # Blank the style block, preserving line count so nothing shifts.
-            text = _STYLE_BLOCK.sub(lambda m: "\n" * m.group(0).count("\n"), text)
-        # Blank each resolved fallback AT ITS OWN SPAN, preserving length, rather
-        # than counting them file-wide and subtracting. A file-wide subtraction
-        # let `getCssVar('--accent', '#ff00aa')` on one line cancel a bare
-        # `background: '#ff00aa'` on another, so adding a hardcoded colour beside
-        # a correctly-resolved one of the same value passed the ratchet.
-        text = _RESOLVED.sub(lambda m: "_" * len(m.group(0)), text)
-        for line in text.splitlines():
-            if not _CONTEXT.search(line):
-                continue
-            for match in _HEX.finditer(line):
-                if not _is_colour(match.group(0), line, match.start()):
-                    continue
-                literal = match.group(0).lower()
-                counts[literal] = counts.get(literal, 0) + 1
-    return counts
 
 
 @pytest.fixture(scope="module")
@@ -169,6 +45,11 @@ def measured() -> dict[str, int]:
     root = repo_root() / _FRONTEND
     assert root.is_dir(), f"{_FRONTEND} has moved; this guard reads it by path"
     return _scan(root)
+
+
+@pytest.fixture(scope="module")
+def measured_important() -> dict[str, int]:
+    return _scan_important(repo_root() / _FRONTEND)
 
 
 class TestTheDetectorWorksBeforeItsOutputIsRead:
@@ -181,6 +62,16 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
     def test_it_finds_a_bare_literal(self, tmp_path):
         self._w(tmp_path, "a.ts", "const c = { color: '#ef4444' }")
         assert _scan(tmp_path) == {"#ef4444": 1}
+
+    def test_a_value_on_the_next_line_is_still_a_colour(self, tmp_path):
+        # The property supplies the context and the literal sits below it.
+        self._w(tmp_path, "a.ts", "const s = {\n  color:\n    '#ff00aa'\n}\n")
+        assert _scan(tmp_path) == {"#ff00aa": 1}
+
+    def test_the_carry_does_not_run_past_one_line(self, tmp_path):
+        # `id` is two lines below the colour context and must not inherit it.
+        self._w(tmp_path, "a.ts", "const s = {\n  color: 'red',\n  label: 'x',\n  id: '#1234'\n}\n")
+        assert _scan(tmp_path) == {}
 
     def test_a_digit_only_short_literal_in_a_value_is_a_colour(self, tmp_path):
         # #000 and #1234 are valid CSS and carry no a-f letter to identify them.
@@ -261,6 +152,14 @@ class TestTheBaselineIsInternallyConsistent:
 
 
 class TestThePopulationOnlyShrinks:
+    def test_the_colour_sweep_reaches_the_tree(self):
+        read = len(_colour_scanned_files(repo_root()))
+        floor = REACH_COLOUR_FILES.floor
+        assert read >= floor, (
+            f"opened only {read} files, floor {floor} -- an empty result would mean "
+            "'nothing was read', not 'nothing was written'"
+        )
+
     def test_every_pinned_colour_matches_its_measured_count(self, measured):
         """Equality, not a ceiling.
 
@@ -317,47 +216,6 @@ class TestTheSharedNotificationSourceStaysShared:
         assert "return '#" not in source, "the shared source returns a literal instead of resolving one"
 
 
-# ==================== Form 3: !important (#17567) ====================
-
-_STYLE_CONTENT = re.compile(r"<style\b[^>]*>(.*?)</style>", re.DOTALL | re.IGNORECASE)
-_IMPORTANT = re.compile(r"!\s*important", re.IGNORECASE)
-
-#: Where the design system's token vocabulary is declared. Named rather than
-#: globbed -- see the comment in the ownership assertion below.
-_THEME_SOURCES = (
-    "assets/css/design-tokens.css",
-    "assets/css/themes/light.css",
-    "assets/css/themes/dark.css",
-)
-
-
-def _scan_important(root: Path) -> dict[str, int]:
-    """``path -> !important declarations`` inside component ``<style>`` blocks.
-
-    Keyed by path because `!important` has no value to key on. Files are reached
-    by GLOB rather than named as literals, so this does not add a concrete
-    dependency the python path filter would have to cover.
-    """
-    counts: dict[str, int] = {}
-    for path in sorted(root.rglob("*.vue")):
-        if "node_modules" in path.parts:
-            continue
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        css = "\n".join(m.group(1) for m in _STYLE_CONTENT.finditer(text))
-        found = len(_IMPORTANT.findall(css))
-        if found:
-            counts[path.relative_to(root).as_posix()] = found
-    return counts
-
-
-@pytest.fixture(scope="module")
-def measured_important() -> dict[str, int]:
-    return _scan_important(repo_root() / _FRONTEND)
-
-
 class TestTheImportantDetectorWorks:
     def test_it_finds_one(self, tmp_path):
         (tmp_path / "a.vue").write_text("<style>.x { color: red !important; }</style>", encoding="utf-8")
@@ -378,6 +236,14 @@ class TestTheImportantDetectorWorks:
 
 
 class TestTheImportantPopulationOnlyShrinks:
+    def test_the_important_sweep_reaches_the_components(self):
+        read = len(_important_scanned_files(repo_root()))
+        floor = REACH_IMPORTANT_FILES.floor
+        assert read >= floor, (
+            f"opened only {read} components, floor {floor} -- an empty result would mean "
+            "'nothing was read', not 'nothing was found'"
+        )
+
     def test_the_total_matches_the_entries(self):
         assert TOTAL_IMPORTANT == sum(IMPORTANT_DECLARATIONS.values())
 
@@ -406,85 +272,6 @@ class TestTheImportantPopulationOnlyShrinks:
         assert not stale, f"clean now -- delete their entries and lower TOTAL_IMPORTANT: {stale}"
 
 
-#: A custom property DECLARATION: the name follows `{`, `;` or a line start.
-#: Position-agnostic matching reads a BEM modifier -- `.wr-btn--primary:hover`
-#: -- as a declaration of `--primary`, which is how one count of this
-#: population came out at 47 instead of 34.
-_DECLARATION = re.compile(r"(?:^|[{;])\s*(--[A-Za-z0-9_-]+)\s*:", re.MULTILINE)
-_ANY_DECLARATION = re.compile(r"(--[A-Za-z0-9_-]+)\s*:")
-
-
-def _component_style_blocks(root: Path) -> list[tuple[str, int]]:
-    """Every component ``<style>`` block the sweep reads. The reach population.
-
-    NOT the theme-name count: those come from three CSS files, so a floor on
-    them stays satisfied even if every component were skipped, and "zero
-    clashes" would then mean "nothing was read" (#17567).
-    """
-    found: list[tuple[str, int]] = []
-    frontend = root / _FRONTEND
-    if not frontend.is_dir():
-        return found
-    for path in sorted(frontend.rglob("*.vue")):
-        if "node_modules" in path.parts:
-            continue
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        for index, _ in enumerate(_STYLE_CONTENT.finditer(text)):
-            found.append((path.relative_to(frontend).as_posix(), index))
-    return found
-
-
-#: Re-measured for this declaration rather than carried across from the
-#: hand-rolled constant it replaces: 409 blocks in 388 files (#15928 -- the old
-#: number is exactly what must not be reused). Floor below that with headroom;
-#: ``verify_floor`` refuses one that drifts too far under its own population.
-REACH_STYLE_BLOCKS = declare(
-    "component-style-block-sweep",
-    discover=_component_style_blocks,
-    floor=380,
-    growth=40,
-    skips=0,
-    what="component <style> blocks searched for design-token redefinitions",
-)
-
-
-def _owned_token_names(root: Path) -> set[str]:
-    """Every custom property the design system declares."""
-    owned: set[str] = set()
-    for name in _THEME_SOURCES:
-        source = root / name
-        assert source.is_file(), f"{name} has moved; this assertion reads it by path"
-        owned |= set(_ANY_DECLARATION.findall(source.read_text(encoding="utf-8")))
-    return owned
-
-
-def _token_redefinitions(root: Path, owned: set[str]) -> tuple[dict[str, list[str]], int]:
-    """``(component -> theme tokens it redefines, style blocks parsed)``.
-
-    Returns the reach alongside the finding, because "no component redefines a
-    token" and "no component was read" produce the same empty dict.
-    """
-    offenders: dict[str, list[str]] = {}
-    blocks = 0
-    for path in sorted(root.rglob("*.vue")):
-        if "node_modules" in path.parts:
-            continue
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        found = list(_STYLE_CONTENT.finditer(text))
-        blocks += len(found)
-        css = "\n".join(m.group(1) for m in found)
-        clashes = sorted({n for n in _DECLARATION.findall(css) if n in owned})
-        if clashes:
-            offenders[path.relative_to(root).as_posix()] = clashes
-    return offenders, blocks
-
-
 class TestFormTwoStaysAbsent:
     """#17567 form 2: redefining a design-system token inside a component.
 
@@ -502,6 +289,16 @@ class TestFormTwoStaysAbsent:
         offenders, blocks = _token_redefinitions(tmp_path, {"--text-primary"})
         assert offenders == {"bad.vue": ["--text-primary"]}
         assert blocks == 1
+
+    def test_a_declaration_after_a_css_comment_is_found(self, tmp_path):
+        # `{ /* why */ --text-primary: red; }` separates the name from its `{`,
+        # so a position-anchored pattern saw no declaration and the override
+        # passed the zero-clash test.
+        (tmp_path / "c.vue").write_text(
+            "<style>.x { /* explanation */ --text-primary: red; }</style>", encoding="utf-8"
+        )
+        offenders, _ = _token_redefinitions(tmp_path, {"--text-primary"})
+        assert offenders == {"c.vue": ["--text-primary"]}
 
     def test_the_detector_accepts_a_component_local_alias(self, tmp_path):
         # The real shape, from WorkflowCanvas.vue: a local name assigned FROM a token.
