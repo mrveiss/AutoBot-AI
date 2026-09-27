@@ -497,8 +497,8 @@ function closeModal() {
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem;
-  background: var(--color-error-bg, #fee);
-  border: 1px solid var(--color-error, #f44);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error);
   border-radius: 0.375rem;
   color: var(--color-error);
   font-size: 0.875rem;

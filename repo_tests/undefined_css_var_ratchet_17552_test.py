@@ -42,6 +42,7 @@ from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 from repo_tests._undefined_css_var_baseline import TOTAL_SITES, UNDEFINED_CSS_VAR_NAMES
 
 _SCANNED_SUFFIXES = {".css", ".scss", ".vue", ".ts", ".js"}
@@ -60,6 +61,32 @@ _TAILWIND_PALETTE = re.compile(r"^--color-[A-Za-z]+-(?:50|100|200|300|400|500|60
 #: A new Tailwind built-in used here fails this guard until it is added, which
 #: is the safe direction -- it asks a question instead of staying silent.
 _TAILWIND_BUILTINS = frozenset({"--font-weight-bold", "--font-weight-medium", "--font-weight-semibold"})
+
+
+def _inspected_files(root: Path) -> list[Path]:
+    """Every file this guard reads. The reach declaration's population."""
+    frontend = root / _FRONTEND
+    if not frontend.is_dir():
+        return []
+    return [
+        path
+        for path in sorted(frontend.rglob("*"))
+        if path.suffix in _SCANNED_SUFFIXES and "node_modules" not in path.parts
+    ]
+
+
+#: A tree-scanning guard reports the same green for a clean tree and for a tree
+#: it never read, so a floor is what makes the difference visible. Measured at
+#: 1452 files; the floor sits below that with headroom, and ``verify_floor``
+#: refuses one that drifts too far under its own population (#15928).
+REACH = declare(
+    "undefined-css-var-scan",
+    discover=_inspected_files,
+    floor=1400,
+    growth=60,
+    skips=0,
+    what="frontend source files scanned for var() references",
+)
 
 
 def _scan(root: Path) -> dict[str, int]:
