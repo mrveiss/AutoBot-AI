@@ -1,0 +1,255 @@
+metadata:
+  category: file_analysis
+  description: File format analysis, carving, and recovery tools
+  last_updated: "2024-01-01T00:00:00"
+  version: "1.0.0"
+
+tools:
+  - name: file
+    type: file_identification
+    purpose: Determine file format and type information
+    installation:
+      apt: sudo apt-get install file
+      yum: sudo yum install file
+      pacman: sudo pacman -S file
+      brew: brew install file
+    usage:
+      basic: file {filename}
+      detailed: file -b {filename}
+      mime_type: file -b --mime-type {filename}
+      all_info: file -b --mime {filename}
+    common_examples:
+      - description: Basic file identification
+        command: file suspicious.bin
+        expected_output: "suspicious.bin: ELF 64-bit LSB executable, x86-64"
+      - description: Get MIME type only
+        command: file -b --mime-type image.jpg
+        expected_output: "image/jpeg"
+      - description: Analyze multiple files
+        command: file *
+        expected_output: "List of all files with their types"
+      - description: Follow symbolic links
+        command: file -L symlink
+        expected_output: "Information about the target file, not the link"
+    related_tools: ["strings", "hexdump", "binwalk"]
+
+  - name: strings
+    type: text_extraction
+    purpose: Extract printable strings from binary files
+    installation:
+      apt: sudo apt-get install binutils
+      yum: sudo yum install binutils
+      pacman: sudo pacman -S binutils
+      brew: brew install binutils
+    usage:
+      basic: strings {filename}
+      min_length: strings -n {length} {filename}
+      encoding: strings -e {encoding} {filename}
+      addresses: strings -a -t x {filename}
+    common_examples:
+      - description: Extract all strings from binary
+        command: strings malware.exe
+        expected_output: "List of printable strings found in the file"
+      - description: Only strings 10+ characters long
+        command: strings -n 10 firmware.bin
+        expected_output: "Longer strings that might be more meaningful"
+      - description: Show string addresses in hex
+        command: strings -a -t x binary.dat
+        expected_output: "Strings with their hexadecimal addresses"
+      - description: Search for specific patterns
+        command: strings binary.exe | grep -i password
+        expected_output: "Any strings containing 'password'"
+    security_notes:
+      - "Strings can reveal hardcoded passwords, URLs, and sensitive data"
+      - "Malware may obfuscate strings to avoid detection"
+      - "Use different encodings (-e) for international character sets"
+    related_tools: ["hexdump", "objdump", "readelf"]
+
+  - name: xxd
+    type: hex_editor
+    purpose: Create hex dumps or reverse hex dumps to binary
+    installation:
+      apt: sudo apt-get install xxd
+      yum: sudo yum install vim-common
+      pacman: sudo pacman -S xxd
+      brew: brew install xxd
+    usage:
+      hex_dump: xxd {filename}
+      binary_dump: xxd -b {filename}
+      reverse: xxd -r {hexfile} {output}
+      columns: xxd -c {cols} {filename}
+    common_examples:
+      - description: Standard hex dump
+        command: xxd firmware.bin | head -10
+        expected_output: "First 10 lines of hex dump with ASCII representation"
+      - description: Binary representation
+        command: xxd -b file.dat
+        expected_output: "Binary dump showing individual bits"
+      - description: Convert hex back to binary
+        command: xxd -r modified.hex restored.bin
+        expected_output: "Creates binary file from hex dump"
+      - description: Custom column width
+        command: xxd -c 32 large_file.bin
+        expected_output: "32 bytes per line instead of default 16"
+    troubleshooting:
+      - problem: "Output too long for large files"
+        solution: "Use head/tail or specify byte ranges with -s and -l options"
+      - problem: "Reverse operation fails"
+        solution: "Ensure hex file format is correct (address: hex data)"
+    related_tools: ["hexdump", "od", "hexedit"]
+
+  - name: dd
+    type: data_dumper
+    purpose: Convert and copy files with precise control over block sizes
+    installation:
+      apt: Pre-installed on most Linux systems
+      yum: Pre-installed (part of coreutils)
+      pacman: Pre-installed (part of coreutils)
+      brew: Pre-installed on macOS
+    usage:
+      copy: dd if={input} of={output}
+      block_size: dd if={input} of={output} bs={size}
+      count: dd if={input} of={output} count={blocks}
+      skip: dd if={input} of={output} skip={blocks}
+      seek: dd if={input} of={output} seek={blocks}
+    common_examples:
+      - description: Create disk image
+        command: dd if=/dev/sda of=disk_image.dd bs=4M
+        expected_output: "Creates bit-for-bit copy of entire disk"
+      - description: Extract specific bytes
+        command: dd if=binary.dat of=extracted.bin skip=1000 count=500 bs=1
+        expected_output: "Extracts 500 bytes starting from byte 1000"
+      - description: Create file with random data
+        command: dd if=/dev/urandom of=random.dat bs=1M count=10
+        expected_output: "Creates 10MB file filled with random data"
+      - description: Zero-fill file section
+        command: dd if=/dev/zero of=file.dat bs=1 count=100 seek=50 conv=notrunc
+        expected_output: "Overwrites 100 bytes with zeros starting at offset 50"
+    security_notes:
+      - "Can permanently destroy data if used incorrectly"
+      - "Always double-check if= and of= parameters"
+      - "Use conv=noerror,sync for damaged media"
+      - "Consider using dcfldd for forensic copies"
+    troubleshooting:
+      - problem: "Permission denied accessing device"
+        solution: "Run with sudo for raw device access"
+      - problem: "Operation too slow"
+        solution: "Increase block size (bs=) for better performance"
+    related_tools: ["dcfldd", "ddrescue", "cp"]
+
+  - name: hexedit
+    type: hex_editor
+    purpose: Interactive binary file editor with hex and ASCII views
+    installation:
+      apt: sudo apt-get install hexedit
+      yum: sudo yum install hexedit
+      pacman: sudo pacman -S hexedit
+      brew: brew install hexedit
+    usage:
+      edit_file: hexedit {filename}
+      readonly: hexedit -r {filename}
+    common_examples:
+      - description: Edit binary file interactively
+        command: hexedit firmware.bin
+        expected_output: "Opens interactive hex editor interface"
+      - description: View file in read-only mode
+        command: hexedit -r important.dat
+        expected_output: "Browse file without risk of modification"
+    controls:
+      - "Arrow keys: Navigate"
+      - "Tab: Switch between hex and ASCII"
+      - "Ctrl+S: Save changes"
+      - "Ctrl+X: Exit"
+      - "F1: Help"
+    security_notes:
+      - "Always backup files before editing"
+      - "Use read-only mode for evidence files"
+      - "Changes are immediate - no undo function"
+    related_tools: ["xxd", "hexdump", "bless", "ghex"]
+
+  - name: scalpel
+    type: file_carver
+    purpose: Fast file carver for recovering files from raw data
+    installation:
+      apt: sudo apt-get install scalpel
+      yum: sudo yum install scalpel
+      pacman: sudo pacman -S scalpel
+    usage:
+      carve: scalpel -o {output_dir} {input_file}
+      config: scalpel -c {config_file} -o {output_dir} {input_file}
+      verbose: scalpel -v -o {output_dir} {input_file}
+    common_examples:
+      - description: Recover files from disk image
+        command: scalpel -o recovered/ disk_image.dd
+        expected_output: "Creates recovered/ directory with carved files"
+      - description: Use custom configuration
+        command: scalpel -c custom.conf -o output/ memory.dump
+        expected_output: "Carves files using custom file signatures"
+      - description: Verbose output with progress
+        command: scalpel -v -o carved/ evidence.raw
+        expected_output: "Shows detailed progress and statistics"
+    troubleshooting:
+      - problem: "No files recovered despite known content"
+        solution: "Check scalpel.conf for supported file types and signatures"
+      - problem: "Output directory errors"
+        solution: "Ensure output directory doesn't exist or use -f to force"
+    related_tools: ["foremost", "photorec", "bulk_extractor"]
+
+  - name: bulk_extractor
+    type: data_extractor
+    purpose: Extract features like emails, URLs, and credit cards from files
+    installation:
+      apt: sudo apt-get install bulk-extractor
+      yum: sudo yum install bulk-extractor
+      pacman: sudo pacman -S bulk-extractor
+    usage:
+      extract: bulk_extractor -o {output_dir} {input_file}
+      specific: bulk_extractor -E {scanner} -o {output_dir} {input_file}
+      recursive: bulk_extractor -R -o {output_dir} {input_directory}
+    common_examples:
+      - description: Extract all features from disk image
+        command: bulk_extractor -o features/ disk.dd
+        expected_output: "Creates features/ with extracted emails, URLs, etc."
+      - description: Extract only email addresses
+        command: bulk_extractor -E email -o emails/ data.bin
+        expected_output: "Extracts only email addresses"
+      - description: Process directory recursively
+        command: bulk_extractor -R -o results/ /evidence/
+        expected_output: "Processes all files in directory tree"
+    output_files:
+      - "email.txt: Extracted email addresses"
+      - "url.txt: Found URLs"
+      - "ccn.txt: Credit card numbers"
+      - "telephone.txt: Phone numbers"
+      - "ip.txt: IP addresses"
+    related_tools: ["strings", "grep", "scalpel"]
+
+  - name: photorec
+    type: file_recovery
+    purpose: Digital photo recovery and general file carving tool
+    installation:
+      apt: sudo apt-get install testdisk
+      yum: sudo yum install testdisk
+      pacman: sudo pacman -S testdisk
+      brew: brew install testdisk
+    usage:
+      interactive: photorec {device_or_image}
+      command_line: photorec /log /debug {device_or_image}
+    common_examples:
+      - description: Recover files from damaged partition
+        command: photorec /dev/sdb1
+        expected_output: "Interactive recovery session"
+      - description: Recover from disk image file
+        command: photorec disk_image.dd
+        expected_output: "Menu-driven file recovery interface"
+    supported_formats:
+      - "Images: JPEG, PNG, GIF, TIFF, BMP, etc."
+      - "Documents: PDF, DOC, XLS, PPT, etc."
+      - "Archives: ZIP, RAR, 7Z, TAR, etc."
+      - "Media: MP3, MP4, AVI, MOV, etc."
+      - "Over 440 file formats supported"
+    recovery_tips:
+      - "Choose 'Other' filesystem type for ext2/3/4, NTFS"
+      - "Select 'Intel' partition table type for most PCs"
+      - "Use 'Free' space option to recover from unallocated areas"
+    related_tools: ["testdisk", "foremost", "scalpel"]
