@@ -72,7 +72,7 @@ def _test_files(root: Path = REPO) -> list[Path]:
 REACH = declare(
     "blanket-skip-test-module-sweep",
     discover=_test_files,
-    floor=2540,
+    floor=2741,
     growth=200,
     skips=0,
     what="test modules",
