@@ -25,16 +25,23 @@ moving the blocking work here and scheduling it explicitly does.
 
 import json
 import logging
-import os
 import sqlite3
 from pathlib import Path
 
-from autobot_shared import time_utils
+from autobot_shared import env_utils, time_utils
 
 logger = logging.getLogger(__name__)
 
 #: Rows read per sync attempt. One admin POST carries at most this many events.
-SYNC_BATCH_SIZE = int(os.getenv("SLM_SYNC_BATCH_SIZE", "100"))
+#:
+#: Read through ``env_utils`` rather than ``int(os.getenv(...))``: a bare cast
+#: raises ``ValueError`` at **import**, and for an agent module that means a
+#: malformed value in a node's environment stops the agent from starting rather
+#: than degrading one setting. Caught by ``repo_tests/env_var_bare_cast_test.py``
+#: on the first attempt at this change, which is what the guard is for.
+#:
+#: Floored at 1: a batch size of 0 reads nothing, forever, while the buffer fills.
+SYNC_BATCH_SIZE = env_utils.env_int_clamped("SLM_SYNC_BATCH_SIZE", 100, min_v=1)
 
 #: Cap on buffered rows. Oldest-first pruning keeps an offline node from
 #: filling its disk while the admin is unreachable.
@@ -45,7 +52,9 @@ SYNC_BATCH_SIZE = int(os.getenv("SLM_SYNC_BATCH_SIZE", "100"))
 #: exactly this and for three further things this module cannot provide -- the
 #: agent must *report* its depth and its cumulative drops, and the SLM must
 #: persist and surface them. Those stay open there; only the literal is settled.
-MAX_BUFFERED_EVENTS = int(os.getenv("SLM_MAX_BUFFERED_EVENTS", "500"))
+#: Floored at 1: a cap of 0 would delete every row on each prune, and a negative
+#: cap makes ``count - max_events`` delete more rows than exist.
+MAX_BUFFERED_EVENTS = env_utils.env_int_clamped("SLM_MAX_BUFFERED_EVENTS", 500, min_v=1)
 
 _SCHEMA = """
     CREATE TABLE IF NOT EXISTS event_buffer (

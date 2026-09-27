@@ -44,7 +44,19 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 # Issue #3094: Use SSOT config port so the default (8100) matches Ansible deployment.
-# Host remains os.getenv-based: empty string = use local PersistentClient (dev mode).
+#
+# Host comes from the SSOT too, and its default is `127.0.0.1` -- so an empty host,
+# and therefore the local PersistentClient branch below, requires
+# `AUTOBOT_CHROMADB_HOST` to be set to an empty value *explicitly*. An unset
+# variable yields the default and takes the HttpClient branch.
+#
+# This comment previously read "Host remains os.getenv-based: empty string = use
+# local PersistentClient (dev mode)", which had been true of an earlier revision and
+# describes the opposite default. Three sessions diagnosing empty analytics panels on
+# 2026-09-27 read it, concluded the backend was opening an empty local store because
+# no host appears in any config file, and were wrong: the host is a code default, not
+# a config value. A stale comment about a mechanism outranks the mechanism for anyone
+# who stops reading at the comment (#17646 review).
 _CHROMADB_HOST = _ssot_config.vm.chromadb
 _CHROMADB_PORT = _ssot_config.port.chromadb
 # Issue #12513: whether server auth (CHROMA_SERVER_AUTHN_*) is configured.

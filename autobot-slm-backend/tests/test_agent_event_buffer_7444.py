@@ -113,6 +113,42 @@ class TestEnvBackedLimits:
             monkeypatch.delenv(env)
             importlib.reload(event_buffer)
 
+    @pytest.mark.parametrize("env", ["SLM_MAX_BUFFERED_EVENTS", "SLM_SYNC_BATCH_SIZE"])
+    def test_a_malformed_value_falls_back_instead_of_killing_the_import(self, monkeypatch, env: str) -> None:
+        """The first attempt at env-backing used `int(os.getenv(...))`.
+
+        A bare cast raises `ValueError` at **import**, and for an agent module that
+        means a typo in one node's environment stops the agent from starting rather
+        than degrading one setting. `repo_tests/env_var_bare_cast_test.py` caught it
+        in CI; this pins the behaviour at the site so the shape cannot come back
+        quietly with the guard's population ceiling unchanged.
+        """
+        monkeypatch.setenv(env, "not-a-number")
+        try:
+            reloaded = importlib.reload(event_buffer)  # must not raise
+            assert getattr(
+                reloaded, {"SLM_MAX_BUFFERED_EVENTS": "MAX_BUFFERED_EVENTS"}.get(env, "SYNC_BATCH_SIZE")
+            ) in (
+                500,
+                100,
+            )
+        finally:
+            monkeypatch.delenv(env)
+            importlib.reload(event_buffer)
+
+    @pytest.mark.parametrize(
+        ("env", "attr"),
+        [("SLM_MAX_BUFFERED_EVENTS", "MAX_BUFFERED_EVENTS"), ("SLM_SYNC_BATCH_SIZE", "SYNC_BATCH_SIZE")],
+    )
+    def test_a_zero_or_negative_limit_is_clamped(self, monkeypatch, env: str, attr: str) -> None:
+        """A cap of 0 deletes every row on each prune; a batch of 0 reads nothing, forever."""
+        monkeypatch.setenv(env, "0")
+        try:
+            assert getattr(importlib.reload(event_buffer), attr) == 1
+        finally:
+            monkeypatch.delenv(env)
+            importlib.reload(event_buffer)
+
     def test_the_default_is_unchanged_without_the_env_var(self) -> None:
         # Env-backing must not quietly alter behaviour for every existing node.
         assert (event_buffer.MAX_BUFFERED_EVENTS, event_buffer.SYNC_BATCH_SIZE) == (500, 100)
