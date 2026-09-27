@@ -91,6 +91,42 @@ graph cannot attribute anything. Two cautions for whoever checks it afterwards:
 - `PipelineContext.document_id` already reaches the loader unused, so the fix is an
   attribution rather than a new field.
 
+## What this procedure leaves behind, and who can remove it
+
+**Read this before running it.** The procedure writes data into a live knowledge
+base, and **no agent removes stored data on its own** — deleting, rewriting or
+rotating stored data is proposed by an agent and approved by a human through the
+review queue ([#17038](https://github.com/mrveiss/AutoBot-AI/issues/17038)). So every
+row below is a human's to clean up, and running this is a decision to create it.
+
+| leg | what remains |
+|---|---|
+| 1 Manual entry | one fact: Redis projection, Chroma vector, durable fact-store row |
+| 2 File upload | the same three, plus the stored file and its page-offset metadata |
+| 3 Transcriber | one fact per non-empty segment — a short recording is tens of facts — plus a `kb_pushes` row, plus the recording itself |
+| 4 Watch folder | one fact per file, **plus a persisted watch-folder config** under `kb:watch_folder:*` that keeps watching after the run |
+| 5 Connector | one fact per fetched item, **plus a persisted connector config** and any stored credential for it |
+
+Two of the five leave **configuration**, not just facts: the watch folder keeps
+ingesting anything dropped into it, and the connector keeps its schedule. Those are
+the rows to undo first, because they continue producing data after the procedure ends.
+
+The transcriber leg is the largest by volume — its push is one fact per segment, so
+the count scales with the recording's length. Use the shortest recording that still
+transcribes.
+
+**Recommended:** use a dedicated collection per run, named with the run's date, so
+the facts are identifiable as test data afterwards without needing the nonce. The
+nonce makes them *findable*; a collection makes them *groupable*, which is what a
+human deleting them will want.
+
+## Recording the SHA, twice
+
+State the deployed commit **before and after** the run. A continuously-updated
+deployment can move mid-procedure, and a five-leg ingest is not instantaneous — a
+result spanning two SHAs is a result about neither. If they differ, the run is
+inconclusive and should be repeated, not reported with a range.
+
 ## Recording the result
 
 Per leg, per surface, one of: **pass**, **content missing**, or **provenance
