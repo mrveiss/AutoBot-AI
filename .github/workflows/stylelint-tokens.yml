@@ -76,10 +76,16 @@ jobs:
           # Split by project: each has its own node_modules/.stylelintrc, and
           # `npx stylelint` needs to run from inside the matching project so it
           # resolves the customSyntax (postcss-html) that project installed.
-          git diff --name-only "origin/${BASE_REF}...HEAD" -- \
+          # --diff-filter=d drops DELETED paths. Without it a PR that removes a
+          # CSS/Vue file hands stylelint a path that is not in the checkout, and
+          # stylelint answers NoFilesFoundError and exits 123 BEFORE linting any
+          # of the files that do exist (#17571). continue-on-error hid that as a
+          # red badge, so the job read as "ran and found problems" when it had
+          # not looked at a single file.
+          git diff --name-only --diff-filter=d "origin/${BASE_REF}...HEAD" -- \
             'autobot-frontend/**/*.vue' 'autobot-frontend/**/*.css' \
             | sed -e 's|^autobot-frontend/||' > changed-frontend.txt || true
-          git diff --name-only "origin/${BASE_REF}...HEAD" -- \
+          git diff --name-only --diff-filter=d "origin/${BASE_REF}...HEAD" -- \
             'autobot-slm-frontend/**/*.vue' 'autobot-slm-frontend/**/*.css' \
             | sed -e 's|^autobot-slm-frontend/||' > changed-slm.txt || true
           frontend_count=$(wc -l < changed-frontend.txt | tr -d ' ')

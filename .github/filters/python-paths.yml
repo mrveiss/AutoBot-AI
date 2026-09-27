@@ -231,6 +231,12 @@ python:
   - '.github/workflows/ci-dispatch-watchdog.yml'
   - '.github/workflows/import-hermeticity-sweep.yml'
   - '.github/workflows/ratchet-base-guard.yml'
+  # #17571: `stylelint_changed_files_skip_deletions_17571_test.py` runs this
+  # workflow's own changed-file step in a throwaway repo, proving a deleted path
+  # never reaches stylelint (which exits 123 on it, before linting anything).
+  # The import-hermeticity entry above is read by that guard too, for the same
+  # `--diff-filter=d` reason.
+  - '.github/workflows/stylelint-tokens.yml'
   # #15163: a repo-root file, so `**/requirements*.txt` above does not reach it --
   # this filter is matched with fnmatch, which (unlike the real dorny/paths-filter
   # matcher) requires a literal `/` before `requirements` for a `**/` prefix, and a
