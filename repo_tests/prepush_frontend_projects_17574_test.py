@@ -494,10 +494,20 @@ class TestTheFixturesAreFixtures:
 
         Every path it sees is one this file chose, so a check that only ever
         looks at conforming input proves nothing -- it would pass just as well
-        if the rule were `assert True`. This is the name that actually broke
-        things: #17616 created it, and it carries no reserved segment.
+        if the rule were `assert True`.
+
+        The first version quoted the real path that broke things: the RolesView
+        test under autobot-slm-frontend's views directory, created by #17616.
+        That put the uncovered record straight back to 46, because a quoted
+        path which RESOLVES is precisely what `python_filter_covers_its_guards`
+        records as a tree this guard reads. The contrast case for the sentinel
+        rule reintroduced the defect the sentinel rule removes.
+
+        So the real name stays in prose, unquoted, and the assertion uses a
+        path that resolves to nothing. The property under test is whether a
+        name carries the sentinel; it never needed the name to be real.
         """
-        assert "__prepush_fixture__" not in "autobot-slm-frontend/src/views/RolesView.test.ts"
+        assert "__prepush_fixture__" not in "src/views/PlainName.test.ts"
 
     @pytest.mark.parametrize("path", [*example_changeset(), *single_project_change()])
     def test_no_fixture_path_names_a_real_file(self, path: str) -> None:
