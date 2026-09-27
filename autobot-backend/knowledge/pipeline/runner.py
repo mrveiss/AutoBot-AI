@@ -90,17 +90,17 @@ class PipelineRunner:
         # Guarded to a str the same way SemanticChunker.process() checks shape.
         #
         # `sanitize_fact_content` and not its two halves: it is the declared rule
-        # for text entering the KB (ingest_sanitize.py:96) and it fixes the order
+        # for text entering the KB (`sanitize_fact_content`) and it fixes the order
         # -- injection pass, THEN credential redaction -- plus the provenance
         # stamp. Calling `sanitize_for_storage` and `redact_content` separately
         # here would be a second definition of one question, in the module that
         # can least afford it.
         #
         # It has to happen on THIS path or not at all: the load stage writes
-        # straight to the stores (chromadb_loader.py:96, sqlite_loader.py,
+        # straight to the stores (chromadb_loader.py, sqlite_loader.py,
         # redis_graph_loader.py), so nothing here reaches store_fact's chokepoint
-        # at knowledge/facts.py:819. The ECL path is 1 of 26 writers that bypass
-        # it; the class is #17649.
+        # in knowledge/facts.py's `store_fact`. The ECL path is 1 of 26 writers that
+        # bypass it; the class is #17649.
         if isinstance(input_data, str):
             context.metadata.setdefault(INJECTION_ROUTE, "ecl_pipeline")
             input_data, context.metadata = sanitize_fact_content(input_data, context.metadata)

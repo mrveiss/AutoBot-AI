@@ -203,7 +203,7 @@ class TestPipelineRunnerExecution:
         for chunk in loaded_ctx.chunks:
             # Neutralised, not deleted: `sanitize_for_storage` wraps the matched span
             # so a later prompt reads it as quoted text rather than as an instruction.
-            # `test_query_sanitizer.py:346` fixes that contract for this exact payload.
+            # `test_query_sanitizer.py` fixes that contract for this exact payload.
             assert f"[ESCAPED:{span}]" in chunk.content
             # ...and it appears nowhere unwrapped, which is what would actually reach
             # a model as an instruction.

@@ -450,7 +450,8 @@ def test_create_version_still_only_reachable_with_already_redacted_content():
 
 
 #: The declared entry points that redact. `sanitize_fact_content` runs the injection
-#: pass and then `redact_content` (`knowledge/ingest_sanitize.py:120-122`), so either
+#: pass and then `redact_content` (see `sanitize_fact_content` in
+#: `knowledge/ingest_sanitize.py`), so either
 #: satisfies the property below. This stays a list because "does this call redact?"
 #: cannot be answered without following the callee across files -- but it is a list of
 #: *primitives*, not of call sites, so it grows only when a third way to redact is
