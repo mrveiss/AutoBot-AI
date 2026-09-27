@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
+import { waitForLastEmit } from './emitTestUtils'
 /**
  * #14612: the node context menu — `contextMenu`/`contextMenuActions`/
  * `openContextMenuAt`/`onNodeContextMenu`/`runContextMenuAction` were
@@ -87,6 +88,8 @@ describe('the context menu opens where the user pointed, on the right node (#146
     await node(w, 'n2').trigger('contextmenu', { clientX: 50, clientY: 50 })
     await menuItem(w, 'select').trigger('click')
 
+    await waitForLastEmit(w, 'node-selected', ['n2'])
+
     expect(w.emitted('node-selected')?.at(-1)).toEqual(['n2'])
   })
 
@@ -96,6 +99,8 @@ describe('the context menu opens where the user pointed, on the right node (#146
     await node(w, 'n1').trigger('contextmenu', { clientX: 10, clientY: 10 })
     await node(w, 'n2').trigger('contextmenu', { clientX: 200, clientY: 200 })
     await menuItem(w, 'select').trigger('click')
+
+    await waitForLastEmit(w, 'node-selected', ['n2'])
 
     expect(w.emitted('node-selected')?.at(-1)).toEqual(['n2'])
   })
@@ -209,6 +214,7 @@ describe('the context menu is keyboard-reachable (#14609/#14610/#14612)', () => 
 
     expect(menu(w).exists()).toBe(true)
     await menuItem(w, 'select').trigger('click')
+    await waitForLastEmit(w, 'node-selected', ['n2'])
     expect(w.emitted('node-selected')?.at(-1)).toEqual(['n2'])
   })
 })

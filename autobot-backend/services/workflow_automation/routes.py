@@ -19,6 +19,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
 from services.notification_service import NotificationConfig
 
+from .approval_support import execute_approval_outcome, validate_approval_request
 from .manager import WorkflowAutomationManager
 from .models import (
     AutomatedWorkflowRequest,
@@ -32,6 +33,7 @@ from .models import (
     WorkflowStep,
 )
 from .persistence import load_notification_config, save_notification_config
+from .workflow_ownership import caller_id, find_workflow
 from .ws_endpoint import serve_workflow_socket
 
 logger = get_logger(__name__)
@@ -74,6 +76,7 @@ async def create_workflow(
             steps=workflow_steps,
             session_id=request.session_id,
             automation_mode=automation_mode,
+            owner_id=caller_id(current_user),
         )
 
         return {
@@ -113,6 +116,7 @@ async def start_workflow(
         inject_runtime_credentials(request.provider_credentials)
 
     try:
+        _find_workflow(workflow_id, current_user)  # #17014: owner or admin only
         success = await get_workflow_manager().start_workflow_execution(workflow_id)
 
         if success:
@@ -149,6 +153,11 @@ async def control_workflow(
 ):
     """Control workflow execution (pause, resume, cancel, approve, skip)"""
     try:
+        # #17014: this route authenticated and stopped there, so any signed-in user
+        # could pause, cancel or approve another user's workflow. 404 before 403 is
+        # deliberate: it matches the pre-existing lookup and leaks no more than the
+        # unauthenticated-user case already did.
+        _find_workflow(request.workflow_id, current_user)
         success = await get_workflow_manager().handle_workflow_control(request)
 
         if success:
@@ -159,6 +168,11 @@ async def control_workflow(
         else:
             raise HTTPException(status_code=404, detail="Workflow not found or action failed")
 
+    except HTTPException:
+        # #17014: without this the 403 below -- and the 404 above, already -- left as
+        # a 500. An ownership refusal that surfaces as "Internal server error" is
+        # indistinguishable from a bug, and no test can assert it.
+        raise
     except Exception as e:
         logger.error("Failed to control workflow: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -173,6 +187,7 @@ async def control_workflow(
 async def get_workflow_status(workflow_id: str, current_user: dict = Depends(get_current_user)):
     """Get current workflow status"""
     try:
+        _find_workflow(workflow_id, current_user)  # #17014: owner or admin only
         status = get_workflow_manager().get_workflow_status(workflow_id)
 
         if status:
@@ -180,6 +195,8 @@ async def get_workflow_status(workflow_id: str, current_user: dict = Depends(get
         else:
             raise HTTPException(status_code=404, detail=ERR_WORKFLOW_NOT_FOUND)
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to get workflow status: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -255,7 +272,9 @@ async def create_workflow_from_chat(request: dict, current_user: dict = Depends(
         if not user_request or not session_id:
             raise HTTPException(status_code=400, detail="user_request and session_id are required")
 
-        workflow_id = await get_workflow_manager().create_workflow_from_chat_request(user_request, session_id)
+        workflow_id = await get_workflow_manager().create_workflow_from_chat_request(
+            user_request, session_id, owner_id=caller_id(current_user)
+        )
 
         if workflow_id:
             # Issue #390: Support both modes for backward compatibility
@@ -314,6 +333,7 @@ async def present_plan(
     Issue #390: Show plan before execution starts.
     """
     try:
+        _find_workflow(workflow_id, current_user)  # #17014: owner or admin only
         approval_mode = PlanApprovalMode.FULL_PLAN_APPROVAL
         timeout_seconds = 300
 
@@ -335,45 +355,11 @@ async def present_plan(
         else:
             raise HTTPException(status_code=404, detail=ERR_WORKFLOW_NOT_FOUND)
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to present plan: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
-
-
-def _validate_approval_request(workflow_id: str) -> None:
-    """Helper for approve_plan. Ref: #1088.
-
-    Verifies that the workflow exists and has a pending approval.
-    Raises HTTPException(404) if either check fails.
-    """
-    if not get_workflow_manager().get_workflow_status(workflow_id):
-        raise HTTPException(status_code=404, detail=ERR_WORKFLOW_NOT_FOUND)
-    if not get_workflow_manager().get_pending_approval(workflow_id):
-        raise HTTPException(status_code=404, detail="No pending approval for this workflow")
-
-
-async def _execute_approval_outcome(request: PlanApprovalResponse) -> dict:
-    """Helper for approve_plan. Ref: #1088.
-
-    Starts workflow execution on approval, or cancels it on rejection.
-    Returns the appropriate response dict.
-    """
-    if request.approved:
-        await get_workflow_manager().start_workflow_execution(request.workflow_id)
-        return {
-            "success": True,
-            "workflow_id": request.workflow_id,
-            "status": "executing",
-            "message": "Plan approved, workflow execution started",
-        }
-
-    await get_workflow_manager().cancel_workflow(request.workflow_id)
-    return {
-        "success": True,
-        "workflow_id": request.workflow_id,
-        "status": "rejected",
-        "message": f"Plan rejected: {request.reason or 'No reason provided'}",
-    }
 
 
 @with_error_handling(
@@ -391,14 +377,15 @@ async def approve_plan(
 
     Issue #390: Process plan approval before execution.
 
-    Note: Authorization is validated by checking session_id matches the workflow.
-    The client must provide the correct session_id that owns the workflow.
+    #17014: authorization is the workflow's recorded owner or an admin. It was
+    previously described as "session_id matches the workflow", which the client
+    supplies -- so it authorised whoever asked, and deferred the real check to an
+    API gateway that does not perform it.
     """
     try:
-        # Issue #390 Security Fix: Verify workflow exists and has pending approval.
-        # Full session ownership validation should be done at API gateway level
-        # or via session token in request headers.
-        _validate_approval_request(request.workflow_id)
+        _find_workflow(request.workflow_id, current_user)
+        # Issue #390: verify the workflow exists and has a pending approval.
+        validate_approval_request(get_workflow_manager(), request.workflow_id)
 
         success = get_workflow_manager().handle_plan_approval_response(
             workflow_id=request.workflow_id,
@@ -410,7 +397,7 @@ async def approve_plan(
         if not success:
             raise HTTPException(status_code=400, detail="Failed to process approval response")
 
-        return await _execute_approval_outcome(request)
+        return await execute_approval_outcome(get_workflow_manager(), request)
 
     except HTTPException:
         raise
@@ -432,6 +419,7 @@ async def get_pending_approval(workflow_id: str, current_user: dict = Depends(ge
     Issue #390: Check if plan is awaiting approval.
     """
     try:
+        _find_workflow(workflow_id, current_user)  # #17014: owner or admin only
         approval = get_workflow_manager().get_pending_approval(workflow_id)
 
         if approval:
@@ -449,6 +437,8 @@ async def get_pending_approval(workflow_id: str, current_user: dict = Depends(ge
                 "approval": None,
             }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to get pending approval: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -460,22 +450,8 @@ async def get_pending_approval(workflow_id: str, current_user: dict = Depends(ge
 
 
 def _find_workflow(workflow_id: str, current_user: dict = None):
-    """Look up a workflow in active or completed stores.
-
-    Returns the ActiveWorkflow dataclass or raises 404/403.
-    Verifies ownership when current_user is provided.
-    """
-    mgr = get_workflow_manager()
-    wf = mgr.active_workflows.get(workflow_id)
-    if wf is None:
-        wf = mgr.completed_workflows.get(workflow_id)
-    if wf is None:
-        raise HTTPException(status_code=404, detail=ERR_WORKFLOW_NOT_FOUND)
-    if current_user and hasattr(wf, "owner_id") and wf.owner_id:
-        user_id = current_user.get("user_id", current_user.get("sub"))
-        if user_id and wf.owner_id != user_id:
-            raise HTTPException(status_code=403, detail="Not authorized")
-    return wf
+    """Look up a workflow, ownership-checked. See ``workflow_ownership`` (#17014)."""
+    return find_workflow(get_workflow_manager(), workflow_id, current_user)
 
 
 @with_error_handling(

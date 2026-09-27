@@ -46,6 +46,7 @@ vi.mock('@/composables/llc/useLlcCompanyContext', () => ({
 }))
 
 import OrgChart from '../OrgChart.vue'
+import { waitForSettled } from '@/test/utils/waitForState'
 
 const AGENT_NAME = 'Ada'
 const USER_NAME = 'Grace'
@@ -210,6 +211,22 @@ describe('a failed save reports the error and leaves the contact unchanged (#146
     await wrapper.get(`[data-testid="org-person-edit-name-${CONTACT_KEY}"]`).setValue('Hedy Renamed')
     await wrapper.get(`[data-testid="org-person-edit-form-${CONTACT_KEY}"]`).trigger('submit')
     await flushPromises()
+
+    // #17365: `flushPromises` was not enough under `--coverage`, and the two
+    // assertions below fail for OPPOSITE reasons when it is short. The error
+    // text is a positive — it fails because the rejection has not rendered
+    // yet. `involvedCallCount()` is a negative, and a negative cannot be
+    // waited for: if a refetch were still coming, waiting longer would make
+    // this PASS wrongly rather than fail.
+    //
+    // So anchor the negative to the positive. The rendered error is the signal
+    // that the failure path RAN TO COMPLETION; once it is on screen, "no
+    // refetch happened" is a settled fact about a finished path rather than a
+    // race against an unfinished one.
+    await waitForSettled(
+      () => wrapper.find(`[data-testid="org-person-edit-error-${CONTACT_KEY}"]`).exists(),
+      'the failed save to report its error',
+    )
 
     // No optimistic update, and no refetch — the failed call is not "reload
     // and hope", it is a reported failure with the prior state intact. The
