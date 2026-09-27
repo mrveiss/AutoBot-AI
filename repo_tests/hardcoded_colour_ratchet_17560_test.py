@@ -41,6 +41,7 @@ from repo_tests._hardcoded_colour_baseline import (
     TOTAL_OCCURRENCES,
 )
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 _FRONTEND = Path("autobot-frontend/src")
 _SUFFIXES = {".ts", ".vue", ".js"}
@@ -412,10 +413,42 @@ class TestTheImportantPopulationOnlyShrinks:
 _DECLARATION = re.compile(r"(?:^|[{;])\s*(--[A-Za-z0-9_-]+)\s*:", re.MULTILINE)
 _ANY_DECLARATION = re.compile(r"(--[A-Za-z0-9_-]+)\s*:")
 
-#: Component `<style>` blocks the sweep must reach before a zero means anything.
-#: Not a count of theme names: those come from three other files, so a floor on
-#: them would still pass if every component were skipped (#17567).
-_STYLE_BLOCK_FLOOR = 300
+
+def _component_style_blocks(root: Path) -> list[tuple[str, int]]:
+    """Every component ``<style>`` block the sweep reads. The reach population.
+
+    NOT the theme-name count: those come from three CSS files, so a floor on
+    them stays satisfied even if every component were skipped, and "zero
+    clashes" would then mean "nothing was read" (#17567).
+    """
+    found: list[tuple[str, int]] = []
+    frontend = root / _FRONTEND
+    if not frontend.is_dir():
+        return found
+    for path in sorted(frontend.rglob("*.vue")):
+        if "node_modules" in path.parts:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for index, _ in enumerate(_STYLE_CONTENT.finditer(text)):
+            found.append((path.relative_to(frontend).as_posix(), index))
+    return found
+
+
+#: Re-measured for this declaration rather than carried across from the
+#: hand-rolled constant it replaces: 409 blocks in 388 files (#15928 -- the old
+#: number is exactly what must not be reused). Floor below that with headroom;
+#: ``verify_floor`` refuses one that drifts too far under its own population.
+REACH_STYLE_BLOCKS = declare(
+    "component-style-block-sweep",
+    discover=_component_style_blocks,
+    floor=380,
+    growth=40,
+    skips=0,
+    what="component <style> blocks searched for design-token redefinitions",
+)
 
 
 def _owned_token_names(root: Path) -> set[str]:
@@ -493,8 +526,9 @@ class TestFormTwoStaysAbsent:
         """
         root = repo_root() / _FRONTEND
         _, blocks = _token_redefinitions(root, _owned_token_names(root))
-        assert blocks >= _STYLE_BLOCK_FLOOR, (
-            f"parsed only {blocks} component style blocks, floor {_STYLE_BLOCK_FLOOR} -- "
+        floor = REACH_STYLE_BLOCKS.floor
+        assert blocks >= floor, (
+            f"parsed only {blocks} component style blocks, floor {floor} -- "
             "the zero below would mean 'nothing was read', not 'nothing was found'"
         )
 
