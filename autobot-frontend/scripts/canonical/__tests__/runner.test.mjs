@@ -111,14 +111,59 @@ describe("a rule pointing at nothing is reported, not skipped (#17571)", () => {
 });
 
 describe("the unloaded-authority rule (#14785)", () => {
-  it("blocks on a stylesheet that claims canonicality and is imported by nothing", () => {
-    const r = run("--all", "--format", "json");
-    const found = JSON.parse(r.stdout);
-    const hit = found.filter((d) => d.rule_id === "ds-unloaded-authority");
-    expect(hit.length).toBeGreaterThan(0);
-    expect(hit[0].severity).toBe("block");
-    expect(hit[0].file).toContain("tokens.css");
-    // A `block` diagnostic must fail the run; previously nothing did.
-    expect(r.status).toBe(1);
+  // Synthetic, not the live tree. The live instance -- assets/tokens.css --
+  // is removed in this same change, so a test asserting "the repo contains a
+  // blocking violation" would pass only until the backlog drained and then
+  // fail for the best possible reason. RATCHET_BASELINES.md names this: a
+  // guard whose population can reach zero tests itself with fixtures.
+  it("blocks a stylesheet that claims canonicality and is imported by nothing", async () => {
+    const { mkdtemp, writeFile } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const rule = await import("../rules/ds_unloaded_authority.mjs");
+
+    const dir = await mkdtemp(join(tmpdir(), "canon-"));
+    const file = join(dir, "orphan.css");
+    await writeFile(file, "/* Canonical CSS Design Tokens */\n:root { --x: 1px; }\n", "utf-8");
+
+    const found = await rule.check(file);
+    expect(found).toHaveLength(1);
+    expect(found[0].severity).toBe("block");
+    expect(found[0].message).toContain("no file imports it");
+  });
+
+  it("says nothing about a stylesheet that makes no such claim", async () => {
+    const { mkdtemp, writeFile } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const rule = await import("../rules/ds_unloaded_authority.mjs");
+
+    const dir = await mkdtemp(join(tmpdir(), "canon-"));
+    const file = join(dir, "ordinary.css");
+    await writeFile(file, "/* component styles */\n.x { color: red; }\n", "utf-8");
+
+    expect(await rule.check(file)).toEqual([]);
+  });
+
+  it("honours its waiver", async () => {
+    const { mkdtemp, writeFile } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const rule = await import("../rules/ds_unloaded_authority.mjs");
+
+    const dir = await mkdtemp(join(tmpdir(), "canon-"));
+    const file = join(dir, "waived.css");
+    await writeFile(
+      file,
+      "/* canonical: ignore ds-unloaded-authority */\n/* Canonical CSS Design Tokens */\n",
+      "utf-8",
+    );
+
+    expect(await rule.check(file)).toEqual([]);
+  });
+
+  it("the tree is clean of blocking violations", () => {
+    // The live assertion, stated as the outcome rather than as the detector's
+    // proof: after removing assets/tokens.css nothing blocks, so the gate added
+    // to canonical-audit.yml lands green rather than reddening main on arrival.
+    const r = run("--all");
+    expect(r.status).toBe(0);
   });
 });

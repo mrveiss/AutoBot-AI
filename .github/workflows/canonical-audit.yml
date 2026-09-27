@@ -41,9 +41,21 @@ jobs:
             --output "audit-output/canonical-audit-infra-$DATE.md"
           python tools/lint/canonical_check_infra.py --all --format json \
             --output "audit-output/canonical-audit-infra-$DATE.json"
-          # Frontend audit deferred to Wave 3 (no --all support yet); empty placeholder
-          echo "# Canonical-style audit — Frontend ($DATE)" > "audit-output/canonical-audit-fe-$DATE.md"
-          echo "Frontend full-codebase audit not yet implemented (Wave 3)." >> "audit-output/canonical-audit-fe-$DATE.md"
+          # #17571: the frontend audit is wired in. It used to write a placeholder
+          # saying --all was unimplemented, which was true -- the flag was accepted
+          # and walked nothing, so it reported a clean tree it had never opened.
+          #
+          # The exit code is CAPTURED rather than allowed to fail this step: a
+          # blocking diagnostic must still reach the artifact and the job summary,
+          # so the gate below runs after the upload. `bash -e` would otherwise
+          # abort here and publish nothing, which is the failure mode that makes
+          # people stop reading a gate.
+          FE_RC=0
+          node autobot-frontend/scripts/canonical_check.mjs --all --format pretty \
+            --output "audit-output/canonical-audit-fe-$DATE.md" || FE_RC=$?
+          node autobot-frontend/scripts/canonical_check.mjs --all --format json \
+            --output "audit-output/canonical-audit-fe-$DATE.json" || true
+          echo "fe_rc=$FE_RC" >> "$GITHUB_OUTPUT"
           echo "date=$DATE" >> "$GITHUB_OUTPUT"
 
       - name: Upload audit artifact
@@ -63,3 +75,17 @@ jobs:
               cat "$f"
             } >> "$GITHUB_STEP_SUMMARY"
           done
+
+      # #17571: the audit had no failing step at all -- it generated, uploaded and
+      # summarised, so a `block` diagnostic landed in an artifact nobody opened.
+      # A rule that cannot fail anything is a report, and the design system was
+      # advisory for exactly that reason.
+      #
+      # Only `block` fails. The severity vocabulary is block | warn | audit, and
+      # `makeDiagnostic` rejects anything else -- a rule cannot opt into failing
+      # by inventing a level, it says block or it is advisory.
+      - name: Fail on a blocking canonical violation
+        if: steps.audit.outputs.fe_rc != '0'
+        run: |
+          echo "::error::canonical-audit: a blocking canonical violation was found — see the job summary above and the uploaded artifact."
+          exit 1
