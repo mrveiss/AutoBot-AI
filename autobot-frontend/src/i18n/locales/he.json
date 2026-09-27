@@ -2034,7 +2034,17 @@
       "create": "Create",
       "loading3dVisualization": "Loading3d visualization",
       "loadingVisualization": "Loading visualization library...",
-      "retry": "Retry"
+      "retry": "Retry",
+      "sourcesUnreadable": "לא ניתן לקרוא את גרף הידע",
+      "sourcesUnreadableHint": "לא מוצג דבר מכיוון שהמאגרים שלהלן לא הגיבו — ולא מכיוון שהגרף ריק.",
+      "sourceHeld": "{source}: {held} ישויות",
+      "sourceFailed": "{source}: לא ניתן לקרוא — {reason}",
+      "partialGraph": "הגרף הזה חלקי: לא ניתן היה לקרוא את {sources}.",
+      "source": {
+        "unified": "גרף מאגר הידע",
+        "memory": "ישויות זיכרון"
+      },
+      "reasonUnknown": "לא דווחה סיבה"
     },
     "vectorization": {
       "actionVectorize": "Vectorize",

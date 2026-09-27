@@ -3150,7 +3150,17 @@
       "noEntities3D": "Brak encji do wyświetlenia",
       "loading3dVisualization": "Loading3d visualization",
       "loadingVisualization": "Loading visualization library...",
-      "retry": "Retry"
+      "retry": "Retry",
+      "sourcesUnreadable": "Nie można odczytać grafu wiedzy",
+      "sourcesUnreadableHint": "Nic nie jest wyświetlane, ponieważ poniższe magazyny nie odpowiedziały — a nie dlatego, że graf jest pusty.",
+      "sourceHeld": "{source}: {held} encji",
+      "sourceFailed": "{source}: nie udało się odczytać — {reason}",
+      "partialGraph": "Ten graf jest niekompletny: nie udało się odczytać {sources}.",
+      "source": {
+        "unified": "Graf bazy wiedzy",
+        "memory": "Encje pamięci"
+      },
+      "reasonUnknown": "nie podano przyczyny"
     },
     "connectors": {
       "title": "Konektory źródeł",
