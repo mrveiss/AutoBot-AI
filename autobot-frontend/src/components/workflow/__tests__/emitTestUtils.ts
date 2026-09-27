@@ -30,31 +30,13 @@
  * split.
  */
 
-import { nextTick } from 'vue'
+import { waitForTicks } from '@/test/utils/waitForState'
+
+export { waitForTicks }
 
 /** The slice of `VueWrapper` these helpers need, so they are not tied to one wrapper type. */
 export interface EmitsEvents {
   emitted(event: string): unknown[] | undefined
-}
-
-/** Ticks to flush before giving up. Generous: the bound is there to fail a
- *  broken component, not to bound a slow one. 50 microtask flushes cost
- *  microseconds on an idle machine and are still 50 on a loaded one — unlike a
- *  timeout, which is what made the original assertions load-sensitive. */
-const MAX_TICKS = 50
-
-/**
- * Flush Vue ticks until `predicate()` is true.
- *
- * @throws if it is still false after {@link MAX_TICKS}, naming what was awaited —
- *   a timeout message that says what it wanted beats a bare assertion failure.
- */
-export async function waitForTicks(predicate: () => boolean, awaited: string): Promise<void> {
-  for (let tick = 0; tick < MAX_TICKS; tick += 1) {
-    if (predicate()) return
-    await nextTick()
-  }
-  throw new Error(`waited ${MAX_TICKS} ticks for ${awaited} and it never became true`)
 }
 
 /**

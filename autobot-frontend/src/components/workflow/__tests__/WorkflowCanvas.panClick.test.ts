@@ -25,6 +25,7 @@ import en from '@/i18n/locales/en.json'
 import WorkflowCanvas from '../WorkflowCanvas.vue'
 import type { CanvasNode } from '../canvasNode'
 import { firePointer } from './pointerTestUtils'
+import { waitForEmitCount } from './emitTestUtils'
 
 const NODES: CanvasNode[] = [
   {
@@ -104,6 +105,14 @@ describe('a pan gesture is not a selection (#14079)', () => {
     await firePointer(node(w).element, 'pointerdown', { clientX: 100, clientY: 100, button: 0 })
     await node(w).trigger('click')
 
+    // #17365: `trigger` flushes ONE tick, and this selection does not always
+    // land inside it. Under `--coverage` the suite lost that race often enough
+    // to red the required Unit gate with a workflow-canvas failure on PRs that
+    // never touched the canvas. Waiting on the EMISSION rather than on a tick
+    // removes the race without making the assertion weaker: the count is still
+    // exactly one, and a component that genuinely swallows the click never
+    // reaches it and fails on the bound.
+    await waitForEmitCount(w, 'node-selected', 1)
     expect(selections(w)).toEqual([['ceo']])
   })
 })
