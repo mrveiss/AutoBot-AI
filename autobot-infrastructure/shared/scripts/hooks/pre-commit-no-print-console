@@ -12,6 +12,19 @@
 #
 # Intentional exceptions:
 # - Test files (*_test.py, *.spec.ts, *.e2e_test.*, *-test.js)
+# - Everything under data/ (#17623). The rule is "no print()/console.* in
+#   PRODUCTION CODE" and it is right; data/ is not production code. It is
+#   application data -- `file_manager_root` is a registered data path via
+#   `PathsManager.get_data_path("file_manager_root")` -- and the whole tracked
+#   tree holds exactly two source-like files under it, both one-line upload
+#   fixtures whose `print("Hello World")` / `console.log("test")` IS the sample.
+#   This is a directory excluded for what it is, alongside autobot-infrastructure/,
+#   code_analysis/, ansible/ and tools/lint/ above, not a list of filenames:
+#   #16008 removed an INVISIBLE exemption, and nothing is hidden here because
+#   those two files are all there is. Note the fixtures also miss every
+#   filename exemption by one character -- `test.py` is not `test_*.py` and
+#   `test.js` is not `*-test.js` -- so the next fixture named that way hits the
+#   same wall.
 # - debugUtils.ts, RumConsoleHelper.ts (logging infrastructure)
 # - Lines with "# noqa: print" or "// noqa: console" comments — for a
 #   multi-line call this is recognised on any line from the opening
@@ -237,7 +250,8 @@ get_staged_python_files() {
         grep -v -E '(autobot-infrastructure/)' | \
         grep -v -E '(code_analysis/)' | \
         grep -v -E '(ansible/)' | \
-        grep -v -E '(tools/lint/)' || true)"  # code_analysis, tools/lint: CLI output (#15730); ansible: doctest examples
+        grep -v -E '(tools/lint/)' | \
+        grep -v -E '(^data/)' || true)"  # code_analysis, tools/lint: CLI output (#15730); ansible: doctest examples; data/: application data, not code (#17623)
     # Drop CLI entry points under a declared CLI root, and RECORD each drop.
     # An exemption a reader cannot see is the defect this replaces, so the
     # hook says which files it declined to scan and why, every run.
@@ -264,7 +278,8 @@ get_staged_ts_files() {
         grep -v -E '(debugUtils\.ts$|RumConsoleHelper\.ts$)' | \
         grep -v -E '(\.d\.ts$|vite\.config\.(ts|js)$|vitest\.config\.(ts|js)$)' | \
         grep -v -E '(autobot-infrastructure/)' | \
-        grep -v -E '(autobot-browser-worker/)' || true  # Node.js server: console.* is appropriate
+        grep -v -E '(autobot-browser-worker/)' | \
+        grep -v -E '(^data/)' || true  # Node.js server: console.* is appropriate; data/: application data, not code (#17623)
 }
 
 # Shared driver: both languages are "read file, walk lines, skip the
