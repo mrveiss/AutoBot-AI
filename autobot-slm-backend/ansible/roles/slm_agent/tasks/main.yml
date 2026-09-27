@@ -227,6 +227,17 @@
   notify: Restart SLM agent
   tags: ['slm_agent', 'deploy']
 
+- name: "SLM Agent | Copy agent source - event_buffer.py"
+  copy:
+    src: slm/agent/event_buffer.py
+    dest: "{{ slm_agent_dir }}/slm/agent/event_buffer.py"
+    owner: "{{ slm_agent_user }}"
+    group: "{{ slm_agent_group }}"
+    mode: '0644'
+  become: true
+  notify: Restart SLM agent
+  tags: ['slm_agent', 'deploy']
+
 - name: "SLM Agent | Copy agent source - heartbeat_payload.py"
   copy:
     src: slm/agent/heartbeat_payload.py

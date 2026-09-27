@@ -82,7 +82,7 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _resolve_command_secrets(command: str, owner_id: str) -> tuple[str, FrozenSet[str]]:
+def _resolve_command_secrets(command: str, owner_id: str | None) -> tuple[str, FrozenSet[str]]:
     """
     Replace ${secrets.NAME} tokens in *command* with their plaintext values.
 
@@ -96,7 +96,7 @@ def _resolve_command_secrets(command: str, owner_id: str) -> tuple[str, FrozenSe
         _redact_result_secrets so only injected secrets are scanned. (#2321)
     """
     try:
-        return get_workflow_secret_service().resolve_secrets(command, owner_id)
+        return get_workflow_secret_service().resolve_secrets(command, owner_id) if owner_id else (command, frozenset())
     except Exception as exc:  # pragma: no cover
         logger.error("Secret resolution failed for workflow command: %s", exc)
         return command, frozenset()
@@ -104,7 +104,7 @@ def _resolve_command_secrets(command: str, owner_id: str) -> tuple[str, FrozenSe
 
 def _redact_result_secrets(
     result: Metadata,
-    owner_id: str,
+    owner_id: str | None,
     resolved_names: FrozenSet[str],
 ) -> Metadata:
     """
@@ -582,7 +582,7 @@ class WorkflowExecutor:
         # Issue #2153: Resolve ${secrets.NAME} tokens before execution.
         # Issue #2321: Capture resolved_names so redaction only scans
         # injected secrets — not all secrets for all users.
-        owner_id = workflow.owner_id or workflow.session_id
+        owner_id = workflow.owner_id  # #17014: never the session id -- see workflow_ownership
         resolved_command, resolved_names = _resolve_command_secrets(current_step.command, owner_id)
 
         # Issue #2632: Resolve ${steps.<id>.<path>} references for ALL step

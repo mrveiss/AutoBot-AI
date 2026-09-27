@@ -68,8 +68,15 @@ class WorkflowAutomationManager:
         """Expose terminal sessions from messenger for WebSocket management"""
         return self.messenger.terminal_sessions
 
-    async def create_workflow_from_chat_request(self, user_request: str, session_id: str) -> str | None:
-        """Create automated workflow from natural language chat request"""
+    async def create_workflow_from_chat_request(
+        self, user_request: str, session_id: str, owner_id: str | None = None
+    ) -> str | None:
+        """Create automated workflow from natural language chat request.
+
+        #17014: ``owner_id`` is the authenticated caller, so the workflow records who
+        created it and the control routes can scope to them. Callers with no user
+        context leave it None, which makes the workflow admin-only rather than open.
+        """
         try:
             # Use orchestrator to analyze request and create workflow steps.
             # #13730: both are coroutine functions — without await this bound
@@ -114,6 +121,7 @@ class WorkflowAutomationManager:
                     description=user_request,
                     steps=workflow_steps,
                     session_id=session_id,
+                    owner_id=owner_id,
                 )
                 return workflow_id
 
@@ -171,6 +179,12 @@ class WorkflowAutomationManager:
             automation_mode=automation_mode,
             owner_id=owner_id,
         )
+
+        if not owner_id:
+            # #17014: no owner means no user's secrets resolve for this workflow and only
+            # an admin may steer it. Both are deliberate and both are invisible at the
+            # point they bite, so they are stated here, once, where the choice is made.
+            logger.warning("Workflow %s created with no owner: admin-only, no user secrets", workflow_id)
 
         self.active_workflows[workflow_id] = workflow
 

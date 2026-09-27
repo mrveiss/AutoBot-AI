@@ -19,15 +19,14 @@ import os
 import platform
 import signal
 import socket
-import sqlite3
 import sys
-from pathlib import Path
 
 import aiohttp
 from aiohttp import web
 
 from autobot_shared import async_compat, env_utils, time_utils
 
+from . import event_buffer
 from .health_collector import HealthCollector
 from .heartbeat_payload import build_heartbeat_payload
 from .role_detector import RoleDetector
@@ -154,30 +153,11 @@ class SLMAgent:
 
     def _init_buffer_db(self):
         """Initialize SQLite buffer database."""
-        Path(self.buffer_db).parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(self.buffer_db)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS event_buffer (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                event_type TEXT NOT NULL,
-                data TEXT NOT NULL,
-                synced INTEGER DEFAULT 0
-            )
-        """)
-        conn.commit()
-        conn.close()
-        logger.info("Event buffer initialized at %s", self.buffer_db)
+        event_buffer.initialize(self.buffer_db)
 
     def buffer_event(self, event_type: str, data: dict):
         """Buffer an event for later sync."""
-        conn = sqlite3.connect(self.buffer_db)
-        conn.execute(
-            "INSERT INTO event_buffer (timestamp, event_type, data) VALUES (?, ?, ?)",
-            (time_utils.utc_timestamp(), event_type, json.dumps(data)),
-        )
-        conn.commit()
-        conn.close()
+        event_buffer.append(self.buffer_db, event_type, data)
 
     def _process_heartbeat_response(self, response: dict) -> None:
         """
@@ -285,7 +265,9 @@ class SLMAgent:
                 return False
         except aiohttp.ClientError as e:
             logger.warning("Failed to send heartbeat: %s", e)
-            self.buffer_event("heartbeat", payload)
+            # Offloaded here, not inside `buffer_event`: its other caller is sync.
+            # Hot path -- every failed heartbeat writes a row (#17647 review).
+            await asyncio.to_thread(self.buffer_event, "heartbeat", payload)
             return False
 
     async def send_heartbeat(self) -> bool:
@@ -303,32 +285,37 @@ class SLMAgent:
         )
         return await self._send_heartbeat_request(payload)
 
-    async def sync_buffered_events(self):
-        """Sync buffered events to admin (#1106)."""
-        assert self._session is not None
-        self._prune_old_events()
-        conn = sqlite3.connect(self.buffer_db)
+    async def prune_event_buffer(self) -> None:
+        """Cap the buffer every cycle and never raise -- why: `event_buffer.prune` (#17647)."""
         try:
-            cursor = conn.execute(
-                "SELECT id, event_type, data FROM event_buffer" " WHERE synced = 0 ORDER BY id LIMIT 100"
-            )
-            events = cursor.fetchall()
+            await asyncio.to_thread(event_buffer.prune, self.buffer_db)
+        except Exception as exc:
+            logger.warning("Event buffer prune failed, continuing to heartbeat: %s", exc)
 
-            if not events:
-                return
+    async def sync_buffered_events(self):
+        """Sync buffered events to admin (#1106).
 
-            logger.info("Syncing %d buffered events", len(events))
+        Every sqlite call reached from async goes through ``asyncio.to_thread``
+        (#7444), and a connection is no longer held across the POST below. Why no
+        widening of the guard finds these: module docstring of ``event_buffer``.
+        """
+        assert self._session is not None
+        events = await asyncio.to_thread(event_buffer.read_unsynced, self.buffer_db)
+        if not events:
+            return
 
-            url = f"{self.admin_url}/api/events/sync"
-            payload = [
-                {
-                    "id": e[0],
-                    "type": e[1],
-                    "data": json.loads(e[2]),
-                    "node_id": self.node_id,
-                }
-                for e in events
-            ]
+        logger.info("Syncing %d buffered events", len(events))
+        url = f"{self.admin_url}/api/events/sync"
+        payload = [
+            {
+                "id": e[0],
+                "type": e[1],
+                "data": json.loads(e[2]),
+                "node_id": self.node_id,
+            }
+            for e in events
+        ]
+        try:
             async with self._session.post(
                 url,
                 json=payload,
@@ -336,14 +323,7 @@ class SLMAgent:
                 ssl=False,
             ) as response:
                 if response.status == 200:
-                    ids = [e[0] for e in events]
-                    placeholders = ",".join("?" * len(ids))
-                    query = (
-                        "UPDATE event_buffer SET synced = 1 "
-                        f"WHERE id IN ({placeholders})"  # nosec B608  # only
-                    )
-                    conn.execute(query, ids)
-                    conn.commit()
+                    await asyncio.to_thread(event_buffer.mark_synced, self.buffer_db, [e[0] for e in events])
                     logger.info("Synced %d events", len(events))
                 else:
                     body = await response.text()
@@ -354,34 +334,6 @@ class SLMAgent:
                     )
         except aiohttp.ClientError as e:
             logger.warning("Failed to sync events: %s", e)
-        finally:
-            conn.close()
-
-    @staticmethod
-    def _prune_old_events(
-        db_path: str = DEFAULT_BUFFER_DB,
-        max_events: int = 500,
-    ):
-        """Cap the event buffer to prevent unbounded growth (#1106)."""
-        conn = sqlite3.connect(db_path)
-        try:
-            count = conn.execute("SELECT COUNT(*) FROM event_buffer").fetchone()[0]
-            if count > max_events:
-                conn.execute(
-                    "DELETE FROM event_buffer WHERE id IN ("
-                    "  SELECT id FROM event_buffer"
-                    "  ORDER BY id ASC LIMIT ?"
-                    ")",
-                    (count - max_events,),
-                )
-                conn.commit()
-                logger.info(
-                    "Pruned %d old events (cap=%d)",
-                    count - max_events,
-                    max_events,
-                )
-        finally:
-            conn.close()
 
     async def run(self, enable_notify_server: bool = False, notify_port: int = DEFAULT_NOTIFY_PORT):
         """Main agent loop."""
@@ -406,6 +358,9 @@ class SLMAgent:
                 sd_notify("WATCHDOG=1")
 
                 try:
+                    # First, and never raising -- why: `event_buffer.prune` (#17647).
+                    await self.prune_event_buffer()
+
                     # Send heartbeat
                     success = await self.send_heartbeat()
 
@@ -489,7 +444,7 @@ class SLMAgent:
 
             logger.info("Code change notification: %s on %s", commit[:12], branch)
 
-            self._process_code_change(commit, branch, message)
+            await asyncio.to_thread(self._process_code_change, commit, branch, message)
             async_compat.fire_and_forget(self._notify_code_change(commit), name=commit[:12])
 
             return web.json_response(
