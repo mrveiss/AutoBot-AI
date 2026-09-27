@@ -314,11 +314,16 @@ async def sweep_source_liveness(*, limit: int = DEFAULT_SWEEP_LIMIT) -> Dict[str
     answer. Reading first, probing outside any transaction, then writing in a
     short one means a stalled filesystem costs no database time.
 
-    Returns the per-outcome counts for this page, plus ``superseded``: how many
-    probes were discarded because a newer sweep had already recorded a look. That
-    number is reported rather than swallowed -- `probed` counts what was probed,
-    not what was written, and a caller comparing the two would otherwise be
-    reading a silent discrepancy.
+    Returns the per-outcome counts for this page, plus two discard counts:
+    ``superseded`` (a newer sweep had already recorded a look) and ``relocated``
+    (the fact's locator changed between the probe and the write). Both are
+    reported rather than swallowed -- `probed` counts what was probed, not what
+    was written, and a caller comparing the two would otherwise be reading a
+    silent discrepancy.
+
+    ``started_at`` and ``finished_at`` bound the sweep. Neither is the timestamp
+    written to a row: each observation carries the instant its own probe returned,
+    which on a page containing a dead mount is minutes from either bound.
 
     Nothing is deleted and no field outside the four observation columns is
     written.
@@ -334,13 +339,22 @@ async def sweep_source_liveness(*, limit: int = DEFAULT_SWEEP_LIMIT) -> Dict[str
     # 2. Probe with no transaction held and no blocking on the event loop. An
     #    unusable locator is NOT skipped -- `probe_path` reports it `unreadable`,
     #    which records an observation and lets the page make progress.
-    now = datetime.now(tz=timezone.utc)
+    #
+    #    Each probe carries its OWN completion timestamp and the locator it
+    #    actually looked at (#17615 review). One timestamp for the whole page was
+    #    wrong twice over: it is not when the probe happened -- a page of 2s
+    #    timeouts understates by the page's duration -- and it made the ordering
+    #    guard below compare the wrong instants, so a LATER successful probe from
+    #    a sweep that started earlier was discarded as stale and `source_seen_at`
+    #    stayed older than a sighting that really occurred.
+    started_at = datetime.now(tz=timezone.utc)
     counts: Dict[str, int] = {outcome: 0 for outcome in PROBE_OUTCOMES}
-    observed: List[Tuple[str, str]] = []
+    observed: List[Tuple[str, str, str | None, datetime]] = []
     for fact_id, metadata in candidates:
-        outcome = await probe_path_async(locator_of(metadata))
+        probed_locator = locator_of(metadata)
+        outcome = await probe_path_async(probed_locator)
         counts[outcome] += 1
-        observed.append((fact_id, outcome))
+        observed.append((fact_id, outcome, probed_locator, datetime.now(tz=timezone.utc)))
 
     # 3. Persist in a short write transaction, one row at a time under a lock.
     #
@@ -357,34 +371,49 @@ async def sweep_source_liveness(*, limit: int = DEFAULT_SWEEP_LIMIT) -> Dict[str
     #    the write monotonic even across processes that never contend for the lock
     #    at the same instant. The SQLite dialect omits FOR UPDATE rather than
     #    failing on it, so a test database is unaffected.
+    #
+    #    The locator is re-read under the lock and compared with the one probed:
+    #    `update_fact` can move a fact's `file_path` while the sweep is probing,
+    #    and an observation of the OLD document applied to the NEW locator would
+    #    mark a path `resolved` that nothing looked at. That is the exact
+    #    mis-attribution this module exists to prevent, so the observation is
+    #    dropped -- and counted, not swallowed.
     stale = 0
+    relocated = 0
     if observed:
         async with factory() as session:
-            for fact_id, outcome in observed:
+            for fact_id, outcome, probed_locator, observed_at in observed:
                 row = await session.get(KnowledgeFact, fact_id, with_for_update=True)
                 if row is None:
                     continue
-                if row.source_checked_at is not None and row.source_checked_at >= now:
+                if locator_of(row.metadata_json) != probed_locator:
+                    relocated += 1
+                    continue
+                if row.source_checked_at is not None and row.source_checked_at >= observed_at:
                     # A newer sweep already recorded a look at this fact. Dropping
                     # the write is correct; dropping it SILENTLY is not, so it is
                     # counted and returned.
                     stale += 1
                     continue
-                apply_observation(row, outcome, now=now)
+                apply_observation(row, outcome, now=observed_at)
             await session.commit()
 
+    finished_at = datetime.now(tz=timezone.utc)
     logger.info(
-        "Source-liveness sweep probed %d locator(s): %s (%d superseded by a newer sweep)",
+        "Source-liveness sweep probed %d locator(s): %s (%d superseded, %d relocated mid-probe)",
         sum(counts.values()),
         counts,
         stale,
+        relocated,
     )
     return {
         "probed": sum(counts.values()),
         "outcomes": counts,
         "superseded": stale,
+        "relocated": relocated,
         "limit": limit,
-        "checked_at": now.isoformat(),
+        "started_at": started_at.isoformat(),
+        "finished_at": finished_at.isoformat(),
     }
 
 

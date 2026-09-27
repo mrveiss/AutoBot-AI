@@ -33,6 +33,7 @@ from __future__ import annotations
 import ast
 import asyncio
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -147,6 +148,9 @@ class _FakeSession:
         return _FakeResult([(fact.id, fact.metadata_json) for fact in self._rows])
 
     async def get(self, model, fact_id, with_for_update=False):
+        hook = self._tracker.get("on_get")
+        if hook is not None:
+            hook(fact_id)
         self._tracker["locked_gets"] += int(bool(with_for_update))
         self._tracker["gets"] += 1
         return next((fact for fact in self._rows if fact.id == fact_id), None)
@@ -172,7 +176,14 @@ class TestTheSweepHoldsNoTransactionWhileProbing:
         ]
 
     def _install(self, monkeypatch, facts):
-        tracker = {"open": 0, "sessions": 0, "probes_with_a_session_open": 0, "gets": 0, "locked_gets": 0}
+        tracker = {
+            "open": 0,
+            "sessions": 0,
+            "probes_with_a_session_open": 0,
+            "gets": 0,
+            "locked_gets": 0,
+            "on_get": None,
+        }
         sessions = []
 
         def _factory():
@@ -302,6 +313,85 @@ class TestTwoSweepsCannotUndoEachOther:
 
         assert tracker["gets"] == 2
         assert tracker["locked_gets"] == 2
+
+
+class TestAnObservationIsAboutOneLocatorAtOneInstant:
+    """#17615 review, round 2. Two ways an observation reached the wrong subject.
+
+    Both are the module's own thesis turned on itself: a probe result is a
+    statement about **which path** was looked at and **when**, and the first
+    version recorded neither faithfully.
+    """
+
+    @staticmethod
+    def _fact(fact_id="f1", locator="/srv/a.pdf"):
+        return KnowledgeFact(id=fact_id, content="c", metadata_json={LOCATOR_KEY: locator})
+
+    @pytest.mark.asyncio
+    async def test_each_row_carries_the_instant_its_own_probe_returned(self, monkeypatch) -> None:
+        """One timestamp for the page is not when any probe happened.
+
+        The probes here are made to take real time, so a shared page-level `now`
+        would make all three timestamps identical.
+        """
+        facts = [self._fact("f1"), self._fact("f2"), self._fact("f3")]
+        TestTheSweepHoldsNoTransactionWhileProbing()._install(monkeypatch, facts)
+        real_probe = source_liveness.probe_path
+
+        def _slow(path):
+            time.sleep(0.02)
+            return real_probe(path)
+
+        monkeypatch.setattr(source_liveness, "probe_path", _slow)
+
+        await sweep_source_liveness(limit=10)
+
+        stamps = [fact.source_checked_at for fact in facts]
+        assert all(stamp is not None for stamp in stamps)
+        assert len(set(stamps)) == len(stamps), "all three rows share one timestamp -- the page's, not each probe's"
+        assert stamps == sorted(stamps)
+
+    @pytest.mark.asyncio
+    async def test_the_sweep_bounds_are_not_the_row_timestamps(self, monkeypatch) -> None:
+        facts = [self._fact()]
+        TestTheSweepHoldsNoTransactionWhileProbing()._install(monkeypatch, facts)
+
+        result = await sweep_source_liveness(limit=10)
+
+        started = datetime.fromisoformat(result["started_at"])
+        finished = datetime.fromisoformat(result["finished_at"])
+        assert started <= facts[0].source_checked_at <= finished
+        assert "checked_at" not in result, "one ambiguous timestamp per sweep is what the review removed"
+
+    @pytest.mark.asyncio
+    async def test_a_locator_that_moves_mid_probe_discards_the_observation(self, monkeypatch) -> None:
+        """`update_fact` can move `file_path` while the sweep is probing.
+
+        Applying the old document's result to the new locator would mark a path
+        `resolved` that nothing ever looked at.
+        """
+        fact = self._fact(locator="/srv/before.pdf")
+        tracker, _ = TestTheSweepHoldsNoTransactionWhileProbing()._install(monkeypatch, [fact])
+        # The move lands after the probe, when the write phase reads the row.
+        tracker["on_get"] = lambda _fact_id: fact.metadata_json.__setitem__(LOCATOR_KEY, "/srv/after.pdf")
+
+        result = await sweep_source_liveness(limit=10)
+
+        assert result["relocated"] == 1
+        assert result["probed"] == 1
+        assert fact.source_checked_at is None, "an observation of the old path was attached to the new one"
+        assert fact.source_last_probe is None
+
+    @pytest.mark.asyncio
+    async def test_a_locator_that_does_not_move_is_recorded_normally(self, monkeypatch) -> None:
+        """The guard must not become "discard everything"."""
+        fact = self._fact()
+        TestTheSweepHoldsNoTransactionWhileProbing()._install(monkeypatch, [fact])
+
+        result = await sweep_source_liveness(limit=10)
+
+        assert result["relocated"] == 0
+        assert fact.source_checked_at is not None
 
 
 class TestTheSweepQueryAsksOneQuestion:
