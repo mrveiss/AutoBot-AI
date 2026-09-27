@@ -65,13 +65,38 @@ def test_no_async_function_calls_a_blocking_probe_inline(probe: str) -> None:
     assert not offenders, f"{probe}() called inline from async: {offenders}"
 
 
-def test_the_probes_are_actually_reached_from_async():
-    """A file that stopped calling the probes would pass the test above vacuously.
+def _offloaded_calls(node: ast.AST, name: str) -> list:
+    """Calls to *name* handed to `to_thread` as its callable."""
+    return [
+        arg
+        for sub in ast.walk(node)
+        if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Attribute) and sub.func.attr == "to_thread"
+        for arg in sub.args
+        if isinstance(arg, ast.Name) and arg.id == name
+    ]
 
-    `MEASUREMENT_DISCIPLINE.md`: an empty result must not read as a clean one. If
-    the probes move or get renamed, this fails and the pin above is re-pointed
-    rather than silently satisfied.
+
+@pytest.mark.parametrize("probe", _BLOCKING_PROBES)
+def test_each_probe_is_actually_reached_from_async(probe: str) -> None:
+    """The sweep above passes trivially if nothing calls the probes at all.
+
+    `MEASUREMENT_DISCIPLINE.md`: an empty result must not read as a clean one. A
+    "no bad call sites" assertion is satisfied by a file with no call sites, so
+    each probe is separately shown to be *reached*.
+
+    This assertion is checked against the AST, not against the source text. The
+    first version of this test asked whether the probe's name appeared anywhere in
+    the file, which the `import` line alone satisfies -- so it would have passed
+    with every call deleted, while its name promised the calls were reached from
+    async. That is the same name-claims-more-than-mechanism defect the sweep it
+    guards exists to prevent, so it is worth saying plainly: a non-vacuity check
+    written vacuously buys nothing and reads like coverage.
     """
-    source = _SOURCE.read_text(encoding="utf-8")
-    reached = [p for p in _BLOCKING_PROBES if f"{p}" in source]
-    assert reached == list(_BLOCKING_PROBES), f"probe(s) no longer referenced: {reached}"
+    reached = {
+        fname for fname, fn in _async_functions().items() if _offloaded_calls(fn, probe) or _bare_calls(fn, probe)
+    }
+    assert reached, (
+        f"{probe}() is not called from any `async def` in {_SOURCE.name} -- "
+        "either it moved and the sweep above is now vacuous, or it was renamed "
+        "and this pin needs re-pointing"
+    )
