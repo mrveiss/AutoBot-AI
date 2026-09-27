@@ -207,6 +207,14 @@ jobs:
         python -m pip install --upgrade pip
         # Pin versions to match .pre-commit-config.yaml (Issue #2128)
         python -m pip install black==26.3.1 isort==8.0.1 flake8==7.3.0 autoflake==2.3.3 'bandit[toml]==1.9.4'
+        # #17610 review: this job installs its tools explicitly and never the
+        # application's dependencies, so a checker needing `packaging` cannot
+        # assume it. tools/lint/check_ci_plane_unenforced_pins.py parses
+        # requirement specifiers and environment markers with it, and
+        # check_requirements_ci_drift.py compares constraint semantics with it.
+        # Both degrade rather than crash without it -- and degrading silently is
+        # the failure this branch exists to remove, so it is installed.
+        python -m pip install packaging
         # mypy and stubs (GH#7105).
         #
         # This version is pinned in two places -- here and as the mirrors-mypy

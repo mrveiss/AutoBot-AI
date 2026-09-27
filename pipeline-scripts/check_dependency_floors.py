@@ -21,6 +21,14 @@ that satisfies the declared set without touching anything outside its venv;
 
 from __future__ import annotations
 
+import sys as _sys
+from pathlib import Path as _Path
+
+# The report half lives beside this file. `sys.path` is amended from __file__
+# rather than relying on the caller's cwd, because repo_tests/dependency_floor_
+# banner.py loads this module with spec_from_file_location, where the script's
+# directory is NOT on sys.path.
+_sys.path.insert(0, str(_Path(__file__).resolve().parent))
 import argparse
 import json
 import os
@@ -32,6 +40,8 @@ from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
+
+from dependency_floor_report import MAX_REPORTED, FloorAudit, render  # noqa: E402,F401
 
 #: Entry points of the requirement graph describing the environment local
 #: verification is meant to reproduce. Each is expanded through its ``-r``
@@ -61,7 +71,6 @@ DECLARATION_ROOTS: tuple[str, ...] = (
 #: not a new entry here. check_dependency_floors_test.py pins this empty.
 KNOWN_CROSS_VENV_EXEMPTIONS: Mapping[tuple[str, str], str] = {}
 
-MAX_REPORTED = 10
 
 #: Stands in for a version in a :class:`Shortfall` raised for a distribution
 #: that is not installed at all. Only reachable when a caller asks for it --
@@ -402,8 +411,9 @@ def audit(
     roots: Sequence[str] | None = None,
     require_present: bool = False,
     python: Path | None = None,
-) -> tuple[list[Shortfall], int]:
-    """Shortfalls in *root*'s declared set, plus how many declarations were read.
+    environment: str | None = None,
+) -> FloorAudit:
+    """Everything the sweep established, as a :class:`FloorAudit`.
 
     *roots* narrows the sweep to a subset of the entry points. A caller that
     installs only part of the graph -- ``scripts/setup-ci-parity-env.sh``
@@ -414,7 +424,7 @@ def audit(
     Raises :class:`EmptyEnumerationError` when the sweep reads nothing, so an
     empty enumeration can never be reported as a clean environment.
     """
-    swept = DECLARATION_ROOTS if roots is None else roots
+    swept = tuple(DECLARATION_ROOTS if roots is None else roots)
     files = declaration_files(root, swept)
     declarations = parse_declarations(files, root)
     if not declarations:
@@ -428,70 +438,71 @@ def audit(
     # capability rather than a changed contract. Only the --venv path passes a
     # second argument, and only that path is new.
     installed = installed_versions(names) if python is None else installed_versions(names, python)
-    return shortfalls(declarations, installed, require_present), len(declarations)
+    absent = tuple(sorted({d.name for d in declarations if d.name not in installed}))
+    unreadable = tuple(sorted({d.name for d in declarations if installed.get(d.name) == UNREADABLE}))
+    # #17610 review, twice over. Counted per DECLARATION, not per unique name:
+    # one package can be declared several times -- across service files, or
+    # through `-r` includes -- and `absent` is de-duplicated, so
+    # `len(declarations) - len(absent)` credited the extra declarations of an
+    # uninstalled package as compared.
+    #
+    # And a declaration is only compared when its installed version is
+    # READABLE. `UNREADABLE` is a value in `installed`, not an absence, so
+    # `name in installed` counted an unreadable package as compared when
+    # nothing was compared at all -- *did not measure* reported as *measured*,
+    # which is the defect this whole change exists to remove.
+    comparable = {
+        declaration.name
+        for declaration in declarations
+        if declaration.name in installed and installed[declaration.name] != UNREADABLE
+    }
+    compared = sum(1 for declaration in declarations if declaration.name in comparable)
+    # Declarations, not names: the complement of `compared` has to be countable
+    # in the same unit, or the two numbers cannot be read together.
+    not_compared_declarations = len(declarations) - compared
+    return FloorAudit(
+        shortfalls=tuple(shortfalls(declarations, installed, require_present)),
+        declared=len(declarations),
+        compared=compared,
+        not_installed=absent,
+        unreadable=unreadable,
+        not_compared_declarations=not_compared_declarations,
+        roots=swept,
+        environment=environment or f"the interpreter running this check (python {platform.python_version()})",
+        roots_are_the_union=set(swept) == set(DECLARATION_ROOTS),
+    )
 
 
-def render(
-    found: Sequence[Shortfall],
-    examined: int,
-    limit: int = MAX_REPORTED,
+def _print_report(
+    result: FloorAudit,
     *,
-    in_ci: bool = False,
-    environment: str | None = None,
-) -> list[str]:
-    """The report, one line per element; *limit* caps the per-package detail.
+    show_all: bool,
+    gating: bool,
+    in_ci: bool,
+    deployed: bool,
+    already_reported: bool = False,
+) -> None:
+    """Print :func:`render`'s lines, plus the not-compared names under ``--all``.
 
-    *in_ci* names the reference correctly for where this prints (#16264). Off a
-    developer's box, the interpreter making the report is some OTHER
-    environment than the one CI installs, so the second line points there. A
-    caller that IS CI -- the ``python-shard`` ``--strict`` step, or this
-    plugin's own ``pytest_terminal_summary`` when ``CI`` is set -- passes
-    ``in_ci=True`` instead, because the interpreter making the report there
-    already IS the declared set: saying a pass "carries no information about
-    CI" would be false when the box printing it is CI's own.
+    Extracted from :func:`main` for the #620 length gate. ``--all`` lists what
+    was NOT compared as well as the shortfalls: a flag promising "every
+    shortfall" while hiding the packages no shortfall could be computed for is
+    the same omission this issue exists to fix, one level down.
     """
-    # #17449: name the environment beside the number. With --venv the report is
-    # about an interpreter this process is NOT running in, and saying "the
-    # interpreter running this check" there attributes a deployed venv's numbers
-    # to the local box. Two sessions retracted conclusions from exactly that
-    # confusion on one CI log; a tool that prints it is worse than a log that
-    # merely allows it.
-    where = environment or f"the interpreter running this check (python {platform.python_version()})"
-    if not found:
-        return [f"dependency floors: {examined} declarations checked against {where}, all satisfied"]
-    lines = [f"{len(found)} of {examined} declared versions are NOT satisfied by {where}."]
-    if in_ci:
-        lines.append(
-            "This IS the CI job's own environment -- these are the packages CI itself "
-            "installed, below the floor it declares, not a stand-in for it."
-        )
-    else:
-        lines.append("A pass here therefore carries no information about CI, which installs " "the declared set.")
-    if environment is not None:
-        del lines[1:]  # the CI-parity framing above is about a local box, not this one
-        # The advice below is about reproducing CI on a developer's box. None of
-        # it applies to a deployed venv, and printing it there would tell an
-        # operator to fix production by running a CI-parity script.
-        lines.extend(f"  {shortfall.describe()}" for shortfall in found[:limit])
-        if len(found) > limit:
-            # Without this the deployed report silently truncated and never said
-            # so -- a list that hides entries without admitting it (#17502).
-            lines.append(f"  ... and {len(found) - limit} more; re-run with --all to list them")
-        lines.append(
-            "This is a DEPLOYED environment, not a local or CI one: these are the versions "
-            "actually serving traffic. Changing them goes through the builtin updater, never "
-            "an ad-hoc pip install."
-        )
-        return lines
-    lines.extend(f"  {shortfall.describe()}" for shortfall in found[:limit])
-    if len(found) > limit:
-        remaining = len(found) - limit
-        lines.append(
-            f"  ... and {remaining} more; " "run pipeline-scripts/check_dependency_floors.py --all to list them"
-        )
-    lines.append("Reproduce the declared environment: scripts/setup-ci-parity-env.sh")
-    lines.append("Otherwise push and read CI. Known divergence: #15093 (include_router defers).")
-    return lines
+    for line in render(
+        result,
+        len(result.shortfalls) if show_all else MAX_REPORTED,
+        in_ci=in_ci,
+        gating=gating,
+        deployed=deployed,
+    ):
+        print(line)  # noqa: print
+    if show_all and result.not_installed and not already_reported:
+        # `--require-present` already turns every absent declaration into a
+        # shortfall, so listing them again below would print each one twice.
+        print(f"Declared but not installed, therefore not compared ({len(result.not_installed)}):")  # noqa: print
+        for name in result.not_installed:
+            print(f"  {name}")  # noqa: print
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -539,11 +550,12 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
     try:
-        found, examined = audit(
+        result = audit(
             root,
             None if args.roots is None else tuple(args.roots),
             require_present=args.require_present,
             python=interpreter,
+            environment=environment,
         )
     except EmptyEnumerationError as exc:
         print(f"FATAL: {exc}", file=sys.stderr)  # noqa: print
@@ -552,13 +564,19 @@ def main(argv: list[str] | None = None) -> int:
     # the same signal autobot-backend/tests/test_ocr_fallback_13896.py already
     # keys on for the same distinction.
     in_ci = bool(os.environ.get("CI"))
-    for line in render(found, examined, len(found) if args.all else MAX_REPORTED, in_ci=in_ci, environment=environment):
-        print(line)  # noqa: print
+    _print_report(
+        result,
+        show_all=args.all,
+        gating=args.strict,
+        in_ci=in_ci,
+        deployed=environment is not None,
+        already_reported=args.require_present,
+    )
     # #16264: a shortfall matching KNOWN_CROSS_VENV_EXEMPTIONS is still printed
     # above (it is real, in this interpreter) but never fails --strict -- it is
     # a documented cross-venv mismatch, not drift this run should gate on.
-    gating = [shortfall for shortfall in found if not is_exempt(shortfall)]
-    return 1 if gating and args.strict else 0
+    blocking = [shortfall for shortfall in result.shortfalls if not is_exempt(shortfall)]
+    return 1 if blocking and args.strict else 0
 
 
 if __name__ == "__main__":
