@@ -3150,7 +3150,17 @@
       "noEntities3D": "Keine Entitäten zum Anzeigen",
       "loading3dVisualization": "Loading3d visualization",
       "loadingVisualization": "Loading visualization library...",
-      "retry": "Retry"
+      "retry": "Retry",
+      "sourcesUnreadable": "Wissensgraph konnte nicht gelesen werden",
+      "sourcesUnreadableHint": "Es wird nichts angezeigt, weil die unten aufgeführten Speicher nicht geantwortet haben – nicht, weil der Graph leer ist.",
+      "sourceHeld": "{source}: {held} Entitäten",
+      "sourceFailed": "{source}: konnte nicht gelesen werden – {reason}",
+      "partialGraph": "Dieser Graph ist unvollständig: {sources} konnte nicht gelesen werden.",
+      "source": {
+        "unified": "Wissensdatenbank-Graph",
+        "memory": "Speicher-Entitäten"
+      },
+      "reasonUnknown": "kein Grund gemeldet"
     },
     "connectors": {
       "title": "Quell-Konnektoren",

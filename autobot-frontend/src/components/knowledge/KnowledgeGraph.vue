@@ -129,6 +129,19 @@
       </div>
     </div>
 
+    <!-- A drawn graph can still be missing a whole store. That has to stay on
+         screen: the failure notification above is a 5s toast, so without this
+         the gap became invisible while the incomplete picture stayed (#17612). -->
+    <div v-if="graphIsPartial && entities.length > 0" class="partial-notice" role="status">
+      <Icon name="exclamation-triangle" />
+      <span>
+        {{ $t('knowledge.graph.partialGraph', {
+          sources: failedSources.map((source) => sourceLabel(source.key)).join(', '),
+        }) }}
+      </span>
+      <button @click="refreshGraph" class="btn-link">{{ $t('knowledge.graph.retry') }}</button>
+    </div>
+
     <!-- Loading State -->
     <div v-if="isLoading" class="loading-state">
       <div class="spinner">
@@ -137,14 +150,48 @@
       <p>{{ $t('knowledge.graph.loadingGraph') }}</p>
     </div>
 
-    <!-- Empty State -->
-    <div v-else-if="entities.length === 0 && !isLoading" class="empty-state">
+    <!-- Nothing to draw. WHY decides the words: a store that holds nothing
+         invites you to create an entity, a store that could not be read is a
+         failure to report, and the two used to share this one screen (#17612).
+         Either way the per-store lines below state what was read and what it
+         held, so the claim is checkable rather than asserted. -->
+    <div
+      v-else-if="entities.length === 0 && !isLoading"
+      class="empty-state"
+      :class="{ 'empty-state--unreadable': failedSources.length > 0 }"
+    >
       <div class="empty-icon">
-        <Icon name="project-diagram" />
+        <Icon :name="failedSources.length > 0 ? 'exclamation-triangle' : 'project-diagram'" />
       </div>
-      <h4>{{ $t('knowledge.graph.noEntitiesFound') }}</h4>
-      <p>{{ $t('knowledge.graph.noEntitiesHint') }}</p>
-      <button @click="showCreateModal = true" class="action-btn primary">
+      <h4>
+        {{ graphIsEmpty
+          ? $t('knowledge.graph.noEntitiesFound')
+          : $t('knowledge.graph.sourcesUnreadable') }}
+      </h4>
+      <p>
+        {{ graphIsEmpty
+          ? $t('knowledge.graph.noEntitiesHint')
+          : $t('knowledge.graph.sourcesUnreadableHint') }}
+      </p>
+      <ul v-if="graphSources.length > 0" class="source-outcomes">
+        <li v-for="source in graphSources" :key="source.key" :class="{ 'is-failed': !source.ok }">
+          {{ source.ok
+            ? $t('knowledge.graph.sourceHeld', { source: sourceLabel(source.key), count: source.count })
+            : $t('knowledge.graph.sourceFailed', {
+              source: sourceLabel(source.key),
+              reason: source.error || $t('knowledge.graph.reasonUnknown'),
+            }) }}
+        </li>
+      </ul>
+      <button
+        v-if="failedSources.length > 0"
+        @click="refreshGraph"
+        class="action-btn primary"
+      >
+        <Icon name="sync" />
+        {{ $t('knowledge.graph.retry') }}
+      </button>
+      <button v-else @click="showCreateModal = true" class="action-btn primary">
         <Icon name="plus" />
         {{ $t('knowledge.graph.createEntity') }}
       </button>
@@ -395,6 +442,7 @@ import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick, def
 import type cytoscape from 'cytoscape'
 import type { Core, NodeSingular } from 'cytoscape'
 import { useCytoscapeLibrary } from '@/composables/charts/useCytoscapeLibrary'
+import { useI18n } from 'vue-i18n'
 import { useKnowledgeGraphEntities } from '@/composables/knowledge/useKnowledgeGraphEntities'
 import type { GraphEntity as Entity, GraphRelation as Relation } from '@/composables/knowledge/useKnowledgeGraphEntities'
 import { createLogger } from '@/utils/debugUtils'
@@ -444,14 +492,42 @@ interface NewEntity {
 // State
 // ============================================================================
 
+const { t } = useI18n()
+
 const {
   entities,
   relations,
   isLoading,
   errorMessage: graphError,
+  sources: graphSources,
   fetchGraphData,
   createGraphEntity,
 } = useKnowledgeGraphEntities()
+
+/**
+ * #17612: an empty canvas had one explanation on screen -- "No Entities Found",
+ * with an invitation to create one -- and three possible causes. A store that
+ * could not be read produced the same words as a store that was read and holds
+ * nothing, because the only question asked was `entities.length === 0`. The
+ * failure notification is a `useTransientError(5000)` toast, so after five
+ * seconds the false version was all that remained.
+ */
+const failedSources = computed(() => graphSources.value.filter((source) => !source.ok))
+
+/** Some stores answered and some did not: what is drawn is a partial graph. */
+const graphIsPartial = computed(
+  () => failedSources.value.length > 0 && failedSources.value.length < graphSources.value.length,
+)
+
+/** Read, and genuinely holding nothing. The only case that may invite a create. */
+const graphIsEmpty = computed(
+  () => graphSources.value.length > 0 && failedSources.value.length === 0 && entities.value.length === 0,
+)
+
+/** A store's name for the reader; `key` is a wire value, not a label. */
+function sourceLabel(key: string): string {
+  return t(`knowledge.graph.source.${key}`)
+}
 
 const { message: errorMessage, show: showError, clear: clearError } = useTransientError(5000)
 watch(graphError, (msg) => {
@@ -1325,7 +1401,9 @@ watch(layoutMode, () => {
   border: 1px solid var(--color-error-border);
   border-left: 4px solid var(--color-error);
   border-radius: var(--radius-md);
-  color: var(--color-error-text);
+  /* #17552/#17612: `--color-error-text` is defined nowhere, so this banner's
+     text was inheriting its colour rather than taking the intended one. */
+  color: var(--text-on-error);
 }
 
 .error-notification i.fa-exclamation-circle {
@@ -1459,6 +1537,39 @@ watch(layoutMode, () => {
 .loading-state .spinner {
   font-size: 2rem;
   color: var(--color-primary);
+}
+
+/* #17612: the unreadable-store variant of the empty state, and the banner a
+   partial graph keeps. Every token below was checked to be defined before it
+   was used -- #17552: a var() naming nothing does not fall back to the intended
+   colour, it renders transparent or inherits. `--color-warning-text` and
+   `--color-text-secondary` are the plausible names, and neither exists; the
+   real ones are `--text-on-warning` and `--text-secondary`. */
+.partial-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-warning-bg);
+  border-left: 4px solid var(--color-warning);
+  color: var(--text-on-warning);
+  font-size: 0.875rem;
+}
+
+.empty-state--unreadable .empty-icon {
+  color: var(--color-warning);
+}
+
+.source-outcomes {
+  list-style: none;
+  margin: var(--spacing-sm) 0;
+  padding: 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.source-outcomes .is-failed {
+  color: var(--color-error);
 }
 
 /* Empty State */
