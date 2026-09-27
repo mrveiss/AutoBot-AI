@@ -67,6 +67,7 @@ _GUARDED_CHECKERS = (
     "tools/lint/check_requirements_pin_parity.py",
     "tools/lint/check_docs_no_fleet_addressing.py",
     "tools/lint/check_runner_watchdog_schedule.py",
+    "tools/lint/check_ci_plane_unenforced_pins.py",
 )
 
 _FILTER_BULLET_RE = re.compile(r"^\s*-\s*'([^']+)'\s*$")
@@ -83,9 +84,30 @@ def repo_root() -> pathlib.Path:
 
 
 def _load_module(root: pathlib.Path, rel_path: str):
-    spec = importlib.util.spec_from_file_location(rel_path.replace("/", "_"), root / rel_path)
+    """Load a guarded checker by location, registered so dataclasses resolve.
+
+    The ``sys.modules`` assignment before ``exec_module`` is required, not
+    incidental: ``@dataclass`` resolves its annotations through
+    ``sys.modules[cls.__module__]``, so a module executed without that key
+    raises ``AttributeError: 'NoneType' object has no attribute '__dict__'`` on
+    import. Without it this loader could not read ANY checker that defines a
+    dataclass -- `check_ci_plane_unenforced_pins.py` was the first to try and
+    the failure named neither the cause nor the file.
+
+    ``repo_tests/dependency_floor_banner.py`` documents the same trap for the
+    same reason; this is that fix, one guard over.
+    """
+    name = rel_path.replace("/", "_").removesuffix(".py")
+    spec = importlib.util.spec_from_file_location(name, root / rel_path)
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        # Never leave a half-executed module registered: the next load would
+        # reuse it and report whatever it managed to define before failing.
+        sys.modules.pop(name, None)
+        raise
     return module
 
 
