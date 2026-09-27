@@ -19,9 +19,11 @@ from autobot_shared.logging_manager import get_logger
 """
 
 import asyncio
+from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import redact_provider_error
 from security.content_firewall import ContentSource, get_content_firewall
 from services.mcp_isolation_config import BridgePolicy
 from skills.sync.mcp_transport import MCPTransport, create_transport
@@ -35,6 +37,75 @@ logger = get_logger(__name__)
 
 # Incrementing per-client request counter start
 _INIT_REQ_ID = 1
+
+
+@dataclass(frozen=True)
+class RejectedTool:
+    """A tool the server advertised that we could not accept (#17467).
+
+    ``name`` is best-effort: a payload malformed enough to have no usable name
+    yields ``None`` rather than crashing the discovery that is reporting it.
+    """
+
+    name: str | None
+    reason: str
+
+
+@dataclass(frozen=True)
+class ToolDiscovery:
+    """What one server's `tools/list` yielded: what we took, and what we refused."""
+
+    accepted: List[MCPToolDefinition] = field(default_factory=list)
+    rejected: List[RejectedTool] = field(default_factory=list)
+
+
+def _rejection_reason(exc: Exception) -> str:
+    """Why a tool was refused, WITHOUT echoing what it contained (#17467).
+
+    The first version passed the validator's message through
+    ``redact_provider_error``, which was not enough and failed for an
+    instructive reason. ``redact_text`` masks ``Authorization: Bearer <token>``
+    correctly on its own -- but pydantic embeds the offending input in its
+    message AND truncates it, yielding fragments like
+    ``'inputS...Bearer sk-secret-value'``. The validator's own truncation breaks
+    the very prefix the redactor matches on, so the token survived.
+
+    **A redactor is not a substitute for not including the data.** A pattern
+    matcher can only mask shapes it can still recognise, and anything that
+    reformats the text first can destroy the shape while keeping the secret.
+
+    So the reason is built from the validator's STRUCTURE -- which field, which
+    failure kind -- and never from its rendered message or its ``input`` value.
+    `description: missing; inputSchema: model_type` tells an operator what to fix
+    and cannot carry a credential. Non-pydantic exceptions fall back to the
+    provider redactor, where there is no structure to use.
+    """
+    errors = getattr(exc, "errors", None)
+    if callable(errors):
+        try:
+            parts = {
+                f"{'.'.join(str(p) for p in err.get('loc', ())) or '<root>'}: {err.get('type', 'invalid')}"
+                for err in errors()
+            }
+        except Exception:  # noqa: BLE001 - a validator that cannot describe itself falls back below
+            parts = set()
+        if parts:
+            return "; ".join(sorted(parts)[:6])
+    return redact_provider_error(exc)
+
+
+def _advertised_name(raw: Any) -> str | None:
+    """The tool's advertised name, or None -- never raising (#17467).
+
+    The previous code read ``raw.get("name")`` *inside* the ``except`` handler,
+    so a non-dict entry raised ``AttributeError`` from the error path itself and
+    aborted discovery for every remaining tool. An error reporter that can fail
+    on the input it is reporting is worse than the error it describes.
+    """
+    if isinstance(raw, dict):
+        value = raw.get("name")
+        return value if isinstance(value, str) else None
+    return None
 
 
 class MCPClient:
@@ -123,22 +194,48 @@ class MCPClient:
     # Tool operations
     # ------------------------------------------------------------------
 
-    async def discover_tools(self) -> List[MCPToolDefinition]:
-        """List all tools advertised by the MCP server.
+    async def discover_tools_detailed(self) -> "ToolDiscovery":
+        """Tools advertised by the server, with the ones we rejected and why (#17467).
 
-        Returns:
-            List of :class:`~type_defs.mcp.MCPToolDefinition` objects.
+        A tool that fails validation used to vanish: it was absent from the
+        returned list and the reason existed only in a backend log line. An
+        operator saw four of six tools and had nothing to ask. *Nothing found*
+        and *we rejected what we found* were the same answer.
+
+        Rejections are returned, not raised -- one malformed tool must not cost
+        the server its other tools. The distinction the caller needs is which
+        happened, and that is now in the value rather than in a log.
+
+        Reasons pass through ``redact_provider_error`` before they leave here.
+        An MCP server is an external provider and its validation messages quote
+        the payload, so they can carry hosts, paths or credentials
+        (REDACTION_BOUNDARY.md names this the provider-exception shape).
         """
         result = await self._call("tools/list", {})
-        raw_tools: List[Dict[str, Any]] = (result or {}).get("tools", [])
-        tools = []
+        raw_tools: List[Any] = (result or {}).get("tools", [])
+        accepted: List[MCPToolDefinition] = []
+        rejected: List[RejectedTool] = []
         for raw in raw_tools:
             try:
-                tools.append(MCPToolDefinition.model_validate(raw))
+                accepted.append(MCPToolDefinition.model_validate(raw))
             except Exception as exc:  # noqa: BLE001
-                logger.warning("MCPClient: could not parse tool %s: %s", raw.get("name"), exc)
-        logger.info("MCPClient: discovered %d tools", len(tools))
-        return tools
+                rejected.append(RejectedTool(name=_advertised_name(raw), reason=_rejection_reason(exc)))
+        logger.info(
+            "MCPClient: discovered %d tools, rejected %d",
+            len(accepted),
+            len(rejected),
+        )
+        for bad in rejected:
+            logger.warning("MCPClient: rejected tool %s: %s", bad.name or "<unnamed>", bad.reason)
+        return ToolDiscovery(accepted=accepted, rejected=rejected)
+
+    async def discover_tools(self) -> List[MCPToolDefinition]:
+        """The accepted tools only — see :meth:`discover_tools_detailed` for rejections.
+
+        Kept so existing callers are unchanged, and implemented over the same
+        pass rather than duplicating the loop: one truth, two views.
+        """
+        return (await self.discover_tools_detailed()).accepted
 
     async def call_tool(self, name: str, arguments: Dict[str, Any] | None = None) -> Any:
         """Invoke a named tool on the MCP server.

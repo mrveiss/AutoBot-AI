@@ -17,6 +17,7 @@ import pytest
 
 from services.mcp_external_bridge import MCPExternalBridge
 from services.mcp_external_servers import MCPServerConfig
+from testkit.mcp_client_doubles import mcp_client_double
 from type_defs.mcp import MCPToolDefinition
 
 
@@ -63,10 +64,7 @@ class TestListTools:
     @pytest.mark.asyncio
     async def test_single_server_tool_keeps_bare_name(self):
         bridge = MCPExternalBridge()
-        mock_client = AsyncMock()
-        mock_client.discover_tools = AsyncMock(return_value=[_make_tool("search")])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client = mcp_client_double([_make_tool("search")])
 
         with patch("services.mcp_external_bridge.get_mcp_external_server_store") as get_store:
             get_store.return_value.list = AsyncMock(return_value=[_stdio_server()])
@@ -83,10 +81,7 @@ class TestListTools:
         that a mocked-bridge dispatch test cannot see is caught here.
         """
         bridge = MCPExternalBridge()
-        mock_client = AsyncMock()
-        mock_client.discover_tools = AsyncMock(return_value=[_make_tool("search")])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client = mcp_client_double([_make_tool("search")])
 
         with patch("services.mcp_external_bridge.get_mcp_external_server_store") as get_store:
             get_store.return_value.list = AsyncMock(return_value=[_stdio_server()])
@@ -103,15 +98,9 @@ class TestListTools:
     @pytest.mark.asyncio
     async def test_collision_across_two_servers_prefixes_both(self):
         bridge = MCPExternalBridge()
-        client_a = AsyncMock()
-        client_a.discover_tools = AsyncMock(return_value=[_make_tool("search")])
-        client_a.__aenter__ = AsyncMock(return_value=client_a)
-        client_a.__aexit__ = AsyncMock(return_value=False)
+        client_a = mcp_client_double([_make_tool("search")])
 
-        client_b = AsyncMock()
-        client_b.discover_tools = AsyncMock(return_value=[_make_tool("search")])
-        client_b.__aenter__ = AsyncMock(return_value=client_b)
-        client_b.__aexit__ = AsyncMock(return_value=False)
+        client_b = mcp_client_double([_make_tool("search")])
 
         def _factory(uri, **_kwargs):
             return client_a if "mcp-a" in uri else client_b
@@ -134,10 +123,7 @@ class TestListTools:
     @pytest.mark.asyncio
     async def test_unreachable_server_skipped_gracefully(self):
         bridge = MCPExternalBridge()
-        alive_client = AsyncMock()
-        alive_client.discover_tools = AsyncMock(return_value=[_make_tool("alive_tool")])
-        alive_client.__aenter__ = AsyncMock(return_value=alive_client)
-        alive_client.__aexit__ = AsyncMock(return_value=False)
+        alive_client = mcp_client_double([_make_tool("alive_tool")])
 
         dead_client = AsyncMock()
         dead_client.__aenter__ = AsyncMock(side_effect=ConnectionRefusedError())
@@ -228,10 +214,7 @@ class TestResourcePolicy:
     @pytest.mark.asyncio
     async def test_stdio_server_gets_a_resource_policy(self):
         bridge = MCPExternalBridge()
-        mock_client = AsyncMock()
-        mock_client.discover_tools = AsyncMock(return_value=[_make_tool("fs_read")])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client = mcp_client_double([_make_tool("fs_read")])
 
         captured_kwargs = {}
 
@@ -250,10 +233,7 @@ class TestResourcePolicy:
     @pytest.mark.asyncio
     async def test_remote_server_gets_no_resource_policy(self):
         bridge = MCPExternalBridge()
-        mock_client = AsyncMock()
-        mock_client.discover_tools = AsyncMock(return_value=[_make_tool("remote_search")])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client = mcp_client_double([_make_tool("remote_search")])
 
         captured_kwargs = {}
 
