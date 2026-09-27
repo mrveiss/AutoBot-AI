@@ -98,25 +98,41 @@ def _filter(expr: str, project: str, paths: list[str]) -> list[str]:
     return [line for line in completed.stdout.splitlines() if line.strip()]
 
 
-#: Illustrative changeset paths, fed to the hook's own filters as text. **Every
-#: one must be fictional.** `python_filter_covers_its_guards_test` records a
-#: quoted path literal as a tree this guard reads whenever the path is a real
-#: file -- so a fixture that happens to name one asserts a dependency this guard
-#: does not have, and lands in a shrink-only record that nothing can remove.
-#: `autobot-frontend/src/App.vue` stood here and is a real file; five siblings
-#: were already fictional and went unnoticed for exactly that reason.
-#: `test_no_fixture_path_names_a_real_file` keeps this true.
-FRONTEND_CHANGES = [
-    "autobot-frontend/src/components/Chat.vue",
-    "autobot-frontend/src/composables/useThing.ts",
-    "autobot-slm-frontend/src/views/RolesView.test.ts",
-    "autobot-slm-frontend/src/composables/usePerformanceMonitoring.test.ts",
-    "libs/autobot-ui/src/components/Button.vue",
-    "libs/autobot-sdk-ts/src/resources/exampleOnly.ts",
-]
+def example_changeset() -> list:
+    """Illustrative changeset paths, built HERE rather than bound at module level.
 
-#: One project, one file -- the no-remainder case. Fictional, as above.
-SINGLE_PROJECT_CHANGE = ("autobot-frontend/src/ExampleOnlyView.vue",)
+    Two guards read a module-level collection of repo-rooted path strings in
+    opposite directions, and a fixture satisfies neither:
+
+    * `python_filter_covers_its_guards_test` treats a quoted path that RESOLVES
+      as a tree this guard depends on -- so a real path must not appear. That is
+      what `autobot-frontend/src/App.vue` tripped.
+    * `stranded_recorder_entries_test` discovers any module-level dict/set/list/
+      tuple with >= 3 repo-rooted entries as a **ledger**, and an entry the tree
+      does not hold is a stale record -- so a fictional path must not appear
+      either. That is what the fix for the first one tripped.
+
+    These strings are neither: they are sample input to a `grep`, and the hook's
+    filter needs them repo-root-shaped (`^autobot-frontend/`) to exercise
+    anything. `ledgers_in` inspects `ast.parse(source).body`, i.e. top-level
+    bindings only, so a function-scoped fixture is outside the population by
+    construction rather than by dilution -- padding the list with prose to fall
+    under the 0.8 rooted share would be gaming a heuristic, and making the paths
+    real would re-break the other guard.
+    """
+    return [
+        "autobot-frontend/src/components/Chat.vue",
+        "autobot-frontend/src/composables/useThing.ts",
+        "autobot-slm-frontend/src/views/RolesView.test.ts",
+        "autobot-slm-frontend/src/composables/usePerformanceMonitoring.test.ts",
+        "libs/autobot-ui/src/components/Button.vue",
+        "libs/autobot-sdk-ts/src/resources/exampleOnly.ts",
+    ]
+
+
+def single_project_change() -> list:
+    """One project, one file -- the no-remainder case. Fictional, as above."""
+    return ["autobot-frontend/src/ExampleOnlyView.vue"]
 
 
 class TestTheDeclaredProjectsMatchTheTree:
@@ -201,7 +217,7 @@ class TestRouting:
         ],
     )
     def test_a_project_claims_exactly_its_own_paths(self, project: str, expected: list[str]) -> None:
-        claimed = _filter(_extract(_CLAIM, "project claim"), project, FRONTEND_CHANGES)
+        claimed = _filter(_extract(_CLAIM, "project claim"), project, example_changeset())
         assert claimed == expected
 
     def test_autobot_frontend_does_not_claim_the_slm_tree(self) -> None:
@@ -210,7 +226,7 @@ class TestRouting:
         `sed 's|^autobot-frontend/||'` is anchored, so an `autobot-slm-frontend/`
         path survived it intact and reached the wrong runner.
         """
-        claimed = _filter(_extract(_CLAIM, "project claim"), "autobot-frontend", FRONTEND_CHANGES)
+        claimed = _filter(_extract(_CLAIM, "project claim"), "autobot-frontend", example_changeset())
         assert not [path for path in claimed if path.startswith("autobot-slm-frontend/")]
 
     def test_the_remainder_is_accounted_for_not_dropped(self) -> None:
@@ -218,7 +234,7 @@ class TestRouting:
         install, so nothing local can check them. They must end up in the
         unclaimed list, which the hook reports as `could_not_run` -- a silent
         skip is the failure mode #16912 describes."""
-        remainder = FRONTEND_CHANGES
+        remainder = example_changeset()
         unclaim = _extract(_UNCLAIM, "unclaimed remainder")
         for project in _declared_projects():
             remainder = _filter(unclaim, project, remainder)
@@ -228,7 +244,7 @@ class TestRouting:
         ]
 
     def test_a_changeset_inside_one_project_leaves_no_remainder(self) -> None:
-        remainder = list(SINGLE_PROJECT_CHANGE)
+        remainder = single_project_change()
         unclaim = _extract(_UNCLAIM, "unclaimed remainder")
         for project in _declared_projects():
             remainder = _filter(unclaim, project, remainder)
@@ -438,7 +454,7 @@ class TestTheFixturesAreFixtures:
     later remove because there is no tree to widen a filter to.
     """
 
-    @pytest.mark.parametrize("path", [*FRONTEND_CHANGES, *SINGLE_PROJECT_CHANGE])
+    @pytest.mark.parametrize("path", [*example_changeset(), *single_project_change()])
     def test_no_fixture_path_names_a_real_file(self, path: str) -> None:
         assert not (REPO_ROOT / path).exists(), (
             f"{path} exists in the repository, so the coverage detector will record it as a tree this "
