@@ -59,19 +59,25 @@ export async function collectTargetFiles(rules, root = repoRoot()) {
       found.add(abs);
       continue;
     }
-    const stack = [target];
+    const stack = [[target, true]];
     while (stack.length) {
-      const rel = stack.pop();
+      const [rel, isRoot] = stack.pop();
       let entries;
       try {
         entries = await readdir(join(root, rel), { withFileTypes: true });
-      } catch {
-        continue;
+      } catch (err) {
+        // ENOENT on the target itself is an absent tree, reported by
+        // `unreachableTargets`. Anything else is a directory that exists and
+        // could not be read, and swallowing that shrank the audit silently --
+        // the run still said "0 violations", the reading this harness exists
+        // to make impossible.
+        if (err.code === "ENOENT" && isRoot) continue;
+        throw new Error(`canonical-check: cannot traverse ${rel}: ${err.message}`);
       }
       for (const e of entries) {
         if (e.name === "node_modules" || e.name.startsWith(".")) continue;
         const child = `${rel}/${e.name}`;
-        if (e.isDirectory()) stack.push(child);
+        if (e.isDirectory()) stack.push([child, false]);
         else if ([...wanted].some((ext) => e.name.endsWith(ext))) found.add(join(root, child));
       }
     }

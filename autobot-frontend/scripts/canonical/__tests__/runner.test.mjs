@@ -167,3 +167,76 @@ describe("the unloaded-authority rule (#14785)", () => {
     expect(r.status).toBe(0);
   });
 });
+
+describe("a run that inspects nothing is refused, not reported clean (#17608 review)", () => {
+  it("--files reports what it skipped and exits 0 — it is a filter", () => {
+    // The pre-commit hook passes every changed autobot-frontend/**/*.{ts,vue,mjs,js},
+    // including this harness, which no rule targets. Skipping those is correct.
+    // Refusing here instead broke the hook on the commit implementing it.
+    const r = run("--files", join(__dirname, "..", "..", "canonical_check.mjs"));
+    expect(r.status).toBe(0);
+    expect(r.stderr).toContain("none inside any rule's TARGETS");
+    expect(r.stderr).toContain("nothing to check");
+  });
+
+  it("still exits 0 for a covered file with no violations", () => {
+    expect(run("--files", join(FIXTURES, "negative.ts")).status).toBe(0);
+  });
+});
+
+describe("import specifiers are resolved, not pattern-matched (#17608 review)", () => {
+  async function ruleOn(files, targetName) {
+    const { mkdtemp, writeFile, mkdir } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const root = await mkdtemp(join(tmpdir(), "canon-res-"));
+    for (const [rel, body] of Object.entries(files)) {
+      const abs = join(root, rel);
+      await mkdir(dirname(abs), { recursive: true });
+      await writeFile(abs, body, "utf-8");
+    }
+    return { root, target: join(root, targetName) };
+  }
+
+  it("a same-directory @import counts as loaded", async () => {
+    // The anchored pattern required a slash and missed this.
+    const { isImportedForTest } = await import("../rules/ds_unloaded_authority.mjs");
+    if (!isImportedForTest) return; // exported only for this test
+    const { root, target } = await ruleOn(
+      {
+        "autobot-frontend/src/assets/tokens.css": "/* Canonical CSS Design Tokens */",
+        "autobot-frontend/src/assets/index.css": '@import "tokens.css";',
+      },
+      "autobot-frontend/src/assets/tokens.css",
+    );
+    expect(await isImportedForTest(target, root)).toBe(true);
+  });
+
+  it("a same-named file in another directory does NOT count", async () => {
+    const { isImportedForTest } = await import("../rules/ds_unloaded_authority.mjs");
+    if (!isImportedForTest) return;
+    const { root, target } = await ruleOn(
+      {
+        "autobot-frontend/src/assets/tokens.css": "/* Canonical CSS Design Tokens */",
+        "autobot-frontend/src/other/tokens.css": "/* unrelated */",
+        "autobot-frontend/src/other/index.css": '@import "./tokens.css";',
+      },
+      "autobot-frontend/src/assets/tokens.css",
+    );
+    expect(await isImportedForTest(target, root)).toBe(false);
+  });
+
+  it("a prefixed name is not a match", async () => {
+    // The unanchored substring matched design-tokens.css for tokens.css.
+    const { isImportedForTest } = await import("../rules/ds_unloaded_authority.mjs");
+    if (!isImportedForTest) return;
+    const { root, target } = await ruleOn(
+      {
+        "autobot-frontend/src/assets/tokens.css": "/* Canonical CSS Design Tokens */",
+        "autobot-frontend/src/assets/design-tokens.css": "/* real one */",
+        "autobot-frontend/src/assets/index.css": '@import "./design-tokens.css";',
+      },
+      "autobot-frontend/src/assets/tokens.css",
+    );
+    expect(await isImportedForTest(target, root)).toBe(false);
+  });
+});

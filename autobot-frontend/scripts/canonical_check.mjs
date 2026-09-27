@@ -4,12 +4,14 @@
 import { argv, exit, stderr, stdout } from "node:process";
 import { writeFile } from "node:fs/promises";
 
-import { resolve } from "node:path";
+import { relative, resolve } from "node:path";
 import { cwd } from "node:process";
 
 import {
   collectTargetFiles,
   discoverRules,
+  repoRoot,
+  ruleAppliesTo,
   runRules,
   unreachableTargets,
 } from "./canonical/registry.mjs";
@@ -76,6 +78,31 @@ async function main() {
   if (files.length === 0) {
     stderr.write("canonical-check: no files matched — refusing to report a clean run\n");
     return 2;
+  }
+
+  // Having files is not having COVERAGE, and the two modes differ in what that
+  // means.
+  //
+  // `--all` is an AUDIT: it chose the files itself, so nothing in scope means
+  // it inspected nothing and reporting success would be a false clean bill --
+  // the `--all` bug this PR fixes, one level in. It refuses.
+  //
+  // `--files` is a FILTER: the caller chose the files, and the pre-commit hook
+  // passes every changed `autobot-frontend/**/*.{ts,vue,mjs,js}` including this
+  // harness, which no rule targets. Skipping those is correct behaviour, not a
+  // concealed pass, so it reports what it skipped and exits 0. Refusing here
+  // instead broke the hook on the very commit implementing it.
+  const covered = files.filter((f) => {
+    const rel = relative(repoRoot(), resolve(f)).split("\\").join("/");
+    return rules.some((rule) => ruleAppliesTo(rule, rel));
+  });
+  if (covered.length === 0) {
+    const scope = args.all ? "refusing to report a clean run" : "nothing to check";
+    stderr.write(
+      `canonical-check: ${files.length} file(s) given, none inside any rule's TARGETS — ${scope}\n`,
+    );
+    if (args.all) return 2;
+    return 0;
   }
 
   const diagnostics = await runRules(rules, files);

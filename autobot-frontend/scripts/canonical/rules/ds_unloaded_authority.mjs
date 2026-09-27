@@ -1,7 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import { makeDiagnostic } from "../diagnostic.mjs";
 import { repoRoot } from "../registry.mjs";
@@ -29,49 +29,72 @@ const CLAIMS_AUTHORITY = /canonical\s+(?:css\s+)?design\s+tokens|design\s+tokens
 const WAIVER = /\/\*\s*canonical:\s*ignore\s+ds-unloaded-authority\b/;
 
 /**
- * Whether anything in the two frontends imports `basename`.
+ * Whether any file in the two frontends imports the stylesheet at `targetAbs`.
  *
- * The rule reads the import graph itself rather than taking it from the
- * harness: `check(filePath)` is called with one argument, so a rule that
- * needed repo-wide context passed in would get `undefined` and return no
- * diagnostics -- a rule that cannot answer, reporting the same clean result as
- * a rule that found nothing.
+ * Import specifiers are RESOLVED against the importing file's directory and
+ * compared as absolute paths. Two earlier versions got this wrong in opposite
+ * directions, which is why it is done properly rather than with a pattern:
  *
- * A substring test over both spellings, not a resolver: a stylesheet reaches
- * the browser through `@import './x.css'` in another stylesheet OR through
- * `import './x.css'` in an entry module, and a resolver that understood only
- * one would report the other as dead.
+ *   - an unanchored substring matched `design-tokens.css` when looking for
+ *     `tokens.css`, so the unloaded file read as loaded -- and telling those
+ *     two apart is this rule's entire job;
+ *   - anchoring on a preceding `/` then missed a legitimate same-directory
+ *     `@import "tokens.css"`, and could still match a different `tokens.css`
+ *     in another directory.
+ *
+ * Resolution has neither failure: `./tokens.css` from `assets/` and
+ * `../assets/tokens.css` from `assets/css/` both resolve to the same file, and
+ * a same-named file elsewhere resolves to a different one.
  */
-async function isImportedAnywhere(basename, root) {
-  // Anchored on a path boundary. An unanchored substring made `tokens.css`
-  // match `design-tokens.css`, which IS imported -- so the unloaded file read
-  // as loaded and the rule reported nothing. The two names differ by a prefix
-  // and that is exactly the pair this rule exists to tell apart.
-  const needle = new RegExp(`['"][^'"]*(?:^|/)${basename.replace(".", "\\.")}['"]`);
-  const stack = ["autobot-frontend/src", "autobot-slm-frontend/src"];
+//: The keyword is captured because it decides what a BARE specifier means.
+//: In CSS, `@import "tokens.css"` is relative to the importing stylesheet. In
+//: JavaScript, a bare specifier is a package. Treating both the same way is
+//: what made the resolved version miss a legitimate same-directory import.
+const SPECIFIER = /(@import\s+(?:url\()?|from\s+|import\s+)['"]([^'"]+)['"]/g;
+
+export const isImportedForTest = (t, r) => isImportedAnywhere(t, r);
+
+async function isImportedAnywhere(targetAbs, root) {
+  const roots = ["autobot-frontend/src", "autobot-slm-frontend/src"];
+  const stack = roots.map((r) => [r, true]);
   while (stack.length) {
-    const rel = stack.pop();
+    const [rel, isRoot] = stack.pop();
     let entries;
     try {
       entries = await readdir(join(root, rel), { withFileTypes: true });
-    } catch {
-      continue;
+    } catch (err) {
+      // ENOENT on a TOP-LEVEL target means the tree is absent, which
+      // `unreachableTargets` already reports -- skipping it is not a silent
+      // loss. Anything else is a directory that exists and could not be read,
+      // and that must not shrink the audit into a clean result.
+      if (err.code === "ENOENT" && isRoot) continue;
+      throw new Error(`cannot read ${rel}: ${err.message}`);
     }
     for (const e of entries) {
       if (e.name === "node_modules" || e.name.startsWith(".")) continue;
       const child = `${rel}/${e.name}`;
       if (e.isDirectory()) {
-        stack.push(child);
+        stack.push([child, false]);
         continue;
       }
-      if (!/\.(css|ts|mjs|js|vue)$/.test(e.name) || e.name === basename) continue;
+      if (!/\.(css|ts|mjs|js|vue)$/.test(e.name)) continue;
+      const abs = join(root, child);
+      if (abs === targetAbs) continue;
       let text;
       try {
-        text = await readFile(join(root, child), "utf-8");
-      } catch {
-        continue;
+        text = await readFile(abs, "utf-8");
+      } catch (err) {
+        throw new Error(`cannot read ${child}: ${err.message}`);
       }
-      if (needle.test(text)) return true;
+      for (const [, keyword, spec] of text.matchAll(SPECIFIER)) {
+        const isCssImport = keyword.trimStart().startsWith("@import");
+        const relativeish = spec.startsWith(".") || spec.startsWith("/") || isCssImport;
+        if (!relativeish && !spec.startsWith("@/")) continue;
+        const from = spec.startsWith("@/")
+          ? join(root, "autobot-frontend/src", spec.slice(2))
+          : resolve(dirname(abs), spec);
+        if (from === targetAbs) return true;
+      }
     }
   }
   return false;
@@ -87,7 +110,7 @@ export async function check(filePath) {
   if (!CLAIMS_AUTHORITY.test(text) || WAIVER.test(text)) return [];
 
   const basename = filePath.split("/").pop();
-  if (await isImportedAnywhere(basename, repoRoot())) return [];
+  if (await isImportedAnywhere(resolve(filePath), repoRoot())) return [];
 
   const lines = text.split(/\r?\n/);
   const line = lines.findIndex((l) => CLAIMS_AUTHORITY.test(l));
