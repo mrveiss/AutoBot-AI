@@ -439,10 +439,17 @@ def audit(
     # second argument, and only that path is new.
     installed = installed_versions(names) if python is None else installed_versions(names, python)
     absent = tuple(sorted({d.name for d in declarations if d.name not in installed}))
+    # #17610 review: counted per DECLARATION, not per unique absent name. One
+    # package can be declared several times -- across service files, or through
+    # `-r` includes -- and `absent` is de-duplicated, so
+    # `len(declarations) - len(absent)` credited the extra declarations of an
+    # uninstalled package as compared. The pass line then reported "N of M
+    # compared" with the wrong N, which is this issue's own defect one layer in.
+    compared = sum(1 for declaration in declarations if declaration.name in installed)
     return FloorAudit(
         shortfalls=tuple(shortfalls(declarations, installed, require_present)),
         declared=len(declarations),
-        compared=len(declarations) - len(absent),
+        compared=compared,
         not_installed=absent,
         roots=swept,
         environment=environment or f"the interpreter running this check (python {platform.python_version()})",

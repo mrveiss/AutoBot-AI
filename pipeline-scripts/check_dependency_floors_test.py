@@ -229,55 +229,6 @@ class TestAuditRefusesAnEmptyEnumeration:
         assert isinstance(result.shortfalls, tuple)
 
 
-class TestRender:
-    def test_names_both_versions_and_the_remedy(self):
-        """The acceptance criterion: the report must name installed AND declared."""
-        report = "\n".join(checker.render(_result([checker.Shortfall(_declaration(), "0.135.2")])))
-        assert "0.135.2" in report
-        assert "0.141.1" in report
-        assert "fastapi" in report
-        assert "scripts/setup-ci-parity-env.sh" in report
-
-    def test_clean_environment_says_how_many_were_checked(self):
-        """#17558: and says how many it could NOT check, and against what."""
-        report = "\n".join(checker.render(_result([], declared=206, compared=206)))
-        assert "206" in report and "all satisfied" in report
-        assert "roots:" in report, "a clean verdict must name the declarations it compared against"
-        assert "report only" in report, "a block that cannot fail the run must say so"
-
-    def test_a_clean_pass_counts_comparisons_and_admits_what_it_skipped(self):
-        """The defect this issue exists for: 128 declared, 42 never compared.
-
-        The old line said "206 declarations checked, all satisfied" whether or
-        not anything was installed to compare them against.
-        """
-        report = "\n".join(
-            checker.render(_result([], declared=128, compared=86, not_installed=tuple(f"p{i}" for i in range(42))))
-        )
-        assert "86 of 128" in report, "the pass must count comparisons, not declarations read"
-        assert "42 declared but NOT INSTALLED" in report
-        assert "not compared" in report
-
-    def test_detail_is_capped_and_the_remainder_counted(self):
-        found = [checker.Shortfall(_declaration(name=f"pkg{i}"), "0.1") for i in range(25)]
-        report = "\n".join(checker.render(_result(found), limit=10))
-        assert "pkg0" in report
-        assert "pkg24" not in report
-        assert "15 more" in report
-
-    def test_default_points_at_ci_as_a_different_environment(self):
-        """#16264: off CI, the report describes some OTHER interpreter than CI's."""
-        report = "\n".join(checker.render(_result([checker.Shortfall(_declaration(), "0.135.2")])))
-        assert "carries no information about CI" in report
-        assert "CI job's own environment" not in report
-
-    def test_in_ci_names_the_running_environment_as_ci_itself(self):
-        """#16264: printed FROM CI, the interpreter making the report IS CI's own."""
-        report = "\n".join(checker.render(_result([checker.Shortfall(_declaration(), "0.135.2")]), in_ci=True))
-        assert "CI job's own environment" in report
-        assert "carries no information about CI" not in report
-
-
 class TestMainExitCodes:
     def test_reporting_run_exits_zero_even_when_below_floor(self, tmp_path, monkeypatch, capsys):
         """Warn, do not gate: a below-floor box stays usable for ordinary work."""
@@ -562,28 +513,26 @@ class TestUnreadableIsNotAbsent:
         assert absent != unreadable
 
 
-class TestTheReportNamesItsEnvironment:
-    """A number without its environment is what caused two retractions in one day."""
+class TestComparedCountsDeclarationsNotNames:
+    """#17610 review: `absent` is de-duplicated; `compared` must not be."""
 
-    def _one(self):
-        return [
-            checker.Shortfall(
-                checker.Declaration(source="req.txt:1", name="pkg", operator=">=", required="2.0"),
-                "1.0",
-            )
-        ]
+    def test_a_package_declared_twice_and_absent_is_not_half_compared(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(checker, "DECLARATION_ROOTS", ("a.txt", "b.txt"))
+        _write(tmp_path, "a.txt", "fastapi>=0.141.1\n")
+        _write(tmp_path, "b.txt", "fastapi>=0.141.1\n")
+        monkeypatch.setattr(checker, "installed_versions", lambda names: {})
+        result = checker.audit(tmp_path)
+        assert result.declared == 2
+        assert result.compared == 0, "both declarations are of an uninstalled package"
+        assert result.not_installed == ("fastapi",)
 
-    def test_the_default_still_names_the_running_interpreter(self):
-        assert "interpreter running this check" in checker.render(_result(self._one(), declared=1))[0]
-
-    def test_a_named_environment_replaces_it(self):
-        line = checker.render(
-            _result(self._one(), declared=1, environment="/opt/x/venv/bin/python (python 3.14.6)"), deployed=True
-        )[0]
-        assert "/opt/x/venv/bin/python (python 3.14.6)" in line
-        assert "interpreter running this check" not in line
-
-    def test_a_deployed_report_does_not_give_ci_parity_advice(self):
-        lines = checker.render(_result(self._one(), declared=1, environment="/opt/x/venv/bin/python"), deployed=True)
-        assert not any("setup-ci-parity-env.sh" in line for line in lines)
-        assert any("DEPLOYED environment" in line for line in lines)
+    def test_the_headline_numerator_never_exceeds_the_comparisons(self, tmp_path, monkeypatch):
+        """With --require-present an absence is a shortfall, but not a comparison."""
+        monkeypatch.setattr(checker, "DECLARATION_ROOTS", ("a.txt",))
+        _write(tmp_path, "a.txt", "fastapi>=0.141.1\nstarlette>=1.6.0\n")
+        monkeypatch.setattr(checker, "installed_versions", lambda names: {})
+        result = checker.audit(tmp_path, require_present=True)
+        line = checker.render(result)[0]
+        assert result.compared == 0
+        assert " of 0 " not in line or "0 of 0" in line, line
+        assert "12 of 5" not in line

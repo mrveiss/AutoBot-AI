@@ -24,6 +24,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:  # pragma: no cover - typing only, never imported at runtime
     from check_dependency_floors import Shortfall
 
+#: The checker's sentinel for "declared, nothing installed". Written as a
+#: literal rather than imported: this module must not import the checker (see
+#: the module docstring), so the one duplicated constant is deliberate and the
+#: test below pins it against the checker's own value.
+ABSENT = "(absent)"
+
 #: Per-package detail lines before the report truncates and says it did.
 MAX_REPORTED = 10
 
@@ -95,6 +101,12 @@ def render(
         else "every declaration had an installed version to compare"
     )
 
+    # #17610 review: with `--require-present` an absent declaration becomes an
+    # ABSENT shortfall, but `compared` excludes absent declarations -- so the
+    # headline could read "12 of 5". Absences are counted on their own line
+    # below; they must not also sit in the numerator of a comparison count.
+    below_floor = tuple(s for s in result.shortfalls if s.installed != ABSENT)
+
     if not result.shortfalls:
         return [
             f"dependency floors [{role}]: {result.compared} of {result.declared} "
@@ -104,7 +116,7 @@ def render(
         ]
 
     lines = [
-        f"dependency floors [{role}]: {len(result.shortfalls)} of {result.compared} "
+        f"dependency floors [{role}]: {len(below_floor)} of {result.compared} "
         f"compared versions are below their declared floor in {result.environment}.",
         f"  {result.declared} declarations read; {uncompared}",
         f"  {scope}",

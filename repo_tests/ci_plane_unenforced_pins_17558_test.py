@@ -98,3 +98,29 @@ class TestTheBaselineOnlyShrinks:
         """OpenTelemetry was #17557 and is declared in both planes since #17502."""
         _, _, pairs = hook.audit()
         assert not [pair for pair in pairs if pair.name.startswith("opentelemetry")]
+
+
+class TestMarkersAreNotMistakenForSpecifiers:
+    """#17610 review: both halves of a requirement string were being scanned."""
+
+    def test_a_marker_comparison_does_not_look_like_an_upper_bound(self):
+        """`python_version < "3.10"` is not a cap on the package."""
+        assert hook.specifier_of('widget>=1.0; python_version < "3.10"') == ">=1.0"
+        assert not hook.bounds_above(hook.specifier_of('widget>=1.0; python_version < "3.10"'))
+
+    def test_a_real_cap_beside_a_marker_is_still_seen(self):
+        """Contrast pair: the specifier still decides, marker or not."""
+        assert hook.bounds_above(hook.specifier_of('widget<2.0,>=1.0; python_version >= "3.9"'))
+
+    def test_an_unparseable_requirement_does_not_invent_a_bound(self):
+        """Under-claim rather than fabricate: drop the marker, never scan it."""
+        assert ";" not in hook.specifier_of("widget>=1.0; not a valid marker <3")
+
+    @pytest.mark.parametrize("req", ['widget>=1; extra == "dev"', 'widget>=1; extra=="dev"'])
+    def test_an_optional_requirement_is_dropped_whatever_its_spacing(self, req):
+        """`extra=="x"` without spaces defeated the old substring check."""
+        assert hook.is_optional(req)
+
+    def test_a_plain_requirement_is_kept(self):
+        assert not hook.is_optional("widget>=1.0")
+        assert not hook.is_optional('widget>=1.0; python_version >= "3.9"')

@@ -110,10 +110,58 @@ def bounds_above(specifier: str) -> bool:
     return bool(_UPPER.search(specifier))
 
 
+def _parsed(requirement: str):
+    """``packaging.requirements.Requirement``, or None when it will not parse."""
+    from packaging.requirements import Requirement  # noqa: PLC0415
+
+    try:
+        return Requirement(requirement)
+    except Exception:  # noqa: BLE001 - malformed metadata raises several types
+        return None
+
+
 def requirement_name(requirement: str) -> str:
     """The distribution name at the head of a requirement string."""
+    parsed = _parsed(requirement)
+    if parsed is not None:
+        return _normalize(parsed.name)
     match = _REQ_NAME.match(requirement.strip())
     return _normalize(match.group(1)) if match else ""
+
+
+def specifier_of(requirement: str) -> str:
+    """Only the version specifier -- never the environment marker.
+
+    #17610 review: `bounds_above` used to scan the whole requirement suffix, so
+    `widget>=1.0; python_version < "3.10"` looked capped because of the `<` in
+    its MARKER. That turns a genuinely unbounded requirer into a structurally
+    bounded one and hides a real pair -- a false negative in the direction that
+    matters, since this guard exists to find pairs nothing bounds.
+    """
+    parsed = _parsed(requirement)
+    if parsed is not None:
+        return str(parsed.specifier)
+    # Unparseable: drop anything after the marker separator rather than scanning
+    # it. Better to under-claim a bound than to invent one.
+    return requirement.split(";", 1)[0]
+
+
+def is_optional(requirement: str) -> bool:
+    """True when *requirement* only applies under an extra.
+
+    #17610 review: the previous test was `"extra ==" in requirement`, a substring
+    check that missed `extra=="x"` and any other spacing valid metadata may use.
+    Retaining an optional requirement invents a pair nothing installs. The marker
+    is evaluated with an empty extra, which is what "installed without extras"
+    means.
+    """
+    parsed = _parsed(requirement)
+    if parsed is None or parsed.marker is None:
+        return False
+    try:
+        return not parsed.marker.evaluate({"extra": ""})
+    except Exception:  # noqa: BLE001 - an undefined marker variable raises
+        return False
 
 
 def ci_transitive_closure(ci_names: set[str], requires: dict[str, list[str]]) -> dict[str, list[tuple[str, str]]]:
@@ -160,7 +208,7 @@ def unenforced_pairs(
         # Structural agreement: if EVERY requirer caps it, the resolution cannot
         # climb past the cap and the planes cannot diverge. Only an unbounded
         # requirer makes the agreement a coincidence.
-        if all(bounds_above(spec.split(name, 1)[-1]) for _, spec in requirers):
+        if all(bounds_above(specifier_of(spec)) for _, spec in requirers):
             continue
         found.append(UnenforcedPair(name=name, production=specifier, requirers=tuple(requirers)))
     return found
@@ -179,11 +227,7 @@ def installed_requires() -> dict[str, list[str]]:
         name = dist.metadata["Name"] if dist.metadata else None
         if not name:
             continue
-        keep = [
-            requirement
-            for requirement in (dist.requires or [])
-            if not (";" in requirement and "extra ==" in requirement.split(";", 1)[1])
-        ]
+        keep = [requirement for requirement in (dist.requires or []) if not is_optional(requirement)]
         out[_normalize(name)] = keep
     return out
 
