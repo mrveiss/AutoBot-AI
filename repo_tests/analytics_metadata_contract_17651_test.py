@@ -189,10 +189,25 @@ def test_the_writers_emit_every_key_the_endpoints_filter_on() -> None:
 
 def test_every_metadata_builder_is_one_the_name_based_discovery_finds() -> None:
     """Tripwire for preparer six, whatever it ends up being called."""
-    unchecked = sorted(metadata_binders(_writer_source()) - set(preparers(_writer_source())))
+    by_name = set(preparers(_writer_source()))
+    by_behaviour = metadata_binders(_writer_source())
+
+    # BOTH directions (#17672 review). Checking only `behaviour - name` leaves
+    # the other failure open: a named preparer that stops binding a literal
+    # dict to `metadata` drops out of `by_behaviour`, the difference stays
+    # empty, and the guard passes while that preparer emits nothing this file
+    # can see. A one-directional check on two populations is half a check.
+    unchecked = sorted(by_behaviour - by_name)
     assert not unchecked, (
         f"these functions build a row's `metadata` but name-based discovery misses them, so the "
         f"contract never checks what they emit: {unchecked}"
+    )
+
+    silent = sorted(by_name - by_behaviour)
+    assert not silent, (
+        f"these are named as preparers but no longer bind a `metadata` dict: {silent}. Either they "
+        "stopped emitting, or they emit by a route this file cannot see — both make the contract "
+        "above vacuous for their rows."
     )
 
 
