@@ -30,6 +30,21 @@ backlog of existing violations is migrated separately.
     ``.write_bytes(...)`` — these are sync filesystem calls (typically on
     ``pathlib.Path`` instances). Inside an async path, use ``aiofiles`` for
     streaming or ``await asyncio.to_thread(p.read_text)`` for one-shot reads.
+  - ``subprocess.run/call/check_call/check_output/Popen``, ``sqlite3.connect``,
+    ``time.sleep``, ``os.system`` — matched on ``(module, attr)``. See
+    ``_MODULE_BLOCKING_CALLS`` for why the module qualifier is load-bearing.
+
+## What the second group is about, and where it is not enforced
+
+The ``requests``/``Path`` patterns are flagged everywhere. The stdlib group is
+flagged in **production modules only**: a ``sqlite3.connect`` in an async test
+body blocks the loop that test owns and nothing else, so enforcing it there
+would buy no production latency and would gate 18 existing test files. That is
+a deliberate narrowing of the question, not an oversight, so it is *counted*:
+a full-repo run prints how many stdlib hits were skipped in test files. A
+silent exemption and a clean tree read identically, which is the failure
+``MEASUREMENT_DISCIPLINE.md`` calls "did not look" wearing "nothing found".
+Test files stay fully in scope for ``requests.*`` and ``Path.*``.
 
 ## Allowlist
 
@@ -102,6 +117,26 @@ class _Violation:
         return f"{self.path}:{self.line}:{self.col}: {self.kind}: {self.snippet}\n{guidance}"
 
 
+#: Blocking stdlib calls by (module, attr). Added because the codebase-analytics
+#: index reported 8 high-severity `performance_blocking_io_in_async` findings that
+#: this guard passed clean over: it knew `requests.*` and `Path.read/write_*` and
+#: nothing else, so a `subprocess.run(..., timeout=5)` on the event loop was
+#: invisible. One endpoint held three such calls for up to twelve seconds.
+#:
+#: Matched on (module, attr) rather than attr alone: a bare `run` or `connect` is
+#: any object's method, and flagging those would make the guard a nuisance rather
+#: than a gate.
+_MODULE_BLOCKING_CALLS = {
+    ("subprocess", "run"): "subprocess.*",
+    ("subprocess", "call"): "subprocess.*",
+    ("subprocess", "check_call"): "subprocess.*",
+    ("subprocess", "check_output"): "subprocess.*",
+    ("subprocess", "Popen"): "subprocess.*",
+    ("sqlite3", "connect"): "sqlite3.connect",
+    ("time", "sleep"): "time.sleep",
+    ("os", "system"): "os.system",
+}
+
 _GUIDANCE = {
     "requests.*": (
         "  → Replace with `httpx.AsyncClient`. Share a single client instance per\n"
@@ -109,12 +144,53 @@ _GUIDANCE = {
         "    Or use the existing `aiohttp` clients where already present.\n"
         "    See #7444 migration follow-ups."
     ),
+    "subprocess.*": (
+        "  → Wrap the one-shot call: `await asyncio.to_thread(subprocess.run, argv, ...)`.\n"
+        "    A `timeout=N` bounds the child, not the event loop — the loop is blocked\n"
+        "    for the whole N. See #7444 migration follow-ups."
+    ),
+    "sqlite3.connect": (
+        "  → `await asyncio.to_thread(...)` around the connect AND the queries, and do\n"
+        "    not hold the connection across an `await`: a slow peer then holds both the\n"
+        "    loop and a database handle."
+    ),
+    "time.sleep": ("  → `await asyncio.sleep(n)`. `time.sleep` blocks every other task."),
+    "os.system": (
+        "  → `await asyncio.create_subprocess_exec(...)`, or\n"
+        "    `await asyncio.to_thread(subprocess.run, argv)` with a fixed argv."
+    ),
     "Path.read/write_text/bytes": (
         "  → Replace with `aiofiles` for streaming, or wrap a one-shot call:\n"
         "      content = await asyncio.to_thread(path.read_text, encoding='utf-8')\n"
         "    See #7444 migration follow-ups."
     ),
 }
+
+
+#: Kinds whose harm is scoped to the loop the calling module runs on. A test
+#: body owns its loop, so these are not enforced in test files -- see the
+#: module docstring. `requests.*` and `Path.*` are deliberately absent: those
+#: stay enforced everywhere, which is the status quo this widening preserves.
+_LOOP_ONLY_KINDS: frozenset[str] = frozenset({"subprocess.*", "sqlite3.connect", "time.sleep", "os.system"})
+
+
+def _is_test_path(rel_posix: str) -> bool:
+    """Return True for the repo's three test-path spellings.
+
+    Keyed on the whole class, not one spelling: a predicate matching only
+    ``*_test.py`` would let ``tests/test_x.py`` through, and this guard has
+    already been bitten once by a detector narrower than the class it named.
+    """
+    name = rel_posix.rsplit("/", 1)[-1]
+    return name.endswith("_test.py") or name.startswith("test_") or "/tests/" in f"/{rel_posix}"
+
+
+def in_scope(violations: List[_Violation], rel_posix: str) -> tuple[List[_Violation], int]:
+    """Split *violations* into (enforced, count skipped as loop-only-in-a-test)."""
+    if not _is_test_path(rel_posix):
+        return violations, 0
+    kept = [v for v in violations if v.kind not in _LOOP_ONLY_KINDS]
+    return kept, len(violations) - len(kept)
 
 
 class _AsyncBlockingIOVisitor(ast.NodeVisitor):
@@ -165,6 +241,12 @@ class _AsyncBlockingIOVisitor(ast.NodeVisitor):
         # Pattern 2: <anything>.read_text() / write_text() / read_bytes() / write_bytes()
         if attr in _PATH_FORBIDDEN_METHODS:
             self._record(node, "Path.read/write_text/bytes")
+            return
+        # Pattern 3: blocking stdlib calls, matched on (module, attr) (#7444 follow-up).
+        if isinstance(node.func.value, ast.Name):
+            kind = _MODULE_BLOCKING_CALLS.get((node.func.value.id, attr))
+            if kind:
+                self._record(node, kind)
 
     def _record(self, node: ast.Call, kind: str) -> None:
         line_idx = node.lineno - 1
@@ -215,8 +297,20 @@ def main(argv: List[str]) -> int:
     files = [f for f in files if any(part in backend_roots for part in f.relative_to(repo_root).parts[:1])]
 
     all_violations: List[_Violation] = []
+    skipped_in_tests = 0
     for path in files:
-        all_violations.extend(check_file(path))
+        enforced, skipped = in_scope(check_file(path), path.relative_to(repo_root).as_posix())
+        all_violations.extend(enforced)
+        skipped_in_tests += skipped
+
+    if full_repo and skipped_in_tests:
+        # Stated, not silent: the narrowing has a number attached so a reader
+        # can tell "no stdlib hits" from "stdlib hits, not enforced here".
+        print(  # noqa: print -- CLI diagnostic output on stderr
+            f"[{HOOK_ID}] {skipped_in_tests} stdlib blocking call(s) in test files "
+            "are out of scope (they block only the loop their own test owns).",
+            file=sys.stderr,
+        )
 
     if not all_violations:
         return 0
