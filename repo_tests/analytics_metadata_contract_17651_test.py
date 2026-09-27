@@ -50,7 +50,16 @@ def _emitted_keys() -> set[str]:
 _COLLECTION_ACCESSOR = "get_code_collection"
 
 
-def _reader_filter_keys() -> dict[str, set[str]]:
+#: Modules referencing the collection accessor, measured 2026-09-28: 19.
+#: A FLOOR on files reached, not on matches found (#17672 review). `assert
+#: filtered` only proves the matcher fired somewhere -- a sweep that read two
+#: files and recognised one filter satisfies it. This catches the sweep
+#: collapsing; `assert filtered` catches the matcher going silent across files
+#: it did read. Different failures; neither detects the other.
+_MIN_READER_MODULES = 17
+
+
+def _reader_filter_keys() -> tuple[dict[str, set[str]], int]:
     """Filter keys of every module that reads the writer's collection.
 
     #17672 review (e5): the first version globbed `endpoints/*.py`. The
@@ -70,17 +79,18 @@ def _reader_filter_keys() -> dict[str, set[str]]:
     """
     backend = repo_root() / "autobot-backend"
     found: dict[str, set[str]] = {}
+    reached = 0
     for path in sorted(backend.rglob("*.py")):
         if "test" in path.name or "/tests/" in str(path):
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         if _COLLECTION_ACCESSOR not in text:
             continue
+        reached += 1
         keys = filter_keys(text)
         if keys:
             found[str(path.relative_to(backend))] = keys
-    assert found, f"no module referencing {_COLLECTION_ACCESSOR} filters on anything — re-derive"
-    return found
+    return found, reached
 
 
 # ---------------------------------------------------------------- contrasts
@@ -157,8 +167,16 @@ def test_the_filter_detector_finds_keys_it_was_never_told_about() -> None:
 def test_the_writers_emit_every_key_the_endpoints_filter_on() -> None:
     """The gap this closes is not in either side. It is between them."""
     emitted = _emitted_keys()
-    filtered = _reader_filter_keys()
-    assert filtered, "no endpoint filters found — re-derive the population, do not pass vacuously"
+    filtered, reached = _reader_filter_keys()
+
+    # Two vacuity checks, because they fail for different reasons: the floor
+    # catches the SWEEP collapsing, `assert filtered` catches the MATCHER going
+    # silent across files it did read.
+    assert reached >= _MIN_READER_MODULES, (
+        f"only {reached} modules referencing {_COLLECTION_ACCESSOR} were read, floor is "
+        f"{_MIN_READER_MODULES} — the sweep collapsed, so a pass here says nothing"
+    )
+    assert filtered, "no reader filters found — the matcher is silent, do not pass vacuously"
 
     gaps = {name: sorted(keys - emitted - set(ENGINE_SUPPLIED)) for name, keys in filtered.items()}
     gaps = {name: missing for name, missing in gaps.items() if missing}
