@@ -197,3 +197,22 @@ def test_the_warning_is_prepended_to_a_batched_verdict_too():
     assert ok
     assert "::warning::" in message
     assert "Batched: closes 3 issues" in message, "the verdict itself must survive the prepend"
+
+
+def test_a_body_using_only_non_s_keywords_is_reported_as_batched():
+    """AC4 literally: the batching **verdict**, not just the extracted count.
+
+    Consequence 1 in #17580 is about what the gate *reports*: `Fix #A` / `Fix #B`
+    closed two issues and scored as closing nothing, so a batch was never asked for
+    a rationale. The tests above assert `closing_issues`, which is the input to that
+    verdict rather than the verdict — so the step a reader of AC4 checks was covered
+    only by inference. This asserts it directly, with no `-s` keyword anywhere in the
+    body.
+    """
+    ok, message = check("Fix #101\nFix #102\nFix #103\n")
+
+    assert ok
+    assert "Batched: closes 3 issues" in message, (
+        "a body closing three issues with `Fix` must report as batched — "
+        "reporting nothing is the defect this issue exists to remove"
+    )
