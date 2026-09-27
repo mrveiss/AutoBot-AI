@@ -3150,7 +3150,17 @@
       "noEntities3D": "No hay entidades para mostrar",
       "loading3dVisualization": "Loading3d visualization",
       "loadingVisualization": "Loading visualization library...",
-      "retry": "Retry"
+      "retry": "Retry",
+      "sourcesUnreadable": "No se pudo leer el grafo de conocimiento",
+      "sourcesUnreadableHint": "No se muestra nada porque los almacenes siguientes no respondieron, no porque el grafo esté vacío.",
+      "sourceHeld": "{source}: {held} entidades",
+      "sourceFailed": "{source}: no se pudo leer — {reason}",
+      "partialGraph": "Este grafo está incompleto: no se pudo leer {sources}.",
+      "source": {
+        "unified": "Grafo de la base de conocimiento",
+        "memory": "Entidades de memoria"
+      },
+      "reasonUnknown": "motivo no informado"
     },
     "connectors": {
       "title": "Conectores de fuentes",

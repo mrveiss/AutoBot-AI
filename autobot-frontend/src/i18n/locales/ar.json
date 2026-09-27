@@ -3150,7 +3150,17 @@
       "noEntities3D": "لا توجد كيانات للعرض",
       "loading3dVisualization": "Loading3d visualization",
       "loadingVisualization": "Loading visualization library...",
-      "retry": "Retry"
+      "retry": "Retry",
+      "sourcesUnreadable": "تعذّرت قراءة رسم المعرفة البياني",
+      "sourcesUnreadableHint": "لا يُعرض شيء لأن المخازن أدناه لم تستجب، وليس لأن الرسم البياني فارغ.",
+      "sourceHeld": "{source}: {held} كيانات",
+      "sourceFailed": "{source}: تعذّرت القراءة — {reason}",
+      "partialGraph": "هذا الرسم البياني غير مكتمل: تعذّرت قراءة {sources}.",
+      "source": {
+        "unified": "رسم قاعدة المعرفة البياني",
+        "memory": "كيانات الذاكرة"
+      },
+      "reasonUnknown": "لم يُبلَّغ عن سبب"
     },
     "connectors": {
       "title": "Source Connectors",
