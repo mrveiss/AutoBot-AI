@@ -41,7 +41,7 @@ from typing import Optional
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from pki.config import VM_DEFINITIONS, TLSConfig
+from pki.config import REDIS_STACK_CONFIG_PATH, VM_DEFINITIONS, TLSConfig
 from pki.configurator import ServiceConfigurator
 from pki.distributor import CertificateDistributor
 from pki.generator import CertificateGenerator
@@ -521,7 +521,10 @@ class MTLSMigration:
                 known_hosts=None,
                 connect_timeout=10,
             ) as conn:
-                config_path = "/etc/redis-stack/redis-stack.conf"
+                # #17434: was /etc/redis-stack/redis-stack.conf while every
+                # rollback path in this file used /etc/redis-stack.conf, so the
+                # rollback restored a file the migration never wrote.
+                config_path = REDIS_STACK_CONFIG_PATH
 
                 await conn.run(
                     f"sudo cp {config_path} {config_path}.pre-mtls-final",
@@ -653,18 +656,18 @@ class MTLSMigration:
                 connect_timeout=10,
             ) as conn:
                 # Check if backup exists
-                check = await conn.run("test -f /etc/redis-stack.conf.pre-mtls-final && echo 'exists'")
+                check = await conn.run(f"test -f {REDIS_STACK_CONFIG_PATH}.pre-mtls-final && echo 'exists'")
                 if "exists" in check.stdout:
                     await conn.run(
-                        "sudo cp /etc/redis-stack.conf.pre-mtls-final /etc/redis-stack.conf",
+                        f"sudo cp {REDIS_STACK_CONFIG_PATH}.pre-mtls-final {REDIS_STACK_CONFIG_PATH}",
                         check=True,
                     )
                     logger.info("Restored from pre-mTLS-final backup")
                 else:
                     # Fallback: re-enable plain port
-                    await conn.run("sudo sed -i 's/^port 0$/port 6379/' /etc/redis-stack.conf")
+                    await conn.run(f"sudo sed -i 's/^port 0$/port 6379/' {REDIS_STACK_CONFIG_PATH}")
                     await conn.run(
-                        "sudo sed -i 's/^tls-auth-clients yes$/tls-auth-clients optional/' " "/etc/redis-stack.conf"
+                        f"sudo sed -i 's/^tls-auth-clients yes$/tls-auth-clients optional/' {REDIS_STACK_CONFIG_PATH}"
                     )
                     logger.info("Re-enabled plain port 6379")
 
@@ -696,7 +699,7 @@ class MTLSMigration:
             ) as conn:
                 # Remove TLS config lines
                 await conn.run(
-                    "sudo sed -i '/# TLS Configuration/,/tls-auth-clients/d' " "/etc/redis-stack.conf",
+                    f"sudo sed -i '/# TLS Configuration/,/tls-auth-clients/d' {REDIS_STACK_CONFIG_PATH}",
                     check=True,
                 )
                 logger.info("TLS configuration removed from Redis")

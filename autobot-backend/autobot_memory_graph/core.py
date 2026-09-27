@@ -40,6 +40,14 @@ ENTITY_TYPES: Set[str] = {
     "BROWSER_ACTIVITY",  # Issue #608
     "DESKTOP_ACTIVITY",  # Issue #608
     "SECRET_USAGE",  # Issue #608
+    # Artifact types (#17539). Every type above is a unit of work or a record
+    # of something a user did; none names the thing the activity acted on.
+    # FILE_ACTIVITY is "a file was opened", not "a file" — so until these two
+    # existed, "this fact came from that document" and "this task implements
+    # that function" were unsayable, while the verbs for both (references,
+    # implements, informs) were already canonical in CORE_RELATION_TYPES below.
+    "DOCUMENT",
+    "CODE",
 }
 
 # ----------------------------------------------------------------------------

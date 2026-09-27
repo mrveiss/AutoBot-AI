@@ -27,7 +27,10 @@ WorkingDirectory=/var/lib/redis-stack
 ExecStartPre=/bin/chown -R {{ redis_user }}:{{ redis_group }} /var/lib/redis-stack
 ExecStartPre=/bin/chown -R {{ redis_user }}:{{ redis_group }} /var/log/redis-stack
 
-ExecStart=/opt/redis-stack/bin/redis-stack-server /etc/redis-stack/redis-stack.conf
+# #17434: /etc/redis-stack/ does not exist on a provisioned node -- the wrapper's
+# `[ -f "${1}" ]` test failed and it silently fell back to its packaged default.
+ExecStartPre=/usr/bin/test -r {{ redis_config_file | default('/etc/redis-stack.conf') }}
+ExecStart=/opt/redis-stack/bin/redis-stack-server {{ redis_config_file | default('/etc/redis-stack.conf') }}
 ExecStop=/bin/kill -s TERM $MAINPID
 
 Restart=always

@@ -42,7 +42,7 @@ _ENTITY_TYPE_PATTERNS: Dict[str, List[str]] = {
     r"task[s]?|todo[s]?|action[s]?": ["TASK"],
     r"conversation[s]?|chat[s]?|session[s]?": ["CONVERSATION"],
     r"terminal|shell|command[s]?": ["TERMINAL_ACTIVITY"],
-    r"file[s]?|upload[s]?|document[s]?": ["FILE_ACTIVITY"],
+    r"file[s]?|upload[s]?|document[s]?": ["DOCUMENT", "FILE_ACTIVITY"],
     r"browser|web|url": ["BROWSER_ACTIVITY"],
     r"desktop|vnc|novnc": ["DESKTOP_ACTIVITY"],
     r"user[s]?|account[s]?": ["USER"],

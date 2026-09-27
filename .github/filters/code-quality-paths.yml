@@ -44,6 +44,15 @@
 # the same step.
 backend:
   - '**/*.py'
+  # #17440: generic, for the same reason #17353 added '**/*.sh' above. The
+  # fleet-addressing audit for the file kinds no other guard scans lives in
+  # `code-quality`, and its population is overwhelmingly Markdown outside docs/
+  # (311 occurrences in 65 files) and committed .json (148 in 16). Without these
+  # two entries a README-only or JSON-only change skips the one check that
+  # exists to read it -- and #15608 records what that looks like: the shim
+  # publishes `code-quality` green for an audit that never ran.
+  - '**/*.md'
+  - '**/*.json'
   # #17353: generic, mirroring '**/*.py' above. The shell size ratchet's
   # --audit-ceilings step lives in `code-quality`, which only runs when this
   # filter says so. Without a generic entry, 4 of the 10 grandfathered files

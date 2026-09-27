@@ -52,6 +52,7 @@ from typing import Deque, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from mcp_server.auth_throttle_store import SharedThrottleStore, StoreUnavailable
 
 logger = get_logger(__name__)
 
@@ -99,6 +100,16 @@ class _IpRecord:
             self.failures.popleft()
 
 
+def _default_shared_store() -> "SharedThrottleStore | None":
+    """The shared store, or None when Redis is not configured at all."""
+    try:
+        from autobot_shared.redis_client import get_redis_client
+
+        return SharedThrottleStore(lambda: get_redis_client(database="main"))
+    except Exception:  # pragma: no cover - import-time misconfiguration
+        return None
+
+
 class PreAuthThrottle:
     """Counts failed MCP authentications before any validation work runs.
 
@@ -116,6 +127,10 @@ class PreAuthThrottle:
         # the endpoint offline for clients that are demonstrably not the source.
         self._recent_success: "OrderedDict[str, float]" = OrderedDict()
         self._last_evict_log: float = 0.0
+        # #17450: shared state when the store answers, per-process when it does
+        # not. The degraded path below IS today's behaviour, which is why
+        # degrading introduces no new outage mode and no new attack.
+        self._shared = _default_shared_store()
 
     # -- internal helpers ------------------------------------------------
 
@@ -178,6 +193,10 @@ class PreAuthThrottle:
         now = time.monotonic() if now is None else now
         cutoff = now - _window_seconds()
 
+        shared = self._shared_check(ip)
+        if shared is not None:
+            return shared
+
         # B2: the ceiling sheds only callers that have not proven themselves.
         # Applying it unconditionally made 100 anonymous failures per window
         # enough to take the endpoint offline platform-wide for everyone,
@@ -208,10 +227,38 @@ class PreAuthThrottle:
             return True, f"{len(record.failures)} failed attempts in {_window_seconds():.0f}s (limit {limit})"
         return False, ""
 
+    def _shared_check(self, ip: str) -> Tuple[bool, str] | None:
+        """The shared-state answer, or None when the store cannot supply one.
+
+        Mirrors the local algorithm exactly -- global ceiling first with the
+        recent-success exemption, then lockout, then the per-IP budget. The
+        exemption applies to the CEILING only: authenticating once must not buy
+        a licence to guess, and that reasoning predates this change (B2).
+        """
+        if self._shared is None:
+            return None
+        window = _window_seconds()
+        try:
+            if not self._shared.has_recent_success(ip):
+                ceiling = _global_max_failures()
+                if ceiling > 0 and self._shared.global_failures_in_window(window) >= ceiling:
+                    return True, f"endpoint-wide auth failure ceiling reached (limit {ceiling} in {window:.0f}s)"
+            remaining = self._shared.lockout_remaining(ip)
+            if remaining > 0:
+                return True, f"client locked out for a further {remaining:.0f}s"
+            limit = _max_failures()
+            if limit > 0 and self._shared.failures_in_window(ip, window) >= limit:
+                return True, f"failed attempts in {window:.0f}s reached the limit ({limit})"
+            return False, ""
+        except StoreUnavailable:
+            return None
+
     def record_failure(self, ip: str, now: float | None = None) -> None:
         """Count one failed authentication from *ip* and arm lockout if tripped."""
         now = time.monotonic() if now is None else now
         cutoff = now - _window_seconds()
+
+        self._shared_record_failure(ip)
 
         record = self._record_for(ip, now)
         record.prune(cutoff)
@@ -229,6 +276,23 @@ class PreAuthThrottle:
                 len(record.failures),
                 _window_seconds(),
             )
+
+    def _shared_record_failure(self, ip: str) -> None:
+        """Write the failure through to shared state, ignoring unavailability.
+
+        The local counters below are updated either way, so a degraded store
+        loses sharing but never loses the count.
+        """
+        if self._shared is None:
+            return
+        window = _window_seconds()
+        try:
+            self._shared.add_failure(ip, window)
+            self._shared.add_global_failure(window)
+            if _max_failures() > 0 and self._shared.failures_in_window(ip, window) >= _max_failures():
+                self._shared.arm_lockout(ip, _lockout_seconds())
+        except StoreUnavailable:
+            return
 
     def _has_recent_success(self, ip: str, cutoff: float) -> bool:
         """Return True if *ip* authenticated within the current window."""
@@ -255,13 +319,25 @@ class PreAuthThrottle:
         non-authoritative (see _evict_overflow); the ceiling is not affected.
         """
         now = time.monotonic() if now is None else now
+        if self._shared is not None:
+            try:
+                self._shared.mark_success(ip, _window_seconds())
+            except StoreUnavailable:
+                pass
         self._ips.pop(ip, None)
         self._recent_success[ip] = now
         self._recent_success.move_to_end(ip)
         self._evict_overflow(now)
 
     def reset(self) -> None:
-        """Drop all state. Test helper; also usable for an operator unblock."""
+        """Drop all state. Test helper; also usable for an operator unblock.
+
+        Rebuilds the shared-store handle so a degraded one does not persist
+        across a reset -- otherwise a single induced failure would silently pin
+        every later call to the per-process path, which is the exact weakness
+        this is meant to remove.
+        """
+        self._shared = _default_shared_store()
         self._ips.clear()
         self._global_failures.clear()
         self._recent_success.clear()

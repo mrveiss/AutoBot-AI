@@ -31,6 +31,17 @@ from autobot_shared.ssot_config import TLSMode  # noqa: F401 — canonical enum
 # ``run_agent.sh``. It now shares the one implementation.
 PROJECT_ROOT = project_root()
 
+# #17434: the Redis config file the daemon actually reads, and the Python half of
+# a value ansible declares as `redis_config_file` in
+# autobot-slm-backend/ansible/inventory/group_vars/all.yml. One value cannot be
+# one literal across a YAML tree and a Python package, so the two declarations
+# are pinned equal by repo_tests/redis_config_path_is_canonical_17434_test.py --
+# that guard, not a shared file, is what makes "named in one place" enforceable.
+#
+# It is NOT /etc/redis-stack/redis-stack.conf: that directory does not exist on a
+# provisioned node, so every write to it landed in nothing.
+REDIS_STACK_CONFIG_PATH = "/etc/redis-stack.conf"
+
 
 class CertificateType(str, Enum):
     """Types of certificates managed."""

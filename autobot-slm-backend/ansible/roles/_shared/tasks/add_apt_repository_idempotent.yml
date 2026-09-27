@@ -37,6 +37,8 @@
 #                                 sweep matching.
 #   apt_repo_label    (str)       Friendly name for log messages, e.g.
 #                                 "Grafana", "NodeSource", "PostgreSQL pgdg".
+#   apt_repo_retries  (int, opt.) Retry budget for the repo add (default 5).
+#   apt_repo_retry_delay (int, opt.) Seconds between retries (default 10).
 #
 # Example:
 #   - include_tasks: ../../_shared/tasks/add_apt_repository_idempotent.yml
@@ -93,4 +95,13 @@
     filename: "{{ apt_repo_filename }}"
   become: true
   when: _apt_repo_present.stdout | trim == 'MISSING'
+  # A `ppa:` spec fetches its signing key from the keyserver here, and a
+  # `deb https://` spec reaches the repository host: one transient failure
+  # used to abort the whole play (#17230). Retry with a bounded budget; once
+  # it is spent the task still fails -- a repo that cannot be added stops
+  # the deploy, it is never downgraded to `failed_when: false`.
+  register: _apt_repo_add
+  until: _apt_repo_add is succeeded
+  retries: "{{ apt_repo_retries | default(5) }}"
+  delay: "{{ apt_repo_retry_delay | default(10) }}"
   tags: ['packages']

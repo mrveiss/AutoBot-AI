@@ -35,4 +35,8 @@ redis_port: 6379
 redis_password: ""
 # #16626: ACL username for this role's redis-cli calls; "" keeps password-only AUTH
 redis_username: "{{ lookup('env', 'AUTOBOT_REDIS_USERNAME') }}"
-redis_config_file: "/etc/redis/redis.conf"
+# #17434: follows roles/redis. Nine tasks in this role consume it; while the
+# role is unwired (#17176) the old plain-redis value was latent, and wiring it
+# would have made every replication edit a silent no-op against a file that
+# does not exist on a provisioned node.
+redis_config_file: "/etc/redis-stack.conf"
