@@ -3150,7 +3150,17 @@
       "noEntities3D": "Aucune entité à afficher",
       "loading3dVisualization": "Loading3d visualization",
       "loadingVisualization": "Loading visualization library...",
-      "retry": "Retry"
+      "retry": "Retry",
+      "sourcesUnreadable": "Impossible de lire le graphe de connaissances",
+      "sourcesUnreadableHint": "Rien n'est affiché parce que les magasins ci-dessous n'ont pas répondu, et non parce que le graphe est vide.",
+      "sourceHeld": "{source} : {held} entités",
+      "sourceFailed": "{source} : lecture impossible — {reason}",
+      "partialGraph": "Ce graphe est incomplet : impossible de lire {sources}.",
+      "source": {
+        "unified": "Graphe de la base de connaissances",
+        "memory": "Entités mémoire"
+      },
+      "reasonUnknown": "raison non communiquée"
     },
     "connectors": {
       "title": "Connecteurs source",

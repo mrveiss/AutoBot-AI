@@ -2034,7 +2034,17 @@
       "create": "Create",
       "loading3dVisualization": "Loading3d visualization",
       "loadingVisualization": "Loading visualization library...",
-      "retry": "Retry"
+      "retry": "Retry",
+      "sourcesUnreadable": "خواندن گراف دانش ممکن نشد",
+      "sourcesUnreadableHint": "چیزی نمایش داده نمی‌شود چون مخازن زیر پاسخ ندادند — نه به این دلیل که گراف خالی است.",
+      "sourceHeld": "{source}: {held} موجودیت",
+      "sourceFailed": "{source}: خوانده نشد — {reason}",
+      "partialGraph": "این گراف ناقص است: {sources} خوانده نشد.",
+      "source": {
+        "unified": "گراف پایگاه دانش",
+        "memory": "موجودیت‌های حافظه"
+      },
+      "reasonUnknown": "دلیلی گزارش نشد"
     },
     "vectorization": {
       "actionVectorize": "Vectorize",
