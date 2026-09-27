@@ -292,11 +292,11 @@ class SLMAgent:
     async def sync_buffered_events(self):
         """Sync buffered events to admin (#1106).
 
-        Every sqlite call goes through ``asyncio.to_thread`` (#7444). They ran on
-        the event loop, and one connection was held open across the POST below, so
-        a slow admin held both the loop and a database handle for that request's
-        30-second timeout. Why a wider call-list guard could not have found it:
-        module docstring of ``event_buffer``.
+        Every sqlite call reached from async goes through ``asyncio.to_thread``
+        (#7444) -- here, and on both of ``buffer_event``'s async paths. One
+        connection was also held open across the POST below, so a slow admin held
+        the loop and a database handle for its 30-second timeout. Why no widening
+        of the guard finds these: module docstring of ``event_buffer``.
         """
         assert self._session is not None
         events = await asyncio.to_thread(event_buffer.read_unsynced, self.buffer_db)
@@ -444,7 +444,7 @@ class SLMAgent:
 
             logger.info("Code change notification: %s on %s", commit[:12], branch)
 
-            self._process_code_change(commit, branch, message)
+            await asyncio.to_thread(self._process_code_change, commit, branch, message)
             async_compat.fire_and_forget(self._notify_code_change(commit), name=commit[:12])
 
             return web.json_response(

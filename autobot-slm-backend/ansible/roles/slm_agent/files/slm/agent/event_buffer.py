@@ -63,7 +63,19 @@ def initialize(db_path: str) -> None:
 
 
 def append(db_path: str, event_type: str, data: dict) -> None:
-    """Append one unsynced event. Blocking."""
+    """Append one unsynced event. Blocking.
+
+    ``SLMAgent.buffer_event`` wraps this and has **two** async callers -- the
+    heartbeat failure handler and the code-change HTTP handler. The #17647 review
+    found the first push had offloaded only one of them, so the rule is recorded
+    here rather than at either call site: every async path reaching this function
+    goes through ``asyncio.to_thread``, and the hop belongs at the caller, because
+    ``buffer_event``'s third caller is synchronous and must stay so.
+
+    For the code-change path the hop wraps the whole of ``_process_code_change``
+    rather than this call: that function writes a version file, clears a cache and
+    appends a row, so three wrappers would buy nothing over one.
+    """
     conn = sqlite3.connect(db_path)
     try:
         conn.execute(

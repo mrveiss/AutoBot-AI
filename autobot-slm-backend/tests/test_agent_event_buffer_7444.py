@@ -204,3 +204,28 @@ class TestBufferCallSites:
             if isinstance(arg, ast.Attribute) and arg.attr == "buffer_event"
         ]
         assert handed_off, "the failure path no longer buffers the heartbeat at all"
+
+    def test_both_of_buffer_events_async_callers_are_offloaded(self, rel: str) -> None:
+        """`buffer_event` has two async paths; a fix that covers one is not a fix.
+
+        The first push offloaded the heartbeat handler and left
+        `handle_code_change` -- an aiohttp request handler -- calling
+        `_process_code_change` bare, which reaches `buffer_event` and so sqlite.
+        Found by review at the pushed head, not by the guard, because the chain
+        runs through two sync frames.
+
+        The hop belongs around the whole of `_process_code_change`: it writes a
+        version file, clears a cache and appends a row, so wrapping each would buy
+        nothing over wrapping once.
+        """
+        fn = _function(_tree(rel), "handle_code_change")
+        assert (
+            _calls_named(fn, "_process_code_change") == []
+        ), "_process_code_change(...) is called inline in an async request handler"
+        handed_off = [
+            arg
+            for call in _calls_named(fn, "to_thread")
+            for arg in call.args
+            if isinstance(arg, ast.Attribute) and arg.attr == "_process_code_change"
+        ]
+        assert handed_off, "the code-change handler no longer processes the change at all"

@@ -177,7 +177,7 @@ async def get_vnc_status(
     Returns:
         {"running": true/false}
     """
-    running = is_vnc_running()
+    running = await asyncio.to_thread(is_vnc_running)
     return {"running": running}
 
 
@@ -193,7 +193,7 @@ async def ensure_vnc_running(
     Returns:
         {"status": "running|started|error", "message": "..."}
     """
-    if is_vnc_running():
+    if await asyncio.to_thread(is_vnc_running):
         return {"status": "running", "message": "VNC server already running"}
 
     logger.info("VNC server not running, starting...")
