@@ -149,7 +149,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/terminal.py": 1294,
     "autobot-backend/api/terminal_handlers.py": 1497,
     "autobot-backend/api/validation_dashboard.py": 671,
-    "autobot-backend/api/vnc_manager.py": 1699,
+    "autobot-backend/api/vnc_manager.py": 1651,
     "autobot-backend/api/vnc_mcp.py": 763,
     "autobot-backend/api/websockets.py": 1120,  # #16457: accepts routed through websocket_subprotocol.accept_websocket
     "autobot-backend/api/workflow.py": 1027,
@@ -440,7 +440,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/workers/audit_tasks_test.py": 1197,
     "autobot-backend/workflow_scheduler.py": 1070,
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
-    "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 675,
+    "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 630,
     "autobot-slm-backend/api/code_source.py": 719,
     "autobot-slm-backend/api/code_sync.py": 6025,  # #16640: moved to api/_colocated_role_procedures.py
     "autobot-slm-backend/api/errors.py": 866,
@@ -480,7 +480,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/services/role_registry.py": 713,
     "autobot-slm-backend/services/service_orchestrator.py": 955,
     "autobot-slm-backend/services/sync_orchestrator.py": 649,
-    "autobot-slm-backend/slm/agent/agent.py": 675,
+    "autobot-slm-backend/slm/agent/agent.py": 630,
     "autobot-slm-backend/tests/api/test_code_sync_deploy_bugs.py": 2012,  # #16713: containment tests moved out
     "autobot-slm-backend/tests/api/test_drift_resolve.py": 606,
     "autobot-slm-backend/tests/api/test_fleet_node_update_11511.py": 1051,

@@ -51,6 +51,11 @@ from api.schemas_system import (
     WaitForTextRequest,
     WaitForTextResponse,
 )
+from api.vnc_blocking_probes import (
+    is_vnc_running,
+    probe_connection_quality,
+    run_clipboard_write,
+)
 
 # Issue #74 - Area 5: Human-like behavior helpers
 from api.vnc_humanization import (
@@ -76,22 +81,6 @@ router = APIRouter()
 # Global connection settings storage (in-memory for now)
 _connection_settings: Dict[str, ConnectionSettings] = {}
 _settings_lock = asyncio.Lock()
-
-
-def is_vnc_running() -> bool:
-    """Check if VNC server is running on the canonical desktop display."""
-    try:
-        # Check for Xtigervnc process on the canonical display (Issue #11579)
-        result = subprocess.run(  # nosec B603 B607  # fixed argv, no user input
-            ["pgrep", "-f", f"Xtigervnc {NetworkConstants.DESKTOP_DISPLAY}"],
-            capture_output=True,
-            timeout=5,
-        )
-        # pgrep returns 0 if process found, 1 if not found
-        return result.returncode == 0
-    except Exception as e:
-        logger.error("Error checking VNC status: %s", e)
-        return False
 
 
 def _launch_websockify() -> None:
@@ -188,7 +177,7 @@ async def get_vnc_status(
     Returns:
         {"running": true/false}
     """
-    running = is_vnc_running()
+    running = await asyncio.to_thread(is_vnc_running)
     return {"running": running}
 
 
@@ -204,7 +193,7 @@ async def ensure_vnc_running(
     Returns:
         {"status": "running|started|error", "message": "..."}
     """
-    if is_vnc_running():
+    if await asyncio.to_thread(is_vnc_running):
         return {"status": "running", "message": "VNC server already running"}
 
     logger.info("VNC server not running, starting...")
@@ -641,17 +630,14 @@ async def vnc_clipboard_sync(
     """
     try:
         # Use xclip to set clipboard content
-        proc = subprocess.Popen(  # nosec B603 B607  # fixed argv, no user input
-            ["xclip", "-selection", "clipboard"],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
-        )
-        stdout, stderr = proc.communicate(input=request.content.encode("utf-8"), timeout=5)
+        # `Popen` is cheap; `communicate(timeout=5)` is not, and it was on the event
+        # loop. `subprocess.run` with `input=` is the same two calls in one, so it
+        # moves off the loop in a single `to_thread` hop. `TimeoutExpired` still
+        # propagates to the handler below.
+        completed = await asyncio.to_thread(run_clipboard_write, request.content.encode("utf-8"))
 
-        if proc.returncode != 0:
-            return {"status": "error", "message": stderr.decode("utf-8")}
+        if completed.returncode != 0:
+            return {"status": "error", "message": completed.stderr.decode("utf-8")}
 
         return {"status": "success", "message": "Clipboard synced"}
 
@@ -732,42 +718,8 @@ async def get_connection_quality_metrics(
     Returns:
         Connection quality stats (latency, bandwidth, packet loss)
     """
-    metrics = {
-        "vnc_running": is_vnc_running(),
-        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-    }
-
-    # Check VNC port connectivity
-    try:
-        import socket
-
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(2)
-        start_time = datetime.now(tz=timezone.utc)
-        result = sock.connect_ex(("localhost", 5901))
-        latency_ms = (datetime.now(tz=timezone.utc) - start_time).total_seconds() * 1000
-        sock.close()
-
-        metrics["vnc_port_reachable"] = result == 0
-        metrics["latency_ms"] = round(latency_ms, 2)
-    except Exception as e:
-        logger.warning("Failed to check VNC connectivity: %s", e)
-        metrics["vnc_port_reachable"] = False
-
-    # Get websockify process info
-    try:
-        result = subprocess.run(  # nosec B603 B607  # fixed argv, no user input
-            ["pgrep", "-a", "websockify"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        metrics["websockify_running"] = result.returncode == 0
-        if result.returncode == 0:
-            metrics["websockify_processes"] = len(result.stdout.strip().split("\n"))
-    except Exception as e:
-        logger.warning("Failed to check websockify: %s", e)
-
+    metrics = await asyncio.to_thread(probe_connection_quality)
+    metrics["timestamp"] = datetime.now(tz=timezone.utc).isoformat()
     return metrics
 
 
