@@ -130,7 +130,10 @@ describe('usePerformanceMonitoring transport', () => {
 
     await fetchSLOs()
 
-    expect(error.value).toContain('HTTP 502')
+    // `toBe`, not `toContain('HTTP 502')`: dropping the `|| response.statusText`
+    // fallback yields `'HTTP 502: '`, which contains 'HTTP 502' and would have
+    // passed. A test whose title names a behaviour must fail when it is removed.
+    expect(error.value).toBe('HTTP 502: Bad Gateway')
   })
 
   it('hands the body over unserialised, so rawRequest encodes it exactly once', async () => {
