@@ -31,6 +31,25 @@
 # Usage:
 #   bash scripts/install-git-hooks.sh          # install/refresh hooks
 #   HOOKS_DEST=/tmp/x bash scripts/install-git-hooks.sh   # override dest (tests)
+#   bash scripts/install-git-hooks.sh --sync pre-push     # #17578, see below
+#
+# `--sync <hook>...` is the mode the post-checkout and post-merge hooks call.
+# It differs from a full run in two ways, both deliberate:
+#
+#   * it does NOT call normalise_hooks_path. Unsetting core.hooksPath is a
+#     config mutation, and a checkout is not the moment to perform one behind
+#     the operator's back. A full run still does it.
+#   * it is silent unless it actually replaces something. A hook that prints on
+#     every checkout is a hook the third person to see it disables.
+#
+# Why it exists (#17578): hooks are COPIED, not symlinked (#11598), and nothing
+# kept .git/hooks/pre-push in step with tools/git-hooks/pre-push. Measured on a
+# live checkout: the installed copy was the tracked file as of 4bae334f12, two
+# revisions behind, missing #16912's two `could_not_run` branches AND #17035's
+# `REPO_ROOT="$PWD"`. The second is why this is not tidiness -- the old spelling
+# resolves through `git rev-parse --show-toplevel`, which an inherited GIT_DIR
+# outranks, so the running hook could verify a DIFFERENT CHECKOUT than the one
+# being pushed.
 #
 # Related: #4113 (branch guard), #11581, #11593.
 
@@ -47,8 +66,14 @@ set -uo pipefail
 unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
 
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; NC='\033[0m'
-info()  { printf "${CYAN}[install-hooks]${NC} %s\n" "$*"; }
-ok()    { printf "${GREEN}[install-hooks]${NC} %s\n" "$*"; }
+# QUIET (set by --sync) suppresses progress, never a change or a problem:
+# `changed`, `warn` and `fail` always print. A sync that replaced a stale hook
+# must leave a trace, or the drift this mode exists to remove becomes invisible
+# in the other direction -- corrected silently, with nobody told it was wrong.
+QUIET=""
+info()  { [ -n "$QUIET" ] && return 0; printf "${CYAN}[install-hooks]${NC} %s\n" "$*"; }
+ok()    { [ -n "$QUIET" ] && return 0; printf "${GREEN}[install-hooks]${NC} %s\n" "$*"; }
+changed() { printf "${GREEN}[install-hooks]${NC} %s\n" "$*"; }
 warn()  { printf "${YELLOW}[install-hooks WARN]${NC} %s\n" "$*" >&2; }
 fail()  { printf "${RED}[install-hooks FAIL]${NC} %s\n" "$*" >&2; }
 
@@ -57,6 +82,39 @@ fail()  { printf "${RED}[install-hooks FAIL]${NC} %s\n" "$*" >&2; }
 # rejects a subject without the `<type>(scope): ... (#NNNN)` convention; it was
 # a hand-installed local file until then, present on one machine and nowhere else.
 MANAGED_HOOKS="pre-commit pre-push commit-msg"
+
+# --sync <hook>... : the subset to bring into step, quietly. Validated against
+# MANAGED_HOOKS below, so a typo fails loudly instead of syncing nothing --
+# which would read exactly like a clean sync.
+SYNC_ONLY=""
+# An unknown option must FAIL, never fall through to a full install. #17578's
+# own near miss: the hooks live in ONE shared .git/hooks while this installer is
+# per worktree, so a hook installed from a tree that has --sync gets invoked
+# from trees that do not. An older copy ignored the unknown argument, ran
+# `main "$@"`, and performed a full install -- including normalise_hooks_path,
+# the config mutation --sync exists to avoid. Observed live: a merge in another
+# worktree did exactly that. Failing here kills the class; the hooks also probe
+# for support before calling, which handles the older-installer direction.
+case "${1:-}" in
+    -*)
+        if [ "$1" != "--sync" ]; then
+            fail "unknown option: $1 (supported: --sync <hook>...)"
+            exit 2
+        fi
+        ;;
+esac
+if [ "${1:-}" = "--sync" ]; then
+    shift
+    SYNC_ONLY="$*"
+    [ -n "$SYNC_ONLY" ] || { fail "--sync needs at least one hook name"; exit 2; }
+    QUIET=1
+    for _requested in $SYNC_ONLY; do
+        case " $MANAGED_HOOKS " in
+            *" $_requested "*) ;;
+            *) fail "--sync: '$_requested' is not one of: $MANAGED_HOOKS"; exit 2 ;;
+        esac
+    done
+fi
 
 # --- Locate the repo and its canonical hook templates (portable) -----------
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
@@ -175,18 +233,25 @@ install_one_hook() {
 
     cp "$src" "$dest" || { fail "failed to copy $name into $dest"; return 1; }
     chmod +x "$dest" || { fail "failed to chmod +x $dest"; return 1; }
-    ok "installed $name"
+    # `changed`, not `ok`: a replacement is reported even under --sync.
+    changed "installed $name"
 }
 
 main() {
     info "repo root:   $REPO_ROOT"
     info "hooks dest:  $HOOKS_DEST"
     mkdir -p "$HOOKS_DEST"
-    normalise_hooks_path
+    # #17578: a --sync run touches hooks only. See the note at the top for why
+    # config normalisation is not a side effect of a checkout.
+    [ -z "$SYNC_ONLY" ] && normalise_hooks_path
     local rc=0
-    for hook in $MANAGED_HOOKS; do
+    for hook in ${SYNC_ONLY:-$MANAGED_HOOKS}; do
         install_one_hook "$hook" || rc=1
     done
+    if [ -n "$SYNC_ONLY" ]; then
+        [ "$rc" -ne 0 ] && fail "hook sync failed for one or more of: $SYNC_ONLY"
+        return "$rc"
+    fi
     echo ""
     if [ "$rc" -ne 0 ]; then
         fail "one or more hooks failed to install"

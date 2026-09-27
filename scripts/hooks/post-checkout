@@ -75,6 +75,27 @@ if [ -n "$MAIN_ROOT" ] && [ "$MAIN_ROOT" != "$GIT_ROOT" ]; then
         _dst="$GIT_ROOT/$_proj/node_modules"
         [ -d "$GIT_ROOT/$_proj" ] || continue
         [ -d "$_src" ] || continue
+        # #17573: `-d` is true for a directory carrying no execute bit, and such
+        # a directory denies EVERYTHING inside it. autobot-slm-frontend's install
+        # is mode 644 on at least one host, so every binary under .bin is
+        # unreachable while the directory itself reads as present -- `ls
+        # node_modules/.bin/vue-tsc` is Permission denied, and `npm run
+        # type-check` answers `vue-tsc: Permission denied`.
+        #
+        # Linking to that produces a link that RESOLVES and a toolchain that
+        # cannot run, beneath a line that says "Linked". Checked before the
+        # already-linked guard below, so a tree that was linked on an earlier run
+        # is told too -- the condition is a property of the target, not of this
+        # invocation. Reported rather than skipped: a silent `continue` is the
+        # failure mode #16912 exists to remove, and this is the only place that
+        # knows why local verification will not work.
+        if [ ! -x "$_src" ]; then
+            _mode="$(stat -c '%a' "$_src" 2>/dev/null || echo '?')"
+            echo "⚠️  $_proj/node_modules is present in the main checkout but cannot be traversed (mode $_mode)." >&2
+            echo "    Its toolchain is unreachable, so vue-tsc, eslint and vitest cannot run for that project" >&2
+            echo "    here or anywhere else on this host. See #17573; this hook cannot fix a mode it does not own." >&2
+            continue
+        fi
         if [ -L "$_dst" ] && [ ! -e "$_dst" ]; then
             rm -f "$_dst"
         fi
@@ -272,6 +293,59 @@ fi
 # scripts/hooks/post-checkout. This section copies it into .git/hooks/
 # whenever the installed version differs, so developers always run the
 # latest version after checkout — even in worktrees.
+# ---------------------------------------------------------------------------
+# #17578: keep the installed pre-push in step with its tracked copy.
+#
+# Hooks are COPIED, not symlinked (#11598), and nothing synced this one. The
+# measured cost on a live checkout: .git/hooks/pre-push was the tracked file as
+# of 4bae334f12 -- two revisions behind, without #16912's two `could_not_run`
+# branches and without #17035's `REPO_ROOT="$PWD"`. The second is the one that
+# matters: the old spelling goes through `git rev-parse --show-toplevel`, which
+# an inherited GIT_DIR outranks, so the running hook could verify a DIFFERENT
+# checkout than the one being pushed. Every "hooks green" claim made while that
+# was installed described a gate nobody could name.
+#
+# `pre-push` ONLY, deliberately. `pre-commit` is already kept in step above, by
+# a comparison that strips the separately-injected flock block -- pointing a
+# second mechanism at the same file is how two managers of one thing drift, and
+# it would re-copy the template on every checkout, stripping a flock that the
+# later step then re-injects.
+#
+# The installer is reused rather than a third content-diff written here: it
+# skips a pre-commit-framework-generated hook, replaces a symlink with a real
+# file, short-circuits on `cmp -s`, and backs up an UNMANAGED hook instead of
+# destroying a developer's own. It also unsets GIT_DIR up front (#15246) --
+# the same trap #17035 fixed one file over.
+#
+# Not the atomic-rename dance the self-sync below needs: `pre-push` is not the
+# script executing here, so a plain copy cannot make a running shell resume at
+# a byte offset inside new content (#15532). Anyone extending this to a hook
+# that IS running must use that idiom instead -- see
+# repo_tests/hook_self_sync_atomic_test.py.
+# The probe is load-bearing, not defensive politeness. `.git/hooks` is ONE
+# directory shared by every worktree; this installer is per worktree. So a hook
+# installed from a tree that has the --sync mode will be invoked from trees that
+# do not, and an installer without it ignored the unknown argument and ran a
+# FULL install -- normalise_hooks_path included. That happened on this machine
+# before the guard existed. A tree without the mode now simply does not sync,
+# which is correct and silent.
+INSTALLER="$GIT_ROOT/scripts/install-git-hooks.sh"
+if [ -f "$INSTALLER" ] && grep -q 'SYNC_ONLY=' "$INSTALLER"; then
+    # Provenance (#17578, 63's ask): say which pre-push is in place, so nobody
+    # has to ask afterwards which hook ran. `git hash-object` is the same
+    # identity git itself uses, so the two sides are directly comparable, and
+    # the tracked side is named rather than assumed.
+    _tracked_hook="$GIT_ROOT/tools/git-hooks/pre-push"
+    _installed_hook="$(git rev-parse --git-common-dir 2>/dev/null)/hooks/pre-push"
+    _before="$(git hash-object "$_installed_hook" 2>/dev/null | cut -c1-10)"
+    bash "$INSTALLER" --sync pre-push || true
+    _after="$(git hash-object "$_installed_hook" 2>/dev/null | cut -c1-10)"
+    _want="$(git hash-object "$_tracked_hook" 2>/dev/null | cut -c1-10)"
+    if [ -n "$_after" ] && [ "$_before" != "$_after" ]; then
+        echo "   pre-push now ${_after} (tracked ${_want}); was ${_before:-absent}" >&2
+    fi
+fi
+
 CANONICAL="$GIT_ROOT/scripts/hooks/post-checkout"
 COMMON_HOOKS="$(git rev-parse --git-common-dir 2>/dev/null)/hooks"
 INSTALLED="${COMMON_HOOKS}/post-checkout"

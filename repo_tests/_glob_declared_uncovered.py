@@ -87,6 +87,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     ),
     "*.vue": (
         {
+            "repo_tests/_hardcoded_colour_detect.py",
             "repo_tests/slm_frontend_bare_ui_literals_test.py",
             "repo_tests/slm_frontend_calls_reach_served_routes_test.py",
         },
@@ -145,8 +146,15 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         {
             "repo_tests/npm_audit_covers_its_workspaces_test.py",
             "repo_tests/npm_test_scripts_run_in_ci_test.py",
+            "repo_tests/prepush_frontend_projects_17574_test.py",
         },
-        "root-relative `*package.json` sweep; the matching files live outside the python filter's trees",
+        "root-relative `*package.json` sweep; the matching files live outside the python filter's trees. "
+        "The #17574 guard reads them to answer whether the pre-push hook's FRONTEND_PROJECTS list still "
+        "matches every tree declaring a `type-check` script -- so the gap this record exists to keep "
+        "visible bites it in a particular way: a NEW frontend arrives by adding a package.json, which is "
+        "exactly the change that does not trigger this guard. It fires on the next run that does, so the "
+        "answer is late rather than absent. Recorded rather than fixed by widening the filter, which "
+        "would run the python suite for every package.json edit in the repository",
     ),
     "*package-lock.json": (
         {"repo_tests/npm_audit_covers_its_workspaces_test.py"},

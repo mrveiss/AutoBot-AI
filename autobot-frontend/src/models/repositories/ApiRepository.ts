@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { ApiResponse, RequestOptions } from '@/types/models'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { extractErrorMessage } from '@/utils/errorExtract'
+import { describeFailedResponse, extractErrorMessage } from '@/utils/errorExtract'
 import { getApiBase } from '@/config/ssot-config'
 
 // Note: Window.rum type is defined in @/utils/RumAgent.ts
@@ -149,13 +149,27 @@ export class ApiRepository {
         signal: controller.signal
       })
 
-      clearTimeout(timeoutId)
       const endTime = performance.now()
 
       if (!response.ok) {
         this.trackApiCall(method, endpoint, startTime, endTime, response.status)
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        // #17528: read the body before throwing. Every reason the backend computed for
+        // the rejection lives there, and this line used to discard all of it -- the
+        // knowledge upload endpoint tells a user their PDF is a scan needing OCR, names
+        // the 10MB limit and lists the accepted extensions, and none of it ever arrived.
+        //
+        // The abort timer stays ARMED across that read and is cleared after it. Reading
+        // the body is a second trip to the network: a server that sends headers and then
+        // stalls would otherwise hang here forever, because clearing the timer first
+        // disarms the only thing that bounds it. Aborting mid-read rejects response.text(),
+        // which describeFailedResponse catches, so the deadline degrades to the bare
+        // status line instead of a hang.
+        const message = await describeFailedResponse(response)
+        clearTimeout(timeoutId)
+        throw new Error(message)
       }
+
+      clearTimeout(timeoutId)
 
       const contentType = response.headers.get('content-type')
 
