@@ -62,13 +62,17 @@ def _load_checker() -> ModuleType:
 def pytest_terminal_summary(terminalreporter) -> None:
     """Report unsatisfied declared floors under the run's result counts."""
     checker = _load_checker()
-    found, examined = checker.audit(_REPO_ROOT)
-    if not found:
+    result = checker.audit(_REPO_ROOT)
+    if not result.shortfalls:
         return
-    terminalreporter.write_sep("=", "environment is BELOW the declared dependency floors", red=True)
+    # #17558: this banner is INFORMATIONAL -- it cannot fail the run. It used to
+    # print a red "environment is BELOW the declared dependency floors" header
+    # in the same shape as the gating check, and three readers in one day took
+    # it for the build failure. The header now says what it is.
+    terminalreporter.write_sep("=", "dependency floors (informational -- this did not fail the run)", yellow=True)
     # #16264: this same hook runs inside ci.yml's pytest invocations, where the
     # interpreter collecting the run IS the CI job's own environment, not a
     # stand-in for it -- render() needs to know which is true to say so correctly.
     in_ci = bool(os.environ.get("CI"))
-    for line in checker.render(found, examined, in_ci=in_ci):
+    for line in checker.render(result, in_ci=in_ci, gating=False):
         terminalreporter.write_line(line)

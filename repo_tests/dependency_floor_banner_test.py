@@ -65,11 +65,27 @@ class TestRegistration:
         assert banner._load_checker() is first
 
 
+def _audit_result(checker, found, declared=206):
+    """A :class:`FloorAudit` stub (#17558 replaced audit's tuple return).
+
+    The banner reads `.shortfalls` now rather than unpacking, because the old
+    second element was a declaration count being printed as a comparison count.
+    """
+    return checker.FloorAudit(
+        shortfalls=tuple(found),
+        declared=declared,
+        compared=declared,
+        not_installed=(),
+        roots=("requirements.txt",),
+        environment="the interpreter running this check (python 3.14.6)",
+    )
+
+
 class TestTerminalSummary:
     def test_silent_when_every_floor_is_satisfied(self, monkeypatch):
         checker = banner._load_checker()
         monkeypatch.setattr(banner, "_load_checker", lambda: checker)
-        monkeypatch.setattr(checker, "audit", lambda root: ([], 206))
+        monkeypatch.setattr(checker, "audit", lambda root: _audit_result(checker, []))
         reporter = _FakeReporter()
         banner.pytest_terminal_summary(reporter)
         assert reporter.lines == []
@@ -78,7 +94,7 @@ class TestTerminalSummary:
     def test_names_both_versions_when_below_floor(self, monkeypatch):
         checker = banner._load_checker()
         monkeypatch.setattr(banner, "_load_checker", lambda: checker)
-        monkeypatch.setattr(checker, "audit", lambda root: ([_shortfall(checker)], 206))
+        monkeypatch.setattr(checker, "audit", lambda root: _audit_result(checker, [_shortfall(checker)]))
         reporter = _FakeReporter()
         banner.pytest_terminal_summary(reporter)
         assert reporter.separators, "the banner must be visually separated from the counts"
@@ -89,7 +105,7 @@ class TestTerminalSummary:
     def test_points_at_the_remedy(self, monkeypatch):
         checker = banner._load_checker()
         monkeypatch.setattr(banner, "_load_checker", lambda: checker)
-        monkeypatch.setattr(checker, "audit", lambda root: ([_shortfall(checker)], 206))
+        monkeypatch.setattr(checker, "audit", lambda root: _audit_result(checker, [_shortfall(checker)]))
         reporter = _FakeReporter()
         banner.pytest_terminal_summary(reporter)
         assert "scripts/setup-ci-parity-env.sh" in reporter.text
@@ -99,7 +115,7 @@ class TestTerminalSummary:
         printed there, the interpreter collecting the run IS CI's environment."""
         checker = banner._load_checker()
         monkeypatch.setattr(banner, "_load_checker", lambda: checker)
-        monkeypatch.setattr(checker, "audit", lambda root: ([_shortfall(checker)], 206))
+        monkeypatch.setattr(checker, "audit", lambda root: _audit_result(checker, [_shortfall(checker)]))
         monkeypatch.setenv("CI", "true")
         reporter = _FakeReporter()
         banner.pytest_terminal_summary(reporter)
@@ -109,7 +125,7 @@ class TestTerminalSummary:
     def test_points_at_a_different_environment_when_the_ci_env_var_is_absent(self, monkeypatch):
         checker = banner._load_checker()
         monkeypatch.setattr(banner, "_load_checker", lambda: checker)
-        monkeypatch.setattr(checker, "audit", lambda root: ([_shortfall(checker)], 206))
+        monkeypatch.setattr(checker, "audit", lambda root: _audit_result(checker, [_shortfall(checker)]))
         monkeypatch.delenv("CI", raising=False)
         reporter = _FakeReporter()
         banner.pytest_terminal_summary(reporter)
@@ -132,5 +148,6 @@ class TestAgainstTheRealTree:
     def test_the_repo_enumerates_a_substantial_declaration_set(self):
         """Guards the enumeration itself: a silent drop to zero would hide everything."""
         checker = banner._load_checker()
-        _found, examined = checker.audit(REPO_ROOT)
-        assert examined > 100, f"only {examined} declarations enumerated across the repo"
+        result = checker.audit(REPO_ROOT)
+        assert result.declared > 100, f"only {result.declared} declarations enumerated across the repo"
+        assert result.compared <= result.declared, "comparisons can never exceed declarations read"

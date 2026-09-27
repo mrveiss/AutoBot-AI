@@ -185,6 +185,24 @@ class TestIsExempt:
         assert checker.is_exempt(checker.Shortfall(declaration, "15.0.1")) is False
 
 
+def _result(found, declared=206, *, compared=None, not_installed=(), roots=("req.txt",), environment=None):
+    """A :class:`FloorAudit` for render tests (#17558 changed render's input).
+
+    ``compared`` defaults to ``declared`` so existing expectations about the
+    number in the first line stay meaningful; the tests that care about the
+    distinction set it explicitly.
+    """
+    return checker.FloorAudit(
+        shortfalls=tuple(found),
+        declared=declared,
+        compared=declared if compared is None else compared,
+        not_installed=tuple(not_installed),
+        roots=tuple(roots),
+        environment=environment
+        or f"the interpreter running this check (python {__import__('platform').python_version()})",
+    )
+
+
 class TestAuditRefusesAnEmptyEnumeration:
     def test_empty_tree_raises_instead_of_reporting_clean(self, tmp_path, monkeypatch):
         """#15087: a check that asserts over an enumeration must fail when it is empty.
@@ -206,40 +224,56 @@ class TestAuditRefusesAnEmptyEnumeration:
     def test_a_populated_tree_does_not_raise(self, tmp_path, monkeypatch):
         monkeypatch.setattr(checker, "DECLARATION_ROOTS", ("r.txt",))
         _write(tmp_path, "r.txt", "fastapi>=0.141.1\n")
-        found, examined = checker.audit(tmp_path)
-        assert examined == 1
-        assert isinstance(found, list)
+        result = checker.audit(tmp_path)
+        assert result.declared == 1
+        assert isinstance(result.shortfalls, tuple)
 
 
 class TestRender:
     def test_names_both_versions_and_the_remedy(self):
         """The acceptance criterion: the report must name installed AND declared."""
-        report = "\n".join(checker.render([checker.Shortfall(_declaration(), "0.135.2")], 206))
+        report = "\n".join(checker.render(_result([checker.Shortfall(_declaration(), "0.135.2")])))
         assert "0.135.2" in report
         assert "0.141.1" in report
         assert "fastapi" in report
         assert "scripts/setup-ci-parity-env.sh" in report
 
     def test_clean_environment_says_how_many_were_checked(self):
-        [line] = checker.render([], 206)
-        assert "206" in line and "all satisfied" in line
+        """#17558: and says how many it could NOT check, and against what."""
+        report = "\n".join(checker.render(_result([], declared=206, compared=206)))
+        assert "206" in report and "all satisfied" in report
+        assert "roots:" in report, "a clean verdict must name the declarations it compared against"
+        assert "report only" in report, "a block that cannot fail the run must say so"
+
+    def test_a_clean_pass_counts_comparisons_and_admits_what_it_skipped(self):
+        """The defect this issue exists for: 128 declared, 42 never compared.
+
+        The old line said "206 declarations checked, all satisfied" whether or
+        not anything was installed to compare them against.
+        """
+        report = "\n".join(
+            checker.render(_result([], declared=128, compared=86, not_installed=tuple(f"p{i}" for i in range(42))))
+        )
+        assert "86 of 128" in report, "the pass must count comparisons, not declarations read"
+        assert "42 declared but NOT INSTALLED" in report
+        assert "not compared" in report
 
     def test_detail_is_capped_and_the_remainder_counted(self):
         found = [checker.Shortfall(_declaration(name=f"pkg{i}"), "0.1") for i in range(25)]
-        report = "\n".join(checker.render(found, 206, limit=10))
+        report = "\n".join(checker.render(_result(found), limit=10))
         assert "pkg0" in report
         assert "pkg24" not in report
         assert "15 more" in report
 
     def test_default_points_at_ci_as_a_different_environment(self):
         """#16264: off CI, the report describes some OTHER interpreter than CI's."""
-        report = "\n".join(checker.render([checker.Shortfall(_declaration(), "0.135.2")], 206))
+        report = "\n".join(checker.render(_result([checker.Shortfall(_declaration(), "0.135.2")])))
         assert "carries no information about CI" in report
         assert "CI job's own environment" not in report
 
     def test_in_ci_names_the_running_environment_as_ci_itself(self):
         """#16264: printed FROM CI, the interpreter making the report IS CI's own."""
-        report = "\n".join(checker.render([checker.Shortfall(_declaration(), "0.135.2")], 206, in_ci=True))
+        report = "\n".join(checker.render(_result([checker.Shortfall(_declaration(), "0.135.2")]), in_ci=True))
         assert "CI job's own environment" in report
         assert "carries no information about CI" not in report
 
@@ -333,33 +367,35 @@ class TestScopedRoots:
     def test_a_narrowed_sweep_reads_only_the_named_files(self, tmp_path, monkeypatch):
         self._tree(tmp_path)
         monkeypatch.setattr(checker, "installed_versions", lambda names: {"fastapi": "0.141.1"})
-        found, examined = checker.audit(tmp_path, ("installed.txt",))
-        assert examined == 1
-        assert found == []
+        result = checker.audit(tmp_path, ("installed.txt",))
+        assert result.declared == 1
+        assert result.shortfalls == ()
+        assert result.roots == ("installed.txt",), "the report must be able to name what it compared against"
 
     def test_the_same_tree_unscoped_still_reads_every_root(self, tmp_path, monkeypatch):
         """The default must not change: this option is additive, not a redefinition."""
         self._tree(tmp_path)
         monkeypatch.setattr(checker, "DECLARATION_ROOTS", ("installed.txt", "never-installed.txt"))
         monkeypatch.setattr(checker, "installed_versions", lambda names: {"fastapi": "0.141.1"})
-        _, examined = checker.audit(tmp_path)
-        assert examined == 2
+        assert checker.audit(tmp_path).declared == 2
 
     def test_scoping_out_the_file_that_holds_the_shortfall_clears_it(self, tmp_path, monkeypatch):
         """The whole point: a shortfall you never installed is not your drift."""
         self._tree(tmp_path)
         monkeypatch.setattr(checker, "installed_versions", lambda names: {"fastapi": "0.141.1", "sqlalchemy": "2.0.51"})
-        wide, _ = checker.audit(tmp_path, ("installed.txt", "never-installed.txt"))
-        narrow, _ = checker.audit(tmp_path, ("installed.txt",))
+        wide = checker.audit(tmp_path, ("installed.txt", "never-installed.txt")).shortfalls
+        narrow = checker.audit(tmp_path, ("installed.txt",)).shortfalls
         assert [shortfall.declaration.name for shortfall in wide] == ["sqlalchemy"]
-        assert narrow == []
+        assert narrow == ()
 
     def test_include_graph_is_still_followed_from_a_narrowed_root(self, tmp_path, monkeypatch):
         _write(tmp_path, "top.txt", "-r child.txt\nfastapi>=0.141.1\n")
         _write(tmp_path, "child.txt", "starlette>=1.6.0\n")
         monkeypatch.setattr(checker, "installed_versions", lambda names: {})
-        _, examined = checker.audit(tmp_path, ("top.txt",))
-        assert examined == 2
+        result = checker.audit(tmp_path, ("top.txt",))
+        assert result.declared == 2
+        assert result.compared == 0, "nothing installed, so nothing was compared"
+        assert set(result.not_installed) == {"fastapi", "starlette"}
 
     def test_a_narrowed_sweep_that_reads_nothing_still_raises(self, tmp_path):
         """Narrowing must not become a way to reach a vacuous clean report."""
@@ -538,14 +574,16 @@ class TestTheReportNamesItsEnvironment:
         ]
 
     def test_the_default_still_names_the_running_interpreter(self):
-        assert "interpreter running this check" in checker.render(self._one(), 1)[0]
+        assert "interpreter running this check" in checker.render(_result(self._one(), declared=1))[0]
 
     def test_a_named_environment_replaces_it(self):
-        line = checker.render(self._one(), 1, environment="/opt/x/venv/bin/python (python 3.14.6)")[0]
+        line = checker.render(
+            _result(self._one(), declared=1, environment="/opt/x/venv/bin/python (python 3.14.6)"), deployed=True
+        )[0]
         assert "/opt/x/venv/bin/python (python 3.14.6)" in line
         assert "interpreter running this check" not in line
 
     def test_a_deployed_report_does_not_give_ci_parity_advice(self):
-        lines = checker.render(self._one(), 1, environment="/opt/x/venv/bin/python")
+        lines = checker.render(_result(self._one(), declared=1, environment="/opt/x/venv/bin/python"), deployed=True)
         assert not any("setup-ci-parity-env.sh" in line for line in lines)
         assert any("DEPLOYED environment" in line for line in lines)
