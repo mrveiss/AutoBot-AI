@@ -79,6 +79,16 @@ could_not_run() {
     EXIT_CODE=1
 }
 fail()  { printf "${RED}[pre-push FAIL]${CLR} %s\n" "$*" >&2; }
+
+# A dependency root is usable only if it can be TRAVERSED. A directory that is
+# present but carries no execute bit answers `-d` yes and denies everything
+# inside it (#17573: autobot-slm-frontend/node_modules is mode 644, so every
+# binary in .bin is unreachable). `-d` alone therefore reports a usable
+# toolchain where there is none, which is how a check that CANNOT run comes to
+# read as one that found nothing.
+node_modules_usable() {
+  [ -d "$1/node_modules" ] && [ -x "$1/node_modules" ]
+}
 ok()    { printf "${GRN}[pre-push OK]${CLR} %s\n" "$*" >&2; }
 
 EXIT_CODE=0
@@ -332,38 +342,96 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
 
   # ----- Frontend (TypeScript / Vue) --------------------------------------
-  if echo "$changed" | grep -qE '\.(ts|vue)$'; then
-    log "frontend files changed — running vue-tsc (timeout ${TYPE_CHECK_TIMEOUT}s)"
-    if [ -d "$REPO_ROOT/autobot-frontend" ] \
-       && [ -d "$REPO_ROOT/autobot-frontend/node_modules" ]; then
+  #
+  # PER PROJECT (#17574). This phase named `autobot-frontend` as a literal while
+  # being reached by ANY changed `.ts`/`.vue`, so a change in another tree --
+  # autobot-slm-frontend, libs/autobot-ui, libs/autobot-sdk-ts, the MCP tools --
+  # type-checked autobot-frontend instead: a pass that says nothing about the
+  # change, and a failure attributed to the wrong files (the triage below strips
+  # only its own prefix, so a foreign path can never match a diagnostic and a
+  # real error in it is classified "pre-existing").
+  #
+  # Worse on the test side: the selection stripped only `autobot-frontend/`, so a
+  # foreign test path survived intact and was handed to a vitest rooted in
+  # autobot-frontend, whose config includes `src/**` only. The filter matched
+  # nothing, vitest exited non-zero, and this hook reported `vitest failures` for
+  # tests that had never run -- a red naming specific files, which costs more than
+  # a silent green because someone goes and debugs tests that are fine. #16912's
+  # `could_not_run` branch could not catch it either: it is guarded on
+  # node_modules being ABSENT, and autobot-frontend's is present.
+  #
+  # #16069 made exactly this split for pytest -- two trees, two dependency roots,
+  # one invocation each. This is the frontend half.
+  #
+  # Each project's own `type-check` script is invoked rather than a tsconfig named
+  # here: autobot-frontend uses tsconfig.app.json, autobot-slm-frontend uses
+  # tsconfig.json, and a table of those in this file is a second declaration that
+  # drifts from package.json. FRONTEND_PROJECTS is the two trees that declare
+  # that script; repo_tests/prepush_frontend_projects_17574_test.py fails if a
+  # third appears, so a new frontend cannot silently fall into the first one.
+  FRONTEND_PROJECTS="autobot-frontend autobot-slm-frontend"
+
+  frontend_changed=$(echo "$changed" | grep -E '\.(ts|vue)$' || true)
+  frontend_unclaimed="$frontend_changed"
+
+  for project in $FRONTEND_PROJECTS; do
+    project_changed=$(echo "$frontend_changed" | grep -E "^${project}/" || true)
+    [ -n "$project_changed" ] || continue
+    frontend_unclaimed=$(echo "$frontend_unclaimed" | grep -vE "^${project}/" || true)
+
+    # Reset per iteration: a leaked exit code from the previous project would be
+    # read as this one's verdict.
+    tsc_exit=0
+    vitest_exit=0
+    project_dir="$REPO_ROOT/$project"
+
+    log "${project}: frontend files changed — running vue-tsc (timeout ${TYPE_CHECK_TIMEOUT}s)"
+    if node_modules_usable "$project_dir"; then
       tsc_output=$(
-        cd "$REPO_ROOT/autobot-frontend" \
-        && timeout "$TYPE_CHECK_TIMEOUT" npx vue-tsc --noEmit \
-             -p tsconfig.app.json 2>&1
+        cd "$project_dir" \
+        && timeout "$TYPE_CHECK_TIMEOUT" npm run --silent type-check 2>&1
       ) || tsc_exit=$?
-      tsc_exit=${tsc_exit:-0}
 
       if [ "$tsc_exit" = "124" ]; then
-        did_not_run "vue-tsc" "${TYPE_CHECK_TIMEOUT}"
+        did_not_run "vue-tsc (${project})" "${TYPE_CHECK_TIMEOUT}"
+      elif [ "$tsc_exit" != "0" ] && ! echo "$tsc_output" | grep -q "error TS"; then
+        # A non-zero exit with no diagnostic at all is a broken invocation, not a
+        # clean tree. Reporting it as "no errors in changed files" below would be
+        # a verdict from a check that never produced one.
+        could_not_run "vue-tsc (${project})" \
+          "exited ${tsc_exit} without a single 'error TS' line: $(echo "$tsc_output" | tail -1)"
       elif [ "$tsc_exit" != "0" ]; then
         # Distinguish errors in changed files (block) vs pre-existing (warn)
-        changed_ts_files=$(echo "$changed" | grep -E '\.(ts|vue)$' \
-          | sed 's|^autobot-frontend/||' || true)
+        changed_ts_files=$(echo "$project_changed" | sed "s|^${project}/||" || true)
         if [ -n "$changed_ts_files" ]; then
           # Show only errors that mention any of the changed files
+          # #17579 review: each changed path was an UNBOUNDED fixed-string
+          # pattern, so a changed `src/Foo.ts` matched a diagnostic for
+          # `src/Foo.tsx` and blocked the push over an error in a file nobody
+          # touched. tsc writes a diagnostic as `<path>(line,col): error TS...`
+          # or `<path>:line:col - error TS...`, so requiring the path to be
+          # followed by `(` or `:` is the filename boundary.
+          #
+          # NOT anchored to column 1, deliberately (the review's suggestion
+          # was): that assumes the diagnostic begins with the path, and an
+          # absolute-path diagnostic would then match nothing -- turning a
+          # false BLOCK into a false PASS, which is the wrong direction for a
+          # gate whose misses are invisible. A delimiter suffix gets the
+          # boundary without assuming where the path sits on the line.
+          boundaried=$(echo "$changed_ts_files" | awk 'NF { print $0 "("; print $0 ":" }')
           relevant=$(echo "$tsc_output" \
             | grep "error TS" \
-            | grep -F -f <(echo "$changed_ts_files") || true)
+            | grep -F -f <(echo "$boundaried") || true)
           if [ -n "$relevant" ]; then
-            fail "vue-tsc errors in CHANGED files (#5142):"
+            fail "vue-tsc errors in CHANGED files (${project}, #5142):"
             echo "$relevant" | head -20 >&2
             EXIT_CODE=1
           else
-            ok "vue-tsc: no errors in changed files (other errors are pre-existing)"
+            ok "vue-tsc (${project}): no errors in changed files (other errors are pre-existing)"
           fi
         fi
       else
-        ok "vue-tsc: 0 errors"
+        ok "vue-tsc (${project}): 0 errors"
       fi
     else
       # #16912: "skipping" was a warning and a zero exit, so a frontend change
@@ -371,58 +439,72 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       # scripts/hooks/post-checkout started linking it -- pushed with NO type
       # check and nothing in the transcript that read as unverified. A check
       # that could not look is not a check that found nothing.
-      could_not_run "vue-tsc" \
-        "autobot-frontend/node_modules does not resolve from this tree (a fresh worktree gets it linked by scripts/hooks/post-checkout; otherwise run 'npm install' in the main checkout)"
+      could_not_run "vue-tsc (${project})" \
+        "${project}/node_modules is missing or cannot be traversed, so its toolchain is unreachable (a fresh worktree gets it linked by scripts/hooks/post-checkout; #17573 is the present-but-mode-644 case)"
     fi
 
     # Targeted test runs for changed test files + sibling __tests__/.
-    # vitest below runs with cwd already inside autobot-frontend/, so every
-    # path here must be relative to that dir, not the repo root $changed uses.
+    # vitest runs with cwd inside this project, so every path here is relative
+    # to it, not to the repo root $changed uses.
     # #16912: `.spec.ts` too, not just `.test.ts`. vitest.config.ts runs both,
     # and 51 of autobot-frontend's test files are named `.spec.ts` -- every one
     # of them could be changed, pushed, and never selected here, which reads in
     # the transcript exactly like a push whose tests were run and passed.
-    test_files=$(echo "$changed" \
+    # #17575: the existence filter applies to BOTH selectors and the path is
+    # interpolated by THIS shell. It used to sit only on composable_tests and to
+    # expand `$REPO_ROOT` inside a single-quoted `sh -c`, where that variable is
+    # unset -- nothing in this file exports it -- so the selector matched nothing
+    # for every input, and its absence was indistinguishable from success.
+    test_files=$(echo "$project_changed" \
       | grep -E '\.(test|spec)\.ts$' \
-      | sed 's|^autobot-frontend/||' \
-      | head -10)
+      | sed "s|^${project}/||" \
+      | while IFS= read -r rel; do [ -f "$project_dir/$rel" ] && echo "$rel"; done \
+      | head -10 || true)
     # Also test corresponding __tests__/ for any composable changes
-    composable_tests=$(echo "$changed" \
+    composable_tests=$(echo "$project_changed" \
       | grep -E 'composables/.*\.ts$' \
       | grep -v '\.test\.' \
-      | sed 's|^autobot-frontend/||' \
+      | sed "s|^${project}/||" \
       | sed -E 's|(composables)/(.+)\.ts$|\1/__tests__/\2.test.ts|' \
-      | xargs -I{} sh -c '[ -f "$REPO_ROOT/autobot-frontend/{}" ] && echo "{}"' \
-      2>/dev/null || true)
+      | while IFS= read -r rel; do [ -f "$project_dir/$rel" ] && echo "$rel"; done || true)
     all_tests=$(printf "%s\n%s" "$test_files" "$composable_tests" \
       | sort -u | grep -v '^$' || true)
 
-    if [ -n "$all_tests" ] \
-       && [ -d "$REPO_ROOT/autobot-frontend/node_modules" ]; then
-      log "running vitest on relevant tests (timeout ${TEST_TIMEOUT}s):"
+    if [ -n "$all_tests" ] && node_modules_usable "$project_dir"; then
+      log "${project}: running vitest on relevant tests (timeout ${TEST_TIMEOUT}s):"
       echo "$all_tests" | sed 's/^/    /' >&2
       vitest_output=$(
-        cd "$REPO_ROOT/autobot-frontend" \
+        cd "$project_dir" \
         && timeout "$TEST_TIMEOUT" npx vitest run $(echo "$all_tests") 2>&1
       ) || vitest_exit=$?
-      vitest_exit=${vitest_exit:-0}
 
       if [ "$vitest_exit" = "124" ]; then
-        did_not_run "vitest" "${TEST_TIMEOUT}"
+        did_not_run "vitest (${project})" "${TEST_TIMEOUT}"
       elif [ "$vitest_exit" != "0" ]; then
-        fail "vitest failures (#5142):"
+        fail "vitest failures (${project}, #5142):"
         echo "$vitest_output" | tail -25 >&2
         EXIT_CODE=1
       else
-        ok "vitest: all relevant tests pass"
+        ok "vitest (${project}): all relevant tests pass"
       fi
     elif [ -n "$all_tests" ]; then
       # #16912: this branch did not exist -- tests were selected, node_modules
       # was absent, and the hook fell through silently, so the push looked
       # exactly like one where the tests had passed.
-      could_not_run "vitest" \
-        "autobot-frontend/node_modules does not resolve from this tree, so the $(echo "$all_tests" | grep -c .) selected test file(s) did not run"
+      could_not_run "vitest (${project})" \
+        "${project}/node_modules is missing or cannot be traversed, so the $(echo "$all_tests" | grep -c .) selected test file(s) did not run"
     fi
+  done
+
+  # #17574: `.ts`/`.vue` outside a project that declares a `type-check` script --
+  # libs/autobot-ui, libs/autobot-sdk-ts, the MCP tools. None carries an install
+  # or that script, so nothing here can check them; they used to be handed to
+  # autobot-frontend's invocation, which is how a foreign path reached a vitest
+  # that could not see it. Recorded rather than dropped: not checking is a fact
+  # about this push, and a silent skip is the failure mode #16912 describes.
+  if [ -n "$frontend_unclaimed" ]; then
+    could_not_run "vue-tsc/vitest (unclaimed trees)" \
+      "$(echo "$frontend_unclaimed" | grep -c .) changed .ts/.vue file(s) are outside ${FRONTEND_PROJECTS// /, }, which are the only trees declaring a type-check script: $(echo "$frontend_unclaimed" | head -3 | tr '\n' ' ')"
   fi
 
   # ----- Backend (Python) -------------------------------------------------

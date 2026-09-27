@@ -76,7 +76,15 @@ exclude_dirs:
   # prunes artifacts and never source. A name added here that DOES cover
   # tracked Python fails the guard, so this list cannot become the new
   # hiding place.
-  - node_modules
+  # `node_modules` is ANCHORED for the same reason `venv` below is, and it
+  # became necessary the moment a tracked file's NAME began with it:
+  # `repo_tests/node_modules_link_traversable_17573_test.py` (#17573). Bandit's
+  # substring test made the bare form exclude that file through its filename
+  # alone -- harmless in isolation, since `*_test.py` already excludes it, and
+  # exactly the mechanism this list is forbidden from becoming: a bare entry
+  # covering tracked Python. Anchored, it prunes real `.../node_modules/...`
+  # trees and nothing else.
+  - /node_modules/
   - .venv
   - __pycache__
   # Real, gitignored directories confirmed present on disk (not just absent

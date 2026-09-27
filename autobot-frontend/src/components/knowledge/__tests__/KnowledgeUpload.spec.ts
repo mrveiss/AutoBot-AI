@@ -402,6 +402,39 @@ describe('KnowledgeUpload — file upload section', () => {
     expect(wrapper.find('.file-item.failed').exists()).toBe(true)
   })
 
+  // #17528: the PR's whole thesis is that a rejected upload says WHY. Asserting
+  // only `.file-item.failed` would pass with the message the backend composed
+  // thrown away -- which is exactly the state this change exists to end. These
+  // four are the sentences `api/knowledge.py` actually raises.
+  it.each([
+    ['the size limit', 'HTTP 400: Bad Request — File too large. Maximum size is 10MB'],
+    [
+      'the allowed types',
+      'HTTP 400: Bad Request — File type not allowed. Allowed: .txt, .md, .pdf, .docx, .json, .csv, .html'
+    ],
+    [
+      'the extraction deadline',
+      "HTTP 422: Unprocessable Entity — Could not read 'report.json' within 30s. The document may be unusually large or complex; try splitting it."
+    ],
+    [
+      'scanned-vs-empty (#13884)',
+      'HTTP 400: Bad Request — No text layer found in any of the 12 page(s). The document appears to be scanned or image-only and needs OCR.'
+    ]
+  ])('renders the backend reason for %s', async (_label, detail) => {
+    controllerMock.addFileDocument.mockRejectedValue(new Error(detail))
+    const wrapper = mountKnowledgeUpload(controllerMock, progressMock)
+
+    await selectFiles(wrapper, [new File(['data'], 'report.json', { type: 'application/json' })])
+
+    await wrapper.find('.upload-btn').trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const status = wrapper.find('.file-status.error')
+    expect(status.exists()).toBe(true)
+    expect(status.text()).toContain(detail)
+  })
+
   // ── Drag and drop ────────────────────────────────────────────────────────
 
   it('adds "dragging" class to the drop zone during dragenter', async () => {
