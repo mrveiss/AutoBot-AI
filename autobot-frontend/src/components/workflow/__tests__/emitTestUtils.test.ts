@@ -76,6 +76,43 @@ describe('waitForTicks', () => {
   })
 })
 
+describe('the failure diagnostic describes the END of the wait, not the start', () => {
+  it('reports the last emission observed, not the one present before polling began', async () => {
+    // #17664 review: both messages were plain template literals, so they were
+    // built BEFORE waitForTicks ran and reported the pre-wait state. These
+    // helpers exist to make a timing failure legible; a diagnostic naming the
+    // one moment that is never interesting is the defect they were written for.
+    //
+    // The wrapper must hold its FIRST answer stable and change only afterwards.
+    // An earlier version of this test mutated on every read, so the eager build
+    // also saw a changed value and the test passed against the bug it targets --
+    // a green that meant nothing.
+    let reads = 0
+    const wrapper = {
+      emitted: (name: string) => {
+        if (name !== 'node-selected') return undefined
+        reads += 1
+        return reads <= 1 ? [['before-the-wait']] : [[`during-tick-${reads}`]]
+      },
+    }
+
+    const error = await waitForLastEmit(wrapper, 'node-selected', ['never-matches']).catch(
+      (e: Error) => e,
+    )
+
+    expect(error).toBeInstanceOf(Error)
+    // Eager interpolation reports the first read; lazy reports the last.
+    expect((error as Error).message).not.toContain('before-the-wait')
+    expect((error as Error).message).toContain('during-tick-')
+  })
+
+  it('still accepts a plain string, so existing callers are unchanged', async () => {
+    await expect(waitForTicks(() => false, 'a plain description')).rejects.toThrow(
+      'a plain description',
+    )
+  })
+})
+
 describe('waitForLastEmit', () => {
   it('waits for an emission that arrives several ticks late', async () => {
     const { wrapper } = lateEmitter('node-selected', ['n2'], 4)

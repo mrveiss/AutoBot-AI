@@ -58,7 +58,7 @@ export async function waitForLastEmit(
 
   await waitForTicks(
     () => seen() === wanted,
-    `'${event}' to last emit ${wanted} (last seen: ${seen() ?? 'nothing emitted'})`,
+    () => `'${event}' to last emit ${wanted} (last seen: ${seen() ?? 'nothing emitted'})`,
   )
 }
 
@@ -66,6 +66,6 @@ export async function waitForLastEmit(
 export async function waitForEmitCount(wrapper: EmitsEvents, event: string, count: number): Promise<void> {
   await waitForTicks(
     () => (wrapper.emitted(event)?.length ?? 0) === count,
-    `'${event}' to have been emitted ${count} time(s) (seen: ${wrapper.emitted(event)?.length ?? 0})`,
+    () => `'${event}' to have been emitted ${count} time(s) (seen: ${wrapper.emitted(event)?.length ?? 0})`,
   )
 }

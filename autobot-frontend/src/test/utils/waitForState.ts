@@ -38,12 +38,21 @@ export const MAX_TICKS = 50
  * @throws if still false after {@link MAX_TICKS}, naming what was awaited — a
  *   timeout that says what it wanted beats a bare assertion failure.
  */
-export async function waitForTicks(predicate: () => boolean, awaited: string): Promise<void> {
+export async function waitForTicks(
+  predicate: () => boolean,
+  awaited: string | (() => string),
+): Promise<void> {
   for (let tick = 0; tick < MAX_TICKS; tick += 1) {
     if (predicate()) return
     await nextTick()
   }
-  throw new Error(`waited ${MAX_TICKS} ticks for ${awaited} and it never became true`)
+  // Resolved HERE, not at the call. A caller interpolating observed state into
+  // a plain string builds that string before the first tick, so the timeout
+  // reports what was true BEFORE the wait -- the one moment that is never the
+  // interesting one. These helpers exist to make timing failures legible, and a
+  // diagnostic describing the pre-wait state is the same defect they are for.
+  const described = typeof awaited === 'function' ? awaited() : awaited
+  throw new Error(`waited ${MAX_TICKS} ticks for ${described} and it never became true`)
 }
 
 /**
