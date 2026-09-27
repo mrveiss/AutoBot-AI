@@ -181,11 +181,18 @@ def _iter_sources(root: Path | None = None) -> list[Path]:
 #: Pinned MID-WINDOW, not at `population - growth`. With 3,001 modules live and
 #: `growth=50`, a floor of 2,951 puts the slack exactly at the allowance, so the
 #: very next module anyone adds reds the meta-test -- zero headroom by
-#: construction (#17142). 2,976 leaves room for 25 more before a bump is due.
+#: construction (#17142). 2,976 left room for 25 more before a bump was due.
+#:
+#: Re-pinned 2026-09-28 at 3,027 live (measured by `len(REACH.discover())` at
+#: `b2f41ad3c694`, not by grep), so the mid-window floor is 3,002. The previous
+#: 2,976 had drifted 51 below -- one past the allowance -- and only one of those
+#: 51 modules came from the change that surfaced it: the sweep skips `_test.py`,
+#: so a PR adding two test files and one module moves this by one. The other 50
+#: arrived with base.
 REACH = declare(
     "one-claim-registry",
     discover=_iter_sources,
-    floor=2_976,
+    floor=3_002,
     what="Python modules swept for claim-or-lock primitives",
     growth=50,
 )
