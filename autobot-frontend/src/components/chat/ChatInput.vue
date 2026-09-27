@@ -1228,7 +1228,7 @@ onUnmounted(() => {
 /* Pinned as a shrink-0 flex sibling of the messages scroll container */
 .chat-input-container {
   @apply relative bg-autobot-bg-card border-t border-autobot-border p-4;
-  background-color: var(--autobot-bg-card, white);
+  background-color: var(--bg-card, white);
   box-shadow: var(--shadow-sm);
 }
 

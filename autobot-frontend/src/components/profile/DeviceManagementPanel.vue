@@ -190,7 +190,7 @@ function formatRelativeTime(dateStr: string): string {
   text-align: center;
   padding: 2rem;
   border-radius: 8px;
-  background: var(--color-bg-secondary);
+  background: var(--bg-secondary);
 }
 
 .empty-icon {
@@ -255,7 +255,7 @@ function formatRelativeTime(dateStr: string): string {
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 6px;
-  background: var(--color-bg-secondary);
+  background: var(--bg-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -374,13 +374,13 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 .btn-secondary {
-  background: var(--color-bg-secondary);
+  background: var(--bg-secondary);
   border-color: var(--border-default);
   color: var(--text-primary);
 }
 
 .btn-secondary:hover {
-  background: var(--color-bg-hover);
+  background: var(--bg-hover);
 }
 
 .btn-danger {

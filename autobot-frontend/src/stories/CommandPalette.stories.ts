@@ -29,8 +29,8 @@ export const OpenByDefault = {
       return { paletteRef }
     },
     template: `
-      <div style="height: 400px; background: var(--autobot-bg-primary, #1a1a2e); border-radius: 8px; overflow: hidden;">
-        <p style="padding: 16px; color: var(--autobot-text-secondary, #888); font-size: 14px;">
+      <div style="height: 400px; background: var(--bg-primary, #1a1a2e); border-radius: 8px; overflow: hidden;">
+        <p style="padding: 16px; color: var(--text-secondary, #888); font-size: 14px;">
           Press <kbd>Ctrl/Cmd+K</kbd> to open the command palette (auto-opened below).
         </p>
         <CommandPalette ref="paletteRef" />
@@ -50,7 +50,7 @@ export const WithSearchQuery = {
       return { paletteRef }
     },
     template: `
-      <div style="height: 400px; background: var(--autobot-bg-primary, #1a1a2e); border-radius: 8px; overflow: hidden;">
+      <div style="height: 400px; background: var(--bg-primary, #1a1a2e); border-radius: 8px; overflow: hidden;">
         <CommandPalette ref="paletteRef" />
       </div>
     `

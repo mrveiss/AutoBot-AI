@@ -149,17 +149,17 @@ function submit(): void {
 .attachment-title {
   margin: 0 0 var(--spacing-xs);
   font-size: var(--font-size-md);
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .attachment-count {
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   font-size: var(--font-size-sm);
 }
 
 .attachment-empty {
   margin: 0 0 var(--spacing-xs);
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .attachment-list {
@@ -178,7 +178,7 @@ function submit(): void {
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--radius-sm);
   background: var(--color-surface-hover);
-  color: var(--color-text-primary);
+  color: var(--text-primary);
   font-family: var(--font-family-mono, monospace);
   font-size: var(--font-size-sm);
 }
@@ -186,7 +186,7 @@ function submit(): void {
 .attachment-remove {
   border: none;
   background: transparent;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: var(--font-size-md);
   line-height: 1;
@@ -194,7 +194,7 @@ function submit(): void {
 }
 
 .attachment-remove:hover:not(:disabled) {
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .attachment-remove:disabled {

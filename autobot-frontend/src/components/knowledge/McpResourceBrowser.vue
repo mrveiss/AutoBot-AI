@@ -249,12 +249,12 @@ onMounted(() => {
 .browser-header h2 {
   font-size: 1.5rem;
   font-weight: 600;
-  color: var(--autobot-text-primary);
+  color: var(--text-primary);
   margin-bottom: 0.5rem;
 }
 
 .description {
-  color: var(--autobot-text-secondary);
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
@@ -270,14 +270,14 @@ onMounted(() => {
 
 .loading-state span,
 .error-state p {
-  color: var(--autobot-text-secondary);
+  color: var(--text-secondary);
 }
 
 .bridge-tabs {
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1.5rem;
-  border-bottom: 2px solid var(--autobot-border-color);
+  border-bottom: 2px solid var(--border-default);
 }
 
 .bridge-tab {
@@ -285,7 +285,7 @@ onMounted(() => {
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: var(--autobot-text-secondary);
+  color: var(--text-secondary);
   cursor: pointer;
   font-weight: 500;
   display: flex;
@@ -296,12 +296,12 @@ onMounted(() => {
 }
 
 .bridge-tab:hover {
-  color: var(--autobot-text-primary);
+  color: var(--text-primary);
 }
 
 .bridge-tab.active {
-  color: var(--autobot-primary);
-  border-bottom-color: var(--autobot-primary);
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
 }
 
 .resources-list {
@@ -315,15 +315,15 @@ onMounted(() => {
   align-items: flex-start;
   gap: 1rem;
   padding: 1rem;
-  background: var(--autobot-bg-secondary);
-  border: 1px solid var(--autobot-border-color);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .resource-item:hover {
-  border-color: var(--autobot-primary);
+  border-color: var(--color-primary);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
@@ -334,9 +334,9 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--autobot-bg-primary);
+  background: var(--bg-primary);
   border-radius: 0.375rem;
-  color: var(--autobot-primary);
+  color: var(--color-primary);
 }
 
 .resource-info {
@@ -346,13 +346,13 @@ onMounted(() => {
 
 .resource-name {
   font-weight: 600;
-  color: var(--autobot-text-primary);
+  color: var(--text-primary);
   margin-bottom: 0.25rem;
 }
 
 .resource-uri {
   font-size: 0.75rem;
-  color: var(--autobot-text-secondary);
+  color: var(--text-secondary);
   font-family: 'Monaco', 'Courier New', monospace;
   word-break: break-all;
 }
@@ -360,7 +360,7 @@ onMounted(() => {
 .resource-description {
   margin-top: 0.5rem;
   font-size: 0.875rem;
-  color: var(--autobot-text-secondary);
+  color: var(--text-secondary);
 }
 
 .resource-meta {
@@ -370,10 +370,10 @@ onMounted(() => {
 .mime-badge {
   display: inline-block;
   padding: 0.25rem 0.75rem;
-  background: var(--autobot-bg-tertiary);
+  background: var(--bg-tertiary);
   border-radius: 0.25rem;
   font-size: 0.75rem;
-  color: var(--autobot-text-secondary);
+  color: var(--text-secondary);
   font-family: 'Monaco', 'Courier New', monospace;
 }
 
@@ -384,7 +384,7 @@ onMounted(() => {
   justify-content: center;
   padding: 3rem;
   gap: 1rem;
-  color: var(--autobot-text-secondary);
+  color: var(--text-secondary);
 }
 
 .loading-content,
@@ -404,7 +404,7 @@ onMounted(() => {
 
 .content-meta {
   padding: 1rem;
-  background: var(--autobot-bg-secondary);
+  background: var(--bg-secondary);
   border-radius: 0.375rem;
   margin-bottom: 1rem;
   display: flex;
@@ -415,12 +415,12 @@ onMounted(() => {
 
 .content-text {
   padding: 1rem;
-  background: var(--autobot-bg-tertiary);
+  background: var(--bg-tertiary);
   border-radius: 0.375rem;
   font-family: 'Monaco', 'Courier New', monospace;
   font-size: 0.875rem;
   white-space: pre-wrap;
   word-break: break-word;
-  color: var(--autobot-text-primary);
+  color: var(--text-primary);
 }
 </style>
