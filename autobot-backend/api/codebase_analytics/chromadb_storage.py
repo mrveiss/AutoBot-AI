@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 from typing import Dict, List
 
+from api.codebase_analytics.source_scope import require_source_id
 from autobot_shared.env_utils import blank_to_none
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -297,10 +298,8 @@ Suggestion: {problem.get('suggestion', '')}
         "description": problem.get("description", ""),
         "suggestion": problem.get("suggestion", ""),
     }
-    if source_id:
-        metadata["source_id"] = source_id
-
-    prefix = f"{source_id}_" if source_id else ""
+    metadata["source_id"] = require_source_id(source_id, "codebase document id")
+    prefix = f"{source_id}_"
     doc_id = f"{prefix}problem_{problem_idx}_{problem.get('type', 'unknown')}"
     return doc_id, problem_doc, metadata
 
@@ -358,11 +357,9 @@ async def _clear_redis_codebase_cache(task_id: str, source_id: str | None = None
     try:
         redis_client = await get_async_redis_client(database="analytics")
         if redis_client:
-            # Scope key pattern to source_id when provided (#1710)
-            if source_id:
-                pattern = f"codebase:{source_id}:*"
-            else:
-                pattern = "codebase:*"
+            # #1710 scoped this "when provided"; the else-branch deleted EVERY
+            # source's keys whenever a caller omitted the parameter.
+            pattern = f"codebase:{require_source_id(source_id, 'delete pattern')}:*"
             keys_to_delete = []
             cursor = 0
             while True:
@@ -568,10 +565,8 @@ Docstring: {func.get('docstring', 'No documentation')}
         "parameters": ",".join(func.get("args", [])),
         "language": ("python" if func.get("file_path", "").endswith(".py") else "javascript"),
     }
-    if source_id:
-        metadata["source_id"] = source_id
-
-    prefix = f"{source_id}_" if source_id else ""
+    metadata["source_id"] = require_source_id(source_id, "codebase document id")
+    prefix = f"{source_id}_"
     return f"{prefix}function_{idx}_{func['name']}", doc_text, metadata
 
 
@@ -593,10 +588,8 @@ Docstring: {cls.get('docstring', 'No documentation')}
         "methods": ",".join(cls.get("methods", [])),
         "language": "python",
     }
-    if source_id:
-        metadata["source_id"] = source_id
-
-    prefix = f"{source_id}_" if source_id else ""
+    metadata["source_id"] = require_source_id(source_id, "codebase document id")
+    prefix = f"{source_id}_"
     return f"{prefix}class_{idx}_{cls['name']}", doc_text, metadata
 
 
@@ -615,10 +608,8 @@ def _prepare_import_document(file_path: str, imports: List[str], idx: int, sourc
         "file_path": file_path,
         "imports": json.dumps(imports),
     }
-    if source_id:
-        metadata["source_id"] = source_id
-
-    prefix = f"{source_id}_" if source_id else ""
+    metadata["source_id"] = require_source_id(source_id, "codebase document id")
+    prefix = f"{source_id}_"
     return f"{prefix}import_{idx}_{file_path}", doc_text, metadata
 
 
@@ -1406,7 +1397,7 @@ async def _store_hardcodes_to_redis(
 
     # Store each type group to Redis (#1710: source-scoped keys)
     stored_count = 0
-    key_prefix = f"codebase:{source_id}" if source_id else "codebase"
+    key_prefix = f"codebase:{require_source_id(source_id, 'storage key')}"
     for htype, items in grouped.items():
         key = f"{key_prefix}:hardcodes:{htype}"
         try:

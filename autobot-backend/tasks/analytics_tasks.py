@@ -106,8 +106,17 @@ def _wrap(result: object, started: str) -> dict:
 
 
 @celery_app.task(bind=True, name="analytics.run_import_tree_analysis")
-def run_import_tree_analysis(self) -> dict:
-    """Celery wrapper for import tree background analysis (#6505)."""
+def run_import_tree_analysis(self, source_id: "str | None" = None) -> dict:
+    """Celery wrapper for import tree background analysis (#6505).
+
+    ``source_id`` scopes the scan (#17758). Before this, the three analytics
+    tasks resolved a root three different ways and none of them was
+    source-aware, so whichever project triggered a scan got AutoBot's own tree
+    analysed and every project's cached read was served from it.
+    ``resolve_scan_root`` is the resolver #12330 built for exactly this, and
+    these tasks -- living outside ``api/codebase_analytics/`` -- were missed by
+    that sweep and the two after it.
+    """
     started = datetime.now(tz=timezone.utc).isoformat()
     _progress(self, "Scanning project files", 10.0, started)
 
@@ -120,9 +129,16 @@ def run_import_tree_analysis(self) -> dict:
             _build_module_to_file_mapping,
             _build_summary,
         )
-        from api.codebase_analytics.endpoints.shared import resolve_project_root
+        from api.codebase_analytics.endpoints.shared import UnresolvedSourceError, resolve_scan_root
 
-        project_root = Path(resolve_project_root())
+        # #17758: strict=True, so a named-but-unresolvable source raises here
+        # instead of silently resolving to AutoBot's own repository. The policy
+        # lives in the resolver; this only decides what a Celery task reports.
+        try:
+            root = await resolve_scan_root(source_id, strict=True)
+        except UnresolvedSourceError as exc:
+            return {"status": "error", "message": f"{exc}; nothing scanned"}
+        project_root = Path(root)
         excluded = {"__pycache__", "node_modules", ".venv", "venv", ".env", "archive", "dist", "build"}
         python_files = await asyncio.to_thread(lambda: list(project_root.rglob("*.py")))
         python_files = [f for f in python_files if not any(ex in f.parts for ex in excluded)]
@@ -148,8 +164,11 @@ def run_import_tree_analysis(self) -> dict:
 
 
 @celery_app.task(bind=True, name="analytics.run_duplicate_analysis")
-def run_duplicate_analysis(self) -> dict:
-    """Celery wrapper for duplicate code background analysis (#6505)."""
+def run_duplicate_analysis(self, source_id: "str | None" = None) -> dict:
+    """Celery wrapper for duplicate code background analysis (#6505).
+
+    ``source_id`` scopes the scan (#17758) -- see ``run_import_tree_analysis``.
+    """
     started = datetime.now(tz=timezone.utc).isoformat()
     _progress(self, "Running duplicate analysis", 20.0, started)
 
@@ -159,9 +178,16 @@ def run_duplicate_analysis(self) -> dict:
             _process_and_cache_analysis,
             _run_duplicate_analysis,
         )
-        from api.codebase_analytics.endpoints.shared import resolve_project_root
+        from api.codebase_analytics.endpoints.shared import UnresolvedSourceError, resolve_scan_root
 
-        project_root = resolve_project_root()
+        # #17758: strict=True, so a named-but-unresolvable source raises here
+        # instead of silently resolving to AutoBot's own repository. The policy
+        # lives in the resolver; this only decides what a Celery task reports.
+        try:
+            root = await resolve_scan_root(source_id, strict=True)
+        except UnresolvedSourceError as exc:
+            return {"status": "error", "message": f"{exc}; nothing scanned"}
+        project_root = str(root)
         analysis = await _run_duplicate_analysis(project_root, 0.5, False)
         if analysis is None:
             return _build_timeout_response()
@@ -177,8 +203,17 @@ def run_duplicate_analysis(self) -> dict:
 
 
 @celery_app.task(bind=True, name="analytics.run_dependency_analysis")
-def run_dependency_analysis(self) -> dict:
-    """Celery wrapper for dependency background analysis (#6505)."""
+def run_dependency_analysis(self, source_id: "str | None" = None) -> dict:
+    """Celery wrapper for dependency background analysis (#6505).
+
+    ``source_id`` scopes the scan (#17758). Before this, the three analytics
+    tasks resolved a root three different ways and none of them was
+    source-aware, so whichever project triggered a scan got AutoBot's own tree
+    analysed and every project's cached read was served from it.
+    ``resolve_scan_root`` is the resolver #12330 built for exactly this, and
+    these tasks -- living outside ``api/codebase_analytics/`` -- were missed by
+    that sweep and the two after it.
+    """
     started = datetime.now(tz=timezone.utc).isoformat()
     _progress(self, "Loading ChromaDB modules", 10.0, started)
 
@@ -192,7 +227,7 @@ def run_dependency_analysis(self) -> dict:
             _load_modules_from_chromadb,
             _scan_filesystem_imports,
         )
-        from api.codebase_analytics.endpoints.shared import get_project_root
+        from api.codebase_analytics.endpoints.shared import UnresolvedSourceError, resolve_scan_root
         from api.codebase_analytics.storage import get_code_collection
 
         code_collection = await asyncio.to_thread(get_code_collection)
@@ -202,10 +237,23 @@ def run_dependency_analysis(self) -> dict:
         runtime_rels: List[Dict] = []
 
         if code_collection:
-            await _load_modules_from_chromadb(code_collection, modules)
+            # #17758: the indexed read is scoped too -- the filesystem scan and the
+            # ChromaDB query are two separate leaks and fixing one leaves the other.
+            await _load_modules_from_chromadb(code_collection, modules, source_id)
 
         _progress(self, "Scanning filesystem imports", 30.0, started)
-        project_root = get_project_root()
+        # get_project_root() was the hardcoded parents[4] here. #12393 already
+        # established that resolves to the install directory in the deployed
+        # layout -- not a repository -- so this task scanned the wrong tree in
+        # production independently of any scoping question.
+        # #17758: strict=True, so a named-but-unresolvable source raises here
+        # instead of silently resolving to AutoBot's own repository. The policy
+        # lives in the resolver; this only decides what a Celery task reports.
+        try:
+            root = await resolve_scan_root(source_id, strict=True)
+        except UnresolvedSourceError as exc:
+            return {"status": "error", "message": f"{exc}; nothing scanned"}
+        project_root = root
         await _scan_filesystem_imports(project_root, modules, import_relationships, external_deps, runtime_rels)
 
         _progress(self, "Detecting circular dependencies", 70.0, started)
