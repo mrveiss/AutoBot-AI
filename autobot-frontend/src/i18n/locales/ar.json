@@ -9475,6 +9475,15 @@
       "settingsButton": "الإعدادات",
       "hideSettingsButton": "إخفاء الإعدادات",
       "settingsHeading": "إعدادات الناسخ"
+    },
+    "kbPush": {
+      "inKnowledgeBase": "في قاعدة المعرفة",
+      "reindex": "إعادة الفهرسة",
+      "push": "إرسال إلى قاعدة المعرفة",
+      "collectionIdPlaceholder": "معرّف المجموعة",
+      "pushing": "جارٍ الإرسال…",
+      "confirm": "تأكيد",
+      "pushFailed": "لم نتمكن من إضافة هذا التسجيل إلى قاعدة المعرفة. يُرجى المحاولة مرة أخرى."
     }
   }
 }

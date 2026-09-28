@@ -9475,6 +9475,15 @@
       "settingsButton": "Paramètres",
       "hideSettingsButton": "Masquer les paramètres",
       "settingsHeading": "Paramètres du transcripteur"
+    },
+    "kbPush": {
+      "inKnowledgeBase": "Dans la base de connaissances",
+      "reindex": "Réindexer",
+      "push": "Envoyer à la base de connaissances",
+      "collectionIdPlaceholder": "ID de collection",
+      "pushing": "Envoi…",
+      "confirm": "Confirmer",
+      "pushFailed": "Impossible d'ajouter cet enregistrement à la base de connaissances. Veuillez réessayer."
     }
   }
 }

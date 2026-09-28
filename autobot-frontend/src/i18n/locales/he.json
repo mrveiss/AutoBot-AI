@@ -9475,6 +9475,15 @@
       "settingsButton": "הגדרות",
       "hideSettingsButton": "הסתר הגדרות",
       "settingsHeading": "הגדרות התמלול"
+    },
+    "kbPush": {
+      "inKnowledgeBase": "במסד הידע",
+      "reindex": "אינדוקס מחדש",
+      "push": "שלח למסד הידע",
+      "collectionIdPlaceholder": "מזהה אוסף",
+      "pushing": "שולח…",
+      "confirm": "אישור",
+      "pushFailed": "לא ניתן היה להוסיף הקלטה זו למסד הידע. נסה שוב."
     }
   }
 }

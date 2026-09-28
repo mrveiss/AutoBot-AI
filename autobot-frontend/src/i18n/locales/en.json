@@ -9475,6 +9475,15 @@
       "settingsButton": "Settings",
       "hideSettingsButton": "Hide settings",
       "settingsHeading": "Transcriber settings"
+    },
+    "kbPush": {
+      "inKnowledgeBase": "In Knowledge Base",
+      "reindex": "Re-index",
+      "push": "Push to KB",
+      "collectionIdPlaceholder": "Collection ID",
+      "pushing": "Pushing…",
+      "confirm": "Confirm",
+      "pushFailed": "Could not add this recording to the knowledge base. Please try again."
     }
   }
 }

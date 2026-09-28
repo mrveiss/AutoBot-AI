@@ -9475,6 +9475,15 @@
       "settingsButton": "Einstellungen",
       "hideSettingsButton": "Einstellungen ausblenden",
       "settingsHeading": "Transkriptionseinstellungen"
+    },
+    "kbPush": {
+      "inKnowledgeBase": "In der Wissensdatenbank",
+      "reindex": "Neu indexieren",
+      "push": "An Wissensdatenbank senden",
+      "collectionIdPlaceholder": "Sammlungs-ID",
+      "pushing": "Wird gesendet…",
+      "confirm": "Bestätigen",
+      "pushFailed": "Diese Aufnahme konnte nicht zur Wissensdatenbank hinzugefügt werden. Bitte erneut versuchen."
     }
   }
 }

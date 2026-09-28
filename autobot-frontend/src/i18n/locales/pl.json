@@ -9475,6 +9475,15 @@
       "settingsButton": "Ustawienia",
       "hideSettingsButton": "Ukryj ustawienia",
       "settingsHeading": "Ustawienia transkrybera"
+    },
+    "kbPush": {
+      "inKnowledgeBase": "W bazie wiedzy",
+      "reindex": "Zindeksuj ponownie",
+      "push": "Wyślij do bazy wiedzy",
+      "collectionIdPlaceholder": "Identyfikator kolekcji",
+      "pushing": "Wysyłanie…",
+      "confirm": "Potwierdź",
+      "pushFailed": "Nie udało się dodać tego nagrania do bazy wiedzy. Spróbuj ponownie."
     }
   }
 }

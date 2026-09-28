@@ -9475,6 +9475,15 @@
       "settingsButton": "تنظیمات",
       "hideSettingsButton": "پنهان کردن تنظیمات",
       "settingsHeading": "تنظیمات رونویس‌گر"
+    },
+    "kbPush": {
+      "inKnowledgeBase": "در پایگاه دانش",
+      "reindex": "نمایه‌سازی مجدد",
+      "push": "ارسال به پایگاه دانش",
+      "collectionIdPlaceholder": "شناسه مجموعه",
+      "pushing": "در حال ارسال…",
+      "confirm": "تأیید",
+      "pushFailed": "افزودن این ضبط به پایگاه دانش ممکن نشد. لطفاً دوباره تلاش کنید."
     }
   }
 }

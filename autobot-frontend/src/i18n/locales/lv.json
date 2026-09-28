@@ -9475,6 +9475,15 @@
       "settingsButton": "Iestatījumi",
       "hideSettingsButton": "Slēpt iestatījumus",
       "settingsHeading": "Transkribētāja iestatījumi"
+    },
+    "kbPush": {
+      "inKnowledgeBase": "Zināšanu bāzē",
+      "reindex": "Pārindeksēt",
+      "push": "Nosūtīt uz zināšanu bāzi",
+      "collectionIdPlaceholder": "Kolekcijas ID",
+      "pushing": "Nosūta…",
+      "confirm": "Apstiprināt",
+      "pushFailed": "Neizdevās pievienot šo ierakstu zināšanu bāzei. Lūdzu, mēģiniet vēlreiz."
     }
   }
 }

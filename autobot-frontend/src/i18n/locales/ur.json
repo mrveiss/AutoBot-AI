@@ -9475,6 +9475,15 @@
       "settingsButton": "ترتیبات",
       "hideSettingsButton": "ترتیبات چھپائیں",
       "settingsHeading": "ٹرانسکرائبر کی ترتیبات"
+    },
+    "kbPush": {
+      "inKnowledgeBase": "نالج بیس میں",
+      "reindex": "دوبارہ انڈیکس کریں",
+      "push": "نالج بیس میں بھیجیں",
+      "collectionIdPlaceholder": "کلیکشن آئی ڈی",
+      "pushing": "بھیجا جا رہا ہے…",
+      "confirm": "تصدیق کریں",
+      "pushFailed": "اس ریکارڈنگ کو نالج بیس میں شامل نہیں کیا جا سکا۔ براہ کرم دوبارہ کوشش کریں۔"
     }
   }
 }

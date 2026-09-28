@@ -9475,6 +9475,15 @@
       "settingsButton": "Configuración",
       "hideSettingsButton": "Ocultar configuración",
       "settingsHeading": "Configuración del transcriptor"
+    },
+    "kbPush": {
+      "inKnowledgeBase": "En la base de conocimiento",
+      "reindex": "Reindexar",
+      "push": "Enviar a la base de conocimiento",
+      "collectionIdPlaceholder": "ID de colección",
+      "pushing": "Enviando…",
+      "confirm": "Confirmar",
+      "pushFailed": "No se pudo añadir esta grabación a la base de conocimiento. Inténtalo de nuevo."
     }
   }
 }
