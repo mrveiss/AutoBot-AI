@@ -1119,24 +1119,90 @@ export function useWorkflowBuilder() {
     wsConnect();
   }
 
-  /** Handle WebSocket messages */
+  /**
+   * Apply a workflow progress event to the active list in place (#17643).
+   *
+   * The dashboard's progress events carry exactly the fields its card renders
+   * -- the step index, the total, and the step's own id -- so the matching
+   * workflow is patched instead of the whole list being refetched. This is the
+   * handler `@workflow-update` was written for and never bound to (#17364's
+   * fourth criterion); binding it is what makes per-step events affordable,
+   * so the dashboard can listen to them without the refetch cost #17477
+   * objected to.
+   *
+   * A workflow that is not in the list is ignored on purpose: membership only
+   * changes on a terminal event, and those refetch.
+   */
+  function applyWorkflowProgress(payload: Record<string, unknown>): void {
+    const workflowId = payload.workflow_id;
+    if (typeof workflowId !== 'string') return;
+    const workflow = activeWorkflows.value.find(
+      (wf) => wf.workflow_id === workflowId,
+    );
+    if (!workflow) return;
+
+    if (typeof payload.step_index === 'number') {
+      workflow.current_step = payload.step_index;
+    }
+    if (typeof payload.total_steps === 'number') {
+      workflow.total_steps = payload.total_steps;
+    }
+
+    const stepId = payload.step_id;
+    if (typeof stepId !== 'string') return;
+    const step = workflow.steps.find((s) => s.step_id === stepId);
+    if (!step) return;
+    step.status =
+      payload.event_type === 'workflow_step_completed'
+        ? 'completed'
+        : 'executing';
+  }
+
+  /**
+   * Handle WebSocket messages.
+   *
+   * #17643: these cases are reconciled against **this** transport's producer,
+   * which is `services/workflow_automation/*` sending `{"type": ...}` over
+   * `workflow_ws/{session_id}` -- not `api/workflow.py`'s bus publishes, which
+   * reach the live dashboard instead. The two vocabularies are disjoint, and
+   * three of the four cases here were matching names that producer never
+   * sends:
+   *
+   *   `workflow_status_update`  no producer on any transport. It carried the
+   *                             in-place update of `currentWorkflow`; nothing
+   *                             on this socket sends a whole workflow object,
+   *                             so there is no data source to wire it to. The
+   *                             capability itself is delivered by
+   *                             `applyWorkflowProgress` above, on the
+   *                             transport that does carry the fields.
+   *   `step_completed`          this producer's step events are `step_failed`,
+   *                             `step_confirmation_required` and
+   *                             `step_rejected_by_judge`; there is no
+   *                             `step_completed`.
+   *   `approval_required`       the plan approval arrives as
+   *                             `workflow_plan_presented`, with the request
+   *                             under `plan` rather than `approval`.
+   *
+   * `start_workflow`, `step_confirmation_required`, `step_rejected_by_judge`
+   * and `automation_control_refused` are sent by the producer and still
+   * unhandled here -- they need user-facing surfaces that do not exist yet, so
+   * they are filed as #17677 rather than stubbed. `step_confirmation_required`
+   * is the consequential one: the executor blocks waiting for a confirmation
+   * this UI never asks for.
+   */
   function handleWebSocketMessage(data: Record<string, unknown>): void {
     const messageType = data.type as string;
 
     switch (messageType) {
-      case 'workflow_status_update':
-        if (data.workflow) {
-          currentWorkflow.value = data.workflow as ActiveWorkflow;
-        }
+      case 'workflow_plan_presented':
+        pendingApproval.value = data.plan as PlanApprovalRequest;
         break;
-      case 'step_completed':
-        loadActiveWorkflows();
-        break;
+      case 'step_failed':
       case 'workflow_completed':
+      case 'workflow_cancelled':
+      case 'workflow_paused':
+      case 'workflow_resumed':
         loadActiveWorkflows();
-        break;
-      case 'approval_required':
-        pendingApproval.value = data.approval as PlanApprovalRequest;
         break;
       default:
         logger.debug('Unhandled WebSocket message:', data);
@@ -1207,6 +1273,7 @@ export function useWorkflowBuilder() {
 
     // Workflow automation methods
     loadActiveWorkflows,
+    applyWorkflowProgress,
     loadCompletedWorkflows,
     getWorkflowStatus,
     createWorkflowFromTemplate,

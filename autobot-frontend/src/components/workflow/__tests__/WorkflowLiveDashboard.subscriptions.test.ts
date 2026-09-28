@@ -106,14 +106,69 @@ describe('WorkflowLiveDashboard subscriptions', () => {
     expect(dashboard.emitted('refresh')).toHaveLength(1)
   })
 
-  it('emits refresh for a status update and a completed step too', () => {
+  it('emits refresh for every terminal event, so a failed workflow leaves the list', () => {
+    // #17643: this test previously fired `workflow_status_update` and
+    // `step_completed` and asserted two refreshes. It passed, and it had
+    // always passed, while asserting behaviour for two events that no backend
+    // publishes under any spelling -- a green certification of the impossible.
+    // The names below were read off the publish sites in `api/workflow.py`.
+    const dashboard = mountWith(['wf-a'])
+    const fire = subscribed.get('workflow:wf-a')!.callback
+
+    fire({ event_type: 'workflow_completed', payload: {} })
+    fire({ event_type: 'workflow_failed', payload: {} })
+    fire({ event_type: 'workflow_cancelled', payload: {} })
+
+    expect(dashboard.emitted('refresh')).toHaveLength(3)
+  })
+
+  it('applies a progress event in place instead of refetching', () => {
+    // Terminal events change which workflows are active and must refetch;
+    // progress events move one card and must not. Asserting both halves,
+    // because a handler that emitted `refresh` for everything would satisfy
+    // the emit-count above on its own.
+    const dashboard = mountWith(['wf-a'])
+    const fire = subscribed.get('workflow:wf-a')!.callback
+
+    fire({
+      event_type: 'workflow_step_started',
+      payload: { workflow_id: 'wf-a', step_id: 's1', step_index: 2, total_steps: 5 },
+    })
+
+    expect(dashboard.emitted('refresh')).toBeUndefined()
+    expect(dashboard.emitted('workflow-update')).toHaveLength(1)
+  })
+
+  it('carries the event type into the progress payload', () => {
+    // The step payloads are identical for a started and a completed step; the
+    // consumer can only tell them apart by the event that delivered them, so
+    // the handler adds it. Without this the in-place update cannot decide
+    // between marking a step `executing` and marking it `completed`.
+    const dashboard = mountWith(['wf-a'])
+
+    subscribed.get('workflow:wf-a')!.callback({
+      event_type: 'workflow_step_completed',
+      payload: { workflow_id: 'wf-a', step_id: 's1' },
+    })
+
+    const [[payload]] = dashboard.emitted('workflow-update') as [
+      [Record<string, unknown>],
+    ]
+    expect(payload.event_type).toBe('workflow_step_completed')
+    expect(payload.step_id).toBe('s1')
+  })
+
+  it('rejects the two names the backend never published', () => {
+    // The contrast case for the fix: these are the exact strings the filter
+    // used to hold. If either is ever reinstated, this fails.
     const dashboard = mountWith(['wf-a'])
     const fire = subscribed.get('workflow:wf-a')!.callback
 
     fire({ event_type: 'workflow_status_update', payload: {} })
     fire({ event_type: 'step_completed', payload: {} })
 
-    expect(dashboard.emitted('refresh')).toHaveLength(2)
+    expect(dashboard.emitted('refresh')).toBeUndefined()
+    expect(dashboard.emitted('workflow-update')).toBeUndefined()
   })
 
   it('ignores an event type it does not handle', () => {

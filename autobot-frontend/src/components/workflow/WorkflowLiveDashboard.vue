@@ -318,20 +318,48 @@ function formatElapsed(wf: ActiveWorkflow): string {
 // boundary: subscribing to what this client is showing is the same set it is
 // entitled to, and there is no channel that means "every workflow" without
 // re-opening what #17358 closed.
-const WORKFLOW_EVENT_TYPES = new Set([
-  'workflow_status_update',
-  'step_completed',
+// #17643: the names below are the ones `autobot-backend/api/workflow.py`
+// actually publishes to `workflow:{workflow_id}`, read off each publish site.
+// The set here used to hold `workflow_status_update` and a bare
+// `step_completed`, and no backend publishes either under any spelling -- so a
+// workflow that failed or was cancelled never left the active list without a
+// manual click, and nothing moved mid-run. Only completion got through.
+//
+// They are split by what the event means for the list rather than handled
+// alike: a terminal event changes WHICH workflows are active, so the list is
+// refetched; a progress event leaves membership alone and only moves one
+// card's step counter, so it is applied in place. #17477 and #17364 both read
+// the old uniform handling as a per-step refetch cost -- that cost is real,
+// and this split is where it goes away, rather than by dropping the events.
+const TERMINAL_EVENT_TYPES = new Set([
   'workflow_completed',
+  'workflow_failed',
+  'workflow_cancelled',
+]);
+
+const PROGRESS_EVENT_TYPES = new Set([
+  'workflow_step_started',
+  'workflow_step_completed',
+  'workflow_approval',
+  'workflow_approval_required',
 ]);
 
 /** workflow_id -> its unsubscribe handle, so a departed workflow is dropped. */
 const unsubByWorkflow = new Map<string, () => void>();
 
 function onWorkflowEvent(event: LiveEvent): void {
-  if (!WORKFLOW_EVENT_TYPES.has(event.event_type)) return;
-  logger.info('Received live workflow event:', event.event_type);
-  emit('workflow-update', event.payload);
-  emit('refresh');
+  if (TERMINAL_EVENT_TYPES.has(event.event_type)) {
+    logger.info('Received terminal workflow event:', event.event_type);
+    emit('refresh');
+    return;
+  }
+  if (PROGRESS_EVENT_TYPES.has(event.event_type)) {
+    logger.info('Received workflow progress event:', event.event_type);
+    // The event type rides along in the payload: a started step and a
+    // completed one carry the same fields and are told apart only by which
+    // event delivered them.
+    emit('workflow-update', { ...event.payload, event_type: event.event_type });
+  }
 }
 
 function syncSubscriptions(ids: string[]): void {
