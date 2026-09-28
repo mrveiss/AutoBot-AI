@@ -635,6 +635,6 @@ generates its consumer cannot drift from it.
 This study faulted the reference work for having no file-size discipline (a 3,302-line
 `nginx.ts`, a 1,377-line `stacks.ts`). Our own fleet-update playbook is **2,260 lines / 102 KB**
 (`autobot-slm-backend/ansible/playbooks/update-all-nodes.yml`), and the 600-line `MAX_LINES`
-ratchet only covers `.py`. The Ansible plane has the same disease we named in theirs; the ratchet
-simply cannot see it.
-
+ratchet only covers `.py` (plus `.sh`, since #17353). The Ansible plane has the same disease we
+named in theirs; the ratchet simply cannot see it. Counted across the tree: **17 YAML files over
+600 lines, 33,996 lines in them**, 7 of them Ansible. Filed as **#17675**.
