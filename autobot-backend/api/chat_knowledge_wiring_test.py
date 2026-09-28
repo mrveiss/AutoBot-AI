@@ -38,6 +38,7 @@ from api.chat_knowledge_manager import (
     probe_chat_knowledge,
 )
 from api.schemas_knowledge import FileAssociationType
+from api.user_management.dependencies import get_current_user
 
 API_PREFIX = "/api/chat-knowledge"
 CHAT_ID = "chat-15160"
@@ -98,9 +99,18 @@ class StubChatKnowledgeManager:
         return [{"content": "hit-from-manager", "score": 0.9}]
 
 
-def _make_app() -> FastAPI:
+def _make_app(*, authenticated: bool = True) -> FastAPI:
     app = FastAPI()
     app.include_router(router, prefix=API_PREFIX)
+    if authenticated:
+        # #16375: the router is gated with `get_current_user`. These tests are
+        # about manager WIRING, not about the gate, so the caller is stubbed in
+        # rather than each test acquiring a credential. `authenticated=False`
+        # exists for the one test that asserts the gate itself.
+        app.dependency_overrides[get_current_user] = lambda: {
+            "user_id": "wiring-test-user",
+            "username": "wiring-test-user",
+        }
     return app
 
 
@@ -369,3 +379,49 @@ class TestHealthProbeReportsTheRealState:
             assert _call(test_client, "search").status_code == 200
 
         assert asyncio.run(probe_chat_knowledge(self._FakeRequest(app))).status == "ok"
+
+
+class TestTheRouterIsGated:
+    """#16375: every route requires an authenticated caller.
+
+    `config_router_auth_coverage_test` already proves the gate is DECLARED --
+    it reads the AST and checks `KNOWN_UNGATED`. This class proves the gate
+    REFUSES, which is a different claim: a static scan sees a
+    `dependencies=[Depends(...)]` and cannot see whether the dependency
+    actually rejects anyone. Both matter, and a declared gate that admits
+    everyone is the shape this repository keeps finding.
+    """
+
+    def test_an_unauthenticated_request_is_refused(self, stub_manager):
+        app = _make_app(authenticated=False)
+        setattr(app.state, MANAGER_STATE_KEY, stub_manager)
+        with TestClient(app) as unauth:
+            response = unauth.get(f"{API_PREFIX}/knowledge/pending/{CHAT_ID}")
+
+        assert response.status_code in (401, 403), (
+            f"an anonymous caller got {response.status_code} from a gated route -- "
+            f"before #16375 this returned 200 and the whole module was reachable "
+            f"without a credential"
+        )
+
+    def test_an_authenticated_request_still_reaches_the_handler(self, client):
+        """The contrast case. Without it, 'the gate refuses' is satisfied by a
+        gate that refuses everyone, which would be a broken module rather than a
+        secured one."""
+        response = client.get(f"{API_PREFIX}/knowledge/pending/{CHAT_ID}")
+
+        assert response.status_code == 200, (
+            f"an authenticated caller got {response.status_code}; the gate is "
+            f"rejecting the traffic it is meant to admit"
+        )
+
+    def test_the_gate_is_on_the_router_so_a_new_route_inherits_it(self):
+        """Per-route gating is one forgotten decorator away from a hole. This
+        pins the gate to the router object, which a route added later cannot
+        opt out of by omission."""
+        from api.chat_knowledge import router as chat_knowledge_router
+
+        declared = [getattr(d, "dependency", None) for d in (chat_knowledge_router.dependencies or [])]
+        assert get_current_user in declared, (
+            "the router-level `get_current_user` dependency is gone; a route added " "later would be ungated by default"
+        )
