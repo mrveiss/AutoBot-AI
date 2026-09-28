@@ -11,8 +11,8 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.secret_redaction import redact_content
 from autobot_shared.time_utils import now_utc
+from knowledge.ingest_sanitize import INJECTION_ROUTE, sanitize_fact_content
 
 from .base import PipelineContext, PipelineResult
 from .registry import TaskRegistry
@@ -82,18 +82,28 @@ class PipelineRunner:
         Returns:
             List of extracted data objects
         """
-        # #13708 round 4: the ECL pipeline never ran the credential sanitizer at
-        # all -- every extract task below (classify_document, chunk_text,
-        # extract_metadata) receives the same input_data, so redacting it once
-        # here, before chunking, means every chunk, RAPTOR summary and
-        # entity/relationship derived from those chunks is already clean by the
-        # time chromadb_loader.py/sqlite_loader.py persist them. Guarded to a str
-        # the same way SemanticChunker.process() itself checks input_data's shape.
-        # This closes the credential leak only -- the pipeline still never runs
-        # the #16770 prompt-injection sanitizer (sanitize_for_storage); tracked
-        # separately as #17033, found by review after this fix landed.
+        # #13708 round 4 + #17033: every extract task below (classify_document,
+        # chunk_text, extract_metadata) receives the same input_data, so
+        # sanitizing it once here, before chunking, means every chunk, RAPTOR
+        # summary and entity/relationship derived from those chunks is already
+        # clean by the time chromadb_loader.py/sqlite_loader.py persist them.
+        # Guarded to a str the same way SemanticChunker.process() checks shape.
+        #
+        # `sanitize_fact_content` and not its two halves: it is the declared rule
+        # for text entering the KB (`sanitize_fact_content`) and it fixes the order
+        # -- injection pass, THEN credential redaction -- plus the provenance
+        # stamp. Calling `sanitize_for_storage` and `redact_content` separately
+        # here would be a second definition of one question, in the module that
+        # can least afford it.
+        #
+        # It has to happen on THIS path or not at all: the load stage writes
+        # straight to the stores (chromadb_loader.py, sqlite_loader.py,
+        # redis_graph_loader.py), so nothing here reaches store_fact's chokepoint
+        # in knowledge/facts.py's `store_fact`. The ECL path is 1 of 26 writers that
+        # bypass it; the class is #17649.
         if isinstance(input_data, str):
-            input_data = redact_content(input_data)
+            context.metadata.setdefault(INJECTION_ROUTE, "ecl_pipeline")
+            input_data, context.metadata = sanitize_fact_content(input_data, context.metadata)
 
         extract_config = self.config.get("extract", [])
         extracted_data = []

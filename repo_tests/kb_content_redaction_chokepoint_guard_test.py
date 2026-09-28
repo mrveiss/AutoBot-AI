@@ -449,17 +449,83 @@ def test_create_version_still_only_reachable_with_already_redacted_content():
     )
 
 
+#: The declared entry points that redact. `sanitize_fact_content` runs the injection
+#: pass and then `redact_content` (see `sanitize_fact_content` in
+#: `knowledge/ingest_sanitize.py`), so either
+#: satisfies the property below. This stays a list because "does this call redact?"
+#: cannot be answered without following the callee across files -- but it is a list of
+#: *primitives*, not of call sites, so it grows only when a third way to redact is
+#: introduced, and the assertion below is about position rather than spelling.
+#:
+#: This list is safe ONLY while the assertion around it stays positional. Strip the
+#: before-the-loop check and keep the list, and the guard silently becomes a
+#: membership test -- "is one of these two names mentioned" -- which is the shape it
+#: was rewritten to escape (#15826). The list answers a narrow sub-question; it is
+#: not the claim.
+_REDACTING_CALLS = frozenset({"redact_content", "sanitize_fact_content"})
+
+
+def _redacts_input_data_before_the_extract_loop(source: str) -> tuple[bool, str]:
+    """Whether `_run_extract_stage` reassigns `input_data` from a redacting call,
+    positioned before the loop over extract tasks.
+
+    Returns (ok, why-not).
+    """
+    fn = next(
+        (
+            n
+            for n in ast.walk(ast.parse(source))
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == "_run_extract_stage"
+        ),
+        None,
+    )
+    if fn is None:
+        return False, "_run_extract_stage no longer exists in runner.py -- re-derive this guard"
+
+    loops = [n.lineno for n in ast.walk(fn) if isinstance(n, (ast.For, ast.AsyncFor))]
+    if not loops:
+        return False, "_run_extract_stage has no task loop -- the shape this guard assumes is gone"
+    first_loop = min(loops)
+
+    for node in ast.walk(fn):
+        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Call):
+            continue
+        callee = _attr_or_name(node.value.func)
+        if callee not in _REDACTING_CALLS:
+            continue
+        targets = [t for tgt in node.targets for t in (tgt.elts if isinstance(tgt, ast.Tuple) else [tgt])]
+        if not any(isinstance(t, ast.Name) and t.id == "input_data" for t in targets):
+            continue
+        if node.lineno < first_loop:
+            return True, ""
+        return False, (
+            f"the redacting call is at line {node.lineno}, AFTER the extract task loop at "
+            f"line {first_loop} -- chunks built in that loop would carry unredacted text"
+        )
+    return False, (f"no call to any of {sorted(_REDACTING_CALLS)} reassigns input_data in _run_extract_stage")
+
+
 def test_the_ecl_pipeline_redacts_before_the_extract_stage():
     """A second documented, hand-verified exception: the ECL pipeline's real
     chokepoint (runner.py's _run_extract_stage) redacts input_data BEFORE
     chunking, which is why _upsert_chunk_batch/_upsert_summary_batch in
     chromadb_loader.py are exempt above rather than redacting themselves --
-    their content already is, several call frames up. Source-text checked
-    for the same reason as the test above: the AST sweep's per-function
-    tracking doesn't follow "redacted N calls ago, N files away".
+    their content already is, several call frames up. The AST sweep's
+    per-function tracking doesn't follow "redacted N calls ago, N files away",
+    so this position is asserted here instead.
+
+    #17033: this was a source-text match on the single literal
+    `input_data = redact_content(input_data)`. It fired on a change that
+    *strengthened* the pipeline -- #17667 replaced that call with
+    `sanitize_fact_content`, which adds an injection pass before the same
+    redaction -- because it could not tell a stronger implementation from a
+    removed one. It also could not have caught the failure its own name
+    describes: a source-text match knows nothing about position, so moving the
+    redaction *after* the extract loop would have left it passing. Asserting
+    the position is both the honest mechanism and a strictly stronger one.
     """
-    source = _read("autobot-backend/knowledge/pipeline/runner.py")
-    assert "input_data = redact_content(input_data)" in source, (
-        "_run_extract_stage no longer redacts input_data before the extract task loop -- "
+    ok, why = _redacts_input_data_before_the_extract_loop(_read("autobot-backend/knowledge/pipeline/runner.py"))
+    assert ok, (
+        f"_run_extract_stage no longer redacts input_data before the extract task loop: {why} -- "
         "every chunk/summary chromadb_loader.py persists downstream would be unredacted again"
     )
