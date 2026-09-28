@@ -21133,9 +21133,17 @@ export interface paths {
         post?: never;
         /**
          * Clear Codebase Cache
-         * @description Clear codebase analysis cache from storage.
+         * @description Clear ONE code source's analysis cache from storage.
          *
-         *     Issue #1772: source_id scopes deletion to per-project keys.
+         *     Issue #1772 scoped deletion to per-project keys when a source_id was
+         *     supplied. #17758: it is now required, because the `else "codebase:*"` branch
+         *     made a request that omitted the parameter delete **every** source's cached
+         *     analytics -- reachable by leaving a query string off a DELETE.
+         *
+         *     There is deliberately no "clear all sources" mode here. Destroying every
+         *     project's cached analysis is not something a caller should express by
+         *     omission, and adding it as an explicit flag would be adding a destructive
+         *     capability this change has no mandate to invent.
          */
         delete: operations["clear_codebase_cache_api_analytics_codebase_cache_delete"];
         options?: never;
@@ -131408,8 +131416,9 @@ export interface operations {
     };
     get_cached_dependency_result_api_analytics_codebase_analytics_dependencies_cached_get: {
         parameters: {
-            query?: {
-                source_id?: string;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -131439,7 +131448,10 @@ export interface operations {
     };
     start_dependency_analysis_api_analytics_codebase_analytics_dependencies_analyze_post: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -131453,6 +131465,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -131554,8 +131575,9 @@ export interface operations {
     };
     get_cached_import_tree_result_api_analytics_codebase_analytics_import_tree_cached_get: {
         parameters: {
-            query?: {
-                source_id?: string;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -131585,7 +131607,10 @@ export interface operations {
     };
     start_import_tree_analysis_endpoint_api_analytics_codebase_analytics_import_tree_analyze_post: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -131599,6 +131624,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -131806,8 +131840,9 @@ export interface operations {
     };
     get_cached_duplicate_result_api_analytics_codebase_duplicates_cached_get: {
         parameters: {
-            query?: {
-                source_id?: string;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -131837,7 +131872,10 @@ export interface operations {
     };
     start_duplicate_analysis_api_analytics_codebase_duplicates_analyze_post: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -131851,6 +131889,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -131920,9 +131967,9 @@ export interface operations {
     };
     clear_codebase_cache_api_analytics_codebase_cache_delete: {
         parameters: {
-            query?: {
-                /** @description #1772: clear only this source's cache */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the source whose cache to clear */
+                source_id: string;
             };
             header?: never;
             path?: never;
