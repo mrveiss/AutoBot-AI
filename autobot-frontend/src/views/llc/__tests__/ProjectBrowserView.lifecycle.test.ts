@@ -217,6 +217,85 @@ describe('ProjectBrowserView lifecycle affordances (GH#11129 P2)', () => {
     expect(post).toHaveBeenCalledWith('/api/llc/projects/p-archived/dispose')
   })
 
+  it('shows the archive-before-delete hint on an active project', async () => {
+    // #17683: the rule was expressed only by the Delete button's absence. A
+    // user with an active project saw no Delete and no reason, which reads as
+    // a broken page rather than as a precondition.
+    get.mockImplementation((url?: string) => {
+      if (url?.endsWith('/projects')) return Promise.resolve([ACTIVE_PROJECT])
+      if (url?.includes('/velocity')) return Promise.resolve({ sprints: [] })
+      return Promise.resolve([])
+    })
+
+    const wrapper = mount(ProjectBrowserView, mountOpts)
+    await flushPromises()
+
+    expect(wrapper.findAll('button').find(b => b.text().includes('Delete'))).toBeUndefined()
+    expect(wrapper.text()).toContain(en.llcBrowser.projects.archiveToDeleteHint)
+  })
+
+  it('does NOT show the hint once the project is archived', async () => {
+    // The contrast case: an archived project has Delete, so the hint would be
+    // noise. Without this, the assertion above is satisfied by a hint that is
+    // always rendered.
+    get.mockImplementation((url?: string) => {
+      if (url?.endsWith('/projects')) return Promise.resolve([ARCHIVED_PROJECT])
+      if (url?.includes('/velocity')) return Promise.resolve({ sprints: [] })
+      return Promise.resolve([])
+    })
+
+    const wrapper = mount(ProjectBrowserView, mountOpts)
+    await flushPromises()
+
+    expect(wrapper.findAll('button').find(b => b.text().includes('Delete'))).toBeDefined()
+    expect(wrapper.text()).not.toContain(en.llcBrowser.projects.archiveToDeleteHint)
+  })
+
+  it('reports a 409 from dispose as the archive precondition, not a generic failure', async () => {
+    // #17683: both disposal routes refuse a non-archived project with a 409
+    // carrying an actionable reason, and every failure collapsed to one
+    // string -- so a lifecycle violation, a permission refusal and a network
+    // fault were presented identically.
+    get.mockImplementation((url?: string) => {
+      if (url?.endsWith('/projects')) return Promise.resolve([ARCHIVED_PROJECT])
+      if (url?.includes('/velocity')) return Promise.resolve({ sprints: [] })
+      return Promise.resolve([])
+    })
+    post.mockRejectedValue({ status: 409, message: 'Project must be archived before disposal' })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    const wrapper = mount(ProjectBrowserView, mountOpts)
+    await flushPromises()
+
+    await wrapper.findAll('button').find(b => b.text().includes('Delete'))!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(en.llcBrowser.projects.deleteNeedsArchive)
+    expect(wrapper.text()).not.toContain(en.llcBrowser.projects.deleteError)
+  })
+
+  it('reports a 403 from dispose as a permission refusal', async () => {
+    // The other half of the contrast: a different status must not reach the
+    // same message, or the mapping above is indistinguishable from assigning
+    // the archive wording to every failure.
+    get.mockImplementation((url?: string) => {
+      if (url?.endsWith('/projects')) return Promise.resolve([ARCHIVED_PROJECT])
+      if (url?.includes('/velocity')) return Promise.resolve({ sprints: [] })
+      return Promise.resolve([])
+    })
+    post.mockRejectedValue({ status: 403, message: 'Forbidden' })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    const wrapper = mount(ProjectBrowserView, mountOpts)
+    await flushPromises()
+
+    await wrapper.findAll('button').find(b => b.text().includes('Delete'))!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(en.llcBrowser.projects.deleteForbidden)
+    expect(wrapper.text()).not.toContain(en.llcBrowser.projects.deleteNeedsArchive)
+  })
+
   it('cancelled Delete does NOT call POST dispose', async () => {
     get.mockImplementation((url?: string) => {
       if (url?.endsWith('/projects')) return Promise.resolve([ARCHIVED_PROJECT])

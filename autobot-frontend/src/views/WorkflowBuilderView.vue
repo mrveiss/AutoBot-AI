@@ -581,6 +581,7 @@
             @refresh="refreshAll"
             @refresh-agents="handleRefreshAgents"
             @select-workflow="handleViewWorkflow"
+            @workflow-update="applyWorkflowProgress"
           />
         </section>
 
@@ -792,6 +793,7 @@ const {
   loadAgentPerformance,
   loadExampleWorkflows,
   loadActiveWorkflows,
+  applyWorkflowProgress,
   loadCompletedWorkflows,
   createWorkflowFromTemplate,
   createWorkflowFromNaturalLanguage,
