@@ -24676,10 +24676,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify migration preserves authorization check"""
         from api import error_monitoring
 
-        source = inspect.getsource(error_monitoring.clear_error_history)
-        self.assertIn("authorization", source)
-        self.assertIn("Bearer admin_token", source)
-        self.assertIn("HTTP_401_UNAUTHORIZED", source)
+        # #17727: asserted a literal credential was in the source; a real fix failed it.
+        deps = [getattr(d.dependency, "__name__", "") for d in (error_monitoring.router.dependencies or [])]
+        self.assertIn("check_admin_permission", deps)
 
     def test_batch_147_migration_preserves_test_error_types(self):
         """Verify migration preserves test error type handling"""
