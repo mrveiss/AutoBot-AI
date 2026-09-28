@@ -13,6 +13,14 @@ export interface Project {
   user_id: string
 }
 
+/** Outcome of a KB push. `partial` = stored, but the named collection was not joined (#17533). */
+export interface KbPushResult {
+  status: 'ok' | 'partial' | string
+  added?: number
+  already_present?: number
+  missing?: number
+}
+
 export type RecordingStatus = 'pending' | 'processing' | 'complete' | 'error'
 
 export interface Recording {
@@ -146,8 +154,11 @@ export function useTranscriberApi() {
       new EventSource(`${base}/recordings/${recordingId}/ai/ask?action=${action}${customQuestion ? `&q=${encodeURIComponent(customQuestion)}` : ''}`),
 
     // KB
+    // #17533: the response carries the outcome. `partial` means the transcript was
+    // stored and the named collection was NOT joined -- a real result the caller has
+    // to read, not a formality. Typed so a caller that ignores it is visible.
     kbPush: (recordingId: number, collectionId: string) =>
-      api.post(`${base}/recordings/${recordingId}/kb/push`, { collection_id: collectionId }),
+      api.post<KbPushResult>(`${base}/recordings/${recordingId}/kb/push`, { collection_id: collectionId }),
     kbStatus: (recordingId: number) =>
       api.get<KbPushStatus>(`${base}/recordings/${recordingId}/kb/status`),
 

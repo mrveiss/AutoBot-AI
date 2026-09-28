@@ -59,6 +59,68 @@ def build_watch_metadata(folder_id: str, config: "WatchFolderConfig", file_path:
     }
 
 
+#: How many collections one page of `list_collections` returns while resolving. The
+#: resolver pages to completion rather than trusting one call -- `list_collections`
+#: defaults to 100 and a watched folder naming the 101st collection must not be told
+#: it does not exist (#17533, and the same shape as #17713).
+_COLLECTION_PAGE = 100
+
+
+async def resolve_collection_id(name: str) -> Dict[str, Any]:
+    """Resolve a collection NAME to the UUID the store is keyed by (#17533).
+
+    Collections are keyed by a UUID minted at creation (`knowledge/collections.py`),
+    while `WatchFolderConfig.collection` is user-authored text. Nothing joined the two,
+    so a watched folder never reached the collection it named.
+
+    **This refuses; it never creates.** Owner ruling, 2026-09-28: an unknown name is an
+    error the operator sees, not a new collection. A typo in a config string would
+    otherwise mint a durable collection and ingest into it, with nothing to mark it as
+    unintended -- and creating stored data as a side effect of a name lookup is not a
+    decision this path gets to make. Create-on-first-use remains available later as a
+    deliberate, gated feature.
+
+    Returns a status that separates three outcomes an empty result cannot:
+
+    ``resolved``    ``collection_id`` is the id to store
+    ``not_found``   the listing was read in full and no collection carries this name
+    ``error``       the listing could not be read, so nothing is known
+
+    The ``not_found`` message names the collections that DO exist, because a refusal an
+    operator cannot act on is only marginally better than a silent drop.
+    """
+    from knowledge import get_knowledge_base
+
+    wanted = (name or "").strip()
+    if not wanted:
+        return {"status": "error", "message": "watch folder has no collection configured"}
+
+    kb = await get_knowledge_base()
+    seen: list[str] = []
+    offset = 0
+    while True:
+        page = await kb.list_collections(limit=_COLLECTION_PAGE, offset=offset)
+        if not page.get("success"):
+            return {
+                "status": "error",
+                "message": f"could not list collections: {page.get('message', 'no message')}",
+            }
+        for collection in page.get("collections") or []:
+            found_name = (collection.get("name") or "").strip()
+            if found_name == wanted:
+                return {"status": "resolved", "collection_id": collection.get("id")}
+            seen.append(found_name)
+        if not page.get("has_more"):
+            break
+        offset += _COLLECTION_PAGE
+
+    known = ", ".join(sorted(n for n in seen if n)) or "none"
+    return {
+        "status": "not_found",
+        "message": f"no collection is named {wanted!r}; collections that exist: {known}",
+    }
+
+
 async def ingest_watched_file(
     folder_id: str,
     config: "WatchFolderConfig",
@@ -70,8 +132,24 @@ async def ingest_watched_file(
 
     # get_knowledge_base is a coroutine function: un-awaited it yields a coroutine
     # whose every attribute access raises AttributeError (#13551).
+    resolved = await resolve_collection_id(config.collection)
+    if resolved["status"] != "resolved":
+        # #17533: refuse rather than store into a collection that does not exist. The
+        # result shape matches `add_document`'s so `ingest_stored` reads it correctly --
+        # a rejection here must look like a rejection, not like a write that happened.
+        return {
+            "status": "rejected",
+            "message": f"collection routing failed: {resolved['message']}",
+            "collection_status": resolved["status"],
+        }
+
     kb = await get_knowledge_base()
-    return await kb.add_document(content=content, metadata=build_watch_metadata(folder_id, config, file_path))
+    metadata = build_watch_metadata(folder_id, config, file_path)
+    # The store is keyed by id; the name is kept beside it so a human reading a stored
+    # document still sees what the folder was configured with (#17533).
+    metadata["collection_name"] = metadata["collection"]
+    metadata["collection"] = resolved["collection_id"]
+    return await kb.add_document(content=content, metadata=metadata)
 
 
 def ingest_stored(result: Dict[str, Any]) -> bool:
