@@ -47,6 +47,12 @@
       <VisualBrowserPanel class="flex-1" :session-id="currentSessionId" />
     </div>
 
+    <!-- #17370: a bookmarked /chat/novnc sets activeTab from route meta, so
+         hiding the tab is not enough -- this branch must come first. -->
+    <div v-else-if="activeTab === 'novnc' && !canUseDesktop" class="flex-1 flex flex-col min-h-0">
+      <DesktopAccessDenied />
+    </div>
+
     <!-- noVNC Tab Content (Issue #715: Dynamic hosts from user config, Issue #4977: DesktopInterface) -->
     <div v-else-if="activeTab === 'novnc'" class="flex-1 flex flex-col min-h-0">
       <div class="flex-1 flex flex-col bg-black">
@@ -128,9 +134,22 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { ref, watch, defineAsyncComponent } from 'vue'
+import DesktopAccessDenied from '@/components/desktop/DesktopAccessDenied.vue'
+import { usePermissions } from '@/composables/usePermissions'
+import { ref, watch, computed, defineAsyncComponent } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
+
+// #17370: the desktop socket refuses a caller without `mcp.desktop.control`
+// (#17054/#17369). Gated through `holdsPermission` -- the role table, no
+// administrative override -- so this agrees with the socket on every role,
+// including superadmin, whose table entry is empty and whom the socket
+// refuses while `hasPermission` would return true.
+//
+// Not the boundary. The socket is. This is so a refused caller reads an
+// explanation instead of a viewer that never connects.
+const { holdsPermission } = usePermissions()
+const canUseDesktop = computed(() => holdsPermission('mcp.desktop.control'))
 
 const logger = createLogger('ChatTabContent')
 

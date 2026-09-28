@@ -92,6 +92,29 @@ export function usePermissions() {
   }
 
   /**
+   * Does the caller's ROLE TABLE hold this permission -- with no
+   * administrative override.
+   *
+   * Use this, not `hasPermission`, wherever the UI must agree with a backend
+   * gate that asks `role_has_permission`. #13854 removed the administrative
+   * short-circuit from that predicate on purpose, because it made the
+   * predicate the most permissive permission source in the system. So
+   * `hasPermission`'s `isAdmin` bypass disagrees with every such gate for any
+   * admin role whose table entry lacks the permission.
+   *
+   * `superadmin` is the live case and not a hypothetical: its
+   * `ROLE_PERMISSIONS` entry is empty by that same ruling, so the desktop
+   * socket refuses it (#17054) while `hasPermission('mcp.desktop.control')`
+   * returns true. Gating a control on `hasPermission` would offer a superadmin
+   * a desktop the handshake then closes with 1008 (#17370).
+   *
+   * `hasPermission` is left alone deliberately -- its administrative override
+   * is relied on by call sites this did not audit.
+   */
+  const holdsPermission = (permission: Permission | string): boolean =>
+    permissions.value.includes(permission as Permission)
+
+  /**
    * Check if user has ANY of the specified permissions
    */
   const hasAnyPermission = (perms: (Permission | string)[]): boolean => {
@@ -143,6 +166,7 @@ export function usePermissions() {
 
     // Permission checks
     hasPermission,
+    holdsPermission,
     hasAnyPermission,
     hasAllPermissions,
     canAccess

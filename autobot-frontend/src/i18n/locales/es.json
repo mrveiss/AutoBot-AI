@@ -757,6 +757,13 @@
       "sendFailedAfterRetries": "No se pudo enviar el mensaje después de {attempts} intentos: {error}. Comprueba tu conexión e inténtalo de nuevo.",
       "invalidFormatDetail": "Formato de mensaje no válido: {error}. Comprueba tu entrada e inténtalo de nuevo.",
       "networkFailedRetry": "Error de conexión de red. Comprueba tu conexión a Internet e inténtalo de nuevo."
+    },
+    "tabs": {
+      "chat": "Chat",
+      "files": "Archivos",
+      "terminal": "Terminal",
+      "browser": "Navegador",
+      "novnc": "Escritorio remoto"
     }
   },
   "settings": {
@@ -7759,6 +7766,10 @@
       "unknown": "Control status unknown",
       "acquireFailed": "Failed to take control: {error}",
       "releaseFailed": "Failed to release control: {error}"
+    },
+    "accessDenied": {
+      "title": "El escritorio remoto no está disponible para tu rol",
+      "description": "Ver y controlar el escritorio gestionado requiere el permiso desktop-control. Pide a un administrador que lo conceda a tu rol."
     }
   },
   "serviceMessages": {
@@ -9496,6 +9507,15 @@
       "settingsButton": "Configuración",
       "hideSettingsButton": "Ocultar configuración",
       "settingsHeading": "Configuración del transcriptor"
+    },
+    "kbPush": {
+      "inKnowledgeBase": "En la base de conocimiento",
+      "reindex": "Reindexar",
+      "push": "Enviar a la base de conocimiento",
+      "collectionIdPlaceholder": "ID de colección",
+      "pushing": "Enviando…",
+      "confirm": "Confirmar",
+      "pushFailed": "No se pudo añadir esta grabación a la base de conocimiento. Inténtalo de nuevo."
     }
   }
 }
