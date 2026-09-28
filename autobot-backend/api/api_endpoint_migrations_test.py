@@ -24675,10 +24675,10 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
     def test_batch_147_migration_preserves_auth_check(self):
         """Verify migration preserves authorization check"""
         from api import error_monitoring
+        from auth_middleware import check_admin_permission
 
-        # #17727: asserted a literal credential was in the source; a real fix failed it.
-        deps = [getattr(d.dependency, "__name__", "") for d in (error_monitoring.router.dependencies or [])]
-        self.assertIn("check_admin_permission", deps)
+        # #17727 identity, not name: three repo functions share it (file PARKED, #15173).
+        self.assertIn(check_admin_permission, {d.dependency for d in (error_monitoring.router.dependencies or [])})
 
     def test_batch_147_migration_preserves_test_error_types(self):
         """Verify migration preserves test error type handling"""
