@@ -166,19 +166,42 @@ describe('ProjectBrowserView edit (#17681)', () => {
     expect(patch).not.toHaveBeenCalled()
   })
 
-  it('replaces the edited project in the list with the response', async () => {
-    patch.mockResolvedValue({ ...PROJECT, name: 'Renamed' })
-    const wrapper = await openEditor()
+  it('reloads the list from the server rather than trusting the PATCH response', async () => {
+    // The response is deliberately neither typed nor read: naming a response
+    // type at the call site is a shape claim TypeScript cannot check, and
+    // `frontend_api_contract_ratchet` counts those on a shrink-only pin. So the
+    // list is refetched, matching what create and delete already do here.
+    //
+    // Asserting the REFETCH and not just the rendered name, because a handler
+    // that read the response would also end up showing 'Renamed' -- the two are
+    // indistinguishable by output alone, which is the whole reason this test
+    // names the mechanism.
+    patch.mockResolvedValue({ ...PROJECT, name: 'ignored-if-read' })
+    let served = { ...PROJECT }
+    get.mockImplementation((url?: string) => {
+      if (url?.endsWith('/projects')) return Promise.resolve([served])
+      if (url?.includes('/velocity')) return Promise.resolve({ sprints: [] })
+      return Promise.resolve([])
+    })
+    const wrapper = mount(ProjectBrowserView, mountOpts)
+    await flushPromises()
+    await byText(wrapper, P.edit)!.trigger('click')
+    await flushPromises()
 
     const nameInput = wrapper.findAll('input').find(
       i => (i.element as HTMLInputElement).value === 'Original name',
     )!
     await nameInput.setValue('Renamed')
+    // What the server will now serve — only a refetch can pick this up.
+    served = { ...PROJECT, name: 'Renamed' }
     await byText(wrapper, P.saveAction)!.trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('Renamed')
     expect(wrapper.text()).not.toContain('Original name')
+    // And the response's own value must NOT appear, which is what proves it
+    // was not read.
+    expect(wrapper.text()).not.toContain('ignored-if-read')
   })
 
   it('reports a 404 as gone rather than as a generic failure', async () => {
