@@ -114,6 +114,10 @@ async def remove_watched_file(file_path: Path) -> Dict[str, Any]:
     from knowledge import get_knowledge_base
 
     kb = await get_knowledge_base()
+    # Unfiltered by design, classified NOT_USER_FACING in the #16654 allowlist
+    # (_WATCH_RECONCILE): this runs from a filesystem observer with no user in context, and
+    # scoping a reconciliation delete to one user's view would skip the rows that user cannot
+    # see -- leaving documents for deleted files that nothing could then remove.
     found = await kb.search_by_metadata("file_path", str(file_path), limit=MAX_REMOVAL_MATCHES)
     if found.get("status") != "success":
         return {
