@@ -8276,6 +8276,7 @@
       "allTypes": "All Types",
       "allStatuses": "All Statuses",
       "allPriorities": "All Priorities",
+      "allProjects": "همه پروژه‌ها",
       "statusBacklog": "Backlog",
       "statusReady": "Ready",
       "searchPlaceholder": "Search work items...",
@@ -8956,7 +8957,10 @@
       "confirmDelete": "این پروژه بایگانی‌شده و اسپرینت‌های آن حذف شوند؟ این عمل قابل بازگشت نیست.",
       "archiveError": "بایگانی پروژه ناموفق بود.",
       "restoreError": "بازیابی پروژه ناموفق بود.",
-      "deleteError": "حذف پروژه ناموفق بود."
+      "deleteError": "حذف پروژه ناموفق بود.",
+      "archiveToDeleteHint": "برای فعال‌سازی حذف، بایگانی کنید",
+      "deleteNeedsArchive": "پیش از حذف، پروژه را بایگانی کنید.",
+      "deleteForbidden": "شما اجازه حذف این پروژه را ندارید."
     },
     "approvals": {
       "decideError": "Failed to record your decision. Please try again."
@@ -9018,7 +9022,9 @@
       "verdictRationale": "استدلال",
       "disabled": "جستجوی یافته‌ها غیرفعال است.",
       "actionError": "عملیات ناموفق بود، لطفاً دوباره تلاش کنید.",
-      "severity": "شدت"
+      "severity": "شدت",
+      "unavailable": "سیاست یافته‌ها در دسترس نیست — پویش قابل ارائه نیست.",
+      "forbidden": "شما اجازه پویش این پروژه را ندارید."
     }
   },
   "admin": {

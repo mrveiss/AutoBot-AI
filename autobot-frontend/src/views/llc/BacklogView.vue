@@ -27,6 +27,11 @@
 
     <!-- Filters -->
     <div class="backlog-filters">
+      <!-- #17680: a project filter, served by the API's own `project_id` -->
+      <select v-model="projectFilterId" class="filter-select" :disabled="isLoadingProjects">
+        <option value="">{{ t('llc.backlog.allProjects') }}</option>
+        <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
+      </select>
       <select v-model="filters.type" class="filter-select">
         <option value="">{{ t('llc.backlog.allTypes') }}</option>
         <option v-for="wt in WORK_ITEM_TYPES" :key="wt.value" :value="wt.value">{{ wt.label }}</option>
@@ -243,7 +248,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
@@ -286,6 +291,13 @@ const selectedIds = ref<Set<string>>(new Set())
 const draggedItem = ref<WorkItem | null>(null)
 
 const filters = ref({ type: '', status: '', priority: '', search: '' })
+
+// #17680: kept out of `filters` on purpose -- everything in there is applied
+// client-side by `filteredItems`, and this one is applied by the server. A
+// project filter cannot be client-side: the route pages at `limit=50`, so
+// narrowing an already-truncated page returns an arbitrary subset of the
+// project rather than the project.
+const projectFilterId = ref('')
 
 const showCreateForm = ref(false)
 const isCreating = ref(false)
@@ -501,7 +513,13 @@ async function bulkAssign() {
 async function fetchBacklog() {
   isLoading.value = true
   try {
-    const result = await api.get<{ items: WorkItem[] }>(`/api/llc/backlog?company_id=${companyId.value}`)
+    // #17680: `GET /api/llc/backlog` has accepted and honoured `project_id`
+    // since it was written, and this was its only caller -- sending
+    // `company_id` alone. So "the project backlog" was always the whole
+    // company's backlog, for every project.
+    const query = new URLSearchParams({ company_id: companyId.value })
+    if (projectFilterId.value) query.set('project_id', projectFilterId.value)
+    const result = await api.get<{ items: WorkItem[] }>(`/api/llc/backlog?${query.toString()}`)
     items.value = result.items ?? []
   } catch (err) {
     logger.error('Failed to load backlog', err)
@@ -510,7 +528,18 @@ async function fetchBacklog() {
   }
 }
 
-onMounted(fetchBacklog)
+// Server-side filter, so a change is a refetch rather than a recompute.
+watch(projectFilterId, () => {
+  selectedIds.value = new Set()
+  fetchBacklog()
+})
+
+onMounted(() => {
+  fetchBacklog()
+  // The filter needs the project list on load; the bulk-assign modal used to
+  // be the only thing that fetched it, so it arrived only after opening that.
+  loadProjects()
+})
 </script>
 
 <style scoped>

@@ -8276,6 +8276,7 @@
       "allTypes": "All Types",
       "allStatuses": "All Statuses",
       "allPriorities": "All Priorities",
+      "allProjects": "כל הפרויקטים",
       "statusBacklog": "Backlog",
       "statusReady": "Ready",
       "searchPlaceholder": "Search work items...",
@@ -8956,7 +8957,10 @@
       "confirmDelete": "למחוק את הפרויקט הממוקם בארכיון ואת הספרינטים שלו? לא ניתן לבטל פעולה זו.",
       "archiveError": "כשל בארכיון הפרויקט.",
       "restoreError": "כשל בשחזור הפרויקט.",
-      "deleteError": "כשל במחיקת הפרויקט."
+      "deleteError": "כשל במחיקת הפרויקט.",
+      "archiveToDeleteHint": "העבר לארכיון כדי לאפשר מחיקה",
+      "deleteNeedsArchive": "העבר את הפרויקט לארכיון לפני מחיקתו.",
+      "deleteForbidden": "אין לך הרשאה למחוק פרויקט זה."
     },
     "approvals": {
       "decideError": "Failed to record your decision. Please try again."
@@ -9018,7 +9022,9 @@
       "verdictRationale": "נימוק",
       "disabled": "סריקת ממצאים מושבתת.",
       "actionError": "הפעולה נכשלה, אנא נסה שוב.",
-      "severity": "חומרה"
+      "severity": "חומרה",
+      "unavailable": "מדיניות הממצאים אינה זמינה — לא ניתן להציע סריקה.",
+      "forbidden": "אין לך הרשאה לסרוק פרויקט זה."
     }
   },
   "admin": {

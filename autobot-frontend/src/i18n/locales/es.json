@@ -8276,6 +8276,7 @@
       "allTypes": "Todos los tipos",
       "allStatuses": "Todos los estados",
       "allPriorities": "Todas las prioridades",
+      "allProjects": "Todos los proyectos",
       "statusBacklog": "Backlog",
       "statusReady": "Listo",
       "searchPlaceholder": "Buscar elementos de trabajo...",
@@ -8956,7 +8957,10 @@
       "confirmDelete": "¿Eliminar este proyecto archivado y sus sprints? Esta acción no se puede deshacer.",
       "archiveError": "Error al archivar el proyecto.",
       "restoreError": "Error al restaurar el proyecto.",
-      "deleteError": "Error al eliminar el proyecto."
+      "deleteError": "Error al eliminar el proyecto.",
+      "archiveToDeleteHint": "Archiva para habilitar la eliminación",
+      "deleteNeedsArchive": "Archiva el proyecto antes de eliminarlo.",
+      "deleteForbidden": "No tienes permiso para eliminar este proyecto."
     },
     "approvals": {
       "decideError": "No se pudo registrar tu decisión. Inténtalo de nuevo."
@@ -9018,7 +9022,9 @@
       "verdictRationale": "Justificación",
       "disabled": "La búsqueda de hallazgos está deshabilitada.",
       "actionError": "Acción fallida, por favor inténtelo de nuevo.",
-      "severity": "Severidad"
+      "severity": "Severidad",
+      "unavailable": "Política de hallazgos no disponible: no se puede ofrecer el análisis.",
+      "forbidden": "No tienes permiso para analizar este proyecto."
     }
   },
   "admin": {

@@ -8276,6 +8276,7 @@
       "allTypes": "Alle Typen",
       "allStatuses": "Alle Status",
       "allPriorities": "Alle Prioritäten",
+      "allProjects": "Alle Projekte",
       "statusBacklog": "Backlog",
       "statusReady": "Bereit",
       "searchPlaceholder": "Arbeitselemente suchen...",
@@ -8956,7 +8957,10 @@
       "confirmDelete": "Dieses archivierte Projekt und seine Sprints löschen? Dies kann nicht rückgängig gemacht werden.",
       "archiveError": "Projekt konnte nicht archiviert werden.",
       "restoreError": "Projekt konnte nicht wiederhergestellt werden.",
-      "deleteError": "Projekt konnte nicht gelöscht werden."
+      "deleteError": "Projekt konnte nicht gelöscht werden.",
+      "archiveToDeleteHint": "Archivieren, um das Löschen zu ermöglichen",
+      "deleteNeedsArchive": "Archivieren Sie das Projekt, bevor Sie es löschen.",
+      "deleteForbidden": "Sie haben keine Berechtigung, dieses Projekt zu löschen."
     },
     "approvals": {
       "decideError": "Ihre Entscheidung konnte nicht gespeichert werden. Bitte versuchen Sie es erneut."
@@ -9018,7 +9022,9 @@
       "verdictRationale": "Begründung",
       "disabled": "Befundsuche ist deaktiviert.",
       "actionError": "Aktion fehlgeschlagen, bitte erneut versuchen.",
-      "severity": "Schweregrad"
+      "severity": "Schweregrad",
+      "unavailable": "Findings-Richtlinie nicht verfügbar — Scannen kann nicht angeboten werden.",
+      "forbidden": "Sie haben keine Berechtigung, dieses Projekt zu scannen."
     }
   },
   "admin": {

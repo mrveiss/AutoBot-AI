@@ -8276,6 +8276,7 @@
       "allTypes": "Todos os tipos",
       "allStatuses": "Todos os estados",
       "allPriorities": "Todas as prioridades",
+      "allProjects": "Todos os projetos",
       "statusBacklog": "Backlog",
       "statusReady": "Pronto",
       "searchPlaceholder": "Pesquisar itens de trabalho...",
@@ -8956,7 +8957,10 @@
       "confirmDelete": "Excluir este projeto arquivado e seus sprints? Esta ação não pode ser desfeita.",
       "archiveError": "Falha ao arquivar o projeto.",
       "restoreError": "Falha ao restaurar o projeto.",
-      "deleteError": "Falha ao excluir o projeto."
+      "deleteError": "Falha ao excluir o projeto.",
+      "archiveToDeleteHint": "Arquive para permitir a exclusão",
+      "deleteNeedsArchive": "Arquive o projeto antes de excluí-lo.",
+      "deleteForbidden": "Você não tem permissão para excluir este projeto."
     },
     "approvals": {
       "decideError": "Falha ao registrar sua decisão. Tente novamente."
@@ -9018,7 +9022,9 @@
       "verdictRationale": "Justificativa",
       "disabled": "A verificação de resultados está desativada.",
       "actionError": "Ação falhou, por favor tente novamente.",
-      "severity": "Severidade"
+      "severity": "Severidade",
+      "unavailable": "Política de constatações indisponível — a verificação não pode ser oferecida.",
+      "forbidden": "Você não tem permissão para verificar este projeto."
     }
   },
   "admin": {

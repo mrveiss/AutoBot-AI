@@ -8276,6 +8276,7 @@
       "allTypes": "Tous les types",
       "allStatuses": "Tous les statuts",
       "allPriorities": "Toutes les priorités",
+      "allProjects": "Tous les projets",
       "statusBacklog": "Backlog",
       "statusReady": "Prêt",
       "searchPlaceholder": "Rechercher des éléments de travail...",
@@ -8956,7 +8957,10 @@
       "confirmDelete": "Supprimer ce projet archivé et ses sprints ? Cette action est irréversible.",
       "archiveError": "Échec de l'archivage du projet.",
       "restoreError": "Échec de la restauration du projet.",
-      "deleteError": "Échec de la suppression du projet."
+      "deleteError": "Échec de la suppression du projet.",
+      "archiveToDeleteHint": "Archiver pour permettre la suppression",
+      "deleteNeedsArchive": "Archivez le projet avant de le supprimer.",
+      "deleteForbidden": "Vous n'avez pas l'autorisation de supprimer ce projet."
     },
     "approvals": {
       "decideError": "Échec de l'enregistrement de votre décision. Veuillez réessayer."
@@ -9018,7 +9022,9 @@
       "verdictRationale": "Justification",
       "disabled": "La recherche de résultats est désactivée.",
       "actionError": "Échec de l'action, veuillez réessayer.",
-      "severity": "Sévérité"
+      "severity": "Sévérité",
+      "unavailable": "Politique de constats indisponible — l'analyse ne peut être proposée.",
+      "forbidden": "Vous n'avez pas l'autorisation d'analyser ce projet."
     }
   },
   "admin": {

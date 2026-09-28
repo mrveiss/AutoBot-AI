@@ -8276,6 +8276,7 @@
       "allTypes": "All Types",
       "allStatuses": "All Statuses",
       "allPriorities": "All Priorities",
+      "allProjects": "Visi projekti",
       "statusBacklog": "Backlog",
       "statusReady": "Ready",
       "searchPlaceholder": "Search work items...",
@@ -8956,7 +8957,10 @@
       "confirmDelete": "Dzēst šo arhivēto projektu un tā sprintus? Šo darbību nevar atcelt.",
       "archiveError": "Neizdevās arhivēt projektu.",
       "restoreError": "Neizdevās atjaunot projektu.",
-      "deleteError": "Neizdevās dzēst projektu."
+      "deleteError": "Neizdevās dzēst projektu.",
+      "archiveToDeleteHint": "Arhivējiet, lai varētu dzēst",
+      "deleteNeedsArchive": "Arhivējiet projektu pirms tā dzēšanas.",
+      "deleteForbidden": "Jums nav atļaujas dzēst šo projektu."
     },
     "approvals": {
       "decideError": "Neizdevās saglabāt jūsu lēmumu. Lūdzu, mēģiniet vēlreiz."
@@ -9018,7 +9022,9 @@
       "verdictRationale": "Pamatojums",
       "disabled": "Atklājumu meklēšana ir atspējota.",
       "actionError": "Darbība neizdevās, lūdzu mēģiniet vēlreiz.",
-      "severity": "Nopietnība"
+      "severity": "Nopietnība",
+      "unavailable": "Atklājumu politika nav pieejama — skenēšanu nevar piedāvāt.",
+      "forbidden": "Jums nav atļaujas skenēt šo projektu."
     }
   },
   "admin": {

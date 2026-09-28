@@ -146,10 +146,21 @@ describe('ProjectBrowserView findings proposal queue (GH#11271 T8)', () => {
     const scanBtn = wrapper.findAll('button').find(b => b.text().includes('Scan'))
     expect(scanBtn).toBeUndefined()
     expect(wrapper.text()).toContain(en.llcBrowser.findings.disabled)
+    // #17684: and NOT the unavailable wording -- a policy that answered
+    // `enabled: false` is a setting, not a fault.
+    expect(wrapper.text()).not.toContain(en.llcBrowser.findings.unavailable)
   })
 
-  it('treats an unreadable findings policy as disabled', async () => {
-    // Offering an action that cannot work is worse than hiding one that might.
+  it('gates an unreadable findings policy shut but reports it as unavailable, not disabled', async () => {
+    // #17684: the gate is unchanged -- offering an action that cannot work is
+    // worse than hiding one that might. What changes is the message: a policy
+    // endpoint that failed is a server fault, and reporting it as "disabled"
+    // is why such a fault gets read as configuration and never investigated.
+    //
+    // The two assertions are a contrast pair with the test above: each state
+    // must produce its own wording and reject the other's. Asserting only the
+    // absent button -- which is all this test used to do -- cannot tell the
+    // two apart, and they were indistinguishable in the UI for that reason.
     get.mockImplementation((url?: string) => {
       if (url?.includes('/findings/policy')) return Promise.reject(new Error('boom'))
       return makeGetMock([])(url)
@@ -159,6 +170,8 @@ describe('ProjectBrowserView findings proposal queue (GH#11271 T8)', () => {
     await flushPromises()
 
     expect(wrapper.findAll('button').find(b => b.text().includes('Scan'))).toBeUndefined()
+    expect(wrapper.text()).toContain(en.llcBrowser.findings.unavailable)
+    expect(wrapper.text()).not.toContain(en.llcBrowser.findings.disabled)
   })
 
   it('Promote button calls POST /api/llc/findings/proposals/{id}/promote and refreshes', async () => {

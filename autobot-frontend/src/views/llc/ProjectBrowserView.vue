@@ -137,6 +137,13 @@
           >
             {{ t('llcBrowser.projects.archive') }}
           </BaseButton>
+          <!-- #17683: the archive-before-delete rule was expressed only by the
+               Delete button's absence, which reads as a broken page rather
+               than as a precondition. -->
+          <span
+            v-if="p.lifecycle_state === 'active' || !p.lifecycle_state"
+            class="lifecycle-hint"
+          >{{ t('llcBrowser.projects.archiveToDeleteHint') }}</span>
           <template v-if="p.lifecycle_state === 'archived' || p.lifecycle_state === 'pending_disposal'">
             <BaseButton
               variant="secondary"
@@ -179,7 +186,12 @@
             >
               {{ scanningProject === p.id ? t('llcBrowser.findings.scanning') : t('llcBrowser.findings.scan') }}
             </BaseButton>
-            <span v-else class="findings-disabled-note">{{ t('llcBrowser.findings.disabled') }}</span>
+            <span v-else-if="findingsPolicy === 'disabled'" class="findings-disabled-note">
+              {{ t('llcBrowser.findings.disabled') }}
+            </span>
+            <span v-else-if="findingsPolicy === 'unavailable'" class="findings-disabled-note">
+              {{ t('llcBrowser.findings.unavailable') }}
+            </span>
           </div>
           <ErrorBanner v-if="findingsError[p.id]" :message="findingsError[p.id]" class="browser-error" />
           <div v-if="proposals[p.id] && proposals[p.id].length === 0" class="findings-empty">
@@ -469,7 +481,14 @@ const scanningProject = ref<string | null>(null)
 // GH#12734: the scan action is gated on the server-side findings policy, which
 // defaults to OFF. Assume disabled until the policy says otherwise so the
 // button never appears during load and then vanishes.
-const findingsEnabled = ref(false)
+//
+// #17684: four states, not two. Failing closed stays correct -- an action that
+// could only 403 must not be offered -- but "disabled by policy" and "the
+// policy could not be read" are different facts, and reporting a server fault
+// as a deliberate setting is why nobody investigates it. `loading` renders
+// nothing, so the note does not flash "unavailable" on the way in.
+const findingsPolicy = ref<'loading' | 'enabled' | 'disabled' | 'unavailable'>('loading')
+const findingsEnabled = computed(() => findingsPolicy.value === 'enabled')
 const findingsError = ref<Record<string, string>>({})
 
 function velocityFor(projectId: string): number[] {
@@ -723,7 +742,16 @@ async function deleteProject(project: ProjectResponse): Promise<void> {
     await loadProjects()
   } catch (err) {
     logger.error('Failed to delete project', err)
-    lifecycleError.value = { ...lifecycleError.value, [project.id]: t('llcBrowser.projects.deleteError') }
+    // #17683: the backend refuses a non-archived project with a 409 carrying
+    // an actionable reason, and every failure used to collapse to one string,
+    // so a lifecycle violation, a permission refusal and a network fault read
+    // identically. Mapped to localised messages rather than echoing the
+    // backend's own text, which is not translated.
+    const status = (err as { status?: number })?.status
+    let msg = t('llcBrowser.projects.deleteError')
+    if (status === 409) msg = t('llcBrowser.projects.deleteNeedsArchive')
+    else if (status === 403) msg = t('llcBrowser.projects.deleteForbidden')
+    lifecycleError.value = { ...lifecycleError.value, [project.id]: msg }
   } finally {
     deletingProject.value = null
   }
@@ -753,7 +781,10 @@ async function scanFindings(project: ProjectResponse): Promise<void> {
   } catch (err) {
     logger.error('Failed to scan findings', err)
     const status = (err as { status?: number })?.status
-    const msg = status === 403 ? t('llcBrowser.findings.disabled') : t('llcBrowser.findings.actionError')
+    // #17684: a 403 here means this caller may not scan. It is not evidence
+    // that the policy is off -- the policy was read separately and said
+    // otherwise, or the button would not have been rendered.
+    const msg = status === 403 ? t('llcBrowser.findings.forbidden') : t('llcBrowser.findings.actionError')
     findingsError.value = { ...findingsError.value, [project.id]: msg }
   } finally {
     scanningProject.value = null
@@ -785,12 +816,13 @@ async function dismissProposal(project: ProjectResponse, proposal: FindingPropos
 async function loadFindingsPolicy(): Promise<void> {
   try {
     const policy = await api.get<{ enabled: boolean }>('/api/llc/findings/policy')
-    findingsEnabled.value = Boolean(policy?.enabled)
+    findingsPolicy.value = policy?.enabled ? 'enabled' : 'disabled'
   } catch (err) {
-    // A policy we cannot read is treated as disabled: showing an action that
-    // cannot work is worse than hiding one that might (GH#12734).
+    // A policy we cannot read still gates the action shut -- showing an action
+    // that cannot work is worse than hiding one that might (GH#12734). Only
+    // the message differs, so a fault is not mistaken for configuration.
     logger.error('Failed to load findings policy', err)
-    findingsEnabled.value = false
+    findingsPolicy.value = 'unavailable'
   }
 }
 
@@ -800,6 +832,12 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.lifecycle-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  align-self: center;
+}
+
 .findings-disabled-note {
   font-size: var(--text-xs);
   color: var(--text-muted);

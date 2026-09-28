@@ -8276,6 +8276,7 @@
       "allTypes": "All Types",
       "allStatuses": "All Statuses",
       "allPriorities": "All Priorities",
+      "allProjects": "جميع المشاريع",
       "statusBacklog": "Backlog",
       "statusReady": "Ready",
       "searchPlaceholder": "Search work items...",
@@ -8956,7 +8957,10 @@
       "confirmDelete": "حذف هذا المشروع المؤرشف وسباقاته؟ لا يمكن التراجع عن هذا.",
       "archiveError": "فشل أرشفة المشروع.",
       "restoreError": "فشل استعادة المشروع.",
-      "deleteError": "فشل حذف المشروع."
+      "deleteError": "فشل حذف المشروع.",
+      "archiveToDeleteHint": "قم بالأرشفة لتمكين الحذف",
+      "deleteNeedsArchive": "قم بأرشفة المشروع قبل حذفه.",
+      "deleteForbidden": "ليس لديك إذن لحذف هذا المشروع."
     },
     "approvals": {
       "decideError": "Failed to record your decision. Please try again."
@@ -9018,7 +9022,9 @@
       "verdictRationale": "المبرر",
       "disabled": "البحث عن النتائج معطّل.",
       "actionError": "فشل الإجراء، يرجى المحاولة مجدداً.",
-      "severity": "الخطورة"
+      "severity": "الخطورة",
+      "unavailable": "سياسة النتائج غير متاحة — لا يمكن تقديم الفحص.",
+      "forbidden": "ليس لديك إذن لفحص هذا المشروع."
     }
   },
   "admin": {

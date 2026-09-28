@@ -8264,6 +8264,7 @@
       "allTypes": "All Types",
       "allStatuses": "All Statuses",
       "allPriorities": "All Priorities",
+      "allProjects": "All Projects",
       "statusBacklog": "Backlog",
       "statusReady": "Ready",
       "searchPlaceholder": "Search work items...",
@@ -8956,7 +8957,10 @@
       "confirmDelete": "Delete this archived project and its sprints? This cannot be undone.",
       "archiveError": "Failed to archive project.",
       "restoreError": "Failed to restore project.",
-      "deleteError": "Failed to delete project."
+      "deleteError": "Failed to delete project.",
+      "archiveToDeleteHint": "Archive to enable deletion",
+      "deleteNeedsArchive": "Archive the project before deleting it.",
+      "deleteForbidden": "You do not have permission to delete this project."
     },
     "approvals": {
       "decideError": "Failed to record your decision. Please try again."
@@ -9018,7 +9022,9 @@
       "verdictRationale": "Rationale",
       "disabled": "Findings scanning is disabled.",
       "actionError": "Action failed, please try again.",
-      "severity": "Severity"
+      "severity": "Severity",
+      "unavailable": "Findings policy unavailable — scanning cannot be offered.",
+      "forbidden": "You do not have permission to scan this project."
     }
   },
   "admin": {

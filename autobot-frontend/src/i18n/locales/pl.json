@@ -8276,6 +8276,7 @@
       "allTypes": "All Types",
       "allStatuses": "All Statuses",
       "allPriorities": "All Priorities",
+      "allProjects": "Wszystkie projekty",
       "statusBacklog": "Backlog",
       "statusReady": "Ready",
       "searchPlaceholder": "Search work items...",
@@ -8956,7 +8957,10 @@
       "confirmDelete": "Usunąć ten zarchiwizowany projekt i jego sprinty? Tej operacji nie można cofnąć.",
       "archiveError": "Nie udało się zarchiwizować projektu.",
       "restoreError": "Nie udało się przywrócić projektu.",
-      "deleteError": "Nie udało się usunąć projektu."
+      "deleteError": "Nie udało się usunąć projektu.",
+      "archiveToDeleteHint": "Zarchiwizuj, aby umożliwić usunięcie",
+      "deleteNeedsArchive": "Zarchiwizuj projekt przed jego usunięciem.",
+      "deleteForbidden": "Nie masz uprawnień do usunięcia tego projektu."
     },
     "approvals": {
       "decideError": "Nie udało się zapisać Twojej decyzji. Spróbuj ponownie."
@@ -9018,7 +9022,9 @@
       "verdictRationale": "Uzasadnienie",
       "disabled": "Skanowanie wyników jest wyłączone.",
       "actionError": "Akcja nie powiodła się, spróbuj ponownie.",
-      "severity": "Powaga"
+      "severity": "Powaga",
+      "unavailable": "Zasady ustaleń niedostępne — skanowanie nie może zostać udostępnione.",
+      "forbidden": "Nie masz uprawnień do skanowania tego projektu."
     }
   },
   "admin": {
