@@ -216,13 +216,7 @@ def run_duplicate_analysis(self, source_id: "str | None" = None) -> dict:
 def run_dependency_analysis(self, source_id: "str | None" = None) -> dict:
     """Celery wrapper for dependency background analysis (#6505).
 
-    ``source_id`` scopes the scan (#17758). Before this, the three analytics
-    tasks resolved a root three different ways and none of them was
-    source-aware, so whichever project triggered a scan got AutoBot's own tree
-    analysed and every project's cached read was served from it.
-    ``resolve_scan_root`` is the resolver #12330 built for exactly this, and
-    these tasks -- living outside ``api/codebase_analytics/`` -- were missed by
-    that sweep and the two after it.
+    ``source_id`` scopes the scan (#17758) -- see ``run_import_tree_analysis``.
     """
     started = datetime.now(tz=timezone.utc).isoformat()
     _progress(self, "Loading ChromaDB modules", 10.0, started)

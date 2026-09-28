@@ -1339,7 +1339,7 @@ async def list_vulnerability_types(
     error_code_prefix="CODE_INTELLIGENCE",
 )
 async def get_security_score(
-    path: str = Query(..., description="Directory path to analyze"),
+    path: str = Query(..., min_length=1, description="Directory path to analyze"),  # #17758
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
