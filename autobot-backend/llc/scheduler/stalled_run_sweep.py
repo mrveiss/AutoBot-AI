@@ -11,11 +11,20 @@ inconsistency — which is how two abandoned runs were found on 2026-09-16, one 
 holding three already-merged worktrees that no live session could release.
 
 The rule is deliberately narrow: a run that has been non-terminal for longer than
-``LLC_RUN_STALL_TIMEOUT_SECONDS`` is marked ``TIMEOUT`` with an error that says the
-sweep decided it, not the adapter. ``TIMEOUT`` is the existing status for "ran out of
-time" and reusing it keeps the state machine as it is; the distinction that matters —
-*we lost contact* versus *the adapter reported a timeout* — lives in ``error``, which
-is what the reader needs to tell them apart.
+``LLC_RUN_STALL_TIMEOUT_SECONDS`` is marked ``STALLED`` with an error that says the
+sweep decided it, not the adapter.
+
+This reverses a decision recorded here, so the reason is recorded too. The original
+reused ``TIMEOUT`` because that "keeps the state machine as it is", putting the
+distinction — *we lost contact* versus *the adapter reported a timeout* — in ``error``.
+The cost that was being avoided turns out to be close to zero: ``status`` is
+``sa.String(32)`` rather than a native enum, so no migration; and ``is_terminal`` is a
+deny-list over ``{QUEUED, RUNNING}``, so a new terminal member needs no edit there. And
+the thing traded away is what #16817's AC4 asks for — *"the reason is recorded, not
+inferred"*. With four sites setting ``TIMEOUT``, a consumer asking "which runs
+stalled?" had to match a formatted, human-readable ``error`` string, which is inference
+and breaks on a re-wording. ``error`` still carries the detail; ``status`` now carries
+the fact.
 
 What this sweep deliberately does NOT do is release what the run held. Claims,
 assignments and workspace leases are released in #16818, which models the lease this
@@ -29,7 +38,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from celery import shared_task
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from autobot_shared.env_utils import env_int
 from llc.models.enums import LLCRunStatus
@@ -53,9 +62,9 @@ STALL_TIMEOUT_SECONDS = env_int("LLC_RUN_STALL_TIMEOUT_SECONDS", 6 * 60 * 60)
 #: Statuses a run can sit in while still believed to be alive.
 NON_TERMINAL_STATUSES = (LLCRunStatus.QUEUED.value, LLCRunStatus.RUNNING.value)
 
-#: Written to ``error`` so a swept run is never mistaken for an adapter-reported
-#: timeout. The text is asserted by the tests — it is the only thing that tells a
-#: reader which of the two happened.
+#: Written to ``error`` for the human-readable detail. It is no longer the only
+#: thing distinguishing a stall from an adapter timeout — ``STALLED`` is — so a
+#: re-wording here can no longer make the two indistinguishable.
 STALL_ERROR = "run stalled: no completion reported within {seconds}s; closed out by the stalled-run sweep (#16817)"
 
 
@@ -84,27 +93,57 @@ def _cutoff(now: datetime | None = None) -> datetime:
     return (now or datetime.now(timezone.utc)) - timedelta(seconds=STALL_TIMEOUT_SECONDS)
 
 
+def _stalled_candidates(cutoff: datetime):
+    """The rows this sweep may close out, as one statement.
+
+    Extracted so the two properties that matter are assertable without a database:
+    the age comparison happens in SQL, and the rows are locked with SKIP LOCKED.
+    """
+    # The age anchor: started_at is NULL for a run that never got picked up, so fall
+    # back to created_at and a queued-then-abandoned run is swept too. A bare
+    # ``started_at <= cutoff`` would exclude those rows through SQL three-valued
+    # logic and strand them exactly as the disposal sweep found.
+    #
+    # #16817: that reasoning was right and the implementation did not follow it --
+    # the comparison ran in Python over EVERY non-terminal row, so each sweep scanned
+    # the whole live population to act on a few. COALESCE puts the same rule in SQL.
+    age_anchor = func.coalesce(LLCHeartbeatRun.started_at, LLCHeartbeatRun.created_at)
+    return (
+        select(LLCHeartbeatRun).where(
+            LLCHeartbeatRun.status.in_(NON_TERMINAL_STATUSES),
+            LLCHeartbeatRun.finished_at.is_(None),
+            age_anchor.is_not(None),
+            age_anchor <= cutoff,
+        )
+        # #16817 AC5: two beat workers can overlap. Today both would write the same
+        # terminal status and the race would be invisible. #16818 adds the release of
+        # claims, assignments and workspace leases to this path, and the same race
+        # then releases each holding twice. SKIP LOCKED makes the sweep partition
+        # rather than collide, so the lock is in place BEFORE the side effects that
+        # need it -- a defect armed by its own dependency is cheaper to prevent than
+        # to diagnose.
+        .with_for_update(skip_locked=True)
+    )
+
+
 async def _async_sweep() -> int:
     """Select non-terminal runs older than the cutoff and close them out."""
     factory = get_async_session_factory()
     cutoff = _cutoff()
     stalled = 0
     async with factory() as session:
-        # started_at is NULL for a run that never got picked up; fall back to
-        # created_at so a run that was queued and abandoned is swept too. A bare
-        # ``started_at <= cutoff`` would exclude those rows through SQL
-        # three-valued logic and strand them exactly as the disposal sweep found.
-        result = await session.execute(
-            select(LLCHeartbeatRun).where(
-                LLCHeartbeatRun.status.in_(NON_TERMINAL_STATUSES),
-                LLCHeartbeatRun.finished_at.is_(None),
-            )
-        )
+        # The age anchor: started_at is NULL for a run that never got picked up, so
+        # fall back to created_at and a queued-then-abandoned run is swept too. A bare
+        # ``started_at <= cutoff`` would exclude those rows through SQL three-valued
+        # logic and strand them exactly as the disposal sweep found.
+        #
+        # #16817: that reasoning was right and the implementation did not follow it --
+        # the comparison ran in Python over EVERY non-terminal row, so each sweep
+        # scanned the whole live population to act on a few. COALESCE puts the same
+        # rule in SQL, where the index can serve it.
+        result = await session.execute(_stalled_candidates(cutoff))
         for run in result.scalars().all():
-            age_anchor = run.started_at or run.created_at
-            if age_anchor is None or age_anchor > cutoff:
-                continue
-            run.status = LLCRunStatus.TIMEOUT.value
+            run.status = LLCRunStatus.STALLED.value
             run.finished_at = datetime.now(timezone.utc)
             run.error = STALL_ERROR.format(seconds=STALL_TIMEOUT_SECONDS)
             stalled += 1
@@ -115,4 +154,9 @@ async def _async_sweep() -> int:
     return stalled
 
 
-__all__ = ["run_stalled_run_sweep", "STALL_TIMEOUT_SECONDS", "STALL_ERROR", "NON_TERMINAL_STATUSES"]
+__all__ = [
+    "run_stalled_run_sweep",
+    "STALL_TIMEOUT_SECONDS",
+    "STALL_ERROR",
+    "NON_TERMINAL_STATUSES",
+]

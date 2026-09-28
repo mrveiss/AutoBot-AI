@@ -156,6 +156,13 @@ class LLCRunStatus(str, Enum):
     # and the board is notified. Distinct from RATE_LIMITED (which backs off and
     # retries the same run when a per-minute API rate limit is hit).
     QUOTA_EXHAUSTED = "quota_exhausted"
+    # #16817: the stalled-run sweep decided this run was over because nothing
+    # reported on it, NOT because an adapter timed out. Four sites set TIMEOUT
+    # (http_adapter, subprocess_base, heartbeat_scheduler, and the sweep), so
+    # TIMEOUT alone cannot say which happened and a consumer had to match the
+    # `error` text to find out. Terminal by construction: `is_terminal` is a
+    # deny-list over {QUEUED, RUNNING}, so a new member needs no edit there.
+    STALLED = "stalled"
 
     def is_terminal(self) -> bool:
         """True once the run has reached a final state (not queued/running).
