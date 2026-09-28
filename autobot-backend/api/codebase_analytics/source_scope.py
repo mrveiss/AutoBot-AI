@@ -52,6 +52,23 @@ SourceIdQuery = Annotated[
 ]
 
 
+def scoped_prefix(prefix: str, scope: "str | None", scope_name: str = "source_id") -> str:
+    """A task-result prefix for ONE value of whatever dimension scopes it (#17758).
+
+    Most callers scope by ``source_id``; ``code_intelligence``'s security score
+    scopes by the required ``path`` it analyses. The dimension differs, the
+    defect does not: one key per prefix means any ``*/cached`` endpoint serves
+    whichever request ran last, whatever distinguishes those requests.
+
+    Raising on a falsy scope is the point -- it makes the global key
+    unconstructible, so the ``f"...{x}:" if x else PREFIX`` shape cannot come
+    back through a new call site.
+    """
+    if not scope:
+        raise ValueError(f"a task-result prefix requires a {scope_name} (#17758); refusing to build a global key")
+    return f"{prefix}{scope}:"
+
+
 def source_scoped_prefix(prefix: str, source_id: "str | None") -> str:
     """The task-result prefix for ONE code source (#17758).
 
@@ -67,9 +84,7 @@ def source_scoped_prefix(prefix: str, source_id: "str | None") -> str:
     in this repo is the same leak with a narrower trigger, reappearing whenever
     the parameter is omitted.
     """
-    if not source_id:
-        raise ValueError("a task-result prefix requires a source_id (#17758); refusing to build a global key")
-    return f"{prefix}{source_id}:"
+    return scoped_prefix(prefix, source_id, "source_id")
 
 
 async def cached_task_result(prefix: str, source_id: str) -> dict:

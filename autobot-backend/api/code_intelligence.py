@@ -1368,7 +1368,7 @@ async def get_security_score(
         # (POST /security/score/analyze -> run_security_analysis). Serve the
         # latest completed result and enqueue a refresh instead of scanning in
         # the request. Same response shape either way, so callers are unchanged.
-        cached = await get_latest_task_result(_REDIS_PREFIX)
+        cached = await get_latest_task_result(f"{_REDIS_PREFIX}{path}:")  # #17758: keyed by path
         if cached and cached.get("result"):
             return JSONResponse(
                 status_code=200,
@@ -1382,7 +1382,7 @@ async def get_security_score(
             )
 
         queued = run_security_analysis.delay(path)
-        await store_latest_task_id(_REDIS_PREFIX, queued.id)
+        await store_latest_task_id(f"{_REDIS_PREFIX}{path}:", queued.id)  # #17758: same key as the read
         logger.info("Security score not cached; queued analysis task %s for %s", queued.id, path)
         return JSONResponse(
             status_code=200,

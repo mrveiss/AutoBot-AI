@@ -64,7 +64,6 @@ _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
         "autobot-backend/api/code_intelligence.py:2002",
         "autobot-backend/api/code_intelligence.py:2041",
         "autobot-backend/api/codebase_analytics/chromadb_storage.py:688",
-        "autobot-backend/api/codebase_analytics/endpoints/charts.py:173",
         "autobot-backend/api/codebase_analytics/endpoints/stats.py:219",
         "autobot-backend/api/codebase_analytics/endpoints/stats.py:279",
         "autobot-backend/api/codebase_analytics/endpoints/stats.py:463",
@@ -73,7 +72,7 @@ _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
 
 #: Pinned to len(_KNOWN_UNSCOPED_FALLBACKS). Lower it with every removal; raising
 #: it is the deliberate act this exists to make visible.
-_MAX_KNOWN_UNSCOPED_FALLBACKS = 7
+_MAX_KNOWN_UNSCOPED_FALLBACKS = 6
 
 
 #: Scan entry points must resolve their root through the source-aware resolver.
