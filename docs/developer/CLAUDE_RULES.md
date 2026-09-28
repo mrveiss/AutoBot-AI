@@ -104,11 +104,12 @@ Hard-coded Redis TTLs are bugs. For any surface where operators may need to tune
 memory pressure, declare a module-level constant resolved from an env var with a
 logged-fallback default.
 
-Known tunable TTL env vars:
+Known tunable TTL and work-budget env vars:
 
 | Env var | Default | Controls | Code location |
 |---------|---------|----------|---------------|
 | `AUTOBOT_CHAT_SESSION_CACHE_TTL` | `86400` (24 h) | TTL (seconds) for `chat:session:*` Redis keys | `autobot-backend/chat_history/cache.py` — `_resolve_chat_session_cache_ttl()` |
+| `AUTOBOT_CALL_GRAPH_SCAN_BUDGET_SECONDS` | `30` | Seconds the call-graph AST scan may run before it stops and reports the scope it covered. Half the tightest `/api/` `proxy_read_timeout` the repo ships (60s container/user-template, 300s bare-metal), because a scan that outlives the gateway 504s the browser while the backend keeps working (#17651) | `autobot-backend/api/codebase_analytics/endpoints/call_graph.py` — `CALL_GRAPH_SCAN_BUDGET_SECONDS` |
 
 Canonical resolver pattern (copy for every new tunable TTL surface):
 
