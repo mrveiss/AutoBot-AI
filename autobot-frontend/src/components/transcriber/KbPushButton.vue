@@ -36,9 +36,13 @@ async function push() {
     // that never joined the named collection closed the form like a clean success.
     // The collection is UUID-keyed and this field is free text, so `partial` was the
     // normal outcome, not an edge case.
+    // `status` is top-level: transcriber/routes/kb.py returns a plain dict and
+    // ApiClient.post returns the parsed body, not an envelope. Reading result.data
+    // here type-checks as `any` in some shapes and is simply always undefined at
+    // runtime -- a check that never fires and a bug that looks fixed.
     const result = await api.kbPush(props.recordingId, collectionId.value)
     await refresh()
-    if (result?.data?.status === 'partial') {
+    if (result?.status === 'partial') {
       pushError.value = t('transcriber.kbPush.collectionNotJoined')
       return
     }
