@@ -494,3 +494,27 @@ register_env_var(
         range=(1, 720),
     )
 )
+
+
+# #17651: the call-graph endpoint AST-parses every `.py` file under the scan
+# root on every cache miss (6,293 in this repo) and was unbounded by #13468's
+# decision. Registered HERE rather than in `env_registry.py` for the reason this
+# module's own docstring gives -- that file sits at its grandfathered ceiling
+# with no slack, and `env_registry_backend.py` is five lines from MAX_LINES.
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CALL_GRAPH_SCAN_BUDGET_SECONDS",
+        type=float,
+        default=30.0,
+        description=(
+            "Seconds the call-graph AST scan may run before it stops and reports the scope it "
+            "covered. Default 30 -- half the tightest /api/ proxy_read_timeout the repo ships "
+            "(60s in the container config and user template; 300s from the bare-metal "
+            "installer), because a scan that "
+            "outlives the gateway returns 504 to the browser while the backend keeps working, "
+            "so the route's own files_scanned/files_total/truncated reporting never reaches the "
+            "client. Non-positive means unbounded, which is the pre-#17651 behaviour."
+        ),
+        component="analytics",
+    )
+)
