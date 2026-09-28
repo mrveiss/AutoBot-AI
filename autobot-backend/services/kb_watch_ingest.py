@@ -34,6 +34,12 @@ logger = get_logger(__name__)
 STORED_STATUSES = ("success", "duplicate")
 
 
+#: How many documents one watched path may resolve to. A path should map to one
+#: document; a higher cap exists so a duplicate ingest is cleaned up rather than
+#: half-removed, and so the count is reportable when it is not 1.
+MAX_REMOVAL_MATCHES = 25
+
+
 def build_watch_metadata(folder_id: str, config: "WatchFolderConfig", file_path: Path) -> Dict[str, Any]:
     """Metadata for one watched file.
 
@@ -75,3 +81,72 @@ def ingest_stored(result: Dict[str, Any]) -> bool:
     a caller that never reads the result counts attempts rather than ingests.
     """
     return result.get("status") in STORED_STATUSES
+
+
+async def remove_watched_file(file_path: Path) -> Dict[str, Any]:
+    """Remove Knowledge Base documents previously ingested from *file_path* (#17546).
+
+    A watched file that is deleted or renamed leaves its document behind; nothing
+    read the watcher's `change_type` to notice. Documents are addressed by the
+    ``file_path`` metadata key that :func:`build_watch_metadata` already records,
+    rather than by a doc_id derived from the path -- a derived id would only address
+    documents ingested after this change, so the delete would silently do nothing for
+    exactly the backlog the feature exists for.
+
+    Returns a result dict whose ``status`` distinguishes THREE outcomes that an empty
+    list cannot:
+
+    ``removed``     the documents were found and deleted (``removed`` counts them)
+    ``not_found``   the search ran and matched nothing
+    ``error``       the search or a delete failed, so nothing is known
+
+    That split matters because ``search_by_metadata`` returns ``fact_ids: []`` on
+    both a clean miss and an internal failure, separating them only by ``status`` --
+    a caller reading the list alone would report "nothing to remove" for a failed
+    lookup.
+
+    KNOWN CEILING: ``search_by_metadata`` scans only the first 500 fact keys
+    (``knowledge/metadata.py``), so on a large Knowledge Base a document can exist
+    and not be found. That is why ``not_found`` is a reportable outcome here rather
+    than a quiet success -- the caller records it, so an unremovable document is
+    visible instead of being indistinguishable from a file that was never ingested.
+    """
+    from knowledge import get_knowledge_base
+
+    kb = await get_knowledge_base()
+    # Unfiltered by design, classified NOT_USER_FACING in the #16654 allowlist
+    # (_WATCH_RECONCILE): this runs from a filesystem observer with no user in context, and
+    # scoping a reconciliation delete to one user's view would skip the rows that user cannot
+    # see -- leaving documents for deleted files that nothing could then remove.
+    found = await kb.search_by_metadata("file_path", str(file_path), limit=MAX_REMOVAL_MATCHES)
+    if found.get("status") != "success":
+        return {
+            "status": "error",
+            "message": f"metadata search failed: {found.get('message', 'no message')}",
+            "removed": 0,
+        }
+
+    fact_ids = found.get("fact_ids") or []
+    if not fact_ids:
+        return {
+            "status": "not_found",
+            "message": ("no knowledge-base document records this file_path (searched the first 500 fact keys)"),
+            "removed": 0,
+        }
+
+    removed = 0
+    failures = []
+    for fact_id in fact_ids:
+        try:
+            await kb.delete_fact(fact_id)
+            removed += 1
+        except Exception as exc:  # noqa: BLE001 - one failure must not strand the rest
+            failures.append(f"{fact_id}: {type(exc).__name__}: {exc}")
+
+    if failures:
+        return {
+            "status": "error",
+            "message": f"removed {removed} of {len(fact_ids)}; failed: {'; '.join(failures)}",
+            "removed": removed,
+        }
+    return {"status": "removed", "removed": removed}
