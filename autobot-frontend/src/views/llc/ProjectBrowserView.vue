@@ -154,7 +154,7 @@
                than as a precondition. -->
           <span
             v-if="p.lifecycle_state === 'active' || !p.lifecycle_state"
-            class="lifecycle-hint"
+            class="field-label-hint"
           >{{ t('llcBrowser.projects.archiveToDeleteHint') }}</span>
           <template v-if="p.lifecycle_state === 'archived' || p.lifecycle_state === 'pending_disposal'">
             <BaseButton
@@ -346,8 +346,8 @@
             class="create-textarea"
           />
         </div>
-        <label class="create-checkbox">
-          <input v-model="editForm.auto_rollover" type="checkbox" />
+        <label class="checkbox-label">
+          <input v-model="editForm.auto_rollover" type="checkbox" class="checkbox-input" />
           {{ t('llcBrowser.projects.autoRolloverLabel') }}
         </label>
       </div>
@@ -1024,20 +1024,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.create-checkbox {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-primary);
-}
-
-.lifecycle-hint {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  align-self: center;
-}
-
 .findings-disabled-note {
   font-size: var(--text-xs);
   color: var(--text-muted);
