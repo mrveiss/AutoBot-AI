@@ -392,16 +392,36 @@ class TestTheRouterIsGated:
     everyone is the shape this repository keeps finding.
     """
 
-    def test_an_unauthenticated_request_is_refused(self, stub_manager):
+    def test_a_request_whose_user_does_not_resolve_is_refused(self, stub_manager, monkeypatch):
+        """No resolvable user -> the gated route refuses.
+
+        The middleware is NOT left ambient. `get_auth_middleware` is a
+        `lazy_singleton`, so it is process-global and other tests in this suite
+        stub it (`chat_shared_links_tracking_16861_test.py:37` returns a
+        canned user). Relying on whatever state the process happens to hold
+        makes this order-dependent: the first version of this test read a
+        real middleware whose dev-header and JWT paths were already primed by
+        an earlier test, and got 200 from a correctly gated route.
+
+        So the resolution is pinned to "nobody", which is the only input under
+        which "the route refuses" is a claim about THIS router's wiring rather
+        than about the middleware's own logic -- which has its own tests.
+        """
+
+        class _NoUser:
+            def get_user_from_request(self, request):
+                return None
+
+        monkeypatch.setattr("api.user_management.dependencies.get_auth_middleware", lambda: _NoUser())
         app = _make_app(authenticated=False)
         setattr(app.state, MANAGER_STATE_KEY, stub_manager)
-        with TestClient(app) as unauth:
+        with TestClient(app, raise_server_exceptions=False) as unauth:
             response = unauth.get(f"{API_PREFIX}/knowledge/pending/{CHAT_ID}")
 
         assert response.status_code in (401, 403), (
-            f"an anonymous caller got {response.status_code} from a gated route -- "
-            f"before #16375 this returned 200 and the whole module was reachable "
-            f"without a credential"
+            f"a caller with no resolvable user got {response.status_code} from a "
+            f"gated route -- before #16375 there was no gate at all and every "
+            f"route here answered without a credential"
         )
 
     def test_an_authenticated_request_still_reaches_the_handler(self, client):
