@@ -1,8 +1,19 @@
 # Commits exempted from the no-commit-trailers gate — a RATCHET, not an allowlist.
 #
-# Entries may only be REMOVED, never added. A new commit carrying a banned
-# trailer must be fixed before it lands, not recorded here. The gate has no
-# mechanism to add to this file, and adding one would defeat the rule.
+# Entries may only be REMOVED, never added -- with ONE narrow exception, stated
+# here so it cannot be read as general permission (#17717).
+#
+# A new commit carrying a banned trailer must be fixed BEFORE it lands, not
+# recorded here. The gate has no mechanism to add to this file, and adding one
+# would defeat the rule.
+#
+# THE EXCEPTION: a trailer that no branch commit carried, stamped onto the
+# squash result by GitHub's merge from a misconfigured local author identity,
+# and discovered only when a promotion PR first scans the landed range. Such a
+# commit could not have been fixed before it landed -- the trailer did not exist
+# until the merge -- and `main` cannot be rewritten to strip it. Nothing else
+# qualifies. In particular a trailer that WAS present on a branch commit does
+# not: that one was fixable, and the fix is to fix it.
 #
 # WHAT THE ENTRY COUNT IS NOT (#15897)
 #
@@ -83,3 +94,42 @@ f4c5a0582ccf4f1ca21754117880d3fd17dcd149  # fix(config): clamp module-level env 
 7f60a5ae37015ef5485c698d859e8c47dc2813e6  # chore(browser-worker): retire the orphan playwright config, record why (#15695, #15694) (#15702)
 41a74198f2840f2f30ca2cb06277630a39bceec3  # fix(prompts): give three LLM prompts the inputs they were already promised (#15630, #15681, #15682) (#15699)
 474cead7669923149d2672288b838150b13d587d  # ci(npm): gate four ungated npm test runners and record the measured reason for the rest (#15674, #15675, #15676, #15677) (#15697)
+
+# #17717: SECOND-INSTANCE ADDITION by owner decision (28 Sep 2026), under the
+# narrow exception stated at the top of this file.
+#
+# Same cause as the `test <test@test>` case above, a second time. A local
+# `user.name = t` / `user.email = t@example.invalid` override shadowed the
+# correct global identity, so branch commits authored 2026-09-27 between 14:48
+# and 16:40 carried it, and GitHub's squash-merge stamped it onto the squash
+# result as `Co-authored-by: t <t@example.invalid>`. No branch commit carried
+# the trailer; per-PR scans therefore passed, including #17696's own, because
+# the gate compares BASE..HEAD and the trailer is created by the merge.
+#
+# `t <t@example.invalid>` is not a person and claims no attribution. THE SOURCE
+# IS CLOSED: no worktree config and no global config resolves `user.name` to
+# `t` -- checked, not assumed -- so this class is bounded at these five commits
+# and none are being minted. That matters for reading this entry: the previous
+# instance's header said the override was "since corrected", and it was, and a
+# different one appeared. What makes this bounded is the check, not the claim.
+#
+# THE SAME SCAN FOUND FOUR MORE, DELIBERATELY NOT LISTED HERE.
+# 1c00b680ef2eab32183fd1e3a7ef085d96172e34, 31a01bdb387f4aba774f8837761eeb90f1af1d5d,
+# b0f3ac188c81f4462cd4df1b07d5d99a5a12b0cd and c9b412b4481c07cfaa3c0695ea24a5a44c17eee8
+# carry `Co-authored-by: Claude <noreply@anthropic.com>`. That is a real
+# attribution claim -- exactly what `no-commit-trailers.yml` (#13654) exists to
+# reject -- not a misconfigured identity, so the reasoning above does not reach
+# it and the exception at the top of this file does not cover it. It is held for
+# its own ruling rather than folded in on this one. A reader must not conclude
+# from this file that a `Claude` co-author is baselinable.
+#
+# Its source is also NOT closed, which is why it is a separate question: the
+# agent harness instructs sessions to append that trailer, while this project's
+# rules forbid it and this gate enforces them. Until that conflict is resolved
+# at the source, new instances will keep landing. Filed separately.
+
+337434690c4cb71e07a65755fe5cd9e9c82da10d  # test(slm-frontend): make two tests fail for the reason their titles claim (#13140) (#17620)
+479618d814601f112fd2c85aac127a2dac83396d  # feat(kb): detect whether a fact's source still resolves (#17545) (#17615)
+6d61b87784318bf0ce01a1883e63c33c6962301a  # fix(deps): a floor report states its role and scope; detect a production bound the CI plane cannot keep (#17558) (#17610)
+969c1956792e193cae3f474b6afe47a106e68260  # feat(canonical): the audit harness reported clean over a tree it never read (#17571, #14785) (#17608)
+a4768fd323f51a10a4c8d1c5504ac5d153e73e90  # fix(knowledge): an unreadable graph store no longer reads as an empty graph (#17612) (#17621)
