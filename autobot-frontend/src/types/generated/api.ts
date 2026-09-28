@@ -133837,7 +133837,10 @@ export interface operations {
     };
     get_analytics_report_api_reporting_report_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Optional (#17758): scopes the charts section; the rest of the report is global */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -133853,11 +133856,23 @@ export interface operations {
                     "application/json": components["schemas"]["DataResponse_AnalyticsReportingReportResponse_"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_quick_summary_api_reporting_summary_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Optional (#17758): scopes the charts section; the rest of the report is global */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -133871,6 +133886,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_AnalyticsReportingSummaryResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
