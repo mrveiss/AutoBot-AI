@@ -131353,8 +131353,9 @@ export interface operations {
     };
     get_chart_data_api_analytics_codebase_analytics_charts_get: {
         parameters: {
-            query?: {
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
