@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useCanvasStore } from '@/stores/useCanvasStore'
 import type { CanvasCell } from '@/types/canvas'
@@ -15,6 +15,51 @@ const mockCell = (): CanvasCell => ({
 
 describe('useCanvasStore', () => {
   beforeEach(() => { setActivePinia(createPinia()) })
+
+  describe('cell ids are unique regardless of the clock (#17020)', () => {
+    // `addCell` minted `cell-${Date.now()}`. Two cells created inside the same
+    // millisecond therefore shared an id, and every operation in this store
+    // addresses a cell BY id. Frozen clock rather than a fast loop, because a
+    // loop only reproduces it when the machine is quick enough -- which is why
+    // this passed locally and failed in CI.
+    beforeEach(() => { vi.useFakeTimers() })
+    afterEach(() => { vi.useRealTimers() })
+
+    it('gives two cells added in the same millisecond distinct ids', () => {
+      const store = useCanvasStore()
+      store.addCell('user')
+      store.addCell('agent')
+
+      const [first, second] = store.cells.slice(-2)
+      expect(first.id).not.toBe(second.id)
+    })
+
+    it('keeps ids distinct across many cells in one tick', () => {
+      const store = useCanvasStore()
+      for (let i = 0; i < 25; i += 1) store.addCell('user')
+
+      const ids = store.cells.map((cell) => cell.id)
+      expect(new Set(ids).size).toBe(ids.length)
+    })
+
+    it('still addresses the right cell after a same-tick add', () => {
+      // The consequence, not just the id: with a duplicate id, `deleteCell`
+      // removed whichever cell `find` reached first rather than the one asked
+      // for. Asserting the behaviour keeps this test meaningful if the id
+      // scheme changes again.
+      const store = useCanvasStore()
+      store.addCell('user')
+      store.addCell('agent')
+      const target = store.cells[store.cells.length - 1].id
+      const survivor = store.cells[store.cells.length - 2].id
+
+      store.deleteCell(target)
+
+      const remaining = store.cells.map((cell) => cell.id)
+      expect(remaining).toContain(survivor)
+      expect(remaining).not.toContain(target)
+    })
+  })
 
   it('starts empty', () => {
     const store = useCanvasStore()
