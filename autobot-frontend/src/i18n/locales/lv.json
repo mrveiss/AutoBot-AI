@@ -757,6 +757,13 @@
       "sendFailedAfterRetries": "Neizdevās nosūtīt ziņojumu pēc {attempts} mēģinājumiem: {error}. Lūdzu, pārbaudiet savienojumu un mēģiniet vēlreiz.",
       "invalidFormatDetail": "Nederīgs ziņojuma formāts: {error}. Lūdzu, pārbaudiet ievadi un mēģiniet vēlreiz.",
       "networkFailedRetry": "Neizdevās tīkla savienojums. Lūdzu, pārbaudiet interneta savienojumu un mēģiniet vēlreiz."
+    },
+    "tabs": {
+      "chat": "Tērzēšana",
+      "files": "Faili",
+      "terminal": "Terminālis",
+      "browser": "Pārlūks",
+      "novnc": "Attālā darbvirsma"
     }
   },
   "settings": {
@@ -7759,6 +7766,10 @@
       "unknown": "Control status unknown",
       "acquireFailed": "Failed to take control: {error}",
       "releaseFailed": "Failed to release control: {error}"
+    },
+    "accessDenied": {
+      "title": "Attālā darbvirsma jūsu lomai nav pieejama",
+      "description": "Pārvaldītās darbvirsmas skatīšanai un vadīšanai nepieciešama atļauja desktop-control. Lūdziet administratoram to piešķirt jūsu lomai."
     }
   },
   "serviceMessages": {

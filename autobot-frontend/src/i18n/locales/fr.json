@@ -757,6 +757,13 @@
       "sendFailedAfterRetries": "Impossible d'envoyer le message après {attempts} tentatives : {error}. Veuillez vérifier votre connexion et réessayer.",
       "invalidFormatDetail": "Format de message invalide : {error}. Veuillez vérifier votre saisie et réessayer.",
       "networkFailedRetry": "Échec de la connexion réseau. Veuillez vérifier votre connexion Internet et réessayer."
+    },
+    "tabs": {
+      "chat": "Discussion",
+      "files": "Fichiers",
+      "terminal": "Terminal",
+      "browser": "Navigateur",
+      "novnc": "Bureau à distance"
     }
   },
   "settings": {
@@ -7759,6 +7766,10 @@
       "unknown": "Control status unknown",
       "acquireFailed": "Failed to take control: {error}",
       "releaseFailed": "Failed to release control: {error}"
+    },
+    "accessDenied": {
+      "title": "Le bureau à distance n'est pas disponible pour votre rôle",
+      "description": "Afficher et contrôler le bureau géré nécessite l'autorisation desktop-control. Demandez à un administrateur de l'accorder à votre rôle."
     }
   },
   "serviceMessages": {

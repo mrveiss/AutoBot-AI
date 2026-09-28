@@ -4539,6 +4539,10 @@
       "unknown": "Control status unknown",
       "acquireFailed": "Failed to take control: {error}",
       "releaseFailed": "Failed to release control: {error}"
+    },
+    "accessDenied": {
+      "title": "میزکار راه دور برای نقش شما در دسترس نیست",
+      "description": "مشاهده و کنترل میزکار مدیریت‌شده به مجوز desktop-control نیاز دارد. از مدیر بخواهید آن را به نقش شما بدهد."
     }
   },
   "charts": {
@@ -5751,6 +5755,13 @@
       "sendFailedAfterRetries": "ارسال پیام پس از {attempts} تلاش ممکن نشد: {error}. لطفاً اتصال خود را بررسی کرده و دوباره تلاش کنید.",
       "invalidFormatDetail": "قالب پیام نامعتبر است: {error}. لطفاً ورودی خود را بررسی کرده و دوباره تلاش کنید.",
       "networkFailedRetry": "اتصال شبکه ناموفق بود. لطفاً اتصال اینترنت خود را بررسی کرده و دوباره تلاش کنید."
+    },
+    "tabs": {
+      "chat": "گفتگو",
+      "files": "پرونده‌ها",
+      "terminal": "پایانه",
+      "browser": "مرورگر",
+      "novnc": "میزکار راه دور"
     }
   },
   "serviceMessages": {

@@ -757,6 +757,13 @@
       "sendFailedAfterRetries": "تعذّر إرسال الرسالة بعد {attempts} محاولات: {error}. يُرجى التحقق من اتصالك والمحاولة مرة أخرى.",
       "invalidFormatDetail": "تنسيق الرسالة غير صالح: {error}. يُرجى التحقق من إدخالك والمحاولة مرة أخرى.",
       "networkFailedRetry": "فشل الاتصال بالشبكة. يُرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى."
+    },
+    "tabs": {
+      "chat": "محادثة",
+      "files": "الملفات",
+      "terminal": "الطرفية",
+      "browser": "المتصفح",
+      "novnc": "سطح المكتب البعيد"
     }
   },
   "settings": {
@@ -7759,6 +7766,10 @@
       "unknown": "Control status unknown",
       "acquireFailed": "Failed to take control: {error}",
       "releaseFailed": "Failed to release control: {error}"
+    },
+    "accessDenied": {
+      "title": "سطح المكتب البعيد غير متاح لدورك",
+      "description": "يتطلب عرض سطح المكتب المُدار والتحكم فيه إذن desktop-control. اطلب من المسؤول منحه لدورك."
     }
   },
   "serviceMessages": {

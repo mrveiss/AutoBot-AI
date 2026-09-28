@@ -757,6 +757,13 @@
       "sendFailedAfterRetries": "Failed to send message after {attempts} attempts: {error}. Please check your connection and try again.",
       "invalidFormatDetail": "Invalid message format: {error}. Please check your input and try again.",
       "networkFailedRetry": "Network connection failed. Please check your internet connection and try again."
+    },
+    "tabs": {
+      "chat": "Chat",
+      "files": "Files",
+      "terminal": "Terminal",
+      "browser": "Browser",
+      "novnc": "Remote Desktop"
     }
   },
   "settings": {
@@ -7808,6 +7815,10 @@
       "unknown": "Control status unknown",
       "acquireFailed": "Failed to take control: {error}",
       "releaseFailed": "Failed to release control: {error}"
+    },
+    "accessDenied": {
+      "title": "Remote desktop is not available for your role",
+      "description": "Viewing and controlling the managed desktop requires the desktop-control permission. Ask an administrator to grant it to your role."
     }
   },
   "serviceMessages": {

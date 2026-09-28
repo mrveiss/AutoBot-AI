@@ -4539,6 +4539,10 @@
       "unknown": "Control status unknown",
       "acquireFailed": "Failed to take control: {error}",
       "releaseFailed": "Failed to release control: {error}"
+    },
+    "accessDenied": {
+      "title": "שולחן עבודה מרוחק אינו זמין עבור התפקיד שלך",
+      "description": "צפייה ובקרה על שולחן העבודה המנוהל מחייבות את ההרשאה desktop-control. בקש ממנהל להקצות אותה לתפקיד שלך."
     }
   },
   "charts": {
@@ -5751,6 +5755,13 @@
       "sendFailedAfterRetries": "לא ניתן היה לשלוח את ההודעה לאחר {attempts} ניסיונות: {error}. אנא בדוק את החיבור ונסה שוב.",
       "invalidFormatDetail": "פורמט הודעה לא חוקי: {error}. אנא בדוק את הקלט ונסה שוב.",
       "networkFailedRetry": "החיבור לרשת נכשל. אנא בדוק את חיבור האינטרנט שלך ונסה שוב."
+    },
+    "tabs": {
+      "chat": "צ׳אט",
+      "files": "קבצים",
+      "terminal": "טרמינל",
+      "browser": "דפדפן",
+      "novnc": "שולחן עבודה מרוחק"
     }
   },
   "serviceMessages": {

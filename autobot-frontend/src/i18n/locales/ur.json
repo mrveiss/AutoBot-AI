@@ -4539,6 +4539,10 @@
       "unknown": "Control status unknown",
       "acquireFailed": "Failed to take control: {error}",
       "releaseFailed": "Failed to release control: {error}"
+    },
+    "accessDenied": {
+      "title": "آپ کے کردار کے لیے ریموٹ ڈیسک ٹاپ دستیاب نہیں ہے",
+      "description": "منظم شدہ ڈیسک ٹاپ دیکھنے اور کنٹرول کرنے کے لیے desktop-control اجازت درکار ہے۔ منتظم سے کہیں کہ وہ آپ کے کردار کو یہ دے۔"
     }
   },
   "charts": {
@@ -5751,6 +5755,13 @@
       "sendFailedAfterRetries": "{attempts} کوششوں کے بعد پیغام بھیجا نہیں جا سکا: {error}۔ براہ کرم اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔",
       "invalidFormatDetail": "پیغام کی شکل غلط ہے: {error}۔ براہ کرم اپنی ان پٹ چیک کریں اور دوبارہ کوشش کریں۔",
       "networkFailedRetry": "نیٹ ورک کنکشن ناکام ہو گیا۔ براہ کرم اپنا انٹرنیٹ کنکشن چیک کریں اور دوبارہ کوشش کریں۔"
+    },
+    "tabs": {
+      "chat": "چیٹ",
+      "files": "فائلیں",
+      "terminal": "ٹرمینل",
+      "browser": "براؤزر",
+      "novnc": "ریموٹ ڈیسک ٹاپ"
     }
   },
   "serviceMessages": {

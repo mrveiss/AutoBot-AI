@@ -757,6 +757,13 @@
       "sendFailedAfterRetries": "Nachricht konnte nach {attempts} Versuchen nicht gesendet werden: {error}. Bitte überprüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
       "invalidFormatDetail": "Ungültiges Nachrichtenformat: {error}. Bitte überprüfen Sie Ihre Eingabe und versuchen Sie es erneut.",
       "networkFailedRetry": "Netzwerkverbindung fehlgeschlagen. Bitte überprüfen Sie Ihre Internetverbindung und versuchen Sie es erneut."
+    },
+    "tabs": {
+      "chat": "Chat",
+      "files": "Dateien",
+      "terminal": "Terminal",
+      "browser": "Browser",
+      "novnc": "Remotedesktop"
     }
   },
   "settings": {
@@ -7759,6 +7766,10 @@
       "unknown": "Control status unknown",
       "acquireFailed": "Failed to take control: {error}",
       "releaseFailed": "Failed to release control: {error}"
+    },
+    "accessDenied": {
+      "title": "Der Remotedesktop ist für Ihre Rolle nicht verfügbar",
+      "description": "Das Ansehen und Steuern des verwalteten Desktops erfordert die Berechtigung „desktop-control“. Bitten Sie einen Administrator, sie Ihrer Rolle zu erteilen."
     }
   },
   "serviceMessages": {

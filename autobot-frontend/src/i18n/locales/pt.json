@@ -757,6 +757,13 @@
       "sendFailedAfterRetries": "Não foi possível enviar a mensagem após {attempts} tentativas: {error}. Verifique sua conexão e tente novamente.",
       "invalidFormatDetail": "Formato de mensagem inválido: {error}. Verifique sua entrada e tente novamente.",
       "networkFailedRetry": "Falha na conexão de rede. Verifique sua conexão com a internet e tente novamente."
+    },
+    "tabs": {
+      "chat": "Conversa",
+      "files": "Arquivos",
+      "terminal": "Terminal",
+      "browser": "Navegador",
+      "novnc": "Área de trabalho remota"
     }
   },
   "settings": {
@@ -7759,6 +7766,10 @@
       "unknown": "Control status unknown",
       "acquireFailed": "Failed to take control: {error}",
       "releaseFailed": "Failed to release control: {error}"
+    },
+    "accessDenied": {
+      "title": "A área de trabalho remota não está disponível para a sua função",
+      "description": "Ver e controlar a área de trabalho gerida requer a permissão desktop-control. Peça a um administrador para a conceder à sua função."
     }
   },
   "serviceMessages": {

@@ -3,6 +3,9 @@
 <!-- Author: mrveiss -->
 <template>
   <div class="slm-novnc-view view-container-full">
+    <!-- #17370: requiresAuth alone let any signed-in user open this by URL. -->
+    <DesktopAccessDenied v-if="!canUseDesktop" />
+    <template v-else>
     <div class="slm-novnc-header">
       <HostSelector
         v-model="selectedHost"
@@ -21,16 +24,30 @@
       <p class="slm-novnc-empty-title">{{ $t('slm.novnc.selectHost') }}</p>
       <p class="slm-novnc-empty-desc">{{ $t('slm.novnc.selectHostDesc') }}</p>
     </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import DesktopAccessDenied from '@/components/desktop/DesktopAccessDenied.vue'
+import { usePermissions } from '@/composables/usePermissions'
 import { createLogger } from '@/utils/debugUtils'
 import type { SelectorHost } from '@/composables/useHostSelector'
 import HostSelector from '@/components/ui/HostSelector.vue'
 import DesktopInterface from '@/components/desktop/DesktopInterface.vue'
 import Icon from '@/components/ui/Icon.vue'
+
+// #17370: the desktop socket refuses a caller without `mcp.desktop.control`
+// (#17054/#17369). Gated through `holdsPermission` -- the role table, no
+// administrative override -- so this agrees with the socket on every role,
+// including superadmin, whose table entry is empty and whom the socket
+// refuses while `hasPermission` would return true.
+//
+// Not the boundary. The socket is. This is so a refused caller reads an
+// explanation instead of a viewer that never connects.
+const { holdsPermission } = usePermissions()
+const canUseDesktop = computed(() => holdsPermission('mcp.desktop.control'))
 
 const logger = createLogger('SlmNoVncView')
 

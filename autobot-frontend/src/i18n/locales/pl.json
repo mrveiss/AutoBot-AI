@@ -757,6 +757,13 @@
       "sendFailedAfterRetries": "Nie udało się wysłać wiadomości po {attempts} próbach: {error}. Sprawdź połączenie i spróbuj ponownie.",
       "invalidFormatDetail": "Nieprawidłowy format wiadomości: {error}. Sprawdź swoje dane i spróbuj ponownie.",
       "networkFailedRetry": "Połączenie sieciowe nie powiodło się. Sprawdź połączenie z internetem i spróbuj ponownie."
+    },
+    "tabs": {
+      "chat": "Czat",
+      "files": "Pliki",
+      "terminal": "Terminal",
+      "browser": "Przeglądarka",
+      "novnc": "Pulpit zdalny"
     }
   },
   "settings": {
@@ -7759,6 +7766,10 @@
       "unknown": "Control status unknown",
       "acquireFailed": "Failed to take control: {error}",
       "releaseFailed": "Failed to release control: {error}"
+    },
+    "accessDenied": {
+      "title": "Pulpit zdalny nie jest dostępny dla Twojej roli",
+      "description": "Podglądanie i sterowanie zarządzanym pulpitem wymaga uprawnienia desktop-control. Poproś administratora o nadanie go Twojej roli."
     }
   },
   "serviceMessages": {
