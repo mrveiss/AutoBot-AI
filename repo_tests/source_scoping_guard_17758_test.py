@@ -30,6 +30,7 @@ from __future__ import annotations
 import ast
 import pathlib
 
+import pytest
 from repo_tests._paths import repo_root
 
 _REPO = repo_root()
@@ -62,6 +63,17 @@ _ACCEPTS_WITHOUT_READING: frozenset[str] = frozenset()
 _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
     {
         "autobot-backend/api/code_intelligence.py:2002",
+        "autobot-backend/api/codebase_analytics/endpoints/api_endpoints.py:47",
+        "autobot-backend/api/codebase_analytics/endpoints/cross_language_patterns.py:43",
+        "autobot-backend/api/codebase_analytics/endpoints/duplicates.py:334",
+        "autobot-backend/api/codebase_analytics/endpoints/duplicates.py:386",
+        "autobot-backend/api/codebase_analytics/endpoints/environment.py:45",
+        "autobot-backend/api/codebase_analytics/endpoints/ownership.py:312",
+        "autobot-backend/api/codebase_analytics/endpoints/ownership.py:329",
+        "autobot-backend/api/codebase_analytics/endpoints/ownership.py:423",
+        "autobot-backend/api/codebase_analytics/endpoints/ownership.py:479",
+        "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:644",
+        "autobot-backend/tasks/analytics_tasks.py:38",
         "autobot-backend/api/code_intelligence.py:2041",
         "autobot-backend/api/codebase_analytics/chromadb_storage.py:688",
         "autobot-backend/api/codebase_analytics/endpoints/stats.py:219",
@@ -72,7 +84,16 @@ _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
 
 #: Pinned to len(_KNOWN_UNSCOPED_FALLBACKS). Lower it with every removal; raising
 #: it is the deliberate act this exists to make visible.
-_MAX_KNOWN_UNSCOPED_FALLBACKS = 6
+#:
+#: It rose 6 -> 17 once, and the reason matters: the DETECTOR widened, not the
+#: defect. The first version matched only ``X if source_id else Y`` with a bare
+#: ``Name`` test; adding the inverted ``if not source_id`` form and the
+#: ``source_id or "default"`` form surfaced eleven sites that were always there
+#: and always invisible -- ten of them the ``or`` spelling, including #12384's
+#: own fix in ``analytics_tasks.py:38``. A raised pin normally means somebody
+#: parked a leak; this one means somebody could finally see them. Any future
+#: rise needs the same distinction stated, or it is the former.
+_MAX_KNOWN_UNSCOPED_FALLBACKS = 17
 
 
 #: Scan entry points must resolve their root through the source-aware resolver.
@@ -85,6 +106,43 @@ _UNSCOPED_ROOT_RESOLVERS = ("get_project_root", "resolve_project_root")
 def _is_test(path: pathlib.Path) -> bool:
     name = path.name
     return name.endswith("_test.py") or name.startswith("test_")
+
+
+def _is_unscoped_fallback(node: ast.AST) -> bool:
+    """Whether *node* substitutes something when ``source_id`` is absent.
+
+    Three spellings, all of which appear in this repo and all of which produce
+    the same key:
+
+    * ``scoped if source_id else unscoped``
+    * ``unscoped if not source_id else scoped`` -- the same thing inverted
+    * ``source_id or "default"`` -- the shortest, and the one the first version
+      of this guard missed entirely. #12384 introduced it in
+      ``analytics_tasks.py`` while fixing this very class, which is the point:
+      a detector written around the instance in front of you does not see the
+      next spelling.
+
+    Matching by *shape* rather than by name-and-operator would be stronger
+    still, but it is not expressible in a few lines of AST walking. The contrast
+    pairs below pin what this does and does not catch, so the gap is recorded
+    instead of assumed away.
+    """
+    if isinstance(node, ast.IfExp):
+        test = node.test
+        if isinstance(test, ast.Name) and test.id == "source_id":
+            return True
+        if (
+            isinstance(test, ast.UnaryOp)
+            and isinstance(test.op, ast.Not)
+            and isinstance(test.operand, ast.Name)
+            and test.operand.id == "source_id"
+        ):
+            return True
+    if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or) and node.values:
+        first = node.values[0]
+        if isinstance(first, ast.Name) and first.id == "source_id":
+            return True
+    return False
 
 
 def _python_files(include_tests: bool = False) -> list[pathlib.Path]:
@@ -192,12 +250,11 @@ def test_no_key_or_filter_falls_back_to_an_unscoped_form():
     for path in _python_files():
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
-            if not isinstance(node, ast.IfExp):
+            if not _is_unscoped_fallback(node):
                 continue
-            if isinstance(node.test, ast.Name) and node.test.id == "source_id":
-                site = f"{path.relative_to(_REPO)}:{node.lineno}"
-                if site not in _KNOWN_UNSCOPED_FALLBACKS:
-                    offenders.append(site)
+            site = f"{path.relative_to(_REPO)}:{node.lineno}"
+            if site not in _KNOWN_UNSCOPED_FALLBACKS:
+                offenders.append(site)
     assert not offenders, (
         "`... if source_id else <unscoped>` merges every project into one namespace (#17758);\n"
         "refuse instead of falling back, or record the site in _KNOWN_UNSCOPED_FALLBACKS\n"
@@ -231,13 +288,13 @@ def test_every_baselined_site_still_has_the_shape_it_was_recorded_for():
             stale.append(f"{site} (file is gone)")
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        found = any(
-            isinstance(n, ast.IfExp)
-            and isinstance(n.test, ast.Name)
-            and n.test.id == "source_id"
-            and n.lineno == int(lineno)
-            for n in ast.walk(tree)
-        )
+        # `_is_unscoped_fallback`, not a second copy of the predicate. The first
+        # version of this assertion inlined the narrow `IfExp`-with-`Name` test,
+        # so widening the detector left it checking a shape the detector no
+        # longer used -- it reported every newly-visible `or` site as stale. A
+        # guard whose two halves disagree about what they are looking for is the
+        # same drift this file exists to catch, one level up.
+        found = any(_is_unscoped_fallback(n) and getattr(n, "lineno", None) == int(lineno) for n in ast.walk(tree))
         if not found:
             stale.append(site)
     assert not stale, (
@@ -274,3 +331,40 @@ def test_scan_entry_points_use_the_source_aware_resolver():
         f"{path.name} no longer resolves a scan root through the source-aware resolver; "
         "if the tasks stopped scanning, delete this assertion deliberately rather than letting it rot"
     )
+
+
+# ---------------------------------------------------------------------------
+# Contrast pairs -- what the detector catches, and what it does not
+# ---------------------------------------------------------------------------
+
+_MUST_TRIP = (
+    'prefix = f"{p}{source_id}:" if source_id else p',
+    'prefix = p if not source_id else f"{p}{source_id}:"',
+    'tag = source_id or "default"',
+    "where = scoped if source_id else unscoped",
+)
+
+_MUST_NOT_TRIP = (
+    # a required parameter used unconditionally -- the fixed shape
+    'prefix = f"{p}{source_id}:"',
+    # a refusal rather than a substitution
+    'if not source_id:\n    raise ValueError("no")',
+    # a fallback on a DIFFERENT name: out of this guard's scope by design, and
+    # saying so here is the difference between a limit and a blind spot
+    'tag = tenant_id or "default"',
+    # source_id as the fallback, not the thing being fallen back FROM
+    "chosen = explicit or source_id",
+)
+
+
+@pytest.mark.parametrize("snippet", _MUST_TRIP)
+def test_the_detector_trips_on_every_fallback_spelling(snippet):
+    tree = ast.parse(snippet)
+    assert any(_is_unscoped_fallback(n) for n in ast.walk(tree)), f"detector missed: {snippet}"
+
+
+@pytest.mark.parametrize("snippet", _MUST_NOT_TRIP)
+def test_the_detector_leaves_correct_code_alone(snippet):
+    """Without this, a detector that returns True for everything would pass."""
+    tree = ast.parse(snippet)
+    assert not any(_is_unscoped_fallback(n) for n in ast.walk(tree)), f"false positive: {snippet}"

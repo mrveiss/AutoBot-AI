@@ -346,8 +346,11 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   const loadCachedDuplicates = () => cachedDuplicatesEndpoint.load()
   const loadCachedDependencies = () => cachedDependenciesEndpoint.load()
   const loadCachedImportTree = () => cachedImportTreeEndpoint.load()
-  const loadDependencyData = () => _loadDependencyTask()
-  const loadImportTreeData = () => _loadImportTreeTask()
+  // #17758: both routes now REQUIRE source_id -- omitting it is a 422, not a
+  // repo-wide scan. `useTaskLoader.load(body, query)` takes the query record,
+  // and `sourceIdQuery` is the same one the `*/cached` fetchers already send.
+  const loadDependencyData = () => _loadDependencyTask(undefined, sourceIdQuery.value)
+  const loadImportTreeData = () => _loadImportTreeTask(undefined, sourceIdQuery.value)
 
   const loadDeclarations = async () => {
     loadingProgress.declarations = true

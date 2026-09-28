@@ -16,7 +16,7 @@ Provides a single endpoint that aggregates all analytics data from:
 from typing import Any, Dict
 
 import aiohttp
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from api.schemas_analytics import (
@@ -58,8 +58,31 @@ async def fetch_quality_health() -> Dict[str, Any]:
         return {"overall": 0, "grade": "N/A", "breakdown": {}}
 
 
-async def fetch_codebase_charts() -> Dict[str, Any]:
-    """Fetch codebase analytics chart data via HTTP."""
+_EMPTY_CHARTS = {"chart_data": {"problem_types": [], "severity_counts": [], "top_files": []}}
+
+
+async def fetch_codebase_charts(source_id: "str | None" = None) -> Dict[str, Any]:
+    """Fetch codebase analytics chart data via HTTP, for ONE source (#17758).
+
+    The charts route requires a ``source_id`` now, because serving one project's
+    problem aggregate as another's was the leak #17758 reported. This helper
+    therefore has to say which project it is asking about.
+
+    With no ``source_id`` it does not call at all. The alternative -- resolving a
+    default source -- would put "some project's data" back into a report that
+    does not name a project, which is the defect one layer up. The empty shape
+    it returns instead is the same one the non-200 path already returned, so the
+    report renders exactly as it does today when no source is selected.
+
+    That empty shape is itself unsatisfying: an empty chart reads as "this
+    project has no problems" rather than "nobody said which project". It is the
+    pre-existing degraded contract and widening it means changing the response
+    model, so it is recorded on #17764 rather than changed here.
+    """
+    if not source_id:
+        logger.info("codebase charts skipped: no source_id to scope the request (#17758)")
+        return dict(_EMPTY_CHARTS)
+
     try:
         import aiohttp
 
@@ -70,22 +93,17 @@ async def fetch_codebase_charts() -> Dict[str, Any]:
         http_client = get_http_client()
         async with await http_client.get(
             f"{backend_url}/api/analytics/codebase/analytics/charts",
+            params={"source_id": source_id},
             timeout=aiohttp.ClientTimeout(total=10),
         ) as response:
             if response.status == 200:
                 return await response.json()
             else:
                 logger.warning("Charts endpoint returned %s", response.status)
-                return {
-                    "chart_data": {
-                        "problem_types": [],
-                        "severity_counts": [],
-                        "top_files": [],
-                    }
-                }
+                return dict(_EMPTY_CHARTS)
     except Exception as e:
         logger.warning("Failed to fetch codebase charts: %s", e)
-        return {"chart_data": {"problem_types": [], "severity_counts": [], "top_files": []}}
+        return dict(_EMPTY_CHARTS)
 
 
 async def fetch_debt_summary() -> Dict[str, Any]:
@@ -282,7 +300,11 @@ def _build_report_response(
     operation="get_analytics_report",
     error_code_prefix="ANALYTICS_REPORTING",
 )
-async def get_analytics_report():
+async def get_analytics_report(
+    source_id: str | None = Query(
+        None, description="Optional (#17758): scopes the charts section; the rest of the report is global"
+    ),
+):
     """
     Get aggregated analytics report from all analytics sources.
 
@@ -299,7 +321,7 @@ async def get_analytics_report():
     # Fetch all data sources in parallel
     quality_data, charts_data, debt_data, performance_data = await asyncio.gather(
         fetch_quality_health(),
-        fetch_codebase_charts(),
+        fetch_codebase_charts(source_id),
         fetch_debt_summary(),
         fetch_performance_summary(),
     )
@@ -318,7 +340,11 @@ async def get_analytics_report():
     operation="get_quick_summary",
     error_code_prefix="ANALYTICS_REPORTING",
 )
-async def get_quick_summary():
+async def get_quick_summary(
+    source_id: str | None = Query(
+        None, description="Optional (#17758): scopes the charts section; the rest of the report is global"
+    ),
+):
     """
     Get a quick summary of code health.
 
@@ -329,7 +355,7 @@ async def get_quick_summary():
     # Fetch essential data
     quality_data, charts_data = await asyncio.gather(
         fetch_quality_health(),
-        fetch_codebase_charts(),
+        fetch_codebase_charts(source_id),
     )
 
     chart_data = charts_data.get("chart_data", {})

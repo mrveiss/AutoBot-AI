@@ -36,8 +36,33 @@ class TestThePrefixBuilder:
     def test_two_sources_get_two_prefixes(self):
         assert source_scoped_prefix("codebase:deps:", "A") != source_scoped_prefix("codebase:deps:", "B")
 
-    def test_the_source_appears_in_the_key(self):
-        assert source_scoped_prefix("codebase:deps:", "src-A") == "codebase:deps:src-A:"
+    def test_the_source_appears_in_the_key_with_its_dimension(self):
+        """The dimension is in the key, not only the value.
+
+        Without it, a prefix keyed by `source_id` and one keyed by `path`
+        (code_intelligence's security score) share a namespace, and coinciding
+        values serve one analysis as the other.
+        """
+        assert source_scoped_prefix("codebase:deps:", "src-A") == "codebase:deps:source_id:src-A:"
+
+    @pytest.mark.parametrize("hostile", ["*", "?", "a*", "[abc]", "../x", "a/b", "a:b", "a\\b"])
+    def test_a_glob_or_separator_is_refused(self, hostile):
+        """Rejecting only the empty string left the destructive path open.
+
+        `source_id=*` builds `codebase:*:*`, which SCAN MATCH expands to every
+        project -- and the delete path deletes them. That is #17758's worst
+        variant re-entered through the VALUE rather than the absence, so the
+        shape has to be constrained, not just the emptiness.
+        """
+        with pytest.raises(ValueError, match="malformed"):
+            source_scoped_prefix("codebase:deps:", hostile)
+
+    def test_a_uuid_is_accepted(self):
+        """The contrast case: the real id format must still work."""
+        import uuid as _uuid
+
+        sid = str(_uuid.uuid4())
+        assert source_scoped_prefix("codebase:deps:", sid).endswith(f"{sid}:")
 
     @pytest.mark.parametrize("empty", ["", None])
     def test_an_absent_source_is_refused_not_globalised(self, empty):

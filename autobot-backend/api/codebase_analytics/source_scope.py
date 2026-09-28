@@ -27,9 +27,26 @@ it.
 
 from __future__ import annotations
 
+import re
 from typing import Annotated
 
 from fastapi import Query
+
+#: A source id is a UUID string (``source_models.py:48``). This is deliberately
+#: wider than a UUID pattern -- a legacy or seeded id need not be one -- and
+#: deliberately narrower than "non-empty":
+#:
+#: * ``*``, ``?``, ``[``, ``]`` are Redis glob metacharacters, and these values
+#:   reach ``SCAN MATCH`` patterns. ``source_id=*`` builds ``codebase:*:*``,
+#:   which matches every project -- and on the delete path deletes them. That is
+#:   #17758's destructive variant re-entered through the *value* rather than
+#:   through the absence, so rejecting only the empty string does not close it.
+#: * ``:`` is excluded so a source id can never spell a dimension tag. Prefixes
+#:   are built as ``{prefix}{dimension}:{value}:``, and without this a crafted
+#:   id could land in another dimension's namespace.
+#: * ``/`` and ``\`` are excluded because these values also reach filesystem
+#:   path joins via the source-root resolvers.
+_SOURCE_ID_SHAPE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 
 
 def require_source_id(source_id: "str | None", what: str) -> str:
@@ -37,9 +54,18 @@ def require_source_id(source_id: "str | None", what: str) -> str:
 
     ``what`` names the thing that would otherwise be built unscoped, so the error
     says which boundary refused rather than only that one did.
+
+    Rejects a malformed id as well as a missing one -- see ``_SOURCE_ID_SHAPE``.
+    A route can enforce the shape with ``SourceIdQuery``, but an internal caller
+    bypasses the route, and the destructive paths are reached from both.
     """
     if not source_id:
         raise ValueError(f"refusing to build an unscoped {what} without a source_id (#17758)")
+    if not _SOURCE_ID_SHAPE.match(source_id):
+        raise ValueError(
+            f"refusing to build a {what} from a malformed source_id (#17758): "
+            "glob metacharacters, separators and colons are not permitted"
+        )
     return source_id
 
 
@@ -48,7 +74,12 @@ def require_source_id(source_id: "str | None", what: str) -> str:
 #: defect was `source_id: str = ""`, an optional parameter nothing read, and a
 #: shared required type makes that spelling unavailable.
 SourceIdQuery = Annotated[
-    str, Query(min_length=1, description="Required (#17758): the code source this result belongs to")
+    str,
+    Query(
+        min_length=1,
+        pattern=r"^[A-Za-z0-9_.-]{1,128}$",
+        description="Required (#17758): the code source this result belongs to",
+    ),
 ]
 
 
@@ -66,7 +97,7 @@ def scoped_prefix(prefix: str, scope: "str | None", scope_name: str = "source_id
     """
     if not scope:
         raise ValueError(f"a task-result prefix requires a {scope_name} (#17758); refusing to build a global key")
-    return f"{prefix}{scope}:"
+    return f"{prefix}{scope_name}:{scope}:"
 
 
 def source_scoped_prefix(prefix: str, source_id: "str | None") -> str:
@@ -84,7 +115,11 @@ def source_scoped_prefix(prefix: str, source_id: "str | None") -> str:
     in this repo is the same leak with a narrower trigger, reappearing whenever
     the parameter is omitted.
     """
-    return scoped_prefix(prefix, source_id, "source_id")
+    # #17758: through `require_source_id`, so the SHAPE is checked and not only
+    # the emptiness. `scoped_prefix` cannot apply this charset itself -- a `path`
+    # dimension legitimately contains `/` and `:` -- so the source-specific
+    # wrapper is where the source-specific rule belongs.
+    return scoped_prefix(prefix, require_source_id(source_id, "task-result prefix"), "source_id")
 
 
 async def cached_task_result(prefix: str, source_id: str) -> dict:
