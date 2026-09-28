@@ -2,25 +2,54 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Guard: every KB ingestion entry point redacts credentials before content
-reaches the indexer/embedder (#13708 review).
+"""Three historical ingestion paths still call the redactor (#13708 review, #16985).
 
-A prior review of #13708 found the redactor wired into `content_extraction.py`
-(used by the DOCX branch of the gdrive/onedrive connectors) but NOT into the
-PDF and .md/.txt branches of those same connectors, nor into
-`api/knowledge.py`'s separate manual-upload extraction path -- three real
-ingestion entry points a credential in a synced or uploaded document could
-reach the KB unmasked through.
+**This guard is not the coverage argument, and its list is not the set of ingestion
+entry points.** Read `_AUTHORITATIVE_GUARDS` below before drawing any conclusion
+about what is protected.
 
-This is a fixed, hand-enumerated allowlist rather than a tree-scanning guard:
+Credential redaction for knowledge writes is enforced at a single chokepoint --
+`sanitize_fact_content` in `autobot-backend/knowledge/ingest_sanitize.py`, which calls
+`redact_content` -- and the guards that prove it are discovery-based: they walk every
+transitive connector subclass and every durable-store write rather than naming paths.
+A connector added tomorrow is covered without anyone editing a list.
+
+What remains here is narrower and deliberately so: the three specific paths that
+#13708's review found unguarded and #16895 fixed. Verifying they *still* call the
+redactor directly is a second layer under the chokepoint, not a statement about
+completeness.
+
+## Why this docstring exists
+
+The three-entry list is correct and was never wrong. But under the chokepoint design
+it became **misleading by understatement**: a reader who found this file first would
+conclude coverage was three entry points when the real coverage is every write path
+(#16985's remaining criterion). That is the mirror image of the usual defect -- a
+guard whose name claims more than its mechanism enforces. Here the mechanism enforces
+less than the system actually guarantees, and the cost is the same: a reader acts on
+the wrong number.
+
+So the list keeps its job and loses its implied scope. `_HISTORICAL_ENTRY_POINTS` says
+what it is; `_ENTRY_POINTS` read like the answer to "which are the entry points".
+
+## Why the pointer is asserted rather than written
+
+`test_the_authoritative_guards_still_exist` fails if any guard named above is gone.
+Without it this docstring is a cross-reference that rots silently the moment those
+files are renamed -- and a stale comment describing a mechanism is worse than none,
+because it is read in preference to the code. That failure cost three sessions a wrong
+diagnosis on 2026-09-27 (`chromadb_client.py`'s "os.getenv-based" comment above a line
+that read the SSOT default).
+
+## Why this is still not tree-scanning
+
 "extracts external content and returns it for indexing" is not a discoverable
-syntactic pattern the way a route decorator or an import statement is, so
-`repo_tests._reach`'s tree-scanning machinery (built for guards that walk many
-files and need a floor proving they didn't silently stop reaching the tree)
-doesn't fit here -- see PR #16939's review, where a guard that DID need it was
-shipped without one. Each entry point is named explicitly instead; adding a
-new one silently is exactly what this guard cannot catch, which is why the
-negative control below proves the detection logic itself, not just this list.
+syntactic pattern the way a route decorator or an import is, so `repo_tests._reach`'s
+machinery does not fit -- see PR #16939's review, where a guard that DID need a reach
+floor shipped without one. The discovery that *is* possible happens in the
+authoritative guards, keyed on connector subclassing and store writes. Duplicating it
+here would put one rule in two places, which is the defect this file is being edited
+to stop describing.
 """
 
 from __future__ import annotations
@@ -29,14 +58,30 @@ import ast
 import importlib
 import inspect
 import textwrap
+from pathlib import Path
 
 import pytest
 
-_ENTRY_POINTS = [
+#: The three paths #13708's review found unguarded and #16895 fixed. NOT the set of
+#: ingestion entry points -- see the module docstring. Named for what it is so the
+#: next reader cannot mistake its length for a coverage number.
+_HISTORICAL_ENTRY_POINTS = [
     ("knowledge.connectors.gdrive", "GoogleDriveConnector.fetch_content"),
     ("knowledge.connectors.onedrive", "OneDriveConnector.fetch_content"),
     ("api.knowledge", "upload_file_to_knowledge"),
 ]
+
+#: The guards that actually establish coverage, by discovery rather than enumeration.
+#: Asserted to exist below: a docstring pointing at files nobody checks is the stale
+#: comment this edit exists to prevent.
+_AUTHORITATIVE_GUARDS = [
+    "repo_tests/store_fact_chokepoint_guard_test.py",
+    "repo_tests/kb_content_redaction_chokepoint_guard_test.py",
+    "autobot-backend/knowledge/connectors/connector_redaction_functional_test.py",
+]
+
+#: The chokepoint those guards protect.
+_CHOKEPOINT = "autobot-backend/knowledge/ingest_sanitize.py"
 
 
 def _calls_redact_content(source: str) -> bool:
@@ -61,8 +106,12 @@ def _resolve(module_path: str, qualname: str):
     return obj
 
 
-@pytest.mark.parametrize("module_path,qualname", _ENTRY_POINTS, ids=[f"{m}.{q}" for m, q in _ENTRY_POINTS])
-def test_ingestion_entry_point_redacts_credentials(module_path: str, qualname: str) -> None:
+@pytest.mark.parametrize(
+    "module_path,qualname",
+    _HISTORICAL_ENTRY_POINTS,
+    ids=[f"{m}.{q}" for m, q in _HISTORICAL_ENTRY_POINTS],
+)
+def test_historical_entry_point_still_redacts_credentials(module_path: str, qualname: str) -> None:
     func = _resolve(module_path, qualname)
     source = inspect.getsource(func)
     assert _calls_redact_content(source), (
@@ -106,3 +155,35 @@ def test_negative_control_a_mention_in_a_comment_or_string_is_not_a_call() -> No
 
     source = inspect.getsource(_fake_entry_point_that_only_mentions_it)
     assert not _calls_redact_content(source), "a comment/docstring mention of redact_content( must not count as a call"
+
+
+def test_the_authoritative_guards_still_exist() -> None:
+    """The docstring's cross-reference is asserted, not merely written.
+
+    If a guard named in `_AUTHORITATIVE_GUARDS` is renamed or removed, this file's
+    claim that coverage lives elsewhere becomes false and a reader is sent to nothing.
+    A pointer nobody checks is how a comment outlives the mechanism it describes.
+    """
+    root = Path(__file__).resolve().parents[1]
+    missing = [rel for rel in [*_AUTHORITATIVE_GUARDS, _CHOKEPOINT] if not (root / rel).is_file()]
+    assert not missing, (
+        f"this guard's docstring points at {missing}, which do not exist. Either the "
+        "coverage argument moved and the docstring needs re-pointing, or the guards that "
+        "establish it were removed -- in which case the three paths verified here are the "
+        "only redaction coverage left, and that is a security regression, not a doc defect."
+    )
+
+
+def test_the_chokepoint_calls_the_redactor() -> None:
+    """The three paths here are a second layer; this asserts the first one is real.
+
+    Without it, every test in this file could pass while the chokepoint the docstring
+    defers to had stopped redacting -- the guard would be measuring its own narrow
+    layer and reporting the system as covered.
+    """
+    root = Path(__file__).resolve().parents[1]
+    source = (root / _CHOKEPOINT).read_text(encoding="utf-8")
+    assert _calls_redact_content(source), (
+        f"{_CHOKEPOINT} is named here as the chokepoint that redacts every knowledge "
+        "write, and its source contains no redact_content(...) call."
+    )
