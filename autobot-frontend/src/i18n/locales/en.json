@@ -8960,7 +8960,22 @@
       "deleteError": "Failed to delete project.",
       "archiveToDeleteHint": "Archive to enable deletion",
       "deleteNeedsArchive": "Archive the project before deleting it.",
-      "deleteForbidden": "You do not have permission to delete this project."
+      "deleteForbidden": "You do not have permission to delete this project.",
+      "edit": "Edit",
+      "editTitle": "Edit project",
+      "saveAction": "Save changes",
+      "statusLabel": "Status",
+      "targetDateLabel": "Target date",
+      "autoRolloverLabel": "Roll unfinished work into the next sprint",
+      "editError": "Could not save the project. Please try again.",
+      "editNotFound": "This project is no longer available.",
+      "status": {
+        "backlog": "Backlog",
+        "planned": "Planned",
+        "in_progress": "In progress",
+        "completed": "Completed",
+        "cancelled": "Cancelled"
+      }
     },
     "approvals": {
       "decideError": "Failed to record your decision. Please try again."

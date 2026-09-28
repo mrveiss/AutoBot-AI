@@ -8960,7 +8960,22 @@
       "deleteError": "Projekt konnte nicht gelöscht werden.",
       "archiveToDeleteHint": "Archivieren, um das Löschen zu ermöglichen",
       "deleteNeedsArchive": "Archivieren Sie das Projekt, bevor Sie es löschen.",
-      "deleteForbidden": "Sie haben keine Berechtigung, dieses Projekt zu löschen."
+      "deleteForbidden": "Sie haben keine Berechtigung, dieses Projekt zu löschen.",
+      "edit": "Bearbeiten",
+      "editTitle": "Projekt bearbeiten",
+      "saveAction": "Änderungen speichern",
+      "statusLabel": "Status",
+      "targetDateLabel": "Zieldatum",
+      "autoRolloverLabel": "Unerledigte Arbeit in den nächsten Sprint übernehmen",
+      "editError": "Das Projekt konnte nicht gespeichert werden. Bitte erneut versuchen.",
+      "editNotFound": "Dieses Projekt ist nicht mehr verfügbar.",
+      "status": {
+        "backlog": "Backlog",
+        "planned": "Geplant",
+        "in_progress": "In Arbeit",
+        "completed": "Abgeschlossen",
+        "cancelled": "Abgebrochen"
+      }
     },
     "approvals": {
       "decideError": "Ihre Entscheidung konnte nicht gespeichert werden. Bitte versuchen Sie es erneut."

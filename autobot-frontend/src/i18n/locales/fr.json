@@ -8960,7 +8960,22 @@
       "deleteError": "Échec de la suppression du projet.",
       "archiveToDeleteHint": "Archiver pour permettre la suppression",
       "deleteNeedsArchive": "Archivez le projet avant de le supprimer.",
-      "deleteForbidden": "Vous n'avez pas l'autorisation de supprimer ce projet."
+      "deleteForbidden": "Vous n'avez pas l'autorisation de supprimer ce projet.",
+      "edit": "Modifier",
+      "editTitle": "Modifier le projet",
+      "saveAction": "Enregistrer",
+      "statusLabel": "Statut",
+      "targetDateLabel": "Date cible",
+      "autoRolloverLabel": "Reporter le travail inachevé au sprint suivant",
+      "editError": "Impossible d’enregistrer le projet. Veuillez réessayer.",
+      "editNotFound": "Ce projet n’est plus disponible.",
+      "status": {
+        "backlog": "Backlog",
+        "planned": "Planifié",
+        "in_progress": "En cours",
+        "completed": "Terminé",
+        "cancelled": "Annulé"
+      }
     },
     "approvals": {
       "decideError": "Échec de l'enregistrement de votre décision. Veuillez réessayer."

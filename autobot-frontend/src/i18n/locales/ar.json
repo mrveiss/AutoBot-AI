@@ -8960,7 +8960,22 @@
       "deleteError": "فشل حذف المشروع.",
       "archiveToDeleteHint": "قم بالأرشفة لتمكين الحذف",
       "deleteNeedsArchive": "قم بأرشفة المشروع قبل حذفه.",
-      "deleteForbidden": "ليس لديك إذن لحذف هذا المشروع."
+      "deleteForbidden": "ليس لديك إذن لحذف هذا المشروع.",
+      "edit": "تعديل",
+      "editTitle": "تعديل المشروع",
+      "saveAction": "حفظ التغييرات",
+      "statusLabel": "الحالة",
+      "targetDateLabel": "التاريخ المستهدف",
+      "autoRolloverLabel": "نقل العمل غير المكتمل إلى السبرنت التالي",
+      "editError": "لم نتمكن من حفظ المشروع. يُرجى المحاولة مرة أخرى.",
+      "editNotFound": "هذا المشروع لم يعد متاحًا.",
+      "status": {
+        "backlog": "قائمة الانتظار",
+        "planned": "مُخطَّط",
+        "in_progress": "قيد التنفيذ",
+        "completed": "مكتمل",
+        "cancelled": "ملغى"
+      }
     },
     "approvals": {
       "decideError": "Failed to record your decision. Please try again."

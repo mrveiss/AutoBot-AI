@@ -8960,7 +8960,22 @@
       "deleteError": "Falha ao excluir o projeto.",
       "archiveToDeleteHint": "Arquive para permitir a exclusão",
       "deleteNeedsArchive": "Arquive o projeto antes de excluí-lo.",
-      "deleteForbidden": "Você não tem permissão para excluir este projeto."
+      "deleteForbidden": "Você não tem permissão para excluir este projeto.",
+      "edit": "Editar",
+      "editTitle": "Editar projeto",
+      "saveAction": "Salvar alterações",
+      "statusLabel": "Estado",
+      "targetDateLabel": "Data alvo",
+      "autoRolloverLabel": "Transferir o trabalho não concluído para o próximo sprint",
+      "editError": "Não foi possível salvar o projeto. Tente novamente.",
+      "editNotFound": "Este projeto já não está disponível.",
+      "status": {
+        "backlog": "Backlog",
+        "planned": "Planejado",
+        "in_progress": "Em andamento",
+        "completed": "Concluído",
+        "cancelled": "Cancelado"
+      }
     },
     "approvals": {
       "decideError": "Falha ao registrar sua decisão. Tente novamente."

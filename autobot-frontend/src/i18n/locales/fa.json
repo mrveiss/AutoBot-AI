@@ -8960,7 +8960,22 @@
       "deleteError": "حذف پروژه ناموفق بود.",
       "archiveToDeleteHint": "برای فعال‌سازی حذف، بایگانی کنید",
       "deleteNeedsArchive": "پیش از حذف، پروژه را بایگانی کنید.",
-      "deleteForbidden": "شما اجازه حذف این پروژه را ندارید."
+      "deleteForbidden": "شما اجازه حذف این پروژه را ندارید.",
+      "edit": "ویرایش",
+      "editTitle": "ویرایش پروژه",
+      "saveAction": "ذخیره تغییرات",
+      "statusLabel": "وضعیت",
+      "targetDateLabel": "تاریخ هدف",
+      "autoRolloverLabel": "انتقال کارهای ناتمام به اسپرینت بعدی",
+      "editError": "ذخیره پروژه ممکن نشد. لطفاً دوباره تلاش کنید.",
+      "editNotFound": "این پروژه دیگر در دسترس نیست.",
+      "status": {
+        "backlog": "فهرست کارها",
+        "planned": "برنامه‌ریزی‌شده",
+        "in_progress": "در حال انجام",
+        "completed": "تکمیل‌شده",
+        "cancelled": "لغوشده"
+      }
     },
     "approvals": {
       "decideError": "Failed to record your decision. Please try again."

@@ -8960,7 +8960,22 @@
       "deleteError": "כשל במחיקת הפרויקט.",
       "archiveToDeleteHint": "העבר לארכיון כדי לאפשר מחיקה",
       "deleteNeedsArchive": "העבר את הפרויקט לארכיון לפני מחיקתו.",
-      "deleteForbidden": "אין לך הרשאה למחוק פרויקט זה."
+      "deleteForbidden": "אין לך הרשאה למחוק פרויקט זה.",
+      "edit": "עריכה",
+      "editTitle": "עריכת פרויקט",
+      "saveAction": "שמור שינויים",
+      "statusLabel": "סטטוס",
+      "targetDateLabel": "תאריך יעד",
+      "autoRolloverLabel": "העבר עבודה שלא הושלמה לספרינט הבא",
+      "editError": "לא ניתן היה לשמור את הפרויקט. נסה שוב.",
+      "editNotFound": "פרויקט זה אינו זמין עוד.",
+      "status": {
+        "backlog": "מצבור",
+        "planned": "מתוכנן",
+        "in_progress": "בתהליך",
+        "completed": "הושלם",
+        "cancelled": "בוטל"
+      }
     },
     "approvals": {
       "decideError": "Failed to record your decision. Please try again."

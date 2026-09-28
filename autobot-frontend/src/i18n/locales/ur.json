@@ -8960,7 +8960,22 @@
       "deleteError": "پروجیکٹ حذف کرنے میں ناکامی۔",
       "archiveToDeleteHint": "حذف کرنے کے لیے آرکائیو کریں",
       "deleteNeedsArchive": "پروجیکٹ کو حذف کرنے سے پہلے آرکائیو کریں۔",
-      "deleteForbidden": "آپ کو یہ پروجیکٹ حذف کرنے کی اجازت نہیں ہے۔"
+      "deleteForbidden": "آپ کو یہ پروجیکٹ حذف کرنے کی اجازت نہیں ہے۔",
+      "edit": "ترمیم",
+      "editTitle": "پروجیکٹ میں ترمیم",
+      "saveAction": "تبدیلیاں محفوظ کریں",
+      "statusLabel": "حالت",
+      "targetDateLabel": "ہدف کی تاریخ",
+      "autoRolloverLabel": "نامکمل کام کو اگلے اسپرنٹ میں منتقل کریں",
+      "editError": "پروجیکٹ محفوظ نہیں ہو سکا۔ براہ کرم دوبارہ کوشش کریں۔",
+      "editNotFound": "یہ پروجیکٹ اب دستیاب نہیں ہے۔",
+      "status": {
+        "backlog": "بیک لاگ",
+        "planned": "منصوبہ بند",
+        "in_progress": "جاری",
+        "completed": "مکمل",
+        "cancelled": "منسوخ"
+      }
     },
     "approvals": {
       "decideError": "Failed to record your decision. Please try again."

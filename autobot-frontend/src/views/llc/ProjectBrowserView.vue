@@ -127,6 +127,18 @@
 
         <!-- GH#11129 P2: lifecycle actions -->
         <div class="card-lifecycle-actions">
+          <!-- #17681: PATCH /api/llc/projects/{id} has always worked and
+               nothing called it, so projects were write-once at creation.
+               Not gated on lifecycle_state: renaming a project is not a
+               lifecycle operation, and an archived project with a wrong name
+               is exactly the one you need to fix. -->
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            @click="openEdit(p)"
+          >
+            {{ t('llcBrowser.projects.edit') }}
+          </BaseButton>
           <BaseButton
             v-if="p.lifecycle_state === 'active' || !p.lifecycle_state"
             variant="secondary"
@@ -278,6 +290,78 @@
           @click="createProject"
         >
           {{ t('llcBrowser.createAction') }}
+        </BaseButton>
+      </template>
+    </BaseModal>
+
+    <!-- #17681: edit modal. Mirrors the create modal's structure. -->
+    <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
+      v-model="showEdit"
+      :title="t('llcBrowser.projects.editTitle')"
+      size="sm"
+    >
+      <ErrorBanner v-if="editError" :message="editError" class="browser-error" />
+      <div class="create-form">
+        <BaseInput
+          v-model="editForm.name"
+          :label="t('llcBrowser.nameLabel')"
+          :placeholder="t('llcBrowser.namePlaceholder')"
+          required
+        />
+        <div class="create-field">
+          <label class="create-label" for="edit-project-description">
+            {{ t('llcBrowser.descriptionLabel') }}
+          </label>
+          <textarea
+            id="edit-project-description"
+            v-model="editForm.description"
+            class="create-textarea"
+            rows="3"
+            :placeholder="t('llcBrowser.descriptionPlaceholder')"
+          />
+        </div>
+        <div class="create-field">
+          <label class="create-label" for="edit-project-status">
+            {{ t('llcBrowser.projects.statusLabel') }}
+          </label>
+          <!-- A select, not a text field: `ProjectUpdate.status` is an
+               unvalidated `str` on the API while the column is a DB enum, so a
+               free-text value is refused by Postgres rather than by a 422
+               (#17694). -->
+          <select id="edit-project-status" v-model="editForm.status" class="create-textarea">
+            <option v-for="value in PROJECT_STATUSES" :key="value" :value="value">
+              {{ t(`llcBrowser.projects.status.${value}`) }}
+            </option>
+          </select>
+        </div>
+        <div class="create-field">
+          <label class="create-label" for="edit-project-target-date">
+            {{ t('llcBrowser.projects.targetDateLabel') }}
+          </label>
+          <input
+            id="edit-project-target-date"
+            v-model="editForm.target_date"
+            type="date"
+            class="create-textarea"
+          />
+        </div>
+        <label class="create-checkbox">
+          <input v-model="editForm.auto_rollover" type="checkbox" />
+          {{ t('llcBrowser.projects.autoRolloverLabel') }}
+        </label>
+      </div>
+      <template #actions>
+        <BaseButton variant="secondary" :disabled="saving" @click="showEdit = false">
+          {{ t('llcBrowser.cancel') }}
+        </BaseButton>
+        <BaseButton
+          variant="primary"
+          :loading="saving"
+          :disabled="!editForm.name.trim() || saving"
+          @click="saveProject"
+        >
+          {{ t('llcBrowser.projects.saveAction') }}
         </BaseButton>
       </template>
     </BaseModal>
@@ -441,6 +525,40 @@ const creating = ref(false)
 const createError = ref('')
 const form = ref({ name: '', description: '' })
 
+// #17681: edit state. The field set is read off `ProjectUpdate`
+// (`llc/api/sprints.py:151-159`) rather than off `ProjectResponse`, which
+// returns more than the route accepts.
+//
+// Five of its eight fields are here. The three left out, each for a reason:
+//   `lead_agent_id` / `lead_user_id`  a person-picker here would settle
+//                                    #17682's open ruling on how people
+//                                    attach to a project, one field at a time
+//   `env`                            free-form JSONB; a textarea of raw JSON
+//                                    is a worse editor than none
+const showEdit = ref(false)
+const saving = ref(false)
+const editError = ref('')
+const editTarget = ref<ProjectResponse | null>(null)
+
+/** The `projectstatus` DB enum (`llc/models/sprint.py:118-131`), in order. */
+const PROJECT_STATUSES = ['backlog', 'planned', 'in_progress', 'completed', 'cancelled'] as const
+
+interface EditForm {
+  name: string
+  description: string
+  status: string
+  target_date: string
+  auto_rollover: boolean
+}
+
+const editForm = ref<EditForm>({
+  name: '',
+  description: '',
+  status: 'backlog',
+  target_date: '',
+  auto_rollover: false,
+})
+
 // GH#11129: repo attach/detach/sync state
 // Backend requires the repo in `owner/repo` form (AttachRepoRequest pattern);
 // we normalize pasted GitHub URLs to that shape before POSTing (#11129 repo-link bug 1).
@@ -589,6 +707,80 @@ async function createProject(): Promise<void> {
     createError.value = t('llcBrowser.projects.createError')
   } finally {
     creating.value = false
+  }
+}
+
+function openEdit(project: ProjectResponse): void {
+  editTarget.value = project
+  editError.value = ''
+  editForm.value = {
+    name: project.name,
+    description: project.description ?? '',
+    status: project.status,
+    // The column is a DATE; a response carrying a timestamp is trimmed so the
+    // native date input accepts it.
+    target_date: project.target_date ? project.target_date.slice(0, 10) : '',
+    auto_rollover: Boolean(project.auto_rollover),
+  }
+  showEdit.value = true
+}
+
+/**
+ * Only the fields the user actually changed (#17681).
+ *
+ * `update_project` applies `body.model_dump(exclude_none=True)`, so sending an
+ * unchanged value is a no-op write and sending `null` does nothing at all --
+ * a field cannot be cleared back to empty through this route, which is a
+ * backend limitation filed as #17694 rather than worked around here. Sending a
+ * real diff keeps this honest: the request says what the user changed.
+ */
+function editedFields(project: ProjectResponse): Record<string, unknown> {
+  const next = editForm.value
+  const changed: Record<string, unknown> = {}
+  if (next.name.trim() !== project.name) changed.name = next.name.trim()
+  if (next.description.trim() !== (project.description ?? '')) {
+    changed.description = next.description.trim()
+  }
+  if (next.status !== project.status) changed.status = next.status
+  const currentDate = project.target_date ? project.target_date.slice(0, 10) : ''
+  if (next.target_date !== currentDate) changed.target_date = next.target_date
+  if (next.auto_rollover !== Boolean(project.auto_rollover)) {
+    changed.auto_rollover = next.auto_rollover
+  }
+  return changed
+}
+
+async function saveProject(): Promise<void> {
+  const project = editTarget.value
+  if (!project || !editForm.value.name.trim()) return
+  const changed = editedFields(project)
+  if (Object.keys(changed).length === 0) {
+    showEdit.value = false
+    return
+  }
+  saving.value = true
+  editError.value = ''
+  try {
+    const updated = await api.patch<ProjectResponse>(
+      `/api/llc/projects/${project.id}`,
+      changed,
+    )
+    const index = projects.value.findIndex((candidate) => candidate.id === project.id)
+    if (index !== -1) projects.value[index] = updated
+    showEdit.value = false
+  } catch (err) {
+    logger.error('Failed to update project', err)
+    // The route's IDOR guard answers 404 for a project outside the caller's
+    // org as well as for one that does not exist (`sprints.py:697`), so the
+    // message says "not found" rather than implying a permission verdict it
+    // cannot distinguish.
+    const status = (err as { status?: number })?.status
+    editError.value =
+      status === 404
+        ? t('llcBrowser.projects.editNotFound')
+        : t('llcBrowser.projects.editError')
+  } finally {
+    saving.value = false
   }
 }
 
@@ -832,6 +1024,14 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.create-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
 .lifecycle-hint {
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);

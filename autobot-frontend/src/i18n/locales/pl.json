@@ -8960,7 +8960,22 @@
       "deleteError": "Nie udało się usunąć projektu.",
       "archiveToDeleteHint": "Zarchiwizuj, aby umożliwić usunięcie",
       "deleteNeedsArchive": "Zarchiwizuj projekt przed jego usunięciem.",
-      "deleteForbidden": "Nie masz uprawnień do usunięcia tego projektu."
+      "deleteForbidden": "Nie masz uprawnień do usunięcia tego projektu.",
+      "edit": "Edytuj",
+      "editTitle": "Edytuj projekt",
+      "saveAction": "Zapisz zmiany",
+      "statusLabel": "Status",
+      "targetDateLabel": "Data docelowa",
+      "autoRolloverLabel": "Przenieś niezakończoną pracę do następnego sprintu",
+      "editError": "Nie udało się zapisać projektu. Spróbuj ponownie.",
+      "editNotFound": "Ten projekt nie jest już dostępny.",
+      "status": {
+        "backlog": "Backlog",
+        "planned": "Zaplanowany",
+        "in_progress": "W toku",
+        "completed": "Zakończony",
+        "cancelled": "Anulowany"
+      }
     },
     "approvals": {
       "decideError": "Nie udało się zapisać Twojej decyzji. Spróbuj ponownie."

@@ -8960,7 +8960,22 @@
       "deleteError": "Neizdevās dzēst projektu.",
       "archiveToDeleteHint": "Arhivējiet, lai varētu dzēst",
       "deleteNeedsArchive": "Arhivējiet projektu pirms tā dzēšanas.",
-      "deleteForbidden": "Jums nav atļaujas dzēst šo projektu."
+      "deleteForbidden": "Jums nav atļaujas dzēst šo projektu.",
+      "edit": "Rediģēt",
+      "editTitle": "Rediģēt projektu",
+      "saveAction": "Saglabāt izmaiņas",
+      "statusLabel": "Statuss",
+      "targetDateLabel": "Mērķa datums",
+      "autoRolloverLabel": "Pārnest nepabeigto darbu uz nākamo sprintu",
+      "editError": "Projektu nevarēja saglabāt. Lūdzu, mēģiniet vēlreiz.",
+      "editNotFound": "Šis projekts vairs nav pieejams.",
+      "status": {
+        "backlog": "Uzdevumu saraksts",
+        "planned": "Plānots",
+        "in_progress": "Norit",
+        "completed": "Pabeigts",
+        "cancelled": "Atcelts"
+      }
     },
     "approvals": {
       "decideError": "Neizdevās saglabāt jūsu lēmumu. Lūdzu, mēģiniet vēlreiz."

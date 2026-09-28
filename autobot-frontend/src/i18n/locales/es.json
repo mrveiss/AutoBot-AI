@@ -8960,7 +8960,22 @@
       "deleteError": "Error al eliminar el proyecto.",
       "archiveToDeleteHint": "Archiva para habilitar la eliminación",
       "deleteNeedsArchive": "Archiva el proyecto antes de eliminarlo.",
-      "deleteForbidden": "No tienes permiso para eliminar este proyecto."
+      "deleteForbidden": "No tienes permiso para eliminar este proyecto.",
+      "edit": "Editar",
+      "editTitle": "Editar proyecto",
+      "saveAction": "Guardar cambios",
+      "statusLabel": "Estado",
+      "targetDateLabel": "Fecha objetivo",
+      "autoRolloverLabel": "Pasar el trabajo sin terminar al siguiente sprint",
+      "editError": "No se pudo guardar el proyecto. Inténtalo de nuevo.",
+      "editNotFound": "Este proyecto ya no está disponible.",
+      "status": {
+        "backlog": "Pendiente",
+        "planned": "Planificado",
+        "in_progress": "En curso",
+        "completed": "Completado",
+        "cancelled": "Cancelado"
+      }
     },
     "approvals": {
       "decideError": "No se pudo registrar tu decisión. Inténtalo de nuevo."
