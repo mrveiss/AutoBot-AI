@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
 from api.schemas_workflows import (
     RegistryEndpointsResponse,
@@ -22,10 +22,13 @@ from api.schemas_workflows import (
     RegistryValidateResponse,
 )
 from api.system_health import ComponentHealth, register_health_probe
+from api.user_management.dependencies import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-# Create FastAPI router
-router = APIRouter()
+# #16375: every route here was reachable anonymously. Gated at the ROUTER so a
+# route added later inherits it. Authentication only:
+# a read-only map of the API's own routes.
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 class RouterStatus(Enum):
