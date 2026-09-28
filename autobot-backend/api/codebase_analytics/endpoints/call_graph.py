@@ -73,9 +73,9 @@ def _resolve_call_graph_max_files() -> int | None:
 #: env-var-backed module constant, and ``env_float`` is the crash-safe reader
 #: the bare-cast guard exists to enforce.
 #:
-#: WHY 30. nginx's ``proxy_read_timeout`` is 60s
-#: (``autobot-infrastructure/shared/docker/nginx/nginx.conf:121``), while this
-#: route is ``@bounded(120.0)`` -- twice the gateway's patience. So a scan
+#: WHY 30. Half the *tightest* ``/api/`` gateway the repo ships -- 60s container
+#: and user-template, 300s bare-metal (enumerated in ``call_graph_deadline_test.py``).
+#: This route is ``@bounded(120.0)``, twice the tightest gateway. So a scan
 #: between 60s and 120s returns **504 to the browser while the backend keeps
 #: working**, and the route's own ``truncated`` reporting never reaches the
 #: client. Half the gateway leaves room for response building and serialisation.
@@ -676,9 +676,9 @@ def _build_call_graph_response(
             "resolution_rate": round(resolved_count / max(resolved_count + unresolved_count, 1) * 100, 1),
             "top_callers": top_callers,
             "most_called": top_called,
-            # Issue #13468: scope of the statistics above -- files_scanned may
-            # be less than files_total when AUTOBOT_CALL_GRAPH_MAX_FILES caps
-            # the scan; unset (default) scans every file, so truncated is False.
+            # Issue #13468: scope of the above. Either bound can stop the walk --
+            # AUTOBOT_CALL_GRAPH_MAX_FILES (unset by default) or, since #17651, the
+            # 30s deadline -- so truncated is now reachable on a default config.
             "files_scanned": files_scanned,
             "files_total": files_total,
             "truncated": files_scanned < files_total,

@@ -7,7 +7,9 @@
 The endpoint AST-parses every ``.py`` file under the scan root on every cache
 miss -- 6,293 files in this repo -- and was unbounded by #13468's deliberate
 decision to default ``AUTOBOT_CALL_GRAPH_MAX_FILES`` to unlimited. nginx's
-``proxy_read_timeout`` is 60s while the route is ``@bounded(120.0)``, so a scan
+tightest ``/api/`` ``proxy_read_timeout`` is 60s -- ``shared/docker/nginx/nginx.conf:121``
+and ``autobot-frontend/templates/autobot-user.conf:79``, against 300s from
+``shared/scripts/install-bare-metal.sh:562`` -- while the route is ``@bounded(120.0)``, so a scan
 between those two returns **504 to the browser while the backend keeps working**
 and the route's own truncation reporting never reaches the client.
 
