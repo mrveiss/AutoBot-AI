@@ -6,6 +6,232 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- *(frontend)* Unblock base — undefined tokens, duplicated design-system CSS, stale SLM locales (#17698) (#17699) ([#17699](https://github.com/mrveiss/AutoBot-AI/pull/17699))
+
+- *(frontend)* Hide the desktop entry from roles the socket refuses (#17370) (#17691) ([#17691](https://github.com/mrveiss/AutoBot-AI/pull/17691))
+
+- *(frontend)* The KB push button rendered six English literals (#17535) (#17687) ([#17687](https://github.com/mrveiss/AutoBot-AI/pull/17687))
+
+- *(frontend)* The workflow dashboard filtered on two events nobody publishes (#17643) (#17679) ([#17679](https://github.com/mrveiss/AutoBot-AI/pull/17679))
+
+- *(llc/frontend)* The backlog ignored the project filter the API already had (#17680) (#17685) ([#17685](https://github.com/mrveiss/AutoBot-AI/pull/17685))
+
+- *(guards)* Two assertions that could not hold the property they name (#17673, #17650) (#17678) ([#17678](https://github.com/mrveiss/AutoBot-AI/pull/17678))
+
+- *(analytics)* The call scanner read JSDoc examples as live calls — 3 of 4 'Potential Bugs' were documentation (#17668) (#17670) ([#17670](https://github.com/mrveiss/AutoBot-AI/pull/17670))
+
+- *(kb)* Run ECL ingestion through the declared sanitizer (#17033) (#17667) ([#17667](https://github.com/mrveiss/AutoBot-AI/pull/17667))
+
+- *(analytics)* The index request never sent source_id, so every panel queried rows that could not match (#17651) (#17672) ([#17672](https://github.com/mrveiss/AutoBot-AI/pull/17672))
+
+- *(workflows)* Record the owner, then scope control to them (#17014) (#17666) ([#17666](https://github.com/mrveiss/AutoBot-AI/pull/17666))
+
+- *(async)* Four production blocking calls off the event loop, and a guard that could not see them (#17646) (#17647) ([#17647](https://github.com/mrveiss/AutoBot-AI/pull/17647))
+
+- *(deps)* A floor report states its role and scope; detect a production bound the CI plane cannot keep (#17558) (#17610) ([#17610](https://github.com/mrveiss/AutoBot-AI/pull/17610))
+
+- *(knowledge)* Unblock base — #17621 pushed two shrink-only ratchets over (#17612) (#17634) ([#17634](https://github.com/mrveiss/AutoBot-AI/pull/17634))
+
+- *(knowledge)* An unreadable graph store no longer reads as an empty graph (#17612) (#17621) ([#17621](https://github.com/mrveiss/AutoBot-AI/pull/17621))
+
+- *(hooks)* Keep the installed pre-push in step with its tracked copy (#17578) (#17609) ([#17609](https://github.com/mrveiss/AutoBot-AI/pull/17609))
+
+- *(hooks)* Run each frontend project's own toolchain, not autobot-frontend's (#17574, #17575) (#17579) ([#17579](https://github.com/mrveiss/AutoBot-AI/pull/17579))
+
+- *(theme)* One themed source for notification colour, and a ratchet on the rest (#17560) (#17568) ([#17568](https://github.com/mrveiss/AutoBot-AI/pull/17568))
+
+- *(knowledge)* An upload the backend refuses now says why it refused (#17528) (#17529) ([#17529](https://github.com/mrveiss/AutoBot-AI/pull/17529))
+
+- *(theme)* A var() that names nothing renders transparent, not the colour (#17552) (#17553) ([#17553](https://github.com/mrveiss/AutoBot-AI/pull/17553))
+
+- *(mcp)* A rejected tool and an unreachable server are different answers (#17467) (#17549) ([#17549](https://github.com/mrveiss/AutoBot-AI/pull/17549))
+
+- *(activities)* The desktop tracker could not build its row at all (#16464) (#17544) ([#17544](https://github.com/mrveiss/AutoBot-AI/pull/17544))
+
+- *(lint)* The toplevel gate never saw the git hooks, and one carried the bare call (#17035) (#17541) ([#17541](https://github.com/mrveiss/AutoBot-AI/pull/17541))
+
+- *(kb)* The transcriber and the watch folder wrote to a knowledge base API that never existed (#17022, #17531, #17532) (#17536) ([#17536](https://github.com/mrveiss/AutoBot-AI/pull/17536))
+
+- *(ansible)* Retry the shared apt repository add on a transient keyserver failure (#17230) (#17525) ([#17525](https://github.com/mrveiss/AutoBot-AI/pull/17525))
+
+- *(slm-tests)* The conftest's 50 module stubs no longer outlive their directory (#16069) (#17524) ([#17524](https://github.com/mrveiss/AutoBot-AI/pull/17524))
+
+- *(llm)* Provider preference order is configuration, not statement order (#15500) (#17518) ([#17518](https://github.com/mrveiss/AutoBot-AI/pull/17518))
+
+- *(security)* Guard the fleet range in the file kinds nothing else scanned (#17440) (#17447) ([#17447](https://github.com/mrveiss/AutoBot-AI/pull/17447))
+
+- *(redis)* Pass the rendered config to the daemon and converge four spellings of one path (#17434) (#17444) ([#17444](https://github.com/mrveiss/AutoBot-AI/pull/17444))
+
+- *(hooks)* Judge a push by its refspec's destination, not by words in the command (#14144) (#17521) ([#17521](https://github.com/mrveiss/AutoBot-AI/pull/17521))
+
+- *(phase-validation)* 'UI/UX 100%' measured only that files exist (#17089) (#17505) ([#17505](https://github.com/mrveiss/AutoBot-AI/pull/17505))
+
+- *(deps)* Check that both declaration planes resolve the same, and let the floor check reach a venv it is not running in (#17448, #17449) (#17502) ([#17502](https://github.com/mrveiss/AutoBot-AI/pull/17502))
+
+- *(store-authority)* Declare two invisible concepts; share the pre-auth lockout (#17450) (#17519) ([#17519](https://github.com/mrveiss/AutoBot-AI/pull/17519))
+
+- *(guards)* Ratchet the docstring-restatement reach floor to its measured population (#17517) (#17520) ([#17520](https://github.com/mrveiss/AutoBot-AI/pull/17520))
+
+- *(frontend)* Subscribe the workflow dashboard to the channel its events moved to (#17364) (#17478) ([#17478](https://github.com/mrveiss/AutoBot-AI/pull/17478))
+
+- *(redis)* Resolve a database name once; a coroutine is not a client (#17435, #17436, #16499) (#17439) ([#17439](https://github.com/mrveiss/AutoBot-AI/pull/17439))
+
+- *(chat)* A quoted [THOUGHT] marker no longer splits one answer in two (#17513) (#17515) ([#17515](https://github.com/mrveiss/AutoBot-AI/pull/17515))
+
+- *(workflow)* Validate an apt install by installed STATE, and widen the guard to .py (#17411) (#17442) ([#17442](https://github.com/mrveiss/AutoBot-AI/pull/17442))
+
+- *(ci)* Pin the migration gates to the declared dependency versions (#17490) (#17499) ([#17499](https://github.com/mrveiss/AutoBot-AI/pull/17499))
+
+- *(security)* Scope /api/ws events keyed by chat_id or conversation_id (#17428) (#17429) ([#17429](https://github.com/mrveiss/AutoBot-AI/pull/17429))
+
+- *(plugins)* Stop passing grant_capabilities= to loader that rejects it (#17420) (#17427) ([#17427](https://github.com/mrveiss/AutoBot-AI/pull/17427))
+
+- *(security)* Confine an LLC work product's storage_path before opening it (#17302, #17300 AC3) (#17408) ([#17408](https://github.com/mrveiss/AutoBot-AI/pull/17408))
+
+- *(agent-terminal)* Refuse binding a conversation the creator does not own (#17422) (#17426) ([#17426](https://github.com/mrveiss/AutoBot-AI/pull/17426))
+
+- *(orchestration)* Order post-sync actions and restart each unit once (#17453) (#17456) ([#17456](https://github.com/mrveiss/AutoBot-AI/pull/17456))
+
+- *(deploy)* The pre-flight unshallow could not import autobot_shared, breaking every code-sync run (#17457) (#17476) ([#17476](https://github.com/mrveiss/AutoBot-AI/pull/17476))
+
+- *(chat)* One continuation cap, read by the LangGraph route too (#17468) (#17473) ([#17473](https://github.com/mrveiss/AutoBot-AI/pull/17473))
+
+- *(security)* An A2A task claims scopes as its own peer, not as one shared executor (#16950) (#17394) ([#17394](https://github.com/mrveiss/AutoBot-AI/pull/17394))
+
+- *(security)* Scope agent, terminal and chain-of-thought events to their owner (#17363, #17354) (#17375) ([#17375](https://github.com/mrveiss/AutoBot-AI/pull/17375))
+
+- *(deps)* Declare greenlet where the async SQLAlchemy engine is used (#17432) (#17433) ([#17433](https://github.com/mrveiss/AutoBot-AI/pull/17433))
+
+- *(closure-gate)* A repo it cannot find must not read as closure blocked (#17418) (#17425) ([#17425](https://github.com/mrveiss/AutoBot-AI/pull/17425))
+
+- *(provisioning)* Four bugs in the venv/package provisioning path (#17357, #17371, #17362, #17387) (#17398) ([#17398](https://github.com/mrveiss/AutoBot-AI/pull/17398))
+
+- *(frontend)* OpenVnc resolves its URL from SSOT, not from a hardcoded localhost (#17423) (#17424) ([#17424](https://github.com/mrveiss/AutoBot-AI/pull/17424))
+
+- *(repo)* Arm the conflict-marker gate and untrack the file it missed (#17297) (#17407) ([#17407](https://github.com/mrveiss/AutoBot-AI/pull/17407))
+
+- *(hooks)* Stop the Stop orphan-check exiting non-zero outside a work tree (#17410) (#17415) ([#17415](https://github.com/mrveiss/AutoBot-AI/pull/17415))
+
+- *(security)* The desktop socket needs desktop-control, and a purpose-bound token is not a login (#17054, #17049) (#17369) ([#17369](https://github.com/mrveiss/AutoBot-AI/pull/17369))
+
+- *(agents)* The AC verifier no longer truncates a criteria list or trusts an unshown citation (#17090) (#17397) ([#17397](https://github.com/mrveiss/AutoBot-AI/pull/17397))
+
+- *(ci)* A skipped smoke-test must not satisfy the required context (#17126) (#17388) ([#17388](https://github.com/mrveiss/AutoBot-AI/pull/17388))
+
+- *(pty)* Stop the non-blocking write losing input silently (#17381) (#17392) ([#17392](https://github.com/mrveiss/AutoBot-AI/pull/17392))
+
+- *(pty)* Stop the write loop spinning, without introducing the shutdown hang (#17355) (#17367) ([#17367](https://github.com/mrveiss/AutoBot-AI/pull/17367))
+
+- *(deploy)* Make the venv husk repair reachable from ansible provisioning (#17339) (#17360) ([#17360](https://github.com/mrveiss/AutoBot-AI/pull/17360))
+
+- *(ci)* Make the frontend coverage gate enforceable and pin it to the measured floor (#17324) (#17366) ([#17366](https://github.com/mrveiss/AutoBot-AI/pull/17366))
+
+- *(hooks)* Give the hardcoded-values hook and scan one shared directory scope (#17329) (#17330) ([#17330](https://github.com/mrveiss/AutoBot-AI/pull/17330))
+
+- *(security)* Scope workflow events to their own channel instead of broadcasting them (#17354) (#17358) ([#17358](https://github.com/mrveiss/AutoBot-AI/pull/17358))
+
+- *(security)* The task-ownership store fails closed, so an outage is not a bypass (#17060) (#17352) ([#17352](https://github.com/mrveiss/AutoBot-AI/pull/17352))
+
+- *(judges,agent-seam)* One validated loop and one typed-decision seam for code-consumed verdicts (#17307, #17308) (#17327) ([#17327](https://github.com/mrveiss/AutoBot-AI/pull/17327))
+
+- *(ci)* Make the dead-surface report actually emit, reach the job summary, and carry a pin (#16816) (#17341) ([#17341](https://github.com/mrveiss/AutoBot-AI/pull/17341))
+
+- *(deploy,update)* Controller-only manifest paths, and a provenance marker that bricks pip (#17331, #17332, #17246) (#17338) ([#17338](https://github.com/mrveiss/AutoBot-AI/pull/17338))
+
+- *(llm,security)* Wire structured output to every provider and resolve degraded verifier replies by policy (#17305, #17306) (#17322) ([#17322](https://github.com/mrveiss/AutoBot-AI/pull/17322))
+
+- *(approvals)* Wire the orphan-storage deletion gate end to end and validate the action at creation (#17315) (#17323) ([#17323](https://github.com/mrveiss/AutoBot-AI/pull/17323))
+
+- *(provision)* Stop a long ansible line from replacing the failure it carries (#17317) (#17318) ([#17318](https://github.com/mrveiss/AutoBot-AI/pull/17318))
+
+- *(frontend)* Make a worktree able to verify frontend work, then use it on three leftovers (#16912, #16513, #16494, #16704) (#17321) ([#17321](https://github.com/mrveiss/AutoBot-AI/pull/17321))
+
+
+### CI/CD
+
+- *(release)* Baseline five squash-stamped identity trailers blocking v0.10.0 (#17717) (#17718) ([#17718](https://github.com/mrveiss/AutoBot-AI/pull/17718))
+
+- *(migrations)* Run the chain on a schedule, so a break nobody committed still lands (#17490) (#17516) ([#17516](https://github.com/mrveiss/AutoBot-AI/pull/17516))
+
+
+### Documentation
+
+- *(rules)* State rule precedence and land the completion-evidence report (#17484) (#17498) ([#17498](https://github.com/mrveiss/AutoBot-AI/pull/17498))
+
+- *(redis)* Remove fictitious redis.conf mount and broken stack-server validation (#17437) (#17438) ([#17438](https://github.com/mrveiss/AutoBot-AI/pull/17438))
+
+- *(research)* Land two comparative audits whose 12 issues are already open (#17471) (#17472) ([#17472](https://github.com/mrveiss/AutoBot-AI/pull/17472))
+
+- *(review)* A new gate makes existing tests fail like a stale expectation (#17054) (#17396) ([#17396](https://github.com/mrveiss/AutoBot-AI/pull/17396))
+
+
+### Features
+
+- *(canvas)* Make Live Canvas live — publish cell changes on a channel (#17020) (#17697) ([#17697](https://github.com/mrveiss/AutoBot-AI/pull/17697))
+
+- *(llc)* A stalled run is its own status, and the sweep locks what it claims (#16817) (#17696) ([#17696](https://github.com/mrveiss/AutoBot-AI/pull/17696))
+
+- *(llc/frontend)* Projects can be edited, through the route that already existed (#17681) (#17695) ([#17715](https://github.com/mrveiss/AutoBot-AI/pull/17715))
+
+- *(canonical)* The audit harness reported clean over a tree it never read (#17571, #14785) (#17608) ([#17608](https://github.com/mrveiss/AutoBot-AI/pull/17608))
+
+- *(kb)* Detect whether a fact's source still resolves (#17545) (#17615) ([#17615](https://github.com/mrveiss/AutoBot-AI/pull/17615))
+
+- *(memory)* Declare the artifact half of the entity vocabulary (#17539) (#17543) ([#17543](https://github.com/mrveiss/AutoBot-AI/pull/17543))
+
+- *(slm-frontend)* All 11 locales, a way to reach them, and a gate that keeps them (#14781, #15665) (#17395) ([#17395](https://github.com/mrveiss/AutoBot-AI/pull/17395))
+
+- *(agents)* AutoBot claims its issue and runs under a budget; one-claim-registry guard (#17091, #16653) (#17380) ([#17380](https://github.com/mrveiss/AutoBot-AI/pull/17380))
+
+- *(agents)* Verify an issue's acceptance criteria against merged main and post the evidence (#17090) (#17382) ([#17382](https://github.com/mrveiss/AutoBot-AI/pull/17382))
+
+
+### Miscellaneous
+
+- *(git)* Stop tracking .session/ — handoffs are working notes, not repository content (#17479) (#17480) ([#17480](https://github.com/mrveiss/AutoBot-AI/pull/17480))
+
+- *(tech-debt)* Collapse five hand-copied patterns onto one definition each (#16415, #13579) (#17314) ([#17314](https://github.com/mrveiss/AutoBot-AI/pull/17314))
+
+- *(release)* Changelog and fragments for v0.9.0 (#17328) ([#17328](https://github.com/mrveiss/AutoBot-AI/pull/17328))
+
+
+### Other / Uncategorized
+
+- Create graph.json
+
+- *(size)* Give .sh the size ratchet .py has had since #5060 (#17353) (#17378) ([#17378](https://github.com/mrveiss/AutoBot-AI/pull/17378))
+
+
+### Refactoring
+
+- *(redaction)* Name the redaction boundary and pin the concept census (#16688) (#17335) ([#17335](https://github.com/mrveiss/AutoBot-AI/pull/17335))
+
+- *(enums,mcp)* Collapse two hand-copy families onto their real sources (#14881, #14631) (#17342) ([#17342](https://github.com/mrveiss/AutoBot-AI/pull/17342))
+
+- *(optimization)* Collapse the forked accelerate loader (#13049 C4 only) (#17346) ([#17346](https://github.com/mrveiss/AutoBot-AI/pull/17346))
+
+
+### Testing
+
+- *(frontend)* Fix the two tests #17365 names, and share the mechanism (#17365) (#17664) ([#17664](https://github.com/mrveiss/AutoBot-AI/pull/17664))
+
+- *(slm-frontend)* Make two tests fail for the reason their titles claim (#13140) (#17620) ([#17620](https://github.com/mrveiss/AutoBot-AI/pull/17620))
+
+- *(slm-frontend)* Pin the two migrated transports that had no test (#13140) (#17616) ([#17616](https://github.com/mrveiss/AutoBot-AI/pull/17616))
+
+- *(api)* Retire the stale hosts-key assertion in the parked migrations test (#16261) (#17379) ([#17379](https://github.com/mrveiss/AutoBot-AI/pull/17379))
+
+- *(api)* Make the LRO route-auth guard read values, and commit its RED case (#17348) (#17350) ([#17350](https://github.com/mrveiss/AutoBot-AI/pull/17350))
+
+- *(guards)* Prove the duplicate-route guard by mutation, both directions (#16908) (#17347) ([#17347](https://github.com/mrveiss/AutoBot-AI/pull/17347))
+
+- *(api)* No route on /api/long-running can be added without an auth gate (#17010) (#17344) ([#17344](https://github.com/mrveiss/AutoBot-AI/pull/17344))
+
+
+## [0.9.0] - 2026-09-23
+
+### Bug Fixes
+
 - *(deps+security)* Consolidate six packages into the constraints SSOT and confine repo_path (#17304, #17300) (#17309) ([#17309](https://github.com/mrveiss/AutoBot-AI/pull/17309))
 
 - *(security)* Close an arbitrary file write and two path-injection holes (#17300) (#17301) ([#17301](https://github.com/mrveiss/AutoBot-AI/pull/17301))
