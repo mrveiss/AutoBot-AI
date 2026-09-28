@@ -518,3 +518,21 @@ register_env_var(
         component="analytics",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_VECTORIZE_CHECK_INTERVAL_SECONDS",
+        type=int,
+        default=300,
+        description=(
+            "Seconds between vector-reconciler wakes (#17548). The reconciler finds knowledge "
+            "facts that were stored but never vectorised -- the declared half of the projection "
+            "contract that previously never ran. Env-backed rather than a literal because the "
+            "cadence suiting a KB with a handful of facts is not the one suiting a large one, and "
+            "floored at 30s so a misconfiguration cannot turn it into a busy loop against Redis. "
+            "Prefixed AUTOBOT_ deliberately: the registry's sweep is keyed on that prefix, so an "
+            "unprefixed name is not reported as unregistered, it is invisible (#17751)."
+        ),
+        component="knowledge",
+    )
+)

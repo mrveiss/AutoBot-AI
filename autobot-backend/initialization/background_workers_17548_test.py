@@ -149,13 +149,13 @@ def test_the_interval_is_env_backed_not_a_literal(monkeypatch):
 
     import background_vectorization
 
-    monkeypatch.setenv("KB_VECTORIZE_CHECK_INTERVAL_SECONDS", "45")
+    monkeypatch.setenv("AUTOBOT_KB_VECTORIZE_CHECK_INTERVAL_SECONDS", "45")
     reloaded = importlib.reload(background_vectorization)
     try:
         assert reloaded.CHECK_INTERVAL_SECONDS == 45
         assert reloaded.BackgroundVectorizer().check_interval == 45, "the instance must use the constant"
     finally:
-        monkeypatch.delenv("KB_VECTORIZE_CHECK_INTERVAL_SECONDS", raising=False)
+        monkeypatch.delenv("AUTOBOT_KB_VECTORIZE_CHECK_INTERVAL_SECONDS", raising=False)
         importlib.reload(background_vectorization)
 
 
@@ -164,10 +164,10 @@ def test_the_interval_is_floored_so_a_misconfiguration_cannot_busy_loop(monkeypa
 
     import background_vectorization
 
-    monkeypatch.setenv("KB_VECTORIZE_CHECK_INTERVAL_SECONDS", "0")
+    monkeypatch.setenv("AUTOBOT_KB_VECTORIZE_CHECK_INTERVAL_SECONDS", "0")
     reloaded = importlib.reload(background_vectorization)
     try:
         assert reloaded.CHECK_INTERVAL_SECONDS >= 30
     finally:
-        monkeypatch.delenv("KB_VECTORIZE_CHECK_INTERVAL_SECONDS", raising=False)
+        monkeypatch.delenv("AUTOBOT_KB_VECTORIZE_CHECK_INTERVAL_SECONDS", raising=False)
         importlib.reload(background_vectorization)

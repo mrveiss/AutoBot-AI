@@ -39,7 +39,7 @@ FULL_SCAN_EVERY_N_CYCLES = env_int_clamped("KB_VECTORIZE_FULL_SCAN_EVERY_N_CYCLE
 # cadence that suits a KB with a handful of facts is not the one that suits a large
 # one, and a constant in __init__ cannot be tuned per deployment. Floored at 30s so a
 # misconfiguration cannot turn the reconciler into a busy loop against Redis.
-CHECK_INTERVAL_SECONDS = env_int_clamped("KB_VECTORIZE_CHECK_INTERVAL_SECONDS", 300, min_v=30)
+CHECK_INTERVAL_SECONDS = env_int_clamped("AUTOBOT_KB_VECTORIZE_CHECK_INTERVAL_SECONDS", 300, min_v=30)
 
 # Embedding analytics integration (Issue #285)
 try:
