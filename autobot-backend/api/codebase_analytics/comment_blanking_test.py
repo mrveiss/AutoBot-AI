@@ -111,6 +111,19 @@ class TestRealCallsSurvive:
         src = "const y = `${ {a: 1}['a'] /* api.get('/api/gone') */ }`\n"
         assert _visible(src) == []
 
+    def test_a_brace_inside_an_interpolation_comment_does_not_close_it(self) -> None:
+        """`_matching_brace` counted raw braces, so a `}` in a comment ended the
+        interpolation early and the rest of the comment was copied out as template
+        text -- the leak this module exists to close, one level down (#17670 review).
+        """
+        src = "const x = `${/* } api.get('/api/hidden') */ ''}`\n"
+        assert _visible(src) == []
+
+    def test_a_brace_inside_an_interpolation_string_does_not_close_it(self) -> None:
+        # Same cause as the comment case: a brace in a string is not a delimiter.
+        src = "const y = `${ m['}'] /* api.get('/api/gone') */ }`\n"
+        assert _visible(src) == []
+
     def test_template_text_around_an_interpolation_is_untouched(self) -> None:
         # The path is template *text*; only the `${...}` is treated as code.
         src = "await apiClient.get(`/api/items/${id}`)\n"

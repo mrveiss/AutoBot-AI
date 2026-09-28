@@ -71,19 +71,32 @@ def _consume_until(content: str, i: int, closer: str) -> Tuple[str, int]:
 
 
 def _matching_brace(content: str, open_at: int) -> int:
-    """Index of the `}` closing the `{` at *open_at*, or the end of input."""
+    """Index of the `}` closing the `{` at *open_at*, counting **code only**.
+
+    Braces inside a comment or a string are not delimiters. Counting raw characters
+    let ``${/* } … */ ''}`` end at the brace inside the comment, after which the rest
+    of the comment was copied out as template text and its contents became visible
+    to the scanner -- the same leak this module exists to close, one level down
+    (#17670 review).
+
+    The counting view comes from `blank_comments` itself with strings blanked as
+    well, so there is no second scanner to drift from the first: whatever the real
+    pass treats as a comment or a string is what this refuses to count. Blanking
+    preserves length, so indices in the view are indices in *content*.
+    """
+    view = blank_comments(content[open_at:], _strings_too=True)
     depth = 0
-    for j in range(open_at, len(content)):
-        if content[j] == "{":
+    for offset, ch in enumerate(view):
+        if ch == "{":
             depth += 1
-        elif content[j] == "}":
+        elif ch == "}":
             depth -= 1
             if depth == 0:
-                return j
+                return open_at + offset
     return len(content)
 
 
-def _consume_string(content: str, i: int, quote: str) -> Tuple[str, int]:
+def _consume_string(content: str, i: int, quote: str, *, blank_strings: bool = False) -> Tuple[str, int]:
     """Copy the string literal at *i* verbatim, honouring backslash escapes.
 
     Verbatim because the contents are what the scanner is looking for: an API path
@@ -94,38 +107,47 @@ def _consume_string(content: str, i: int, quote: str) -> Tuple[str, int]:
     inside an interpolation survives because the literal around it is copied
     (#17670 review). Length is preserved either way, so positions still hold.
     """
-    out = [content[i]]
+    out = ["#" if blank_strings else content[i]]
     j = i + 1
     while j < len(content):
         ch = content[j]
         if ch == "\\" and j + 1 < len(content):
-            out.append(content[j : j + 2])
+            out.append(_blank_like(content[j : j + 2]) if blank_strings else content[j : j + 2])
             j += 2
             continue
-        if quote == "`" and content.startswith("${", j):
+        # In the counting view the whole literal is blanked, interpolations
+        # included: a brace inside a nested template is not a delimiter of the
+        # interpolation being measured, and skipping the recursion here is what
+        # keeps `_matching_brace` from re-entering itself.
+        if quote == "`" and not blank_strings and content.startswith("${", j):
             end = _matching_brace(content, j + 1)
             out.append("${" + blank_comments(content[j + 2 : end]) + content[end : end + 1])
             j = end + 1
             continue
-        out.append(ch)
+        out.append(_blank_like(ch) if blank_strings else ch)
         j += 1
         if ch == quote:
             break
     return "".join(out), j
 
 
-def blank_comments(content: str) -> str:
+def blank_comments(content: str, *, _strings_too: bool = False) -> str:
     """Return *content* with comment bodies replaced by spaces, length preserved.
 
     Handles ``//`` to end of line, ``/* … */`` across lines, and ``<!-- … -->`` for
     Vue templates. Quoted strings pass through untouched.
+
+    ``_strings_too`` is internal: it additionally blanks string bodies, producing the
+    code-only view `_matching_brace` counts braces in. It is the same pass either
+    way, deliberately -- a separate brace scanner could disagree with this one about
+    what a string is.
     """
     out: list[str] = []
     i, n = 0, len(content)
     while i < n:
         ch = content[i]
         if ch in _QUOTES:
-            text, i = _consume_string(content, i, ch)
+            text, i = _consume_string(content, i, ch, blank_strings=_strings_too)
         elif content.startswith(_LINE, i):
             text, i = _consume_line_comment(content, i)
         elif content.startswith(_BLOCK_OPEN, i):
