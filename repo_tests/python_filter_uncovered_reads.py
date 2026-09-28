@@ -137,3 +137,15 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: backend route, and `autobot-frontend/src/components/` is outside the python
 #: filter's trees. A new bypass, not a denominator correction.
 MAX_UNCOVERED_READS = 45
+
+#: A deliberate raise of ``MAX_UNCOVERED_READS`` is recorded here, as
+#: ``(value, "#issue")``. #17650's criterion is that raising is **justified**, not
+#: that it is forbidden: the direction check in
+#: ``python_filter_covers_its_guards_test.py`` permits MAX to exceed the base only
+#: when this names exactly the current value and cites an issue. So a raise costs one
+#: line of reviewable diff plus a filed reason, and can never be silence.
+#:
+#: It is checked in both directions, like every other baseline on this page: a record
+#: that no longer matches MAX fails as stale, so lowering MAX later cannot leave a
+#: standing permission behind it.
+ACKNOWLEDGED_RAISE: tuple[int, str] | None = None

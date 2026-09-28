@@ -25,11 +25,18 @@ from __future__ import annotations
 import ast
 import fnmatch
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
-from repo_tests.python_filter_uncovered_reads import MAX_UNCOVERED_READS, UNCOVERED_READS
+from repo_tests.python_filter_uncovered_reads import (
+    ACKNOWLEDGED_RAISE,
+    MAX_UNCOVERED_READS,
+    UNCOVERED_READS,
+)
+
+from autobot_shared.paths import scrubbed_git_env
 
 yaml = pytest.importorskip("yaml")
 
@@ -256,6 +263,95 @@ def test_the_uncovered_record_only_shrinks() -> None:
     assert not stale, (
         "the filter now covers these, so they are no longer bypasses — remove them from "
         "UNCOVERED_READS and lower MAX_UNCOVERED_READS to match:\n  " + "\n  ".join(stale)
+    )
+
+
+#: #17650: the equality above is deliberate and documented -- `RATCHET_BASELINES.md`
+#: holds exact congruence in both directions up as the one exemplar satisfying
+#: staleness *and* blindness, and headroom under a ceiling is room for a new bypass
+#: to appear with nothing failing. What was missing is the OTHER half of
+#: `python_filter_uncovered_reads.py`'s stated convention: "and only ever goes down".
+#:
+#: That half was prose. Equality makes MAX track the measured count in EITHER
+#: direction -- a new bypass fails the test, someone raises MAX, green -- which is how
+#: it went 27 -> 38 -> 39 -> 41 -> 42 -> 45. The name says only shrinks; the mechanism
+#: permitted growth to anyone willing to edit the number.
+#:
+#: `RATCHET_BASELINES.md` explains why this one is buildable where blindness is not:
+#: staleness is checkable by the detector, blindness is "no, by definition". Direction
+#: is checkable too -- against the base revision -- and simply was never built.
+_BASE_REFS = ("origin/main", "main")
+
+
+def _max_on_base() -> tuple[int | None, str]:
+    """`MAX_UNCOVERED_READS` as the base revision declares it, or (None, why-not).
+
+    Returns why-not rather than a default so the caller SKIPS loudly. A silent pass
+    here would make this a guard that reports clean having examined nothing, inside
+    the fix for a guard that could not hold its own direction.
+    """
+    rel = "repo_tests/python_filter_uncovered_reads.py"
+    for ref in _BASE_REFS:
+        try:
+            out = subprocess.run(
+                ["git", "show", f"{ref}:{rel}"],
+                cwd=repo_root(),
+                capture_output=True,
+                text=True,
+                env=scrubbed_git_env(),
+                timeout=30,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            return None, f"git is not usable here ({exc.__class__.__name__})"
+        if out.returncode != 0:
+            continue
+        found = re.search(r"^MAX_UNCOVERED_READS\s*=\s*(\d+)", out.stdout, re.MULTILINE)
+        if found is None:
+            return None, f"{ref}:{rel} carries no MAX_UNCOVERED_READS assignment"
+        return int(found.group(1)), ref
+    return None, f"none of {list(_BASE_REFS)} resolves in this clone (shallow or detached?)"
+
+
+def test_the_ceiling_may_not_rise_above_the_base_revision() -> None:
+    """The direction half of shrink-only, which was a docstring and nothing else.
+
+    The equality assertion above pins MAX to the measured count. It does not care
+    which way the count moved, so raising MAX is a legal way to make a new bypass
+    green. This is the assertion that makes "only ever goes down" true.
+
+    #17650's criterion is that a raise is **justified**, not forbidden. Checked:
+    neither `RATCHET_BASELINES.md` (no exception mechanism; its checklist has no "how to
+    raise" entry) nor `ARCHITECTURE_EXCEPTIONS.md` (which records code-structure
+    deviations, not baseline movements) defines an allowance path, and `CLAUDE.md` says
+    "split, don't raise the ceiling" for the analogous file-size case. So this test
+    carries the record itself: `ACKNOWLEDGED_RAISE`, cited to an issue and checked for
+    staleness in both directions.
+
+    The preferred route remains the one the ratchet exists to force -- widen the filter
+    until the read is covered, as #16442 did ("filter entry instead of a raised MAX").
+    """
+    base, why = _max_on_base()
+    if base is None:
+        pytest.skip(f"cannot compare against the base revision, so direction is UNCHECKED: {why}")
+
+    if ACKNOWLEDGED_RAISE is not None:
+        acknowledged, issue = ACKNOWLEDGED_RAISE
+        assert acknowledged == MAX_UNCOVERED_READS, (
+            f"ACKNOWLEDGED_RAISE names {acknowledged} but MAX_UNCOVERED_READS is "
+            f"{MAX_UNCOVERED_READS} -- a stale permission. Remove the record when the "
+            "value it justified is no longer the value in force."
+        )
+        assert issue.strip().startswith("#"), f"ACKNOWLEDGED_RAISE must cite an issue, got {issue!r}"
+        return
+
+    assert MAX_UNCOVERED_READS <= base, (
+        f"MAX_UNCOVERED_READS was raised from {base} (on {why}) to {MAX_UNCOVERED_READS} "
+        "with no recorded justification. Either widen the filter so the new read is "
+        "covered -- the outcome this ratchet exists to force, and what #16442 did -- or, "
+        "if the raise is genuinely right, set ACKNOWLEDGED_RAISE in "
+        'python_filter_uncovered_reads.py to (value, "#issue"). Neither '
+        "RATCHET_BASELINES.md nor ARCHITECTURE_EXCEPTIONS.md defines an allowance path, "
+        "so this is the record."
     )
 
 
