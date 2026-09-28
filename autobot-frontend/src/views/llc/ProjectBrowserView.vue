@@ -761,12 +761,18 @@ async function saveProject(): Promise<void> {
   saving.value = true
   editError.value = ''
   try {
-    const updated = await api.patch<ProjectResponse>(
-      `/api/llc/projects/${project.id}`,
-      changed,
-    )
-    const index = projects.value.findIndex((candidate) => candidate.id === project.id)
-    if (index !== -1) projects.value[index] = updated
+    // No inline generic on this call, deliberately. Naming a response type at
+    // the call site is a shape claim TypeScript cannot check -- the server is
+    // free to answer something else -- and `frontend_api_contract_ratchet`
+    // counts those on a shrink-only pin. The type name is kept out of this
+    // comment too, because that detector reads comments: writing the offending
+    // syntax here to explain it would itself be counted (#17571's shape).
+    //
+    // So the response is neither typed nor read. The list is reloaded from the
+    // endpoint that already types it, which is what `createProject` and
+    // `deleteProject` in this file do after a mutation.
+    await api.patch(`/api/llc/projects/${project.id}`, changed)
+    await loadProjects()
     showEdit.value = false
   } catch (err) {
     logger.error('Failed to update project', err)
