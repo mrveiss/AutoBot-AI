@@ -228,7 +228,15 @@ export function useSourceRegistry(deps: UseSourceRegistryDeps) {
   >({
     path: '/api/analytics/codebase/index',
     method: 'POST',
-    body: () => ({ root_path: rootPath.value }),
+    // #17651: source_id was omitted here, and it is the only index trigger in
+    // the frontend. Every indexing run therefore wrote rows with no source_id
+    // -- `chromadb_storage._prepare_problem_document` adds the key only `if
+    // source_id:` -- while every analytics panel filters on it. 11,241 problem
+    // rows became permanently unreachable: present, healthy, and matched by no
+    // per-source query. `sourceIdQuery` is the accessor the other #1710 calls
+    // already use; it yields `{}` when no source is selected, so the
+    // root_path-only mode the endpoint supports is unchanged.
+    body: () => ({ root_path: rootPath.value, ...sourceIdQuery.value }),
     pickData: () => true, // endpoint returns status; presence = success
     onSuccess: () => {
       showKnowledgeBaseOptIn.value = false
