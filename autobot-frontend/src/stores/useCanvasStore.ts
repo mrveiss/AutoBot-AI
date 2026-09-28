@@ -102,7 +102,17 @@ export const useCanvasStore = defineStore('canvas', () => {
 
   function addCell(owner: 'user' | 'agent' = 'user') {
     cells.value.push({
-      id: `cell-${Date.now()}`,
+      // #17020: was `cell-${Date.now()}`. Millisecond resolution means two
+      // cells created in the same tick share an id, and every lookup here is
+      // by id -- `deleteCell`, `moveCell`, `upsertStreamCell`, the template's
+      // `:key`. The collision surfaced in the conflict branch, which adds a
+      // cell and then addresses "the last one": with a duplicate id it routed
+      // the agent's delta straight back onto the cell the user was resolving,
+      // which is the one thing that branch exists to prevent.
+      //
+      // `crypto.randomUUID()` matches the five existing call sites, including
+      // the same shape at `useAppStore.ts:195`.
+      id: `cell-${crypto.randomUUID()}`,
       canvasId: canvasId.value ?? '',
       owner,
       contentType: 'markdown',
