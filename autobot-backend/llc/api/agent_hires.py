@@ -22,6 +22,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.env_utils import env_str
 from autobot_shared.logging_manager import get_logger
 from llc.adapters import adapter_unavailable_reason, registered_adapter_types
 from llc.deps import assert_company_access
@@ -133,6 +134,34 @@ class AgentHireRead(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+#: #15907, owner ruling 2026-09-28. A hire that opts into the heartbeat gets a
+#: one-minute wake unless it says otherwise.
+#:
+#: Why a default at all. The scheduler's gate is ``heartbeat_enabled = true AND
+#: heartbeat_cron IS NOT NULL`` (``heartbeat_scheduler.py:220-221``), and this
+#: field defaulted to ``None``. So an agent hired with ``heartbeat_enabled=true``
+#: and no cron was never scheduled: the flag said yes and the column the
+#: scheduler actually reads said nothing. Two columns, one of them invisible in
+#: every view, is the shape #15907 reported -- and the hire flow reproduced it
+#: for any caller who set the flag and not the cron.
+#:
+#: Why one minute is affordable. #17726's short-circuit returns before creating
+#: a run when the agent's queue is empty, so the common wake costs one bounded
+#: query and no model invocation. Without that, this default would be 1,440 full
+#: agent invocations per agent per day; the ruling made the cadence conditional
+#: on the short-circuit landing first, and it is in this same change.
+#:
+#: ``heartbeat_enabled`` deliberately stays ``False``: opting every hired agent
+#: into a cadence is option A from the ruling, which was rejected.
+#: ``AUTOBOT_`` prefixed deliberately, against 12 ``LLC_*`` config reads already
+#: on main (``llc/config/__init__.py``, three schedulers, the stalled-run sweep,
+#: and three in ``heartbeat_scheduler.py`` itself). That family is invisible to
+#: the registry's prefix-keyed sweep, which is a real gap -- filed separately
+#: rather than fixed here, because renaming twelve live variables is not this
+#: change. A new one joins the visible set.
+DEFAULT_HEARTBEAT_CRON = env_str("AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON", "* * * * *")
+
+
 class AgentHireRequest(BaseModel):
     """Request body for POST /companies/{company_id}/agent-hires (GH#8486)."""
 
@@ -151,7 +180,10 @@ class AgentHireRequest(BaseModel):
     assistant_agent_id: Optional[str] = Field(None)
     assistant_name: Optional[str] = Field(None)
     role_description: Optional[str] = Field(None)
-    heartbeat_cron: Optional[str] = Field(None)
+    heartbeat_cron: Optional[str] = Field(
+        DEFAULT_HEARTBEAT_CRON,
+        description="Cron for periodic wake. Defaults to every minute; only used when heartbeat_enabled.",
+    )
     heartbeat_enabled: bool = Field(False)
     adapter_type: Optional[str] = Field("claude_code")
     adapter_config: Optional[Dict[str, Any]] = Field(None)
