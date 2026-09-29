@@ -219,3 +219,103 @@ async def test_resolution_runs_before_the_write_so_a_failure_costs_nothing(kb):
     await ingest_watched_file("f1", CONFIG, FILE, "some text")
 
     assert store.added == []
+
+
+# ---------------------------------------------------------------------------
+# Review findings (#17735): ambiguity, a match with no id, an endless listing,
+# and a refusal nobody can read
+# ---------------------------------------------------------------------------
+
+
+async def test_two_collections_with_one_name_are_refused_not_guessed(kb):
+    """`create_collection` does not enforce name uniqueness, so this is reachable.
+
+    The previous resolver returned on the FIRST match, which meant it could not
+    detect a duplicate at all: it picked one of two silently and reproducibly,
+    and ingested the watched folder into whichever the sort put first. Nothing
+    downstream could tell. Same owner ruling as an unknown name (2026-09-28) --
+    a question the config does not answer is an operator-visible error.
+    """
+    instance = kb(_KB([_page([{"name": "Docs", "id": "c1"}, {"name": "Docs", "id": "c2"}])]))
+
+    result = await resolve_collection_id("Docs")
+
+    assert result["status"] == "ambiguous"
+    assert "2 collections" in result["message"]
+    assert not instance.created
+
+
+async def test_the_whole_listing_is_scanned_so_a_late_duplicate_is_seen(kb):
+    """A duplicate on page two must not be missed because page one matched.
+
+    This is why the early return had to go: the cost of a `resolved` is now the
+    same as a `not_found` -- one full listing -- and that is what buys the
+    ability to see a second match at all.
+    """
+    instance = kb(
+        _KB(
+            [
+                _page([{"name": "Docs", "id": "c1"}], has_more=True),
+                _page([{"name": "Docs", "id": "c2"}]),
+            ]
+        )
+    )
+
+    result = await resolve_collection_id("Docs")
+
+    assert result["status"] == "ambiguous"
+    assert len(instance.listed) == 2, "stopped at the first match and never saw the second"
+
+
+async def test_a_match_with_no_id_is_an_error_not_a_resolution(kb):
+    """`collection.get("id")` could be absent, and `resolved` meant "store this".
+
+    The caller writes `collection_id` into `metadata["collection"]`, so a None
+    stored the document with NO collection and reported success -- the exact
+    failure this resolver exists to end, one branch over.
+    """
+    kb(_KB([_page([{"name": "Docs"}])]))
+
+    result = await resolve_collection_id("Docs")
+
+    assert result["status"] == "error"
+    assert "no id" in result["message"]
+
+
+async def test_a_listing_that_never_ends_is_refused_not_reported_as_not_found(kb):
+    """Insurance, not a live bug -- and it must not masquerade as a clean answer.
+
+    `list_collections` computes `has_more` as `offset + limit < total_count`, so
+    against this store the loop terminates. A store that lies would have spun
+    forever; refusing beats both that and reporting a partial scan as
+    `not_found`, which would be a false negative dressed as an answer.
+    """
+    kb(_KB([_page([{"name": "Other", "id": "c9"}], has_more=True)] * 200))
+
+    result = await resolve_collection_id("Docs")
+
+    assert result["status"] == "error"
+    assert "did not terminate" in result["message"]
+
+
+async def test_the_refusal_caps_the_names_and_counts_what_it_omitted(kb):
+    """A message naming every collection is unreadable and gets truncated by logs.
+
+    Saying how many were left out keeps the count honest -- a silently shortened
+    list is a number nobody can check.
+    """
+    many = [{"name": f"c{i:03d}", "id": f"id{i}"} for i in range(50)]
+    kb(_KB([_page(many)]))
+
+    result = await resolve_collection_id("Docs")
+
+    assert result["status"] == "not_found"
+    assert "(+30 more)" in result["message"], result["message"]
+    assert result["message"].count(", ") < 25
+
+
+async def test_a_single_match_still_resolves(kb):
+    """The contrast case: none of the above may cost the ordinary answer."""
+    kb(_KB([_page([{"name": "Docs", "id": "c1"}, {"name": "Other", "id": "c2"}])]))
+
+    assert await resolve_collection_id("Docs") == {"status": "resolved", "collection_id": "c1"}

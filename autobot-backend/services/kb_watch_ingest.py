@@ -65,6 +65,30 @@ def build_watch_metadata(folder_id: str, config: "WatchFolderConfig", file_path:
 #: it does not exist (#17533, and the same shape as #17713).
 _COLLECTION_PAGE = 100
 
+#: Safety bounds, not tuning knobs -- deliberately plain constants rather than
+#: env-backed, because nothing should want to configure them.
+#:
+#: The page cap answers a store that never sets `has_more` false. The name cap
+#: keeps a refusal readable: the message named EVERY collection, so on a store
+#: with hundreds it became unreadable and was truncated by whatever logged it.
+_MAX_COLLECTION_PAGES = 100
+_NAMES_IN_REFUSAL = 20
+
+
+def _name_hint(seen: "list[str]") -> str:
+    """The collections that DO exist, bounded, with the omission counted.
+
+    A refusal an operator cannot act on is only marginally better than a silent
+    drop -- so the names are listed. Saying how many were omitted rather than
+    stopping silently keeps the count honest.
+    """
+    names = sorted({n for n in seen if n})
+    if not names:
+        return "no collections exist"
+    shown = names[:_NAMES_IN_REFUSAL]
+    suffix = "" if len(names) == len(shown) else f" (+{len(names) - len(shown)} more)"
+    return "collections that exist: " + ", ".join(shown) + suffix
+
 
 async def resolve_collection_id(name: str) -> Dict[str, Any]:
     """Resolve a collection NAME to the UUID the store is keyed by (#17533).
@@ -80,14 +104,23 @@ async def resolve_collection_id(name: str) -> Dict[str, Any]:
     decision this path gets to make. Create-on-first-use remains available later as a
     deliberate, gated feature.
 
-    Returns a status that separates three outcomes an empty result cannot:
+    Returns a status that separates four outcomes an empty result cannot:
 
-    ``resolved``    ``collection_id`` is the id to store
-    ``not_found``   the listing was read in full and no collection carries this name
-    ``error``       the listing could not be read, so nothing is known
+    ``resolved``    exactly one collection carries this name; ``collection_id`` is it
+    ``ambiguous``   more than one does, so the config does not say which
+    ``not_found``   the listing was read in full and none carries this name
+    ``error``       the listing could not be read, or the match carries no id
 
-    The ``not_found`` message names the collections that DO exist, because a refusal an
-    operator cannot act on is only marginally better than a silent drop.
+    ``ambiguous`` follows the same owner ruling as ``not_found`` (2026-09-28: an
+    unknown name is an operator-visible error, not a guess). ``create_collection``
+    does not enforce name uniqueness, so two collections may share one -- and a
+    name matching two is a question this resolver cannot answer. Picking one
+    would ingest a watched folder into a collection the operator did not choose,
+    reproducibly, with nothing downstream able to tell.
+
+    The ``not_found`` message names the collections that DO exist, bounded and
+    with the omission counted, because a refusal an operator cannot act on is
+    only marginally better than a silent drop.
     """
     from knowledge import get_knowledge_base
 
@@ -97,8 +130,9 @@ async def resolve_collection_id(name: str) -> Dict[str, Any]:
 
     kb = await get_knowledge_base()
     seen: list[str] = []
+    matches: list[str] = []
     offset = 0
-    while True:
+    for _page_number in range(_MAX_COLLECTION_PAGES):
         page = await kb.list_collections(limit=_COLLECTION_PAGE, offset=offset)
         if not page.get("success"):
             return {
@@ -107,18 +141,49 @@ async def resolve_collection_id(name: str) -> Dict[str, Any]:
             }
         for collection in page.get("collections") or []:
             found_name = (collection.get("name") or "").strip()
-            if found_name == wanted:
-                return {"status": "resolved", "collection_id": collection.get("id")}
             seen.append(found_name)
+            if found_name == wanted:
+                # Collected, not returned. `create_collection` does not check name
+                # uniqueness, so two collections may carry one name -- and the
+                # previous version returned on the FIRST match, which meant it
+                # could not detect a duplicate at all. It picked one of two
+                # silently, reproducibly, and ingested a watched folder into
+                # whichever the sort happened to put first.
+                matches.append(collection.get("id") or "")
         if not page.get("has_more"):
             break
         offset += _COLLECTION_PAGE
+    else:
+        # Reached only if `has_more` never went false. `list_collections` computes
+        # it as `offset + limit < total_count`, so against this store the loop
+        # terminates -- this is insurance against a store that lies, not a live
+        # bug, and it refuses rather than reporting a partial scan as not_found.
+        return {
+            "status": "error",
+            "message": f"collection listing did not terminate after {_MAX_COLLECTION_PAGES} pages",
+        }
 
-    known = ", ".join(sorted(n for n in seen if n)) or "none"
-    return {
-        "status": "not_found",
-        "message": f"no collection is named {wanted!r}; collections that exist: {known}",
-    }
+    if len(matches) > 1:
+        return {
+            "status": "ambiguous",
+            "message": (
+                f"{len(matches)} collections are named {wanted!r}; the watch folder does not say which. "
+                "Rename them or configure the collection id."
+            ),
+        }
+    if matches:
+        if not matches[0]:
+            # A resolution with no id is not a resolution: the caller writes it
+            # into `metadata["collection"]`, so a None here stores the document
+            # with no collection and reports success -- the exact failure this
+            # function exists to end, one branch over.
+            return {
+                "status": "error",
+                "message": f"collection {wanted!r} exists but carries no id; cannot route to it",
+            }
+        return {"status": "resolved", "collection_id": matches[0]}
+
+    return {"status": "not_found", "message": f"no collection is named {wanted!r}; {_name_hint(seen)}"}
 
 
 async def ingest_watched_file(
