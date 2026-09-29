@@ -71,14 +71,40 @@ _HISTORICAL_ENTRY_POINTS = [
     ("api.knowledge", "upload_file_to_knowledge"),
 ]
 
-#: The guards that actually establish coverage, by discovery rather than enumeration.
-#: Asserted to exist below: a docstring pointing at files nobody checks is the stale
-#: comment this edit exists to prevent.
-_AUTHORITATIVE_GUARDS = [
-    "repo_tests/store_fact_chokepoint_guard_test.py",
-    "repo_tests/kb_content_redaction_chokepoint_guard_test.py",
-    "autobot-backend/knowledge/connectors/connector_redaction_functional_test.py",
-]
+#: The guards that actually establish coverage, and the test in each that does the
+#: establishing. Mapped rather than listed, because the previous version asserted
+#: only that the FILES existed -- and a file can survive the deletion of the test
+#: that made it authoritative. `is_file()` is satisfied by an empty file.
+#:
+#: The connector row is the one that mattered (#17732 review). This list named
+#: `connector_redaction_functional_test.py`, which has twelve tests and NO
+#: `__subclasses__()` walk -- it enumerates. The docstring above claims the guards
+#: "walk every transitive connector subclass", and the file that does that is
+#: `repo_tests/connector_redaction_guard_test.py:137`, which was absent. So the
+#: strongest claim in the docstring was backed by the one file that does not
+#: support it, while the file that does went unmentioned -- the coverage argument
+#: pointing at the wrong evidence, which is the exact defect #16985 is about.
+_AUTHORITATIVE_GUARDS = {
+    "repo_tests/store_fact_chokepoint_guard_test.py": (
+        "test_no_writer_reaches_the_store_around_the_chokepoint",
+        "test_a_new_direct_writer_is_detected",
+    ),
+    "repo_tests/kb_content_redaction_chokepoint_guard_test.py": (
+        "test_every_content_sink_call_site_is_redacted_or_explicitly_exempt",
+        "test_negative_control_an_unredacted_write_path_is_caught",
+    ),
+    # The discovery guard: `base.__subclasses__()` at :106, so a connector added
+    # tomorrow is covered without anyone editing a list. This is what makes the
+    # docstring's "every transitive connector subclass" true.
+    "repo_tests/connector_redaction_guard_test.py": (
+        "test_every_discovered_connector_class_routes_through_the_chokepoint",
+        "test_negative_control_an_overriding_connector_is_caught",
+    ),
+    # Retained as the behavioural layer under the discovery guard -- it exercises
+    # real connectors rather than proving the set is complete. Listed with its own
+    # test so a reader is not left inferring which role it plays.
+    "autobot-backend/knowledge/connectors/connector_redaction_functional_test.py": (),
+}
 
 #: The chokepoint those guards protect.
 _CHOKEPOINT = "autobot-backend/knowledge/ingest_sanitize.py"
@@ -171,6 +197,25 @@ def test_the_authoritative_guards_still_exist() -> None:
         "coverage argument moved and the docstring needs re-pointing, or the guards that "
         "establish it were removed -- in which case the three paths verified here are the "
         "only redaction coverage left, and that is a security regression, not a doc defect."
+    )
+
+    # The file existing is not the claim. `is_file()` passes on an empty file, and a
+    # guard whose discovery test was deleted still satisfies it -- so the named test
+    # has to be there too.
+    gutted = []
+    for rel, required in _AUTHORITATIVE_GUARDS.items():
+        if not required:
+            continue
+        defined = {
+            node.name
+            for node in ast.walk(ast.parse((root / rel).read_text(encoding="utf-8")))
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        gutted.extend(f"{rel}::{name}" for name in required if name not in defined)
+    assert not gutted, (
+        f"the tests that make these guards authoritative are gone: {gutted}. The files are "
+        "still present, so a file-existence check would pass while the coverage argument "
+        "this docstring makes had quietly stopped being true."
     )
 
 
