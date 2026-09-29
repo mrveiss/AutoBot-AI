@@ -84,8 +84,20 @@ _SEP_RE = r"\s*(?:,\s*(?:and\s+)?|and\s+)"
 _CLOSING_WORDS = "closes|closed|close|fixes|fixed|fix|resolves|resolved|resolve"
 _MENTION_WORDS = "refs|references|part of"
 _RUN = rf"({_ONE_REF}(?:{_SEP_RE}{_ONE_REF})*)"
-_CLOSING = re.compile(rf"(?:{_CLOSING_WORDS})\s+{_RUN}", re.IGNORECASE)
-_REFERENCE = re.compile(rf"(?:{_CLOSING_WORDS}|{_MENTION_WORDS})\s+{_RUN}", re.IGNORECASE)
+# The left boundary is load-bearing, and widening the verb set is what made it
+# load-bearing here: with bare stems in the alternation, `unresolved #1234`
+# matches `resolved #1234`, `prefixes #12` matches `fixes #12`, and `discloses
+# #5` matches `closes #5`. Every one of those reads as a reference the author
+# never wrote, and all three errors point the same way -- the link gate is
+# SATISFIED and the batching count is INFLATED -- so the guard reports
+# compliance for a body that claims the opposite. `.github/workflows/
+# pr-issue-validation.yml` already carried this guard on its fork-override
+# alternation, with a comment saying why; the widened patterns did not inherit
+# it. A lookbehind rather than a consumed character, so two references can sit
+# adjacent and the group numbering of `_RUN` is untouched.
+_LEFT_EDGE = r"(?<![A-Za-z0-9_-])"
+_CLOSING = re.compile(rf"{_LEFT_EDGE}(?:{_CLOSING_WORDS})\s+{_RUN}", re.IGNORECASE)
+_REFERENCE = re.compile(rf"{_LEFT_EDGE}(?:{_CLOSING_WORDS}|{_MENTION_WORDS})\s+{_RUN}", re.IGNORECASE)
 _SPLIT = re.compile(_SEP_RE, re.IGNORECASE)
 # #17580 AC3: a closing keyword at the START of a line is a deliberate
 # declaration; the same keyword inside a sentence is usually prose. GitHub does
@@ -94,7 +106,17 @@ _SPLIT = re.compile(_SEP_RE, re.IGNORECASE)
 # negation blindness is the platform's and cannot be fixed here, so the only
 # defence is telling the author before the merge. Markdown lead-ins are allowed
 # because `- Closes #1`, `> Closes #1` and `**Closes #1**` are all deliberate.
-_LINE_START_CLOSING = re.compile(rf"^[\s>*_#\-]*(?:{_CLOSING_WORDS})\s+{_RUN}", re.IGNORECASE | re.MULTILINE)
+# A numbered list and a task-list checkbox are line-start declarations too, and
+# the original lead-in class excluded both: digits, `.`, `)`, `[` and `]` are
+# not in it, so `1. Closes #123` and `- [x] Closes #123` were reported as
+# mid-sentence prose. Both are idiomatic in a PR body -- the second is how this
+# repository's own template asks for them -- so the warning fired on exactly the
+# authors who had done it right.
+_MARKDOWN_LEAD = r"[\s>*_#\-]*"
+_LIST_LEAD = rf"(?:(?:\d+[.)]|\[[ xX]\]){_MARKDOWN_LEAD})*"
+_LINE_START_CLOSING = re.compile(
+    rf"^{_MARKDOWN_LEAD}{_LIST_LEAD}(?:{_CLOSING_WORDS})\s+{_RUN}", re.IGNORECASE | re.MULTILINE
+)
 # A reference inside a fenced block or inline code is an EXAMPLE, not a link.
 # Found on this gate's own PR, whose worked examples scored as six extra issues:
 # left in, a PR could satisfy the rule with sample text and never link anything.

@@ -65,12 +65,36 @@ def _checker_keywords() -> set[str]:
     return set(_CLOSING_WORDS.split("|"))
 
 
-def _workflow_keywords() -> set[str]:
-    """The closing keywords in the sibling gate's grep alternation."""
-    line = next(ln for ln in _WORKFLOW.read_text(encoding="utf-8").splitlines() if "grep -iqE" in ln)
-    alternation = re.search(r'grep -iqE "\(([^)]+)\)', line)
-    assert alternation, f"could not find the alternation in: {line.strip()!r}"
-    return {w for w in alternation.group(1).split("|") if w not in {"refs", "references", "part of"}}
+_MENTIONS = {"refs", "references", "part of"}
+
+
+def _workflow_keyword_sets() -> list[tuple[int, set[str]]]:
+    """EVERY closing-keyword alternation in the sibling workflow, with its line.
+
+    This used to be `next(ln for ln in ... if "grep -iqE" in ln)` -- the FIRST
+    such line, which is the link-check near the top of the file. The workflow has
+    a second alternation, the fork-override `keyword_re`, and it sat at three of
+    the nine keywords while the checked one had all nine. So the parity test
+    covering "the two gates cannot disagree" was itself reading a narrower
+    population than the rule it enforced, which is the shape #17580 is about.
+
+    Discovered by asking which alternations exist rather than re-running the one
+    that was already found: re-running confirms the line, never the omission.
+
+    Any parenthesised alternation naming at least one closing keyword counts, so
+    a third one added later is checked without this helper being touched. The
+    reference-shape groups (`(#?[0-9]+|MVA-[0-9]+)`) and the boundary group
+    (`(^|[^[:alnum:]_-])`) are alternations too and are skipped because they name
+    no keyword.
+    """
+    found: list[tuple[int, set[str]]] = []
+    for lineno, line in enumerate(_WORKFLOW.read_text(encoding="utf-8").splitlines(), 1):
+        for group in re.findall(r"\(([^()]+)\)", line):
+            parts = [part.strip() for part in group.split("|")]
+            if len(parts) < 2 or not any(part in GITHUB_CLOSING_KEYWORDS for part in parts):
+                continue
+            found.append((lineno, {part for part in parts if part not in _MENTIONS}))
+    return found
 
 
 @pytest.mark.parametrize("keyword", GITHUB_CLOSING_KEYWORDS)
@@ -95,11 +119,18 @@ def test_both_gates_know_the_same_set():
     Hand-maintained parity is why the divergence from GitHub survived: the two
     files agreed, so there was nothing to notice.
     """
-    assert _workflow_keywords() == _checker_keywords(), (
-        "the two gates disagree about what a closing keyword is — "
-        f"workflow-only: {sorted(_workflow_keywords() - _checker_keywords())}, "
-        f"checker-only: {sorted(_checker_keywords() - _workflow_keywords())}"
+    alternations = _workflow_keyword_sets()
+    assert alternations, (
+        "no closing-keyword alternation found in the workflow at all -- this test "
+        "would pass vacuously, so it fails instead (nothing found != did not look)"
     )
+    expected = _checker_keywords()
+    for lineno, words in alternations:
+        assert words == expected, (
+            f"{_WORKFLOW.name}:{lineno} disagrees with the checker about what a "
+            f"closing keyword is — workflow-only: {sorted(words - expected)}, "
+            f"checker-only: {sorted(expected - words)}"
+        )
 
 
 def test_the_longest_inflection_comes_first_in_each_verb():
@@ -162,12 +193,75 @@ def test_the_warning_reaches_the_author():
 
 @pytest.mark.parametrize(
     "line",
-    ["Closes #123", "- Closes #123", "> Closes #123", "**Closes #123**", "  Fixes #123"],
-    ids=["plain", "bullet", "quote", "bold", "indented"],
+    [
+        "Closes #123",
+        "- Closes #123",
+        "> Closes #123",
+        "**Closes #123**",
+        "  Fixes #123",
+        "1. Closes #123",
+        "2) Fixes #123",
+        "- [x] Closes #123",
+        "- [ ] Resolves #123",
+    ],
+    ids=["plain", "bullet", "quote", "bold", "indented", "numbered", "paren-numbered", "checked", "unchecked"],
 )
 def test_a_deliberate_declaration_is_not_flagged(line):
-    """Every markdown lead-in an author actually uses for a real closing line."""
+    """Every lead-in an author actually uses for a real closing line.
+
+    The last four were reported as mid-sentence prose: the lead-in class held
+    whitespace and markdown punctuation but not digits, `.`, `)`, `[` or `]`.
+    A numbered list and a task-list checkbox are the two most ordinary ways to
+    write a deliberate closing line -- the repository's own PR template asks for
+    the checkbox form -- so the warning fired on the authors who had done it
+    right, which is the failure mode that teaches people to ignore a warning.
+    """
     assert mid_sentence_closings(line) == set()
+
+
+# ---------------------------------------------------------------------------
+# The left word boundary (#17580)
+#
+# Widening the alternation to bare stems (`fix`, `close`, `resolve`) is what
+# turned a missing boundary into a live defect: every one of these bodies
+# matched a closing keyword as a SUBSTRING of an ordinary English word. The
+# direction is what makes it more than a nit -- each one makes the link gate
+# report SATISFIED and inflates the batching count, so the guard certifies a
+# body that says the opposite of what it is credited with. `unresolved #1234`
+# is the worst of them.
+#
+# The fork-override alternation in the workflow already carried this boundary,
+# with a comment explaining it; the widened patterns did not inherit it.
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "body",
+    [
+        "This remains unresolved #1234",
+        "still unfixed #99",
+        "we disclose #5 as an example",
+        "the issue is enclosed #77",
+        "prefixes #12345",
+        "the self-closes #8 case",
+    ],
+    ids=["unresolved", "unfixed", "disclose", "enclosed", "prefixes", "hyphenated"],
+)
+def test_a_keyword_inside_a_word_is_not_a_reference(body):
+    """A keyword must be a word, not a substring of one."""
+    assert closing_issues(body) == set(), (
+        f"{body!r} names no issue -- matching it makes the link gate pass and the "
+        f"batching count rise on a body that references nothing"
+    )
+
+
+@pytest.mark.parametrize(
+    "body",
+    ["Closes #4242", "closes #4242", "(closes #4242)", "- [x] Closes #4242", "See also: fixes #4242"],
+    ids=["plain", "lower", "parenthesised", "checkbox", "after-colon"],
+)
+def test_the_boundary_does_not_cost_a_real_reference(body):
+    """The contrast case: a boundary that also rejected real references would be a
+    worse bug than the one it fixes, so each punctuation lead-in is pinned."""
+    assert closing_issues(body) == {"4242"}
 
 
 def test_the_batching_count_still_includes_a_mid_sentence_closing():
