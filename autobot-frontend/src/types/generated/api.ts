@@ -133837,9 +133837,9 @@ export interface operations {
     };
     get_analytics_report_api_reporting_report_get: {
         parameters: {
-            query?: {
-                /** @description Optional (#17758): scopes the charts section; the rest of the report is global */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -133869,9 +133869,9 @@ export interface operations {
     };
     get_quick_summary_api_reporting_summary_get: {
         parameters: {
-            query?: {
-                /** @description Optional (#17758): scopes the charts section; the rest of the report is global */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
