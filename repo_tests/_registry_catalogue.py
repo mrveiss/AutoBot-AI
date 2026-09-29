@@ -66,23 +66,55 @@ def _string_literal(node: ast.AST | None) -> str | None:
     return None
 
 
-@lru_cache(maxsize=None)
-def catalogue_entries(backend_dir: Path) -> tuple[tuple[str, str], ...]:
-    """``(module_path, prefix)`` for every ``RouterConfig`` the catalogue declares.
+def entries_in_source(source: str, *, origin: str = "<source>") -> tuple[tuple[tuple[str, str], ...], tuple[str, ...]]:
+    """``((module_path, prefix), ...)`` and a description of every entry that could not be read.
+
+    The two are returned together on purpose (review). An earlier version
+    ``continue``d past an entry whose ``module_path`` or ``prefix`` was computed
+    rather than literal, which meant the agreement guard could clear its 20-entry
+    floor **while omitting that router from the comparison**. A floor defends
+    against *zero*; it says nothing about a silently dropped subset, and a
+    catalogue entry a guard cannot compare is a hole, not an absence -- the same
+    shape this guard exists to catch, one level in.
+
+    Callers assert the second element is empty. If a computed entry is ever
+    legitimate it needs an explicit allowlist carrying a reason, not a skip.
 
     Prefixes are right-stripped of ``/`` so both sides of an agreement check are
-    compared in the same coordinates. Entries whose ``module_path`` or ``prefix``
-    is computed rather than literal are skipped -- there are none today, and a
-    guard that silently included a ``None`` would compare against nothing.
+    compared in the same coordinates.
     """
     found: list[tuple[str, str]] = []
+    problems: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "RouterConfig"):
+            continue
+        kwargs = {kw.arg: kw.value for kw in node.keywords}
+        module = _string_literal(kwargs.get("module_path"))
+        prefix = _string_literal(kwargs.get("prefix"))
+        if module is None or prefix is None:
+            missing = [name for name, value in (("module_path", module), ("prefix", prefix)) if value is None]
+            problems.append(f"{origin}:{node.lineno} RouterConfig with non-literal {' and '.join(missing)}")
+            continue
+        found.append((module, prefix.rstrip("/")))
+    return tuple(found), tuple(problems)
+
+
+@lru_cache(maxsize=None)
+def _read_catalogue(backend_dir: Path) -> tuple[tuple[tuple[str, str], ...], tuple[str, ...]]:
+    found: list[tuple[str, str]] = []
+    problems: list[str] = []
     for path in catalogue_files(backend_dir):
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "RouterConfig"):
-                continue
-            kwargs = {kw.arg: kw.value for kw in node.keywords}
-            module = _string_literal(kwargs.get("module_path"))
-            prefix = _string_literal(kwargs.get("prefix"))
-            if module is not None and prefix is not None:
-                found.append((module, prefix.rstrip("/")))
-    return tuple(found)
+        entries, bad = entries_in_source(path.read_text(encoding="utf-8"), origin=path.name)
+        found.extend(entries)
+        problems.extend(bad)
+    return tuple(found), tuple(problems)
+
+
+def catalogue_entries(backend_dir: Path) -> tuple[tuple[str, str], ...]:
+    """Every ``(module_path, prefix)`` the catalogue declares as literals."""
+    return _read_catalogue(backend_dir)[0]
+
+
+def unreadable_catalogue_entries(backend_dir: Path) -> tuple[str, ...]:
+    """Catalogue entries a guard cannot compare. Callers must fail when non-empty."""
+    return _read_catalogue(backend_dir)[1]

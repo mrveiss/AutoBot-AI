@@ -50,7 +50,7 @@ from pathlib import Path
 from typing import Dict, Set, Tuple
 
 from repo_tests._paths import repo_root
-from repo_tests._registry_catalogue import catalogue_entries, catalogue_files
+from repo_tests._registry_catalogue import catalogue_entries, catalogue_files, unreadable_catalogue_entries
 
 from autobot_shared.api_routing.router_prefixes import registry_entries, resolve_registry_targets
 
@@ -111,6 +111,22 @@ def _module_is_importable(module_path: str) -> bool:
 
 
 # --- non-vacuity: the enumerations the assertions below range over ----------
+
+
+def test_every_catalogue_entry_can_actually_be_compared() -> None:
+    """A dropped entry is worse than an empty table, and the floor cannot see it.
+
+    The resolver used to skip a ``RouterConfig`` whose ``module_path`` or
+    ``prefix`` was computed rather than literal. The floor below defends against
+    *zero* entries; it is silent about a subset quietly missing, so this guard
+    could have reported agreement over 30 of 31 routers and called it agreement.
+    An entry that cannot be read is a hole, not an absence (review, #16375).
+    """
+    unreadable = unreadable_catalogue_entries(_BACKEND)
+    assert not unreadable, (
+        "the catalogue declares entries this guard cannot compare, so the agreement "
+        "assertions below would silently omit them:\n  " + "\n  ".join(unreadable)
+    )
 
 
 def test_the_advertised_table_is_read_and_is_not_empty():

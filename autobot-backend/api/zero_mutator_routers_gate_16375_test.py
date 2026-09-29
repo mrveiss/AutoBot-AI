@@ -84,9 +84,16 @@ class TestTheRouterIsGated:
         path = ROUTERS[module_name][1]
         with TestClient(_app(), raise_server_exceptions=False) as client:
             response = client.get(path)
-        assert response.status_code in (401, 403), (
+        # 401, not "401 or 403" (review). `get_current_user` raises
+        # HTTP_401_UNAUTHORIZED on every refusal path in
+        # `api/user_management/dependencies.py` and never 403, so accepting both
+        # would keep passing if the gate stopped meeting the contract this test
+        # is here to state. An authorization failure would be a different defect
+        # and should read as one.
+        assert response.status_code == 401, (
             f"{module_name}{path}: a caller with no resolvable user got "
-            f"{response.status_code} -- before #16375 every route here answered anonymously"
+            f"{response.status_code}, expected 401 -- before #16375 every route here "
+            f"answered anonymously"
         )
 
     def test_an_authenticated_request_passes_the_gate(self, module_name):

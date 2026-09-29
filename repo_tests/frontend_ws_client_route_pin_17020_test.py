@@ -21,7 +21,7 @@ from __future__ import annotations
 import re
 
 from repo_tests._paths import repo_root
-from repo_tests._registry_catalogue import catalogue_entries
+from repo_tests._registry_catalogue import catalogue_entries, entries_in_source
 
 _ROOT = repo_root()
 
@@ -90,10 +90,20 @@ def test_the_route_regex_would_catch_a_removed_or_renamed_route() -> None:
         route_pattern, mutated_route_removed
     ), "the route regex matched text where the route was renamed -- it is not actually pinning anything"
 
-    prefix_pattern = r'module_path="api\.terminal",\s*\n\s*prefix="/api/terminal"'
+    # The control must exercise the reader the LIVE assertion uses (review).
+    # It previously re-tested the `re.search` pattern that the AST reader
+    # replaced, so it proved the dead path still worked and said nothing about
+    # the replacement -- a contrast pair aimed at the code you removed.
     mutated_prefix_changed = (
         'RouterConfig(\n    name="terminal",\n    module_path="api.terminal",\n    prefix="/terminal-v2",\n)'
     )
-    assert not re.search(
-        prefix_pattern, mutated_prefix_changed
-    ), "the prefix regex matched text where the prefix changed -- it is not actually pinning anything"
+    entries, unreadable = entries_in_source(mutated_prefix_changed, origin="<mutated>")
+    assert not unreadable, f"the control's own fixture is unreadable: {unreadable}"
+    assert dict(entries).get("api.terminal") == "/terminal-v2", (
+        "the AST reader did not read the mutated prefix back, so this control is not "
+        "exercising the reader the assertion above depends on"
+    )
+    assert dict(entries).get("api.terminal") != "/api/terminal", (
+        "the reader returned the ORIGINAL prefix for a source that declares a changed one "
+        "-- the live assertion would pass a renamed route"
+    )
