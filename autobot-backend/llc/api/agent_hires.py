@@ -159,7 +159,53 @@ class AgentHireRead(BaseModel):
 #: the registry's prefix-keyed sweep, which is a real gap -- filed separately
 #: rather than fixed here, because renaming twelve live variables is not this
 #: change. A new one joins the visible set.
-DEFAULT_HEARTBEAT_CRON = env_str("AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON", "* * * * *")
+_FALLBACK_HEARTBEAT_CRON = "* * * * *"
+
+
+def _validated_default_cron() -> str:
+    """The configured default cron, or the fallback if it will never fire (#17726 review).
+
+    An unvalidated value here is worse than it looks. It persists into every hire
+    that opts into the heartbeat, and the scheduler's repopulate loop answers a
+    bad cron with ``logger.warning(...); continue`` -- so the agent is stored
+    with ``heartbeat_enabled=true``, is never added to the schedule, and never
+    wakes. One warning line per repopulate is the only evidence.
+
+    That is the failure this change exists to remove, inverted: the whole point
+    of the idle short-circuit is that a wake which finds nothing still leaves a
+    trace. An agent that never wakes at all must not leave less of one.
+
+    So a malformed value is rejected loudly and the operator gets a working
+    default rather than silently dead agents. `croniter` absent is a different
+    case: it means validation is unavailable, not that the value is bad, so the
+    value is accepted and the inability to check is what gets logged.
+    """
+    raw = env_str("AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON", _FALLBACK_HEARTBEAT_CRON)
+    if raw == _FALLBACK_HEARTBEAT_CRON:
+        return raw
+    try:
+        from croniter import croniter
+    except ImportError:
+        logger.warning(
+            "AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON=%r accepted unvalidated: croniter is not installed",
+            raw,
+        )
+        return raw
+    try:
+        croniter(raw)
+    except Exception as exc:
+        logger.error(
+            "AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON=%r is not a valid cron (%s); "
+            "falling back to %r so hired agents are schedulable",
+            raw,
+            exc,
+            _FALLBACK_HEARTBEAT_CRON,
+        )
+        return _FALLBACK_HEARTBEAT_CRON
+    return raw
+
+
+DEFAULT_HEARTBEAT_CRON = _validated_default_cron()
 
 
 class AgentHireRequest(BaseModel):

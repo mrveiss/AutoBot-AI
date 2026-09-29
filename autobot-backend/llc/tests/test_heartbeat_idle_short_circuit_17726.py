@@ -279,3 +279,87 @@ def test_an_explicit_cron_still_wins():
     from llc.api.agent_hires import AgentHireRequest
 
     assert AgentHireRequest(agent_name="CEO", heartbeat_cron="0 * * * *").heartbeat_cron == "0 * * * *"
+
+
+class TestAMisconfiguredCronDoesNotSilentlyUnscheduleAgents:
+    """The inverse of this change's thesis (#17726 review).
+
+    The idle short-circuit exists so a wake that finds nothing still leaves a
+    trace. An agent that never wakes **at all** must not leave less of one --
+    and two paths made exactly that happen.
+    """
+
+    def test_a_malformed_configured_default_falls_back_loudly(self, monkeypatch, caplog):
+        """An unvalidated env value persisted into every opt-in hire.
+
+        The scheduler answers a bad cron with `warning(); continue`, so the agent
+        is stored with `heartbeat_enabled=true`, never enters the schedule and
+        never wakes. One warning per repopulate is the only evidence.
+        """
+        import importlib
+        import logging
+
+        monkeypatch.setenv("AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON", "not a cron at all")
+        with caplog.at_level(logging.ERROR):
+            module = importlib.reload(importlib.import_module("llc.api.agent_hires"))
+
+        assert module.DEFAULT_HEARTBEAT_CRON == "* * * * *", (
+            "a malformed configured default was accepted; every agent hired with "
+            "heartbeat_enabled=true would be stored unschedulable"
+        )
+        # getMessage(), not .message: the latter is the raw format string, so a
+        # naive `in` check tests the template rather than the interpolated value.
+        assert any("not a cron at all" in r.getMessage() for r in caplog.records), (
+            "the rejected value is not named in any log record -- an operator cannot fix " "what the log does not quote"
+        )
+
+        monkeypatch.delenv("AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON", raising=False)
+        importlib.reload(module)
+
+    def test_a_valid_configured_default_is_honoured(self):
+        """The contrast case: validation must not reject working configuration."""
+
+        import llc.api.agent_hires as mod
+
+        assert mod._validated_default_cron() == "* * * * *"
+
+    async def test_one_bad_cron_does_not_unschedule_everyone(self):
+        """`_next_fire` raises RuntimeError with croniter absent, and the loop caught
+        only `(ValueError, KeyError)` -- so it escaped `_repopulate_schedule` and
+        `start()`, which has no handler. One missing dependency took out scheduling
+        for every agent instead of skipping one.
+
+        Pinned here rather than in a comment, because a comment cannot fail when
+        somebody narrows the handler back to be tidy.
+        """
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from llc.scheduler.heartbeat_scheduler import HeartbeatScheduler
+
+        scheduler = HeartbeatScheduler()
+        redis = _make_redis()
+        agents = [
+            {"agent_id": "bad", "heartbeat_cron": "* * * * *"},
+            {"agent_id": "good", "heartbeat_cron": "* * * * *"},
+        ]
+
+        calls = {"n": 0}
+
+        def _fire(cron_expr, now):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("croniter is required for heartbeat scheduling")
+            return now + 60.0
+
+        with (
+            patch.object(scheduler, "_load_enabled_agents", AsyncMock(return_value=agents)),
+            patch.object(scheduler, "_restore_rate_limited_agents", AsyncMock()),
+            patch(f"{_HBS}.get_async_redis_client", AsyncMock(return_value=redis)),
+            patch(f"{_HBS}._next_fire", MagicMock(side_effect=_fire)),
+        ):
+            await scheduler._repopulate_schedule()
+
+        assert calls["n"] == 2, "the loop stopped at the first failure instead of continuing"
+        redis.zadd.assert_awaited()
+        scheduled = redis.zadd.await_args[0][1]
+        assert "good" in scheduled and "bad" not in scheduled

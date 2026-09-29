@@ -176,8 +176,8 @@ class HeartbeatScheduler:
                 continue
             try:
                 next_ts = _next_fire(cron_expr, now)
-            except (ValueError, KeyError) as exc:
-                logger.warning("Invalid cron for agent %s: %s", agent_id, exc)
+            except Exception as exc:  # per-agent; see test_one_bad_cron_does_not_unschedule_everyone
+                logger.warning("Cron unusable for agent %s: %s", agent_id, exc)
                 continue
             mapping[agent_id] = next_ts
 
