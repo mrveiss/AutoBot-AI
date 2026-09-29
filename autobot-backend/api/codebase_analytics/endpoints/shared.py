@@ -74,7 +74,20 @@ async def resolve_source_root(source_id: "str | None") -> "Path | None":
     return None
 
 
-async def resolve_scan_root(source_id: "str | None", use_default: bool = True) -> Path:
+class UnresolvedSourceError(ValueError):
+    """A named ``source_id`` did not resolve to a code source (#17758).
+
+    Raised only under ``resolve_scan_root(..., strict=True)``. Scans pass
+    ``strict=True``; the interactive endpoints do not, because they deliberately
+    want the default-source convenience.
+    """
+
+    def __init__(self, source_id: str) -> None:
+        super().__init__(f"source_id {source_id!r} does not resolve to a code source")
+        self.source_id = source_id
+
+
+async def resolve_scan_root(source_id: "str | None", use_default: bool = True, strict: bool = False) -> Path:
     """Resolve the filesystem root a source-scoped analytics scan must read.
 
     Issue #12330: Several filesystem-scanning analytics endpoints accepted a
@@ -115,6 +128,18 @@ async def resolve_scan_root(source_id: "str | None", use_default: bool = True) -
     source_root = await resolve_source_root(source_id)
     if source_root:
         return source_root
+    if strict and source_id:
+        # #17758: a NAMED source that does not resolve is an error, not a cue to
+        # substitute. `use_default=False` does not cover this -- that flag gates
+        # only the default-source lookup above, while this fallback is reached
+        # whenever `resolve_source_root` returns None: a deleted source, an empty
+        # clone_path, or any exception it swallowed. A background scan has no user
+        # to notice that the result describes AutoBot's tree instead of theirs.
+        #
+        # A source named as NOTHING stays on the dev-checkout path below, because
+        # "you did not say which project" and "you said one that is not there" are
+        # different questions and only the second is a mistake.
+        raise UnresolvedSourceError(source_id)
     return Path(resolve_project_root())
 
 

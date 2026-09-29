@@ -513,7 +513,12 @@ function addWidget() {
 
 function confirmAddWidget(widgetDef: WidgetDefinition) {
   const newWidget: Widget = {
-    id: `widget-${Date.now()}`,
+    // #17020: the same millisecond-resolution id collision fixed in
+    // `useCanvasStore.addCell` this commit. Two widgets added in one tick
+    // shared an id, and the layout, removal and `:key` all address a widget by
+    // it. Fixed with the class rather than left for whichever PR next trips
+    // over it.
+    id: `widget-${crypto.randomUUID()}`,
     type: widgetDef.type,
     title: widgetDef.name,
     x: 0,
