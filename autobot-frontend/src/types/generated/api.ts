@@ -11357,7 +11357,17 @@ export interface paths {
         put?: never;
         /**
          * Voice Speak Api
-         * @description Converts text to speech and plays it.
+         * @description Synthesize *text* and return it as ``audio/wav``.
+         *
+         *     **One implementation, one shape** (#17779). This route used to choose between
+         *     returning WAV bytes and returning ``{"message": ...}`` with no audio at all,
+         *     depending on whether an optional pyttsx3 import had succeeded at boot -- so a
+         *     client could not know which it would get, and on the JSON branch the audio
+         *     played on the *server's* speakers instead of being returned.
+         *
+         *     Synthesis is now unconditional. ``play_locally=true`` additionally speaks on
+         *     the server, reported through the ``X-Server-Playback`` header rather than by
+         *     changing the body, and it cannot be combined with ``stream`` -- see below.
          *
          *     ``stream=true`` returns length-prefixed WAV chunks as they are synthesized
          *     (#13215); omitting it keeps the whole-utterance ``audio/wav`` contract.
@@ -60267,6 +60277,11 @@ export interface components {
              * @default false
              */
             stream: boolean;
+            /**
+             * Play Locally
+             * @default false
+             */
+            play_locally: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -101919,16 +101934,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * VoiceSpeakResponse
-         * @description Response for POST /voice/speak (success path).
-         */
-        VoiceSpeakResponse: {
-            /** Message */
-            message: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * VoiceTranscribeResponse
          * @description Response for POST /voice/transcribe.
          */
@@ -119107,7 +119112,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VoiceSpeakResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
