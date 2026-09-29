@@ -265,9 +265,9 @@ _SERVICE_DEFINITIONS = {
     "tts-worker": ServiceDefinition(
         name="tts-worker",
         service_type=AutoBotServiceType.TTS_WORKER,
-        default_host_env="AUTOBOT_TTS_HOST",
-        default_port_env="AUTOBOT_TTS_PORT",
-        default_host=os.environ.get("AUTOBOT_TTS_HOST", ""),  # noqa: ssot-fallback
+        default_host_env="AUTOBOT_TTS_WORKER_HOST",  # #17782: canonical find-side pair; see
+        default_port_env="AUTOBOT_TTS_WORKER_PORT",  # repo_tests/tts_address_env_names_17782_test
+        default_host=os.environ.get("AUTOBOT_TTS_WORKER_HOST", ""),  # noqa: ssot-fallback
         default_port=8083,  # roles/tts-worker/defaults/main.yml: tts_port
         systemd_service="autobot-tts-worker",
         health_check_type="http",
