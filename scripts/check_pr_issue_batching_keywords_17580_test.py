@@ -310,3 +310,93 @@ def test_a_body_using_only_non_s_keywords_is_reported_as_batched():
         "a body closing three issues with `Fix` must report as batched — "
         "reporting nothing is the defect this issue exists to remove"
     )
+
+
+# ---------------------------------------------------------------------------
+# The colon form (#17580, review)
+#
+# GitHub's documentation: "The keywords can be followed by colons or in
+# uppercase. For example: `Closes: #10`, `CLOSES #10`, or `CLOSES: #10`."
+#
+# Both gates required whitespace IMMEDIATELY after the keyword, so `Fixes: #123`
+# closed the issue on merge while the link gate rejected the PR for having no
+# linkage and the batching count omitted it. That is this file's own subject in
+# the opposite direction from the missing inflections: there the gates saw no
+# reference where GitHub saw one; here they see none where GitHub *closes*.
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("keyword", GITHUB_CLOSING_KEYWORDS)
+def test_the_colon_form_closes_for_every_keyword(keyword):
+    assert closing_issues(f"{keyword.capitalize()}: #12345") == {
+        "12345"
+    }, f"{keyword!r} followed by a colon closes the issue on GitHub; this gate must count it"
+
+
+@pytest.mark.parametrize(
+    "body",
+    ["CLOSES: #10", "- [x] Fixes: #10", "1. Resolves: #10", "> Closed: #10", "**Closes: #10**"],
+    ids=["upper", "checkbox", "numbered", "quote", "bold"],
+)
+def test_the_colon_form_in_the_documented_and_template_shapes(body):
+    """Colon plus whitespace, in the lead-ins authors actually use."""
+    assert closing_issues(body) == {"10"}, f"{body!r} parsed as {closing_issues(body)}"
+
+
+def test_a_colon_with_no_space_before_the_reference_is_a_STATED_gap():
+    """``Closes:#10`` -- GitHub's behaviour for this form is not established.
+
+    Its documentation says the keywords "can be followed by colons" and every
+    example it gives has a space (``Closes: #10``). It does not say whether the
+    space is required, so the pattern keeps ``\\s+`` after the optional colon and
+    this form is rejected.
+
+    Asserted rather than left unwritten, so the choice is visible and a change to
+    it is deliberate. Deliberately NOT written as "either answer is acceptable":
+    the first version of this test asserted ``"10" in closing_issues(body) or
+    closing_issues(body) == set()``, which passes whichever way the gate behaves
+    and therefore records nothing -- the same could-not-fail shape this file's
+    other guards exist to catch.
+    """
+    assert closing_issues("Closes:#10") == set(), (
+        "the gate now accepts a colon with no following whitespace -- if that was deliberate, "
+        "GitHub's behaviour for this form has been established and this test should say so"
+    )
+
+
+@pytest.mark.parametrize(
+    "body",
+    ["This remains unresolved: #1234", "prefixes: #12345", "we disclose: #5", "self-closes: #8"],
+    ids=["unresolved", "prefixes", "disclose", "hyphenated"],
+)
+def test_the_colon_did_not_reopen_the_substring_hole(body):
+    """Adding `:?` must not cost the left boundary. A keyword inside a word is
+    still not a reference, colon or no colon."""
+    assert closing_issues(body) == set(), f"{body!r} names no issue, but the gate read {closing_issues(body)}"
+
+
+# ---------------------------------------------------------------------------
+# Mid-sentence detection counts OCCURRENCES, not issue numbers (#17580, review)
+# ---------------------------------------------------------------------------
+def test_an_issue_both_declared_and_disclaimed_is_still_warned_about():
+    """The set-difference version cancelled this to empty and said nothing.
+
+    A body that declares an issue closed AND says it does not close it is the
+    shape most likely to be a real mistake, and it was the one silently exempt:
+    `closing_issues` and the line-start matcher both contained "42", so their
+    difference was empty.
+    """
+    body = "Closes #42\nThis does not close #42\n"
+    assert mid_sentence_closings(body) == {"42"}, (
+        "an issue that also appears in a deliberate declaration must still be flagged for its "
+        "mid-sentence occurrence -- GitHub closes on both"
+    )
+
+
+def test_the_warning_reaches_the_author_for_a_both_ways_body():
+    ok, message = check("Closes #42\nThis does not close #42\n")
+    del ok
+    assert "42" in message, f"the author was not told about the mid-sentence occurrence: {message!r}"
+
+
+def test_a_body_that_only_declares_is_still_not_flagged():
+    """The contrast: occurrence tracking must not start warning about clean bodies."""
+    assert mid_sentence_closings("Closes #42\n- [x] Fixes #43\n") == set()

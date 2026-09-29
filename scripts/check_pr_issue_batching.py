@@ -95,9 +95,18 @@ _RUN = rf"({_ONE_REF}(?:{_SEP_RE}{_ONE_REF})*)"
 # alternation, with a comment saying why; the widened patterns did not inherit
 # it. A lookbehind rather than a consumed character, so two references can sit
 # adjacent and the group numbering of `_RUN` is untouched.
+# GitHub accepts a colon after the keyword. Its own documentation: "The keywords
+# can be followed by colons or in uppercase. For example: `Closes: #10`,
+# `CLOSES #10`, or `CLOSES: #10`." Both gates required whitespace IMMEDIATELY
+# after the keyword, so `Fixes: #123` closed the issue on merge while the link
+# gate rejected the PR for having no linkage and the batching count omitted it
+# (#17580, review). Same divergence this file exists to remove, in the other
+# direction from the missing-inflections one: there the gate saw no reference
+# where GitHub saw one, here it sees none where GitHub closes.
+_COLON = r":?"
 _LEFT_EDGE = r"(?<![A-Za-z0-9_-])"
-_CLOSING = re.compile(rf"{_LEFT_EDGE}(?:{_CLOSING_WORDS})\s+{_RUN}", re.IGNORECASE)
-_REFERENCE = re.compile(rf"{_LEFT_EDGE}(?:{_CLOSING_WORDS}|{_MENTION_WORDS})\s+{_RUN}", re.IGNORECASE)
+_CLOSING = re.compile(rf"{_LEFT_EDGE}(?:{_CLOSING_WORDS}){_COLON}\s+{_RUN}", re.IGNORECASE)
+_REFERENCE = re.compile(rf"{_LEFT_EDGE}(?:{_CLOSING_WORDS}|{_MENTION_WORDS}){_COLON}\s+{_RUN}", re.IGNORECASE)
 _SPLIT = re.compile(_SEP_RE, re.IGNORECASE)
 # #17580 AC3: a closing keyword at the START of a line is a deliberate
 # declaration; the same keyword inside a sentence is usually prose. GitHub does
@@ -115,7 +124,7 @@ _SPLIT = re.compile(_SEP_RE, re.IGNORECASE)
 _MARKDOWN_LEAD = r"[\s>*_#\-]*"
 _LIST_LEAD = rf"(?:(?:\d+[.)]|\[[ xX]\]){_MARKDOWN_LEAD})*"
 _LINE_START_CLOSING = re.compile(
-    rf"^{_MARKDOWN_LEAD}{_LIST_LEAD}(?:{_CLOSING_WORDS})\s+{_RUN}", re.IGNORECASE | re.MULTILINE
+    rf"^{_MARKDOWN_LEAD}{_LIST_LEAD}(?:{_CLOSING_WORDS}){_COLON}\s+{_RUN}", re.IGNORECASE | re.MULTILINE
 )
 # A reference inside a fenced block or inline code is an EXAMPLE, not a link.
 # Found on this gate's own PR, whose worked examples scored as six extra issues:
@@ -212,7 +221,28 @@ def mid_sentence_closings(body: str) -> set[str]:
     deliberately not subtracted from :func:`closing_issues`, because GitHub does
     close them and the batching count must reflect the platform.
     """
-    return closing_issues(body) - _issues_under(body, _LINE_START_CLOSING)
+    text = _FENCE.sub(" ", body or "")
+    # Occurrences, not sets (review). This was
+    # `closing_issues(body) - _issues_under(body, _LINE_START_CLOSING)`, so a body
+    # containing BOTH "Closes #42" and "this does not close #42" cancelled to the
+    # empty set and the author was never warned -- the one shape most likely to be
+    # a real mistake, silently exempt because the same number also appeared in a
+    # deliberate declaration.
+    #
+    # Both patterns capture the reference run as group 1, so `start(1)` is the same
+    # offset for the same occurrence under either. An occurrence whose run is not
+    # at a declared line start is mid-sentence, whatever else the body says about
+    # that issue.
+    declared_at = {match.start(1) for match in _LINE_START_CLOSING.finditer(text)}
+    risky: set[str] = set()
+    for match in _CLOSING.finditer(text):
+        if match.start(1) in declared_at:
+            continue
+        for ref in _SPLIT.split(match.group(1)):
+            ref = ref.strip().lstrip("#")
+            if ref:
+                risky.add(ref.upper() if ref.upper().startswith("MVA-") else ref)
+    return risky
 
 
 # #16104: an ATX heading is 1-6 `#` followed by a space, a tab, or end of line.
