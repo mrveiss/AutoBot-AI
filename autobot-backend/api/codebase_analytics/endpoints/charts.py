@@ -13,6 +13,7 @@ from typing import Dict
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from api.codebase_analytics.source_scope import SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from utils.chromadb_client import get_all_paginated
@@ -48,15 +49,15 @@ def _try_chromadb_aggregation(
         return 0, False
 
     try:
-        if source_id:
-            where_filter = {
-                "$and": [
-                    {"type": "problem"},
-                    {"source_id": source_id},
-                ]
-            }
-        else:
-            where_filter = {"type": "problem"}
+        # #17758: no unscoped branch. The else-arm queried problems across every
+        # indexed source, which the frontend never triggered only because it
+        # always sends source_id -- any other caller omitting it got the leak.
+        where_filter = {
+            "$and": [
+                {"type": "problem"},
+                {"source_id": require_source_id(source_id, "chart where-filter")},
+            ]
+        }
         results = get_all_paginated(code_collection, where=where_filter, include=["metadatas"])
         total = 0
         for metadata in results.get("metadatas", []):
@@ -169,8 +170,9 @@ async def _aggregate_from_redis(
 
     def _scan_and_aggregate():
         # Issue #561: Collect all keys first, then batch fetch with pipeline
-        # Issue #1772: Scope to source_id when provided
-        key_prefix = f"codebase:{source_id}" if source_id else "codebase"
+        # #17758: #1772 scoped this "when provided"; the else-arm read the
+        # unscoped keys, which every project's aggregation then shared.
+        key_prefix = f"codebase:{require_source_id(source_id, 'chart Redis key')}"
         keys = list(redis_client.scan_iter(match=f"{key_prefix}:problems:*"))
         if not keys:
             return 0
@@ -277,7 +279,7 @@ async def _get_redis_fallback_chart_data(
     error_code_prefix="CODEBASE",
 )
 async def get_chart_data(
-    source_id: str | None = None,
+    source_id: SourceIdQuery,
 ):
     """
     Get aggregated data for analytics charts.

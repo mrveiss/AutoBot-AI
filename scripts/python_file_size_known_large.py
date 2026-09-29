@@ -76,17 +76,16 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/batch_jobs.py": 964,
     "autobot-backend/api/browser_mcp.py": 1340,
     "autobot-backend/api/cache_management.py": 779,
-    "autobot-backend/api/canvas.py": 637,
     "autobot-backend/api/chat.py": 2778,
     "autobot-backend/api/chat_sessions.py": 1953,
     "autobot-backend/api/code_intelligence.py": 2156,
     "autobot-backend/api/code_search.py": 924,
     "autobot-backend/api/codebase_analytics/analyzers.py": 1684,
     "autobot-backend/api/codebase_analytics/api_endpoint_scanner.py": 1444,
-    "autobot-backend/api/codebase_analytics/chromadb_storage.py": 1470,
+    "autobot-backend/api/codebase_analytics/chromadb_storage.py": 1461,  # #17758: policy centralised in source_scope.py
     "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1326,
-    "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 799,
-    "autobot-backend/api/codebase_analytics/endpoints/duplicates.py": 668,
+    "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 757,
+    "autobot-backend/api/codebase_analytics/endpoints/duplicates.py": 661,  # #17758: triplicated cached body collapsed
     "autobot-backend/api/codebase_analytics/endpoints/environment.py": 694,
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 827,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2267,
@@ -251,7 +250,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/api/roles.py": 741,
     "autobot-backend/llc/api/sprints.py": 1223,
     "autobot-backend/llc/api/work_items.py": 1416,
-    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1078,  # #16974: flag-gated org-role-bound enforcement wrap
+    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1053,  # #17726: replay recording extracted
     "autobot-backend/llc/services/portability.py": 936,
     "autobot-backend/llc/services/template.py": 643,
     "autobot-backend/llc/services/work_item_service.py": 1100,

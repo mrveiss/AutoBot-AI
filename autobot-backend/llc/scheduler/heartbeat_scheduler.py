@@ -41,7 +41,7 @@ except ImportError:
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.env_utils import env_float
+from autobot_shared.env_utils import env_float, env_float_clamped
 from autobot_shared.feature_flags import is_feature_enabled
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
@@ -63,7 +63,12 @@ from ..org_role_authority import apply_org_role_bound
 from ..services.api_key import ApiKeyService
 from ..services.budget import BudgetService
 from ..services.controls_service import ControlsService
-from ..services.replay_service import RunReplayService, parse_jsonl_events
+from ..services.work_item_queue import has_pending_work
+
+# Aliased to the name `_run_adapter` already calls (#17726). Renaming the call
+# site would put that unrelated 82-line function in scope for the function-length
+# guard, and refactoring it is not this change.
+from .replay_recording import record_run_for_replay as _record_run_for_replay
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +87,15 @@ _ADAPTER_MAX_WAIT_SECONDS = env_float("LLC_ADAPTER_MAX_WAIT_SECONDS", 7200.0)
 # Ephemeral run-key TTL backstop — must exceed the max wait so a key never
 # expires mid-run; revocation still happens promptly when the run finishes.
 _RUN_KEY_TTL_SECONDS = env_float("LLC_RUN_KEY_TTL_SECONDS", _ADAPTER_MAX_WAIT_SECONDS + 600.0)
+
+#: #17726: a short-circuited wake writes no run row, so these two keys are the
+#: only evidence it happened. Without them "the queue was empty" and "the
+#: scheduler is dead" are the same observation. Retained long enough that a
+#: human investigating a quiet agent can still see its last wake; a hash field
+#: cannot expire on its own, so the TTL is set on the whole key each write.
+#: One key PER AGENT: EXPIRE covers a whole key, so a shared hash outlives its TTL (review).
+_IDLE_WAKE_KEY_PREFIX = "llc:heartbeat:idle:"
+_IDLE_WAKE_TTL_SECONDS = env_float_clamped("AUTOBOT_LLC_HEARTBEAT_IDLE_WAKE_TTL_SECONDS", 604800.0, min_v=60.0)
 
 
 class HeartbeatScheduler:
@@ -162,8 +176,8 @@ class HeartbeatScheduler:
                 continue
             try:
                 next_ts = _next_fire(cron_expr, now)
-            except (ValueError, KeyError) as exc:
-                logger.warning("Invalid cron for agent %s: %s", agent_id, exc)
+            except Exception as exc:  # per-agent; see test_one_bad_cron_does_not_unschedule_everyone
+                logger.warning("Cron unusable for agent %s: %s", agent_id, exc)
                 continue
             mapping[agent_id] = next_ts
 
@@ -286,6 +300,15 @@ class HeartbeatScheduler:
             # Check for an active rate-limited run to resume.
             rate_limited_run = await self._find_rate_limited_run(session, agent_id)
 
+            # #17726: a wake with nothing to do must not cost a run row, an
+            # adapter call or a model invocation. A rate-limited run is resumed
+            # regardless: it already holds a checked-out item, so its work
+            # exists by definition and the queue has nothing to say about it.
+            if rate_limited_run is None and not await self._has_pending_work(session, agent):
+                await self._record_idle_wake(agent_id, redis)
+                await self._reschedule(agent_id, cron_expr, redis)
+                return
+
             if rate_limited_run is not None:
                 run = rate_limited_run
                 context = run.context_snapshot or {}
@@ -342,6 +365,16 @@ class HeartbeatScheduler:
         self._tasks.add(t)
         t.add_done_callback(self._tasks.discard)
 
+        await self._reschedule(agent_id, cron_expr, redis, run_id=run.id)
+
+    async def _reschedule(self, agent_id: str, cron_expr: str, redis: Any, *, run_id: Any = None) -> None:
+        """Advance this agent's sorted-set score to its next fire time.
+
+        Shared by the dispatch path and #17726's short-circuit. A second copy in
+        the short-circuit would be a second place for the invalid-cron handling
+        to drift, and the consequence of that drift is an agent that stops
+        waking with nothing anywhere saying why.
+        """
         now = datetime.now(tz=timezone.utc).timestamp()
         try:
             next_ts = _next_fire(cron_expr, now)
@@ -350,12 +383,54 @@ class HeartbeatScheduler:
             await redis.zrem(_SCHEDULE_KEY, agent_id)
             return
         await redis.zadd(_SCHEDULE_KEY, {agent_id: next_ts})
-        logger.debug(
-            "Dispatched heartbeat for agent=%s run=%s next=%.0f",
-            agent_id,
-            run.id,
-            next_ts,
-        )
+        logger.debug("Heartbeat scheduled agent=%s run=%s next=%.0f", agent_id, run_id, next_ts)
+
+    async def _has_pending_work(self, session: AsyncSession, agent: Dict[str, Any]) -> bool:
+        """Whether a checkout would find anything for this agent (#17726).
+
+        **Returns True when it cannot tell.** An agent with no ``company_id``
+        reaches ``_create_run``, which raises ``ValueError`` and is handled on
+        the dispatch path; answering "no work" here would swallow that and
+        silently stop waking an agent whose configuration is broken. The
+        short-circuit exists to avoid spend on a *known*-empty queue, so
+        anything short of a definite empty answer keeps the old behaviour --
+        a wrong True costs one wake that finds nothing, a wrong False drops work.
+        """
+        company_id = agent.get("company_id")
+        node_id = agent.get("agent_node_id")
+        if not company_id or not node_id:
+            return True
+        try:
+            return await has_pending_work(session, str(node_id), str(company_id))
+        except Exception:
+            logger.exception(
+                "Pending-work check failed for agent %s — dispatching as before",
+                agent.get("agent_id"),
+            )
+            return True
+
+    async def _record_idle_wake(self, agent_id: str, redis: Any) -> None:
+        """Leave evidence that a wake happened and found nothing (#17726).
+
+        The AC this satisfies is *distinguishable from a wake that never
+        happened*: with no run row, silence means both. A counter and a
+        timestamp per agent are the cheapest pair that separates them --
+        ``last_idle_wake_at`` answers "is it alive" and the count answers "how
+        much of its cadence is finding nothing", which is what tells an operator
+        the cadence is wrong. Deliberately not a log line per wake: at a
+        one-minute cron that is 1,440 lines a day per agent saying nothing
+        happened, and the ruling asked for no log noise.
+
+        Never raises into the caller. A bookkeeping failure must not turn a free
+        wake into a skipped schedule advance.
+        """
+        try:
+            key = f"{_IDLE_WAKE_KEY_PREFIX}{agent_id}"
+            await redis.hincrby(key, "count", 1)
+            await redis.hset(key, "at", datetime.now(tz=timezone.utc).isoformat())
+            await redis.expire(key, int(_IDLE_WAKE_TTL_SECONDS))
+        except Exception:
+            logger.warning("Could not record idle wake for agent %s", agent_id, exc_info=True)
 
     async def _find_rate_limited_run(self, session: AsyncSession, agent_id: str) -> Optional[LLCHeartbeatRun]:
         """Return the most recent ``rate_limited`` run for *agent_id*, or None."""
@@ -435,7 +510,7 @@ class HeartbeatScheduler:
         query = """
             SELECT aon.agent_id, aon.name, aon.heartbeat_cron, aon.heartbeat_enabled,
                    aon.adapter_type, aon.adapter_config, aon.context_mode,
-                   aon.company_id
+                   aon.company_id, aon.id AS agent_node_id
             FROM agent_org_nodes aon
             WHERE aon.agent_id = :agent_id
         """
@@ -723,106 +798,6 @@ def get_heartbeat_scheduler() -> HeartbeatScheduler:
 # ------------------------------------------------------------------
 # Module-level helpers
 # ------------------------------------------------------------------
-
-
-def _resolve_adapter_output_file(
-    adapter_type: str, output_dir: str, agent_id: str, external_run_id: str
-) -> Optional[str]:
-    """Locate the transcript an adapter run actually wrote (#13614, #14760).
-
-    Delegates to the adapters package, which resolves the path helpers from the
-    adapter registered under *adapter_type* rather than importing one family's
-    helpers directly. The previous version imported `claude_code_adapter`'s pair
-    unconditionally, so the copilot adapters — which name their files
-    `llc_copilot_*` rather than `llc_agent_*` — missed on both the state-file
-    lookup and the recomputed fallback, every time. The function was generic in
-    name only (#14760).
-    """
-    try:
-        from ..adapters.subprocess_base import resolve_transcript_path
-    except ImportError:
-        # Losing the helpers is a wiring fault, not an absent transcript. The
-        # caller cannot tell those apart from a None, so say which it was.
-        logger.exception(
-            "Could not import adapter path helpers — replay transcript resolution is disabled for run %s",
-            external_run_id,
-        )
-        return None
-
-    return resolve_transcript_path(adapter_type, output_dir, agent_id, external_run_id)
-
-
-async def _record_run_for_replay(
-    agent: Dict[str, Any],
-    run_id: uuid.UUID,
-    context: Dict[str, Any],
-    final_status: str,
-    *,
-    external_run_id: Optional[str] = None,
-) -> None:
-    """Best-effort replay recording fired after a run reaches terminal status (GH#9034).
-
-    For subprocess adapters the JSONL output file is resolved via the adapter's
-    ``_output_path`` helper using the exact ``external_run_id`` returned by
-    ``adapter.invoke`` — no mtime glob, no concurrent-run collision (H1 fix).
-    For in-process agents there is no file; recorded_events is stored as None.
-    Any exception is swallowed so the scheduler is never blocked.
-    """
-    import asyncio as _asyncio
-    import os as _os
-
-    try:
-        output_text: Optional[str] = None
-        recorded_events = None
-
-        adapter_type = agent.get("adapter_type") or "autobot_agent"
-        if adapter_type != "autobot_agent" and external_run_id is not None:
-            # Resolve the exact output file via the adapter's own path helper.
-            cfg = agent.get("adapter_config") or {}
-            output_dir: str = cfg.get("output_dir", "/tmp")  # nosec B108
-            agent_id_str = str(agent.get("agent_id", ""))
-            output_file: Optional[str] = _resolve_adapter_output_file(
-                adapter_type, output_dir, agent_id_str, external_run_id
-            )
-
-            if output_file and _os.path.exists(output_file):
-                try:
-                    raw: str = await _asyncio.to_thread(_read_file_text, output_file)
-                    from ..services.replay_service import _REPLAY_OUTPUT_CAP
-
-                    output_text = raw[-_REPLAY_OUTPUT_CAP:] if len(raw) > _REPLAY_OUTPUT_CAP else raw
-                    recorded_events = parse_jsonl_events(raw)
-                except OSError:
-                    logger.warning(
-                        "Could not read transcript for replay (run_id: %s) — recording the run without output",
-                        run_id,
-                    )
-            elif output_file:
-                # A configured transcript path that does not exist is currently
-                # indistinguishable from an empty transcript: the replay record is
-                # written either way, with no output and no trace of why.
-                logger.warning(
-                    "Transcript file for replay does not exist (run_id: %s) — recording the run without output",
-                    run_id,
-                )
-
-        svc = RunReplayService()
-        await svc.record_run(
-            run_id=run_id,
-            agent=agent,
-            context=context,
-            final_status=final_status,
-            output_text=output_text,
-            recorded_events=recorded_events,
-        )
-    except Exception:
-        logger.exception("_record_run_for_replay: unexpected error for run %s", run_id)
-
-
-def _read_file_text(path: str) -> str:
-    """Read a file as text — runs in a thread via asyncio.to_thread (M4)."""
-    with open(path, encoding="utf-8", errors="replace") as fh:
-        return fh.read()
 
 
 def _next_fire(cron_expr: str, base_ts: float) -> float:
