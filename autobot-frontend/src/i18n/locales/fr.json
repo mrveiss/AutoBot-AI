@@ -9515,7 +9515,8 @@
       "collectionIdPlaceholder": "ID de collection",
       "pushing": "Envoi…",
       "confirm": "Confirmer",
-      "pushFailed": "Impossible d'ajouter cet enregistrement à la base de connaissances. Veuillez réessayer."
+      "pushFailed": "Impossible d'ajouter cet enregistrement à la base de connaissances. Veuillez réessayer.",
+      "collectionNotJoined": "Enregistré, mais la collection indiquée est introuvable — la transcription est dans la base de connaissances et non dans cette collection."
     }
   }
 }
