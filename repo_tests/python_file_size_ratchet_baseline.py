@@ -87,10 +87,10 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/code_search.py": 924,
     "autobot-backend/api/codebase_analytics/analyzers.py": 1684,
     "autobot-backend/api/codebase_analytics/api_endpoint_scanner.py": 1444,
-    "autobot-backend/api/codebase_analytics/chromadb_storage.py": 1470,
+    "autobot-backend/api/codebase_analytics/chromadb_storage.py": 1461,  # #17758: policy centralised in source_scope.py
     "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1326,
     "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 757,
-    "autobot-backend/api/codebase_analytics/endpoints/duplicates.py": 668,
+    "autobot-backend/api/codebase_analytics/endpoints/duplicates.py": 661,  # #17758: triplicated cached body collapsed
     "autobot-backend/api/codebase_analytics/endpoints/environment.py": 694,
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 827,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2267,
@@ -213,7 +213,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/events/stream_manager.py": 654,
     "autobot-backend/events/types.py": 885,
     "autobot-backend/hardware_acceleration.py": 609,
-    "autobot-backend/initialization/lifespan.py": 2357,
+    "autobot-backend/initialization/lifespan.py": 2340,
     "autobot-backend/initialization/router_registry/feature_routers.py": 779,
     "autobot-backend/integrations/cloud_integration.py": 630,
     "autobot-backend/integrations/communication_integration.py": 605,
@@ -255,7 +255,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/llc/api/roles.py": 741,
     "autobot-backend/llc/api/sprints.py": 1223,
     "autobot-backend/llc/api/work_items.py": 1416,
-    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1078,  # #16974: flag-gated org-role-bound enforcement wrap
+    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1053,  # #17726: replay recording extracted
     "autobot-backend/llc/services/portability.py": 936,
     "autobot-backend/llc/services/template.py": 643,
     "autobot-backend/llc/services/work_item_service.py": 1100,
