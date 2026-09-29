@@ -234,6 +234,42 @@ async def _authorize_resource_channel(channel: str, user_payload: dict) -> bool:
     return False
 
 
+async def _authorize_canvas_channel(channel: str, user_payload: dict) -> bool:
+    """Authorize a ``canvas:{id}`` subscription against the canvas's owner (#17020).
+
+    The same rule ``api/canvas.py`` applies to every REST route on the resource:
+    ``canvas.user_id == caller``. Asked here rather than re-derived, so the
+    socket and the REST surface cannot drift into disagreeing about who may see
+    a canvas.
+
+    Fails closed, per the doctrine's channel-authorization rule: an unknown
+    canvas id, an unreadable store, or a raising lookup is a denial and not an
+    absence of restriction. Admins bypass, as they do on the other prefixes.
+    """
+    if _is_admin(user_payload):
+        return True
+    user_id = str(user_payload.get("user_id") or user_payload.get("username") or "")
+    if not user_id:
+        return False
+    _, _, ident = channel.partition(":")
+    if not ident:
+        return False
+    try:
+        from sqlalchemy import select
+
+        from canvas.models import Canvas
+        from user_management.database import get_async_session_factory
+
+        async with get_async_session_factory()() as session:
+            canvas = (await session.execute(select(Canvas).where(Canvas.id == ident))).scalar_one_or_none()
+            if canvas is None:
+                return False
+            return str(canvas.user_id) == user_id
+    except Exception:
+        logger.exception("Canvas channel authorization failed for %s", channel)
+        return False
+
+
 async def _authorize_channel(channel: str, user_payload: dict | None) -> bool:
     """Single authorization rule for a channel, shared by subscribe and command.
 
@@ -256,6 +292,8 @@ async def _authorize_channel(channel: str, user_payload: dict | None) -> bool:
         return await _authorize_conversation_channel(channel, user_payload)
     if channel.startswith("workflow:") or channel.startswith("heartbeat:") or channel.startswith("task:"):
         return await _authorize_resource_channel(channel, user_payload)
+    if channel.startswith("canvas:"):
+        return await _authorize_canvas_channel(channel, user_payload)
     # ``global`` is the shared broadcast channel: every authenticated client is
     # meant to see it, so nothing tenant-scoped may be published to it.
     #

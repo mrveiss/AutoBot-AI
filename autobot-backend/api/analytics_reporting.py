@@ -16,15 +16,17 @@ Provides a single endpoint that aggregates all analytics data from:
 from typing import Any, Dict
 
 import aiohttp
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
+from api.codebase_analytics.source_scope import SourceIdQuery
 from api.schemas_analytics import (
     AnalyticsReportingReportResponse,
     AnalyticsReportingSummaryResponse,
     AnalyticsReportingTrendsResponse,
 )
 from api.schemas_common import DataResponse
+from api.user_management.dependencies import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
@@ -33,7 +35,10 @@ from code_intelligence.shared.scoring import get_grade_from_score
 
 logger = get_logger(__name__)
 # Issue #3355: prefix moved to router registry (analytics_routers.py)
-router = APIRouter(tags=["analytics"])
+# #16375: every route here was reachable anonymously. Gated at the ROUTER so a
+# route added later inherits it. Authentication only:
+# read-only reports any signed-in user may see.
+router = APIRouter(tags=["analytics"], dependencies=[Depends(get_current_user)])
 
 
 async def fetch_quality_health() -> Dict[str, Any]:
@@ -58,8 +63,39 @@ async def fetch_quality_health() -> Dict[str, Any]:
         return {"overall": 0, "grade": "N/A", "breakdown": {}}
 
 
-async def fetch_codebase_charts() -> Dict[str, Any]:
-    """Fetch codebase analytics chart data via HTTP."""
+#: #17758: `charts_available` is the difference between "this project is clean"
+#: and "nobody said which project". Without it, empty `severity_counts` sums to
+#: ZERO ISSUES and `calculate_composite_health_score` awards the full 30% issues
+#: component -- the report then calls a project healthy that it never examined.
+#: An empty panel is a blank space; an empty panel fed to a scorer is a claim.
+_EMPTY_CHARTS = {
+    "chart_data": {"problem_types": [], "severity_counts": [], "top_files": []},
+    "charts_available": False,
+}
+
+
+async def fetch_codebase_charts(source_id: "str | None" = None) -> Dict[str, Any]:
+    """Fetch codebase analytics chart data via HTTP, for ONE source (#17758).
+
+    The charts route requires a ``source_id`` now, because serving one project's
+    problem aggregate as another's was the leak #17758 reported. This helper
+    therefore has to say which project it is asking about.
+
+    With no ``source_id`` it does not call at all. The alternative -- resolving a
+    default source -- would put "some project's data" back into a report that
+    does not name a project, which is the defect one layer up. The empty shape
+    it returns instead is the same one the non-200 path already returned, so the
+    report renders exactly as it does today when no source is selected.
+
+    That empty shape is itself unsatisfying: an empty chart reads as "this
+    project has no problems" rather than "nobody said which project". It is the
+    pre-existing degraded contract and widening it means changing the response
+    model, so it is recorded on #17764 rather than changed here.
+    """
+    if not source_id:
+        logger.info("codebase charts skipped: no source_id to scope the request (#17758)")
+        return dict(_EMPTY_CHARTS)
+
     try:
         import aiohttp
 
@@ -70,22 +106,17 @@ async def fetch_codebase_charts() -> Dict[str, Any]:
         http_client = get_http_client()
         async with await http_client.get(
             f"{backend_url}/api/analytics/codebase/analytics/charts",
+            params={"source_id": source_id},
             timeout=aiohttp.ClientTimeout(total=10),
         ) as response:
             if response.status == 200:
-                return await response.json()
+                return {**(await response.json()), "charts_available": True}
             else:
                 logger.warning("Charts endpoint returned %s", response.status)
-                return {
-                    "chart_data": {
-                        "problem_types": [],
-                        "severity_counts": [],
-                        "top_files": [],
-                    }
-                }
+                return dict(_EMPTY_CHARTS)
     except Exception as e:
         logger.warning("Failed to fetch codebase charts: %s", e)
-        return {"chart_data": {"problem_types": [], "severity_counts": [], "top_files": []}}
+        return dict(_EMPTY_CHARTS)
 
 
 async def fetch_debt_summary() -> Dict[str, Any]:
@@ -155,14 +186,24 @@ def calculate_composite_health_score(
     quality_score = quality_data.get("overall", 0)
     quality_component = quality_score * 0.4
 
-    # Issues impact component (30%)
+    # Issues impact component (30%) -- only when the charts were actually read.
+    #
+    # #17758: an unavailable charts section arrives as empty `severity_counts`,
+    # which sums to zero issues and scores 100 -- a full 30% awarded for a
+    # measurement that never happened. Unknown is not zero, and here the
+    # difference is the report calling a project healthy without examining it.
+    #
+    # Unknown components are DROPPED and the remaining weights renormalised,
+    # rather than scored 0 (which punishes a project for a failed fetch) or 100
+    # (the defect). The number then means "computed from what was measured".
+    charts_available = charts_data.get("charts_available", True)
     chart_data = charts_data.get("chart_data", {})
     severity_counts = chart_data.get("severity_counts", [])
 
     total_issues = sum(s.get("count", 0) for s in severity_counts)
     # Normalize: 0 issues = 100, 1000+ issues = 0
     issues_score = max(0, 100 - (total_issues / 10))
-    issues_component = issues_score * 0.3
+    issues_component = issues_score * 0.3 if charts_available else 0.0
 
     # Technical debt component (15%)
     debt_summary = debt_data.get("summary", {})
@@ -178,7 +219,9 @@ def calculate_composite_health_score(
         perf_score = quality_data.get("breakdown", {}).get("performance", 70)
     perf_component = perf_score * 0.15
 
-    return round(quality_component + issues_component + debt_component + perf_component, 1)
+    total = quality_component + issues_component + debt_component + perf_component
+    weight_measured = 0.4 + 0.15 + 0.15 + (0.3 if charts_available else 0.0)
+    return round(total / weight_measured, 1)
 
 
 def _get_problem_category_mapping() -> list:
@@ -282,7 +325,9 @@ def _build_report_response(
     operation="get_analytics_report",
     error_code_prefix="ANALYTICS_REPORTING",
 )
-async def get_analytics_report():
+async def get_analytics_report(
+    source_id: SourceIdQuery,
+):
     """
     Get aggregated analytics report from all analytics sources.
 
@@ -299,7 +344,7 @@ async def get_analytics_report():
     # Fetch all data sources in parallel
     quality_data, charts_data, debt_data, performance_data = await asyncio.gather(
         fetch_quality_health(),
-        fetch_codebase_charts(),
+        fetch_codebase_charts(source_id),
         fetch_debt_summary(),
         fetch_performance_summary(),
     )
@@ -318,7 +363,9 @@ async def get_analytics_report():
     operation="get_quick_summary",
     error_code_prefix="ANALYTICS_REPORTING",
 )
-async def get_quick_summary():
+async def get_quick_summary(
+    source_id: SourceIdQuery,
+):
     """
     Get a quick summary of code health.
 
@@ -329,7 +376,7 @@ async def get_quick_summary():
     # Fetch essential data
     quality_data, charts_data = await asyncio.gather(
         fetch_quality_health(),
-        fetch_codebase_charts(),
+        fetch_codebase_charts(source_id),
     )
 
     chart_data = charts_data.get("chart_data", {})

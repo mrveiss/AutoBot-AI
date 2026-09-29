@@ -67,3 +67,41 @@ env_registry.register_env_var(
         component="orchestrator",
     )
 )
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON",
+        type=str,
+        default="* * * * *",
+        description=(
+            "Cron a hired LLC agent wakes on when the hire request does not name one "
+            "(#15907, owner ruling 2026-09-28). The scheduler's gate is "
+            "heartbeat_enabled = true AND heartbeat_cron IS NOT NULL, and this field "
+            "previously defaulted to NULL, so an agent hired with the flag set and no "
+            "cron was never scheduled -- the flag said yes and the column the "
+            "scheduler reads said nothing. One minute is affordable because #17726's "
+            "idle short-circuit returns before creating a run when the agent's queue "
+            "is empty; without that it would be 1,440 full invocations per agent per "
+            "day. heartbeat_enabled still defaults false, so a cadence is not an opt-in."
+        ),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_HEARTBEAT_IDLE_WAKE_TTL_SECONDS",
+        type=float,
+        default=604800.0,
+        description=(
+            "How long the per-agent idle-wake counter and last-idle-wake timestamp are "
+            "kept in Redis (#17726). A short-circuited wake writes no llc_heartbeat_runs "
+            "row, so these two keys are the only evidence it happened -- without them "
+            "'the queue was empty' and 'the scheduler is dead' are the same observation. "
+            "A week outlasts any plausible investigation into a quiet agent. A Redis hash "
+            "field cannot expire on its own, so the TTL is reapplied to the whole key on "
+            "each write."
+        ),
+        component="orchestrator",
+    )
+)

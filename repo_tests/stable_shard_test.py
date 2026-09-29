@@ -10,6 +10,7 @@ and quoted.
 """
 
 import json
+from pathlib import Path
 
 import pytest
 from repo_tests.stable_shard import (
@@ -222,13 +223,68 @@ class TestDurationsFileHandling:
         bad.write_text("{not json", encoding="utf-8")
         assert load_module_weights(bad) == {}
 
-    def test_weights_count_tests_per_module(self, tmp_path):
+    def test_weights_sum_recorded_milliseconds_per_module(self, tmp_path):
+        """Seconds, not test count (#17787).
+
+        The two disagree in exactly the way that mattered: `a_test.py` has TWICE
+        the tests of `b_test.py` and the SAME recorded time, so a count-based
+        weight would send twice as much load to a shard for no extra cost.
+        """
         path = tmp_path / "d.json"
         path.write_text(
             json.dumps({"a_test.py::test_x": 0.1, "a_test.py::test_y": 0.2, "b_test.py::test_z": 0.3}),
             encoding="utf-8",
         )
-        assert load_module_weights(path) == {"a_test.py": 2, "b_test.py": 1}
+        assert load_module_weights(path) == {"a_test.py": 300, "b_test.py": 300}
+
+    def test_a_module_recorded_as_faster_than_a_millisecond_still_outweighs_an_absent_one(self, tmp_path):
+        """ "Fast" and "never recorded" are different facts and must not share a weight."""
+        path = tmp_path / "d.json"
+        path.write_text(json.dumps({"quick_test.py::test_x": 0.0000001}), encoding="utf-8")
+        assert load_module_weights(path) == {"quick_test.py": 1}
+
+    @pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity"], ids=["nan", "inf", "-inf"])
+    def test_a_non_finite_duration_is_rejected_by_name(self, tmp_path, literal):
+        """Python's JSON parser accepts these, and `round()` then raises (review).
+
+        The raise came from inside the weighting loop -- outside the try that
+        guards `json.loads` -- so collection died with a bare "cannot convert
+        float NaN to integer" naming no file and no module.
+        """
+        path = tmp_path / "d.json"
+        path.write_text('{"pkg/a_test.py::test_x": ' + literal + "}", encoding="utf-8")
+        with pytest.raises(ValueError, match="pkg/a_test.py"):
+            load_module_weights(path)
+
+    def test_a_negative_duration_is_rejected_rather_than_weighted(self, tmp_path):
+        """Worse than a crash: a negative weight is consumed silently.
+
+        `int(round(-5.0 * 1000))` is -5000, the LPT pass accepts it, and the
+        balance is quietly wrong -- no error, no signal, a shard credited for
+        work that reduces its load.
+        """
+        path = tmp_path / "d.json"
+        path.write_text('{"pkg/a_test.py::test_x": -5.0}', encoding="utf-8")
+        with pytest.raises(ValueError, match="pkg/a_test.py"):
+            load_module_weights(path)
+
+    def test_a_zero_duration_is_weighted_not_rejected(self, tmp_path):
+        """The boundary is `< 0`, not `<= 0`.
+
+        A test recorded at 0.0s is ordinary -- pytest-split rounds fast tests
+        down -- so it must weigh the floor of 1ms, not raise. Pinned because the
+        first version of this test asserted `load_module_weights.__doc__`, which
+        is true regardless of how zero is handled and therefore recorded nothing.
+        """
+        path = tmp_path / "d.json"
+        path.write_text('{"pkg/a_test.py::test_x": 0.0}', encoding="utf-8")
+        assert load_module_weights(path) == {"pkg/a_test.py": 1}
+
+    def test_one_malformed_entry_does_not_discard_the_whole_file(self, tmp_path):
+        """A file that fails to load re-deals every module, so a null must not do that."""
+        path = tmp_path / "d.json"
+        path.write_text(json.dumps({"a_test.py::test_x": None, "a_test.py::test_y": 0.5}), encoding="utf-8")
+        assert load_module_weights(path) == {"a_test.py": 500}
 
 
 class TestNodeIdParsing:
@@ -247,3 +303,150 @@ class TestNodeIdParsing:
     def test_bucketing_depends_only_on_the_path(self):
         assert bucket_of("a/b_test.py", DEFAULT_BUCKETS) == bucket_of("a/b_test.py", DEFAULT_BUCKETS)
         assert bucket_of("a/b_test.py", DEFAULT_BUCKETS) < DEFAULT_BUCKETS
+
+
+#: How far above the theoretical optimum the balancer may land. The optimum is a
+#: property of the input, so this bound does not move when the suite does -- which
+#: is the point: a guard that compared against a RECORDED spread would drift the
+#: first time a module was added, and someone would raise the number.
+_OPTIMUM_SLACK = 1.05
+
+#: The headline target from #17787, for the message only. Asserting it directly
+#: would make this guard fail for a reason no balancer can fix -- see below.
+_TARGET_RATIO = 1.3
+
+
+def _loads(weights, splits=SPLITS):
+    table = build_bucket_table(weights, splits, DEFAULT_BUCKETS)
+    load = [0] * splits
+    for module, weight in weights.items():
+        load[shard_of(module, table, DEFAULT_BUCKETS)] += weight
+    return load
+
+
+def _heaviest_bucket(weights):
+    """The largest weight that CANNOT be split across shards.
+
+    ``build_bucket_table`` assigns whole **buckets**, so the indivisible unit is
+    the bucket and not the module (review). Two heavy modules hashing into one
+    bucket force a floor no assignment can beat, and bounding on the heaviest
+    MODULE would then fail an assignment that is in fact optimal -- blaming the
+    balancer for a hash collision it cannot undo.
+
+    Measured on the current durations file the two coincide, because the heaviest
+    bucket holds exactly one module (the 31.9s pole, alone in bucket 362). So the
+    module bound was right *by accident*, and the accident breaks the first time
+    two heavy modules collide -- which adding one test file can cause.
+    """
+    totals: dict[int, int] = {}
+    for module, weight in weights.items():
+        bucket = bucket_of(module, DEFAULT_BUCKETS)
+        totals[bucket] = totals.get(bucket, 0) + weight
+    return max(totals.values()) if totals else 0
+
+
+def _optimum(weights, splits=SPLITS):
+    """The best max-shard-load any assignment of these buckets could achieve."""
+    return max(sum(weights.values()) / splits, _heaviest_bucket(weights))
+
+
+class TestBalanceOnTheRealDurations:
+    """#17787: the balancer must get close to the best any balancer could do.
+
+    Whole modules stay in one shard -- ``--dist loadscope`` depends on it -- so a
+    single module heavier than a shard's fair share sets a floor nothing can beat.
+    The assertion is therefore against ``max(mean, heaviest_module)``, the
+    theoretical optimum, and NOT against a target ratio: a target would fail when
+    the suite grew a heavy module, which is a fact about the suite rather than a
+    defect in the assignment, and the fix would be to raise the number.
+    """
+
+    def _real_weights(self):
+        weights = load_module_weights(Path(__file__).resolve().parents[1] / ".test_durations")
+        assert weights, "no durations were read, so every assertion below would range over nothing"
+        return weights
+
+    def test_the_balancer_lands_within_slack_of_the_theoretical_optimum(self):
+        """How close the assignment gets to the best any assignment could do.
+
+        **This is deliberately not an assertion that max/mean <= 1.3.** A target
+        ratio would fail the day the suite grew a heavy module -- a fact about
+        the suite, not a defect in the assignment -- and the only available fix
+        would be to raise the number, which is how a ratchet becomes a record of
+        surrender. The optimum is a property of the input, so this bound does not
+        move when the suite does, and it fails only when the *balancer* is at
+        fault.
+
+        The achieved ratio against the 1.3 target is checked separately, where a
+        miss can name which of the two causes it was.
+        """
+        weights = self._real_weights()
+        load = _loads(weights)
+        mean = sum(load) / len(load)
+        optimum = _optimum(weights)
+        assert max(load) <= optimum * _OPTIMUM_SLACK, (
+            f"slowest shard carries {max(load)/1000:.1f}s against an optimum of "
+            f"{optimum/1000:.1f}s (mean {mean/1000:.1f}s, heaviest indivisible bucket "
+            f"{_heaviest_bucket(weights)/1000:.1f}s) -- the assignment is leaving "
+            f"balance on the table"
+        )
+
+    def test_the_achieved_ratio_is_reported_against_the_target(self):
+        """Not an assertion about the suite: it fails only if the balancer is at fault.
+
+        If the achieved ratio misses the 1.3 target, that is either a balancing
+        defect (caught above) or one module larger than 1.3x the mean. This
+        separates them, so a failure names which.
+        """
+        weights = self._real_weights()
+        load = _loads(weights)
+        mean = sum(load) / len(load)
+        achieved = max(load) / mean
+        pole = _heaviest_bucket(weights) / mean
+        assert achieved <= _TARGET_RATIO or pole > _TARGET_RATIO, (
+            f"max/mean is {achieved:.3f}, above the {_TARGET_RATIO} target, and no single "
+            f"bucket explains it (heaviest is {pole:.3f}x the mean) -- so this is the "
+            f"assignment, not the shape of the suite"
+        )
+
+    def test_a_worse_than_optimal_assignment_fails_the_bound(self):
+        """The contrast the optimum bound actually needs (review).
+
+        The lopsided fixture below proves the RATIO can exceed the target, but it
+        passes both guards -- the optimum bound because its optimum includes the
+        whale, and the target-ratio guard because the whale satisfies the pole
+        escape hatch. So it does not demonstrate that the bound can fail, and the
+        contrast I wrote to stop the escape hatch excusing everything was itself
+        excused by it.
+
+        This one cannot be: every bucket piled onto one shard is worse than
+        optimal by construction, whatever the weights are.
+        """
+        weights = self._real_weights()
+        piled = [sum(weights.values())] + [0] * (SPLITS - 1)
+        assert max(piled) > _optimum(weights) * _OPTIMUM_SLACK, (
+            "an assignment with every bucket on one shard did not exceed the bound, so the "
+            "bound accepts any assignment and the guard above asserts nothing"
+        )
+
+    def test_a_lopsided_input_does_not_satisfy_the_target_ratio(self):
+        """Proves the RATIO can exceed the target -- and nothing more than that.
+
+        Deliberately NOT presented as the optimum bound's contrast pair: this
+        input passes the optimum bound (correctly -- its optimum includes the
+        whale) and is accepted by the target-ratio guard's pole escape hatch. The
+        bound's real contrast is the test above.
+        """
+        weights = {f"pkg/mod_{i:04d}_test.py": 1 for i in range(1200)}
+        weights["pkg/whale_test.py"] = 10_000
+        load = _loads(weights)
+        achieved = max(load) / (sum(load) / len(load))
+        assert achieved > _TARGET_RATIO, (
+            f"a single module worth {10_000 / sum(load):.0%} of the suite produced max/mean "
+            f"{achieved:.2f}, which the target would accept -- the ratio is not measuring "
+            "what it claims"
+        )
+        assert max(load) <= _optimum(weights) * _OPTIMUM_SLACK, (
+            "the same lopsided input must still be within slack of its own optimum: the two "
+            "assertions measure different things and this pins that they do"
+        )

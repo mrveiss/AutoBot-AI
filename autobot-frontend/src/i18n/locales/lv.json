@@ -9515,7 +9515,8 @@
       "collectionIdPlaceholder": "Kolekcijas ID",
       "pushing": "Nosūta…",
       "confirm": "Apstiprināt",
-      "pushFailed": "Neizdevās pievienot šo ierakstu zināšanu bāzei. Lūdzu, mēģiniet vēlreiz."
+      "pushFailed": "Neizdevās pievienot šo ierakstu zināšanu bāzei. Lūdzu, mēģiniet vēlreiz.",
+      "collectionNotJoined": "Saglabāts, bet norādītā kolekcija netika atrasta — transkripts ir zināšanu bāzē, taču nav šajā kolekcijā."
     }
   }
 }
