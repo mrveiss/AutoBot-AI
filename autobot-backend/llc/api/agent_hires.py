@@ -192,7 +192,11 @@ def _validated_default_cron() -> str:
         )
         return raw
     try:
-        croniter(raw)
+        # .get_next(), not just the constructor: `0 0 31 2 *` CONSTRUCTS fine and
+        # can never fire (February has no 31st). Validation that accepts an
+        # unfireable cron leaves exactly the silently-dead agent it was added to
+        # prevent -- `get_next()` is what raises CroniterBadDateError.
+        croniter(raw).get_next()
     except Exception as exc:
         logger.error(
             "AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON=%r is not a valid cron (%s); "

@@ -373,3 +373,55 @@ class TestAMisconfiguredCronDoesNotSilentlyUnscheduleAgents:
         redis.zadd.assert_awaited()
         scheduled = redis.zadd.await_args[0][1]
         assert "good" in scheduled and "bad" not in scheduled
+
+    def test_a_syntactically_valid_cron_that_can_never_fire_is_rejected(self, monkeypatch):
+        """Construction proves the syntax; a fire proves the schedule (review).
+
+        `0 0 31 2 *` constructs without error -- February has no 31st, so it can
+        never fire. Validating by construction alone accepted it, producing
+        exactly the silently-dead agent the validator exists to prevent: stored
+        `heartbeat_enabled=true`, never scheduled, one warning per repopulate.
+        """
+        import llc.api.agent_hires as mod
+
+        monkeypatch.setenv("AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON", "0 0 31 2 *")
+        assert mod._validated_default_cron() == "* * * * *"
+
+    def test_the_idle_wake_ttl_cannot_be_configured_to_zero(self):
+        """A TTL of 0 deletes the only evidence a short-circuited wake happened.
+
+        This PR's premise is that a wake finding nothing still leaves a trace, so
+        a tuning knob must not be able to erase it. `env_float_clamped` floors it
+        AND logs the rejected value -- a silent correction is indistinguishable
+        from a value that was honoured (#15778's reasoning, reused rather than
+        rewritten).
+        """
+        import re
+        from pathlib import Path
+
+        from llc.scheduler import heartbeat_scheduler as mod
+
+        # Asserted against the CALL SITE, not by calling the helper.
+        #
+        # The first two versions of this test were both worthless, in the same
+        # way twice. The first never set the probe variable, so the helper
+        # returned its default and `>= 60` passed without exercising the clamp.
+        # The second set it -- and still only proved that `env_float_clamped`
+        # clamps, which is `autobot_shared`'s test to own. Reverting THIS module
+        # to a bare `env_float` left both of them green.
+        #
+        # What drifted is which helper this constant is built with, so that is
+        # what is pinned. A reload with a hostile env would be behavioural, but it
+        # re-executes this module's singletons mid-suite and the patch targets
+        # other tests here rely on.
+        src = Path(mod.__file__).read_text(encoding="utf-8")
+        line = next(
+            (ln for ln in src.splitlines() if "AUTOBOT_LLC_HEARTBEAT_IDLE_WAKE_TTL_SECONDS" in ln and "=" in ln),
+            None,
+        )
+        assert line, "the idle-wake TTL constant is gone"
+        assert "env_float_clamped" in line, (
+            f"the idle-wake TTL is read with an unclamped helper: {line.strip()!r}. A configured 0 or "
+            "negative then deletes the only evidence a short-circuited wake happened."
+        )
+        assert re.search(r"min_v\s*=\s*[1-9]", line), f"no positive floor on the idle-wake TTL: {line.strip()!r}"

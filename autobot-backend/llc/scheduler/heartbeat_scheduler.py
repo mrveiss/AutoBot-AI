@@ -41,7 +41,7 @@ except ImportError:
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.env_utils import env_float
+from autobot_shared.env_utils import env_float, env_float_clamped
 from autobot_shared.feature_flags import is_feature_enabled
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
@@ -95,7 +95,7 @@ _RUN_KEY_TTL_SECONDS = env_float("LLC_RUN_KEY_TTL_SECONDS", _ADAPTER_MAX_WAIT_SE
 #: cannot expire on its own, so the TTL is set on the whole key each write.
 #: One key PER AGENT: EXPIRE covers a whole key, so a shared hash outlives its TTL (review).
 _IDLE_WAKE_KEY_PREFIX = "llc:heartbeat:idle:"
-_IDLE_WAKE_TTL_SECONDS = env_float("AUTOBOT_LLC_HEARTBEAT_IDLE_WAKE_TTL_SECONDS", 604800.0)
+_IDLE_WAKE_TTL_SECONDS = env_float_clamped("AUTOBOT_LLC_HEARTBEAT_IDLE_WAKE_TTL_SECONDS", 604800.0, min_v=60.0)
 
 
 class HeartbeatScheduler:
