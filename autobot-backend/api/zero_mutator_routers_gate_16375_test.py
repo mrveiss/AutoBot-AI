@@ -23,21 +23,30 @@ without running a handler that needs a live service.
 
 from __future__ import annotations
 
-import importlib
-
 import pytest
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
 
+from api.analytics_reporting import router as analytics_reporting_router
+from api.project import router as project_router
+from api.registry import router as registry_router
+from api.self_capabilities import router as self_capabilities_router
 from api.user_management.dependencies import get_current_user
 
-#: module -> a parameterless GET route on it. Prefixes are irrelevant here: the
-#: gate lives on the router, so any mount carries it.
+#: module -> (its router, a parameterless GET route on it). Prefixes are
+#: irrelevant here: the gate lives on the router, so any mount carries it.
+#:
+#: The routers are imported by name rather than reached through
+#: `importlib.import_module`, because `repo_tests/router_mount_parity_test.py`
+#: resolves every `include_router` target statically and fails on one it cannot
+#: read -- an unresolvable mount is a blind spot in that guard, not an exemption.
+#: So `_app` mounts all four by their imported names in one app, and the four
+#: route paths are distinct, which also proves each one is reachable.
 ROUTERS = {
-    "api.analytics_reporting": "/summary",
-    "api.project": "/status",
-    "api.registry": "/routers",
-    "api.self_capabilities": "/capabilities",
+    "api.analytics_reporting": (analytics_reporting_router, "/summary"),
+    "api.project": (project_router, "/status"),
+    "api.registry": (registry_router, "/routers"),
+    "api.self_capabilities": (self_capabilities_router, "/capabilities"),
 }
 
 
@@ -46,9 +55,12 @@ class _NoUser:
         return None
 
 
-def _make_app(module_name: str) -> FastAPI:
+def _app() -> FastAPI:
     app = FastAPI()
-    app.include_router(importlib.import_module(module_name).router)
+    app.include_router(analytics_reporting_router)
+    app.include_router(project_router)
+    app.include_router(registry_router)
+    app.include_router(self_capabilities_router)
     return app
 
 
@@ -57,7 +69,7 @@ class TestTheRouterIsGated:
     """#16375 slice S1: every route requires an authenticated caller."""
 
     def test_the_gate_is_on_the_router(self, module_name):
-        router = importlib.import_module(module_name).router
+        router = ROUTERS[module_name][0]
         gates = [d.dependency for d in router.dependencies]
         assert get_current_user in gates, (
             f"{module_name}: the gate is not on the router object -- per-route gating is "
@@ -69,16 +81,16 @@ class TestTheRouterIsGated:
         # and other tests stub it with a canned user. The pin lands where
         # dependencies.py looks the name up, since it `from`-imports it.
         monkeypatch.setattr("api.user_management.dependencies.get_auth_middleware", lambda: _NoUser())
-        app = _make_app(module_name)
-        with TestClient(app, raise_server_exceptions=False) as client:
-            response = client.get(ROUTERS[module_name])
+        path = ROUTERS[module_name][1]
+        with TestClient(_app(), raise_server_exceptions=False) as client:
+            response = client.get(path)
         assert response.status_code in (401, 403), (
-            f"{module_name}{ROUTERS[module_name]}: a caller with no resolvable user got "
+            f"{module_name}{path}: a caller with no resolvable user got "
             f"{response.status_code} -- before #16375 every route here answered anonymously"
         )
 
     def test_an_authenticated_request_passes_the_gate(self, module_name):
-        gated = importlib.import_module(module_name).router
+        gated = ROUTERS[module_name][0]
         probe = APIRouter(dependencies=list(gated.dependencies))
 
         @probe.get("/probe")
