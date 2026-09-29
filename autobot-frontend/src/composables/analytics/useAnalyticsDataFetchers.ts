@@ -13,8 +13,11 @@
  * Issues #2228, #2230: Extracted from CodebaseAnalytics.vue.
  * Issue #5112: the 14x GET-fetcher boilerplate routes through
  * `useFetchEndpoint`. Every call-site opts in to source scoping with an
- * explicit `scopeToSource: true`; `/api/reporting/report` is the one
- * exception that stays global. Domain types live in `./analyticsTypes`.
+ * explicit `scopeToSource: true`. Domain types live in `./analyticsTypes`.
+ * Issue #17758 (owner ruling 2026-09-29): `/api/reporting/report` is NO LONGER
+ * the global exception #5112 made it -- a report that aggregates across
+ * projects is the cross-project leak that issue removes, so it is per-project
+ * like everything else here.
  * Issue #5174: migrated off the deprecated `useAnalyticsEndpoint` alias
  * to the rehomed `@/composables/api/useFetchEndpoint`.
  */
@@ -158,7 +161,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/reporting/report',
-      scopeToSource: false, // global report — not source-scoped
+      scopeToSource: true, // #17758: per-project, superseding #5112's global contract
       label: 'Unified report endpoint',
       pickData: (raw) => (raw.status === 'success' ? raw : null),
       onSuccess: (d) =>
@@ -346,8 +349,11 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   const loadCachedDuplicates = () => cachedDuplicatesEndpoint.load()
   const loadCachedDependencies = () => cachedDependenciesEndpoint.load()
   const loadCachedImportTree = () => cachedImportTreeEndpoint.load()
-  const loadDependencyData = () => _loadDependencyTask()
-  const loadImportTreeData = () => _loadImportTreeTask()
+  // #17758: both routes now REQUIRE source_id -- omitting it is a 422, not a
+  // repo-wide scan. `useTaskLoader.load(body, query)` takes the query record,
+  // and `sourceIdQuery` is the same one the `*/cached` fetchers already send.
+  const loadDependencyData = () => _loadDependencyTask(undefined, sourceIdQuery.value)
+  const loadImportTreeData = () => _loadImportTreeTask(undefined, sourceIdQuery.value)
 
   const loadDeclarations = async () => {
     loadingProgress.declarations = true
