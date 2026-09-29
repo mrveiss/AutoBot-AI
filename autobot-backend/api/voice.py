@@ -24,7 +24,6 @@ from api.schemas_agent import VoiceCreateResponse
 from api.schemas_code import (
     VoiceDeleteResponse,
     VoiceListenResponse,
-    VoiceSpeakResponse,
     VoiceTranscribeResponse,
 )
 from auth_middleware import check_admin_permission, get_current_user
@@ -202,7 +201,33 @@ async def voice_listen_api(request: Request, user_role: str = Form("user")):
         )
 
 
-@router.post("/speak", response_model=VoiceSpeakResponse)
+#: Reports what server-side playback did, so ``play_locally`` can be honest about
+#: an outcome without changing the response BODY (#17779). Values: ``not-requested``,
+#: ``played``, ``failed``, ``unavailable``.
+SERVER_PLAYBACK_HEADER = "X-Server-Playback"
+
+
+async def _play_on_server(request: Request, text: str) -> str:
+    """Speak *text* on the server's own speakers. Returns the header value.
+
+    The optional pyttsx3 ``voice_interface`` is the only thing that can do this,
+    and it is absent whenever that import failed at boot. Absence and failure are
+    both *reported*, not raised: the caller still receives the synthesized audio
+    and can play it itself. Raising here would put the boot accident back in
+    charge of the response, which is the whole defect (#17779).
+    """
+    voice_interface = getattr(request.app.state, "voice_interface", None)
+    if voice_interface is None:
+        logger.warning("#17779: play_locally requested but no local voice interface is loaded")
+        return "unavailable"
+    result = await voice_interface.speak_text(text)
+    if result.get("status") == "success":
+        return "played"
+    logger.warning("#17779: server-side playback failed: %s", result.get("message"))
+    return "failed"
+
+
+@router.post("/speak", response_model=None)  # Returns audio/wav Response — no Pydantic schema (#17779)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="voice_speak_api",
@@ -215,8 +240,19 @@ async def voice_speak_api(
     language: str = Form(""),
     user_role: str = Form("user"),
     stream: bool = Form(False),
+    play_locally: bool = Form(False),
 ):
-    """Converts text to speech and plays it.
+    """Synthesize *text* and return it as ``audio/wav``.
+
+    **One implementation, one shape** (#17779). This route used to choose between
+    returning WAV bytes and returning ``{"message": ...}`` with no audio at all,
+    depending on whether an optional pyttsx3 import had succeeded at boot -- so a
+    client could not know which it would get, and on the JSON branch the audio
+    played on the *server's* speakers instead of being returned.
+
+    Synthesis is now unconditional. ``play_locally=true`` additionally speaks on
+    the server, reported through the ``X-Server-Playback`` header rather than by
+    changing the body, and it cannot be combined with ``stream`` -- see below.
 
     ``stream=true`` returns length-prefixed WAV chunks as they are synthesized
     (#13215); omitting it keeps the whole-utterance ``audio/wav`` contract.
@@ -234,33 +270,29 @@ async def voice_speak_api(
             content={"message": "Permission denied to speak via voice."},
         )
 
-    # Canonical TTS is the pocket-tts worker (always available). The optional
-    # local pyttsx3 voice_interface only does *server-side* playback; when it is
-    # absent, synthesize via the worker and return WAV for the client to play —
-    # instead of a misleading 503 that implies TTS is uninstalled.
-    voice_interface = getattr(request.app.state, "voice_interface", None)
-    if voice_interface is None:
-        # Audit after synthesis — see voice_synthesize_api for why.
-        response = await _synthesized_audio_response(text, voice_id, language, stream)
-        outcome = "accepted" if stream else "success"
-        security_layer.audit_log("voice_speak", user_role, outcome, {"via": "tts_worker", "text_preview": text[:50]})
-        return response
-
-    result = await voice_interface.speak_text(text)
-    if result["status"] == "success":
-        security_layer.audit_log("voice_speak", user_role, "success", {"text_preview": text[:50]})
-        return {"message": "Text spoken successfully."}
-    else:
-        security_layer.audit_log(
-            "voice_speak",
-            user_role,
-            "failure",
-            {"text_preview": text[:50], "reason": result.get("message")},
-        )
+    # Streaming sends bytes to the CALLER as they are produced; server playback
+    # blocks until the whole utterance has been spoken here. Serving both from one
+    # request would make `stream` silently useless, so the combination is refused
+    # rather than quietly degraded. An error body is JSON as every error is; the
+    # SUCCESS shape is audio/wav either way, which is the contract #17779 fixes.
+    if play_locally and stream:
         return JSONResponse(
-            status_code=500,
-            content={"message": f"Text-to-speech failed: {result['message']}"},
+            status_code=400,
+            content={"message": "play_locally cannot be combined with stream; request them separately."},
         )
+
+    # Canonical TTS is the pocket-tts worker, always available and the only
+    # synthesizer this route uses. Audit after synthesis — see voice_synthesize_api.
+    response = await _synthesized_audio_response(text, voice_id, language, stream)
+    playback = await _play_on_server(request, text) if play_locally else "not-requested"
+    response.headers[SERVER_PLAYBACK_HEADER] = playback
+    security_layer.audit_log(
+        "voice_speak",
+        user_role,
+        "accepted" if stream else "success",
+        {"via": "tts_worker", "server_playback": playback, "text_preview": text[:50]},
+    )
+    return response
 
 
 @router.post("/synthesize", response_model=None)  # Returns audio/wav Response — no Pydantic schema
