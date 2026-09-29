@@ -100,25 +100,38 @@ def _function(mod: ast.Module, name: str) -> ast.FunctionDef | ast.AsyncFunction
     raise AssertionError(f"{name} is not defined at module level; this guard's premise moved")
 
 
-def test_the_whisper_loader_pins_the_revision_and_verifies_the_cache() -> None:
-    """This load had neither, while another module pinned the SAME repo.
+def test_the_whisper_loader_goes_through_load_verified() -> None:
+    """The canonical path, not the three steps by hand.
+
+    `load_verified` exists because writing them out has a **fail-open** failure
+    mode: #17124 found that assigning the model before `verify_cached_model` ran
+    left a tampered model reachable when a caller's broad `except` swallowed
+    `ModelIntegrityError`. `get_whisper_pipeline` has exactly such an `except
+    Exception`, so the hand-written form -- which is what the first version of
+    #17780's fix used -- would have reproduced that bug while looking pinned.
+
+    Asserting the helper rather than its three ingredients is therefore the
+    stronger check: it pins the ORDER, which is the part that failed open.
 
     Scoped to this call site on purpose -- #17804 owns the general rule.
     """
     loader = _function(_module(_PIPELINE), "get_whisper_pipeline")
     calls = [n for n in ast.walk(loader) if isinstance(n, ast.Call)]
 
+    verified = [c for c in calls if isinstance(c.func, ast.Name) and c.func.id == "load_verified"]
+    assert verified, (
+        "the Whisper pipeline is not loaded through load_verified, so the revision, the "
+        "integrity check and their ORDER are each a separate thing to get right here "
+        "(autobot_shared/pinned_model_registry.py; #17124 is why the order matters)"
+    )
+
     pipeline_calls = [c for c in calls if isinstance(c.func, ast.Name) and c.func.id == "hf_pipeline"]
     assert pipeline_calls, "get_whisper_pipeline no longer calls hf_pipeline; this guard's premise moved"
     for call in pipeline_calls:
-        kwargs = {kw.arg for kw in call.keywords}
-        assert "revision" in kwargs, (
-            "the Whisper pipeline is loaded without revision=, so it resolves against whatever "
-            "the hub serves today (docs/developer/MODEL_REVISION_PINNING.md)"
+        assert "revision" in {kw.arg for kw in call.keywords}, (
+            "the pipeline factory is called without revision=, so it resolves against whatever "
+            "the hub serves today even though load_verified supplied a pinned one"
         )
-
-    verified = [c for c in calls if isinstance(c.func, ast.Name) and c.func.id == "verify_cached_model"]
-    assert verified, "the pinned load does not call verify_cached_model, so the pin is unchecked after download"
 
 
 def test_both_features_reach_the_same_inference_function() -> None:

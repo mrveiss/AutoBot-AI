@@ -93,21 +93,30 @@ def get_whisper_pipeline() -> Any | None:
         with _whisper_pipeline_lock:
             if not _WHISPER_LOADED:
                 try:
-                    # #17780: pinned, with integrity verification, per
-                    # docs/developer/MODEL_REVISION_PINNING.md. This load had
-                    # neither, while `multimodal_processor/processors/voice.py`
-                    # pinned the SAME repo -- so the registry entry already
-                    # exists and is reused here rather than a revision being
-                    # obtained or invented. `pipeline()` documents `revision`
-                    # for a string model identifier, which is what is passed.
-                    from autobot_shared.pinned_model_registry import get_pinned_revision, verify_cached_model
+                    # #17780: pinned and integrity-verified through
+                    # `load_verified`, which is the canonical path rather than
+                    # the three steps by hand. #17124 introduced it after a
+                    # FAIL-OPEN bug: assigning the model before
+                    # `verify_cached_model` ran left a tampered model reachable
+                    # when a caller's broad `except` swallowed
+                    # `ModelIntegrityError`. The `except Exception` below is
+                    # exactly such a caller, so writing the steps out here --
+                    # which is what my first version of this did -- would have
+                    # reproduced the bug the helper exists to prevent.
+                    #
+                    # The registry already pins this repo (the same one
+                    # `multimodal_processor/processors/voice.py` loads), so no
+                    # revision is obtained here and none is invented.
+                    from autobot_shared.pinned_model_registry import load_verified
 
-                    _whisper_pipeline = hf_pipeline(
-                        "automatic-speech-recognition",
-                        model=WHISPER_MODEL,
-                        revision=get_pinned_revision(WHISPER_MODEL),
+                    (_whisper_pipeline,) = load_verified(
+                        WHISPER_MODEL,
+                        lambda revision: hf_pipeline(
+                            "automatic-speech-recognition",
+                            model=WHISPER_MODEL,
+                            revision=revision,
+                        ),
                     )
-                    verify_cached_model(WHISPER_MODEL)
                     logger.info("Whisper pipeline loaded: %s", WHISPER_MODEL)
                 except Exception as exc:
                     logger.warning("Failed to load Whisper pipeline: %s", exc)
