@@ -875,9 +875,13 @@ inferred) and carries both a visible benefit and a hidden cost.
 
 ### Gaps and opportunities, prioritised
 
-1. **Four RAG assembly paths reach a prompt without the firewall** (B2). One defect class, four
-   instances, the sharpest being content appended *after* the firewall at
-   `services/rag_service.py:857,864`. Belongs in one issue, not four.
+1. **Four RAG assembly paths reach a prompt without the firewall** (B2) — **three live, one
+   latent.** One defect class, four instances, the sharpest being content appended *after* the
+   firewall at `services/rag_service.py:857,864`. The latent one is agentic RAG: `agentic_context`
+   is written at `chat_workflow/graph.py:1302` and read nowhere in the repository, tests included,
+   so the bypass exists and nothing currently traverses it. That makes it a weaker instance and a
+   stronger warning — it becomes live the moment anything reads that state, with no further defect
+   required. Belongs in one issue listing all four, not four issues, and not three.
 2. **The claim event never fires in production** (C6). The projection is built, allow-listed by
    name, and has zero production callers, so a claims UI gets no push and must poll. The state
    half works and #15949 closed correctly — its ACs tested the publisher, never a caller.
