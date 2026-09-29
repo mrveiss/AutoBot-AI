@@ -303,3 +303,11 @@ python:
   - 'autobot-frontend/src/assets/css/design-tokens.css'
   - 'autobot-frontend/src/assets/css/themes/light.css'
   - 'autobot-frontend/src/assets/css/themes/dark.css'
+  # #17787: the shard balancer reads this file to weight modules, and
+  # repo_tests/stable_shard_test.py now reads it BY LITERAL PATH to assert the
+  # assignment lands within slack of the theoretical optimum. Since #17787 it
+  # decides how CI cost is distributed across the twelve shards, so a change
+  # confined to it must run the suite that measures the result -- otherwise the
+  # one file that sets shard balance is the one file whose change is invisible
+  # to the balance guard, and the PR takes the required-context shim's green.
+  - '.test_durations'
