@@ -26,19 +26,15 @@ KNOWN_UNGATED: frozenset[str] = frozenset(
     {
         "api.analytics_llm_patterns",
         "api.analytics_pattern_learning",
-        "api.analytics_reporting",
         "api.code_search",
         "api.development_speedup",
         "api.error_resilience",
         "api.knowledge_eval",
         "api.natural_language_search",
         "api.phases",
-        "api.project",
         "api.prometheus_endpoint",
-        "api.registry",
         "api.rum",
         "api.search",
-        "api.self_capabilities",
         "api.system_validation",
         "api.validation_dashboard",
         "routers.code_completion",
@@ -96,7 +92,7 @@ _EVER_UNGATED: frozenset[str] = frozenset(
 #: Pinned to len(KNOWN_UNGATED). Lower it with every removal; raising it is the
 #: deliberate act the rule exists to make visible. It catches what the set above
 #: cannot: an entry removed once and later put back.
-_MAX_KNOWN_UNGATED = 20
+_MAX_KNOWN_UNGATED = 16
 
 
 #: Config-registered routers this sweep cannot read, pinned so that a new one

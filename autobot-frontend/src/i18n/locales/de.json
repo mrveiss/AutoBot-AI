@@ -9515,7 +9515,8 @@
       "collectionIdPlaceholder": "Sammlungs-ID",
       "pushing": "Wird gesendet…",
       "confirm": "Bestätigen",
-      "pushFailed": "Diese Aufnahme konnte nicht zur Wissensdatenbank hinzugefügt werden. Bitte erneut versuchen."
+      "pushFailed": "Diese Aufnahme konnte nicht zur Wissensdatenbank hinzugefügt werden. Bitte erneut versuchen.",
+      "collectionNotJoined": "Gespeichert, aber die angegebene Sammlung wurde nicht gefunden — das Transkript ist in der Wissensdatenbank, aber nicht in dieser Sammlung."
     }
   }
 }
