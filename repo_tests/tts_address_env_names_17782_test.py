@@ -37,8 +37,10 @@ The set only shrinks. A new entry means a fourth way to say the same thing.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 #: Extensions that can carry an env-var reference. Kept narrow so the walk stays
 #: fast; widening it can only find MORE names, which fails loudly rather than
@@ -86,10 +88,9 @@ _ALLOWED = {
 }
 
 
-def _found_names() -> dict[str, set[str]]:
-    """Every TTS address env name in the tree, mapped to the files naming it."""
-    root = repo_root()
-    found: dict[str, set[str]] = {}
+def _scanned_files(root: Path) -> list[Path]:
+    """Every file this guard reads. The population, so the reach is checkable."""
+    files: list[Path] = []
     for path in root.rglob("*"):
         if not path.is_file() or path.suffix not in _SUFFIXES:
             continue
@@ -101,6 +102,41 @@ def _found_names() -> dict[str, set[str]]:
         # names. `_ADDRESS_NAME` is exercised directly instead, below.
         if rel == "repo_tests/tts_address_env_names_17782_test.py":
             continue
+        files.append(path)
+    return files
+
+
+#: The reach floor, declared as data rather than asserted inside one test
+#: (#15826), so `reach_declarations_test.py` can run this discovery against an
+#: empty directory and REQUIRE the failure. My first version hand-wrote a
+#: non-vacuity check, which proves the population is non-empty today and cannot
+#: prove the check would fire if it ever became empty -- that is the difference
+#: the mechanism exists for, and the meta-guard caught me not using it.
+#:
+#: **10,267** files match today -- one fewer than a raw count, because the sweep
+#: excludes this file. The floor sits just under that with a growth band rather
+#: than far below it: `reach_declarations_test` refuses a floor more than
+#: `skips + growth` under the live population, and it is right to. A floor at
+#: 6000 (my first attempt) "passes while most of the tree stops being reached",
+#: which is the failure a reach floor exists to prevent, dressed as a safety
+#: margin. So the band is explicit: 10,000..10,400 needs no action, and beyond
+#: that the floor is ratcheted deliberately.
+REACH = declare(
+    "tts-address-env-name-sweep",
+    discover=_scanned_files,
+    floor=10000,
+    growth=400,
+    skips=0,
+    what="text files that can carry an env-var reference",
+)
+
+
+def _found_names() -> dict[str, set[str]]:
+    """Every TTS address env name in the tree, mapped to the files naming it."""
+    root = repo_root()
+    found: dict[str, set[str]] = {}
+    for path in _scanned_files(root):
+        rel = path.relative_to(root).as_posix()
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
