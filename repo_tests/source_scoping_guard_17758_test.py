@@ -88,7 +88,7 @@ _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
 #: ``Name`` test; adding the inverted ``if not source_id`` form and the
 #: ``source_id or "default"`` form surfaced eleven sites that were always there
 #: and always invisible -- ten of them the ``or`` spelling, including #12384's
-#: own fix in ``analytics_tasks.py:38``. A raised pin normally means somebody
+#: own fix, ``_path_checkpoint_key``. A raised pin normally means somebody
 #: parked a leak; this one means somebody could finally see them. Any future
 #: rise needs the same distinction stated, or it is the former.
 _MAX_KNOWN_UNSCOPED_FALLBACKS = 15
