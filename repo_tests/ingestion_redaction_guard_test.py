@@ -109,20 +109,71 @@ _AUTHORITATIVE_GUARDS = {
 
 #: The chokepoint those guards protect.
 _CHOKEPOINT = "autobot-backend/knowledge/ingest_sanitize.py"
+#: The function inside it that must do the redacting. Named, not inferred, so the
+#: check below cannot be satisfied by a redact_content call elsewhere in the file.
+_CHOKEPOINT_FUNCTION = "sanitize_fact_content"
 
 
-def _calls_redact_content(source: str) -> bool:
+def _collectible_test_names(module: ast.Module) -> set[str]:
+    """Test names pytest can actually collect: module-level functions, plus the
+    methods of a module-level class.
+
+    Deliberately NOT ``ast.walk`` (review, #17732). A ``def`` nested inside
+    another function is unreachable to collection, so a required test could be
+    deleted, its name survive inside some closure, and this guard stay green
+    while pytest ran nothing -- the failure this test exists to prevent, in the
+    test itself.
+
+    Class methods are included rather than excluded: pytest collects
+    ``TestX::test_y``, so restricting to the module body alone would reject a
+    legitimately class-based guard later. All six names required today are
+    module-level functions, so this is about the next one, not the current set.
+    """
+    names: set[str] = set()
+    for node in module.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            names.add(node.name)
+        elif isinstance(node, ast.ClassDef):
+            names.update(
+                child.name for child in node.body if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+            )
+    return names
+
+
+def _calls_redact_content(source: str, *, function_name: str | None = None) -> bool:
     """True if *source* contains an actual call to redact_content(...).
 
     Checked against the function's own source, not the module's imports, so an
     entry point that imports the redactor but never calls it still fails.
     Parsed with ast rather than a substring search (review): a comment or a
     docstring mentioning "redact_content(" in passing must not satisfy this.
+
+    ``function_name`` narrows the search to that module-level function (review,
+    #17732). Without it, *source* being a whole module means any
+    ``redact_content`` call anywhere in the file satisfies the check -- so
+    moving the call out of the chokepoint into an unrelated helper would leave
+    this guard green. The docstring above already claimed function scoping; the
+    whole-module call site is where that claim was not in effect. A named
+    function that is absent returns False rather than falling back to the
+    module, so a rename fails loudly instead of widening the scope.
     """
     tree = ast.parse(textwrap.dedent(source))
+    scope: ast.AST = tree
+    if function_name is not None:
+        named = next(
+            (
+                node
+                for node in tree.body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == function_name
+            ),
+            None,
+        )
+        if named is None:
+            return False
+        scope = named
     return any(
         isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "redact_content"
-        for node in ast.walk(tree)
+        for node in ast.walk(scope)
     )
 
 
@@ -207,11 +258,7 @@ def test_the_authoritative_guards_still_exist() -> None:
     for rel, required in _AUTHORITATIVE_GUARDS.items():
         if not required:
             continue
-        defined = {
-            node.name
-            for node in ast.walk(ast.parse((root / rel).read_text(encoding="utf-8")))
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        }
+        defined = _collectible_test_names(ast.parse((root / rel).read_text(encoding="utf-8")))
         gutted.extend(f"{rel}::{name}" for name in required if name not in defined)
     assert not gutted, (
         f"the tests that make these guards authoritative are gone: {gutted}. The files are "
@@ -229,7 +276,8 @@ def test_the_chokepoint_calls_the_redactor() -> None:
     """
     root = Path(__file__).resolve().parents[1]
     source = (root / _CHOKEPOINT).read_text(encoding="utf-8")
-    assert _calls_redact_content(source), (
-        f"{_CHOKEPOINT} is named here as the chokepoint that redacts every knowledge "
-        "write, and its source contains no redact_content(...) call."
+    assert _calls_redact_content(source, function_name=_CHOKEPOINT_FUNCTION), (
+        f"{_CHOKEPOINT}::{_CHOKEPOINT_FUNCTION} is named here as the chokepoint that redacts "
+        "every knowledge write, and it contains no redact_content(...) call. A call elsewhere "
+        "in that module does not satisfy this: the chokepoint argument is about this function."
     )
