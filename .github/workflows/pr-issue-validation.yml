@@ -85,7 +85,21 @@ jobs:
           # authors into over-claiming closure to get a green check. That is the
           # opposite of what the closure rule wants. Four PRs in one day hit
           # this: each had to invent a scoped issue purely to satisfy the gate.
-          if ! printf '%s' "$BODY" | grep -iqE "(resolves|closes|fixes|refs|references|part of)[[:space:]]+(#?[0-9]+|MVA-[0-9]+)"; then
+          # `:?` because GitHub accepts a colon after the keyword -- its docs give
+          # `Closes: #10` and `CLOSES: #10` as valid -- so `Fixes: #123` closes the
+          # issue on merge. Without it this gate rejected a PR that genuinely links
+          # (#17580, review).
+          # The left boundary is the same one the fork-override alternation below
+          # carries, and widening this set to bare stems is what made it matter:
+          # without it `unresolved #1234` satisfies this gate as `resolved #1234`.
+          # #17580: all nine of GitHub's closing keywords. Longest alternative
+          # first per verb is a readability convention, not a requirement -- ERE
+          # is leftmost-longest, so the order does not change what matches.
+          # Kept identical to check_pr_issue_batching.py's _CLOSING_WORDS, and
+          # scripts/check_pr_issue_batching_test.py reads both files and fails if
+          # they drift: the parity was previously maintained by hand, and holding
+          # while both diverged from GitHub is exactly how this went unnoticed.
+          if ! printf '%s' "$BODY" | grep -iqE "(^|[^[:alnum:]_-])(closes|closed|close|fixes|fixed|fix|resolves|resolved|resolve|refs|references|part of):?[[:space:]]+(#?[0-9]+|MVA-[0-9]+)"; then
             echo "::error::PR body has no issue linkage."
             echo "::error::Add 'Closes #${EXPECTED_ISSUE}' if this PR fully delivers it,"
             echo "::error::or 'Refs #${EXPECTED_ISSUE}' if it does not."
@@ -131,7 +145,10 @@ jobs:
           # expression to be a literal rather than a range.
           # `#0` is excluded because no issue can have that number, so it is
           # never an author naming something.
-          keyword_re="(^|[^[:alnum:]_-])(resolves|closes|fixes)[[:space:]]+(#[1-9][0-9]*|MVA-[1-9][0-9]*)([^0-9]|$)"
+          # All nine, not the three this line knew while the gate above knew nine:
+          # a fork PR whose body said `Fixed #N` took the mismatch path instead of
+          # this override and was rejected for closing the issue it named.
+          keyword_re="(^|[^[:alnum:]_-])(closes|closed|close|fixes|fixed|fix|resolves|resolved|resolve):?[[:space:]]+(#[1-9][0-9]*|MVA-[1-9][0-9]*)([^0-9]|$)"
 
           if [ "${PR_IS_FORK:-false}" = "true" ] \
              && printf '%s' "$PROSE" | grep -iqE "$keyword_re"; then
