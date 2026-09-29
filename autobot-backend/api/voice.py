@@ -10,8 +10,6 @@ bridging the FastAPI layer with the TTS/STT backend services.
 """
 
 import asyncio
-import os
-import tempfile
 from collections.abc import AsyncIterator
 from contextlib import aclosing
 from typing import Any, Dict, List
@@ -424,15 +422,6 @@ async def voice_delete_api(voice_id: str):
 
 from voice_processing.hallucination_filter import is_silence_hallucination  # noqa: E402
 
-_MIME_TO_SUFFIX = {
-    "audio/webm": ".webm",
-    "audio/ogg": ".ogg",
-    "audio/wav": ".wav",
-    "audio/x-wav": ".wav",
-    "audio/mpeg": ".mp3",
-    "audio/mp4": ".m4a",
-}
-
 
 def _drop_silence_hallucination(text: str, detected_lang: str, requested_lang: str) -> str:
     """Return "" when Whisper hallucinated *text* from silence. Issue #13104.
@@ -457,56 +446,55 @@ def _drop_silence_hallucination(text: str, detected_lang: str, requested_lang: s
     return ""
 
 
-def _whisper_sync(pipe, audio_bytes: bytes, suffix: str, language: str = "") -> dict:
-    """Blocking Whisper inference — call via asyncio.to_thread (#1030).
+def _whisper_sync(pipe, audio_bytes: bytes, mime: str, language: str = "") -> dict:
+    """Blocking Whisper inference for this route — call via asyncio.to_thread (#1030).
 
-    Args:
-        language: BCP-47 language hint (e.g. "en", "de"). Empty = auto-detect.
+    The inference itself is `media.audio.pipeline.transcribe_bytes` (#17780);
+    this function is now only what is SPECIFIC to `/voice/transcribe`:
+
+    * the silence-hallucination filter (#13104), which the media pipeline does
+      not apply and must not start applying by accident;
+    * a confidence floor of 0.0 for empty text, where the media pipeline uses
+      0.5 -- two different promises about what "no words" means;
+    * this route's result field names.
+
+    Those differences are why the consolidation shares the inference and not the
+    result: collapsing them would have changed one feature's contract to match
+    the other's.
+
+    `language` is a BCP-47 hint; empty means auto-detect.
     """
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp.write(audio_bytes)
-        tmp_path = tmp.name
+    # Imported here, not at module scope: `repo_tests/import_hermeticity_test.py`
+    # requires `api.voice` to import inertly, and reaching the media package at
+    # module level pulls in a chain that writes a temp file during import. The
+    # original code had this import function-local too -- that was a hermeticity
+    # boundary, not laziness, and #17780 briefly mistook it for one.
+    from media.audio.pipeline import transcribe_bytes  # noqa: PLC0415
 
     try:
-        generate_kwargs = {}
-        if language:
-            generate_kwargs["language"] = language
-        output = pipe(
-            tmp_path,
-            return_timestamps=False,
-            generate_kwargs=generate_kwargs or None,
-        )
-        text = output.get("text", "").strip() if isinstance(output, dict) else ""
-        detected_lang = output.get("language", "unknown") if isinstance(output, dict) else "unknown"
-
-        text = _drop_silence_hallucination(text, detected_lang, language)
-        confidence = 0.9 if text else 0.0
-        return {
-            "text": text,
-            "language": detected_lang,
-            "confidence": confidence,
-        }
+        result = transcribe_bytes(pipe, audio_bytes, mime=mime, language=language)
     except Exception as exc:
         logger.warning("Whisper transcription failed: %s", exc)
         return {"text": "", "language": "unknown", "confidence": 0.0}
-    finally:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
+
+    text = _drop_silence_hallucination(result.text, result.language, language)
+    return {
+        "text": text,
+        "language": result.language,
+        "confidence": 0.9 if text else 0.0,
+    }
 
 
 async def _transcribe_with_whisper(audio_bytes: bytes, content_type: str, language: str = "") -> dict:
     """Run Whisper transcription in a background thread (#1030)."""
-    from media.audio.pipeline import _get_whisper_pipeline
+    from media.audio.pipeline import get_whisper_pipeline  # noqa: PLC0415 -- see _whisper_sync
 
-    pipe = _get_whisper_pipeline()
+    pipe = get_whisper_pipeline()
     if not pipe:
         return {"text": "", "language": "unknown", "confidence": 0.0}
 
     ct = content_type.split(";")[0].strip()
-    suffix = _MIME_TO_SUFFIX.get(ct, ".wav")
-    return await asyncio.to_thread(_whisper_sync, pipe, audio_bytes, suffix, language)
+    return await asyncio.to_thread(_whisper_sync, pipe, audio_bytes, ct, language)
 
 
 @router.post("/transcribe", response_model=VoiceTranscribeResponse)
