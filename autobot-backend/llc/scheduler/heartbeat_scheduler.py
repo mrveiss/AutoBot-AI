@@ -93,8 +93,8 @@ _RUN_KEY_TTL_SECONDS = env_float("LLC_RUN_KEY_TTL_SECONDS", _ADAPTER_MAX_WAIT_SE
 #: scheduler is dead" are the same observation. Retained long enough that a
 #: human investigating a quiet agent can still see its last wake; a hash field
 #: cannot expire on its own, so the TTL is set on the whole key each write.
-_IDLE_WAKE_COUNT_KEY = "llc:heartbeat:idle_wakes"
-_IDLE_WAKE_AT_KEY = "llc:heartbeat:last_idle_wake_at"
+#: One key PER AGENT: EXPIRE covers a whole key, so a shared hash outlives its TTL (review).
+_IDLE_WAKE_KEY_PREFIX = "llc:heartbeat:idle:"
 _IDLE_WAKE_TTL_SECONDS = env_float("AUTOBOT_LLC_HEARTBEAT_IDLE_WAKE_TTL_SECONDS", 604800.0)
 
 
@@ -425,10 +425,10 @@ class HeartbeatScheduler:
         wake into a skipped schedule advance.
         """
         try:
-            await redis.hincrby(_IDLE_WAKE_COUNT_KEY, agent_id, 1)
-            await redis.hset(_IDLE_WAKE_AT_KEY, agent_id, datetime.now(tz=timezone.utc).isoformat())
-            await redis.expire(_IDLE_WAKE_COUNT_KEY, int(_IDLE_WAKE_TTL_SECONDS))
-            await redis.expire(_IDLE_WAKE_AT_KEY, int(_IDLE_WAKE_TTL_SECONDS))
+            key = f"{_IDLE_WAKE_KEY_PREFIX}{agent_id}"
+            await redis.hincrby(key, "count", 1)
+            await redis.hset(key, "at", datetime.now(tz=timezone.utc).isoformat())
+            await redis.expire(key, int(_IDLE_WAKE_TTL_SECONDS))
         except Exception:
             logger.warning("Could not record idle wake for agent %s", agent_id, exc_info=True)
 

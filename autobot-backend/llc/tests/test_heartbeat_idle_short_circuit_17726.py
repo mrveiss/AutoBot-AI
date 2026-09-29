@@ -24,8 +24,8 @@ import pytest
 
 from llc.models.work_item import LLCWorkItem
 from llc.scheduler.heartbeat_scheduler import (
-    _IDLE_WAKE_AT_KEY,
-    _IDLE_WAKE_COUNT_KEY,
+    _IDLE_WAKE_KEY_PREFIX,
+    _IDLE_WAKE_TTL_SECONDS,
     HeartbeatScheduler,
 )
 
@@ -153,10 +153,14 @@ async def test_a_short_circuited_wake_records_a_count_and_a_timestamp():
     """The AC that decides whether the feature is safe, not just cheap."""
     _, redis, _, _ = await _drive(has_work=False)
 
-    redis.hincrby.assert_awaited_once_with(_IDLE_WAKE_COUNT_KEY, _AGENT_SLUG, 1)
-    assert redis.hset.await_args[0][0] == _IDLE_WAKE_AT_KEY
-    assert redis.hset.await_args[0][1] == _AGENT_SLUG
-    assert redis.expire.await_count == 2
+    key = f"{_IDLE_WAKE_KEY_PREFIX}{_AGENT_SLUG}"
+    redis.hincrby.assert_awaited_once_with(key, "count", 1)
+    assert redis.hset.await_args[0][0] == key
+    assert redis.hset.await_args[0][1] == "at"
+    # ONE expire, on this agent's own key, so the TTL covers this agent alone.
+    # Re-expiring a shared hash kept every idle agent's row alive for as long as
+    # any agent stayed busy -- the documented retention, inverted (review).
+    redis.expire.assert_awaited_once_with(key, int(_IDLE_WAKE_TTL_SECONDS))
 
 
 @pytest.mark.asyncio
@@ -316,12 +320,18 @@ class TestAMisconfiguredCronDoesNotSilentlyUnscheduleAgents:
         monkeypatch.delenv("AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON", raising=False)
         importlib.reload(module)
 
-    def test_a_valid_configured_default_is_honoured(self):
-        """The contrast case: validation must not reject working configuration."""
+    def test_a_valid_configured_default_is_honoured(self, monkeypatch):
+        """The contrast case, and the first version did not contrast.
 
+        It asserted `_validated_default_cron() == "* * * * *"` without setting
+        the env var -- comparing the fallback against the fallback. It would have
+        passed a validator that rejected every non-default cron. A contrast case
+        sharing the subject's inputs is not one (review).
+        """
         import llc.api.agent_hires as mod
 
-        assert mod._validated_default_cron() == "* * * * *"
+        monkeypatch.setenv("AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON", "*/15 * * * *")
+        assert mod._validated_default_cron() == "*/15 * * * *"
 
     async def test_one_bad_cron_does_not_unschedule_everyone(self):
         """`_next_fire` raises RuntimeError with croniter absent, and the loop caught
