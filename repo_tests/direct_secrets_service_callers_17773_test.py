@@ -24,6 +24,11 @@ four modules that merely *discuss* the classes in comments and docstrings
 ``services/legacy_secrets_migrator.py``) and would freeze documentation as if it
 were a call. Parsed instead, so prose about a service is not a use of it.
 
+A module whose only use of the class is ``SecretsCoordinator(<service>)`` is not
+listed: injecting a service into the enforcement point is the remediation, and a
+guard that flagged it would penalise the fix it is asking for. The two #17773
+callers holding a ``root_key`` can reach the coordinator no other way.
+
 The set only shrinks. A new entry means a new bypass of the coordinator; route it
 through ``SecretsCoordinator`` or, if it is genuinely a principal the coordinator
 does not model, record the verdict on #17773 and add it here with the reason.
@@ -77,25 +82,61 @@ _FROZEN_DIRECT_CALLERS = {
 }
 
 
+#: The enforcement point. A service handed to *this* constructor is being routed
+#: THROUGH the coordinator, which is the remediation -- not a bypass of it.
+_COORDINATOR = "SecretsCoordinator"
+
+
+def _injected_into_the_coordinator(module: ast.Module) -> set[int]:
+    """``id()`` of every ``Name`` node sitting inside a ``SecretsCoordinator(...)`` call.
+
+    ``SecretsCoordinator(service=...)`` takes an injected service, and the two
+    callers of #17773 that hold a ``root_key`` can only reach the coordinator by
+    passing ``EnvelopeSecretsService(root_key=...)`` into it. They therefore keep
+    importing the class while no longer calling it -- so an import-only check
+    would report the **remediated** caller as an unremediated bypass, which is
+    how a baseline teaches people to add an entry instead of fixing the code.
+    """
+    injected: set[int] = set()
+    for node in ast.walk(module):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == _COORDINATOR:
+            for inner in ast.walk(node):
+                if isinstance(inner, ast.Name):
+                    injected.add(id(inner))
+    return injected
+
+
 def _imports_a_service_class(source: str) -> bool:
-    """True when *source* imports a secrets service class, by either import form.
+    """True when *source* reaches a secrets service class other than by injection.
 
     ``from services.envelope_secrets_service import EnvelopeSecretsService`` is
-    the only form present today; the module form is handled too so this guard has
-    no hole waiting for the first caller to spell it differently.
+    the only import form present today; the module form is handled too so this
+    guard has no hole waiting for the first caller to spell it differently.
+
+    A module whose ONLY use of the class is inside ``SecretsCoordinator(...)`` is
+    not a direct caller: it is injecting a service into the enforcement point.
+    Any other use counts, including a bare annotation, because a module typing a
+    service parameter is receiving one in order to call it.
     """
     try:
         module = ast.parse(source)
     except SyntaxError:
         return False
+
+    imported: set[str] = set()
     for node in ast.walk(module):
         if isinstance(node, ast.ImportFrom):
-            if any(alias.name in _SERVICE_CLASSES for alias in node.names):
-                return True
+            imported.update(alias.asname or alias.name for alias in node.names if alias.name in _SERVICE_CLASSES)
         elif isinstance(node, ast.Import):
             if any(alias.name.rsplit(".", 1)[-1].endswith("secrets_service") for alias in node.names):
                 return True
-    return False
+    if not imported:
+        return False
+
+    injected = _injected_into_the_coordinator(module)
+    return any(
+        isinstance(node, ast.Name) and node.id in imported and id(node) not in injected for node in ast.walk(module)
+    )
 
 
 def _is_production(rel: str) -> bool:
@@ -181,14 +222,47 @@ def test_the_delete_path_still_takes_no_authorizing_vault() -> None:
 @pytest.mark.parametrize(
     ("source", "expected"),
     [
-        ("from services.envelope_secrets_service import EnvelopeSecretsService\n", True),
-        ("from services.secrets_service import SecretsService\n", True),
+        (
+            "from services.envelope_secrets_service import EnvelopeSecretsService\n"
+            "raw = EnvelopeSecretsService().read(s, secret_id=i, accessible_vaults=v)\n",
+            True,
+        ),
+        (
+            "from services.secrets_service import SecretsService\n"
+            "rows = SecretsService().list_for_vaults(s, accessible_vaults=v)\n",
+            True,
+        ),
+        # An import with no use is dead code, not a caller -- `flake8` F821/F401 owns that,
+        # and this guard is about modules that REACH a service. Pinned so the distinction is
+        # a decision rather than an accident of the detector requiring a Name load.
+        ("from services.envelope_secrets_service import EnvelopeSecretsService\n", False),
         ("from services.envelope_secrets_service import SecretAccessError\n", False),
         ('"""A docstring naming EnvelopeSecretsService in prose."""\n', False),
         ("# EnvelopeSecretsService is discussed in this comment\n", False),
         ("x = 'EnvelopeSecretsService'\n", False),
+        (
+            "from services.envelope_secrets_service import EnvelopeSecretsService\n"
+            "c = SecretsCoordinator(EnvelopeSecretsService(root_key=k))\n",
+            False,
+        ),
+        (
+            "from services.envelope_secrets_service import EnvelopeSecretsService\n"
+            "c = SecretsCoordinator(EnvelopeSecretsService(root_key=k))\n"
+            "raw = EnvelopeSecretsService().read(s, secret_id=i, accessible_vaults=v)\n",
+            True,
+        ),
     ],
-    ids=["from-import", "from-import-base", "exception-only", "docstring", "comment", "string-literal"],
+    ids=[
+        "imported-and-called",
+        "imported-and-called-base",
+        "imported-but-unused",
+        "exception-only",
+        "docstring",
+        "comment",
+        "string-literal",
+        "injected-into-the-coordinator",
+        "injected-and-also-called-directly",
+    ],
 )
 def test_the_detector_reads_imports_not_prose(source: str, expected: bool) -> None:
     """Four real modules only discuss these classes; freezing those would be wrong."""
