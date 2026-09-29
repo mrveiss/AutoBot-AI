@@ -62,7 +62,6 @@ _ACCEPTS_WITHOUT_READING: frozenset[str] = frozenset()
 #: and a verdict is not something this guard can supply.
 _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
     {
-        "autobot-backend/api/code_intelligence.py:2002",
         "autobot-backend/api/codebase_analytics/endpoints/api_endpoints.py:47",
         "autobot-backend/api/codebase_analytics/endpoints/cross_language_patterns.py:43",
         "autobot-backend/api/codebase_analytics/endpoints/duplicates.py:334",
@@ -74,7 +73,6 @@ _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
         "autobot-backend/api/codebase_analytics/endpoints/ownership.py:479",
         "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:644",
         "autobot-backend/tasks/analytics_tasks.py:38",
-        "autobot-backend/api/code_intelligence.py:2041",
         "autobot-backend/api/codebase_analytics/chromadb_storage.py:688",
         "autobot-backend/api/codebase_analytics/endpoints/stats.py:219",
         "autobot-backend/api/codebase_analytics/endpoints/stats.py:279",
@@ -93,7 +91,7 @@ _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
 #: own fix in ``analytics_tasks.py:38``. A raised pin normally means somebody
 #: parked a leak; this one means somebody could finally see them. Any future
 #: rise needs the same distinction stated, or it is the former.
-_MAX_KNOWN_UNSCOPED_FALLBACKS = 17
+_MAX_KNOWN_UNSCOPED_FALLBACKS = 15
 
 
 #: Scan entry points must resolve their root through the source-aware resolver.
@@ -368,3 +366,41 @@ def test_the_detector_leaves_correct_code_alone(snippet):
     """Without this, a detector that returns True for everything would pass."""
     tree = ast.parse(snippet)
     assert not any(_is_unscoped_fallback(n) for n in ast.walk(tree)), f"false positive: {snippet}"
+
+
+# ---------------------------------------------------------------------------
+# The charset rule must have ONE spelling
+# ---------------------------------------------------------------------------
+
+
+def test_every_inline_source_id_pattern_matches_the_canonical_one():
+    """A second spelling of the charset is the drift this file exists to catch.
+
+    `code_intelligence.py` validates its `source_id` with an inline
+    `Query(pattern=...)` rather than `SourceIdQuery`, because that module is
+    2156 lines against a frozen ceiling of 2156 and the import line alone
+    breaches it (#17761 carries the split that unblocks it). The duplication is
+    therefore deliberate and temporary -- and pinned, so it cannot quietly
+    diverge from `source_scope._SOURCE_ID_SHAPE` while it lasts.
+
+    Two spellings that agree are a maintenance cost. Two that disagree are a
+    hole in whichever endpoint has the looser one.
+    """
+    import re as _re
+
+    canonical_src = (_REPO / "autobot-backend/api/codebase_analytics/source_scope.py").read_text(encoding="utf-8")
+    canonical = _re.search(r'_SOURCE_ID_SHAPE = re\.compile\(r"([^"]+)"\)', canonical_src)
+    assert canonical, "source_scope._SOURCE_ID_SHAPE is gone or reshaped; this pin needs rewriting"
+
+    inline = _re.findall(
+        r'source_id: str = Query\([^)]*pattern=r"([^"]+)"',
+        (_REPO / "autobot-backend/api/code_intelligence.py").read_text(encoding="utf-8"),
+    )
+    assert (
+        inline
+    ), "code_intelligence.py no longer validates source_id inline -- if it now imports SourceIdQuery, delete this test"
+    mismatched = [p for p in inline if p != canonical.group(1)]
+    assert not mismatched, (
+        f"inline source_id pattern(s) {mismatched} differ from the canonical "
+        f"{canonical.group(1)!r} (#17758) -- one rule, one spelling"
+    )

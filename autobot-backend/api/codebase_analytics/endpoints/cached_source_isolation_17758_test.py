@@ -194,3 +194,67 @@ class TestTheReportIsPerProject:
         result = asyncio.run(fetch_codebase_charts(None))
         assert result["chart_data"]["problem_types"] == []
         assert result["chart_data"]["severity_counts"] == []
+
+
+class TestUnavailableChartsAreNotAHealthyProject:
+    """Unknown is not zero, and here zero meant a full mark (#17758).
+
+    `_EMPTY_CHARTS` supplies empty `severity_counts`, which sums to zero issues.
+    The composite score read that as a perfectly clean project and awarded the
+    entire 30% issues component -- for a measurement that never happened. The
+    report then called a project healthy that it had not examined, which is the
+    empty-versus-unasked defect with a number attached.
+    """
+
+    @staticmethod
+    def _inputs(charts):
+        return {
+            "quality_data": {"overall": 50, "breakdown": {"performance": 50}},
+            "charts_data": charts,
+            "debt_data": {"summary": {"total_hours": 50}},
+            "performance_data": {"average_score": 50},
+        }
+
+    def test_unavailable_charts_do_not_award_the_issues_component(self):
+        from api.analytics_reporting import _EMPTY_CHARTS, calculate_composite_health_score
+
+        unavailable = calculate_composite_health_score(**self._inputs(dict(_EMPTY_CHARTS)))
+        clean = calculate_composite_health_score(
+            **self._inputs({"chart_data": {"severity_counts": []}, "charts_available": True})
+        )
+        assert unavailable != clean, (
+            "an unavailable charts section scores the same as a genuinely clean project; "
+            "that is the full 30% awarded for a measurement that never happened"
+        )
+
+    def test_an_unavailable_component_is_dropped_not_zeroed(self):
+        """Scoring it 0 would punish a project for a failed fetch; 100 is the bug.
+
+        With every measured component at 50, the renormalised score must stay 50
+        -- the missing component neither helps nor harms.
+        """
+        from api.analytics_reporting import _EMPTY_CHARTS, calculate_composite_health_score
+
+        assert calculate_composite_health_score(**self._inputs(dict(_EMPTY_CHARTS))) == 50.0
+
+    def test_a_clean_project_still_scores_its_full_marks(self):
+        """The contrast case: really having no issues must still score 100 there."""
+        from api.analytics_reporting import calculate_composite_health_score
+
+        score = calculate_composite_health_score(
+            quality_data={"overall": 100, "breakdown": {"performance": 100}},
+            charts_data={"chart_data": {"severity_counts": []}, "charts_available": True},
+            debt_data={"summary": {"total_hours": 0}},
+            performance_data={"average_score": 100},
+        )
+        assert score == 100.0
+
+    def test_the_default_is_available_so_existing_callers_are_unchanged(self):
+        """A caller that never heard of the flag must score as it always did."""
+        from api.analytics_reporting import calculate_composite_health_score
+
+        legacy = calculate_composite_health_score(**self._inputs({"chart_data": {"severity_counts": []}}))
+        explicit = calculate_composite_health_score(
+            **self._inputs({"chart_data": {"severity_counts": []}, "charts_available": True})
+        )
+        assert legacy == explicit
