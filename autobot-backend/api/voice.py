@@ -420,7 +420,6 @@ async def voice_delete_api(voice_id: str):
 # Audio transcription via Whisper (#1030)
 # ------------------------------------------------------------------
 
-from media.audio.pipeline import get_whisper_pipeline, transcribe_bytes  # noqa: E402
 from voice_processing.hallucination_filter import is_silence_hallucination  # noqa: E402
 
 
@@ -465,6 +464,13 @@ def _whisper_sync(pipe, audio_bytes: bytes, mime: str, language: str = "") -> di
 
     `language` is a BCP-47 hint; empty means auto-detect.
     """
+    # Imported here, not at module scope: `repo_tests/import_hermeticity_test.py`
+    # requires `api.voice` to import inertly, and reaching the media package at
+    # module level pulls in a chain that writes a temp file during import. The
+    # original code had this import function-local too -- that was a hermeticity
+    # boundary, not laziness, and #17780 briefly mistook it for one.
+    from media.audio.pipeline import transcribe_bytes  # noqa: PLC0415
+
     try:
         result = transcribe_bytes(pipe, audio_bytes, mime=mime, language=language)
     except Exception as exc:
@@ -481,6 +487,8 @@ def _whisper_sync(pipe, audio_bytes: bytes, mime: str, language: str = "") -> di
 
 async def _transcribe_with_whisper(audio_bytes: bytes, content_type: str, language: str = "") -> dict:
     """Run Whisper transcription in a background thread (#1030)."""
+    from media.audio.pipeline import get_whisper_pipeline  # noqa: PLC0415 -- see _whisper_sync
+
     pipe = get_whisper_pipeline()
     if not pipe:
         return {"text": "", "language": "unknown", "confidence": 0.0}
