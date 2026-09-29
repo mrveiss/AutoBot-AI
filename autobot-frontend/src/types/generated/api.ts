@@ -156203,9 +156203,9 @@ export interface operations {
     };
     get_cached_security_score_api_code_intelligence_security_score_cached_get: {
         parameters: {
-            query?: {
-                /** @description GH#8436: scope result by project source_id */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758) */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -156238,8 +156238,8 @@ export interface operations {
             query: {
                 /** @description Directory path to analyze */
                 path: string;
-                /** @description GH#8436: scope cached result by project source_id */
-                source_id?: string | null;
+                /** @description Required (#17758) */
+                source_id: string;
             };
             header?: never;
             path?: never;
