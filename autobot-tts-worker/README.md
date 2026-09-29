@@ -33,9 +33,7 @@ ansible-playbook playbooks/deploy-full.yml --tags tts-worker
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `TTS_HOST` | `0.0.0.0` | Bind address |
-| `TTS_PORT` | `8083` | Listen port. The default is rendered from `tts_port` in the
-  tts-worker role, so the role is authoritative; 8082 is WSL2/Hyper-V reserved on the
-  NPU host class (#3431, incident #3464). |
+| `TTS_PORT` | `8083` | Listen port, rendered from `tts_port` in the tts-worker role, which is authoritative. 8082 is WSL2/Hyper-V reserved on the NPU host class (#3431, incident #3464). |
 | `TTS_MODEL_ID` | `liquid-ai/kani-tts-2` | HuggingFace model ID |
 | `TTS_DEVICE` | `cpu` | Inference device (`cpu`, `cuda`, `mps`) |
 | `TTS_MODELS_DIR` | `/var/lib/autobot/models/tts` | Model cache directory |

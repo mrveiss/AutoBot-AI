@@ -39,13 +39,40 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 #: Extensions that can carry an env-var reference. Kept narrow so the walk stays
 #: fast; widening it can only find MORE names, which fails loudly rather than
 #: silently passing.
-_SUFFIXES = (".py", ".yml", ".yaml", ".j2", ".ts", ".vue", ".sh", ".env", ".md", ".toml", ".cfg")
+#:
+#: ``.env`` is NOT in this list, and the reason is the bug review found (#17782):
+#: ``Path(".env").suffix`` is ``""`` and ``Path(".env.docker").suffix`` is
+#: ``".docker"``, so a suffix entry for ``.env`` matched **no file in this
+#: repository at all** -- zero of the nine env files, every one of which is
+#: ``.env`` or ``.env.<something>``. The entry was decoration and the file type
+#: most likely to hold a deployed override was the one type never scanned.
+_SUFFIXES = (".py", ".yml", ".yaml", ".j2", ".ts", ".vue", ".sh", ".md", ".toml", ".cfg")
+
+#: Env files are matched by NAME, because their shape defeats suffix matching.
+#: Covers `.env`, `.env.docker`, `.env.example`, and `backend.env`.
+_ENV_NAME_PREFIX = ".env"
+_ENV_NAME_SUFFIX = ".env"
+
+
+def _is_scannable(name: str) -> bool:
+    """True when a file of this NAME can carry an env-var reference.
+
+    Split out from the walk so the env-file case has a contrast pair: the bug it
+    fixes was invisible precisely because nothing exercised the predicate.
+    """
+    if name == _ENV_NAME_PREFIX or name.startswith(_ENV_NAME_PREFIX + "."):
+        return True
+    if name.endswith(_ENV_NAME_SUFFIX):
+        return True
+    return Path(name).suffix in _SUFFIXES
+
 
 #: An env-var-shaped token naming a TTS address. Broad on the prefix: a future
 #: `AUTOBOT_SPEECH_TTS_PORT` is exactly the drift this exists to catch.
@@ -92,7 +119,7 @@ def _scanned_files(root: Path) -> list[Path]:
     """Every file this guard reads. The population, so the reach is checkable."""
     files: list[Path] = []
     for path in root.rglob("*"):
-        if not path.is_file() or path.suffix not in _SUFFIXES:
+        if not path.is_file() or not _is_scannable(path.name):
             continue
         rel = path.relative_to(root).as_posix()
         if rel.startswith((".git/", "node_modules/")) or "/node_modules/" in rel:
@@ -180,6 +207,57 @@ def test_retired_names_are_removed_from_the_record() -> None:
     stale = sorted(set(_ALLOWED) - set(found))
     assert not stale, "recorded TTS address names that no longer appear anywhere -- delete them:\n  " + "\n  ".join(
         stale
+    )
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        (".env", True),
+        (".env.docker", True),
+        (".env.example", True),
+        ("backend.env", True),
+        ("tts-worker.env.j2", True),
+        ("config.py", True),
+        ("notes.txt", False),
+        ("image.png", False),
+        ("envelope.pdf", False),
+    ],
+    ids=[
+        "bare-env",
+        "env-docker",
+        "env-example",
+        "prefixed-env",
+        "env-template",
+        "python",
+        "text",
+        "binary",
+        "endswith-env-but-not-env",
+    ],
+)
+def test_env_files_are_scannable_despite_having_no_usable_suffix(name: str, expected: bool) -> None:
+    """The contrast pair for review's finding (#17782).
+
+    `Path(".env").suffix` is `""` and `Path(".env.docker").suffix` is
+    `".docker"`, so the original suffix tuple's `".env"` entry matched **zero**
+    of this repository's nine env files. The guard's population silently excluded
+    the file type most likely to carry a deployed override, and nothing failed --
+    because no test exercised the predicate, only the walk's result.
+
+    `envelope.pdf` is the negative that stops `endswith(".env")` from being a
+    substring test.
+    """
+    assert _is_scannable(name) is expected
+
+
+def test_the_walk_actually_reaches_an_env_file() -> None:
+    """The predicate being right is not the same as the walk using it."""
+    root = repo_root()
+    names = {p.name for p in _scanned_files(root)}
+    env_files = {n for n in names if n == ".env" or n.startswith(".env.") or n.endswith(".env")}
+    assert env_files, (
+        "no env file was reached by the walk, though this repository tracks nine -- the "
+        "predicate and the walk have come apart"
     )
 
 
