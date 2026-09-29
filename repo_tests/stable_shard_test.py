@@ -304,6 +304,19 @@ class TestBalanceOnTheRealDurations:
         return weights
 
     def test_the_balancer_lands_within_slack_of_the_theoretical_optimum(self):
+        """How close the assignment gets to the best any assignment could do.
+
+        **This is deliberately not an assertion that max/mean <= 1.3.** A target
+        ratio would fail the day the suite grew a heavy module -- a fact about
+        the suite, not a defect in the assignment -- and the only available fix
+        would be to raise the number, which is how a ratchet becomes a record of
+        surrender. The optimum is a property of the input, so this bound does not
+        move when the suite does, and it fails only when the *balancer* is at
+        fault.
+
+        The achieved ratio against the 1.3 target is checked separately, where a
+        miss can name which of the two causes it was.
+        """
         weights = self._real_weights()
         load = _loads(weights)
         mean = sum(load) / len(load)
