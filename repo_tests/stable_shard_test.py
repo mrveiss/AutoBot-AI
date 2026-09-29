@@ -10,6 +10,7 @@ and quoted.
 """
 
 import json
+from pathlib import Path
 
 import pytest
 from repo_tests.stable_shard import (
@@ -222,13 +223,31 @@ class TestDurationsFileHandling:
         bad.write_text("{not json", encoding="utf-8")
         assert load_module_weights(bad) == {}
 
-    def test_weights_count_tests_per_module(self, tmp_path):
+    def test_weights_sum_recorded_milliseconds_per_module(self, tmp_path):
+        """Seconds, not test count (#17787).
+
+        The two disagree in exactly the way that mattered: `a_test.py` has TWICE
+        the tests of `b_test.py` and the SAME recorded time, so a count-based
+        weight would send twice as much load to a shard for no extra cost.
+        """
         path = tmp_path / "d.json"
         path.write_text(
             json.dumps({"a_test.py::test_x": 0.1, "a_test.py::test_y": 0.2, "b_test.py::test_z": 0.3}),
             encoding="utf-8",
         )
-        assert load_module_weights(path) == {"a_test.py": 2, "b_test.py": 1}
+        assert load_module_weights(path) == {"a_test.py": 300, "b_test.py": 300}
+
+    def test_a_module_recorded_as_faster_than_a_millisecond_still_outweighs_an_absent_one(self, tmp_path):
+        """ "Fast" and "never recorded" are different facts and must not share a weight."""
+        path = tmp_path / "d.json"
+        path.write_text(json.dumps({"quick_test.py::test_x": 0.0000001}), encoding="utf-8")
+        assert load_module_weights(path) == {"quick_test.py": 1}
+
+    def test_one_malformed_entry_does_not_discard_the_whole_file(self, tmp_path):
+        """A file that fails to load re-deals every module, so a null must not do that."""
+        path = tmp_path / "d.json"
+        path.write_text(json.dumps({"a_test.py::test_x": None, "a_test.py::test_y": 0.5}), encoding="utf-8")
+        assert load_module_weights(path) == {"a_test.py": 500}
 
 
 class TestNodeIdParsing:
@@ -247,3 +266,89 @@ class TestNodeIdParsing:
     def test_bucketing_depends_only_on_the_path(self):
         assert bucket_of("a/b_test.py", DEFAULT_BUCKETS) == bucket_of("a/b_test.py", DEFAULT_BUCKETS)
         assert bucket_of("a/b_test.py", DEFAULT_BUCKETS) < DEFAULT_BUCKETS
+
+
+#: How far above the theoretical optimum the balancer may land. The optimum is a
+#: property of the input, so this bound does not move when the suite does -- which
+#: is the point: a guard that compared against a RECORDED spread would drift the
+#: first time a module was added, and someone would raise the number.
+_OPTIMUM_SLACK = 1.05
+
+#: The headline target from #17787, for the message only. Asserting it directly
+#: would make this guard fail for a reason no balancer can fix -- see below.
+_TARGET_RATIO = 1.3
+
+
+def _loads(weights, splits=SPLITS):
+    table = build_bucket_table(weights, splits, DEFAULT_BUCKETS)
+    load = [0] * splits
+    for module, weight in weights.items():
+        load[shard_of(module, table, DEFAULT_BUCKETS)] += weight
+    return load
+
+
+class TestBalanceOnTheRealDurations:
+    """#17787: the balancer must get close to the best any balancer could do.
+
+    Whole modules stay in one shard -- ``--dist loadscope`` depends on it -- so a
+    single module heavier than a shard's fair share sets a floor nothing can beat.
+    The assertion is therefore against ``max(mean, heaviest_module)``, the
+    theoretical optimum, and NOT against a target ratio: a target would fail when
+    the suite grew a heavy module, which is a fact about the suite rather than a
+    defect in the assignment, and the fix would be to raise the number.
+    """
+
+    def _real_weights(self):
+        weights = load_module_weights(Path(__file__).resolve().parents[1] / ".test_durations")
+        assert weights, "no durations were read, so every assertion below would range over nothing"
+        return weights
+
+    def test_the_balancer_lands_within_slack_of_the_theoretical_optimum(self):
+        weights = self._real_weights()
+        load = _loads(weights)
+        mean = sum(load) / len(load)
+        heaviest = max(weights.values())
+        optimum = max(mean, heaviest)
+        assert max(load) <= optimum * _OPTIMUM_SLACK, (
+            f"slowest shard carries {max(load)/1000:.1f}s against an optimum of "
+            f"{optimum/1000:.1f}s (mean {mean/1000:.1f}s, heaviest single module "
+            f"{heaviest/1000:.1f}s) -- the assignment is leaving balance on the table"
+        )
+
+    def test_the_achieved_ratio_is_reported_against_the_target(self):
+        """Not an assertion about the suite: it fails only if the balancer is at fault.
+
+        If the achieved ratio misses the 1.3 target, that is either a balancing
+        defect (caught above) or one module larger than 1.3x the mean. This
+        separates them, so a failure names which.
+        """
+        weights = self._real_weights()
+        load = _loads(weights)
+        mean = sum(load) / len(load)
+        achieved = max(load) / mean
+        pole = max(weights.values()) / mean
+        assert achieved <= _TARGET_RATIO or pole > _TARGET_RATIO, (
+            f"max/mean is {achieved:.3f}, above the {_TARGET_RATIO} target, and no single "
+            f"module explains it (heaviest is {pole:.3f}x the mean) -- so this is the "
+            f"assignment, not the shape of the suite"
+        )
+
+    def test_a_lopsided_input_does_not_satisfy_the_target_ratio(self):
+        """The contrast pair: prove the ratio can exceed the target.
+
+        Without this, ``achieved <= 1.3`` might be unfalsifiable -- and the pole
+        escape hatch in the test above would then excuse everything.
+        """
+        weights = {f"pkg/mod_{i:04d}_test.py": 1 for i in range(1200)}
+        weights["pkg/whale_test.py"] = 10_000
+        load = _loads(weights)
+        achieved = max(load) / (sum(load) / len(load))
+        assert achieved > _TARGET_RATIO, (
+            f"a single module worth {10_000 / sum(load):.0%} of the suite produced max/mean "
+            f"{achieved:.2f}, which the target would accept -- the ratio is not measuring "
+            "what it claims"
+        )
+        assert max(load) <= max(sum(load) / len(load), max(weights.values())) * _OPTIMUM_SLACK, (
+            "the same lopsided input must still be within slack of its own optimum: the two "
+            "assertions measure different things and this pins that they do"
+        )
