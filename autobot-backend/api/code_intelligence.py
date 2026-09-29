@@ -1339,7 +1339,7 @@ async def list_vulnerability_types(
     error_code_prefix="CODE_INTELLIGENCE",
 )
 async def get_security_score(
-    path: str = Query(..., description="Directory path to analyze"),
+    path: str = Query(..., min_length=1, description="Directory path to analyze"),  # #17758
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -1368,7 +1368,7 @@ async def get_security_score(
         # (POST /security/score/analyze -> run_security_analysis). Serve the
         # latest completed result and enqueue a refresh instead of scanning in
         # the request. Same response shape either way, so callers are unchanged.
-        cached = await get_latest_task_result(_REDIS_PREFIX)
+        cached = await get_latest_task_result(f"{_REDIS_PREFIX}path:{path}:")  # #17758: dimension-tagged
         if cached and cached.get("result"):
             return JSONResponse(
                 status_code=200,
@@ -1382,7 +1382,7 @@ async def get_security_score(
             )
 
         queued = run_security_analysis.delay(path)
-        await store_latest_task_id(_REDIS_PREFIX, queued.id)
+        await store_latest_task_id(f"{_REDIS_PREFIX}path:{path}:", queued.id)  # #17758: same key as the read
         logger.info("Security score not cached; queued analysis task %s for %s", queued.id, path)
         return JSONResponse(
             status_code=200,
@@ -1996,10 +1996,10 @@ async def get_full_evolution_report(
     error_code_prefix="CODE_INTELLIGENCE",
 )
 async def get_cached_security_score(
-    source_id: str | None = Query(default=None, description="GH#8436: scope result by project source_id"),
+    source_id: str = Query(..., min_length=1, pattern=r"^[A-Za-z0-9_.-]{1,128}$", description="Required (#17758)"),
 ):
     """Return the latest completed security score result (#1540, GH#8436)."""
-    prefix = f"{_REDIS_PREFIX}{source_id}:" if source_id else _REDIS_PREFIX
+    prefix = f"{_REDIS_PREFIX}source_id:{source_id}:"  # #17758: tagged, no unscoped branch
     cached = await get_latest_task_result(prefix)
     if cached and cached.get("result"):
         return {
@@ -2022,7 +2022,7 @@ _NO_PATH_RESULT = {"status": "no_data", "message": "Path does not exist", "secur
 )
 async def start_security_analysis(
     path: str = Query(..., description="Directory path to analyze"),
-    source_id: str | None = Query(default=None, description="GH#8436: scope cached result by project source_id"),
+    source_id: str = Query(..., min_length=1, pattern=r"^[A-Za-z0-9_.-]{1,128}$", description="Required (#17758)"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Enqueue security score analysis as a Celery task (GH#6505).
@@ -2038,7 +2038,7 @@ async def start_security_analysis(
             "status": "completed",
             "result": {**_NO_PATH_RESULT, "message": f"Path does not exist: {path}"},
         }
-    prefix = f"{_REDIS_PREFIX}{source_id}:" if source_id else _REDIS_PREFIX
+    prefix = f"{_REDIS_PREFIX}source_id:{source_id}:"  # #17758: tagged, no unscoped branch
     result = run_security_analysis.delay(path)
     await store_latest_task_id(prefix, result.id)
     return {"task_id": result.id, "status": "pending"}
