@@ -63,6 +63,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Dict, List
 
@@ -101,8 +102,23 @@ def load_module_weights(durations_path: Path) -> Dict[str, int]:
         return {}
     weights: Dict[str, int] = {}
     for nodeid, seconds in raw.items():
-        millis = int(round(seconds * 1000)) if isinstance(seconds, (int, float)) else 0
         module = module_of(nodeid)
+        if isinstance(seconds, bool) or not isinstance(seconds, (int, float)):
+            millis = 0
+        elif not math.isfinite(seconds) or seconds < 0:
+            # Rejected at the boundary, named, rather than handed to the balancer
+            # (review). Python's JSON parser accepts `NaN` and `Infinity`, and
+            # `int(round(...))` on either raises from inside this loop -- outside
+            # the try above, so collection dies with a bare
+            # "cannot convert float NaN to integer" naming nothing. A negative
+            # duration is worse than a crash: it makes a negative bucket weight,
+            # which the LPT pass consumes happily and silently mis-balances.
+            raise ValueError(
+                f"durations file {durations_path.name} has an unusable time for {module}: "
+                f"{seconds!r}. A duration must be finite and non-negative."
+            )
+        else:
+            millis = int(round(seconds * 1000))
         weights[module] = weights.get(module, 0) + millis
     # Present-but-fast is not absent. A module whose recorded total rounds to
     # zero would otherwise weigh exactly what a module the file has never seen

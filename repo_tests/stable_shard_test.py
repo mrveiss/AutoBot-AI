@@ -243,6 +243,43 @@ class TestDurationsFileHandling:
         path.write_text(json.dumps({"quick_test.py::test_x": 0.0000001}), encoding="utf-8")
         assert load_module_weights(path) == {"quick_test.py": 1}
 
+    @pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity"], ids=["nan", "inf", "-inf"])
+    def test_a_non_finite_duration_is_rejected_by_name(self, tmp_path, literal):
+        """Python's JSON parser accepts these, and `round()` then raises (review).
+
+        The raise came from inside the weighting loop -- outside the try that
+        guards `json.loads` -- so collection died with a bare "cannot convert
+        float NaN to integer" naming no file and no module.
+        """
+        path = tmp_path / "d.json"
+        path.write_text('{"pkg/a_test.py::test_x": ' + literal + "}", encoding="utf-8")
+        with pytest.raises(ValueError, match="pkg/a_test.py"):
+            load_module_weights(path)
+
+    def test_a_negative_duration_is_rejected_rather_than_weighted(self, tmp_path):
+        """Worse than a crash: a negative weight is consumed silently.
+
+        `int(round(-5.0 * 1000))` is -5000, the LPT pass accepts it, and the
+        balance is quietly wrong -- no error, no signal, a shard credited for
+        work that reduces its load.
+        """
+        path = tmp_path / "d.json"
+        path.write_text('{"pkg/a_test.py::test_x": -5.0}', encoding="utf-8")
+        with pytest.raises(ValueError, match="pkg/a_test.py"):
+            load_module_weights(path)
+
+    def test_a_zero_duration_is_weighted_not_rejected(self, tmp_path):
+        """The boundary is `< 0`, not `<= 0`.
+
+        A test recorded at 0.0s is ordinary -- pytest-split rounds fast tests
+        down -- so it must weigh the floor of 1ms, not raise. Pinned because the
+        first version of this test asserted `load_module_weights.__doc__`, which
+        is true regardless of how zero is handled and therefore recorded nothing.
+        """
+        path = tmp_path / "d.json"
+        path.write_text('{"pkg/a_test.py::test_x": 0.0}', encoding="utf-8")
+        assert load_module_weights(path) == {"pkg/a_test.py": 1}
+
     def test_one_malformed_entry_does_not_discard_the_whole_file(self, tmp_path):
         """A file that fails to load re-deals every module, so a null must not do that."""
         path = tmp_path / "d.json"
@@ -287,6 +324,32 @@ def _loads(weights, splits=SPLITS):
     return load
 
 
+def _heaviest_bucket(weights):
+    """The largest weight that CANNOT be split across shards.
+
+    ``build_bucket_table`` assigns whole **buckets**, so the indivisible unit is
+    the bucket and not the module (review). Two heavy modules hashing into one
+    bucket force a floor no assignment can beat, and bounding on the heaviest
+    MODULE would then fail an assignment that is in fact optimal -- blaming the
+    balancer for a hash collision it cannot undo.
+
+    Measured on the current durations file the two coincide, because the heaviest
+    bucket holds exactly one module (the 31.9s pole, alone in bucket 362). So the
+    module bound was right *by accident*, and the accident breaks the first time
+    two heavy modules collide -- which adding one test file can cause.
+    """
+    totals: dict[int, int] = {}
+    for module, weight in weights.items():
+        bucket = bucket_of(module, DEFAULT_BUCKETS)
+        totals[bucket] = totals.get(bucket, 0) + weight
+    return max(totals.values()) if totals else 0
+
+
+def _optimum(weights, splits=SPLITS):
+    """The best max-shard-load any assignment of these buckets could achieve."""
+    return max(sum(weights.values()) / splits, _heaviest_bucket(weights))
+
+
 class TestBalanceOnTheRealDurations:
     """#17787: the balancer must get close to the best any balancer could do.
 
@@ -320,12 +383,12 @@ class TestBalanceOnTheRealDurations:
         weights = self._real_weights()
         load = _loads(weights)
         mean = sum(load) / len(load)
-        heaviest = max(weights.values())
-        optimum = max(mean, heaviest)
+        optimum = _optimum(weights)
         assert max(load) <= optimum * _OPTIMUM_SLACK, (
             f"slowest shard carries {max(load)/1000:.1f}s against an optimum of "
-            f"{optimum/1000:.1f}s (mean {mean/1000:.1f}s, heaviest single module "
-            f"{heaviest/1000:.1f}s) -- the assignment is leaving balance on the table"
+            f"{optimum/1000:.1f}s (mean {mean/1000:.1f}s, heaviest indivisible bucket "
+            f"{_heaviest_bucket(weights)/1000:.1f}s) -- the assignment is leaving "
+            f"balance on the table"
         )
 
     def test_the_achieved_ratio_is_reported_against_the_target(self):
@@ -339,18 +402,40 @@ class TestBalanceOnTheRealDurations:
         load = _loads(weights)
         mean = sum(load) / len(load)
         achieved = max(load) / mean
-        pole = max(weights.values()) / mean
+        pole = _heaviest_bucket(weights) / mean
         assert achieved <= _TARGET_RATIO or pole > _TARGET_RATIO, (
             f"max/mean is {achieved:.3f}, above the {_TARGET_RATIO} target, and no single "
-            f"module explains it (heaviest is {pole:.3f}x the mean) -- so this is the "
+            f"bucket explains it (heaviest is {pole:.3f}x the mean) -- so this is the "
             f"assignment, not the shape of the suite"
         )
 
-    def test_a_lopsided_input_does_not_satisfy_the_target_ratio(self):
-        """The contrast pair: prove the ratio can exceed the target.
+    def test_a_worse_than_optimal_assignment_fails_the_bound(self):
+        """The contrast the optimum bound actually needs (review).
 
-        Without this, ``achieved <= 1.3`` might be unfalsifiable -- and the pole
-        escape hatch in the test above would then excuse everything.
+        The lopsided fixture below proves the RATIO can exceed the target, but it
+        passes both guards -- the optimum bound because its optimum includes the
+        whale, and the target-ratio guard because the whale satisfies the pole
+        escape hatch. So it does not demonstrate that the bound can fail, and the
+        contrast I wrote to stop the escape hatch excusing everything was itself
+        excused by it.
+
+        This one cannot be: every bucket piled onto one shard is worse than
+        optimal by construction, whatever the weights are.
+        """
+        weights = self._real_weights()
+        piled = [sum(weights.values())] + [0] * (SPLITS - 1)
+        assert max(piled) > _optimum(weights) * _OPTIMUM_SLACK, (
+            "an assignment with every bucket on one shard did not exceed the bound, so the "
+            "bound accepts any assignment and the guard above asserts nothing"
+        )
+
+    def test_a_lopsided_input_does_not_satisfy_the_target_ratio(self):
+        """Proves the RATIO can exceed the target -- and nothing more than that.
+
+        Deliberately NOT presented as the optimum bound's contrast pair: this
+        input passes the optimum bound (correctly -- its optimum includes the
+        whale) and is accepted by the target-ratio guard's pole escape hatch. The
+        bound's real contrast is the test above.
         """
         weights = {f"pkg/mod_{i:04d}_test.py": 1 for i in range(1200)}
         weights["pkg/whale_test.py"] = 10_000
@@ -361,7 +446,7 @@ class TestBalanceOnTheRealDurations:
             f"{achieved:.2f}, which the target would accept -- the ratio is not measuring "
             "what it claims"
         )
-        assert max(load) <= max(sum(load) / len(load), max(weights.values())) * _OPTIMUM_SLACK, (
+        assert max(load) <= _optimum(weights) * _OPTIMUM_SLACK, (
             "the same lopsided input must still be within slack of its own optimum: the two "
             "assertions measure different things and this pins that they do"
         )
