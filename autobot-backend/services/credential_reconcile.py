@@ -16,10 +16,12 @@ marker'd envelope row and reconciles it against SQLite:
 **Destructive-safety.** Deletes are irreversible (hard delete), so the sweep refuses to run
 when the canonical store can't be positively confirmed authoritative *and populated*:
 - SQLite file missing or its table absent → abort (``OperationalError``/``FileNotFoundError``).
-- SQLite present but **empty**, or the sweep would delete **every** envelope copy → abort. A
-  populated mirror against an empty canonical store is indistinguishable from a misconfigured
-  or wiped DB (``get_secrets_service`` auto-creates an empty ``secrets.db`` at a bad path), so
-  it must never be read as "everything revoked".
+- SQLite present but **empty** → abort. A populated mirror against an empty canonical store is
+  indistinguishable from a misconfigured or wiped DB (``get_secrets_service`` auto-creates an
+  empty ``secrets.db`` at a bad path), so it must never be read as "everything revoked". Checked
+  before the collision filter, which can otherwise empty the row set and skip this (#17773).
+- The sweep would delete **every** reconcilable copy → abort. Checked after that filter, because
+  ``all()`` over a subset is more readily true, so filtering only makes this fire more eagerly.
 - Two envelope rows claiming the same canonical id → that marker is skipped, not deleted. The
   marker→owner coupling the delete relies on is unenforced in the schema (#17773), so it is
   verified per sweep rather than trusted.
@@ -158,6 +160,22 @@ async def reconcile_connector_credentials(
     rows = (await session.execute(select(Secret).where(marker.isnot(None), Secret.is_active.is_(True)))).scalars().all()
     report.checked = len(rows)
 
+    # Arm 1 of the circuit breaker, hoisted ABOVE the collision filter (review, #17773).
+    # It asks "is the canonical store empty", which does not depend on how many rows survive
+    # that filter -- and the filter can empty `rows` completely when every marker is collided.
+    # Left below, the `rows and ...` prefix short-circuited and this abort never ran, so a
+    # sweep against a wiped canonical store reported `aborted=False` with nothing deleted:
+    # harmless in effect and wrong in report, which is *could not evaluate* rendering as
+    # *nothing to do*. Tested against the rows as FOUND, before filtering.
+    if rows and not sqlite_state:
+        logger.error(
+            "Reconcile aborted — canonical store readable but EMPTY; %d envelope copy(ies) found. "
+            "An empty canonical store is never 'everything revoked'.",
+            len(rows),
+        )
+        report.aborted = True
+        return report
+
     # The 1:1 coupling `_reconcile_one` depends on -- marker → one canonical row → one owner --
     # is checked here rather than assumed. `extra_data` is a JSON column with no unique
     # constraint or index on the marker, so two envelope rows CAN claim the same canonical id;
@@ -178,12 +196,13 @@ async def reconcile_connector_credentials(
             )
     rows = [row for row in rows if len(by_marker[str(row.extra_data.get(_MARKER))]) == 1]
 
-    # Destructive-safety circuit breaker: refuse to mass-delete when canonical looks empty or a
-    # total wipe — that is far more likely a misconfigured/wiped store than a real "revoke all".
-    if rows and (not sqlite_state or all(_is_revoked(sqlite_state, r) for r in rows)):
-        logger.error(
-            "Reconcile aborted — would delete all %d envelope copies (canonical empty=%s)", len(rows), not sqlite_state
-        )
+    # Arm 2: refuse a total wipe. This one DOES belong after the collision filter, and the
+    # reason is that `all()` over a subset is more readily true than over the superset, so
+    # filtering can only make this fire more eagerly, never less. The proving case is a
+    # collided row that is NOT revoked: left in, it makes `all(...)` false and suppresses an
+    # abort that should happen. `rows and` stays as the vacuity guard -- `all([])` is True.
+    if rows and all(_is_revoked(sqlite_state, r) for r in rows):
+        logger.error("Reconcile aborted — would delete all %d reconcilable envelope copies", len(rows))
         report.aborted = True
         return report
 
