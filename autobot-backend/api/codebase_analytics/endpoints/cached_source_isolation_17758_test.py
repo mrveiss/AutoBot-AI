@@ -153,3 +153,44 @@ class TestTheParameterCannotBeOmitted:
         assert params[
             "source_id"
         ].field_info.is_required(), f"{route_path}'s source_id is optional; an omitted one used to read a global key"
+
+
+class TestTheReportIsPerProject:
+    """Owner ruling, 2026-09-29: `/report` and `/summary` are per-project (#17758).
+
+    This reverses #5112, which made `/api/reporting/report` "the one exception
+    that stays global" -- a report aggregating across projects is the
+    cross-project leak #17758 exists to remove. The ruling is recorded here as
+    an assertion rather than only in a comment, because a comment cannot fail
+    when someone restores the optional parameter for convenience.
+    """
+
+    @pytest.mark.parametrize("route_path", ["/report", "/summary"])
+    def test_source_id_is_required(self, route_path):
+        from api import analytics_reporting
+
+        routes = [r for r in analytics_reporting.router.routes if getattr(r, "path", "") == route_path]
+        assert len(routes) == 1, f"expected one route at {route_path}, found {len(routes)}"
+
+        params = {p.name: p for p in routes[0].dependant.query_params}
+        assert "source_id" in params, f"{route_path} takes no source_id; it would aggregate across projects"
+        assert params["source_id"].field_info.is_required(), (
+            f"{route_path}'s source_id is optional again -- an omitted one makes the report "
+            "cross-project, which is the #17758 leak in the surface that composes every panel"
+        )
+
+    def test_the_charts_helper_declines_without_a_source(self):
+        """Defence for the internal path: the routes require it, callers can still omit it.
+
+        `fetch_codebase_charts()` is an ordinary function. Requiring the
+        parameter at two routes does not stop a third caller passing nothing,
+        and the honest answer to "which project?" unanswered is to not ask the
+        charts endpoint at all rather than to resolve a default.
+        """
+        import asyncio
+
+        from api.analytics_reporting import fetch_codebase_charts
+
+        result = asyncio.run(fetch_codebase_charts(None))
+        assert result["chart_data"]["problem_types"] == []
+        assert result["chart_data"]["severity_counts"] == []

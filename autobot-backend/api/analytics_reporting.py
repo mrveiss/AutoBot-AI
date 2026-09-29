@@ -16,9 +16,10 @@ Provides a single endpoint that aggregates all analytics data from:
 from typing import Any, Dict
 
 import aiohttp
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from api.codebase_analytics.source_scope import SourceIdQuery
 from api.schemas_analytics import (
     AnalyticsReportingReportResponse,
     AnalyticsReportingSummaryResponse,
@@ -301,9 +302,7 @@ def _build_report_response(
     error_code_prefix="ANALYTICS_REPORTING",
 )
 async def get_analytics_report(
-    source_id: str | None = Query(
-        None, description="Optional (#17758): scopes the charts section; the rest of the report is global"
-    ),
+    source_id: SourceIdQuery,
 ):
     """
     Get aggregated analytics report from all analytics sources.
@@ -341,9 +340,7 @@ async def get_analytics_report(
     error_code_prefix="ANALYTICS_REPORTING",
 )
 async def get_quick_summary(
-    source_id: str | None = Query(
-        None, description="Optional (#17758): scopes the charts section; the rest of the report is global"
-    ),
+    source_id: SourceIdQuery,
 ):
     """
     Get a quick summary of code health.
