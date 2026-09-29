@@ -55928,8 +55928,12 @@ export interface components {
             assistant_name?: string | null;
             /** Role Description */
             role_description?: string | null;
-            /** Heartbeat Cron */
-            heartbeat_cron?: string | null;
+            /**
+             * Heartbeat Cron
+             * @description Cron for periodic wake. Defaults to every minute; only used when heartbeat_enabled.
+             * @default * * * * *
+             */
+            heartbeat_cron: string | null;
             /**
              * Heartbeat Enabled
              * @default false
