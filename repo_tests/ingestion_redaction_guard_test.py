@@ -80,7 +80,8 @@ _HISTORICAL_ENTRY_POINTS = [
 #: `connector_redaction_functional_test.py`, which has twelve tests and NO
 #: `__subclasses__()` walk -- it enumerates. The docstring above claims the guards
 #: "walk every transitive connector subclass", and the file that does that is
-#: `repo_tests/connector_redaction_guard_test.py:137`, which was absent. So the
+#: `test_every_discovered_connector_class_routes_through_the_chokepoint`, which was
+#: absent. So the
 #: strongest claim in the docstring was backed by the one file that does not
 #: support it, while the file that does went unmentioned -- the coverage argument
 #: pointing at the wrong evidence, which is the exact defect #16985 is about.
@@ -93,7 +94,7 @@ _AUTHORITATIVE_GUARDS = {
         "test_every_content_sink_call_site_is_redacted_or_explicitly_exempt",
         "test_negative_control_an_unredacted_write_path_is_caught",
     ),
-    # The discovery guard: `base.__subclasses__()` at :106, so a connector added
+    # The discovery guard: it walks `base.__subclasses__()`, so a connector added
     # tomorrow is covered without anyone editing a list. This is what makes the
     # docstring's "every transitive connector subclass" true.
     "repo_tests/connector_redaction_guard_test.py": (
