@@ -19,10 +19,12 @@ from __future__ import annotations
 import uuid
 from typing import Any, Optional
 
-from fastapi import APIRouter, Form, HTTPException
+from fastapi import APIRouter, Depends, Form, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from api.user_management.dependencies import get_current_user
+from auth_middleware import check_admin_permission
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_config
 from voice_processing.realtime.base import RealtimeProviderError
@@ -34,7 +36,12 @@ from voice_processing.realtime.registry import (
 )
 
 logger = get_logger(__name__)
-router = APIRouter()
+
+# #16375: every route here spends something on the caller's behalf — an upstream
+# realtime negotiation, a billed token budget, or an MCP tool invocation — so the
+# router authenticates. The browser already sends credentials (useRealtimeVoice.ts
+# calls fetchWithAuth), so this gate adds no client change.
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 # ── Telemetry endpoint models (Issue #7421) ───────────────────────────────────
@@ -162,7 +169,13 @@ async def list_providers() -> dict:
     return {"selected": get_active_provider_id(), "providers": list_realtime_providers()}
 
 
-@router.patch("/providers", response_model=RealtimeProvidersResponse)
+# Admin, not just authenticated: set_active_provider mutates the in-process
+# selection for every session, not the caller's own.
+@router.patch(
+    "/providers",
+    response_model=RealtimeProvidersResponse,
+    dependencies=[Depends(check_admin_permission)],
+)
 async def set_provider(body: SetRealtimeProviderRequest) -> dict:
     """Set the active realtime provider (in-process; doc'd restart limitation).
 
