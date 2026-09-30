@@ -72,8 +72,6 @@ from check_requirements_ci_drift import (  # noqa: E402
 #: (#16715), `torchmetrics` was absent, and the bidirectional contract fired a
 #: confident "torch is no longer an unenforced pair".
 BASELINE: dict[str, str] = {
-    # production `==2.14.0`; `torchmetrics` requires `torch>=2.0.0`, unbounded.
-    "torch": "torchmetrics",
     # production `>=7.36.2,<8.0.0`; `onnxruntime` requires `protobuf>=4.25.8`,
     # unbounded, so CI takes 8.0 the day it ships. The HIGHER-RISK entry: that
     # cap is not incidental -- requirements.txt:10-14 records it as the real

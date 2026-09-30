@@ -19,6 +19,19 @@ pillow==12.3.0
 # py3-none-any, and torch is ALREADY installed here transitively via
 # sentence-transformers. No nvidia-* wheels — the CPU-only index in
 # .github/actions/setup-python-suite keeps resolving torch, so the ~3GB saving stands.
+# torch is pinned here, not left transitive (#17706 review). It arrives via
+# sentence-transformers, and until 2026-09-30 the CPU index happened to resolve the
+# same release that autobot-backend/requirements.txt declares. Upstream published
+# 2.14.1 and the two diverged: the dependency-floor GATE compares the installed
+# environment against every root's declaration and read
+# `installed 2.14.1+cpu, declared ==2.14.0`, so every python-suite shard went red
+# on a transitive resolution rather than on anything a PR changed. main was green
+# at 15:08 UTC and red at 16:16 UTC with no relevant commit between.
+#
+# `==2.14.0` matches `2.14.0+cpu` -- a local version satisfies an `==` without one --
+# so this keeps the CPU-only index and its ~3GB saving. Move it WITH
+# autobot-backend/requirements.txt's torch/torchvision pair, never alone.
+torch==2.14.0
 torchmetrics>=1.9.0,<2.0.0
 # #14551: production dep (autobot-backend/requirements.txt, RAPTOR clustering).
 # pytest.importorskip("sklearn") gates entity_resolution_test.py,
