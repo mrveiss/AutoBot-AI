@@ -28805,7 +28805,16 @@ export interface paths {
         put?: never;
         /**
          * Clear Error History
-         * @description Clear error history (admin only)
+         * @description Clear error history. Admin-gated at the router (#16375).
+         *
+         *     This route used to compare the Authorization header against a literal
+         *     defined in this file, under a comment saying authentication "would
+         *     typically" be required -- a placeholder never replaced. A literal is not a
+         *     credential: it ships in the repository, so it authenticates anyone who can
+         *     read the source while presenting as a gate to anyone who reads the route.
+         *     The literal is deliberately not repeated here, because a secrets scan reads
+         *     docstrings too. See #17727; the router-level `check_admin_permission` above
+         *     is the replacement, so this route no longer authenticates itself.
          */
         post: operations["clear_error_history_api_errors_clear_post"];
         delete?: never;
@@ -141848,9 +141857,7 @@ export interface operations {
     clear_error_history_api_errors_clear_post: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -141863,15 +141870,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorMonitoringClearResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

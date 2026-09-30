@@ -203,8 +203,10 @@ all:
         # AI/ML-specific configuration
         ai_stack_port: 8080
         ollama_port: 11434
-        # TTS Worker (#928, migrated from .22 -- #1394)
-        tts_worker_port: 8082
+        # TTS Worker: the port lives in roles/tts-worker/defaults/main.yml as
+        # `tts_port` (8083). #17782 removed a `tts_worker_port: 8082` here -- no
+        # Ansible task read that name, so it configured nothing, and 8082 is
+        # WSL2/Hyper-V reserved on this host class anyway (#3431, incident #3464).
         model_cache_size: "10gb"
         inference_threads: 4
 

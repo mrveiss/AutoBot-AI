@@ -10,7 +10,7 @@ Provides endpoints for comprehensive project state tracking and reporting
 import asyncio
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from api.schemas_workflows import (
@@ -28,6 +28,7 @@ from api.schemas_workflows import (
     StateTrackingSummaryResponse,
     StateTrackingTrendsResponse,
 )
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from project_state_tracker import (
@@ -36,7 +37,9 @@ from project_state_tracker import (
     get_state_tracker,
 )
 
-router = APIRouter()
+# #16375: snapshot and change-recording write the one shared project tracker, and
+# export writes a report to disk. Nothing here is per-user, so admin is the gate.
+router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = get_logger(__name__)
 
 

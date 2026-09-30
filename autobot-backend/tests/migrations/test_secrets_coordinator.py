@@ -147,6 +147,27 @@ async def test_delete_then_not_found(coord, session):
         await coord.read(session, user_id=_ADMIN, permissions=_NO_PERMS, secret_id=sid)
 
 
+async def test_a_scope_refusal_is_forbidden_not_not_found(coord, session):
+    """The contrast pair for `test_delete_then_not_found` (#17822).
+
+    #17772's pre-check collapsed both into `SecretAccessError`, so a secret that had
+    been deleted reported 403 where 404 is correct. Pinning only the not-found side
+    would be satisfied by collapsing them the other way, which is why this exists:
+    same call, a secret that **does** exist, a principal the scope refuses.
+    """
+    sid = await _make(coord, session)
+    await session.commit()
+    with pytest.raises(SecretAccessError):
+        await coord.read(session, user_id=_OUTSIDER, permissions=_NO_PERMS, secret_id=sid)
+
+
+async def test_the_owner_still_reads_their_own_after_the_precheck(coord, session):
+    """Non-vacuity: a pre-check that refused everyone would pass both cases above."""
+    sid = await _make(coord, session)
+    await session.commit()
+    assert await coord.read(session, user_id=_ADMIN, permissions=_NO_PERMS, secret_id=sid) == b"hunter2"
+
+
 async def test_mutation_on_missing_secret_raises_not_found(coord, session):
     with pytest.raises(SecretNotFoundError):
         await coord.share(
