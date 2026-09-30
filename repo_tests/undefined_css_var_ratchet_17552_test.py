@@ -76,13 +76,25 @@ def _inspected_files(root: Path) -> list[Path]:
 
 
 #: A tree-scanning guard reports the same green for a clean tree and for a tree
-#: it never read, so a floor is what makes the difference visible. Measured at
-#: 1452 files; the floor sits below that with headroom, and ``verify_floor``
-#: refuses one that drifts too far under its own population (#15928).
+#: it never read, so a floor is what makes the difference visible, and
+#: ``verify_floor`` refuses one that drifts too far under its own population
+#: (#15928).
+#:
+#: RE-MEASURED at **1463** files (was 1452 when floor=1400 was set). The tree
+#: grew 11 files, which took the slack to 63 against an allowance of 60 and
+#: failed the declaration itself -- not the scan.
+#:
+#: Restated at 1433 rather than nudged past the failure. The old pin sat 52 of
+#: its 60 allowance below its own measurement, leaving room for **8** more
+#: files before a bump came due; 11 arrived. 1433 sits at half the allowance,
+#: so the slack is 30 and the next bump is due after 30 more files. That is the
+#: mid-window convention `python_file_size_known_large` records: a floor at
+#: ``population - growth`` puts the slack exactly at the allowance and goes red
+#: on the next file anyone adds, which is the state this just came out of.
 REACH = declare(
     "undefined-css-var-scan",
     discover=_inspected_files,
-    floor=1400,
+    floor=1433,
     growth=60,
     skips=0,
     what="frontend source files scanned for var() references",

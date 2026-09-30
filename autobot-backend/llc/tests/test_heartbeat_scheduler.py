@@ -673,7 +673,7 @@ class TestRecordRunForReplayH1:
 
         from llc.adapters.claude_code_adapter import _output_path
         from llc.adapters.subprocess_base import placeholder_run_id
-        from llc.scheduler.heartbeat_scheduler import _record_run_for_replay
+        from llc.scheduler.replay_recording import record_run_for_replay as _record_run_for_replay
 
         agent = _make_agent(adapter_type="claude_code", adapter_config={"output_dir": "/tmp/dummy"})
         agent_id = agent["agent_id"]
@@ -696,7 +696,7 @@ class TestRecordRunForReplayH1:
             mock_svc = MagicMock()
             mock_svc.record_run = AsyncMock(side_effect=lambda **kw: captured.update(kw))
 
-            with patch(f"{_HBS}.RunReplayService", return_value=mock_svc):
+            with patch("llc.scheduler.replay_recording.RunReplayService", return_value=mock_svc):
                 await _record_run_for_replay(
                     agent,
                     uuid.uuid4(),
@@ -727,7 +727,7 @@ class TestRecordRunForReplayH1:
         import os
         import tempfile
 
-        from llc.scheduler.heartbeat_scheduler import _record_run_for_replay
+        from llc.scheduler.replay_recording import record_run_for_replay as _record_run_for_replay
 
         agent = _make_agent(adapter_type="claude_code", adapter_config={"output_dir": "/tmp/dummy"})
         agent_id = agent["agent_id"]
@@ -756,7 +756,7 @@ class TestRecordRunForReplayH1:
             mock_svc = MagicMock()
             mock_svc.record_run = AsyncMock(side_effect=lambda **kw: captured.update(kw))
 
-            with patch(f"{_HBS}.RunReplayService", return_value=mock_svc):
+            with patch("llc.scheduler.replay_recording.RunReplayService", return_value=mock_svc):
                 await _record_run_for_replay(
                     agent,
                     uuid.uuid4(),
@@ -785,7 +785,7 @@ class TestRecordRunForReplayH1:
 
         from llc.adapters.claude_code_adapter import _output_path
         from llc.adapters.subprocess_base import placeholder_run_id
-        from llc.scheduler.heartbeat_scheduler import _record_run_for_replay
+        from llc.scheduler.replay_recording import record_run_for_replay as _record_run_for_replay
 
         agent = _make_agent(adapter_type="claude_code", adapter_config={"output_dir": "/tmp/dummy"})
         agent_id = agent["agent_id"]
@@ -812,7 +812,7 @@ class TestRecordRunForReplayH1:
             mock_svc = MagicMock()
             mock_svc.record_run = AsyncMock(side_effect=lambda **kw: captured.update(kw))
 
-            with patch(f"{_HBS}.RunReplayService", return_value=mock_svc):
+            with patch("llc.scheduler.replay_recording.RunReplayService", return_value=mock_svc):
                 await _record_run_for_replay(agent, uuid.uuid4(), {}, "completed", external_run_id=external_run_id)
 
         assert "result" in (
@@ -821,14 +821,14 @@ class TestRecordRunForReplayH1:
 
     async def test_no_external_run_id_stores_no_events(self):
         """When external_run_id is None, recorded_events is None."""
-        from llc.scheduler.heartbeat_scheduler import _record_run_for_replay
+        from llc.scheduler.replay_recording import record_run_for_replay as _record_run_for_replay
 
         agent = _make_agent(adapter_type="claude_code", adapter_config={"output_dir": "/tmp"})
         captured: dict = {}
         mock_svc = MagicMock()
         mock_svc.record_run = AsyncMock(side_effect=lambda **kw: captured.update(kw))
 
-        with patch(f"{_HBS}.RunReplayService", return_value=mock_svc):
+        with patch("llc.scheduler.replay_recording.RunReplayService", return_value=mock_svc):
             await _record_run_for_replay(agent, uuid.uuid4(), {}, "completed", external_run_id=None)
 
         assert captured.get("recorded_events") is None
