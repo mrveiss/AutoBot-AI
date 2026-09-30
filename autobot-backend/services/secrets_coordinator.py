@@ -100,15 +100,77 @@ class SecretsCoordinator:
             created_by=user_id,
         )
 
+    @staticmethod
+    def _scope_permits(secret: Secret, facts: PrincipalFacts, session_id: str | None) -> bool:
+        """Whether *secret*'s own scope admits this principal (#16982).
+
+        A vault grant and a secret's scope answer different questions, and until
+        now only the first was asked: ``accessible_vaults()`` says *which vaults
+        you reach*, while ``Secret.is_accessible_by`` says *whether this secret's
+        scope admits you*. A SESSION-scoped secret sitting in a vault you reach
+        was readable by anyone who reached the vault. The vault grant is
+        necessary, not sufficient -- so both are asked now, and this is the
+        second.
+
+        **The org argument is the one decision the ruling did not settle.**
+        ``PrincipalFacts.company_roles`` is a mapping, so a principal may hold
+        several companies while ``is_accessible_by`` takes one. Passing the
+        secret's own ``org_id`` unconditionally would be a HOLE, not a fix: the
+        shared rule is ``resource.company_id == principal.company_id``
+        (``autobot_shared/scoping/visibility.py:80``), so handing it the secret's
+        own company makes the comparison tautological and every ORGANIZATION
+        secret readable by anyone. Passing ``None`` is the opposite failure --
+        every ORGANIZATION secret becomes unreadable, which looks like a
+        permissions bug two frames from its cause.
+
+        So the candidate company comes from the secret and is only supplied when
+        the principal actually holds it. One value, cardinality resolved, and the
+        rule still means what it says.
+        """
+        org_id = secret.org_id if secret.org_id and str(secret.org_id) in facts.company_roles else None
+        return secret.is_accessible_by(
+            uuid.UUID(facts.user_id) if isinstance(facts.user_id, str) else facts.user_id,
+            session_id=session_id,
+            user_org_id=org_id,
+            user_team_ids=list(facts.team_ids),
+        )
+
     async def read(
-        self, session: AsyncSession, *, user_id: uuid.UUID, permissions: set[str], secret_id: uuid.UUID
+        self,
+        session: AsyncSession,
+        *,
+        user_id: uuid.UUID,
+        permissions: set[str],
+        secret_id: uuid.UUID,
+        session_id: str | None = None,
     ) -> bytes:
+        """Decrypt *secret_id* for this principal, if the vault AND the scope admit them.
+
+        ``session_id`` is threaded rather than defaulted away (owner ruling):
+        ``_grant_lookup`` compares it to the secret's own for a SESSION-scoped
+        secret, so omitting it makes every session-scoped secret unreadable
+        through this path -- a correct-looking refusal with its cause two frames
+        away. A caller that has no session context passes None deliberately and
+        gets that refusal; one that has it must pass it.
+        """
         facts = await self._facts(session, user_id, permissions)
+        secret = await session.get(Secret, secret_id)
+        if secret is None or not self._scope_permits(secret, facts, session_id):
+            raise SecretAccessError(f"no accessible grant for secret {secret_id}")
         return await self._service.read(session, secret_id=secret_id, accessible_vaults=facts.accessible_vaults())
 
-    async def list(self, session: AsyncSession, *, user_id: uuid.UUID, permissions: set[str]) -> list[Secret]:
+    async def list(
+        self,
+        session: AsyncSession,
+        *,
+        user_id: uuid.UUID,
+        permissions: set[str],
+        session_id: str | None = None,
+    ) -> list[Secret]:
+        """Every secret this principal may read -- vault-reachable AND scope-admitted."""
         facts = await self._facts(session, user_id, permissions)
-        return await self._service.list_for_vaults(session, accessible_vaults=facts.accessible_vaults())
+        reachable = await self._service.list_for_vaults(session, accessible_vaults=facts.accessible_vaults())
+        return [s for s in reachable if self._scope_permits(s, facts, session_id)]
 
     async def describe_access(
         self, session: AsyncSession, *, user_id: uuid.UUID, permissions: set[str], secret_id: uuid.UUID
