@@ -23,8 +23,14 @@ aiosqlite>=0.22.1  # matches autobot-backend/requirements.txt's pin
 prometheus-client>=0.26.0
 
 # Web framework
-fastapi>=0.141.1                # SECURITY UPDATE - requires starlette >=1.7.0
-starlette>=1.7.0              # explicit pin — avoids python_multipart __all__ ImportError on older starlette (#8275)
+fastapi>=0.141.1                # SECURITY UPDATE - requires starlette >=1.6.0
+# Held at 1.6.0. #17706 proposed >=1.7.0, which cannot be taken alone: the CI plane
+# pins `starlette==1.6.0` (requirements-ci/framework.txt) and the dependency-patching
+# role floors it at 1.6.0, so a bump here alone fails the parity guard and leaves CI
+# installing a release this file forbids. 1.6.0 already carries the Range-header DoS
+# fix that floor records. Moving the three together is a coordinated migration with
+# fastapi compatibility to check, not a grouped dependency bump (#17833).
+starlette>=1.6.0              # explicit pin — avoids python_multipart __all__ ImportError on older starlette (#8275)
 uvicorn[standard]>=0.54.0
 
 # Database - PostgreSQL (Issue #786)
