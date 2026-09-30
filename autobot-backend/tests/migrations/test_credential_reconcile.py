@@ -145,6 +145,11 @@ async def test_reconcile_skips_a_collided_marker_and_never_deletes_it(session, t
     _make_db(db, [{"id": "dup", "active": 0, "value": "a"}, {"id": "solo", "active": 1, "value": "s"}])
     await _seed_vault(session, "dup", "a")
     await _seed_vault(session, "dup", "a")
+    # `solo` is seeded DRIFTED. Without it the sweep has no unique row left once the collision
+    # filter runs, so the test proved the collided marker was skipped but not that the skip let
+    # anything else through -- a filter that dropped every row would have passed it identically
+    # (#17776 review).
+    await _seed_vault(session, "solo", "old")
     await session.commit()
     report = await reconcile_connector_credentials(session, sqlite_path=db, fernet=_FERNET, root_key=_ROOT)
     await session.commit()
@@ -153,6 +158,9 @@ async def test_reconcile_skips_a_collided_marker_and_never_deletes_it(session, t
     assert report.aborted is False, "one ambiguous marker must not abort the whole sweep"
     assert any("dup" in f for f in report.failed), f"the skip was not reported: {report.failed}"
     assert (await _read(session, "dup"))["value"] == "a"
+    # The skip is a skip, not a halt: the uncollided marker still reconciles in the same sweep.
+    assert report.resynced == 1, f"the uncollided marker did not reconcile past the skip: {report}"
+    assert (await _read(session, "solo"))["value"] == "s"
 
 
 async def test_reconcile_still_aborts_on_an_empty_store_when_every_marker_collided(session, tmp_path):
