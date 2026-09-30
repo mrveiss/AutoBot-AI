@@ -94,14 +94,51 @@ def _injected_into_the_coordinator(module: ast.Module) -> set[int]:
     importing the class while no longer calling it -- so an import-only check
     would report the **remediated** caller as an unremediated bypass, which is
     how a baseline teaches people to add an entry instead of fixing the code.
+
+    Two narrowings, both from #17776 review:
+
+    **The coordinator is recognised through an alias.** Keying on the literal name
+    meant ``import SecretsCoordinator as Coordinator`` was not seen as injection, so
+    a caller that HAD been remediated still read as a bypass -- the baseline pushing
+    someone to add an entry rather than fix the code, which is the failure this
+    docstring already warns about, reached by a different route.
+
+    **The exemption no longer swallows the whole call.** Marking every ``Name``
+    below ``SecretsCoordinator(...)`` exempted a direct service call that merely sat
+    in an argument: ``SecretsCoordinator(EnvelopeSecretsService(k).read(...))`` runs
+    the read before the coordinator receives anything, and that is exactly the
+    unscoped call this guard exists to freeze. Only the service reference being
+    *constructed and handed over* is injection, so the exemption is limited to an
+    argument that is a bare service name or a direct ``Service(...)`` construction.
+    A method call on a service is a call, wherever it is written.
     """
+    coordinators = _coordinator_bindings(module)
     injected: set[int] = set()
     for node in ast.walk(module):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == _COORDINATOR:
-            for inner in ast.walk(node):
-                if isinstance(inner, ast.Name):
-                    injected.add(id(inner))
+        if not (isinstance(node, ast.Call) and _refers_to_coordinator(node.func, coordinators)):
+            continue
+        for arg in [*node.args, *(kw.value for kw in node.keywords)]:
+            if isinstance(arg, ast.Name):
+                injected.add(id(arg))  # a service instance held in a local, handed over
+            elif isinstance(arg, ast.Call) and isinstance(arg.func, ast.Name):
+                injected.add(id(arg.func))  # `Service(...)` constructed inline as the argument
     return injected
+
+
+def _coordinator_bindings(module: ast.Module) -> set[str]:
+    """Every local name bound to ``SecretsCoordinator``, including import aliases."""
+    names = {_COORDINATOR}
+    for node in ast.walk(module):
+        if isinstance(node, ast.ImportFrom):
+            names.update(alias.asname or alias.name for alias in node.names if alias.name == _COORDINATOR)
+    return names
+
+
+def _refers_to_coordinator(func: ast.expr, coordinators: set[str]) -> bool:
+    """``Coordinator(...)`` or ``module.SecretsCoordinator(...)``."""
+    if isinstance(func, ast.Name):
+        return func.id in coordinators
+    return isinstance(func, ast.Attribute) and func.attr == _COORDINATOR
 
 
 def _imports_a_service_class(source: str) -> bool:
@@ -317,6 +354,39 @@ def test_the_delete_path_still_takes_no_authorizing_vault() -> None:
             "raw = EnvelopeSecretsService().read(s, secret_id=i, accessible_vaults=v)\n",
             True,
         ),
+        # #17776 review: injection through an import alias is still injection.
+        (
+            "from services.secrets_coordinator import SecretsCoordinator as Coordinator\n"
+            "from services.envelope_secrets_service import EnvelopeSecretsService\n"
+            "c = Coordinator(EnvelopeSecretsService(root_key=k))\n",
+            False,
+        ),
+        # ...and the contrast: a direct read does not become injection by sitting in an
+        # argument. It runs before the coordinator receives anything.
+        (
+            "from services.envelope_secrets_service import EnvelopeSecretsService\n"
+            "c = SecretsCoordinator(EnvelopeSecretsService(k).read(s, secret_id=i, accessible_vaults=v))\n",
+            True,
+        ),
+        # The conservative boundary, pinned as a decision rather than left to chance:
+        # constructing the service into a local and handing THAT over is still a finding.
+        # Exempting it needs dataflow, and the same dataflow would hide `svc.read(...)`
+        # -- the detector cannot see a call through a local alias either, so a rule that
+        # exempted the construction would make the whole module invisible. A false
+        # positive here costs a conversation; that false negative costs the freeze.
+        (
+            "from services.envelope_secrets_service import EnvelopeSecretsService\n"
+            "svc = EnvelopeSecretsService(root_key=k)\n"
+            "c = SecretsCoordinator(svc)\n",
+            True,
+        ),
+        # A module-qualified coordinator is still the coordinator.
+        (
+            "import services.secrets_coordinator as sc\n"
+            "from services.envelope_secrets_service import EnvelopeSecretsService\n"
+            "c = sc.SecretsCoordinator(EnvelopeSecretsService(root_key=k))\n",
+            False,
+        ),
     ],
     ids=[
         "imported-and-called",
@@ -328,6 +398,10 @@ def test_the_delete_path_still_takes_no_authorizing_vault() -> None:
         "string-literal",
         "injected-into-the-coordinator",
         "injected-and-also-called-directly",
+        "injected-through-an-import-alias",
+        "direct-read-inside-a-coordinator-argument",
+        "instance-built-into-a-local-stays-a-finding",
+        "module-qualified-coordinator",
     ],
 )
 def test_the_detector_reads_imports_not_prose(source: str, expected: bool) -> None:
