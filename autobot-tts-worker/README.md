@@ -7,7 +7,7 @@ Text-to-speech microservice using [Kani-TTS-2](https://huggingface.co/liquid-ai/
 
 ```
 autobot-backend POST /api/voice/synthesize
-    └─► TTS Worker POST /tts/synthesize (172.16.168.22:8082)
+    └─► TTS Worker POST /tts/synthesize (NPU node, port 8083)
             └─► Kani-TTS-2 (CPU mode, ~3GB RAM)
 ```
 
@@ -33,7 +33,7 @@ ansible-playbook playbooks/deploy-full.yml --tags tts-worker
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `TTS_HOST` | `0.0.0.0` | Bind address |
-| `TTS_PORT` | `8082` | Listen port |
+| `TTS_PORT` | `8083` | Listen port, rendered from `tts_port` in the tts-worker role, which is authoritative. 8082 is WSL2/Hyper-V reserved on the NPU host class (#3431, incident #3464). |
 | `TTS_MODEL_ID` | `liquid-ai/kani-tts-2` | HuggingFace model ID |
 | `TTS_DEVICE` | `cpu` | Inference device (`cpu`, `cuda`, `mps`) |
 | `TTS_MODELS_DIR` | `/var/lib/autobot/models/tts` | Model cache directory |
