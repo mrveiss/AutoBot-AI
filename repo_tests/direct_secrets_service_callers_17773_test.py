@@ -37,9 +37,11 @@ does not model, record the verdict on #17773 and add it here with the reason.
 from __future__ import annotations
 
 import ast
+from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 #: Class names whose import means "this module talks to a secrets service directly".
 _SERVICE_CLASSES = frozenset({"EnvelopeSecretsService", "SecretsService"})
@@ -53,11 +55,6 @@ _SERVICE_MODULES = frozenset(
 )
 
 _TREES = ("autobot-backend", "autobot_shared")
-
-#: Floor for the walk. A moved or renamed tree would scan nothing, and an empty
-#: scan equals the frozen set minus everything -- which fails loudly, but for the
-#: wrong reason. This makes "the walk stopped reaching the tree" its own failure.
-_MIN_SCANNED = 2000
 
 #: Every production module reaching a secrets service directly, with its #17773
 #: verdict. ONLY SHRINKS.
@@ -117,11 +114,14 @@ def _imports_a_service_class(source: str) -> bool:
     not a direct caller: it is injecting a service into the enforcement point.
     Any other use counts, including a bare annotation, because a module typing a
     service parameter is receiving one in order to call it.
+
+    Raises ``SyntaxError`` on a source that will not parse. It used to return
+    ``False`` there, which made an unparseable module indistinguishable from one
+    that imports nothing -- a skip wearing a clean verdict. ``_scan`` records it
+    as a skip instead, and ``test_every_module_in_the_population_parses`` makes
+    it loud.
     """
-    try:
-        module = ast.parse(source)
-    except SyntaxError:
-        return False
+    module = ast.parse(source)
 
     imported: set[str] = set()
     for node in ast.walk(module):
@@ -143,34 +143,91 @@ def _is_production(rel: str) -> bool:
     return not (rel.endswith("_test.py") or "/tests/" in rel or "/test_" in rel)
 
 
-def _scan() -> tuple[set[str], int]:
-    """(modules importing a service class, production files scanned)."""
-    root = repo_root()
-    found: set[str] = set()
-    scanned = 0
+def _discover(root: Path) -> list[str]:
+    """The guard's population: production modules under ``_TREES``.
+
+    ``_scan`` iterates exactly what this returns, so the enumeration and the
+    count are one code path. Two walks that must agree by inspection is how a
+    floor ends up measured against one question and asserted against another --
+    the defect this guard's own subject is an instance of.
+
+    Returns ``[]`` on an empty tree rather than raising: ``reach_declarations_test``
+    hands every declaration an empty repository and needs an empty *result* to
+    prove the floor can fire.
+    """
+    found: list[str] = []
     for tree in _TREES:
         for path in (root / tree).rglob("*.py"):
             rel = path.relative_to(root).as_posix()
-            if not _is_production(rel) or rel in _SERVICE_MODULES:
-                continue
-            scanned += 1
-            if _imports_a_service_class(path.read_text(encoding="utf-8", errors="replace")):
-                found.add(rel)
-    return found, scanned
+            if _is_production(rel) and rel not in _SERVICE_MODULES:
+                found.append(rel)
+    return sorted(found)
 
 
-def test_the_walk_reaches_the_trees_it_claims() -> None:
-    """Non-vacuity: an empty scan must fail as an empty scan, not as a diff."""
-    _, scanned = _scan()
-    assert scanned >= _MIN_SCANNED, (
-        f"only {scanned} production .py file(s) reached under {_TREES}, expected at least "
-        f"{_MIN_SCANNED} — the walk has stopped reaching these trees, which would make every "
-        "entry below look removed"
+#: Migrated from a hand-rolled ``_MIN_SCANNED = 2000`` (#15928 requires
+#: ``declare``; the meta-test caught this one). The old constant was NOT carried
+#: across -- 2000 was never measured, and against the real population it left 704
+#: files of slack, enough to lose ``autobot_shared`` whole and still read clean.
+#:
+#: Measured 2026-09-30 on this branch at 601bd5a0, by a throwaway script running
+#: this same filter: **2704** files (autobot-backend 2493, autobot_shared 211),
+#: of which 0 fail to parse, so ``completed`` == ``discover`` today.
+#:
+#: Do not reconcile this against the 3,027 in ``model_revision_pinning_enforced_
+#: 17804_test``. That floor counts tracked python files repo-wide; this one counts
+#: two trees, production only, minus the two service definitions. Different
+#: populations, so neither number validates the other.
+#:
+#: floor=2600 against a measured 2704 leaves **104 files of downward margin** --
+#: the number to watch when re-pinning. It is chosen to still fire on the failure
+#: this guard exists to catch: losing ``autobot_shared`` drops the walk to 2493
+#: and losing the backend drops it to 211, both well under the floor. growth=200
+#: (~7% of the population, this repo's rough maintenance interval) keeps
+#: ``verify_floor`` quiet until the tree reaches 2800. skips=0 is measured, not
+#: assumed: nothing is skipped silently, because an unparseable file fails
+#: ``test_every_module_in_the_population_parses`` outright.
+REACH = declare(
+    "direct-secrets-service-callers",
+    discover=_discover,
+    floor=2600,
+    growth=200,
+    what="production modules under the backend and shared trees",
+)
+
+
+def _scan() -> tuple[set[str], int, list[str]]:
+    """(modules importing a service class, files examined, files that would not parse).
+
+    Non-vacuity lives in ``REACH.examined`` (the walk reached the trees) and
+    ``REACH.completed`` (it finished reading them), rather than in a floor of
+    this module's own -- candidates are not coverage.
+    """
+    root = repo_root()
+    population = REACH.examined(root)
+    found: set[str] = set()
+    unparsed: list[str] = []
+    for rel in population:
+        try:
+            if _imports_a_service_class((root / str(rel)).read_text(encoding="utf-8", errors="replace")):
+                found.add(str(rel))
+        except SyntaxError:
+            unparsed.append(str(rel))
+    REACH.completed(len(population) - len(unparsed))
+    return found, len(population), unparsed
+
+
+def test_every_module_in_the_population_parses() -> None:
+    """A file that will not parse is a skip, not a clean file."""
+    _, _, unparsed = _scan()
+    assert not unparsed, (
+        "these modules could not be parsed, so the freeze below says nothing about them:\n  "
+        + "\n  ".join(unparsed)
+        + "\n\nA syntax error here is a hole in the sweep, not a clean module."
     )
 
 
 def test_no_new_module_reaches_a_secrets_service_directly() -> None:
-    found, _ = _scan()
+    found, _, _ = _scan()
     added = sorted(found - set(_FROZEN_DIRECT_CALLERS))
     assert not added, (
         "these modules reach a secrets service directly and are not recorded:\n  "
@@ -183,7 +240,7 @@ def test_no_new_module_reaches_a_secrets_service_directly() -> None:
 
 def test_recorded_callers_that_no_longer_reach_the_service_are_removed() -> None:
     """The list only shrinks, so a stale entry has to be deleted, not left."""
-    found, _ = _scan()
+    found, _, _ = _scan()
     stale = sorted(set(_FROZEN_DIRECT_CALLERS) - found)
     assert not stale, "recorded direct callers that no longer import a service class — remove them:\n  " + "\n  ".join(
         stale
