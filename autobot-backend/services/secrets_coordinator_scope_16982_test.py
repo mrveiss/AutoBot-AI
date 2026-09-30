@@ -21,6 +21,7 @@ import uuid
 
 import pytest
 
+from autobot_shared.secrets_vault import VaultKind, VaultRef
 from models.secret import Secret
 from services.secrets_authz import PrincipalFacts
 from services.secrets_coordinator import SecretsCoordinator
@@ -166,9 +167,19 @@ class TestTheReadPathActuallyAsksIt:
         async def get(self, _model, _pk):
             return self._secret
 
-        async def execute(self, _stmt):
-            """Stands in for the direct-grant lookup; the ids it was seeded with."""
+        async def execute(self, stmt):
+            """Stands in for the direct-grant lookup; the ids it was seeded with.
+
+            The statement is kept so a test can assert what the lookup BOUND. Without
+            that, this fake answers every query the same way and the test would pass
+            on a lookup keyed to the wrong vault or the wrong secret -- a stub that
+            agrees with anything (#17824 review).
+            """
+            self.last_stmt = stmt
             return TestTheReadPathActuallyAsksIt._FakeResult(self._granted)
+
+        def bound_params(self) -> set:
+            return set(self.last_stmt.compile().params.values())
 
     async def test_read_refuses_when_the_scope_does_not_permit(self, monkeypatch):
         from services.envelope_secrets_service import SecretAccessError
@@ -239,12 +250,19 @@ class TestTheReadPathActuallyAsksIt:
         monkeypatch.setattr(coord, "_facts", lambda *a, **k: _async(_facts()))
         monkeypatch.setattr(SecretsCoordinator, "_scope_permits", staticmethod(lambda *a: False))
 
-        value = await coord.read(
-            self._FakeSession(_secret(scope="user"), granted=[sid]), user_id=_USER, permissions=set(), secret_id=sid
-        )
+        fake = self._FakeSession(_secret(scope="user"), granted=[sid])
+        value = await coord.read(fake, user_id=_USER, permissions=set(), secret_id=sid)
 
         assert value == b"plaintext"
         assert service.read_calls == 1
+        # What the lookup asked for, not merely that it asked. The fake answers any
+        # statement identically, so without this the test passes on a lookup keyed to
+        # another user's vault or another secret.
+        bound = fake.bound_params()
+        assert (
+            VaultRef(VaultKind.USER, str(_USER)).to_str() in bound
+        ), f"the grant lookup did not bind this principal's own user vault; bound {bound}"
+        assert sid in bound, f"the grant lookup did not bind the requested secret id; bound {bound}"
 
     async def test_no_grant_and_no_scope_still_refuses(self, monkeypatch):
         """The contrast pair: the grant path must not admit everyone."""
