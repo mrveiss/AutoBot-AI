@@ -45,7 +45,17 @@ def _facts(*, companies=(), teams=()) -> PrincipalFacts:
 
 
 def _secret(**kw) -> Secret:
-    defaults = {"owner_id": _OTHER, "org_id": None, "session_id": None, "team_ids": [], "shared_with": []}
+    # `sealed_value` is what makes this an ENVELOPE row. The read pre-check skips legacy
+    # rows (`sealed_value IS NULL`) as not-found, so a fixture without it would be 404 in
+    # every test below rather than exercising the scope (#17822).
+    defaults = {
+        "owner_id": _OTHER,
+        "org_id": None,
+        "session_id": None,
+        "team_ids": [],
+        "shared_with": [],
+        "sealed_value": {"ciphertext": "x", "nonce": "y"},
+    }
     defaults.update(kw)
     return Secret(**defaults)
 
@@ -138,12 +148,27 @@ class TestTheReadPathActuallyAsksIt:
         async def list_for_vaults(self, session, *, accessible_vaults):
             return list(self.listed)
 
+    class _FakeResult:
+        def __init__(self, ids):
+            self._ids = list(ids)
+
+        def first(self):
+            return (self._ids[0],) if self._ids else None
+
+        def scalars(self):
+            return iter(self._ids)
+
     class _FakeSession:
-        def __init__(self, secret):
+        def __init__(self, secret, granted=()):
             self._secret = secret
+            self._granted = list(granted)
 
         async def get(self, _model, _pk):
             return self._secret
+
+        async def execute(self, _stmt):
+            """Stands in for the direct-grant lookup; the ids it was seeded with."""
+            return TestTheReadPathActuallyAsksIt._FakeResult(self._granted)
 
     async def test_read_refuses_when_the_scope_does_not_permit(self, monkeypatch):
         from services.envelope_secrets_service import SecretAccessError
@@ -179,6 +204,79 @@ class TestTheReadPathActuallyAsksIt:
 
         assert value == b"plaintext"
         assert service.read_calls == 1
+
+    async def test_a_missing_secret_is_not_found_rather_than_refused(self, monkeypatch):
+        """404, not 403. Every other method in this file raises not-found when absent."""
+        from services.envelope_secrets_service import SecretNotFoundError
+
+        coord = SecretsCoordinator(self._FakeService())
+        monkeypatch.setattr(coord, "_facts", lambda *a, **k: _async(_facts()))
+
+        with pytest.raises(SecretNotFoundError):
+            await coord.read(self._FakeSession(None), user_id=_USER, permissions=set(), secret_id=uuid.uuid4())
+
+    async def test_a_legacy_row_is_not_found_rather_than_refused(self, monkeypatch):
+        """The pre-check speaks for envelope rows; a legacy row is outside its population."""
+        from services.envelope_secrets_service import SecretNotFoundError
+
+        coord = SecretsCoordinator(self._FakeService())
+        monkeypatch.setattr(coord, "_facts", lambda *a, **k: _async(_facts()))
+        legacy = _secret(scope="user", owner_id=_USER, sealed_value=None)
+
+        with pytest.raises(SecretNotFoundError):
+            await coord.read(self._FakeSession(legacy), user_id=_USER, permissions=set(), secret_id=uuid.uuid4())
+
+    async def test_a_secret_shared_with_this_principal_by_name_is_readable(self, monkeypatch):
+        """The regression #17772 shipped with its sharing tests skipped.
+
+        `coordinator.share` authorizes by issuing a grant to the grantee's own user
+        vault; the scope check reads `shared_with`, which that path never writes. The
+        grant is the system of record -- without it there is no wrapped DEK at all.
+        """
+        sid = uuid.uuid4()
+        service = self._FakeService()
+        coord = SecretsCoordinator(service)
+        monkeypatch.setattr(coord, "_facts", lambda *a, **k: _async(_facts()))
+        monkeypatch.setattr(SecretsCoordinator, "_scope_permits", staticmethod(lambda *a: False))
+
+        value = await coord.read(
+            self._FakeSession(_secret(scope="user"), granted=[sid]), user_id=_USER, permissions=set(), secret_id=sid
+        )
+
+        assert value == b"plaintext"
+        assert service.read_calls == 1
+
+    async def test_no_grant_and_no_scope_still_refuses(self, monkeypatch):
+        """The contrast pair: the grant path must not admit everyone."""
+        from services.envelope_secrets_service import SecretAccessError
+
+        service = self._FakeService()
+        coord = SecretsCoordinator(service)
+        monkeypatch.setattr(coord, "_facts", lambda *a, **k: _async(_facts()))
+        monkeypatch.setattr(SecretsCoordinator, "_scope_permits", staticmethod(lambda *a: False))
+
+        with pytest.raises(SecretAccessError):
+            await coord.read(
+                self._FakeSession(_secret(scope="user"), granted=[]),
+                user_id=_USER,
+                permissions=set(),
+                secret_id=uuid.uuid4(),
+            )
+
+        assert service.read_calls == 0
+
+    async def test_list_keeps_a_secret_shared_by_name_that_the_scope_refuses(self, monkeypatch):
+        shared = _secret(scope="user")
+        shared.id = uuid.uuid4()
+        service = self._FakeService()
+        service.listed = [shared]
+        coord = SecretsCoordinator(service)
+        monkeypatch.setattr(coord, "_facts", lambda *a, **k: _async(_facts()))
+        monkeypatch.setattr(SecretsCoordinator, "_scope_permits", staticmethod(lambda *a: False))
+
+        kept = await coord.list(self._FakeSession(None, granted=[shared.id]), user_id=_USER, permissions=set())
+
+        assert kept == [shared], "list dropped a secret this principal was granted by name"
 
     async def test_list_filters_on_the_scope(self, monkeypatch):
         service = self._FakeService()

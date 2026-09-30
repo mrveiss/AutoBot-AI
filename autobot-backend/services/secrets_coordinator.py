@@ -135,6 +135,46 @@ class SecretsCoordinator:
             user_team_ids=list(facts.team_ids),
         )
 
+    @staticmethod
+    def _own_user_vault(facts: PrincipalFacts) -> str:
+        """The principal's OWN user vault, as stored in ``SecretGrant.grantee``."""
+        return VaultRef(VaultKind.USER, str(facts.user_id)).to_str()
+
+    async def _holds_direct_grant(self, session: AsyncSession, secret_id: uuid.UUID, facts: PrincipalFacts) -> bool:
+        """Whether this secret was shared with this principal *by name* (#17822).
+
+        **Why a scope refusal is not the last word.** #16982 closed a real hole:
+        a secret sitting in a vault you reach was readable on vault
+        reachability alone, so the secret's own scope is now asked too. But
+        ``coordinator.share`` authorizes by issuing a ``SecretGrant`` to the
+        grantee's own user vault, and that record is the system of record for
+        "who may open this" -- without it there is no wrapped DEK and no
+        decryption is possible. The model's ``shared_with`` list, which
+        ``Secret._grant_lookup`` consults, is a second copy that this path never
+        writes, so a scope check reading only that copy refuses a share the
+        system actually granted. #17772 shipped with the sharing tests skipped,
+        which is why it read as clean.
+
+        **This does not reopen #16982.** The hole was *vault reachability* --
+        being able to reach a vault that happens to hold the secret. This asks a
+        strictly narrower question: is there a grant naming **this principal's
+        own user vault**. A principal who merely reaches a shared, org or team
+        vault does not match it, so the scope check still governs every case
+        #16982 was about.
+        """
+        own = self._own_user_vault(facts)
+        row = await session.execute(
+            select(SecretGrant.secret_id).where(SecretGrant.secret_id == secret_id, SecretGrant.grantee == own)
+        )
+        return row.first() is not None
+
+    async def _directly_granted_ids(self, session: AsyncSession, facts: PrincipalFacts) -> set[uuid.UUID]:
+        """Secret ids shared with this principal by name -- one query, for ``list``."""
+        rows = await session.execute(
+            select(SecretGrant.secret_id).where(SecretGrant.grantee == self._own_user_vault(facts))
+        )
+        return set(rows.scalars())
+
     async def read(
         self,
         session: AsyncSession,
@@ -155,7 +195,14 @@ class SecretsCoordinator:
         """
         facts = await self._facts(session, user_id, permissions)
         secret = await session.get(Secret, secret_id)
-        if secret is None or not self._scope_permits(secret, facts, session_id):
+        # Absent, or a legacy non-envelope row: not found, not refused. Same condition the
+        # service's own `_load` uses, so the pre-check speaks for the same population it
+        # guards and a missing secret keeps its 404 (#17822).
+        if secret is None or secret.sealed_value is None:
+            raise SecretNotFoundError(f"envelope secret {secret_id} not found")
+        if not self._scope_permits(secret, facts, session_id) and not await self._holds_direct_grant(
+            session, secret_id, facts
+        ):
             raise SecretAccessError(f"no accessible grant for secret {secret_id}")
         return await self._service.read(session, secret_id=secret_id, accessible_vaults=facts.accessible_vaults())
 
@@ -170,7 +217,8 @@ class SecretsCoordinator:
         """Every secret this principal may read -- vault-reachable AND scope-admitted."""
         facts = await self._facts(session, user_id, permissions)
         reachable = await self._service.list_for_vaults(session, accessible_vaults=facts.accessible_vaults())
-        return [s for s in reachable if self._scope_permits(s, facts, session_id)]
+        granted = await self._directly_granted_ids(session, facts)
+        return [s for s in reachable if self._scope_permits(s, facts, session_id) or s.id in granted]
 
     async def describe_access(
         self, session: AsyncSession, *, user_id: uuid.UUID, permissions: set[str], secret_id: uuid.UUID
