@@ -16,7 +16,7 @@ Provides a single endpoint that aggregates all analytics data from:
 from typing import Any, Dict
 
 import aiohttp
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
 from api.codebase_analytics.source_scope import SourceIdQuery
@@ -26,6 +26,7 @@ from api.schemas_analytics import (
     AnalyticsReportingTrendsResponse,
 )
 from api.schemas_common import DataResponse
+from api.user_management.dependencies import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
@@ -34,7 +35,10 @@ from code_intelligence.shared.scoring import get_grade_from_score
 
 logger = get_logger(__name__)
 # Issue #3355: prefix moved to router registry (analytics_routers.py)
-router = APIRouter(tags=["analytics"])
+# #16375: every route here was reachable anonymously. Gated at the ROUTER so a
+# route added later inherits it. Authentication only:
+# read-only reports any signed-in user may see.
+router = APIRouter(tags=["analytics"], dependencies=[Depends(get_current_user)])
 
 
 async def fetch_quality_health() -> Dict[str, Any]:

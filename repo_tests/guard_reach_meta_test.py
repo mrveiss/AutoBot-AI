@@ -97,7 +97,25 @@ _ENUMERATOR = re.compile(r"tracked_paths|ls-files|rglob\(|os\.walk\(|\.iterdir\(
 #: `.glob(`. Guard growth had carried the no-`.glob(` reach up to the old floor
 #: of 104, so dropping the term no longer failed anything -- re-pinned to the
 #: exact full reach so the mutation below fires again.
-MIN_GUARDS_EXAMINED = 132
+#: RE-MEASURED 2026-09-29 on the pinning-guard train (#17804): 165 tracked
+#: `repo_tests/*_test.py` match `_ENUMERATOR`, 132 match it without `.glob(`.
+#: Ten days of guard growth carried the no-`.glob(` reach from 104 to 131, and
+#: this PR's own new guard -- reached via `rglob(`, so it lands in the narrowed
+#: set -- made it the 132nd, exactly the old floor. At equality the mutation
+#: test below reads as clean while detecting nothing, which is the third time
+#: this floor has been caught from below (2026-09-11, 2026-09-19, today).
+#:
+#: This is maintenance, not a patch: the floor does double duty -- a reach floor
+#: on line ~257 and, on line ~355, the yardstick for whether that floor could
+#: still notice a lost enumerator term. The second job is only healthy while the
+#: number tracks full reach, so growth in the narrowed reach silently eats the
+#: detection margin and the pin has to be re-measured.
+#:
+#: Do NOT "fix" the treadmill by deriving this from the tree. A floor computed
+#: by the same enumerator it guards always agrees with itself and can never
+#: fail; the hand-pinned number is the whole mechanism, and paying it forward on
+#: each guard change is the cost of having a check that can fail.
+MIN_GUARDS_EXAMINED = 165
 
 #: WHAT THIS MODULE CHECKS, AND WHAT IT DOES NOT (#16154).
 #:
