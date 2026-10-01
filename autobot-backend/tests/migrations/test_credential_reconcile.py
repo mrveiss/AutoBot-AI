@@ -135,3 +135,74 @@ async def test_reconcile_aborts_on_total_wipe(session, tmp_path):
     await session.commit()
     assert report.aborted is True and report.deleted == 0
     assert (await _read(session, "rev1"))["value"] == "a"
+
+
+async def test_reconcile_skips_a_collided_marker_and_never_deletes_it(session, tmp_path):
+    # Two envelope rows claim the same canonical id. `extra_data` has no unique constraint on
+    # the marker, so this is reachable, and a revocation cannot be attributed to one owner --
+    # deleting "the" copy would remove one the revocation was never about (#17773).
+    db = str(tmp_path / "secrets.db")
+    _make_db(db, [{"id": "dup", "active": 0, "value": "a"}, {"id": "solo", "active": 1, "value": "s"}])
+    await _seed_vault(session, "dup", "a")
+    await _seed_vault(session, "dup", "a")
+    # `solo` is seeded DRIFTED. Without it the sweep has no unique row left once the collision
+    # filter runs, so the test proved the collided marker was skipped but not that the skip let
+    # anything else through -- a filter that dropped every row would have passed it identically
+    # (#17776 review).
+    await _seed_vault(session, "solo", "old")
+    await session.commit()
+    report = await reconcile_connector_credentials(session, sqlite_path=db, fernet=_FERNET, root_key=_ROOT)
+    await session.commit()
+    assert report.collided == 1, f"the collided marker was not detected: {report}"
+    assert report.deleted == 0, "a collided marker must never be deleted -- ownership is ambiguous"
+    assert report.aborted is False, "one ambiguous marker must not abort the whole sweep"
+    assert any("dup" in f for f in report.failed), f"the skip was not reported: {report.failed}"
+    assert (await _read(session, "dup"))["value"] == "a"
+    # The skip is a skip, not a halt: the uncollided marker still reconciles in the same sweep.
+    assert report.resynced == 1, f"the uncollided marker did not reconcile past the skip: {report}"
+    assert (await _read(session, "solo"))["value"] == "s"
+
+
+async def test_reconcile_still_aborts_on_an_empty_store_when_every_marker_collided(session, tmp_path):
+    """The empty-store abort must not depend on surviving the collision filter (#17773).
+
+    Regression for a real gap in the first version of that filter: it ran *before* the
+    circuit breaker, so when every marker collided `rows` became empty, the breaker's
+    `rows and ...` prefix short-circuited, and a sweep against a wiped canonical store
+    reported `aborted=False`. Nothing was deleted, so the effect was harmless and the
+    *report* was wrong -- "could not evaluate" rendered as "nothing to do".
+    """
+    db = str(tmp_path / "secrets.db")
+    _make_db(db, [])  # table exists, zero rows -- the wiped/misconfigured store case
+    await _seed_vault(session, "dup", "a")
+    await _seed_vault(session, "dup", "a")
+    await session.commit()
+    report = await reconcile_connector_credentials(session, sqlite_path=db, fernet=_FERNET, root_key=_ROOT)
+    await session.commit()
+    assert report.aborted is True, f"an empty canonical store must abort even with every marker collided: {report}"
+    assert report.deleted == 0
+    assert (await _read(session, "dup"))["value"] == "a"
+
+
+async def test_a_collided_marker_that_is_not_revoked_does_not_suppress_the_wipe_abort(session, tmp_path):
+    """Why the wipe arm belongs AFTER the collision filter, not before it.
+
+    `all()` over a subset is more readily true than over the superset, so filtering can
+    only make this abort fire more eagerly. The proving case is a collided row that is NOT
+    revoked: counted in, it makes `all(...)` false and suppresses an abort that should
+    happen; excluded, the abort is restored.
+    """
+    db = str(tmp_path / "secrets.db")
+    _make_db(db, [{"id": "dup", "active": 1, "value": "live"}, {"id": "rev", "active": 0, "value": "r"}])
+    await _seed_vault(session, "dup", "live")
+    await _seed_vault(session, "dup", "live")
+    await _seed_vault(session, "rev", "r")
+    await session.commit()
+    report = await reconcile_connector_credentials(session, sqlite_path=db, fernet=_FERNET, root_key=_ROOT)
+    await session.commit()
+    assert report.aborted is True, (
+        "every reconcilable row was revoked once the collided non-revoked pair was excluded, "
+        f"so the wipe abort must fire: {report}"
+    )
+    assert report.deleted == 0
+    assert (await _read(session, "rev"))["value"] == "r"

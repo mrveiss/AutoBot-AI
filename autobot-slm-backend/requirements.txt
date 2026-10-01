@@ -24,8 +24,14 @@ prometheus-client>=0.26.0
 
 # Web framework
 fastapi>=0.141.1                # SECURITY UPDATE - requires starlette >=1.6.0
+# Held at 1.6.0. #17706 proposed >=1.7.0, which cannot be taken alone: the CI plane
+# pins `starlette==1.6.0` (requirements-ci/framework.txt) and the dependency-patching
+# role floors it at 1.6.0, so a bump here alone fails the parity guard and leaves CI
+# installing a release this file forbids. 1.6.0 already carries the Range-header DoS
+# fix that floor records. Moving the three together is a coordinated migration with
+# fastapi compatibility to check, not a grouped dependency bump (#17833).
 starlette>=1.6.0              # explicit pin — avoids python_multipart __all__ ImportError on older starlette (#8275)
-uvicorn[standard]>=0.53.0
+uvicorn[standard]>=0.54.0
 
 # Database - PostgreSQL (Issue #786)
 # Capped below 2.1 (#17445). A fresh venv from this file took SQLAlchemy 2.1.0
@@ -41,6 +47,10 @@ uvicorn[standard]>=0.53.0
 # base-unblocking change; the tracking issue is on the cap for whoever lifts it.
 # Do not raise this bound without running the SLM suite against 2.1.x first.
 sqlalchemy>=2.0.54,<2.1
+# Dependabot raised this to `>=2.1.0,<2.2` in #17706 and left the paragraph above
+# saying not to. Restored. The cap is not stale: #17445 is OPEN and records the
+# 27 failures 2.1.0 causes in this service. Lifting it needs the SLM suite run
+# against 2.1.x, which is that issue's work, not a dependency bump's.
 asyncpg>=0.31.0  # Async PostgreSQL driver for SQLAlchemy
 # greenlet is declared explicitly, not left to SQLAlchemy (#17432). SQLAlchemy
 # ships it as an `[asyncio]` extra AND, in some releases, under a
@@ -50,7 +60,7 @@ asyncpg>=0.31.0  # Async PostgreSQL driver for SQLAlchemy
 # `main` with `ModuleNotFoundError: No module named 'greenlet'` before the
 # container could start. The async engine is a direct requirement of this
 # service, so it is declared directly rather than inherited conditionally.
-greenlet>=3.1.0  # SQLAlchemy async engine dependency -- see the note above
+greenlet>=3.5.6  # SQLAlchemy async engine dependency -- see the note above
 psycopg2-binary>=2.9.13  # Sync PostgreSQL driver for migrations
 
 # Data validation
@@ -59,7 +69,7 @@ pydantic-settings>=2.15.0
 typing_extensions>=4.16.0  # For Python 3.8 compatibility
 
 # Authentication
-PyJWT[crypto]>=2.14.0
+PyJWT[crypto]>=2.15.0
 bcrypt>=5.0.0  # Direct bcrypt API — passlib removed (#2669)
 python-multipart>=0.0.32          # SECURITY UPDATE - arbitrary file write fix
 

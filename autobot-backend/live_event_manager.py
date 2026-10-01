@@ -6,7 +6,7 @@
 Live Event Manager - Scoped Real-Time Events (#1408)
 
 In-memory channel router for WebSocket-based entity-scoped event streaming.
-Supports channels: agent:{id}, task:{id}, workflow:{id}, heartbeat:{id}, global
+Supports channels: agent:{id}, task:{id}, workflow:{id}, heartbeat:{id}, canvas:{id}, global
 """
 
 import asyncio
@@ -63,6 +63,11 @@ _VALID_PREFIXES = {
     "board",
     "session",
     "chat",
+    # #17020: canvas cell updates. A channel rather than a WebSocket route, per
+    # EVENT_STATE_DOCTRINE principle 5 -- `useCanvasWebSocket` opened a bespoke
+    # `/api/canvas/{id}/ws` that the backend never served, and serving it would
+    # have made a third parallel delivery system of the kind principle 1 names.
+    "canvas",
 }
 
 

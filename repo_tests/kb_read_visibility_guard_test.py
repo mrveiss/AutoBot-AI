@@ -165,7 +165,12 @@ MIN_READS_FOUND = 40
 #: knowledge_ai_stack.py's _search_local_knowledge_base/search(), but #16716 had
 #: already filtered that read (no allowlist entry), so removing it changes nothing
 #: this scan counts.
-UNFILTERED_READ_CEILING = 95
+#: Then 95 -> 96 (#17546): the watch folder learned to remove a deleted file's document,
+#: and that removal resolves a file_path to fact ids through search_by_metadata. It is
+#: classified NOT_USER_FACING rather than filtered -- see _WATCH_RECONCILE in the
+#: allowlist for why a visibility filter would make a reconciliation delete *wrong*,
+#: not safer.
+UNFILTERED_READ_CEILING = 96
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ", "ADMIN_ONLY: ")
 _NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)

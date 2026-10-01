@@ -24675,11 +24675,10 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
     def test_batch_147_migration_preserves_auth_check(self):
         """Verify migration preserves authorization check"""
         from api import error_monitoring
+        from auth_middleware import check_admin_permission
 
-        source = inspect.getsource(error_monitoring.clear_error_history)
-        self.assertIn("authorization", source)
-        self.assertIn("Bearer admin_token", source)
-        self.assertIn("HTTP_401_UNAUTHORIZED", source)
+        # #17727 identity, not name: three repo functions share it (file PARKED, #15173).
+        self.assertIn(check_admin_permission, {d.dependency for d in (error_monitoring.router.dependencies or [])})
 
     def test_batch_147_migration_preserves_test_error_types(self):
         """Verify migration preserves test error type handling"""

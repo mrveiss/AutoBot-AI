@@ -73,7 +73,7 @@ EXEMPT_PATHS=(
     "autobot-backend/security/enterprise/sso_integration.py"
     "autobot-backend/api/codebase_analytics/source_models.py"
     "autobot-backend/api/knowledge_grounding_models.py"
-    "autobot-backend/api/registry.py"
+    "autobot-backend/api/registry_catalog.py"
     "autobot-backend/api/schemas_analytics.py"
     "autobot-backend/api/schemas_workflows.py"
     "autobot-backend/async_chat_workflow.py"

@@ -95,7 +95,6 @@ protobuf
 # (see the "Installing CI-safe requirements" step's ~3GB-vs-10-package-closure
 # comment in setup-python-suite/action.yml, and the completion_trainer_test.py
 # 17 tests that import torch directly and pass in CI).
-torch
 torchvision
 
 # tree-sitter-javascript has no CI-scoped test gating on it directly (only

@@ -9515,7 +9515,8 @@
       "collectionIdPlaceholder": "Collection ID",
       "pushing": "Pushing…",
       "confirm": "Confirm",
-      "pushFailed": "Could not add this recording to the knowledge base. Please try again."
+      "pushFailed": "Could not add this recording to the knowledge base. Please try again.",
+      "collectionNotJoined": "Stored, but the collection you named was not found — the transcript is in the Knowledge Base and is not in that collection."
     }
   }
 }
