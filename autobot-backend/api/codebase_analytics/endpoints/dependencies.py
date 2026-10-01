@@ -16,10 +16,11 @@ from celery.result import AsyncResult
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
+from api.codebase_analytics.source_scope import SourceIdQuery, cached_task_result, source_scoped_prefix
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from tasks.analytics_tasks import run_dependency_analysis
-from utils.celery_task_status import celery_result_to_status, get_latest_task_result, store_latest_task_id
+from utils.celery_task_status import celery_result_to_status, store_latest_task_id
 from utils.chromadb_client import get_all_paginated
 
 from ..storage import get_code_collection
@@ -397,7 +398,20 @@ async def _load_modules_from_chromadb(
     """
     try:
         type_filter = {"type": {"$in": ["function", "class"]}}
-        where = {"$and": [type_filter, {"source_id": source_id}]} if source_id else type_filter
+        # #17758: no unscoped branch. This docstring already said that without the
+        # clause "the query returns modules indexed for every registered source" --
+        # the conditional made that the behaviour whenever the parameter was omitted.
+        #
+        # Returns rather than raises on a falsy source_id, because the callers
+        # reach here after `get_default_source_id()`, which is legitimately None on
+        # a checkout with no registered sources. Raising would turn a working
+        # filesystem fallback into a 500. Declining to query is fail-closed and
+        # strictly safer than both alternatives: the old code queried EVERY source,
+        # and the caller's next step is the source-scoped filesystem walk.
+        if not source_id:
+            logger.debug("dependency module load skipped: no source_id to scope the index query (#17758)")
+            return
+        where = {"$and": [type_filter, {"source_id": source_id}]}
         results = get_all_paginated(
             code_collection,
             where=where,
@@ -515,25 +529,17 @@ async def get_dependencies(
 
 @router.get("/analytics/dependencies/cached")
 @bounded(60.0)
-async def get_cached_dependency_result(source_id: str = ""):
+async def get_cached_dependency_result(source_id: SourceIdQuery):
     """Return the latest completed dependency analysis result (#1540)."""
-    cached = await get_latest_task_result(_REDIS_PREFIX)
-    if cached and cached.get("result"):
-        return {
-            "status": "success",
-            "from_cache": True,
-            "completed_at": cached.get("completed_at"),
-            **cached["result"],
-        }
-    return {"status": "no_data"}
+    return await cached_task_result(_REDIS_PREFIX, source_id)
 
 
 @router.post("/analytics/dependencies/analyze")
 @bounded(60.0)
-async def start_dependency_analysis():
+async def start_dependency_analysis(source_id: SourceIdQuery):
     """Enqueue dependency analysis as a Celery task (GH#6505)."""
-    result = run_dependency_analysis.delay()
-    await store_latest_task_id(_REDIS_PREFIX, result.id)
+    result = run_dependency_analysis.delay(source_id)
+    await store_latest_task_id(source_scoped_prefix(_REDIS_PREFIX, source_id), result.id)
     return {"task_id": result.id, "status": "pending"}
 
 

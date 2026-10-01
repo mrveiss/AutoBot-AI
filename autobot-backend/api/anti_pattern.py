@@ -12,7 +12,7 @@ feature envy, circular dependencies, and more.
 Issue: #221
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
 from api.schemas_code import (
@@ -29,10 +29,17 @@ from api.schemas_code import (
     AntiPatternTypesResultResponse,
     SeveritySummary,
 )
+from api.user_management.dependencies import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
-router = APIRouter()
+# #16375: nine routes, seven of them POST, all reachable anonymously. These
+# analyse the codebase -- god classes, circular dependencies, dead code, health
+# score -- so they are developer operations on shared code rather than on a
+# user's own data, and they neither execute anything nor write shared state.
+# `get_current_user` is therefore the right level: an admin gate would stop
+# ordinary developers reading analysis of their own repository.
+router = APIRouter(dependencies=[Depends(get_current_user)])
 logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for refactoring recommendation keywords (Issue #326)

@@ -9515,7 +9515,8 @@
       "collectionIdPlaceholder": "ID de colección",
       "pushing": "Enviando…",
       "confirm": "Confirmar",
-      "pushFailed": "No se pudo añadir esta grabación a la base de conocimiento. Inténtalo de nuevo."
+      "pushFailed": "No se pudo añadir esta grabación a la base de conocimiento. Inténtalo de nuevo.",
+      "collectionNotJoined": "Guardado, pero no se encontró la colección indicada: la transcripción está en la base de conocimiento y no en esa colección."
     }
   }
 }

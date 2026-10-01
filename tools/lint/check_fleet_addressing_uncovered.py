@@ -407,7 +407,7 @@ BASELINE: dict[str, int] = {
     "autobot-slm-backend/scripts/README-remove-orphaned-node.md": 11,
     "autobot-slm-backend/services/inventory_placeholder_test.py": 1,
     "autobot-slm-frontend/README.md": 4,
-    "autobot-tts-worker/README.md": 2,
+    "autobot-tts-worker/README.md": 1,  # #17782: the second was an internal address in the arch diagram
     "changelog/v0.4.0.md": 9,
     "check-grafana-health.sh": 2,
     "context7.json": 2,
