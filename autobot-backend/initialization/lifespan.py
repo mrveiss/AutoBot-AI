@@ -33,6 +33,7 @@ from chat_workflow import ChatWorkflowManager
 from config.manager import get_config_manager
 from initialization import agent_presence_sync
 from initialization import lifespan_shutdown as shutdown_steps
+from initialization.background_workers import start_background_workers
 from initialization.neural_mesh_wiring import wire_neural_mesh_components
 from initialization.startup_error_file import persist_startup_error
 from knowledge_factory import get_or_create_knowledge_base
@@ -798,24 +799,6 @@ async def _warmup_npu_connection(app: FastAPI) -> None:
         logger.warning("NPU warmup failed: %s", warmup_error)
     finally:
         app.state.npu_worker_ready = npu_ready
-
-
-async def _start_doc_sync_queue_worker(app: FastAPI) -> None:
-    """Start the persistent document sync queue worker (#4453).
-
-    The worker drains :class:`DocumentSyncQueue` so re-indexing survives
-    crashes, retries up to MAX_ATTEMPTS, and respects priority ordering.
-    """
-    try:
-        from services.knowledge.sync_queue import SyncQueueWorker
-
-        worker = SyncQueueWorker()
-        task = asyncio.create_task(worker.run())
-        app.state.doc_sync_queue_worker = worker
-        app.state.doc_sync_queue_worker_task = task
-        logger.info("✅ Doc Sync Queue: worker started")
-    except Exception as e:  # noqa: BLE001
-        logger.warning("Doc sync queue worker failed to start: %s", e)
 
 
 async def _init_documentation_watcher():
@@ -2032,7 +2015,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_background_llm_sync(app)
         await _init_documentation_watcher()
         await _init_kb_folder_watcher()
-        await _start_doc_sync_queue_worker(app)
+        await start_background_workers(app)
         await _auto_index_documentation()
         await _init_log_forwarding()
         await _recover_agent_sessions(app)

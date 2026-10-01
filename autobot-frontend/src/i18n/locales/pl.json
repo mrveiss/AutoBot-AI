@@ -9515,7 +9515,8 @@
       "collectionIdPlaceholder": "Identyfikator kolekcji",
       "pushing": "Wysyłanie…",
       "confirm": "Potwierdź",
-      "pushFailed": "Nie udało się dodać tego nagrania do bazy wiedzy. Spróbuj ponownie."
+      "pushFailed": "Nie udało się dodać tego nagrania do bazy wiedzy. Spróbuj ponownie.",
+      "collectionNotJoined": "Zapisano, ale nie znaleziono wskazanej kolekcji — transkrypcja jest w bazie wiedzy, ale nie w tej kolekcji."
     }
   }
 }

@@ -11357,7 +11357,17 @@ export interface paths {
         put?: never;
         /**
          * Voice Speak Api
-         * @description Converts text to speech and plays it.
+         * @description Synthesize *text* and return it as ``audio/wav``.
+         *
+         *     **One implementation, one shape** (#17779). This route used to choose between
+         *     returning WAV bytes and returning ``{"message": ...}`` with no audio at all,
+         *     depending on whether an optional pyttsx3 import had succeeded at boot -- so a
+         *     client could not know which it would get, and on the JSON branch the audio
+         *     played on the *server's* speakers instead of being returned.
+         *
+         *     Synthesis is now unconditional. ``play_locally=true`` additionally speaks on
+         *     the server, reported through the ``X-Server-Playback`` header rather than by
+         *     changing the body, and it cannot be combined with ``stream`` -- see below.
          *
          *     ``stream=true`` returns length-prefixed WAV chunks as they are synthesized
          *     (#13215); omitting it keeps the whole-utterance ``audio/wav`` contract.
@@ -21133,9 +21143,17 @@ export interface paths {
         post?: never;
         /**
          * Clear Codebase Cache
-         * @description Clear codebase analysis cache from storage.
+         * @description Clear ONE code source's analysis cache from storage.
          *
-         *     Issue #1772: source_id scopes deletion to per-project keys.
+         *     Issue #1772 scoped deletion to per-project keys when a source_id was
+         *     supplied. #17758: it is now required, because the `else "codebase:*"` branch
+         *     made a request that omitted the parameter delete **every** source's cached
+         *     analytics -- reachable by leaving a query string off a DELETE.
+         *
+         *     There is deliberately no "clear all sources" mode here. Destroying every
+         *     project's cached analysis is not something a caller should express by
+         *     omission, and adding it as an explicit flag would be adding a destructive
+         *     capability this change has no mandate to invent.
          */
         delete: operations["clear_codebase_cache_api_analytics_codebase_cache_delete"];
         options?: never;
@@ -28787,7 +28805,16 @@ export interface paths {
         put?: never;
         /**
          * Clear Error History
-         * @description Clear error history (admin only)
+         * @description Clear error history. Admin-gated at the router (#16375).
+         *
+         *     This route used to compare the Authorization header against a literal
+         *     defined in this file, under a comment saying authentication "would
+         *     typically" be required -- a placeholder never replaced. A literal is not a
+         *     credential: it ships in the repository, so it authenticates anyone who can
+         *     read the source while presenting as a gate to anyone who reads the route.
+         *     The literal is deliberately not repeated here, because a secrets scan reads
+         *     docstrings too. See #17727; the router-level `check_admin_permission` above
+         *     is the replacement, so this route no longer authenticates itself.
          */
         post: operations["clear_error_history_api_errors_clear_post"];
         delete?: never;
@@ -55920,8 +55947,12 @@ export interface components {
             assistant_name?: string | null;
             /** Role Description */
             role_description?: string | null;
-            /** Heartbeat Cron */
-            heartbeat_cron?: string | null;
+            /**
+             * Heartbeat Cron
+             * @description Cron for periodic wake. Defaults to every minute; only used when heartbeat_enabled.
+             * @default * * * * *
+             */
+            heartbeat_cron: string | null;
             /**
              * Heartbeat Enabled
              * @default false
@@ -60255,6 +60286,11 @@ export interface components {
              * @default false
              */
             stream: boolean;
+            /**
+             * Play Locally
+             * @default false
+             */
+            play_locally: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -101907,16 +101943,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * VoiceSpeakResponse
-         * @description Response for POST /voice/speak (success path).
-         */
-        VoiceSpeakResponse: {
-            /** Message */
-            message: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * VoiceTranscribeResponse
          * @description Response for POST /voice/transcribe.
          */
@@ -119095,7 +119121,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VoiceSpeakResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -131345,8 +131371,9 @@ export interface operations {
     };
     get_chart_data_api_analytics_codebase_analytics_charts_get: {
         parameters: {
-            query?: {
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -131408,8 +131435,9 @@ export interface operations {
     };
     get_cached_dependency_result_api_analytics_codebase_analytics_dependencies_cached_get: {
         parameters: {
-            query?: {
-                source_id?: string;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -131439,7 +131467,10 @@ export interface operations {
     };
     start_dependency_analysis_api_analytics_codebase_analytics_dependencies_analyze_post: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -131453,6 +131484,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -131554,8 +131594,9 @@ export interface operations {
     };
     get_cached_import_tree_result_api_analytics_codebase_analytics_import_tree_cached_get: {
         parameters: {
-            query?: {
-                source_id?: string;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -131585,7 +131626,10 @@ export interface operations {
     };
     start_import_tree_analysis_endpoint_api_analytics_codebase_analytics_import_tree_analyze_post: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -131599,6 +131643,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -131806,8 +131859,9 @@ export interface operations {
     };
     get_cached_duplicate_result_api_analytics_codebase_duplicates_cached_get: {
         parameters: {
-            query?: {
-                source_id?: string;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -131837,7 +131891,10 @@ export interface operations {
     };
     start_duplicate_analysis_api_analytics_codebase_duplicates_analyze_post: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -131851,6 +131908,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -131920,9 +131986,9 @@ export interface operations {
     };
     clear_codebase_cache_api_analytics_codebase_cache_delete: {
         parameters: {
-            query?: {
-                /** @description #1772: clear only this source's cache */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the source whose cache to clear */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -133789,7 +133855,10 @@ export interface operations {
     };
     get_analytics_report_api_reporting_report_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -133805,11 +133874,23 @@ export interface operations {
                     "application/json": components["schemas"]["DataResponse_AnalyticsReportingReportResponse_"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_quick_summary_api_reporting_summary_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -133823,6 +133904,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_AnalyticsReportingSummaryResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -141767,9 +141857,7 @@ export interface operations {
     clear_error_history_api_errors_clear_post: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -141782,15 +141870,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorMonitoringClearResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -156131,9 +156210,9 @@ export interface operations {
     };
     get_cached_security_score_api_code_intelligence_security_score_cached_get: {
         parameters: {
-            query?: {
-                /** @description GH#8436: scope result by project source_id */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758) */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -156166,8 +156245,8 @@ export interface operations {
             query: {
                 /** @description Directory path to analyze */
                 path: string;
-                /** @description GH#8436: scope cached result by project source_id */
-                source_id?: string | null;
+                /** @description Required (#17758) */
+                source_id: string;
             };
             header?: never;
             path?: never;

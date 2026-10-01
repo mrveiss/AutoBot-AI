@@ -23,12 +23,13 @@ from celery.result import AsyncResult
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
+from api.codebase_analytics.source_scope import SourceIdQuery, cached_task_result, source_scoped_prefix
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import AnalyticsConfig
 from tasks.analytics_tasks import run_duplicate_analysis
 from utils.cancel_tokens import new_cancel_token, signal_cancel_token, submit_cancellable
-from utils.celery_task_status import celery_result_to_status, get_latest_task_result, store_latest_task_id
+from utils.celery_task_status import celery_result_to_status, store_latest_task_id
 from utils.chromadb_client import get_all_paginated
 from utils.io_executor import get_analytics_executor
 
@@ -627,25 +628,17 @@ async def detect_config_duplicates_endpoint(
 
 @router.get("/duplicates/cached")
 @bounded(180.0)
-async def get_cached_duplicate_result(source_id: str = ""):
+async def get_cached_duplicate_result(source_id: SourceIdQuery):
     """Return the latest completed duplicate analysis result (#1540)."""
-    cached = await get_latest_task_result(_REDIS_PREFIX)
-    if cached and cached.get("result"):
-        return {
-            "status": "success",
-            "from_cache": True,
-            "completed_at": cached.get("completed_at"),
-            **cached["result"],
-        }
-    return {"status": "no_data"}
+    return await cached_task_result(_REDIS_PREFIX, source_id)
 
 
 @router.post("/duplicates/analyze")
 @bounded(180.0)
-async def start_duplicate_analysis():
+async def start_duplicate_analysis(source_id: SourceIdQuery):
     """Enqueue duplicate analysis as a Celery task (GH#6505)."""
-    result = run_duplicate_analysis.delay()
-    await store_latest_task_id(_REDIS_PREFIX, result.id)
+    result = run_duplicate_analysis.delay(source_id)
+    await store_latest_task_id(source_scoped_prefix(_REDIS_PREFIX, source_id), result.id)
     return {"task_id": result.id, "status": "pending"}
 
 

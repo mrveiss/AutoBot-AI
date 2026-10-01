@@ -154,7 +154,7 @@
                than as a precondition. -->
           <span
             v-if="p.lifecycle_state === 'active' || !p.lifecycle_state"
-            class="lifecycle-hint"
+            class="field-label-hint"
           >{{ t('llcBrowser.projects.archiveToDeleteHint') }}</span>
           <template v-if="p.lifecycle_state === 'archived' || p.lifecycle_state === 'pending_disposal'">
             <BaseButton
@@ -346,8 +346,8 @@
             class="create-textarea"
           />
         </div>
-        <label class="create-checkbox">
-          <input v-model="editForm.auto_rollover" type="checkbox" />
+        <label class="checkbox-label">
+          <input v-model="editForm.auto_rollover" type="checkbox" class="checkbox-input" />
           {{ t('llcBrowser.projects.autoRolloverLabel') }}
         </label>
       </div>
@@ -761,12 +761,18 @@ async function saveProject(): Promise<void> {
   saving.value = true
   editError.value = ''
   try {
-    const updated = await api.patch<ProjectResponse>(
-      `/api/llc/projects/${project.id}`,
-      changed,
-    )
-    const index = projects.value.findIndex((candidate) => candidate.id === project.id)
-    if (index !== -1) projects.value[index] = updated
+    // No inline generic on this call, deliberately. Naming a response type at
+    // the call site is a shape claim TypeScript cannot check -- the server is
+    // free to answer something else -- and `frontend_api_contract_ratchet`
+    // counts those on a shrink-only pin. The type name is kept out of this
+    // comment too, because that detector reads comments: writing the offending
+    // syntax here to explain it would itself be counted (#17571's shape).
+    //
+    // So the response is neither typed nor read. The list is reloaded from the
+    // endpoint that already types it, which is what `createProject` and
+    // `deleteProject` in this file do after a mutation.
+    await api.patch(`/api/llc/projects/${project.id}`, changed)
+    await loadProjects()
     showEdit.value = false
   } catch (err) {
     logger.error('Failed to update project', err)
@@ -1024,20 +1030,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.create-checkbox {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-primary);
-}
-
-.lifecycle-hint {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  align-self: center;
-}
-
 .findings-disabled-note {
   font-size: var(--text-xs);
   color: var(--text-muted);
