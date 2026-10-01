@@ -48,6 +48,16 @@ _ORPHAN_REPAIR = (
 _RAW_REPAIR = "NOT_USER_FACING: operator vector-repair CLI; returns row ids and booleans, no fact content"
 _RAW_ADMIN_MEMORY = "ADMIN_ONLY: platform-admin user reassignment over the verbatim and trajectory stores, not KB facts"
 _CACHE_EVICT = "NOT_USER_FACING: cache eviction reads metadata only"
+_WATCH_RECONCILE = (
+    "NOT_USER_FACING: the watch folder resolving its own filesystem state against the KB. "
+    "It runs from a filesystem observer with no user in context, returns fact ids, counts and a "
+    "status -- never fact content -- and a visibility filter would make it WRONG rather than "
+    "safer: a reconciliation delete scoped to one user's view would skip the rows that user "
+    "cannot see, leaving documents for deleted files that nothing can ever remove. The rows it "
+    "matches carry no owner at all (build_watch_metadata writes source/category/tags/folder_id/"
+    "filename/file_path/collection), which is itself open as the watch-folder visibility ruling "
+    "on #17533"
+)
 _SCOPED_ADMIN_ROUTER = (
     "SCOPED: route requires Depends(check_admin_permission) (403 for non-admins), and "
     "check_access already grants admins unconditional read (#16665)"
@@ -232,6 +242,7 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/services/semantic_query_cache.py", "SemanticQueryCache.clear"): _RAW_ADMIN,
     ("autobot-backend/services/topic_retrieval_cache.py", "TopicRetrievalCache.lookup"): _RAG_CACHE,
     ("autobot-backend/services/topic_retrieval_cache.py", "TopicRetrievalCache._maybe_evict"): _CACHE_EVICT,
+    ("autobot-backend/services/kb_watch_ingest.py", "remove_watched_file"): _WATCH_RECONCILE,
     (
         "autobot-backend/knowledge/claude_memory_importer.py",
         "import_memory_file",
