@@ -9,6 +9,7 @@
 """Unit tests for AudioPipeline."""
 
 import base64
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -111,26 +112,32 @@ class TestAudioPipelineWhisper:
         assert result["processing_status"] == "unavailable"
 
     def test_run_whisper_writes_temp_file_and_cleans_up(self):
+        """Asserts the temp file is GONE, not that `os.unlink` was called once.
+
+        #17780: this counted `os.unlink` calls, which is the mechanism rather
+        than the property its own name states. Moving the temp-file lifecycle
+        into the shared `transcribe_bytes` made the count 2 -- the explicit
+        removal plus the file wrapper's own close path, the second of which finds
+        the file already gone and is swallowed. The file is still removed, so the
+        guarantee held while the assertion failed.
+
+        Checking the path's absence is both stronger and refactor-proof: it
+        verifies the outcome instead of trusting a call count to imply it.
+        """
         pipe = AudioPipeline()
-        deleted_paths = []
+        seen_paths = []
 
-        def mock_unlink(path):
-            deleted_paths.append(path)
+        def capture(path, **kwargs):
+            seen_paths.append(path)
+            return {"text": "hello world", "language": "en", "chunks": []}
 
-        mock_pipe = MagicMock(
-            return_value={
-                "text": "hello world",
-                "language": "en",
-                "chunks": [],
-            }
-        )
-
-        with patch("os.unlink", side_effect=mock_unlink):
-            result = pipe._run_whisper(mock_pipe, b"fake audio bytes", "audio/wav")
+        result = pipe._run_whisper(MagicMock(side_effect=capture), b"fake audio bytes", "audio/wav")
 
         assert result["transcribed_text"] == "hello world"
         assert result["language"] == "en"
-        assert len(deleted_paths) == 1  # temp file was cleaned up
+        assert len(seen_paths) == 1, "Whisper was handed something other than exactly one temp path"
+        assert seen_paths[0].endswith(".wav"), f"temp file got the wrong suffix: {seen_paths[0]}"
+        assert not os.path.exists(seen_paths[0]), f"temp file was left behind: {seen_paths[0]}"
 
     def test_run_whisper_handles_non_dict_output(self):
         pipe = AudioPipeline()
