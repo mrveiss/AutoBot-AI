@@ -104,6 +104,28 @@ _MUTATING = frozenset(
 
 _RESTARTS = frozenset({"_restart_component_services", "_restart_dependents_with_health"})
 
+#: The ONLY awaited calls permitted after a restart. An ALLOW-list, not a
+#: deny-list, and the difference is the whole point: `_MUTATING` can only catch
+#: names it already knows, so a newly added step slips past it silently. The
+#: docstring above claimed this invariant catches steps "the guard does not yet
+#: know about" -- with a deny-list that claim was simply false, which CodeRabbit
+#: caught (#17867). Inverted, an unknown name after a restart fails until
+#: somebody states why it is safe there.
+_POST_RESTART_ALLOWED = frozenset({"_wait_component_healthy", "_rollback_component"})
+
+#: Steps that MUST be present, not merely in the right place. The order check
+#: drops absent names before comparing, so deleting one leaves the rest ordered
+#: and green -- "absent" read as "fine", which is the failure this whole guard
+#: family exists to stop, committed by the guard itself (#17867).
+_MUST_EXIST: dict[str, frozenset[str]] = {
+    "_run_post_sync_backend_branch": frozenset(
+        {"_install_pip_deps_for_component", "_run_alembic_migrations", "_ensure_autobot_shared_symlink"}
+    ),
+    "_run_post_sync_frontend_branch": frozenset({"_build_npm_frontend_for_component"}),
+    "_run_post_sync_worker_branch": frozenset({"_install_pip_deps_for_component"}),
+    "_run_post_sync_shared_branch": frozenset({"_ensure_autobot_shared_symlink"}),
+}
+
 
 def _branch_names(root: Path | None = None) -> list[str]:
     """Branch functions actually present. Empty tree -> [], never a raise."""
@@ -174,6 +196,58 @@ def _first_index(steps: tuple[str, ...], name: str) -> int | None:
 
 
 # --------------------------------------------------------------------------
+# The detectors, as pure functions over a step sequence.
+#
+# Extracted so the contrast tests drive THE SAME CODE the real tests do. The
+# first version recomputed the post-restart rule inline inside its own
+# "negative control", so it proved a copy of the logic could fail and said
+# nothing about the logic (CodeRabbit, #17867) -- a negative control that does
+# not call the thing it controls for is decoration.
+# --------------------------------------------------------------------------
+
+
+def missing_required_steps(branch: str, steps: tuple[str, ...]) -> list[str]:
+    return sorted(_MUST_EXIST.get(branch, frozenset()) - set(steps))
+
+
+def out_of_order_pairs(branch: str, steps: tuple[str, ...]) -> list[tuple[str, str]]:
+    present = [(n, _first_index(steps, n)) for n in _REQUIRED_ORDER.get(branch, ())]
+    present = [(n, i) for n, i in present if i is not None]
+    return [(a, b) for (a, i), (b, j) in zip(present, present[1:]) if i >= j]
+
+
+def disallowed_after_restart(steps: tuple[str, ...]) -> list[str]:
+    at = next((i for i, s in enumerate(steps) if s in _RESTARTS), None)
+    if at is None:
+        return []
+    return sorted(set(steps[at + 1 :]) - _POST_RESTART_ALLOWED - _RESTARTS)
+
+
+def health_without_restart(steps: tuple[str, ...]) -> bool:
+    """A health poll with no restart to gate is not a legal branch state.
+
+    `restart=False` is legal in production, but every branch RETURNS before the
+    health check in that case -- so a health call present with no restart means
+    the restart was lost or renamed, not that it was skipped.
+    """
+    health = _first_index(steps, "_wait_component_healthy")
+    restart = next((i for i, s in enumerate(steps) if s in _RESTARTS), None)
+    return health is not None and restart is None
+
+
+def health_before_restart(steps: tuple[str, ...]) -> bool:
+    health = _first_index(steps, "_wait_component_healthy")
+    restart = next((i for i, s in enumerate(steps) if s in _RESTARTS), None)
+    return health is not None and restart is not None and restart > health
+
+
+def install_after_reconcile(steps: tuple[str, ...]) -> bool:
+    i = _first_index(steps, "_install_pip_deps_for_component")
+    j = _first_index(steps, "reconcile_component")
+    return i is not None and j is not None and i > j
+
+
+# --------------------------------------------------------------------------
 
 
 def test_every_pinned_branch_still_exists():
@@ -191,53 +265,138 @@ def test_every_pinned_branch_still_exists():
 
 
 @pytest.mark.parametrize("branch", sorted(_REQUIRED_ORDER))
+def test_required_steps_are_present(branch):
+    """Absent is not fine. The order check drops missing names before
+    comparing, so a DELETED `_run_alembic_migrations` leaves the rest ordered
+    and green (CodeRabbit, #17867)."""
+    steps = _branch_steps().get(branch, ())
+    assert steps, f"{branch}: no awaited calls found — the guard did not look"
+    missing = missing_required_steps(branch, steps)
+    assert not missing, f"{branch}: required step(s) no longer called at all: {missing}"
+
+
+@pytest.mark.parametrize("branch", sorted(_REQUIRED_ORDER))
 def test_branch_steps_run_in_the_required_order(branch):
     steps = _branch_steps().get(branch, ())
     assert steps, f"{branch}: no awaited calls found — the guard did not look"
-    positions = [(name, _first_index(steps, name)) for name in _REQUIRED_ORDER[branch]]
-    present = [(n, i) for n, i in positions if i is not None]
-    for (earlier, i), (later, j) in zip(present, present[1:]):
-        assert i < j, (
-            f"{branch}: {earlier!r} must run before {later!r}, but the source order is " f"{[n for n in steps]}"
-        )
+    bad = out_of_order_pairs(branch, steps)
+    assert not bad, f"{branch}: {bad[0][0]!r} must run before {bad[0][1]!r}; source order is {list(steps)}"
 
 
 @pytest.mark.parametrize("branch", sorted(_REQUIRED_ORDER))
-def test_nothing_mutating_happens_after_the_first_restart(branch):
-    """The invariant the individual orderings add up to.
-
-    Stated once, so a newly added step cannot land after the restart without
-    tripping something -- the per-pair ordering above only constrains names
-    it already knows about.
-    """
+def test_nothing_unapproved_happens_after_the_first_restart(branch):
+    """An ALLOW-list: anything after the restart that is not explicitly
+    permitted fails, including a step this guard has never heard of."""
     steps = _branch_steps().get(branch, ())
     assert steps, f"{branch}: no awaited calls found"
-    restart_at = next((i for i, s in enumerate(steps) if s in _RESTARTS), None)
-    if restart_at is None:
-        pytest.skip(f"{branch} performs no restart")
-    late = sorted({s for s in steps[restart_at + 1 :] if s in _MUTATING})
-    assert not late, f"{branch}: mutating step(s) run AFTER the restart: {late}"
+    late = disallowed_after_restart(steps)
+    assert not late, (
+        f"{branch}: step(s) run AFTER the restart with no stated reason: {late}. "
+        "If one is genuinely safe there, add it to _POST_RESTART_ALLOWED with a comment."
+    )
 
 
 @pytest.mark.parametrize("branch", sorted(_REQUIRED_ORDER))
-def test_health_is_checked_after_the_restart_that_gates_rollback(branch):
+def test_health_is_checked_after_a_restart_that_actually_exists(branch):
     steps = _branch_steps().get(branch, ())
-    restart_at = next((i for i, s in enumerate(steps) if s in _RESTARTS), None)
-    health_at = _first_index(steps, "_wait_component_healthy")
-    if restart_at is None or health_at is None:
-        pytest.skip(f"{branch} has no restart/health pair")
-    assert restart_at < health_at, f"{branch}: health is polled BEFORE the restart it is meant to gate"
+    assert not health_without_restart(steps), (
+        f"{branch}: a health check with no restart — the restart was lost or renamed. "
+        "restart=False is legal, but the branch returns before the health call in that case."
+    )
+    assert not health_before_restart(steps), f"{branch}: health is polled BEFORE the restart it gates"
 
 
 def test_install_precedes_removal_everywhere_both_appear():
     """Removals are computed against the declared set, so the venv must be
-    brought to that set first. Pinned across every branch at once, not just
-    the two that happen to have both today."""
+    brought to that set first."""
     for branch, steps in _branch_steps().items():
-        i, j = _first_index(steps, "_install_pip_deps_for_component"), _first_index(steps, "reconcile_component")
-        if i is None or j is None:
-            continue
-        assert i < j, f"{branch}: reconcile_component runs BEFORE the pip install it reconciles against"
+        assert not install_after_reconcile(
+            steps
+        ), f"{branch}: reconcile_component runs BEFORE the pip install it reconciles against"
+
+
+# --------------------------------------------------------------------------
+# contrast pairs — each drives THE SAME helper the real test above calls
+# --------------------------------------------------------------------------
+
+_GOOD = (
+    "_install_pip_deps_for_component",
+    "reconcile_component",
+    "_run_alembic_migrations",
+    "_ensure_autobot_shared_symlink",
+    "_restart_component_services",
+    "_wait_component_healthy",
+)
+
+_BACKEND = "_run_post_sync_backend_branch"
+
+
+@pytest.mark.parametrize(
+    "name,detector,steps,expected",
+    [
+        # required-step presence
+        (
+            "migration deleted",
+            lambda s: missing_required_steps(_BACKEND, s),
+            tuple(x for x in _GOOD if x != "_run_alembic_migrations"),
+            ["_run_alembic_migrations"],
+        ),
+        ("all present", lambda s: missing_required_steps(_BACKEND, s), _GOOD, []),
+        # ordering
+        (
+            "restart before migrate",
+            lambda s: out_of_order_pairs(_BACKEND, s),
+            (
+                "_install_pip_deps_for_component",
+                "reconcile_component",
+                "_restart_component_services",
+                "_run_alembic_migrations",
+            ),
+            [("_run_alembic_migrations", "_restart_component_services")],
+        ),
+        ("ordered", lambda s: out_of_order_pairs(_BACKEND, s), _GOOD, []),
+        # post-restart allow-list — an UNKNOWN name, not one in _MUTATING
+        (
+            "unknown step after restart",
+            disallowed_after_restart,
+            _GOOD + ("_some_future_step_nobody_listed",),
+            ["_some_future_step_nobody_listed"],
+        ),
+        ("only approved after restart", disallowed_after_restart, _GOOD + ("_rollback_component",), []),
+    ],
+)
+def test_each_detector_fires_on_its_own_defect(name, detector, steps, expected):
+    assert detector(steps) == expected, name
+
+
+@pytest.mark.parametrize(
+    "name,detector,steps,expected",
+    [
+        (
+            "health with no restart",
+            health_without_restart,
+            ("_install_pip_deps_for_component", "_wait_component_healthy"),
+            True,
+        ),
+        ("health after restart", health_without_restart, _GOOD, False),
+        (
+            "health before restart",
+            health_before_restart,
+            ("_wait_component_healthy", "_restart_component_services"),
+            True,
+        ),
+        ("health after restart", health_before_restart, _GOOD, False),
+        (
+            "reconcile before install",
+            install_after_reconcile,
+            ("reconcile_component", "_install_pip_deps_for_component"),
+            True,
+        ),
+        ("install before reconcile", install_after_reconcile, _GOOD, False),
+    ],
+)
+def test_each_boolean_detector_fires_on_its_own_defect(name, detector, steps, expected):
+    assert detector(steps) is expected, name
 
 
 # --------------------------------------------------------------------------
@@ -257,14 +416,6 @@ def _steps_of(src: str, name: str) -> tuple[str, ...]:
     tree = ast.parse(src)
     fn = next(n for n in ast.walk(tree) if isinstance(n, (ast.AsyncFunctionDef, ast.FunctionDef)) and n.name == name)
     return tuple(awaited_calls_in_source_order(fn))
-
-
-def test_the_order_check_fails_on_a_restart_before_migration():
-    """Without this, every assertion above could be passing vacuously."""
-    steps = _steps_of(_MUTATED_BRANCH, "_run_post_sync_backend_branch")
-    restart_at = next(i for i, s in enumerate(steps) if s in _RESTARTS)
-    late = {s for s in steps[restart_at + 1 :] if s in _MUTATING}
-    assert "_run_alembic_migrations" in late, "the mutating-after-restart check cannot fire — it is decoration"
 
 
 def test_source_order_differs_from_walk_order_on_the_real_file():
