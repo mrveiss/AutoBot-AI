@@ -5646,14 +5646,17 @@ export interface paths {
          * Get Llm Config
          * @description Get current LLM configuration (admin only).
          *
-         *     API keys are masked in the response for security.
+         *     API keys are omitted from the response, never masked: a mask round-trips
+         *     back as a value and overwrote every stored key on save (#17826).
          */
         get: operations["get_llm_config_api_settings_admin_llm_get"];
         /**
          * Save Llm Config
          * @description Save LLM configuration (admin only).
          *
-         *     API keys are encrypted before storage via services.encryption.
+         *     A provider's ``api_key`` is write-only: send one to set or rotate it, send
+         *     none to leave the stored key untouched. Keys go to the unified-secrets vault
+         *     (#10503), or inline-encrypted while the vault is not configured.
          */
         put: operations["save_llm_config_api_settings_admin_llm_put"];
         post?: never;
