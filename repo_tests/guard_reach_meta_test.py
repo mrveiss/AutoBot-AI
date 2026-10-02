@@ -111,6 +111,18 @@ _ENUMERATOR = re.compile(r"tracked_paths|ls-files|rglob\(|os\.walk\(|\.iterdir\(
 #: number tracks full reach, so growth in the narrowed reach silently eats the
 #: detection margin and the pin has to be re-measured.
 #:
+#: Every count above is files MATCHING `_ENUMERATOR`, not guards that scan the
+#: tree: a match can be incidental. CENSUS 2026-10-02 at 168 matched (#15826),
+#: each of the 33 `.glob(`-only members resolved by chasing its receiver's
+#: binding, not its name: 30 true, 3 false, 0 unresolved --
+#: `hook_self_sync_atomic_test` and `prepush_hook_sync_17578_test` glob a
+#: `tmp_path`, `sync_to_slm_db_update_classify_14459_test` globs the host
+#: filesystem. True tree-scanning population: 165, exactly this floor. The
+#: apparent 3 of headroom ARE the 3 false members, so there is no real margin,
+#: and tightening `.glob(` to exclude them lands at equality -- it needs a floor
+#: decision in the same change. Quote these numbers as "matched", never as
+#: "guards examined", and never quote 168 - 165 as margin.
+#:
 #: Do NOT "fix" the treadmill by deriving this from the tree. A floor computed
 #: by the same enumerator it guards always agrees with itself and can never
 #: fail; the hand-pinned number is the whole mechanism, and paying it forward on
@@ -144,7 +156,6 @@ MIN_GUARDS_EXAMINED = 165
 #: one fails. May only shrink, and a shrink must be recorded here.
 GRANDFATHERED = frozenset(
     {
-        "repo_tests/background_task_retention_ratchet_test.py",
         "repo_tests/fixture_fixed_path_teardown_guard_gating_test.py",
         # Entered the examined set with `.glob(` (#16147). It was always a
         # tree-scanning guard with no floor; it was simply invisible to the
@@ -164,12 +175,59 @@ GRANDFATHERED = frozenset(
 #: mirrored here too, so a removed entry cannot quietly come back.
 _GRANDFATHERED_BASELINE = frozenset(
     {
-        "repo_tests/background_task_retention_ratchet_test.py",
         "repo_tests/fixture_fixed_path_teardown_guard_gating_test.py",
         "repo_tests/promtool_rules_test.py",
         "repo_tests/workflow_planner_deprecation_test.py",
     }
 )
+
+
+#: A name that reads as a floor: ``MIN_FILES``, ``_FLOOR``, ``budget.min_files``,
+#: ``minimum_reach``. Case-insensitive because a floor's name is a convention,
+#: not its reach -- the case-sensitive form read
+#: ``background_task_retention_ratchet_test``'s ``budget.min_files`` as no floor
+#: at all. Bounded by ``_`` or end so ``minutes`` and ``mine`` do not qualify,
+#: and never applied to a call target, so the builtin ``min(...)`` and
+#: ``math.floor(...)`` do not either.
+_FLOOR_NAME = re.compile(r"_?(min|floor)(imum)?(_|$)", re.IGNORECASE)
+
+
+def _names_a_floor(node: ast.AST, call_targets: set[int]) -> bool:
+    if id(node) in call_targets:
+        return False
+    if isinstance(node, ast.Name):
+        return bool(_FLOOR_NAME.match(node.id))
+    if isinstance(node, ast.Attribute):
+        return bool(_FLOOR_NAME.match(node.attr))
+    return False
+
+
+def _compares_a_floor_to_reach(compare: ast.Compare, call_targets: set[int]) -> bool:
+    """A floor name counts only when compared against something that is not a constant.
+
+    ``files_parsed >= budget.min_files`` binds a measured reach to the floor;
+    ``budget.min_files > 0`` checks the configured bound and examines nothing.
+    """
+    operands = [compare.left, *compare.comparators]
+    for i, operand in enumerate(operands):
+        if any(_names_a_floor(n, call_targets) for n in ast.walk(operand)):
+            others = operands[:i] + operands[i + 1 :]
+            if any(not isinstance(o, ast.Constant) for o in others):
+                return True
+    return False
+
+
+def _assert_binds_a_floor(test: ast.expr) -> bool:
+    if isinstance(test, ast.Name):
+        return True
+    nodes = list(ast.walk(test))
+    call_targets = {id(n.func) for n in nodes if isinstance(n, ast.Call)}
+    for inner in nodes:
+        if isinstance(inner, ast.Call) and getattr(inner.func, "id", "") == "len":
+            return True
+        if isinstance(inner, ast.Compare) and _compares_a_floor_to_reach(inner, call_targets):
+            return True
+    return False
 
 
 def has_floor(source: str) -> bool:
@@ -186,18 +244,7 @@ def has_floor(source: str) -> bool:
         tree = ast.parse(source)
     except SyntaxError:
         return True  # unparsed: not this check's finding to report
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assert):
-            if isinstance(node.test, ast.Name):
-                return True
-            for inner in ast.walk(node.test):
-                if isinstance(inner, ast.Call) and getattr(inner.func, "id", "") == "len":
-                    return True
-                if isinstance(inner, ast.Name) and re.match(r"_?(MIN|FLOOR)", inner.id):
-                    return True
-                if isinstance(inner, ast.Attribute) and re.match(r"_?(MIN|FLOOR)", inner.attr):
-                    return True
-    return False
+    return any(isinstance(node, ast.Assert) and _assert_binds_a_floor(node.test) for node in ast.walk(tree))
 
 
 def _tracked_guards() -> list[Path]:
@@ -267,6 +314,110 @@ def test_the_detector_fails_a_real_guard_with_its_floor_removed() -> None:
     stripped = ast.unparse(ast.fix_missing_locations(_RemoveFloors().visit(tree)))
     ast.parse(stripped)  # the fixture must still be valid Python, or it passes for the wrong reason
     assert not has_floor(stripped), "detector reports a floor in a guard whose floor was removed"
+
+
+def test_a_floor_named_in_lowercase_is_a_floor() -> None:
+    """The convention is not the reach (#15826).
+
+    `background_task_retention_ratchet_test.py` asserts
+    ``census.files_parsed >= budget.min_files`` plus per-root floors -- a
+    richer reach contract than ``declare`` -- and the case-sensitive detector
+    read it as unfloored, so it sat in GRANDFATHERED and the staleness test,
+    using the same detector, could never retire it.
+    """
+    source = (repo_root() / "repo_tests" / "background_task_retention_ratchet_test.py").read_text(encoding="utf-8")
+    assert has_floor(source), "a guard asserting `>= budget.min_files` must read as floored"
+    for form in ("assert n >= budget.min_files", "assert n >= min_reach", "assert n >= _floor"):
+        assert has_floor(form), f"{form!r} names a floor in lowercase"
+
+
+@pytest.mark.parametrize(
+    "lookalike",
+    [
+        "assert min(xs) > 0",
+        "assert math.floor(t) > 0",
+        "assert elapsed < minutes",
+        "assert owner == mine",
+        # a floor checked against a constant is the configured bound, not reach
+        "assert budget.min_files > 0",
+        "assert MIN_FILES > 0",
+    ],
+)
+def test_a_lookalike_of_a_floor_name_is_not_a_floor(lookalike: str) -> None:
+    """The control for the case-insensitive match: it must not buy floors it cannot see.
+
+    ``min`` and ``floor`` are also a builtin, a ``math`` function and the stem
+    of ordinary words. None of them binds an assertion to how much was examined.
+    """
+    assert not has_floor(lookalike), f"{lookalike!r} is not a floor"
+
+
+def _is_emptiness_check(test: ast.expr) -> bool:
+    """``len(x) == 0``, ``<= 0``, ``< 1`` or ``not len(x)``: says nothing about reach."""
+    if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
+        return isinstance(test.operand, ast.Call) and getattr(test.operand.func, "id", "") == "len"
+    if not (isinstance(test, ast.Compare) and len(test.ops) == 1):
+        return False
+    left, op, right = test.left, type(test.ops[0]), test.comparators[0]
+    if _is_len_call(right) and not _is_len_call(left):  # `0 == len(x)` reads as `len(x) == 0`
+        left, right, op = right, left, _MIRRORED.get(op, op)
+    if not (_is_len_call(left) and isinstance(right, ast.Constant)):
+        return False
+    return (op, right.value) in {(ast.Eq, 0), (ast.LtE, 0), (ast.Lt, 1)}
+
+
+_MIRRORED = {ast.Lt: ast.Gt, ast.Gt: ast.Lt, ast.LtE: ast.GtE, ast.GtE: ast.LtE}
+
+
+def _is_len_call(node: ast.expr) -> bool:
+    return isinstance(node, ast.Call) and getattr(node.func, "id", "") == "len"
+
+
+def floored_only_by_emptiness(source: str) -> bool:
+    """True when every floor ``has_floor`` sees is an assertion that something is EMPTY.
+
+    ``has_floor`` counts any ``len()`` inside an assert, so ``assert
+    len(violations) == 0`` reads as a floor while proving nothing was examined.
+    Pinned by the sweep below rather than changed in ``has_floor``: measured
+    2026-10-02, no tracked guard is in this state, so this is a gap with zero
+    instances, not a live defect.
+    """
+    if not has_floor(source):
+        return False
+
+    class _DropEmptiness(ast.NodeTransformer):
+        def visit_Assert(self, node: ast.Assert) -> ast.AST | None:
+            # `pass`, not removal: dropping the only statement of a function leaves an
+            # empty body, the unparse is invalid Python, and has_floor reads a
+            # SyntaxError as floored -- the sweep would go blind on exactly that shape.
+            return ast.Pass() if _is_emptiness_check(node.test) else node
+
+    stripped = ast.unparse(ast.fix_missing_locations(_DropEmptiness().visit(ast.parse(source))))
+    return not has_floor(stripped)
+
+
+def test_no_guard_is_floored_only_by_an_emptiness_assertion() -> None:
+    """Catches the first guard whose only "floor" is ``assert len(found) == 0``."""
+    root = repo_root()
+    offenders = sorted(
+        name
+        for name, floored in _scanning_guards().items()
+        if floored and floored_only_by_emptiness((root / name).read_text(encoding="utf-8"))
+    )
+    assert not offenders, "guards whose only floor asserts emptiness -- bind a real floor:\n  " + "\n  ".join(offenders)
+
+
+def test_the_emptiness_sweep_finds_a_planted_guard() -> None:
+    """The sweep above must be able to fail, or it is the defect it checks for."""
+    assert floored_only_by_emptiness("found = scan()\nassert len(found) == 0")
+    assert floored_only_by_emptiness("found = scan()\nassert not len(found)")
+    assert not floored_only_by_emptiness("found = scan()\nassert len(found) == 0\nassert len(seen) >= 50")
+    # The emptiness assert as the only statement of a test function -- the shape a
+    # real guard takes, and the one a stripped-to-empty body used to hide.
+    assert floored_only_by_emptiness("def test_x():\n    assert len(scan()) == 0")
+    # The same emptiness written with len() on the right.
+    assert floored_only_by_emptiness("found = scan()\nassert 0 == len(found)")
+    assert floored_only_by_emptiness("found = scan()\nassert 1 > len(found)")
 
 
 def test_the_sweep_examined_enough_guards_to_mean_anything() -> None:
