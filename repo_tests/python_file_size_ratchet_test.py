@@ -422,8 +422,14 @@ def test_the_audit_reports_a_vanished_entry(hook, tmp_path, monkeypatch):
 def test_unlisted_files_keep_the_plain_limit(hook):
     unlisted = "autobot-backend/api/definitely_not_grandfathered.py"
     assert hook.verdict(unlisted, hook.MAX_LINES) is None
+    # The message carries the KNOWN_LARGE guidance the shell gate already had and this
+    # one lacked (#17377): the advice not to grandfather a new file belongs in the gate
+    # that HAS a KNOWN_LARGE. Asserted in full rather than by substring, so the wording
+    # cannot degrade silently -- this is the only test pinning it.
     assert hook.verdict(unlisted, hook.MAX_LINES + 1) == (
-        f"{unlisted}: {hook.MAX_LINES + 1} lines (max {hook.MAX_LINES})"
+        f"{unlisted}: {hook.MAX_LINES + 1} lines (max {hook.MAX_LINES}). Split it -- do not "
+        f"add a KNOWN_LARGE entry in {hook.SELF_REL}, which grandfathers what already "
+        "existed and is not a way in for new files."
     )
 
 

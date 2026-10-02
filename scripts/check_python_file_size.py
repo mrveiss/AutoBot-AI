@@ -218,7 +218,11 @@ def verdict(rel: str, line_count: int) -> str | None:
     if ceiling is not None:
         return _grandfathered_verdict(rel, line_count, ceiling)
     if line_count > MAX_LINES:
-        return f"{rel}: {line_count} lines (max {MAX_LINES})"
+        return (
+            f"{rel}: {line_count} lines (max {MAX_LINES}). Split it -- do not add "
+            f"a KNOWN_LARGE entry in {SELF_REL}, which grandfathers what already "
+            "existed and is not a way in for new files."
+        )
     return None
 
 
@@ -264,6 +268,22 @@ def _scan_tracked_files(root: pathlib.Path, tracked: list[str]) -> tuple[int, se
     for rel in sorted(tracked):
         line_count = count_lines(root / rel)
         if line_count is None:
+            # NOT a skip (#14975). `unmeasured` states the contract -- exit 0 is only
+            # entitled to mean *within the limit*, and a file that was never opened has
+            # not earned that -- and `main` has honoured it since. This path did not, so
+            # `--audit-ceilings` could report "all live and at size" having never read a
+            # broken symlink, a bad mode or a non-UTF-8 file. It is reported here and
+            # still does NOT count toward `reached`, so it cannot prop up the floor
+            # check in `run_audit` without having been ruled on.
+            problems.append(unmeasured(rel))
+            # Recorded as SEEN but not as REACHED, and the two words mean different
+            # things here. `seen` answers "did the walk find this path", which it did,
+            # so the `KNOWN_LARGE - seen` pass in `audit_ceilings` must not also call it
+            # moved-or-deleted -- that message is wrong for a file that exists and
+            # cannot be read, and reporting both tells the developer two stories about
+            # one file. `reached` stays exclusive, so an unmeasured file still cannot
+            # prop up the floor check.
+            seen.add(normalise(rel))
             continue
         reached += 1
         seen.add(normalise(rel))
