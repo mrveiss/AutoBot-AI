@@ -107,7 +107,7 @@ class Route:
     method: str
     path: str
     model: str
-    excluded: frozenset[str] = frozenset()
+    excluded: frozenset[tuple[str, ...]] = frozenset()
 
 
 def _python_files(root: Path | None = None) -> list[str]:
@@ -171,7 +171,7 @@ def _annotation_names(expr: ast.expr | None) -> list[str]:
     return _model_names(expr) if expr is not None else []
 
 
-def excluded_field_names(expr: ast.expr | None, resolve: dict[str, ast.expr]) -> set[str]:
+def excluded_field_names(expr: ast.expr | None, resolve: dict[str, ast.expr]) -> set[tuple[str, ...]]:
     """Leaf strings in a `response_model_exclude=` expression.
 
     FastAPI's exclude accepts a set of names or a nested dict keyed by field
@@ -187,13 +187,28 @@ def excluded_field_names(expr: ast.expr | None, resolve: dict[str, ast.expr]) ->
     """
     if expr is None:
         return set()
-    if isinstance(expr, ast.Name):  # a module-level constant
+    if isinstance(expr, ast.Name):  # a module-level constant, THIS module only
         return excluded_field_names(resolve.get(expr.id), resolve)
-    out: set[str] = set()
-    for node in ast.walk(expr):
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            out.add(node.value)
-    return out - {"__all__"}
+    out: set[tuple[str, ...]] = set()
+
+    def walk(node: ast.expr, prefix: tuple[str, ...]) -> None:
+        if isinstance(node, ast.Dict):
+            for k, v in zip(node.keys, node.values):
+                if isinstance(k, ast.Constant) and isinstance(k.value, str):
+                    # `__all__` is the list-item segment, not a field name, so it
+                    # does not extend the path.
+                    walk(v, prefix if k.value == "__all__" else prefix + (k.value,))
+        elif isinstance(node, (ast.Set, ast.List, ast.Tuple)):
+            for elt in node.elts:
+                walk(elt, prefix)
+        elif isinstance(node, ast.Constant):
+            if isinstance(node.value, str) and node.value != "__all__":
+                out.add(prefix + (node.value,))
+            elif node.value is True and prefix:
+                out.add(prefix)  # {"api_key": True}
+
+    walk(expr, ())
+    return out
 
 
 def _route_of(node: ast.Call) -> tuple[str, str] | None:
@@ -213,7 +228,7 @@ class Index:
     failures: tuple[tuple[str, str], ...]
     own: dict[str, list[str]]
     bases: dict[str, list[str]]
-    nested: dict[str, list[str]]
+    nested: dict[str, list[tuple[str, str]]]
     routes: tuple[Route, ...]
     #: Class name -> the files defining it. Needed because `own`/`bases`/`nested`
     #: merge same-named classes across trees, so by themselves they cannot say
@@ -234,11 +249,11 @@ def _build_index(root: Path) -> Index:
     """
     own: dict[str, list[str]] = {}
     bases: dict[str, list[str]] = {}
-    nested: dict[str, list[str]] = {}
+    nested: dict[str, list[tuple[str, str]]] = {}
     routes: list[Route] = []
     parsed: list[str] = []
     failures: list[tuple[str, str]] = []
-    consts: dict[str, ast.expr] = {}
+    consts: dict[str, ast.expr] = {}  # rebound PER FILE in the loop below
     defined_in: dict[str, list[str]] = {}
     passthrough: set[tuple[str, str]] = set()
 
@@ -251,6 +266,13 @@ def _build_index(root: Path) -> Index:
             failures.append((rel, f"{type(exc).__name__}: {exc}"))
             continue
         parsed.append(rel)
+        # Reset PER FILE. One dict shared across the tree let a route using
+        # `response_model_exclude=NAME` resolve NAME from a DIFFERENT module
+        # that happened to define it, adding that module's field names to this
+        # route's excluded set and suppressing a real violation (CodeRabbit,
+        # #17865). A cross-module fallback in a security guard is a way to hide
+        # a leak, not a convenience.
+        consts = {}
         for node in tree.body:  # module-level constants only
             if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
                 consts[node.targets[0].id] = node.value
@@ -261,7 +283,7 @@ def _build_index(root: Path) -> Index:
                     if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
                         if _is_secret_field(stmt.target.id):
                             secrets.append(stmt.target.id)
-                        refs += _annotation_names(stmt.annotation)
+                        refs += [(stmt.target.id, t) for t in _annotation_names(stmt.annotation)]
                 defined_in.setdefault(node.name, [])
                 if rel not in defined_in[node.name]:
                     defined_in[node.name].append(rel)
@@ -292,23 +314,45 @@ def _index(root: Path | None = None) -> Index:
     return _build_index(root or _ROOT)
 
 
-def _reached_fields(model: str, idx: Index, seen: frozenset[str] = frozenset()) -> list[str]:
-    """Secret-named fields reachable from *model* by inheritance OR nesting."""
+def _reached_paths(model: str, idx: Index, seen: frozenset[str] = frozenset()) -> set[tuple[str, ...]]:
+    """Paths to secret-named fields reachable from *model*.
+
+    PATHS, not bare names, because `response_model_exclude` is path-scoped.
+    `{"providers": {"__all__": {"api_key"}}}` excludes `providers[*].api_key`
+    and says nothing about a TOP-LEVEL `api_key` on the same model. Matching on
+    the bare name suppressed both, so a nested exclusion could hide a top-level
+    leak (CodeRabbit, #17865) -- a false negative introduced by the feature
+    that was meant to remove false positives.
+
+    Inheritance does not extend the path (an inherited field is at this level);
+    nesting does.
+    """
     if model in seen or model not in idx.own:
-        return []
+        return set()
     seen = seen | {model}
-    fields = list(idx.own.get(model, []))
-    for other in idx.bases.get(model, []) + idx.nested.get(model, []):
-        fields += _reached_fields(other, idx, seen)
-    return sorted(set(fields))
+    paths = {(f,) for f in idx.own.get(model, [])}
+    for base in idx.bases.get(model, []):
+        paths |= _reached_paths(base, idx, seen)
+    for field, other in idx.nested.get(model, []):
+        paths |= {(field,) + p for p in _reached_paths(other, idx, seen)}
+    return paths
+
+
+def _reached_fields(model: str, idx: Index, seen: frozenset[str] = frozenset()) -> list[str]:
+    """Leaf names only — kept for the waiver and baseline keys, which are by name."""
+    return sorted({p[-1] for p in _reached_paths(model, idx, seen)})
 
 
 def _violations(idx: Index) -> list[tuple[str, int, str, str, str]]:
     out = []
     for route in idx.routes:
-        for field in _reached_fields(route.model, idx):
-            if field in route.excluded:  # never reaches the wire
+        for path in _reached_paths(route.model, idx):
+            # Matched as a PATH. Comparing the leaf name against a set of paths
+            # is always False, which silently disabled every exclusion -- the
+            # bug this line previously had.
+            if path in route.excluded:  # that exact path never reaches the wire
                 continue
+            field = path[-1]
             if (route.model, field, route.method, route.path) in _WAIVED:
                 continue
             if (route.file, f"{route.method} {route.path}".strip(), route.model, field) in _UNAUDITED_BASELINE:
@@ -463,7 +507,9 @@ def test_the_unaudited_baseline_only_shrinks():
     live = {
         (r.file, f"{r.method} {r.path}".strip(), r.model, field)
         for r in idx.routes
-        for field in _reached_fields(r.model, idx)
+        for path in _reached_paths(r.model, idx)
+        if path not in r.excluded
+        for field in [path[-1]]
     }
     stale = sorted(set(_UNAUDITED_BASELINE) - live)
     assert not stale, "baseline entries no longer fire -- remove them, the ratchet only turns down:\n" + "\n".join(

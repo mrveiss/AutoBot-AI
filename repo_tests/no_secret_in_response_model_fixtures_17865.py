@@ -177,4 +177,55 @@ DETECTOR_FIXTURES = [
         },
         False,
     ),
+    (
+        # PATH-AWARE EXCLUSION. A nested exclusion covers `providers[*].api_key`
+        # and says nothing about the TOP-LEVEL `api_key` on the same model.
+        # Matching bare names suppressed both, so a nested exclusion could hide
+        # a top-level leak (CodeRabbit, #17865).
+        "nested-exclusion-does-not-cover-the-top-level-field",
+        {
+            "autobot-slm-backend/models/s.py": (
+                "class Provider(BaseModel):\n    api_key: str | None = None\n"
+                "class Outer(BaseModel):\n    api_key: str | None = None\n"
+                "    providers: list[Provider] = []\n"
+            ),
+            "autobot-slm-backend/api/r.py": (
+                "@router.get('/x', response_model=Outer, "
+                "response_model_exclude={'providers': {'__all__': {'api_key'}}})\ndef h(): ...\n"
+            ),
+        },
+        True,
+    ),
+    (
+        # Excluding BOTH paths explicitly is clean — so the case above is not
+        # passing merely because nested exclusions are ignored.
+        "both-paths-excluded-is-clean",
+        {
+            "autobot-slm-backend/models/s.py": (
+                "class Provider(BaseModel):\n    api_key: str | None = None\n"
+                "class Outer(BaseModel):\n    api_key: str | None = None\n"
+                "    providers: list[Provider] = []\n"
+            ),
+            "autobot-slm-backend/api/r.py": (
+                "@router.get('/x', response_model=Outer, "
+                "response_model_exclude={'api_key': True, 'providers': {'__all__': {'api_key'}}})"
+                "\ndef h(): ...\n"
+            ),
+        },
+        False,
+    ),
+    (
+        # CROSS-MODULE CONSTANT. `_NO_KEYS` is defined in another module, not in
+        # the one holding the route. It must NOT resolve — otherwise an unrelated
+        # module's constant can launder a secret here.
+        "exclusion-constant-from-another-module-does-not-resolve",
+        {
+            "autobot-slm-backend/models/other.py": "_NO_KEYS = {'api_key'}\n",
+            "autobot-slm-backend/models/s.py": "class Outer(BaseModel):\n    api_key: str | None = None\n",
+            "autobot-slm-backend/api/r.py": (
+                "@router.get('/x', response_model=Outer, response_model_exclude=_NO_KEYS)\ndef h(): ...\n"
+            ),
+        },
+        True,
+    ),
 ]
