@@ -135,3 +135,21 @@ def test_every_named_send_endpoint_is_a_post_route_in_api_chat():
     }
     missing = sorted(send_limit.SEND_ENDPOINTS - posts)
     assert not missing, f"SEND_ENDPOINTS names no POST route in api/chat.py: {missing}"
+
+
+def test_every_send_endpoint_keeps_its_name_through_its_decorators():
+    """The limit matches the *runtime* endpoint name, so the source name is not enough.
+
+    The AST check above proves each name is defined in ``api/chat.py``. This one
+    imports the real router and proves each name is still the ``__name__`` of a
+    registered POST route after its decorators: a wrapper that stopped preserving
+    ``__name__`` (``with_error_handling`` uses ``functools.wraps`` today) would
+    make ``_is_send`` skip every send route while the AST check stayed green.
+    """
+    from api.chat import router as chat_router
+
+    runtime_posts = {
+        route.endpoint.__name__ for route in chat_router.routes if "POST" in getattr(route, "methods", set())
+    }
+    lost = sorted(send_limit.SEND_ENDPOINTS - runtime_posts)
+    assert not lost, f"send endpoints whose routed name no longer matches SEND_ENDPOINTS: {lost}"
