@@ -226,3 +226,53 @@ def test_a_display_mask_put_back_is_refused_and_nothing_is_written(client_for, v
     assert db.stored()["openai"] == before
     vault.create.assert_not_awaited()
     vault.rotate.assert_not_awaited()
+
+
+def _saved(vault_id: str) -> _Db:
+    return _Db({"llm_providers": json.dumps([{"name": "openai", "enabled": True, "api_key_vault_id": vault_id}])})
+
+
+def test_a_put_carrying_a_new_key_rotates_it_and_does_not_echo_it(client_for, vault):
+    vault_id = "4b8f1c2e-0000-4000-8000-000000000003"
+    db = _saved(vault_id)
+    client = client_for(db)
+    body = client.get(_PATH).json()["config"]
+    body["providers"][0]["api_key"] = "sk-rotated-0001"  # pragma: allowlist secret
+
+    put = client.put(_PATH, json=body)
+
+    assert put.status_code == 200, put.text
+    assert "sk-rotated-0001" not in put.text, "PUT response echoes the submitted key"
+    assert not set(_SECRET_FIELDS) & set(put.json()["config"]["providers"][0])
+    vault.rotate.assert_awaited_once()
+    assert vault.rotate.call_args.args[1] == "sk-rotated-0001"
+    vault.create.assert_not_awaited()
+    assert db.stored()["openai"]["api_key_vault_id"] == vault_id and "api_key" not in db.stored()["openai"]
+
+
+@pytest.mark.parametrize("names", [["openai", "openai"], [""]])
+def test_duplicate_or_empty_provider_names_are_refused(client_for, vault, names):
+    """Secrets are matched by name: two providers sharing one would share -- and overwrite -- one secret."""
+    db = _saved("4b8f1c2e-0000-4000-8000-000000000004")
+    client = client_for(db)
+    body = client.get(_PATH).json()["config"]
+    body["providers"] = [{"name": n, "api_key": "sk-new-0002"} for n in names]  # pragma: allowlist secret
+
+    put = client.put(_PATH, json=body)
+
+    assert put.status_code == 422, put.text
+    vault.create.assert_not_awaited()
+    vault.rotate.assert_not_awaited()
+
+
+def test_a_vault_outage_is_a_503_not_a_bare_500(client_for, vault):
+    vault.rotate.side_effect = RuntimeError("vault down")  # the stub's VaultClientError
+    db = _saved("4b8f1c2e-0000-4000-8000-000000000005")
+    client = client_for(db)
+    body = client.get(_PATH).json()["config"]
+    body["providers"][0]["api_key"] = "sk-new-0003"  # pragma: allowlist secret
+
+    put = client.put(_PATH, json=body)
+
+    assert put.status_code == 503, put.text
+    assert "vault down" not in put.text

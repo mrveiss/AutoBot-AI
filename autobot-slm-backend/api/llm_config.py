@@ -31,6 +31,7 @@ from user_management.services.llm_secrets import (
     merge_provider_secret,
     public_provider_view,
 )
+from user_management.services.vault_client import VaultClientError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settings/admin/llm", tags=["llm-config"])
@@ -133,24 +134,26 @@ async def _load_llm_config(db: AsyncSession) -> LLMConfig:
     rows = {s.key: s.value for s in result.scalars().all()}
 
     providers = [LLMProviderConfig(**public_provider_view(p)) for p in _stored_providers(rows).values()]
+    return LLMConfig(providers=providers, **_ollama_settings(rows))
 
-    gpu_models_raw = rows.get("llm_gpu_models")
-    gpu_models = json.loads(gpu_models_raw) if gpu_models_raw else []
 
-    cpu_models_raw = rows.get("llm_cpu_models")
-    cpu_models = json.loads(cpu_models_raw) if cpu_models_raw else []
+def _json_list(rows: Dict[str, str], key: str) -> List[str]:
+    raw = rows.get(key)
+    return json.loads(raw) if raw else []
 
-    return LLMConfig(
+
+def _ollama_settings(rows: Dict[str, str]) -> dict:
+    """Every non-provider LLMConfig field from Setting rows. Helper for _load_llm_config."""
+    return dict(
         active_provider=rows.get("llm_active_provider", "ollama"),
-        providers=providers,
         ollama_host=rows.get(
             "llm_ollama_host",
             # Intentional bind to all interfaces for service/test.
             "0.0.0.0",  # nosec B104
         ),
         ollama_port=int(rows.get("llm_ollama_port", "11434")),
-        gpu_models=gpu_models,
-        cpu_models=cpu_models,
+        gpu_models=_json_list(rows, "llm_gpu_models"),
+        cpu_models=_json_list(rows, "llm_cpu_models"),
         max_loaded_models=int(rows.get("llm_max_loaded_models", "5")),
         num_parallel=int(rows.get("llm_num_parallel", "4")),
         keep_alive=rows.get("llm_keep_alive", "10m"),
@@ -170,13 +173,25 @@ async def _merge_providers(db: AsyncSession, providers: List[LLMProviderConfig])
 
     A provider submitted without a key keeps its stored secret untouched; a
     display mask is refused with 422 rather than written as a key (#17826).
+    Secrets are matched to providers by name, so names must be present and
+    unique -- two entries sharing one would share, and overwrite, one secret.
     """
+    names = [p.name for p in providers]
+    if not all(names) or len(set(names)) != len(names):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="provider names must be unique and non-empty"
+        )
     result = await db.execute(select(Setting).where(Setting.key == "llm_providers"))
     stored = _stored_providers({s.key: s.value for s in result.scalars().all()})
     try:
         return [await merge_provider_secret(p.name, p.model_dump(), stored.get(p.name)) for p in providers]
     except MaskedKeySubmitted as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except VaultClientError as exc:
+        logger.error("LLM config save: secrets vault unavailable: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="secrets vault unavailable"
+        ) from exc
 
 
 async def _upsert_setting(db: AsyncSession, key: str, value: str, desc: str) -> None:

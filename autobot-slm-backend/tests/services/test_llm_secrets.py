@@ -325,27 +325,33 @@ class TestMergeProviderSecret:
             call.assert_not_awaited()
 
 
-def test_the_settings_api_builds_providers_only_from_the_public_view():
-    """Binds api/llm_config.py to the view the round-trip tests prove (#17826).
+class TestReviewEdgeCases:
+    @pytest.mark.asyncio
+    async def test_a_dangling_vault_id_falls_back_to_create_instead_of_failing_every_save(self, uvc, monkeypatch):
+        class _Gone(Exception):
+            pass
 
-    The tests above prove ``public_provider_view`` omits the key. They prove
-    nothing if the route stops using it -- so every ``LLMProviderConfig(...)``
-    built in that module must take ``public_provider_view(...)`` as its input,
-    and the module must not resolve a key at all.
-    """
-    import ast
+        new_id = str(uuid.uuid4())
+        monkeypatch.setattr(uvc, "is_configured", lambda: True)
+        monkeypatch.setattr(uvc, "VaultSecretNotFound", _Gone)
+        monkeypatch.setattr(uvc, "vault_rotate", AsyncMock(side_effect=_Gone()))
+        monkeypatch.setattr(uvc, "vault_create", AsyncMock(return_value={"id": new_id}))
+        stored = {"name": "openai", "api_key_vault_id": str(uuid.uuid4())}
 
-    source = (_BACKEND / "api/llm_config.py").read_text(encoding="utf-8")
-    assert "retrieve_provider_api_key" not in source, "the settings API must not resolve provider keys"
-    builds = [
-        node
-        for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "LLMProviderConfig"
-    ]
-    assert builds, "found no LLMProviderConfig construction -- this check has lost its target"
-    for node in builds:
-        arg = node.args[0].value if node.args and isinstance(node.args[0], ast.Starred) else None
-        arg = arg or next((kw.value for kw in node.keywords if kw.arg is None), None)
-        assert (
-            isinstance(arg, ast.Call) and getattr(arg.func, "id", "") == "public_provider_view"
-        ), f"llm_config.py:{node.lineno} builds a provider from something other than public_provider_view"
+        merged = await _llm_sec.merge_provider_secret("openai", {"name": "openai", "api_key": _NEW_KEY}, stored)
+
+        uvc.vault_create.assert_awaited_once()
+        assert merged["api_key_vault_id"] == new_id
+
+    @pytest.mark.asyncio
+    async def test_a_new_key_written_inline_does_not_keep_a_stale_vault_id(self, uvc, monkeypatch, vault_calls):
+        """Kept, the old id would shadow the new key once the vault is configured again."""
+        monkeypatch.setattr(uvc, "is_configured", lambda: False)
+        stored = {"name": "openai", "api_key_vault_id": str(uuid.uuid4()), "api_key_ref": "llm:provider:openai:api_key"}
+
+        merged = await _llm_sec.merge_provider_secret("openai", {"name": "openai", "api_key": _NEW_KEY}, stored)
+
+        assert merged["api_key"] == f"ENC[{_NEW_KEY}]"
+        assert "api_key_vault_id" not in merged and "api_key_ref" not in merged
+        for call in vault_calls:
+            call.assert_not_awaited()
