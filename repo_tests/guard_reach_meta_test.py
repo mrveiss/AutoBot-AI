@@ -202,6 +202,21 @@ def _names_a_floor(node: ast.AST, call_targets: set[int]) -> bool:
     return False
 
 
+def _compares_a_floor_to_reach(compare: ast.Compare, call_targets: set[int]) -> bool:
+    """A floor name counts only when compared against something that is not a constant.
+
+    ``files_parsed >= budget.min_files`` binds a measured reach to the floor;
+    ``budget.min_files > 0`` checks the configured bound and examines nothing.
+    """
+    operands = [compare.left, *compare.comparators]
+    for i, operand in enumerate(operands):
+        if any(_names_a_floor(n, call_targets) for n in ast.walk(operand)):
+            others = operands[:i] + operands[i + 1 :]
+            if any(not isinstance(o, ast.Constant) for o in others):
+                return True
+    return False
+
+
 def _assert_binds_a_floor(test: ast.expr) -> bool:
     if isinstance(test, ast.Name):
         return True
@@ -210,7 +225,7 @@ def _assert_binds_a_floor(test: ast.expr) -> bool:
     for inner in nodes:
         if isinstance(inner, ast.Call) and getattr(inner.func, "id", "") == "len":
             return True
-        if _names_a_floor(inner, call_targets):
+        if isinstance(inner, ast.Compare) and _compares_a_floor_to_reach(inner, call_targets):
             return True
     return False
 
@@ -318,7 +333,15 @@ def test_a_floor_named_in_lowercase_is_a_floor() -> None:
 
 @pytest.mark.parametrize(
     "lookalike",
-    ["assert min(xs) > 0", "assert math.floor(t) > 0", "assert elapsed < minutes", "assert owner == mine"],
+    [
+        "assert min(xs) > 0",
+        "assert math.floor(t) > 0",
+        "assert elapsed < minutes",
+        "assert owner == mine",
+        # a floor checked against a constant is the configured bound, not reach
+        "assert budget.min_files > 0",
+        "assert MIN_FILES > 0",
+    ],
 )
 def test_a_lookalike_of_a_floor_name_is_not_a_floor(lookalike: str) -> None:
     """The control for the case-insensitive match: it must not buy floors it cannot see.
@@ -335,12 +358,19 @@ def _is_emptiness_check(test: ast.expr) -> bool:
         return isinstance(test.operand, ast.Call) and getattr(test.operand.func, "id", "") == "len"
     if not (isinstance(test, ast.Compare) and len(test.ops) == 1):
         return False
-    if not (isinstance(test.left, ast.Call) and getattr(test.left.func, "id", "") == "len"):
+    left, op, right = test.left, type(test.ops[0]), test.comparators[0]
+    if _is_len_call(right) and not _is_len_call(left):  # `0 == len(x)` reads as `len(x) == 0`
+        left, right, op = right, left, _MIRRORED.get(op, op)
+    if not (_is_len_call(left) and isinstance(right, ast.Constant)):
         return False
-    bound = test.comparators[0]
-    if not isinstance(bound, ast.Constant):
-        return False
-    return (type(test.ops[0]), bound.value) in {(ast.Eq, 0), (ast.LtE, 0), (ast.Lt, 1)}
+    return (op, right.value) in {(ast.Eq, 0), (ast.LtE, 0), (ast.Lt, 1)}
+
+
+_MIRRORED = {ast.Lt: ast.Gt, ast.Gt: ast.Lt, ast.LtE: ast.GtE, ast.GtE: ast.LtE}
+
+
+def _is_len_call(node: ast.expr) -> bool:
+    return isinstance(node, ast.Call) and getattr(node.func, "id", "") == "len"
 
 
 def floored_only_by_emptiness(source: str) -> bool:
@@ -385,6 +415,9 @@ def test_the_emptiness_sweep_finds_a_planted_guard() -> None:
     # The emptiness assert as the only statement of a test function -- the shape a
     # real guard takes, and the one a stripped-to-empty body used to hide.
     assert floored_only_by_emptiness("def test_x():\n    assert len(scan()) == 0")
+    # The same emptiness written with len() on the right.
+    assert floored_only_by_emptiness("found = scan()\nassert 0 == len(found)")
+    assert floored_only_by_emptiness("found = scan()\nassert 1 > len(found)")
 
 
 def test_the_sweep_examined_enough_guards_to_mean_anything() -> None:
