@@ -28,15 +28,15 @@ class TestEarlyExitsReleaseTheWorkspace:
 
     @pytest.mark.asyncio
     async def test_release_commits_the_handback(self):
-        from llc.scheduler.heartbeat_scheduler import HeartbeatScheduler
+        from llc.scheduler.run_workspace import release_workspace_best_effort
 
         session = AsyncMock()
         session.__aenter__ = AsyncMock(return_value=session)
         session.__aexit__ = AsyncMock(return_value=False)
         run_id = uuid.uuid4()
 
-        with patch("llc.scheduler.heartbeat_scheduler.release_run_workspace", new=AsyncMock()) as released:
-            await HeartbeatScheduler()._release_workspace(lambda: session, run_id, "rate_limited")
+        with patch("llc.scheduler.run_workspace.release_run_workspace", new=AsyncMock()) as released:
+            await release_workspace_best_effort(lambda: session, run_id, "rate_limited")
 
         released.assert_awaited_once()
         assert released.await_args[0][1] == run_id
@@ -50,17 +50,17 @@ class TestEarlyExitsReleaseTheWorkspace:
         Turning a recorded outcome into an unhandled exception would be worse than the
         leak: the sweep recovers a leak, nothing recovers a lost status write.
         """
-        from llc.scheduler.heartbeat_scheduler import HeartbeatScheduler
+        from llc.scheduler.run_workspace import release_workspace_best_effort
 
         session = AsyncMock()
         session.__aenter__ = AsyncMock(return_value=session)
         session.__aexit__ = AsyncMock(return_value=False)
 
         with patch(
-            "llc.scheduler.heartbeat_scheduler.release_run_workspace",
+            "llc.scheduler.run_workspace.release_run_workspace",
             new=AsyncMock(side_effect=RuntimeError("db gone")),
         ):
-            await HeartbeatScheduler()._release_workspace(lambda: session, uuid.uuid4(), "failed")
+            await release_workspace_best_effort(lambda: session, uuid.uuid4(), "failed")
 
     @pytest.mark.asyncio
     async def test_the_failed_early_exit_actually_releases(self):
@@ -80,7 +80,7 @@ class TestEarlyExitsReleaseTheWorkspace:
         scheduler = HeartbeatScheduler()
         with (
             patch("llc.scheduler.heartbeat_scheduler.get_async_session_factory", return_value=lambda: session),
-            patch.object(scheduler, "_release_workspace", new=AsyncMock()) as released,
+            patch("llc.scheduler.heartbeat_scheduler.release_workspace_best_effort", new=AsyncMock()) as released,
         ):
             await scheduler._run_adapter({"agent_id": str(uuid.uuid4())}, run_id, {})
 
@@ -91,7 +91,7 @@ class TestEarlyExitsReleaseTheWorkspace:
     def test_every_return_in_run_adapter_is_preceded_by_a_release(self):
         """Structural, and unlike a reference count it can FAIL (#17725 review).
 
-        `body.count("_release_workspace") == 3` was the previous form. It asserts that
+        `body.count("_release_workspace") == 3` was the previous form. It asserted that
         three release calls exist, not that every exit has one: add a fourth early
         `return` with no release and the count is still three, so the assertion passes
         and the regression it exists to catch goes through.
@@ -109,14 +109,14 @@ class TestEarlyExitsReleaseTheWorkspace:
         func = tree.body[0]
 
         def _is_release(node: ast.AST) -> bool:
-            """``await self._release_workspace(...)`` as a bare statement."""
+            """``await release_workspace_best_effort(...)`` as a bare statement."""
             if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Await):
                 return False
             call = node.value.value
             return (
                 isinstance(call, ast.Call)
-                and isinstance(call.func, ast.Attribute)
-                and call.func.attr == "_release_workspace"
+                and isinstance(call.func, ast.Name)
+                and call.func.id == "release_workspace_best_effort"
             )
 
         unreleased = []
@@ -131,6 +131,6 @@ class TestEarlyExitsReleaseTheWorkspace:
 
         assert not unreleased, (
             "every early return in _run_adapter must hand the workspace back; these "
-            f"return(s) have no _release_workspace before them in their own block: {unreleased}. "
+            f"return(s) have no release before them in their own block: {unreleased}. "
             "If you added an exit, add the release too."
         )

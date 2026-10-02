@@ -70,7 +70,8 @@ from ..services.work_item_queue import has_pending_work
 # guard, and refactoring it is not this change.
 from .replay_recording import record_run_for_replay as _record_run_for_replay
 from .run_context import enrich_run_context
-from .run_workspace import acquire_run_workspace, release_run_workspace
+from .run_status import mark_running
+from .run_workspace import acquire_run_workspace, release_run_workspace, release_workspace_best_effort
 
 logger = logging.getLogger(__name__)
 
@@ -550,37 +551,11 @@ class HeartbeatScheduler:
         """
         factory = get_async_session_factory()
 
-        # Fetch current retry_count before marking RUNNING so backoff is correct.
-        try:
-            async with factory() as session:
-                result = await session.execute(select(LLCHeartbeatRun.retry_count).where(LLCHeartbeatRun.id == run_id))
-                retry_count: int = result.scalar_one_or_none() or 0
-                await session.execute(
-                    update(LLCHeartbeatRun)
-                    .where(LLCHeartbeatRun.id == run_id)
-                    .values(
-                        status=LLCRunStatus.RUNNING.value,
-                        started_at=datetime.now(tz=timezone.utc),
-                    )
-                )
-                await session.commit()
-        except Exception as exc:
-            logger.exception("Failed to mark run %s as RUNNING — marking FAILED", run_id)
-            try:
-                async with factory() as session:
-                    await session.execute(
-                        update(LLCHeartbeatRun)
-                        .where(LLCHeartbeatRun.id == run_id)
-                        .values(
-                            status=LLCRunStatus.FAILED.value,
-                            finished_at=datetime.now(tz=timezone.utc),
-                            error=str(exc),
-                        )
-                    )
-                    await session.commit()
-            except Exception:
-                logger.exception("Could not write FAILED status for run %s", run_id)
-            await self._release_workspace(factory, run_id, LLCRunStatus.FAILED.value)
+        retry_count = await mark_running(factory, run_id)
+        if retry_count is None:
+            # The release stays HERE rather than inside the helper, so every exit from
+            # this function keeps its release in view (#17725 review).
+            await release_workspace_best_effort(factory, run_id, LLCRunStatus.FAILED.value)
             return
 
         error_msg: Optional[str] = None
@@ -605,19 +580,15 @@ class HeartbeatScheduler:
             error_msg = str(exc)
             final_status = LLCRunStatus.FAILED.value
 
-        # #17725 review: these two return without reaching `_finish_run`, which is the
-        # only place `release_run_workspace` is called. The run is over either way --
-        # a rate-limited retry is re-dispatched as a NEW run that acquires its own
-        # lease -- so holding this one keeps the directory unusable until the deadline
-        # and makes the retry's acquire fail against a lease nobody is using.
+        # #17725: both return without reaching `_finish_run` -- see the release helper.
         if rate_limited_exc is not None:
             await self._handle_rate_limited(agent, run_id, retry_count, rate_limited_exc)
-            await self._release_workspace(factory, run_id, LLCRunStatus.RATE_LIMITED.value)
+            await release_workspace_best_effort(factory, run_id, LLCRunStatus.RATE_LIMITED.value)
             return
 
         if quota_exc is not None:
             await self._handle_quota_exhausted(agent, run_id, quota_exc)
-            await self._release_workspace(factory, run_id, LLCRunStatus.QUOTA_EXHAUSTED.value)
+            await release_workspace_best_effort(factory, run_id, LLCRunStatus.QUOTA_EXHAUSTED.value)
             return
 
         await self._finish_run(factory, agent, run_id, final_status, error_msg)
@@ -633,32 +604,13 @@ class HeartbeatScheduler:
             self._tasks.add(_record_task)
             _record_task.add_done_callback(self._tasks.discard)
 
-    async def _release_workspace(self, factory: Any, run_id: uuid.UUID, final_status: str) -> None:
-        """Hand the workspace back on an ending that does not reach `_finish_run`.
-
-        Best-effort and never raises: the run has already ended and its status is
-        already written, so failing to release must not turn a recorded outcome into
-        an unhandled exception. A missed release is recovered by the expiry sweep;
-        it is just slow, which is the bug this exists to avoid rather than cause.
-        """
-        try:
-            async with factory() as session:
-                await release_run_workspace(session, run_id, final_status)
-                await session.commit()
-        except Exception:
-            logger.exception("Could not release workspace for run %s", run_id)
-
     async def _finish_run(
         self, factory: Any, agent: Dict[str, Any], run_id: uuid.UUID, final_status: str, error_msg: Optional[str]
     ) -> None:
         """Close the run out and hand its workspace back, in one transaction.
 
-        Completed, skipped and adapter-failed runs pass through here. Three endings do
-        NOT -- the early FAILED path above, rate-limited, and quota-exhausted -- and
-        this docstring used to claim releasing here "cannot miss the failure paths",
-        which was false for all three (#17725 review). Those now release through
-        `_release_workspace`. If a fourth early exit is added, it needs the same call;
-        there is no `finally` covering this.
+        Completed, skipped and adapter-failed runs pass here. The three endings that
+        do NOT are documented on `release_workspace_best_effort`.
         """
         try:
             async with factory() as session:

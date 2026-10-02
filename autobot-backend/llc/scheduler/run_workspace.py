@@ -95,3 +95,39 @@ async def release_run_workspace(session: AsyncSession, run_id: UUID, final_statu
 
 
 __all__ = ["RUN_ENDED_RELEASE_REASON", "acquire_run_workspace", "release_run_workspace", "workspace_dir"]
+
+
+async def release_workspace_best_effort(factory: Any, run_id: UUID, final_status: str) -> None:
+    """Hand a run's workspace back on an ending that does not reach ``_finish_run``.
+
+    Owns its own session, because the callers are endings that have already written the
+    run's status and closed their transaction.
+
+    WHY THIS EXISTS SEPARATELY FROM ``_finish_run`` (#17725 review)
+    --------------------------------------------------------------
+    ``_finish_run`` is where completed, skipped and adapter-failed runs release. Three
+    endings never reach it: the early FAILED path when marking a run RUNNING fails, the
+    rate-limited return, and the quota-exhausted return. ``_finish_run``'s docstring
+    used to claim releasing there "cannot miss the failure paths", which was false for
+    all three. The run is over in every case -- a rate-limited retry is re-dispatched as
+    a NEW run that acquires its own lease -- so holding this one keeps the directory
+    unusable until the deadline and makes the retry's acquire fail against a lease
+    nobody is using. That is the slow version of the bug #16818 exists to fix.
+
+    **There is no ``finally`` covering those paths**, and a blanket one would be wrong:
+    each ending releases with a different ``final_status``. So a fourth early exit needs
+    this call added explicitly, which
+    ``test_every_return_in_run_adapter_is_preceded_by_a_release`` enforces structurally
+    rather than by a count.
+
+    NEVER RAISES. The run has already ended and its status is already recorded, so
+    failing to release must not turn a recorded outcome into an unhandled exception. A
+    missed release is recovered by the expiry sweep -- slow, which is the bug this
+    avoids rather than causes.
+    """
+    try:
+        async with factory() as session:
+            await release_run_workspace(session, run_id, final_status)
+            await session.commit()
+    except Exception:
+        logger.exception("#16818: could not release workspace for run %s", run_id)
