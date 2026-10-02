@@ -9,10 +9,22 @@ can drift anywhere"*. The hook's copy is anchored to real file sizes by
 anchors are what make a raise impossible to sneak through one file.
 
 That mechanism only holds if the two are compared **both ways**, and on the Python side
-they were not. `test_no_ceiling_may_be_raised` fires on `ceiling > baseline` alone, so
+they were not. `test_no_ceiling_may_exceed_its_baseline` (renamed here from
+`test_no_ceiling_may_be_raised`, which named a cause it cannot establish) fires on
+`ceiling > baseline` alone, so
 raising the BASELINE passed, and `test_no_entry_may_be_added` compares keys in one
 direction only. The shell gate has had the equality assertion all along
 (`shell_file_size_ratchet_test.py`); the Python gate had no equality assertion at all.
+
+`test_no_ceiling_may_be_raised` was also RENAMED to
+`test_no_ceiling_may_exceed_its_baseline`, and its message no longer claims a cause:
+`ceiling > baseline` is produced equally by a raised ceiling and a lowered baseline, and
+#17725 was the second -- so the reader of a failure was sent after a raise that never
+happened. A wrong diagnosis costs more than a vague one. Its predicate is unchanged and
+still one-directional on purpose; the reverse direction is this file's job, because
+writing it in both places would make two records of one check -- the very shape #17872 is
+about. That test's docstring is one line because its file sits at the 600-line hard limit
+with no KNOWN_LARGE entry, so the rationale lives here, where there is room for it.
 
 Asserted here for BOTH pairs rather than only the one that was broken: the defect was
 two hand-kept copies per gate with an asymmetric comparison, and a fix that covers one
