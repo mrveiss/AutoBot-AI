@@ -106,14 +106,6 @@ _WAIVED: dict[tuple[str, str, str, str], str] = {
 #: CodeRabbit's finding mattered. Draining this set is tracked separately; the
 #: ratchet below means it can only shrink.
 _UNAUDITED_BASELINE: dict[tuple[str, str, str, str], str] = {
-    ("autobot-slm-backend/api/llm_config.py", "GET", "LLMConfigResponse", "api_key"): (
-        "Masked at llm_config.py:196 (`provider.api_key = _mask_api_key(...)`), and "
-        "being changed from masking to omission by PR #17846, which OWNS this file. "
-        "Not touched here: same file, one PR, one agent. Tracked at #17899."
-    ),
-    ("autobot-slm-backend/api/llm_config.py", "PUT", "LLMConfigResponse", "api_key"): (
-        "Same model and same file as the GET above; #17846 territory. Tracked at #17899."
-    ),
     ("autobot-backend/api/secrets.py", "POST /", "SecretCreatedData", "secret"): (
         "`secret: Dict[str, Any]` -- an UNTYPED dict, so this guard cannot tell "
         "whether the value travels in it. That unauditability is itself the finding. Tracked at #17899."
@@ -164,4 +156,8 @@ _UNAUDITED_BASELINE: dict[tuple[str, str, str, str], str] = {
 #: 18 -> 14 (#17899): the four `autobot-backend/api/llm.py` entries were audited and
 #: moved to `_WAIVED`. The ratchet turning DOWN is the only direction this number
 #: may move, and draining the baseline is what it is for.
-_BASELINE_FROZEN_AT = 14
+#:
+#: 14 -> 12 (#17865): `response_model_exclude` for `api_key` on the two
+#: `llm_config.py` routes stopped them firing, so those entries were deleted rather
+#: than left standing. A fixed site leaves the baseline; the number only goes down.
+_BASELINE_FROZEN_AT = 12

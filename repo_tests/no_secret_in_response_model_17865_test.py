@@ -504,6 +504,12 @@ def test_the_unaudited_baseline_only_shrinks():
     silently re-licenses the next route that lands on the same shape.
     """
     idx = _index()
+    # Computed the way a VIOLATION is, not from `_reached_fields` alone. The
+    # first version ignored `route.excluded`, so a baseline entry for a field
+    # that a route had since started excluding stayed "live" for ever and the
+    # entry never aged out -- the staleness check and the violation check
+    # disagreeing about what counts. #17846 made that concrete: it excluded
+    # `api_key` on two routes and the entries went on matching anyway.
     live = {
         (r.file, f"{r.method} {r.path}".strip(), r.model, field)
         for r in idx.routes
