@@ -233,3 +233,119 @@ class TestDeleteProviderApiKey:
         monkeypatch.setattr(uvc, "vault_delete", AsyncMock())
         await _llm_sec.delete_provider_api_key("openai", {})
         uvc.vault_delete.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# GET -> PUT round-trip (#17826)
+# ---------------------------------------------------------------------------
+
+_REAL_KEY = "sk-live-7f3a9c21e4b8d605b3f2"  # nosec B105  # pragma: allowlist secret
+_NEW_KEY = "sk-new-key-0001"  # nosec B105  # pragma: allowlist secret
+_REFS = ("api_key", "api_key_vault_id", "api_key_ref")
+
+
+def _client_round_trip(stored: dict, **edits) -> dict:
+    """What the settings page sends back: the GET view, one unrelated edit, the
+    model's empty ``api_key`` default -- exactly what ``LLMProviderConfig`` emits."""
+    view = _llm_sec.public_provider_view({**stored, "api_key": _REAL_KEY})
+    assert not set(_REFS) & set(view), f"GET view carries a secret field: {sorted(set(_REFS) & set(view))}"
+    assert _REAL_KEY[:4] not in repr(view) and _REAL_KEY[-4:] not in repr(view), "GET view leaks key material"
+    return {**view, "api_key": "", **edits}
+
+
+@pytest.fixture()
+def vault_calls(uvc, monkeypatch):
+    create, rotate = AsyncMock(return_value={"id": str(uuid.uuid4())}), AsyncMock()
+    monkeypatch.setattr(uvc, "vault_create", create)
+    monkeypatch.setattr(uvc, "vault_rotate", rotate)
+    return create, rotate
+
+
+class TestRoundTripLeavesTheStoredKeyUntouched:
+    @pytest.mark.asyncio
+    async def test_vault_path(self, uvc, monkeypatch, vault_calls):
+        monkeypatch.setattr(uvc, "is_configured", lambda: True)
+        stored = _provider("openai", enabled=True, model="gpt", api_key_ref="llm:provider:openai:api_key")
+        stored.pop("api_key")
+        stored["api_key_vault_id"] = str(uuid.uuid4())
+
+        merged = await _llm_sec.merge_provider_secret("openai", _client_round_trip(stored, enabled=False), stored)
+
+        assert {k: merged.get(k) for k in _REFS} == {k: stored.get(k) for k in _REFS}
+        assert merged["enabled"] is False, "the unrelated edit must still land"
+        for call in vault_calls:
+            call.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_inline_encryption_path(self, uvc, monkeypatch, vault_calls):
+        monkeypatch.setattr(uvc, "is_configured", lambda: False)
+        stored = _provider("openai", api_key=f"ENC[{_REAL_KEY}]", enabled=True)
+
+        merged = await _llm_sec.merge_provider_secret("openai", _client_round_trip(stored, enabled=False), stored)
+
+        assert merged["api_key"] == stored["api_key"], "inline ciphertext must be byte-identical after a no-key save"
+        for call in vault_calls:
+            call.assert_not_awaited()
+
+
+class TestMergeProviderSecret:
+    @pytest.mark.parametrize("mask", [f"{_REAL_KEY[:4]}...{_REAL_KEY[-4:]}", "****"])
+    @pytest.mark.asyncio
+    async def test_a_display_mask_is_refused_not_stored(self, uvc, monkeypatch, vault_calls, mask):
+        """A tab loaded before #17826 still holds masks; the old masking shape must not reach the vault."""
+        monkeypatch.setattr(uvc, "is_configured", lambda: True)
+        stored = {"name": "openai", "api_key_vault_id": str(uuid.uuid4())}
+        with pytest.raises(_llm_sec.MaskedKeySubmitted):
+            await _llm_sec.merge_provider_secret("openai", {"name": "openai", "api_key": mask}, stored)
+        for call in vault_calls:
+            call.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_new_key_rotates_the_stored_secret_rather_than_creating_another(
+        self, uvc, monkeypatch, vault_calls
+    ):
+        monkeypatch.setattr(uvc, "is_configured", lambda: True)
+        vault_id = str(uuid.uuid4())
+        stored = {"name": "openai", "api_key_vault_id": vault_id}
+
+        merged = await _llm_sec.merge_provider_secret("openai", {"name": "openai", "api_key": _NEW_KEY}, stored)
+
+        create, rotate = vault_calls
+        create.assert_not_awaited()
+        rotate.assert_awaited_once()
+        assert rotate.call_args.args == (uuid.UUID(vault_id), _NEW_KEY)
+        assert merged["api_key_vault_id"] == vault_id and "api_key" not in merged
+
+    @pytest.mark.asyncio
+    async def test_a_provider_with_nothing_stored_saves_without_a_key(self, uvc, monkeypatch, vault_calls):
+        monkeypatch.setattr(uvc, "is_configured", lambda: True)
+        merged = await _llm_sec.merge_provider_secret("ollama", {"name": "ollama", "api_key": ""}, None)
+        assert merged == {"name": "ollama"}
+        for call in vault_calls:
+            call.assert_not_awaited()
+
+
+def test_the_settings_api_builds_providers_only_from_the_public_view():
+    """Binds api/llm_config.py to the view the round-trip tests prove (#17826).
+
+    The tests above prove ``public_provider_view`` omits the key. They prove
+    nothing if the route stops using it -- so every ``LLMProviderConfig(...)``
+    built in that module must take ``public_provider_view(...)`` as its input,
+    and the module must not resolve a key at all.
+    """
+    import ast
+
+    source = (_BACKEND / "api/llm_config.py").read_text(encoding="utf-8")
+    assert "retrieve_provider_api_key" not in source, "the settings API must not resolve provider keys"
+    builds = [
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "LLMProviderConfig"
+    ]
+    assert builds, "found no LLMProviderConfig construction -- this check has lost its target"
+    for node in builds:
+        arg = node.args[0].value if node.args and isinstance(node.args[0], ast.Starred) else None
+        arg = arg or next((kw.value for kw in node.keywords if kw.arg is None), None)
+        assert (
+            isinstance(arg, ast.Call) and getattr(arg.func, "id", "") == "public_provider_view"
+        ), f"llm_config.py:{node.lineno} builds a provider from something other than public_provider_view"
