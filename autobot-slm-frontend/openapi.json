@@ -31987,7 +31987,7 @@
     },
     "/api/settings/admin/llm": {
       "get": {
-        "description": "Get current LLM configuration (admin only).\n\nAPI keys are omitted from the response, never masked: a mask round-trips\nback as a value and overwrote every stored key on save (#17826).",
+        "description": "Get current LLM configuration (admin only).\n\nAPI keys are omitted from the response, never masked. Before #17826 a mask\nround-tripped back as a value and overwrote every stored key on save; a\nsubmitted mask is now refused with 422.",
         "operationId": "get_llm_config_api_settings_admin_llm_get",
         "responses": {
           "200": {

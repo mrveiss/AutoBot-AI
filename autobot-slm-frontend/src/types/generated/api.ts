@@ -5646,8 +5646,9 @@ export interface paths {
          * Get Llm Config
          * @description Get current LLM configuration (admin only).
          *
-         *     API keys are omitted from the response, never masked: a mask round-trips
-         *     back as a value and overwrote every stored key on save (#17826).
+         *     API keys are omitted from the response, never masked. Before #17826 a mask
+         *     round-tripped back as a value and overwrote every stored key on save; a
+         *     submitted mask is now refused with 422.
          */
         get: operations["get_llm_config_api_settings_admin_llm_get"];
         /**
