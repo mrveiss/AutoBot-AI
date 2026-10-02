@@ -36,9 +36,11 @@ from autobot_shared.coordination.dev_loop_actions import (
 from llm_shared import token_budget
 
 try:
+    import fakeredis
     import fakeredis.aioredis as fakeredis_async
 except ImportError:  # pragma: no cover - environment without the extra
     fakeredis_async = None
+    fakeredis = None  # type: ignore[assignment]
 
 
 @pytest_asyncio.fixture
@@ -47,7 +49,7 @@ async def redis(monkeypatch):
     the token-budget gate (plain get/incrby/expire)."""
     if fakeredis_async is None:
         pytest.skip("fakeredis[lua] not installed — this gate needs real EVAL")
-    client = fakeredis_async.FakeRedis(server=fakeredis_async.FakeServer(), decode_responses=True)
+    client = fakeredis_async.FakeRedis(server=fakeredis.FakeServer(), decode_responses=True)
 
     async def _client(database: str = "main"):
         return client
