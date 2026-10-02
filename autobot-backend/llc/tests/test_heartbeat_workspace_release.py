@@ -78,9 +78,11 @@ class TestEarlyExitsReleaseTheWorkspace:
         session.execute = AsyncMock(side_effect=RuntimeError("cannot mark RUNNING"))
 
         scheduler = HeartbeatScheduler()
-        with patch("llc.scheduler.heartbeat_scheduler.get_async_session_factory", return_value=lambda: session):
-            with patch.object(scheduler, "_release_workspace", new=AsyncMock()) as released:
-                await scheduler._run_adapter({"agent_id": str(uuid.uuid4())}, run_id, {})
+        with (
+            patch("llc.scheduler.heartbeat_scheduler.get_async_session_factory", return_value=lambda: session),
+            patch.object(scheduler, "_release_workspace", new=AsyncMock()) as released,
+        ):
+            await scheduler._run_adapter({"agent_id": str(uuid.uuid4())}, run_id, {})
 
         released.assert_awaited_once()
         assert released.await_args[0][1] == run_id
@@ -106,12 +108,13 @@ class TestEarlyExitsReleaseTheWorkspace:
         tree = ast.parse(inspect.getsource(mod.HeartbeatScheduler._run_adapter).lstrip())
         func = tree.body[0]
 
-        def _is_release(node):
-            call = node.value.value if isinstance(getattr(node, "value", None), ast.Await) else None
+        def _is_release(node: ast.AST) -> bool:
+            """``await self._release_workspace(...)`` as a bare statement."""
+            if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Await):
+                return False
+            call = node.value.value
             return (
-                isinstance(node, ast.Expr)
-                and isinstance(node.value, ast.Await)
-                and isinstance(call, ast.Call)
+                isinstance(call, ast.Call)
                 and isinstance(call.func, ast.Attribute)
                 and call.func.attr == "_release_workspace"
             )

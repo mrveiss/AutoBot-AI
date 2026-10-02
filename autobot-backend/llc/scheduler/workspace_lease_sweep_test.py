@@ -577,5 +577,5 @@ async def test_the_aged_out_count_query_bounds_decided_at_from_above(sweep):
     # every sweep forever, which is a warning nobody can act on.
     assert sql.count("decided_at") >= 2, (
         "the aged-out query has only one bound, so it reads all approval history and "
-        "re-reports rows that aged out arbitrarily long ago:\\n{sql}"
+        f"re-reports rows that aged out arbitrarily long ago:\n{sql}"
     )
