@@ -103,11 +103,15 @@ def _approval(paths, executed=False):
     }
     if executed:
         context["executed_at"] = "2026-09-28T00:00:00+00:00"
-    return SimpleNamespace(context=context)
+    # `id` because the real model has one (llc/models/approval.py:42) and the
+    # aged-out warning names the approvals it skipped. A double missing a column
+    # the model declares does not simplify the test, it just moves the failure.
+    return SimpleNamespace(context=context, id=uuid.uuid4())
 
 
 def _install(sweep, monkeypatch, *, reclaimed=(), landed=None, approvals=(), disposals=None, leases=None):
     session = _Session(list(approvals))
+    session.published = []
     monkeypatch.setattr(sweep, "get_async_session_factory", lambda: (lambda: session))
 
     async def _reclaim(_s, now=None):
@@ -126,6 +130,13 @@ def _install(sweep, monkeypatch, *, reclaimed=(), landed=None, approvals=(), dis
         async def request_approval(self, _s, **kwargs):
             requested.append(kwargs)
             return SimpleNamespace(id=uuid.uuid4())
+
+        async def publish_requested(self, approval):
+            # Recorded WITH the commit state, because the contract is ordering rather
+            # than occurrence: publish_requested's own docstring says to call it AFTER
+            # the transaction commits, and a publish inside the transaction announces a
+            # proposal a rollback could still erase.
+            session.published.append((approval, session.committed))
 
     async def _lease_for_path(_s, path):
         return (leases or {}).get(path)
@@ -504,3 +515,59 @@ def test_an_aged_out_approval_is_skipped_not_marked_expired():
         f"{[n.lineno for n in writes]}; an unattended transition of a human's decision "
         "record is what #16818 exists to prevent"
     )
+
+
+@pytest.mark.asyncio
+async def test_a_proposal_is_published_after_the_commit(sweep, monkeypatch):
+    """`request_approval` only adds and flushes; without the publish nobody hears.
+
+    A human approval is the only path to disposal, so a proposal that is written and
+    never announced is a sweep reporting success into silence -- `llc:approval_requested`
+    is the channel every subscriber watches for the work it must act on.
+
+    Asserted as ORDERING, not occurrence. Publishing inside the transaction would
+    announce a proposal a rollback could still erase, which is why
+    `publish_requested`'s own docstring says to call it after the commit.
+    """
+    session, requested = _install(sweep, monkeypatch, reclaimed=[_lease()])
+    await sweep._async_sweep()
+
+    assert requested, "nothing was proposed, so this test proves nothing about publishing"
+    assert len(session.published) == 1, (
+        "the proposal was written but never published -- llc:approval_requested never "
+        f"fired, so no subscriber learns a disposal is awaiting a human: {session.published}"
+    )
+    _, committed_at_publish = session.published[0]
+    assert (
+        committed_at_publish is True
+    ), "published inside the transaction; a rollback would erase the announced proposal"
+
+
+@pytest.mark.asyncio
+async def test_nothing_is_published_when_nothing_is_proposed(sweep, monkeypatch):
+    """The control: an empty sweep must not announce a proposal it did not raise."""
+    session, requested = _install(sweep, monkeypatch, reclaimed=[])
+    await sweep._async_sweep()
+
+    assert not requested and not session.published
+
+
+@pytest.mark.asyncio
+async def test_the_aged_out_count_query_bounds_decided_at_from_above(sweep):
+    """`_window_start`'s docstring promises the skipped count is logged, not dropped.
+
+    The window predicate alone cannot honour that: it filters in SQL, so the aged-out
+    rows never reach the sweep and there is nothing left to count. This asserts the
+    second query exists and looks at the OTHER side of the window -- without the
+    `decided_at <` bound it would re-count the rows the live query already returned and
+    warn about proposals that are being executed normally.
+    """
+    session = _Session([])
+    await sweep._approved_proposals(session)
+
+    assert len(session.statements) == 2, (
+        "no second query was issued, so the aged-out count the docstring promises "
+        f"cannot exist: {len(session.statements)} statement(s)"
+    )
+    sql = str(session.statements[1].compile(compile_kwargs={"literal_binds": True}))
+    assert "decided_at <" in sql, f"the aged-out query does not bound decided_at from above:\n{sql}"

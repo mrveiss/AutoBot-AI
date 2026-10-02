@@ -30,6 +30,7 @@ import asyncio
 import logging
 import os
 from enum import Enum
+from pathlib import Path
 from typing import NamedTuple, Optional
 
 from autobot_shared.paths import scrubbed_git_env
@@ -90,7 +91,9 @@ async def _git(*args: str, cwd: Optional[str] = None) -> tuple[int, str]:
         # directory is safe to remove (#17725 review).
         process.kill()
         await process.wait()
-        logger.warning("#16818: git %s timed out in %s after %ss, child killed", " ".join(args), cwd, GIT_TIMEOUT_SECONDS)
+        logger.warning(
+            "#16818: git %s timed out in %s after %ss, child killed", " ".join(args), cwd, GIT_TIMEOUT_SECONDS
+        )
         return -1, f"{type(exc).__name__}: {exc}"
     except OSError as exc:
         logger.warning("#16818: git %s failed in %s: %s", " ".join(args), cwd, exc)
@@ -147,9 +150,20 @@ async def dispose_workspace(path: str, branch: Optional[str] = None) -> Disposal
         logger.info("#16818: keeping workspace %s -- %s (%s)", path, check.detail, check.verdict.value)
         return check
 
+    # `worktree remove` must run inside the repository that OWNS the worktree, and
+    # it cannot run inside the worktree being removed -- git refuses to remove the
+    # tree it is standing in. So neither the inherited cwd nor `cwd=path` works: the
+    # first makes the answer depend on wherever the worker happens to live, the
+    # second is refused outright. Resolve the owner from the worktree itself.
+    code, common = await _git("rev-parse", "--path-format=absolute", "--git-common-dir", cwd=path)
+    if code != 0:
+        logger.warning("#16818: cannot resolve the repository owning workspace %s: %s", path, common)
+        return DisposalCheck(DisposalVerdict.UNKNOWN, f"owning repository not resolvable: {common}")
+    owner = str(Path(common.strip()).parent)
+
     # No --force: git refuses a worktree it considers unsafe to remove, and that
     # refusal is a finding rather than an obstacle.
-    code, out = await _git("worktree", "remove", path)
+    code, out = await _git("worktree", "remove", path, cwd=owner)
     if code != 0:
         logger.warning("#16818: git declined to remove workspace %s: %s", path, out)
         return DisposalCheck(DisposalVerdict.UNKNOWN, f"git refused the removal: {out}")

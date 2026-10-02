@@ -161,7 +161,42 @@ async def _approved_proposals(session) -> list[Approval]:
         .order_by(Approval.decided_at)
     )
     pending = [a for a in result.scalars().all() if _is_sweep_proposal(a)]
+    await _log_aged_out(session)
     return pending[:MAX_EXECUTIONS_PER_SWEEP]
+
+
+async def _log_aged_out(session) -> int:
+    """Count approved proposals that fell out of the window, so they are not silent.
+
+    :func:`_window_start` states that aged-out approvals are "skipped, not marked" and
+    that "the count of skipped ones is logged rather than silently dropped". The window
+    predicate alone cannot honour that: it filters in SQL, so the sweep never sees the
+    rows and there is nothing left to count. This is the other half -- without it the
+    docstring describes a log that does not exist, and a proposal that stopped being
+    executed without anyone deciding so is exactly the invisible outcome it names.
+
+    A SQL ``COUNT`` cannot stand in here either: sweep proposals are identified by
+    :func:`_is_sweep_proposal`, a Python predicate over the payload, so the rows have to
+    be fetched and filtered the same way the live query filters them.
+    """
+    result = await session.execute(
+        select(Approval).where(
+            Approval.approval_type == ApprovalType.DESTRUCTIVE_ACTION.value,
+            Approval.status == ApprovalStatus.APPROVED.value,
+            Approval.requested_by_agent == SWEEP_REQUESTER,
+            Approval.decided_at < _window_start(),
+        )
+    )
+    aged = [a for a in result.scalars().all() if _is_sweep_proposal(a)]
+    if aged:
+        logger.warning(
+            "#17738: %s approved disposal proposal(s) aged out of the %s-day window and "
+            "will not be executed; they remain APPROVED and re-approvable: %s",
+            len(aged),
+            EXECUTION_WINDOW_DAYS,
+            ", ".join(str(a.id) for a in aged),
+        )
+    return len(aged)
 
 
 async def _execute_approved(session) -> tuple[int, int]:
@@ -200,8 +235,17 @@ async def _execute_approved(session) -> tuple[int, int]:
     return disposed, refused
 
 
-async def _propose(session, candidates: list[tuple[str, str | None, Any]]) -> int:
-    """Raise one proposal for the workspaces that currently look disposable."""
+async def _propose(session, candidates: list[tuple[str, str | None, Any]]) -> tuple[int, Any]:
+    """Raise one proposal for the workspaces that currently look disposable.
+
+    Returns ``(count, approval)``. The approval is handed back rather than discarded
+    because ``request_approval`` only adds and flushes the row -- publishing
+    ``llc:approval_requested`` is a separate call its own docstring says to make AFTER
+    the transaction commits, so it cannot happen in here. A human approval is the only
+    path to disposal, so an unpublished proposal is one no subscriber ever learns about:
+    the sweep would propose into silence and report success. ``None`` when nothing was
+    proposed.
+    """
     proposed = []
     for path, branch, company_id in candidates:
         check = await work_landed(path, branch)
@@ -211,9 +255,9 @@ async def _propose(session, candidates: list[tuple[str, str | None, Any]]) -> in
         proposed.append({"path": path, "branch": branch, "evidence": check.detail, "company_id": str(company_id)})
 
     if not proposed:
-        return 0
+        return 0, None
 
-    await ApprovalService().request_approval(
+    approval = await ApprovalService().request_approval(
         session,
         company_id=proposed_company(proposed),
         gate_type=ApprovalType.DESTRUCTIVE_ACTION,
@@ -225,7 +269,7 @@ async def _propose(session, candidates: list[tuple[str, str | None, Any]]) -> in
         },
         requested_by=SWEEP_REQUESTER,
     )
-    return len(proposed)
+    return len(proposed), approval
 
 
 def proposed_company(proposed: list[dict]) -> uuid.UUID | None:
@@ -247,8 +291,12 @@ async def _async_sweep() -> dict:
         reclaimed = await reclaim_expired(session)
         candidates = [(lease.path, lease.branch, lease.company_id) for lease in reclaimed]
         disposed, refused = await _execute_approved(session)
-        proposed = await _propose(session, candidates)
+        proposed, approval = await _propose(session, candidates)
         await session.commit()
+        if approval is not None:
+            # After the commit, per publish_requested's own contract. Subscribers to
+            # llc:approval_requested are the only route a human hears about a proposal.
+            await ApprovalService().publish_requested(approval)
 
     # Every number reported, including the zeros: a sweep that found nothing and a sweep
     # that did not run must not look the same in the logs.
