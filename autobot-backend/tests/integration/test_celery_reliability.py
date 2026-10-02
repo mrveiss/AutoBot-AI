@@ -258,7 +258,7 @@ def test_dead_letter_list_is_bounded(fake_sync_redis, monkeypatch):
 
 async def test_dead_letter_status_queryable(monkeypatch):
     """get_dead_letter_status must expose count + recent entries (health API)."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     aclient = fakeredis_async.FakeRedis(server=server, decode_responses=True)
 
     async def _fake_async_client(*_a, **_k):
