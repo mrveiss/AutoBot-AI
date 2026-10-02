@@ -34,6 +34,7 @@ import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+import fakeredis
 import fakeredis.aioredis as fakeredis_async
 
 from api.terminal_handlers import TerminalWebSocket
@@ -62,7 +63,7 @@ class TestSessionTakeover:
         # `llm_shared/tests/test_provider_degradation.py` do -- runs the real
         # persistence path instead of skipping it.
         self.workflow_manager.executor.state_machine._redis = fakeredis_async.FakeRedis(
-            server=fakeredis_async.FakeServer(), decode_responses=True
+            server=fakeredis.FakeServer(), decode_responses=True
         )
 
     async def test_workflow_creation(self):
