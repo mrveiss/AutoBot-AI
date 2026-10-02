@@ -211,7 +211,7 @@
   ansible.builtin.pip:
     name:
       - fastapi>=0.141.1
-      - uvicorn[standard]>=0.53.0
+      - uvicorn[standard]>=0.54.0
       - python-multipart>=0.0.32
       - aiofiles>=25.1.0
     virtualenv: "{{ tts_install_dir }}/venv"
@@ -272,7 +272,13 @@
       # A major bump is not a floor move. The parity guard fires on the
       # NUMBER and cannot know whether the API that number gates still
       # exists; answering that is the only reason this pin carries a comment.
-      - pocket-tts>=3.1.0
+      #
+      # Raised 3.1.0 -> 3.3.0 with `autobot-tts-worker/requirements.txt` (#17707).
+      # This does NOT re-open the API question the paragraph above answers: the old
+      # `>=3.1.0` already admitted 3.3.0 and everything above it, so the floor move
+      # narrows what may install rather than widening it. If `generate_audio_stream`
+      # had gone in 3.3.x, the previous floor was already unsafe.
+      - pocket-tts>=3.3.0
       # #15598: `>=0.14.0` is the floor `autobot-tts-worker/requirements.txt`
       # declares for this worker; `>=0.12.0` here undercut it by two minors.
       - soundfile>=0.14.0
