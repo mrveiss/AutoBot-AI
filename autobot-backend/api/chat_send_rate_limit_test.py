@@ -147,9 +147,18 @@ def test_every_send_endpoint_keeps_its_name_through_its_decorators():
     make ``_is_send`` skip every send route while the AST check stayed green.
     """
     from api.chat import router as chat_router
+    from autobot_shared.api_routing.router_routes import effective_routes
 
+    # effective_routes, not chat_router.routes: api.chat includes child routers, and
+    # under fastapi>=0.139 `.routes` holds opaque wrappers for them (#15093).
     runtime_posts = {
-        route.endpoint.__name__ for route in chat_router.routes if "POST" in getattr(route, "methods", set())
+        mounted.route.endpoint.__name__
+        for mounted in effective_routes(chat_router)
+        if "POST" in getattr(mounted.route, "methods", set())
     }
+    assert len(runtime_posts) >= len(send_limit.SEND_ENDPOINTS), (
+        f"found {len(runtime_posts)} POST routes on api.chat -- the walk did not reach them, "
+        "and an empty set would make the check below pass vacuously"
+    )
     lost = sorted(send_limit.SEND_ENDPOINTS - runtime_posts)
     assert not lost, f"send endpoints whose routed name no longer matches SEND_ENDPOINTS: {lost}"
