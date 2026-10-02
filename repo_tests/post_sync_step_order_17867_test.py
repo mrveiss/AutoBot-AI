@@ -123,8 +123,18 @@ _MUST_EXIST: dict[str, frozenset[str]] = {
     ),
     "_run_post_sync_frontend_branch": frozenset({"_build_npm_frontend_for_component"}),
     "_run_post_sync_worker_branch": frozenset({"_install_pip_deps_for_component"}),
-    "_run_post_sync_shared_branch": frozenset({"_ensure_autobot_shared_symlink"}),
+    "_run_post_sync_shared_branch": frozenset({"_ensure_autobot_shared_symlink", "_restart_dependents_with_health"}),
 }
+
+#: Every branch must restart SOMETHING. The shared branch was the hole: it has
+#: no `_wait_component_healthy` call at all, so `health_without_restart` had
+#: nothing to fire on, and its `_MUST_EXIST` held only the symlink -- deleting
+#: `_restart_dependents_with_health` passed every test, leaving a shared-code
+#: sync that relinks and never restarts a dependent (review of #17867).
+#:
+#: A per-branch existence list could not express this, because the point is
+#: "one of this set", not "this name".
+_MUST_RESTART = frozenset(_REQUIRED_ORDER)
 
 
 def _branch_names(root: Path | None = None) -> list[str]:
@@ -313,6 +323,42 @@ def test_install_precedes_removal_everywhere_both_appear():
         assert not install_after_reconcile(
             steps
         ), f"{branch}: reconcile_component runs BEFORE the pip install it reconciles against"
+
+
+@pytest.mark.parametrize("branch", sorted(_MUST_RESTART))
+def test_every_branch_restarts_something(branch):
+    """Deleting the restart must never be invisible.
+
+    The shared branch polls no health URL, so the health-based checks cannot
+    speak for it. Without this, losing `_restart_dependents_with_health` left
+    a sync that relinks `autobot_shared` and restarts no dependent -- new
+    shared code on disk, every consumer still running the old import.
+    """
+    steps = _branch_steps().get(branch, ())
+    assert steps, f"{branch}: no awaited calls found"
+    assert any(
+        s in _RESTARTS for s in steps
+    ), f"{branch}: performs no restart at all — new code would be deployed and never loaded"
+
+
+def test_the_existence_check_itself_can_fail():
+    """A self-test for `missing_required_steps`.
+
+    Nothing guarded the existence check, so a refactor that made it always
+    return [] would have silenced every `test_required_steps_are_present`
+    case at once while they all still reported green (review of #17867).
+    """
+    assert missing_required_steps("_run_post_sync_shared_branch", ("_ensure_autobot_shared_symlink",)) == [
+        "_restart_dependents_with_health"
+    ]
+    assert (
+        missing_required_steps(
+            "_run_post_sync_shared_branch",
+            ("_ensure_autobot_shared_symlink", "_restart_dependents_with_health"),
+        )
+        == []
+    )
+    assert missing_required_steps("_no_such_branch", ()) == [], "an unknown branch must not invent requirements"
 
 
 # --------------------------------------------------------------------------
