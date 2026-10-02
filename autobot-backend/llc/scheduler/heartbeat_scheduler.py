@@ -580,6 +580,7 @@ class HeartbeatScheduler:
                     await session.commit()
             except Exception:
                 logger.exception("Could not write FAILED status for run %s", run_id)
+            await self._release_workspace(factory, run_id, LLCRunStatus.FAILED.value)
             return
 
         error_msg: Optional[str] = None
@@ -604,12 +605,19 @@ class HeartbeatScheduler:
             error_msg = str(exc)
             final_status = LLCRunStatus.FAILED.value
 
+        # #17725 review: these two return without reaching `_finish_run`, which is the
+        # only place `release_run_workspace` is called. The run is over either way --
+        # a rate-limited retry is re-dispatched as a NEW run that acquires its own
+        # lease -- so holding this one keeps the directory unusable until the deadline
+        # and makes the retry's acquire fail against a lease nobody is using.
         if rate_limited_exc is not None:
             await self._handle_rate_limited(agent, run_id, retry_count, rate_limited_exc)
+            await self._release_workspace(factory, run_id, LLCRunStatus.RATE_LIMITED.value)
             return
 
         if quota_exc is not None:
             await self._handle_quota_exhausted(agent, run_id, quota_exc)
+            await self._release_workspace(factory, run_id, LLCRunStatus.QUOTA_EXHAUSTED.value)
             return
 
         await self._finish_run(factory, agent, run_id, final_status, error_msg)
@@ -625,14 +633,32 @@ class HeartbeatScheduler:
             self._tasks.add(_record_task)
             _record_task.add_done_callback(self._tasks.discard)
 
+    async def _release_workspace(self, factory: Any, run_id: uuid.UUID, final_status: str) -> None:
+        """Hand the workspace back on an ending that does not reach `_finish_run`.
+
+        Best-effort and never raises: the run has already ended and its status is
+        already written, so failing to release must not turn a recorded outcome into
+        an unhandled exception. A missed release is recovered by the expiry sweep;
+        it is just slow, which is the bug this exists to avoid rather than cause.
+        """
+        try:
+            async with factory() as session:
+                await release_run_workspace(session, run_id, final_status)
+                await session.commit()
+        except Exception:
+            logger.exception("Could not release workspace for run %s", run_id)
+
     async def _finish_run(
         self, factory: Any, agent: Dict[str, Any], run_id: uuid.UUID, final_status: str, error_msg: Optional[str]
     ) -> None:
         """Close the run out and hand its workspace back, in one transaction.
 
-        Every normal ending passes through here -- completed, failed and skipped
-        alike -- so releasing here cannot miss the failure paths, where a run holding
-        its workspace until the deadline is the slow version of this issue's bug.
+        Completed, skipped and adapter-failed runs pass through here. Three endings do
+        NOT -- the early FAILED path above, rate-limited, and quota-exhausted -- and
+        this docstring used to claim releasing here "cannot miss the failure paths",
+        which was false for all three (#17725 review). Those now release through
+        `_release_workspace`. If a fourth early exit is added, it needs the same call;
+        there is no `finally` covering this.
         """
         try:
             async with factory() as session:
