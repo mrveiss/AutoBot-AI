@@ -503,3 +503,67 @@ def test_an_unparseable_file_is_reported_not_skipped(tmp_path: Path) -> None:
     fine = tmp_path / "fine.py"
     fine.write_text("x = 1\n", encoding="utf-8")
     assert _parse(fine) is not None, "a parseable file must not be reported as unparseable"
+
+
+# The factory API's four shapes (#17804 AC3, #17819). Every fixture above drives
+# `from_pretrained`, or drives `pipeline()` only as `model=MODULE_CONSTANT` -- so
+# the factory half of `_model_argument` was reached by exactly one of its paths.
+# Untested were the bare literal, the caller-supplied exemption, and the
+# positional branch where `index = 1 if is_factory` does its work.
+_FACTORY_BARE_LITERAL = """
+from transformers import pipeline
+def go():
+    return pipeline("automatic-speech-recognition", model="openai/whisper-base")
+"""
+
+_FACTORY_CALLER_SUPPLIED = """
+from transformers import pipeline
+def go(name):
+    return pipeline("automatic-speech-recognition", model=name)
+"""
+
+_FACTORY_POSITIONAL_LITERAL = """
+from transformers import pipeline
+def go():
+    return pipeline("automatic-speech-recognition", "openai/whisper-base")
+"""
+
+_FACTORY_POSITIONAL_CALLER_SUPPLIED = """
+from transformers import pipeline
+def go(name):
+    return pipeline("automatic-speech-recognition", name)
+"""
+
+
+def test_a_factory_bare_literal_is_found_unpinned() -> None:
+    """`model="repo/id"` with no module constant in sight: the keyword path, literal."""
+    loads = _fixed_repo_loads(ast.parse(_FACTORY_BARE_LITERAL))
+    assert [pinned for _, pinned in loads] == [False], f"expected one unpinned factory load, got {loads}"
+
+
+def test_a_factory_caller_supplied_model_is_exempt() -> None:
+    """Exempt BY THE RULE on the factory side too, not only for `from_pretrained`."""
+    assert _fixed_repo_loads(ast.parse(_FACTORY_CALLER_SUPPLIED)) == []
+
+
+def test_a_factory_positional_repo_id_is_found_unpinned() -> None:
+    """`pipeline(task, "repo/id")` -- the repo id is args[1], not a keyword."""
+    loads = _fixed_repo_loads(ast.parse(_FACTORY_POSITIONAL_LITERAL))
+    assert [pinned for _, pinned in loads] == [False], f"expected one unpinned factory load, got {loads}"
+
+
+def test_the_factory_positional_index_reads_the_repo_not_the_task() -> None:
+    """What makes `index = 1 if is_factory` load-bearing rather than merely present.
+
+    The test above cannot do it: with `index` mutated to 0, `_model_argument`
+    returns the TASK string, which is also a `str` Constant, so the load is still
+    recorded unpinned and the assertion still passes. Reading the wrong argument
+    and reading the right one are indistinguishable when both are literals.
+
+    Here the task is a literal and the repo id is caller-supplied, so the two
+    readings disagree about the VERDICT: at `index = 1` the model is a bare `Name`
+    and the load is exempt, while at `index = 0` the task literal is scored as a
+    fixed repo id and the guard invents a finding. Empty list or one entry --
+    the mutation cannot hide in a shared answer.
+    """
+    assert _fixed_repo_loads(ast.parse(_FACTORY_POSITIONAL_CALLER_SUPPLIED)) == []
