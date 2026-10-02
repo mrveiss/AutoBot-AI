@@ -31,9 +31,11 @@ from autobot_shared.coordination.claim_waitlist import (
 from autobot_shared.coordination.work_claims import ClaimMode, HolderError, try_acquire
 
 try:
+    import fakeredis
     import fakeredis.aioredis as fakeredis_async
 except ImportError:  # pragma: no cover
     fakeredis_async = None
+    fakeredis = None  # type: ignore[assignment]
 
 
 @pytest_asyncio.fixture
@@ -43,7 +45,7 @@ async def redis(monkeypatch):
     from autobot_shared.coordination import claim_waitlist as wl_mod
     from autobot_shared.coordination import work_claims as wc_mod
 
-    client = fakeredis_async.FakeRedis(server=fakeredis_async.FakeServer(), decode_responses=True)
+    client = fakeredis_async.FakeRedis(server=fakeredis.FakeServer(), decode_responses=True)
 
     async def _client(database: str = "main"):
         return client
