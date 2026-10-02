@@ -76,12 +76,17 @@ class GenericProvider(SpeechProvider):
         import os
         import wave
 
+        from autobot_shared.audio_wav import wav_duration_seconds
+
         try:
             # Try to load as WAV file
             with wave.open(audio_path, "rb") as wav:
                 frames = wav.readframes(wav.getnframes())
                 sample_rate = wav.getframerate()
-                duration = wav.getnframes() / float(sample_rate)
+                # Arithmetic shared with services/tts_client.py (#13841). The helper
+                # takes the OPEN handle so this keeps one read for frames + rate +
+                # duration; a bytes- or path-taking helper would open the file twice.
+                duration = wav_duration_seconds(wav)
 
                 return AudioInput(
                     audio_id=os.path.basename(audio_path),
