@@ -1,0 +1,296 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+"""The code-sync post-sync branches run their steps in a safe order (#17867).
+
+Every builtin update funnels through one of four branch functions in
+``autobot-slm-backend/api/code_sync.py``, and each hard-codes its sequence
+imperatively. The order is correct today. **Nothing held it there.**
+
+The sibling path is protected: ``roles.py`` builds its action list through
+``ordered_post_sync_plan`` and ``test_post_sync_plan_order.py`` pins
+``install -> schema -> build -> restart`` with a negative control. The
+code-sync path never calls that helper -- it is a different mechanism, so
+that contract does not reach it. The only ordering fact pinned here before
+this guard was "a failed pip install short-circuits before reconcile"
+(``test_venv_reconcile_wiring_15063.py``), which covers the first link of
+the chain and none of the rest.
+
+So a change that moved the restart ahead of the alembic migration, or
+uninstalled packages before installing them, would have passed CI.
+
+Why these orderings and not others:
+
+* **install before remove** -- reconciliation computes removals against the
+  *declared* set. Removing first means removing against a set the venv has
+  not been brought to yet.
+* **remove before migrate** -- a migration runs in that venv. If reconcile
+  removed something it needed, the migration must be what fails, loudly and
+  with a rollback, rather than the service discovering it after restart.
+* **migrate before restart** -- new code must never start against an
+  un-migrated schema.
+* **symlink before restart** -- ``autobot_shared`` has to resolve at import
+  time or the process crash-loops (#11611).
+* **build before restart** -- nginx must not be reloaded onto a half-built
+  asset tree.
+* **health after restart** -- it is the gate that triggers rollback.
+
+The check is syntactic (AST, no imports): it must run without the app, a
+database or a deployed host.
+"""
+
+from __future__ import annotations
+
+import ast
+from functools import lru_cache
+from pathlib import Path
+
+import pytest
+from repo_tests._paths import repo_root
+from repo_tests._reach import declare
+
+_ROOT = repo_root()
+_CODE_SYNC = Path("autobot-slm-backend/api/code_sync.py")
+
+#: Branch functions, and the step order each must preserve. A name absent from
+#: a branch is simply not constrained there; a name present must appear in
+#: this relative order.
+_REQUIRED_ORDER: dict[str, tuple[str, ...]] = {
+    "_run_post_sync_backend_branch": (
+        "_deploy_constraints_dir",
+        "_deploy_repo_root_requirements",
+        "_ensure_target_python_installed",
+        "_ensure_venv_python",
+        "_install_pip_deps_for_component",
+        "reconcile_component",
+        "_run_alembic_migrations",
+        "_ensure_autobot_shared_symlink",
+        "_restart_component_services",
+        "_wait_component_healthy",
+    ),
+    "_run_post_sync_frontend_branch": (
+        "_build_npm_frontend_for_component",
+        "_restart_component_services",
+        "_wait_component_healthy",
+    ),
+    "_run_post_sync_worker_branch": (
+        "_install_pip_deps_for_component",
+        "reconcile_component",
+        "_restart_component_services",
+        "_wait_component_healthy",
+    ),
+    "_run_post_sync_shared_branch": (
+        "_ensure_autobot_shared_symlink",
+        "_restart_dependents_with_health",
+    ),
+}
+
+#: Steps that mutate the deployed tree, the venv or the schema. Every one of
+#: them must happen BEFORE the first restart in its branch -- that is the
+#: invariant the individual orderings above add up to, stated once so a new
+#: step cannot be appended after the restart without tripping it.
+_MUTATING = frozenset(
+    {
+        "_deploy_constraints_dir",
+        "_deploy_repo_root_requirements",
+        "_ensure_target_python_installed",
+        "_ensure_venv_python",
+        "_install_pip_deps_for_component",
+        "reconcile_component",
+        "_run_alembic_migrations",
+        "_ensure_autobot_shared_symlink",
+        "_build_npm_frontend_for_component",
+    }
+)
+
+_RESTARTS = frozenset({"_restart_component_services", "_restart_dependents_with_health"})
+
+
+def _branch_names(root: Path | None = None) -> list[str]:
+    """Branch functions actually present. Empty tree -> [], never a raise."""
+    path = (root or _ROOT) / _CODE_SYNC
+    if not path.is_file():
+        return []
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError):
+        return []
+    return sorted(
+        n.name
+        for n in ast.walk(tree)
+        if isinstance(n, (ast.AsyncFunctionDef, ast.FunctionDef)) and n.name in _REQUIRED_ORDER
+    )
+
+
+REACH = declare(
+    "post-sync-branch-functions",
+    discover=_branch_names,
+    floor=4,
+    growth=4,
+    skips=0,
+    what="post-sync branch functions in code_sync.py whose step order is pinned",
+)
+
+
+def awaited_calls_in_source_order(fn: ast.AST) -> list[str]:
+    """Awaited call names inside *fn*, in SOURCE order.
+
+    Sorted by `lineno` deliberately. `ast.walk` yields breadth-first, which
+    for this function returns a plausible-looking order that is NOT the
+    source order -- it reported `reconcile_component` running after the
+    rollback in the worker branch, and the shared branch restarting before
+    its symlink restore. Both were artefacts of the traversal, and both read
+    exactly like real sequencing bugs. A guard built on walk order would
+    have failed on correct code and been "fixed" by reordering the source.
+    """
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(fn):
+        if not isinstance(node, ast.Await) or not isinstance(node.value, ast.Call):
+            continue
+        func = node.value.func
+        name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+        if name:
+            found.append((node.lineno, name))
+    return [name for _, name in sorted(found)]
+
+
+@lru_cache(maxsize=4)
+def _branch_steps(root: Path | None = None) -> dict[str, tuple[str, ...]]:
+    path = (root or _ROOT) / _CODE_SYNC
+    if not path.is_file():
+        return {}
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError):
+        return {}
+    return {
+        n.name: tuple(awaited_calls_in_source_order(n))
+        for n in ast.walk(tree)
+        if isinstance(n, (ast.AsyncFunctionDef, ast.FunctionDef)) and n.name in _REQUIRED_ORDER
+    }
+
+
+def _first_index(steps: tuple[str, ...], name: str) -> int | None:
+    return steps.index(name) if name in steps else None
+
+
+# --------------------------------------------------------------------------
+
+
+def test_every_pinned_branch_still_exists():
+    """A renamed branch must fail here, not quietly stop being checked.
+
+    Without this, deleting or renaming a branch function makes its ordering
+    test vacuous -- the dictionary lookup finds nothing and every assertion
+    below passes over an empty set.
+    """
+    REACH.verify_floor(_ROOT)
+    found = _branch_names()
+    REACH.completed(len(found))
+    missing = sorted(set(_REQUIRED_ORDER) - set(found))
+    assert not missing, f"pinned branch function(s) no longer in code_sync.py: {missing}"
+
+
+@pytest.mark.parametrize("branch", sorted(_REQUIRED_ORDER))
+def test_branch_steps_run_in_the_required_order(branch):
+    steps = _branch_steps().get(branch, ())
+    assert steps, f"{branch}: no awaited calls found — the guard did not look"
+    positions = [(name, _first_index(steps, name)) for name in _REQUIRED_ORDER[branch]]
+    present = [(n, i) for n, i in positions if i is not None]
+    for (earlier, i), (later, j) in zip(present, present[1:]):
+        assert i < j, (
+            f"{branch}: {earlier!r} must run before {later!r}, but the source order is " f"{[n for n in steps]}"
+        )
+
+
+@pytest.mark.parametrize("branch", sorted(_REQUIRED_ORDER))
+def test_nothing_mutating_happens_after_the_first_restart(branch):
+    """The invariant the individual orderings add up to.
+
+    Stated once, so a newly added step cannot land after the restart without
+    tripping something -- the per-pair ordering above only constrains names
+    it already knows about.
+    """
+    steps = _branch_steps().get(branch, ())
+    assert steps, f"{branch}: no awaited calls found"
+    restart_at = next((i for i, s in enumerate(steps) if s in _RESTARTS), None)
+    if restart_at is None:
+        pytest.skip(f"{branch} performs no restart")
+    late = sorted({s for s in steps[restart_at + 1 :] if s in _MUTATING})
+    assert not late, f"{branch}: mutating step(s) run AFTER the restart: {late}"
+
+
+@pytest.mark.parametrize("branch", sorted(_REQUIRED_ORDER))
+def test_health_is_checked_after_the_restart_that_gates_rollback(branch):
+    steps = _branch_steps().get(branch, ())
+    restart_at = next((i for i, s in enumerate(steps) if s in _RESTARTS), None)
+    health_at = _first_index(steps, "_wait_component_healthy")
+    if restart_at is None or health_at is None:
+        pytest.skip(f"{branch} has no restart/health pair")
+    assert restart_at < health_at, f"{branch}: health is polled BEFORE the restart it is meant to gate"
+
+
+def test_install_precedes_removal_everywhere_both_appear():
+    """Removals are computed against the declared set, so the venv must be
+    brought to that set first. Pinned across every branch at once, not just
+    the two that happen to have both today."""
+    for branch, steps in _branch_steps().items():
+        i, j = _first_index(steps, "_install_pip_deps_for_component"), _first_index(steps, "reconcile_component")
+        if i is None or j is None:
+            continue
+        assert i < j, f"{branch}: reconcile_component runs BEFORE the pip install it reconciles against"
+
+
+# --------------------------------------------------------------------------
+# negative controls — each proves an assertion above can actually fail
+# --------------------------------------------------------------------------
+
+_MUTATED_BRANCH = """
+async def _run_post_sync_backend_branch(component, snapshot, steps, restart):
+    pip_ok = await _install_pip_deps_for_component(component, steps)
+    await _restart_component_services(component, steps)
+    await _run_alembic_migrations(component, deployed_dir, steps)
+    await _wait_component_healthy(component, steps)
+"""
+
+
+def _steps_of(src: str, name: str) -> tuple[str, ...]:
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree) if isinstance(n, (ast.AsyncFunctionDef, ast.FunctionDef)) and n.name == name)
+    return tuple(awaited_calls_in_source_order(fn))
+
+
+def test_the_order_check_fails_on_a_restart_before_migration():
+    """Without this, every assertion above could be passing vacuously."""
+    steps = _steps_of(_MUTATED_BRANCH, "_run_post_sync_backend_branch")
+    restart_at = next(i for i, s in enumerate(steps) if s in _RESTARTS)
+    late = {s for s in steps[restart_at + 1 :] if s in _MUTATING}
+    assert "_run_alembic_migrations" in late, "the mutating-after-restart check cannot fire — it is decoration"
+
+
+def test_source_order_differs_from_walk_order_on_the_real_file():
+    """The bug this guard was nearly built on.
+
+    `ast.walk` is breadth-first, so an `await` inside an `if` body surfaces
+    after one at the function's top level regardless of line. On the real
+    worker branch that reports `reconcile_component` running after the
+    rollback. If this ever stops differing the lru_cache and the sort are
+    still correct — but the comment above would have lost its evidence, so
+    assert the difference exists rather than trusting the recollection.
+    """
+    path = _ROOT / _CODE_SYNC
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    fn = next(
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, (ast.AsyncFunctionDef, ast.FunctionDef)) and n.name == "_run_post_sync_worker_branch"
+    )
+    walk_order = [
+        (f.id if isinstance(f, ast.Name) else getattr(f, "attr", None))
+        for node in ast.walk(fn)
+        if isinstance(node, ast.Await) and isinstance(node.value, ast.Call)
+        for f in [node.value.func]
+    ]
+    assert walk_order != awaited_calls_in_source_order(fn), (
+        "walk order now matches source order; the sort is still right, but this "
+        "test's premise needs re-checking rather than silently passing"
+    )
