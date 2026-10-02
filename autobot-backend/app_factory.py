@@ -39,6 +39,7 @@ from initialization import (
     register_root_endpoints,
 )
 from initialization.integrity_handlers import register_integrity_handlers
+from initialization.router_registry.route_dependencies import dependencies_for
 
 # Store logger for app usage
 logger = get_logger(__name__)
@@ -85,7 +86,9 @@ def _register_routers(app: FastAPI) -> None:
 
     for router, prefix, tags, name in core_routers:
         try:
-            app.include_router(router, prefix=f"/api{prefix}", tags=tags)
+            # #16857: cross-cutting controls a router's own module cannot hold
+            deps = dependencies_for(name)
+            app.include_router(router, prefix=f"/api{prefix}", tags=tags, dependencies=deps)
             logger.info("✅ Registered core router: %s at /api%s", name, prefix)
         except Exception as e:
             logger.error("❌ Failed to register core router %s: %s", name, e)
