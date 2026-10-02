@@ -28,9 +28,11 @@ from services import claim_projection
 from services.claim_projection import ACQUIRED, CONFLICT, RELEASED, claim_table, publish_conflict
 
 try:
+    import fakeredis
     import fakeredis.aioredis as fakeredis_async
 except ImportError:  # pragma: no cover
     fakeredis_async = None
+    fakeredis = None  # type: ignore[assignment]
 
 
 @pytest_asyncio.fixture
@@ -39,7 +41,7 @@ async def redis(monkeypatch):
         pytest.skip("fakeredis[lua] not installed")
     from autobot_shared.coordination import work_claims as wc
 
-    client = fakeredis_async.FakeRedis(server=fakeredis_async.FakeServer(), decode_responses=True)
+    client = fakeredis_async.FakeRedis(server=fakeredis.FakeServer(), decode_responses=True)
 
     async def _client(database: str = "main"):
         return client
