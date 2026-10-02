@@ -105,31 +105,74 @@ const _RTF_MIN_WINDOW_SEC = 0.5
 
 // Carried production rate in audio-seconds per wall-second; null until measured.
 let _measuredRtf: number | null = null
-// Decoded chunks held back during the current utterance's lead-in.
-let _pendingBuffers: AudioBuffer[] = []
-let _pendingSec = 0
-let _utteranceHolding = false
-let _utterancePrerollSec = 0
-let _utteranceEstimateSec = 0
-// Rate this utterance is being sized against — the carried rate, lowered if the
-// utterance turns out to be producing even more slowly than that.
-let _utteranceRtf = 0
+/**
+ * Per-utterance pre-roll state, owned by one object (#13841).
+ *
+ * These nine fields plus the timer are one state machine with invariants between
+ * them, and resetting them was nine hand-written assignments — three review
+ * findings on #13736 were "field X was not reset alongside field Y", which is the
+ * failure mode loose parallel state produces. `reset()` is now one call that
+ * cannot miss a field.
+ *
+ * The two SEQUENCE GUARDS are deliberately NOT in here. `_utteranceSeq` and
+ * `_stopSeq` are monotonic counters that must survive a reset — zeroing them
+ * would make a stale chunk's sequence match the new utterance's and defeat the
+ * guard. An object that reset "everything" would have broken exactly what they
+ * protect, so they stay module-level and out of reach of `reset()`.
+ */
+const _preroll = {
+  /** Decoded chunks held back during the current utterance's lead-in. */
+  pendingBuffers: [] as AudioBuffer[],
+  pendingSec: 0,
+  holding: false,
+  prerollSec: 0,
+  estimateSec: 0,
+  /**
+   * Rate this utterance is being sized against — the carried rate, lowered if
+   * the utterance turns out to be producing even more slowly than that.
+   */
+  rtf: 0,
+  timer: null as ReturnType<typeof setTimeout> | null,
+  /**
+   * Arrival wall-clock of this utterance's FIRST chunk. Time-to-first-chunk is
+   * model warm-up, not production rate, so the rate is measured from chunk 2 on.
+   */
+  rtfFirstChunkAt: 0,
+  rtfProducedSec: 0,
+  /**
+   * Arrival of the LAST observed chunk. The carried rate is measured to here,
+   * not to tts_end: the final chunk is often still decoding when the utterance
+   * ends, so measuring to "now" left its arrival interval in the window with
+   * its audio missing and biased the worker slow.
+   */
+  rtfLastChunkAt: 0,
+
+  /** Clear the lead-in and the rate window. One call, every field. */
+  reset(): void {
+    if (this.timer) {
+      clearTimeout(this.timer)
+      this.timer = null
+    }
+    this.pendingBuffers = []
+    this.pendingSec = 0
+    this.holding = false
+    this.prerollSec = 0
+    this.estimateSec = 0
+    this.rtf = 0
+    this.rtfFirstChunkAt = 0
+    this.rtfProducedSec = 0
+    this.rtfLastChunkAt = 0
+  },
+}
+
 // Bumped per utterance so a chunk that finishes decoding after its own
 // utterance ended is not folded into the next one's buffer or rate.
+// NOT part of `_preroll`: monotonic, and must survive its reset.
 let _utteranceSeq = 0
 // Bumped by every explicit stop, so a chunk decoded after a barge-in is
 // dropped rather than spoken as a fragment of the superseded reply.
+// NOT part of `_preroll`: monotonic, and must survive its reset.
 let _stopSeq = 0
-let _prerollTimer: ReturnType<typeof setTimeout> | null = null
-// Arrival wall-clock of this utterance's FIRST chunk. Time-to-first-chunk is
-// model warm-up, not production rate, so the rate is measured from chunk 2 on.
-let _rtfFirstChunkAt = 0
-let _rtfProducedSec = 0
-// Arrival of the LAST observed chunk. The carried rate is measured to here, not
-// to tts_end: the final chunk is often still decoding when the utterance ends,
-// so measuring to "now" left its arrival interval in the window with its audio
-// missing and biased the worker slow.
-let _rtfLastChunkAt = 0
 
 // Single shared WebSocket to /api/voice/stream (#6788).
 // Was: useVoiceOutput + useVoiceConversation each opened their own socket to the
@@ -348,19 +391,7 @@ async function _playAudioBuffer(arrayBuffer: ArrayBuffer): Promise<void> {
 
 /** Discard the pre-roll buffer and its timer without playing anything (#12460). */
 function _resetPreroll(): void {
-  if (_prerollTimer) {
-    clearTimeout(_prerollTimer)
-    _prerollTimer = null
-  }
-  _pendingBuffers = []
-  _pendingSec = 0
-  _utteranceHolding = false
-  _utterancePrerollSec = 0
-  _utteranceEstimateSec = 0
-  _utteranceRtf = 0
-  _rtfFirstChunkAt = 0
-  _rtfProducedSec = 0
-  _rtfLastChunkAt = 0
+  _preroll.reset()
 }
 
 /**
@@ -372,7 +403,7 @@ function _resetPreroll(): void {
  */
 function _leadSec(rtf: number): number {
   const ahead = _audioContext ? Math.max(0, _nextStartTime - _audioContext.currentTime) : 0
-  return _pendingSec + rtf * ahead
+  return _preroll.pendingSec + rtf * ahead
 }
 
 /** Place one decoded buffer on the gapless timeline (#1527). */
@@ -402,7 +433,7 @@ function _scheduleBuffer(ctx: AudioContext, audioBuffer: AudioBuffer): void {
       // Not idle if the NEXT sentence is already buffering: clearing here fires
       // watch(isSpeaking) in useVoiceConversation, which reopens the mic in the
       // gap between sentences (#12460).
-      if (!_utteranceHolding) isSpeaking.value = false
+      if (!_preroll.holding) isSpeaking.value = false
     }
   }
 
@@ -415,19 +446,19 @@ function _scheduleBuffer(ctx: AudioContext, audioBuffer: AudioBuffer): void {
 
 /** Hand every held chunk to the timeline and stop holding back (#12460). */
 function _releasePending(): void {
-  if (_prerollTimer) {
-    clearTimeout(_prerollTimer)
-    _prerollTimer = null
+  if (_preroll.timer) {
+    clearTimeout(_preroll.timer)
+    _preroll.timer = null
   }
-  _utteranceHolding = false
-  if (_pendingBuffers.length === 0) {
-    _pendingSec = 0
+  _preroll.holding = false
+  if (_preroll.pendingBuffers.length === 0) {
+    _preroll.pendingSec = 0
     return
   }
   const ctx = _getOrCreateContext()
-  const buffers = _pendingBuffers
-  _pendingBuffers = []
-  _pendingSec = 0
+  const buffers = _preroll.pendingBuffers
+  _preroll.pendingBuffers = []
+  _preroll.pendingSec = 0
   if (ctx.state === 'suspended') {
     // The context was running when these chunks were held but the tab has been
     // backgrounded since. Starting sources on a frozen timeline never fires
@@ -436,9 +467,9 @@ function _releasePending(): void {
     // lead-in, i.e. the opening of the reply. The next chunk, the end of the
     // utterance, or an explicit stop retries or clears them — no timer is
     // re-armed here, so a still-suspended context cannot spin.
-    _pendingBuffers = buffers
-    _pendingSec = buffers.reduce((total, buffer) => total + buffer.duration, 0)
-    _utteranceHolding = true
+    _preroll.pendingBuffers = buffers
+    _preroll.pendingSec = buffers.reduce((total, buffer) => total + buffer.duration, 0)
+    _preroll.holding = true
     _armGestureUnlock()
     _notifyTapToEnableAudio()
     if (_activeChunkCount <= 0) isSpeaking.value = false
@@ -449,9 +480,9 @@ function _releasePending(): void {
 
 /** (Re)arm the stall watchdog for the current hold (#12460). */
 function _armStallTimer(): void {
-  if (_prerollTimer) clearTimeout(_prerollTimer)
-  _prerollTimer = setTimeout(() => {
-    _prerollTimer = null
+  if (_preroll.timer) clearTimeout(_preroll.timer)
+  _preroll.timer = setTimeout(() => {
+    _preroll.timer = null
     logger.warn('TTS pre-roll stalled; playing what is buffered')
     _releasePending()
   }, _PREROLL_STALL_MS)
@@ -476,15 +507,15 @@ function _armStallTimer(): void {
  */
 function _observeChunkRate(durationSec: number): number | null {
   const now = Date.now()
-  _rtfLastChunkAt = now
-  if (_rtfFirstChunkAt === 0) {
-    _rtfFirstChunkAt = now
+  _preroll.rtfLastChunkAt = now
+  if (_preroll.rtfFirstChunkAt === 0) {
+    _preroll.rtfFirstChunkAt = now
     return null
   }
-  _rtfProducedSec += durationSec
-  const elapsedSec = (now - _rtfFirstChunkAt) / 1000
+  _preroll.rtfProducedSec += durationSec
+  const elapsedSec = (now - _preroll.rtfFirstChunkAt) / 1000
   if (elapsedSec < _RTF_MIN_WINDOW_SEC) return null
-  return _rtfProducedSec / elapsedSec
+  return _preroll.rtfProducedSec / elapsedSec
 }
 
 /** Blend an utterance's measured production rate into the carried one (#12460). */
@@ -513,14 +544,14 @@ function _beginUtterance(text: string): void {
   _utteranceSeq++
   const rtf = _measuredRtf
   if (rtf === null) return
-  _utteranceRtf = rtf
-  _utteranceEstimateSec = text.trim().length * _SEC_PER_CHAR
-  _utterancePrerollSec = _prerollTargetSec(rtf, _utteranceEstimateSec)
-  if (_utterancePrerollSec <= 0) return
-  _utteranceHolding = true
+  _preroll.rtf = rtf
+  _preroll.estimateSec = text.trim().length * _SEC_PER_CHAR
+  _preroll.prerollSec = _prerollTargetSec(rtf, _preroll.estimateSec)
+  if (_preroll.prerollSec <= 0) return
+  _preroll.holding = true
   // The watchdog is armed by the first held chunk, NOT here: a slow first chunk
   // would otherwise fire it against an empty buffer, and that release clears
-  // _utteranceHolding — silently disabling pre-roll for the whole utterance.
+  // _preroll.holding — silently disabling pre-roll for the whole utterance.
 }
 
 /**
@@ -531,18 +562,18 @@ function _beginUtterance(text: string): void {
 function _endUtterance(): void {
   _releasePending()
   const elapsedSec =
-    _rtfFirstChunkAt > 0 && _rtfLastChunkAt > _rtfFirstChunkAt
-      ? (_rtfLastChunkAt - _rtfFirstChunkAt) / 1000
+    _preroll.rtfFirstChunkAt > 0 && _preroll.rtfLastChunkAt > _preroll.rtfFirstChunkAt
+      ? (_preroll.rtfLastChunkAt - _preroll.rtfFirstChunkAt) / 1000
       : 0
-  if (elapsedSec > 0 && _rtfProducedSec > 0) {
-    _recordRtfSample(_rtfProducedSec / elapsedSec)
+  if (elapsedSec > 0 && _preroll.rtfProducedSec > 0) {
+    _recordRtfSample(_preroll.rtfProducedSec / elapsedSec)
   }
-  _rtfFirstChunkAt = 0
-  _rtfProducedSec = 0
-  _rtfLastChunkAt = 0
-  _utterancePrerollSec = 0
-  _utteranceEstimateSec = 0
-  _utteranceRtf = 0
+  _preroll.rtfFirstChunkAt = 0
+  _preroll.rtfProducedSec = 0
+  _preroll.rtfLastChunkAt = 0
+  _preroll.prerollSec = 0
+  _preroll.estimateSec = 0
+  _preroll.rtf = 0
 }
 
 /**
@@ -592,13 +623,13 @@ async function _scheduleGaplessChunk(arrayBuffer: ArrayBuffer): Promise<void> {
 
   const liveRtf = _observeChunkRate(audioBuffer.duration)
 
-  if (!_utteranceHolding) {
+  if (!_preroll.holding) {
     _scheduleBuffer(ctx, audioBuffer)
     return
   }
 
-  _pendingBuffers.push(audioBuffer)
-  _pendingSec += audioBuffer.duration
+  _preroll.pendingBuffers.push(audioBuffer)
+  _preroll.pendingSec += audioBuffer.duration
   // #12460: the reply IS being spoken — it is buffering, not finished. Leaving
   // isSpeaking false here would fire watch(isSpeaking) in useVoiceConversation,
   // expiring the TTS echo cooldown and reopening the mic mid-reply.
@@ -609,10 +640,10 @@ async function _scheduleGaplessChunk(arrayBuffer: ArrayBuffer): Promise<void> {
     // over the utterance, so it is already smooth; ratcheting it downward instead
     // let one transient arrival gap pin the target at the cap for the rest of
     // the utterance with no way to recover.
-    _utteranceRtf = liveRtf
-    _utterancePrerollSec = _prerollTargetSec(liveRtf, _utteranceEstimateSec)
+    _preroll.rtf = liveRtf
+    _preroll.prerollSec = _prerollTargetSec(liveRtf, _preroll.estimateSec)
   }
-  if (_leadSec(_utteranceRtf) >= _utterancePrerollSec) _releasePending()
+  if (_leadSec(_preroll.rtf) >= _preroll.prerollSec) _releasePending()
 }
 
 /** Decode base64 audio and schedule for gapless playback (#1527). */
@@ -909,7 +940,7 @@ export function useVoiceOutput() {
     // #12460: a superseded reply may be mid-pre-roll rather than mid-playback.
     // Without the holding check the stop is skipped, and _beginUtterance's
     // release then speaks the superseded audio first — the #12502 failure.
-    if (isSpeaking.value || _utteranceHolding) _stopCurrentAudio()
+    if (isSpeaking.value || _preroll.holding) _stopCurrentAudio()
 
     // #9999: surface a clear message instead of failing silently when the
     // deployment has no TTS voices installed.
