@@ -387,9 +387,14 @@ __all__ = [
 # Shared delegate (Issue #4460)
 # ---------------------------------------------------------------------------
 # A pre-configured instance of the shared RateLimiter scoped to LLM providers.
-# RateLimitHandler handles *retry* logic after a rate-limit error is returned;
-# the shared limiter below adds a *proactive* sliding-window guard that callers
-# can use to check limits before dispatching a request.
+# RateLimitHandler handles *retry* logic after a rate-limit error is returned.
+#
+# NOT ACQUIRED ANYWHERE, ON PURPOSE (owner decision on #16857). Proactive
+# provider pacing is ``llm_shared.cross_worker_rate_limiter.LLMCrossWorkerRateLimiter``
+# (``get_llm_rate_limiter()``), acquired in ``BaseProvider.chat_completion``.
+# Wiring this instance too would run two budgets over one limit, with no way to
+# tell which is authoritative. Known gap in that limiter, tracked on #16538:
+# ``stream_completion`` acquires neither it nor the concurrency cap.
 llm_rate_limiter = _SharedRateLimiter(
     scope_prefix="llm",
     default_tier="privileged",
