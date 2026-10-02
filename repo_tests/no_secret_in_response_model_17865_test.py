@@ -41,6 +41,7 @@ from repo_tests.no_secret_in_response_model_baseline_17865 import (
     _UNAUDITED_BASELINE,
     _WAIVED,
 )
+from repo_tests.no_secret_in_response_model_fixtures_17865 import DETECTOR_FIXTURES
 
 _ROOT = repo_root()
 #: `autobot_shared` is in here because leaving it out made the guard blind in the
@@ -104,6 +105,7 @@ class Route:
     method: str
     path: str
     model: str
+    excluded: frozenset[str] = frozenset()
 
 
 def _python_files(root: Path | None = None) -> list[str]:
@@ -163,6 +165,31 @@ def _annotation_names(expr: ast.expr | None) -> list[str]:
     return _model_names(expr) if expr is not None else []
 
 
+def excluded_field_names(expr: ast.expr | None, resolve: dict[str, ast.expr]) -> set[str]:
+    """Leaf strings in a `response_model_exclude=` expression.
+
+    FastAPI's exclude accepts a set of names or a nested dict keyed by field
+    path, e.g. `{"config": {"providers": {"__all__": {"api_key"}}}}`. Every
+    string in it is either a field name or the `__all__` marker, so collecting
+    the leaves is enough to know a field never reaches the wire.
+
+    Added because the guard is SYNTACTIC: the declaration survives the
+    exclusion, so without this a correctly-fixed route is reported unaudited
+    for ever -- and, worse, a route that later DROPS its exclusion is excused
+    by the baseline entry that was recorded while it was safe. Found when
+    #17846 fixed exactly this way (review, #17865).
+    """
+    if expr is None:
+        return set()
+    if isinstance(expr, ast.Name):  # a module-level constant
+        return excluded_field_names(resolve.get(expr.id), resolve)
+    out: set[str] = set()
+    for node in ast.walk(expr):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            out.add(node.value)
+    return out - {"__all__"}
+
+
 def _route_of(node: ast.Call) -> tuple[str, str] | None:
     """(method, path) for a FastAPI route decorator call, else None."""
     func = node.func
@@ -197,6 +224,7 @@ def _build_index(root: Path) -> Index:
     routes: list[Route] = []
     parsed: list[str] = []
     failures: list[tuple[str, str]] = []
+    consts: dict[str, ast.expr] = {}
 
     for rel in _python_files(root):
         try:
@@ -207,6 +235,9 @@ def _build_index(root: Path) -> Index:
             failures.append((rel, f"{type(exc).__name__}: {exc}"))
             continue
         parsed.append(rel)
+        for node in tree.body:  # module-level constants only
+            if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                consts[node.targets[0].id] = node.value
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
                 secrets, refs = [], []
@@ -221,12 +252,13 @@ def _build_index(root: Path) -> Index:
                 nested[node.name] = sorted(set(nested.get(node.name, []) + refs))
             elif isinstance(node, ast.Call):
                 route = _route_of(node)
-                for kw in node.keywords:
-                    if kw.arg != "response_model":
-                        continue
-                    method, path = route or ("", "")
-                    for name in _model_names(kw.value):
-                        routes.append(Route(rel, node.lineno, method, path, name))
+                kws = {kw.arg: kw.value for kw in node.keywords if kw.arg}
+                if "response_model" not in kws:
+                    continue
+                method, path = route or ("", "")
+                excluded = frozenset(excluded_field_names(kws.get("response_model_exclude"), consts))
+                for name in _model_names(kws["response_model"]):
+                    routes.append(Route(rel, node.lineno, method, path, name, excluded))
     return Index(tuple(parsed), tuple(failures), own, bases, nested, tuple(routes))
 
 
@@ -254,6 +286,8 @@ def _violations(idx: Index) -> list[tuple[str, int, str, str, str]]:
     out = []
     for route in idx.routes:
         for field in _reached_fields(route.model, idx):
+            if field in route.excluded:  # never reaches the wire
+                continue
             if (route.model, field, route.method, route.path) in _WAIVED:
                 continue
             if (route.file, f"{route.method} {route.path}".strip(), route.model, field) in _UNAUDITED_BASELINE:
@@ -324,122 +358,7 @@ def _fixture_tree(tmp_path: Path, files: dict[str, str]) -> Path:
     return tmp_path
 
 
-@pytest.mark.parametrize(
-    "name,files,expect_hit",
-    [
-        (
-            # THE #17865 SHAPE: secret inherited from a parent in ANOTHER module.
-            "inherited-across-modules",
-            {
-                "autobot-slm-backend/models/s.py": (
-                    "class Cfg(BaseModel):\n    llm_model: str | None = None\n"
-                    "class CfgWithKey(Cfg):\n    llm_api_key: str | None = None\n"
-                ),
-                "autobot-slm-backend/api/r.py": ("@router.get('/x', response_model=CfgWithKey)\ndef h(): ...\n"),
-            },
-            True,
-        ),
-        (
-            # The same route returning the PARENT is clean.
-            "inherited-across-modules-clean",
-            {
-                "autobot-slm-backend/models/s.py": (
-                    "class Cfg(BaseModel):\n    llm_model: str | None = None\n"
-                    "class CfgWithKey(Cfg):\n    llm_api_key: str | None = None\n"
-                ),
-                "autobot-slm-backend/api/r.py": "@router.get('/x', response_model=Cfg)\ndef h(): ...\n",
-            },
-            False,
-        ),
-        (
-            # NESTING, not inheritance: reached through a field annotation.
-            "nested-model",
-            {
-                "autobot-slm-backend/models/s.py": (
-                    "class Provider(BaseModel):\n    api_key: str | None = None\n"
-                    "class Outer(BaseModel):\n    providers: list[Provider] = []\n"
-                ),
-                "autobot-slm-backend/api/r.py": "@router.get('/x', response_model=Outer)\ndef h(): ...\n",
-            },
-            True,
-        ),
-        (
-            # A GENERIC SUBSCRIPT -- invisible to an ast.Name-only reader.
-            "generic-subscript",
-            {
-                "autobot-slm-backend/models/s.py": "class Data(BaseModel):\n    api_key: str | None = None\n",
-                "autobot-slm-backend/api/r.py": (
-                    "@router.post('/x', response_model=DataResponse[Data])\ndef h(): ...\n"
-                ),
-            },
-            True,
-        ),
-        (
-            "generic-subscript-clean",
-            {
-                "autobot-slm-backend/models/s.py": "class Data(BaseModel):\n    api_key_ref: str | None = None\n",
-                "autobot-slm-backend/api/r.py": (
-                    "@router.post('/x', response_model=DataResponse[Data])\ndef h(): ...\n"
-                ),
-            },
-            False,
-        ),
-        (
-            # SAME CLASS NAME IN TWO MODULES. `_build_index` keys by bare name, so
-            # the previous version would have let the clean `Cfg` (parsed second,
-            # since files are walked in sorted order) OVERWRITE the one carrying the
-            # secret -- and the route would have been reported clean. Merging keeps
-            # the field. I claimed that in a commit message and had no test for it
-            # until CodeRabbit asked (#17865).
-            "same-name-collision-across-modules",
-            {
-                "autobot-slm-backend/models/a_secret.py": ("class Cfg(BaseModel):\n    api_key: str | None = None\n"),
-                "autobot-slm-backend/models/b_clean.py": ("class Cfg(BaseModel):\n    llm_model: str | None = None\n"),
-                "autobot-slm-backend/api/r.py": "@router.get('/x', response_model=Cfg)\ndef h(): ...\n",
-            },
-            True,
-        ),
-        (
-            # The same two-module shape with NO secret anywhere stays clean, so the
-            # case above cannot be passing merely because collisions are reported.
-            "same-name-collision-clean",
-            {
-                "autobot-slm-backend/models/a_secret.py": (
-                    "class Cfg(BaseModel):\n    api_key_ref: str | None = None\n"
-                ),
-                "autobot-slm-backend/models/b_clean.py": ("class Cfg(BaseModel):\n    llm_model: str | None = None\n"),
-                "autobot-slm-backend/api/r.py": "@router.get('/x', response_model=Cfg)\ndef h(): ...\n",
-            },
-            False,
-        ),
-        (
-            # A waived model REUSED on a different route must still be reported.
-            "waiver-does-not-follow-the-model",
-            {
-                "autobot-slm-backend/models/s.py": (
-                    "class MFASetupResponse(BaseModel):\n    secret: str | None = None\n"
-                ),
-                "autobot-slm-backend/api/r.py": (
-                    "@router.get('/elsewhere', response_model=MFASetupResponse)\ndef h(): ...\n"
-                ),
-            },
-            True,
-        ),
-        (
-            # ...while the waived route itself stays clean.
-            "waiver-applies-to-its-own-route",
-            {
-                "autobot-slm-backend/models/s.py": (
-                    "class MFASetupResponse(BaseModel):\n    secret: str | None = None\n"
-                ),
-                "autobot-slm-backend/api/r.py": (
-                    "@router.post('/setup', response_model=MFASetupResponse)\ndef h(): ...\n"
-                ),
-            },
-            False,
-        ),
-    ],
-)
+@pytest.mark.parametrize("name,files,expect_hit", DETECTOR_FIXTURES)
 def test_the_detector_end_to_end(tmp_path, name, files, expect_hit):
     """Drives `_build_index` + `_violations`, not just the field matcher.
 
