@@ -571,3 +571,11 @@ async def test_the_aged_out_count_query_bounds_decided_at_from_above(sweep):
     )
     sql = str(session.statements[1].compile(compile_kwargs={"literal_binds": True}))
     assert "decided_at <" in sql, f"the aged-out query does not bound decided_at from above:\n{sql}"
+    # #17725 review: bounded from BELOW as well, and not only for cost. An executed
+    # proposal keeps status APPROVED, so "older than the cutoff" is the whole approval
+    # history -- an unbounded read that also re-warns about the same ancient rows on
+    # every sweep forever, which is a warning nobody can act on.
+    assert sql.count("decided_at") >= 2, (
+        "the aged-out query has only one bound, so it reads all approval history and "
+        "re-reports rows that aged out arbitrarily long ago:\\n{sql}"
+    )

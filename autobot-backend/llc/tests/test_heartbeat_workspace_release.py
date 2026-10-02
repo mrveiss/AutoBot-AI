@@ -63,21 +63,71 @@ class TestEarlyExitsReleaseTheWorkspace:
             await HeartbeatScheduler()._release_workspace(lambda: session, uuid.uuid4(), "failed")
 
     @pytest.mark.asyncio
-    async def test_every_early_return_in_run_adapter_releases(self):
-        """The contrast that matters: it is the EARLY exits, not just the normal one.
+    async def test_the_failed_early_exit_actually_releases(self):
+        """Drives the exit rather than reading the source (#17725 review).
 
-        Asserted against the source rather than by driving three dispatch failures,
-        because the thing that regresses is someone adding a fourth `return` without a
-        release -- and no `finally` covers this path.
+        The first early return is reached when marking the run RUNNING raises. A source
+        count cannot tell that this path releases; running it can.
         """
+        from llc.scheduler.heartbeat_scheduler import HeartbeatScheduler
+
+        run_id = uuid.uuid4()
+        session = AsyncMock()
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=False)
+        session.execute = AsyncMock(side_effect=RuntimeError("cannot mark RUNNING"))
+
+        scheduler = HeartbeatScheduler()
+        with patch("llc.scheduler.heartbeat_scheduler.get_async_session_factory", return_value=lambda: session):
+            with patch.object(scheduler, "_release_workspace", new=AsyncMock()) as released:
+                await scheduler._run_adapter({"agent_id": str(uuid.uuid4())}, run_id, {})
+
+        released.assert_awaited_once()
+        assert released.await_args[0][1] == run_id
+        assert released.await_args[0][2] == "failed", "the FAILED early exit must say so on the release"
+
+    def test_every_return_in_run_adapter_is_preceded_by_a_release(self):
+        """Structural, and unlike a reference count it can FAIL (#17725 review).
+
+        `body.count("_release_workspace") == 3` was the previous form. It asserts that
+        three release calls exist, not that every exit has one: add a fourth early
+        `return` with no release and the count is still three, so the assertion passes
+        and the regression it exists to catch goes through.
+
+        This walks each statement list instead and requires a release to appear BEFORE
+        the return in that same block, so a new unreleased exit fails by construction
+        rather than by someone remembering to update a number.
+        """
+        import ast
         import inspect
 
         from llc.scheduler import heartbeat_scheduler as mod
 
-        body = inspect.getsource(mod.HeartbeatScheduler._run_adapter)
-        assert body.count("_release_workspace") == 3, (
-            "every early return in _run_adapter must hand the workspace back; "
-            f"found {body.count('_release_workspace')} release call(s). "
+        tree = ast.parse(inspect.getsource(mod.HeartbeatScheduler._run_adapter).lstrip())
+        func = tree.body[0]
+
+        def _is_release(node):
+            call = node.value.value if isinstance(getattr(node, "value", None), ast.Await) else None
+            return (
+                isinstance(node, ast.Expr)
+                and isinstance(node.value, ast.Await)
+                and isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Attribute)
+                and call.func.attr == "_release_workspace"
+            )
+
+        unreleased = []
+        for parent in ast.walk(func):
+            for field in ("body", "orelse", "finalbody"):
+                block = getattr(parent, field, None)
+                if not isinstance(block, list):
+                    continue
+                for index, stmt in enumerate(block):
+                    if isinstance(stmt, ast.Return) and not any(_is_release(s) for s in block[:index]):
+                        unreleased.append(stmt.lineno)
+
+        assert not unreleased, (
+            "every early return in _run_adapter must hand the workspace back; these "
+            f"return(s) have no _release_workspace before them in their own block: {unreleased}. "
             "If you added an exit, add the release too."
         )
-        assert "_finish_run" in body, "the normal ending still routes through _finish_run"

@@ -85,6 +85,12 @@ MAX_EXECUTIONS_PER_SWEEP = 20
 #: workspace whose branch and landedness have moved on since a human looked. An
 #: approval is a decision about a state of the world, and this is how long that
 #: decision is assumed to still describe it.
+
+#: Ids named in the aged-out warning before it is summarised. A warning long
+#: enough to truncate a log line is a warning that gets scrolled past; the
+#: COUNT is the actionable part and is always exact.
+MAX_AGED_OUT_IDS_LOGGED = 20
+
 EXECUTION_WINDOW_DAYS = env_float_clamped("AUTOBOT_LLC_DISPOSAL_EXECUTION_WINDOW_DAYS", 7.0, min_v=1.0)
 
 
@@ -178,23 +184,36 @@ async def _log_aged_out(session) -> int:
     A SQL ``COUNT`` cannot stand in here either: sweep proposals are identified by
     :func:`_is_sweep_proposal`, a Python predicate over the payload, so the rows have to
     be fetched and filtered the same way the live query filters them.
+
+    BOUNDED FROM BOTH SIDES, and the lower bound is not only about cost (#17725 review).
+    An executed proposal keeps ``status == APPROVED``, so "everything older than the
+    cutoff" is the whole approval history and grows without limit -- an hourly sweep
+    would read all of it to report nothing. It also never stops reporting: a proposal
+    that aged out in March would be named in every sweep thereafter, which is a warning
+    nobody can act on and everybody learns to skip. One window of lookback reports each
+    aged-out proposal while the fact is still news, and reads a bounded slice to do it.
     """
+    cutoff = _window_start()
     result = await session.execute(
         select(Approval).where(
             Approval.approval_type == ApprovalType.DESTRUCTIVE_ACTION.value,
             Approval.status == ApprovalStatus.APPROVED.value,
             Approval.requested_by_agent == SWEEP_REQUESTER,
-            Approval.decided_at < _window_start(),
+            Approval.decided_at < cutoff,
+            Approval.decided_at >= cutoff - timedelta(days=EXECUTION_WINDOW_DAYS),
         )
     )
     aged = [a for a in result.scalars().all() if _is_sweep_proposal(a)]
     if aged:
+        named = sorted(str(a.id) for a in aged)[:MAX_AGED_OUT_IDS_LOGGED]
         logger.warning(
-            "#17738: %s approved disposal proposal(s) aged out of the %s-day window and "
-            "will not be executed; they remain APPROVED and re-approvable: %s",
+            "#17738: %s approved disposal proposal(s) aged out of the %s-day window in the "
+            "window before it and will not be executed; they remain APPROVED and "
+            "re-approvable: %s%s",
             len(aged),
             EXECUTION_WINDOW_DAYS,
-            ", ".join(str(a.id) for a in aged),
+            ", ".join(named),
+            "" if len(aged) <= MAX_AGED_OUT_IDS_LOGGED else f" (+{len(aged) - MAX_AGED_OUT_IDS_LOGGED} more)",
         )
     return len(aged)
 
