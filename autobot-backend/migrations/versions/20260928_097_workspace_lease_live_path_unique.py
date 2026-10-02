@@ -32,6 +32,14 @@ leases before it inserts.** ``workspace_lease.acquire_lease`` does this as its f
 statement, before it checks the path or counts capacity, and a test pins that ordering.
 The index is exact only while that holds.
 
+**The convention is necessary, not sufficient, and this paragraph used to imply it was**
+(#17725 review). It closes the expired-but-unreleased case. It does not close the
+concurrent-acquire race: two writers can both reclaim, both observe nothing live, and
+both insert. No index predicate can close that one. It has to be handled in the service,
+by serialising the acquire or by mapping the collision to ``WorkspaceLeaseHeld`` instead
+of letting a raw integrity error escape. Tracked separately; this file documents the
+dependency rather than claiming it is discharged.
+
 Stated here rather than only in the service because this file is what the next person
 writing an insert path will read when they wonder what the constraint guarantees. It
 guarantees less than it looks like it does, and an insert that skips the reclaim can

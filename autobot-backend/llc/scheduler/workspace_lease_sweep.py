@@ -45,7 +45,7 @@ from autobot_shared.env_utils import env_float_clamped
 from llc.models.enums import ApprovalStatus, ApprovalType
 from llc.services.approval import ApprovalService
 from llc.services.workspace_disposal import DisposalVerdict, dispose_workspace, work_landed
-from llc.services.workspace_lease import reclaim_expired
+from llc.services.workspace_lease import lease_for_path, reclaim_expired
 from models.approval import Approval
 from user_management.database import get_async_session_factory
 from utils.celery_reliability import (
@@ -171,6 +171,18 @@ async def _execute_approved(session) -> tuple[int, int]:
         outcomes = []
         for entry in (approval.context or {}).get("workspaces", []):
             path, branch = entry.get("path"), entry.get("branch")
+            # Landedness is re-proved below, but an approval can sit for days and a
+            # path freed at proposal time may have been leased again since. Disposing
+            # then deletes a workspace somebody is currently working in. #17038 exists
+            # so a destructive act is not carried out on a stale judgement, and the
+            # judgement being re-proved was only ever about the git state (#17725 review).
+            held = await lease_for_path(session, path)
+            if held is not None and held.is_live(datetime.now(timezone.utc)):
+                refused += 1
+                detail = f"a live lease was taken after approval (owner={held.owner})"
+                logger.warning("#16818: approved disposal of %s refused at execution -- %s", path, detail)
+                outcomes.append({"path": path, "verdict": "lease_held", "detail": detail})
+                continue
             check = await dispose_workspace(path, branch)
             if check.verdict is DisposalVerdict.LANDED:
                 disposed += 1

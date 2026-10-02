@@ -83,7 +83,16 @@ async def _git(*args: str, cwd: Optional[str] = None) -> tuple[int, str]:
         )
         stdout, _ = await asyncio.wait_for(process.communicate(), timeout=GIT_TIMEOUT_SECONDS)
         return process.returncode or 0, stdout.decode("utf-8", errors="replace").strip()
-    except (OSError, asyncio.TimeoutError) as exc:
+    except asyncio.TimeoutError as exc:
+        # `wait_for` cancels the await; it does not stop the child. Without this the
+        # git process outlives the sweep that gave up on it, holding the worktree it
+        # was asked about -- and this sweep's whole job is deciding whether that
+        # directory is safe to remove (#17725 review).
+        process.kill()
+        await process.wait()
+        logger.warning("#16818: git %s timed out in %s after %ss, child killed", " ".join(args), cwd, GIT_TIMEOUT_SECONDS)
+        return -1, f"{type(exc).__name__}: {exc}"
+    except OSError as exc:
         logger.warning("#16818: git %s failed in %s: %s", " ".join(args), cwd, exc)
         return -1, f"{type(exc).__name__}: {exc}"
 

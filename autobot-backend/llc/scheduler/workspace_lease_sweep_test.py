@@ -106,7 +106,7 @@ def _approval(paths, executed=False):
     return SimpleNamespace(context=context)
 
 
-def _install(sweep, monkeypatch, *, reclaimed=(), landed=None, approvals=(), disposals=None):
+def _install(sweep, monkeypatch, *, reclaimed=(), landed=None, approvals=(), disposals=None, leases=None):
     session = _Session(list(approvals))
     monkeypatch.setattr(sweep, "get_async_session_factory", lambda: (lambda: session))
 
@@ -127,6 +127,10 @@ def _install(sweep, monkeypatch, *, reclaimed=(), landed=None, approvals=(), dis
             requested.append(kwargs)
             return SimpleNamespace(id=uuid.uuid4())
 
+    async def _lease_for_path(_s, path):
+        return (leases or {}).get(path)
+
+    monkeypatch.setattr(sweep, "lease_for_path", _lease_for_path)
     monkeypatch.setattr(sweep, "reclaim_expired", _reclaim)
     monkeypatch.setattr(sweep, "work_landed", _landed)
     monkeypatch.setattr(sweep, "dispose_workspace", _dispose)
@@ -248,6 +252,71 @@ async def test_landedness_is_proved_again_at_execution_not_trusted_from_the_prop
     assert result["disposed"] == 0 and result["refused"] == 1
     outcome = approval.context["execution_outcomes"][0]
     assert outcome["verdict"] == "not_landed", "the refusal must be recorded on the approval"
+
+
+def _holder(*, live: bool, owner: str = "agent-7"):
+    """A stand-in lease holder. Named `_holder` because this module already has a
+    `_lease` fixture for a different thing, and shadowing it silently broke four
+    unrelated tests the first time round."""
+    return SimpleNamespace(is_live=lambda _moment: live, owner=owner)
+
+
+@pytest.mark.asyncio
+async def test_a_path_leased_since_approval_is_refused_not_disposed(sweep, monkeypatch):
+    """The second gap approval opens, and the one landedness cannot see.
+
+    An approval can sit for days. Re-proving the git state answers "has this work
+    landed", which is the question that was asked at proposal time. It does not answer
+    "is somebody working in this directory right now" -- a path free when proposed can
+    be leased again before the human clicks approve. Disposing then removes a workspace
+    in active use, which is the destructive-act-on-a-stale-judgement #17038 exists to
+    prevent.
+    """
+    approval = _approval(["/w/retaken"])
+    session, _ = _install(
+        sweep,
+        monkeypatch,
+        approvals=[approval],
+        leases={"/w/retaken": _holder(live=True, owner="agent-42")},
+    )
+
+    result = await sweep._async_sweep()
+
+    assert result["disposed"] == 0, "a workspace under a live lease was removed"
+    assert result["refused"] == 1
+    outcome = approval.context["execution_outcomes"][0]
+    assert outcome["verdict"] == "lease_held"
+    assert "agent-42" in outcome["detail"], "the refusal must name who holds it"
+
+
+@pytest.mark.asyncio
+async def test_a_released_or_expired_lease_does_not_block_disposal(sweep, monkeypatch):
+    """The contrast pair. A guard that refused on any row would pass the test above.
+
+    `lease_for_path` returns unreleased rows only, so the row reaching this check may
+    still be expired. Expired is not held -- treating it as held would make a path
+    undisposable for ever, which is the failure the partial index was introduced to end.
+    """
+    session, _ = _install(
+        sweep,
+        monkeypatch,
+        approvals=[_approval(["/w/stale"])],
+        leases={"/w/stale": _holder(live=False)},
+    )
+
+    result = await sweep._async_sweep()
+
+    assert result["disposed"] == 1 and result["refused"] == 0
+
+
+@pytest.mark.asyncio
+async def test_no_lease_at_all_still_disposes(sweep, monkeypatch):
+    """Non-vacuity: the lookup returning None must not read as held."""
+    session, _ = _install(sweep, monkeypatch, approvals=[_approval(["/w/free"])], leases={})
+
+    result = await sweep._async_sweep()
+
+    assert result["disposed"] == 1 and result["refused"] == 0
 
 
 @pytest.mark.asyncio
