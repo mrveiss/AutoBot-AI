@@ -23,7 +23,19 @@ tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a f
                           # ai-stack + npu-worker installs have failed to resolve ever since.
                           # scripts/tokenizers_transformers_range_test.py now fails on a floor
                           # that excludes 0.23.0.
-huggingface-hub>=2.0.0
+# Held below 2.0 (#17847). A grouped bump raised this one file to >=2.0.0 while
+# the other two declarations stayed at >=1.32.0 -- `autobot-tts-worker/
+# requirements.txt` (spelled `huggingface_hub`) and the npu-worker's
+# requirements-npu.txt -- so the ai-stack container would have resolved 2.x
+# while the other two resolved 1.x. All three move together or none do.
+#
+# The hold is not caution about majors in general: the only production call is
+# `huggingface_hub.login(token=..., add_to_git_credential=False)` in two
+# tts-worker ansible templates, and the test covering it swaps the whole module
+# for a MagicMock, which accepts any signature. So CI passes whatever 2.x does
+# to that function. Whether the signature is still valid in 2.x is UNKNOWN and
+# is what #17847 exists to settle -- not something this file can answer.
+huggingface-hub>=1.32.0
 tiktoken>=0.14.0
 
 # Tensor Operations
@@ -90,7 +102,14 @@ python-json-logger>=4.2.0
 # into a recorded one. Migrating to 2.1.x is its own work and is NOT a
 # base-unblocking change; the tracking issue is on the cap for whoever lifts it.
 # Do not raise this bound without running the SLM suite against 2.1.x first.
-sqlalchemy>=2.1.0,<2.2
+#
+# Reversed by a grouped dependabot bump THREE times now -- #17706, #17711 and
+# #17709 (restored here). Every one left this comment intact, so the file
+# arrived contradicting itself. The ignore rule cannot catch it: it is keyed on
+# `update-types: semver-major`, and 2.0 -> 2.1 is a MINOR. The durable fix is a
+# `versions: [">=2.1"]` ignore, tracked on #17451 -- until that lands, expect a
+# fourth attempt and restore this line again.
+sqlalchemy>=2.0.54,<2.1
 aiosqlite>=0.22.1
 
 # Redis client (for communication with host Redis)
