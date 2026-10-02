@@ -38,6 +38,10 @@ router = APIRouter(prefix="/settings/admin/llm", tags=["llm-config"])
 # Setting key prefix for LLM config
 _PREFIX = "llm_"
 
+# ``api_key`` is write-only. ``public_provider_view`` drops it, but the model
+# refills its "" default, so both responses also exclude the field itself (#17826).
+_NO_PROVIDER_KEYS = {"config": {"providers": {"__all__": {"api_key"}}}}
+
 
 class LLMProviderConfig(BaseModel):
     """Configuration for a single LLM provider."""
@@ -188,7 +192,7 @@ async def _upsert_setting(db: AsyncSession, key: str, value: str, desc: str) -> 
         db.add(Setting(key=key, value=value, description=desc))
 
 
-@router.get("", response_model=LLMConfigResponse)
+@router.get("", response_model=LLMConfigResponse, response_model_exclude=_NO_PROVIDER_KEYS)
 async def get_llm_config(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_READ))],
@@ -202,7 +206,7 @@ async def get_llm_config(
     return LLMConfigResponse(config=await _load_llm_config(db))
 
 
-@router.put("", response_model=LLMConfigResponse)
+@router.put("", response_model=LLMConfigResponse, response_model_exclude=_NO_PROVIDER_KEYS)
 async def save_llm_config(
     config: LLMConfig,
     db: Annotated[AsyncSession, Depends(get_db)],
