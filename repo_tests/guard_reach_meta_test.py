@@ -357,7 +357,10 @@ def floored_only_by_emptiness(source: str) -> bool:
 
     class _DropEmptiness(ast.NodeTransformer):
         def visit_Assert(self, node: ast.Assert) -> ast.AST | None:
-            return None if _is_emptiness_check(node.test) else node
+            # `pass`, not removal: dropping the only statement of a function leaves an
+            # empty body, the unparse is invalid Python, and has_floor reads a
+            # SyntaxError as floored -- the sweep would go blind on exactly that shape.
+            return ast.Pass() if _is_emptiness_check(node.test) else node
 
     stripped = ast.unparse(ast.fix_missing_locations(_DropEmptiness().visit(ast.parse(source))))
     return not has_floor(stripped)
@@ -379,6 +382,9 @@ def test_the_emptiness_sweep_finds_a_planted_guard() -> None:
     assert floored_only_by_emptiness("found = scan()\nassert len(found) == 0")
     assert floored_only_by_emptiness("found = scan()\nassert not len(found)")
     assert not floored_only_by_emptiness("found = scan()\nassert len(found) == 0\nassert len(seen) >= 50")
+    # The emptiness assert as the only statement of a test function -- the shape a
+    # real guard takes, and the one a stripped-to-empty body used to hide.
+    assert floored_only_by_emptiness("def test_x():\n    assert len(scan()) == 0")
 
 
 def test_the_sweep_examined_enough_guards_to_mean_anything() -> None:
