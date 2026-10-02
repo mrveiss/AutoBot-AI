@@ -36,9 +36,19 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
+from repo_tests.no_secret_in_response_model_baseline_17865 import (
+    _BASELINE_FROZEN_AT,
+    _UNAUDITED_BASELINE,
+    _WAIVED,
+)
 
 _ROOT = repo_root()
-_BACKENDS = ("autobot-backend", "autobot-slm-backend")
+#: `autobot_shared` is in here because leaving it out made the guard blind in the
+#: exact way its own docstring warns about: `UserListResponse` is routed from a
+#: backend but DEFINED in `autobot_shared/user_management/schemas/user.py`, so it
+#: resolved to nothing and was reported clean. A model is not safe because the
+#: scanner could not find it (review of #17865).
+_BACKENDS = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
 
 #: A field whose VALUE is a stored credential.
 #:
@@ -54,16 +64,25 @@ _BACKENDS = ("autobot-backend", "autobot-slm-backend")
 #: are what keeps `password_hash` and `secret_type` out, and they do that job
 #: whether or not the deny pattern is anchored (CodeRabbit, #17865).
 _SECRET_FIELD_DENY = re.compile(
-    r"(api_key|apikey|private_key|sealed_value|client_secret|password|secret)",
+    r"(api_key|apikey|private_key|signing_key|hmac_key|encryption_key|ssh_key"
+    r"|access_key|sealed_value|client_secret|password|passwd|secret"
+    r"|api_token|webhook_token|bearer_token)",
     re.IGNORECASE,
 )
 
-#: Names that REFER to a credential without being one. A ref, an id, a
-#: ciphertext, a hash, a boolean presence flag, a count or an expiry is what a
-#: SAFE response carries -- folding these in would make the guard fire on the
-#: correct pattern, which is how a guard gets disabled.
+#: Names that REFER to a credential without being one: a ref, an id, a mask, a
+#: boolean presence flag, a count or an expiry. Folding real secrets in here
+#: would make the guard fire on the correct pattern, which is how a guard gets
+#: disabled.
+#:
+#: `_encrypted` and `_hash` WERE exempt and are not any more (review of #17865).
+#: Ciphertext and a password hash are credential material: handing either to a
+#: client is an offline-attack gift, so exempting them contradicted the point of
+#: the guard. Un-exempting them costs nothing measurable -- it adds zero
+#: violations against the current tree -- which is the whole argument for doing
+#: it rather than carrying the risk for a hypothetical convenience.
 _SECRET_FIELD_EXEMPT = re.compile(
-    r"(_ref|_id|_encrypted|_hash|_masked|_type|_warning|_count|_usage|_limit|_at|_name|_names"
+    r"(_ref|_id|_masked|_type|_warning|_count|_usage|_limit|_at|_name|_names"
     r"|_staleness|_status|_health|_rotation|_policy|_scope|_version)$"
     r"|^has_|^total_|^is_|^use_|^require_|^enable_|^masked_|^redacted_",
     re.IGNORECASE,
@@ -111,7 +130,7 @@ def _python_files(root: Path | None = None) -> list[str]:
 REACH = declare(
     "response-model-secret-scan",
     discover=_python_files,
-    floor=4600,
+    floor=4950,
     growth=150,
     skips=0,
     what="backend Python modules scanned for response_model= reaching a stored credential",
@@ -229,63 +248,6 @@ def _reached_fields(model: str, idx: Index, seen: frozenset[str] = frozenset()) 
     for other in idx.bases.get(model, []) + idx.nested.get(model, []):
         fields += _reached_fields(other, idx, seen)
     return sorted(set(fields))
-
-
-#: (model, field, METHOD, path) -> why this one is intentional.
-#:
-#: Keyed by the ROUTE, not by the model. `_WAIVED` keyed on (model, field)
-#: alone would exempt every future route that reuses the model, including one
-#: with a different authorisation posture (CodeRabbit, #17865). A waiver is a
-#: written reason for ONE endpoint, not a property of a schema.
-_WAIVED: dict[tuple[str, str, str, str], str] = {
-    ("MFASetupResponse", "secret", "POST", "/setup"): (
-        "TOTP enrolment. The shared secret IS the deliverable -- the user cannot "
-        "enrol an authenticator without it -- returned once, at setup, for the "
-        "CALLER'S OWN account: the handler binds `current_user` and resolves the "
-        "row by that username. That is the precise contrast with #17865, which "
-        "bound the identity to `_` and discarded it."
-    ),
-}
-
-
-#: PRE-EXISTING sites, frozen so the guard can be introduced without pretending
-#: they are fine. This is NOT a waiver list: a waiver says "audited, intentional,
-#: here is why"; this says "present before the guard existed and NOT YET AUDITED".
-#: Conflating the two is how a baseline becomes a permanent exemption.
-#:
-#: The widened detector found these only once it followed generic subscripts and
-#: nesting -- they were invisible to the first version, which is the whole reason
-#: CodeRabbit's finding mattered. Draining this set is tracked separately; the
-#: ratchet below means it can only shrink.
-_UNAUDITED_BASELINE: dict[tuple[str, str, str, str], str] = {
-    ("autobot-backend/api/llm.py", "GET /config", "LLMConfigResponse", "api_key"): (
-        "Not yet audited. Needs the call site checked for masking or omission."
-    ),
-    ("autobot-slm-backend/api/llm_config.py", "GET", "LLMConfigResponse", "api_key"): (
-        "Masked at llm_config.py:196 (`provider.api_key = _mask_api_key(...)`), and "
-        "being changed from masking to omission by PR #17846, which OWNS this file. "
-        "Not touched here: same file, one PR, one agent."
-    ),
-    ("autobot-slm-backend/api/llm_config.py", "PUT", "LLMConfigResponse", "api_key"): (
-        "Same model and same file as the GET above; #17846 territory."
-    ),
-    ("autobot-backend/api/secrets.py", "POST /", "SecretCreatedData", "secret"): (
-        "`secret: Dict[str, Any]` -- an UNTYPED dict, so this guard cannot tell "
-        "whether the value travels in it. That unauditability is itself the finding."
-    ),
-    ("autobot-backend/api/secrets.py", "GET /{secret_id}", "SecretCreatedData", "secret"): (
-        "Same untyped `Dict[str, Any]` as above."
-    ),
-    ("autobot-backend/api/secrets.py", "PUT /{secret_id}", "SecretCreatedData", "secret"): (
-        "Same untyped `Dict[str, Any]` as above."
-    ),
-    ("autobot-backend/api/secrets.py", "DELETE /{secret_id}", "SecretCreatedData", "secret"): (
-        "Same untyped `Dict[str, Any]` as above."
-    ),
-    ("autobot-backend/api/secrets.py", "GET /", "SecretsListData", "secrets"): (
-        "`secrets: List[Dict[str, Any]]` -- untyped elements; same limit as above."
-    ),
-}
 
 
 def _violations(idx: Index) -> list[tuple[str, int, str, str, str]]:
@@ -499,8 +461,10 @@ def test_generic_response_models_are_unwrapped(expr, expected):
         # refs and ciphertext -- what a SAFE response carries
         ("api_key_ref", False),
         ("vault_id", False),
-        ("llm_api_key_encrypted", False),
-        ("password_hash", False),
+        # ciphertext and hashes are NO LONGER exempt -- handing either to a client
+        # is an offline-attack gift, and un-exempting them added zero violations
+        ("llm_api_key_encrypted", True),
+        ("password_hash", True),
         ("secret_type", False),
         ("has_api_key", False),
         ("total_secrets", False),
@@ -541,6 +505,53 @@ def test_the_unaudited_baseline_only_shrinks():
 
 def test_the_baseline_is_not_silently_growing():
     """Pins the size, so adding a route to the baseline is a visible decision."""
-    assert (
-        len(_UNAUDITED_BASELINE) <= 8
-    ), f"the unaudited baseline grew to {len(_UNAUDITED_BASELINE)}; it may only shrink"
+    assert len(_UNAUDITED_BASELINE) <= _BASELINE_FROZEN_AT, (
+        f"the unaudited baseline grew to {len(_UNAUDITED_BASELINE)}, over the frozen "
+        f"{_BASELINE_FROZEN_AT}. It may only shrink -- unless the DETECTOR widened, in "
+        "which case say so in the commit, with the newly-seen sites listed."
+    )
+
+
+def test_every_exemption_carries_a_real_reason():
+    """A reason is the whole difference between a waiver and a suppression.
+
+    It also keeps the two structures from blurring. A baseline entry claiming to
+    be "audited" would be a waiver wearing a baseline's key, and that distinction
+    lives in prose -- so prose is what has to be checked.
+    """
+    for key, why in _WAIVED.items():
+        assert why and len(why.strip()) > 40, f"waiver {key} carries no real reason"
+    for key, why in _UNAUDITED_BASELINE.items():
+        assert why and len(why.strip()) > 20, f"baseline entry {key} carries no reason"
+        assert (
+            "audited" not in why.lower() or "not yet audited" in why.lower()
+        ), f"baseline entry {key} claims to be audited -- if it is, it belongs in _WAIVED"
+
+
+def test_route_discovery_did_not_collapse():
+    """A route floor, because the FILE floor cannot see this failure.
+
+    `REACH` counts modules. If `_route_of` or `_model_names` broke and discovered
+    zero routes, every file would still parse, the floor would still clear, and
+    the violation test would pass over an empty set -- green because it stopped
+    looking (review of #17865).
+    """
+    idx = _index()
+    assert len(idx.routes) >= 2400, f"only {len(idx.routes)} response_model sites found; expected ~2766"
+
+
+def test_every_routed_model_resolves_or_is_a_known_builtin():
+    """An unresolved model is NOT a clean model.
+
+    `_reached_fields` returns [] for a name it never indexed, so a response model
+    defined outside the scanned tree reads exactly like one with no secrets. That
+    is how `UserListResponse`, declared in `autobot_shared/`, passed before the
+    scan was widened to include it.
+    """
+    idx = _index()
+    builtins = {"Any", "Dict", "List", "Optional", "Union", "dict", "list", "str", "int", "bool", "UUID"}
+    unresolved = sorted({r.model for r in idx.routes if r.model not in idx.own and r.model not in builtins})
+    assert unresolved <= ["GitHubProviderInfo", "Metadata"], (
+        "response models are routed but never indexed, so they are reported clean because "
+        f"the scanner cannot see them, not because they are safe: {unresolved}"
+    )

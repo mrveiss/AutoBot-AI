@@ -58,8 +58,9 @@ def _decrypt_api_key(encrypted_key: str) -> str | None:
     The return value must never reach a response model, a log line or an error
     body. It was previously returned straight out of `GET /{agent_id}/llm`,
     which is the disclosure this module was fixed for.
+
+    Decrypts a key from storage.
     """
-    """Decrypt API key from storage."""
     if not encrypted_key:
         return None
     try:
