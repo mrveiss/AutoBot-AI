@@ -27,15 +27,21 @@ from services.database import get_db
 from services.encryption import decrypt_data
 from services.playbook_executor import get_playbook_executor
 from user_management.services.llm_secrets import (
-    retrieve_provider_api_key,
-    store_provider_api_key,
+    MaskedKeySubmitted,
+    merge_provider_secret,
+    public_provider_view,
 )
+from user_management.services.vault_client import VaultClientError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settings/admin/llm", tags=["llm-config"])
 
 # Setting key prefix for LLM config
 _PREFIX = "llm_"
+
+# ``api_key`` is write-only. ``public_provider_view`` drops it, but the model
+# refills its "" default, so both responses also exclude the field itself (#17826).
+_NO_PROVIDER_KEYS = {"config": {"providers": {"__all__": {"api_key"}}}}
 
 
 class LLMProviderConfig(BaseModel):
@@ -107,13 +113,6 @@ class LLMApplyResponse(BaseModel):
     output: str | None = None
 
 
-def _mask_api_key(key: str) -> str:
-    """Mask API key for safe display. Helper for get_llm_config (#2371)."""
-    if not key or len(key) < 8:
-        return "****" if key else ""
-    return f"{key[:4]}...{key[-4:]}"
-
-
 def _decrypt_provider_key(encrypted_key: str) -> str:
     """Decrypt a legacy inline-encrypted provider API key. Helper for _load_llm_config (#2371)."""
     if not encrypted_key:
@@ -127,45 +126,72 @@ def _decrypt_provider_key(encrypted_key: str) -> str:
 async def _load_llm_config(db: AsyncSession) -> LLMConfig:
     """Load LLM config from Setting table.
 
-    API keys are resolved via the unified-secrets vault when configured (#10503);
-    inline-encrypted values are used as a backward-compatible fallback.
-    Helper for get/put endpoints (Issue #2371).
+    Provider API keys are never loaded: every entry goes through
+    ``public_provider_view``, so nothing built from this can carry a key to a
+    client (#17826). Helper for get/put endpoints (Issue #2371).
     """
     result = await db.execute(select(Setting).where(Setting.key.startswith(_PREFIX)))
     rows = {s.key: s.value for s in result.scalars().all()}
 
-    providers_raw = rows.get("llm_providers")
-    if providers_raw:
-        parsed = json.loads(providers_raw)
-        for p in parsed:
-            p["api_key"] = await retrieve_provider_api_key(p.get("name", ""), p)
-        providers = [LLMProviderConfig(**p) for p in parsed]
-    else:
-        providers = []
+    providers = [LLMProviderConfig(**public_provider_view(p)) for p in _stored_providers(rows).values()]
+    return LLMConfig(providers=providers, **_ollama_settings(rows))
 
-    gpu_models_raw = rows.get("llm_gpu_models")
-    gpu_models = json.loads(gpu_models_raw) if gpu_models_raw else []
 
-    cpu_models_raw = rows.get("llm_cpu_models")
-    cpu_models = json.loads(cpu_models_raw) if cpu_models_raw else []
+def _json_list(rows: Dict[str, str], key: str) -> List[str]:
+    raw = rows.get(key)
+    return json.loads(raw) if raw else []
 
-    return LLMConfig(
+
+def _ollama_settings(rows: Dict[str, str]) -> dict:
+    """Every non-provider LLMConfig field from Setting rows. Helper for _load_llm_config."""
+    return dict(
         active_provider=rows.get("llm_active_provider", "ollama"),
-        providers=providers,
         ollama_host=rows.get(
             "llm_ollama_host",
             # Intentional bind to all interfaces for service/test.
             "0.0.0.0",  # nosec B104
         ),
         ollama_port=int(rows.get("llm_ollama_port", "11434")),
-        gpu_models=gpu_models,
-        cpu_models=cpu_models,
+        gpu_models=_json_list(rows, "llm_gpu_models"),
+        cpu_models=_json_list(rows, "llm_cpu_models"),
         max_loaded_models=int(rows.get("llm_max_loaded_models", "5")),
         num_parallel=int(rows.get("llm_num_parallel", "4")),
         keep_alive=rows.get("llm_keep_alive", "10m"),
         flash_attention=rows.get("llm_flash_attention", "true").lower() == "true",
         kv_cache_type=rows.get("llm_kv_cache_type", "q8_0"),
     )
+
+
+def _stored_providers(rows: Dict[str, str]) -> Dict[str, dict]:
+    """Stored provider entries by name, secret references included (#17826)."""
+    raw = rows.get("llm_providers")
+    return {p.get("name", ""): p for p in json.loads(raw)} if raw else {}
+
+
+async def _merge_providers(db: AsyncSession, providers: List[LLMProviderConfig]) -> List[dict]:
+    """Resolve submitted providers against the stored ones. Helper for save_llm_config.
+
+    A provider submitted without a key keeps its stored secret untouched; a
+    display mask is refused with 422 rather than written as a key (#17826).
+    Secrets are matched to providers by name, so names must be present and
+    unique -- two entries sharing one would share, and overwrite, one secret.
+    """
+    names = [p.name for p in providers]
+    if not all(names) or len(set(names)) != len(names):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="provider names must be unique and non-empty"
+        )
+    result = await db.execute(select(Setting).where(Setting.key == "llm_providers"))
+    stored = _stored_providers({s.key: s.value for s in result.scalars().all()})
+    try:
+        return [await merge_provider_secret(p.name, p.model_dump(), stored.get(p.name)) for p in providers]
+    except MaskedKeySubmitted as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except VaultClientError as exc:
+        logger.error("LLM config save: secrets vault unavailable: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="secrets vault unavailable"
+        ) from exc
 
 
 async def _upsert_setting(db: AsyncSession, key: str, value: str, desc: str) -> None:
@@ -181,23 +207,21 @@ async def _upsert_setting(db: AsyncSession, key: str, value: str, desc: str) -> 
         db.add(Setting(key=key, value=value, description=desc))
 
 
-@router.get("", response_model=LLMConfigResponse)
+@router.get("", response_model=LLMConfigResponse, response_model_exclude=_NO_PROVIDER_KEYS)
 async def get_llm_config(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_READ))],
 ) -> LLMConfigResponse:
     """Get current LLM configuration (admin only).
 
-    API keys are masked in the response for security.
+    API keys are omitted from the response, never masked. Before #17826 a mask
+    round-tripped back as a value and overwrote every stored key on save; a
+    submitted mask is now refused with 422.
     """
-    config = await _load_llm_config(db)
-    # Mask API keys — never send full keys to the frontend
-    for provider in config.providers:
-        provider.api_key = _mask_api_key(provider.api_key)
-    return LLMConfigResponse(config=config)
+    return LLMConfigResponse(config=await _load_llm_config(db))
 
 
-@router.put("", response_model=LLMConfigResponse)
+@router.put("", response_model=LLMConfigResponse, response_model_exclude=_NO_PROVIDER_KEYS)
 async def save_llm_config(
     config: LLMConfig,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -205,16 +229,11 @@ async def save_llm_config(
 ) -> LLMConfigResponse:
     """Save LLM configuration (admin only).
 
-    API keys are encrypted before storage via services.encryption.
+    A provider's ``api_key`` is write-only: send one to set or rotate it, send
+    none to leave the stored key untouched. Keys go to the unified-secrets vault
+    (#10503), or inline-encrypted while the vault is not configured.
     """
-    # Store API keys via unified-secrets vault (#10503); fall back to inline
-    # encryption when vault is not yet configured (rollout window).
-    providers_data = []
-    for p in config.providers:
-        d = p.model_dump()
-        if d.get("api_key"):
-            d = await store_provider_api_key(p.name, d)
-        providers_data.append(d)
+    providers_data = await _merge_providers(db, config.providers)
 
     settings_map = {
         "llm_active_provider": (config.active_provider, "Active LLM provider"),
@@ -245,7 +264,7 @@ async def save_llm_config(
         len(config.gpu_models),
         len(config.cpu_models),
     )
-    return LLMConfigResponse(config=config, message="Configuration saved")
+    return LLMConfigResponse(config=await _load_llm_config(db), message="Configuration saved")
 
 
 async def _test_ollama(endpoint: str) -> LLMTestResponse:
