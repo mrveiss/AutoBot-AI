@@ -26,9 +26,11 @@ from services.claim_yield import (
 )
 
 try:
+    import fakeredis
     import fakeredis.aioredis as fakeredis_async
 except ImportError:  # pragma: no cover
     fakeredis_async = None
+    fakeredis = None  # type: ignore[assignment]
 
 
 class _RecordingTaskManager:
@@ -48,7 +50,7 @@ async def env(monkeypatch):
     import services.claim_yield as cy
     from autobot_shared.coordination import claim_waitlist as wl
 
-    client = fakeredis_async.FakeRedis(server=fakeredis_async.FakeServer(), decode_responses=True)
+    client = fakeredis_async.FakeRedis(server=fakeredis.FakeServer(), decode_responses=True)
 
     async def _client(database: str = "main"):
         return client

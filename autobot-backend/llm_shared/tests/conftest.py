@@ -19,7 +19,7 @@ simply requests a fixture by name as a parameter, no import statement and
 no packaging question:
 
     async def test_foo(_require_fakeredis, _make_store_with_fake_server, _inject_globals):
-        server = fakeredis_async.FakeServer()
+        server = fakeredis.FakeServer()
         store = _make_store_with_fake_server(server)
         ...
 
@@ -51,6 +51,7 @@ def _make_store_with_fake_server():
     a test can request this factory on its own.
     """
     fakeredis_async = pytest.importorskip("fakeredis.aioredis")
+    pytest.importorskip("fakeredis")
 
     def _factory(server):
         from llm_shared.provider_degradation import ProviderDegradationStore
