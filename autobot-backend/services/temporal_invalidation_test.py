@@ -31,6 +31,7 @@ driver hid had to be fixed for the methods to mean anything:
 
 from datetime import datetime, timedelta, timezone
 
+import fakeredis
 import fakeredis.aioredis as fakeredis_async
 
 from models.atomic_fact import AtomicFact, FactType, TemporalType
@@ -128,7 +129,7 @@ class TestTemporalInvalidation:
         # exercise the real rule store rather than skip.
         # `_ensure_redis` only reaches for a client when this is still None.
         self.invalidation_service.redis_client = fakeredis_async.FakeRedis(
-            server=fakeredis_async.FakeServer(), decode_responses=True
+            server=fakeredis.FakeServer(), decode_responses=True
         )
 
         # Create test facts with various temporal characteristics
