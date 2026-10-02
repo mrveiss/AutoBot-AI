@@ -64,8 +64,9 @@ AutoBot is three layers, bottom to top:
 
 ## Quick Start
 
-**Option A — One-line installer (recommended, full platform).** Deploys the Service
-Lifecycle Manager (SLM) and all dependencies:
+**Option A — One-line installer (recommended).** Deploys the **Service Lifecycle
+Manager (SLM) control plane** — Postgres, the SLM backend and nginx. The SLM then
+provisions the platform onto your fleet nodes; it is not the platform itself:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mrveiss/AutoBot-AI/main/install.sh | sudo bash
 ```
@@ -118,11 +119,15 @@ control:
 
 ## System Requirements
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| **CPU** | 4 cores | 8+ cores |
-| **RAM** | 8 GB | 16+ GB |
-| **Storage** | 20 GB SSD | 50+ GB SSD |
+Two different machines, two different sizes. The **SLM node** runs the control
+plane you install with Option A; **platform nodes** run the agents, models and
+stores the SLM provisions onto them.
+
+| Component | SLM node (min) | Platform node (min) | Platform node (rec.) |
+|-----------|----------------|---------------------|----------------------|
+| **CPU** | 2 cores | 4 cores | 8+ cores |
+| **RAM** | 1.5 GB | 8 GB | 16+ GB |
+| **Storage** | 20 GB SSD | 20 GB SSD | 50+ GB SSD |
 | **GPU** | None (CPU-only mode) | NVIDIA GPU for faster inference |
 | **OS** | Ubuntu 20.04+ / Debian 11+ | Ubuntu 22.04 LTS |
 | **Docker** | 24.0+ | 25.0+ |
