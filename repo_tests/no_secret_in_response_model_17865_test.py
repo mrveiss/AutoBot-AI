@@ -385,6 +385,34 @@ def _fixture_tree(tmp_path: Path, files: dict[str, str]) -> Path:
             False,
         ),
         (
+            # SAME CLASS NAME IN TWO MODULES. `_build_index` keys by bare name, so
+            # the previous version would have let the clean `Cfg` (parsed second,
+            # since files are walked in sorted order) OVERWRITE the one carrying the
+            # secret -- and the route would have been reported clean. Merging keeps
+            # the field. I claimed that in a commit message and had no test for it
+            # until CodeRabbit asked (#17865).
+            "same-name-collision-across-modules",
+            {
+                "autobot-slm-backend/models/a_secret.py": ("class Cfg(BaseModel):\n    api_key: str | None = None\n"),
+                "autobot-slm-backend/models/b_clean.py": ("class Cfg(BaseModel):\n    llm_model: str | None = None\n"),
+                "autobot-slm-backend/api/r.py": "@router.get('/x', response_model=Cfg)\ndef h(): ...\n",
+            },
+            True,
+        ),
+        (
+            # The same two-module shape with NO secret anywhere stays clean, so the
+            # case above cannot be passing merely because collisions are reported.
+            "same-name-collision-clean",
+            {
+                "autobot-slm-backend/models/a_secret.py": (
+                    "class Cfg(BaseModel):\n    api_key_ref: str | None = None\n"
+                ),
+                "autobot-slm-backend/models/b_clean.py": ("class Cfg(BaseModel):\n    llm_model: str | None = None\n"),
+                "autobot-slm-backend/api/r.py": "@router.get('/x', response_model=Cfg)\ndef h(): ...\n",
+            },
+            False,
+        ),
+        (
             # A waived model REUSED on a different route must still be reported.
             "waiver-does-not-follow-the-model",
             {
@@ -537,7 +565,11 @@ def test_route_discovery_did_not_collapse():
     looking (review of #17865).
     """
     idx = _index()
-    assert len(idx.routes) >= 2400, f"only {len(idx.routes)} response_model sites found; expected ~2766"
+    # 2700 of 2766, not 2400. A floor 366 below the live count lets a matcher
+    # failure drop 266 sites and still pass -- a material discovery collapse
+    # reported as success, which is the shape this floor exists to catch
+    # (CodeRabbit, #17865).
+    assert len(idx.routes) >= 2700, f"only {len(idx.routes)} response_model sites found; expected ~2766"
 
 
 def test_every_routed_model_resolves_or_is_a_known_builtin():
