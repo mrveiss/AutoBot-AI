@@ -316,3 +316,26 @@ async def test_last_run_is_read_from_the_database_the_writer_uses(seeded, monkey
         f"{writer_db.group(1)!r} — the key will never be found"
     )
     assert section.get("last_run"), "a readable last_run must be surfaced, not dropped"
+
+
+def _enforced_limit_ceiling(router, path: str) -> int:
+    """The ``le`` bound FastAPI actually enforces on ``limit`` for *path* -- not its source text."""
+    from autobot_shared.api_routing.router_routes import effective_routes
+
+    for mounted in effective_routes(router):
+        if getattr(mounted.route, "path", None) == path:
+            limit = next(p for p in mounted.route.dependant.query_params if p.name == "limit")
+            return next(m.le for m in limit.field_info.metadata if getattr(m, "le", None) is not None)
+    raise AssertionError(f"no route {path} on the router -- the check lost its target")
+
+
+def test_the_node_limit_ceiling_is_the_shared_one_the_slm_proxy_uses():
+    """#14887: the SLM proxy forwards `limit` unchanged, so the tiers must accept the same maximum.
+
+    Both bind to ``QueryDefaults.MAX_SEARCH_LIMIT``; the SLM side asserts the same in
+    ``autobot-slm-backend/tests/api/test_memory_lifecycle_proxy_12632_test.py``. The
+    prune-preview bound is a separate constant on purpose and is not checked here.
+    """
+    from autobot_shared.ssot_constants import QueryDefaults
+
+    assert _enforced_limit_ceiling(memory_lifecycle.router, "/lifecycle") == QueryDefaults.MAX_SEARCH_LIMIT
