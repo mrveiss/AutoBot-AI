@@ -460,6 +460,19 @@ function _armStallTimer(): void {
 /**
  * Fold one chunk into the production-rate measurement and return the live rate
  * for this utterance, or null while it is not yet measurable (#12460).
+ *
+ * Deliberately WALL-clock since the first chunk, so it counts network transit
+ * and this tab's scheduling as well as generation. That is what the pre-roll has
+ * to survive: audio arriving slower than it plays starves the player whatever
+ * the cause.
+ *
+ * NOT THE SAME NUMBER AS THE BACKEND'S (#13841). `_SynthesisThroughput` in
+ * `services/tts_client.py` also calls its result a real-time factor and exports
+ * it as `autobot_tts_realtime_factor`, but it restarts its clock after every
+ * yield so a slow consumer is not billed to the worker. It answers *is the
+ * worker fast enough*; this answers *will the player starve*. Do not replace
+ * this with a value carried on the stream — it would drop the link from the
+ * measurement, which is the part this one exists to capture.
  */
 function _observeChunkRate(durationSec: number): number | null {
   const now = Date.now()

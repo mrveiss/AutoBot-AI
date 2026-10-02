@@ -111,6 +111,19 @@ class _SynthesisThroughput:
     suspended at each ``yield`` for as long as the consumer takes to forward the
     chunk. Billing that back-pressure to the worker would fire the
     below-real-time alert against a healthy one whenever a client is slow.
+
+    NOT THE SAME NUMBER AS THE CLIENT'S (#13841). ``useVoiceOutput.ts``'s
+    ``_observeChunkRate`` also calls its result a real-time factor, and measures
+    something else on purpose: audio over WALL time since its first chunk, so it
+    includes network transit and consumer scheduling. This one answers *is the
+    worker fast enough*; that one answers *will the player starve*.
+
+    So this figure MUST NOT be emitted on the stream for the client to size its
+    pre-roll from. Excluding yield time is exactly what makes it wrong for that
+    use: a healthy worker behind a slow link reports well above 1.0 while audio
+    arrives below it, the client would skip the pre-roll, and the player would
+    stutter -- the case pre-roll exists for. The two are not duplicates and
+    reconciling them would break the consumer that needs the link counted.
     """
 
     def __init__(self, route: str) -> None:
