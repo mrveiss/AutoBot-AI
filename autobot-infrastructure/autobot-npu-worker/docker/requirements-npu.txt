@@ -3,7 +3,7 @@
 
 # Core Framework
 fastapi>=0.141.1
-uvicorn[standard]>=0.53.0
+uvicorn[standard]>=0.54.0
 pydantic>=2.13.5
 
 # Intel OpenVINO for NPU acceleration
@@ -22,8 +22,9 @@ tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a f
                           # ai-stack + npu-worker installs have failed to resolve ever since.
                           # scripts/tokenizers_transformers_range_test.py now fails on a floor
                           # that excludes 0.23.0.
-transformers>=5.17.0
-huggingface-hub>=1.32.0
+transformers>=5.18.0  # 5.17.x declares huggingface-hub<2.0, so with the hub floor below a 5.17
+                      # floor is one pip can never install; 5.18.0 is the first to admit hub<3.0.
+huggingface-hub>=2.0.0
 
 # Tensor Operations (NPU optimized)
 -c ../../../constraints/shared.txt  # single source of truth for shared versions (#10524)
