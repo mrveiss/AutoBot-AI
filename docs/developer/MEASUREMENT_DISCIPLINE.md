@@ -191,6 +191,24 @@ asymmetry. Text from #15826, landed verbatim apart from two reference fixes.)*
 
 **Remedy: when a count and a list disagree, re-read the instrument's own enumeration before reporting either as a defect -- and name the filter you applied to the list.**
 
+### An empty result that authorises is worse than one that misinforms
+
+Two consequences, needing opposite responses:
+
+- It **misinforms a report** — someone reads a wrong number. The remedy is a correction, published where the number was.
+- It **authorises an action** — a collision check clears, a cleanup proceeds, a branch is reused, a criterion is ticked. The decision has already been taken on the measurement, so a correction is not enough: **block the action and re-take the measurement with a different instrument.**
+
+Two witnesses, same cause, different consequence:
+
+| the search | the empty result | what it permitted |
+|---|---|---|
+| `grep` over `autobot-infrastructure/ansible/` — a directory that does not exist | no hits | **an edit** to a surface two previous PRs had been bitten on, via a cleared collision check |
+| `components/TerminalWindow.vue` — real path `components/terminal/TerminalWindow.vue` | no hits | **a tick**: on a closure sweep, "the flag is gone" and "I looked in the wrong directory" are the same result, and one marks a criterion delivered |
+
+The worked instance under *A measurement can be true of the process that took it and false elsewhere* (2026-09-10) — a gate read as cleared, and a working tree given up on the strength of it — is the same family, told as an instance; this is the severity rule it generalises to.
+
+**How to apply:** before an empty result authorises anything, name what the action would be if the result were wrong. If the answer is "something becomes permitted", the measurement is a gate and needs a second instrument, not a second look.
+
 ## Three gates, one shape
 
 All three report two distinct states identically:
@@ -948,6 +966,7 @@ A test suite that only exercises new code cannot tell you the old path is gone.
 - [ ] For any refusal: what else produces this, and does it want the same action?
 - [ ] For any field read as evidence: would more data change this answer? If no, name the question it actually answers
 - [ ] When a count and a list disagree: re-read the instrument's own enumeration before calling the tool wrong
+- [ ] Before an empty result authorises an action: name the action, and re-take the measurement with a different instrument
 - [ ] For any exemption: it is narrow, and the red it produces names its real cause
 - [ ] For any acceptance criterion: ticked against a behaviour, never a name
 - [ ] Before editing a file that carries a constraint comment: the constraint is a test, or you have read the region around your edit
