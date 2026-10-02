@@ -92,6 +92,42 @@ def _disagreement_report(known: dict, recorded: dict, hook_rel: str, baseline_mo
     )
 
 
+def _empty_record_failure(known: dict, recorded: dict, hook_rel: str, baseline_mod: str) -> str:
+    """Message when either record is empty, else ``""`` -- the reach half of this guard.
+
+    Equality is satisfied by two EMPTY dicts, so without this the file reports "the two
+    ceiling records agree" having read nothing: the exact shape it was written to catch,
+    one level up (review on #17882). Ask what the PASS licenses -- "they agree" is a
+    claim about two populations, and there were none.
+
+    **A non-empty assert and deliberately NOT a declared floor** from ``repo_tests._reach``.
+    Both records only ever SHRINK -- the hook's own header says "THIS MAPPING ONLY SHRINKS
+    -- entries leave when the file reaches MAX_LINES" -- so a static floor near today's
+    size fails the first time a file is legitimately split, and a floor an order of
+    magnitude below it is precisely the number-chosen-by-feel that ``declare``'s docstring
+    names as that mechanism's recurring failure. A floor that has to be lowered every time
+    the ratchet succeeds is an incentive against doing the work.
+
+    Nor can these records degrade *partially*: each is a literal dict executed by
+    ``exec_module``, so the loader raises rather than returning a subset. Empty is the only
+    reachable degradation, and empty is what this catches.
+
+    The tree-anchored direction -- every file over ``MAX_LINES`` must be recorded -- is
+    already owned by ``python_file_size_ratchet_test.test_recorded_ceilings_match_the_files_today``,
+    which does fail on an emptied record (verified by mutation: 3 failed). Asserting it here
+    as well would make two records of one check, which is the shape #17872 is about.
+    """
+    empty = [label for label, rec in ((hook_rel, known), (f"{baseline_mod.replace('.', '/')}.py", recorded)) if not rec]
+    if not empty:
+        return ""
+    return (
+        "a ceiling record is EMPTY, so this guard has compared nothing: " + ", ".join(empty) + ". "
+        "Two empty records are equal, which is why emptiness is checked before equality -- "
+        "a pass here would license 'the two records agree' on the strength of having read "
+        "neither. Check the loader before touching the records."
+    )
+
+
 def test_the_two_records_are_equal(pair) -> None:
     """Equality, not "neither exceeds the other" written twice.
 
@@ -104,7 +140,13 @@ def test_the_two_records_are_equal(pair) -> None:
     and absent from the other was invisible.
     """
     hook, baseline, hook_rel, baseline_mod = pair
-    report = _disagreement_report(hook.KNOWN_LARGE, baseline.RATCHET_BASELINE, hook_rel, baseline_mod)
+    known, recorded = hook.KNOWN_LARGE, baseline.RATCHET_BASELINE
+
+    # Reach before findings: equality over two empty dicts is a pass that means nothing.
+    unread = _empty_record_failure(known, recorded, hook_rel, baseline_mod)
+    assert not unread, unread
+
+    report = _disagreement_report(known, recorded, hook_rel, baseline_mod)
     assert not report, report
 
 
@@ -155,3 +197,35 @@ def test_a_key_in_one_record_only_is_reported(known: dict, recorded: dict, expec
     """Both directions. The Python key check covered one and skipped the other in silence."""
     report = _disagreement_report(known, recorded, _HOOK, _BASE)
     assert expected_line in report, f"expected {expected_line!r} in:\n{report}"
+
+
+def test_two_empty_records_are_not_agreement() -> None:
+    """The hole review found: ``{} == {}`` is True and licenses nothing."""
+    message = _empty_record_failure({}, {}, _HOOK, _BASE)
+    assert message, "two empty records produced no reach failure"
+    assert (
+        _HOOK in message and "python_file_size_ratchet_baseline.py" in message
+    ), f"both empty records must be named: {message}"
+    assert _disagreement_report({}, {}, _HOOK, _BASE) == "", (
+        "equality must still hold for two empty records -- if this starts failing, the "
+        "emptiness check is no longer what is catching this case, and the reason this "
+        "guard is split in two has been lost"
+    )
+
+
+@pytest.mark.parametrize(
+    ("known", "recorded", "expect_named"),
+    [
+        pytest.param({}, {"a.py": 1}, _HOOK, id="hook-empty"),
+        pytest.param({"a.py": 1}, {}, "python_file_size_ratchet_baseline.py", id="baseline-empty"),
+    ],
+)
+def test_one_empty_record_names_which_one(known: dict, recorded: dict, expect_named: str) -> None:
+    """One side empty must name THAT side -- the #17725 lesson was editing the wrong copy."""
+    message = _empty_record_failure(known, recorded, _HOOK, _BASE)
+    assert expect_named in message, f"expected {expect_named!r} to be named in:\n{message}"
+
+
+def test_populated_records_produce_no_reach_failure() -> None:
+    """Contrast case. Without it, a reach check that always complains passes the three above."""
+    assert _empty_record_failure({"a.py": 1}, {"a.py": 1}, _HOOK, _BASE) == ""
