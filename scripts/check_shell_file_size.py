@@ -97,7 +97,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-infrastructure/shared/scripts/install-bare-metal.sh": 882,
     "autobot-infrastructure/shared/scripts/install-slm.sh": 822,
     "autobot-slm-backend/ansible/deploy.sh": 718,
-    "install.sh": 1265,
+    "install.sh": 1277,  # #17875: +12 for three first-run fixes; single-file installer cannot be split
     "scripts/lib/hardcoded-value-rules.sh": 842,
     "scripts/pr-preflight.sh": 818,
 }
