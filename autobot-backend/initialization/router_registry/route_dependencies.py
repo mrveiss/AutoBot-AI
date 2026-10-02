@@ -19,11 +19,14 @@ from __future__ import annotations
 from fastapi import Depends
 from fastapi.params import Depends as DependsParam
 
+# Imported at module load, not lazily: a broken import must fail startup loudly.
+# Lazily, it would raise inside app_factory's per-router try and the whole chat
+# router would be skipped with a single log line.
+from api.chat_send_rate_limit import enforce_chat_send_rate_limit
+
 
 def _chat_dependencies() -> list[DependsParam]:
-    from api.chat_send_rate_limit import enforce_chat_send_rate_limits
-
-    return [Depends(enforce_chat_send_rate_limits)]
+    return [Depends(enforce_chat_send_rate_limit)]
 
 
 _BY_ROUTER_NAME = {"chat": _chat_dependencies}
