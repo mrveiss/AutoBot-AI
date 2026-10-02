@@ -112,13 +112,16 @@ _ENUMERATOR = re.compile(r"tracked_paths|ls-files|rglob\(|os\.walk\(|\.iterdir\(
 #: detection margin and the pin has to be re-measured.
 #:
 #: Every count above is files MATCHING `_ENUMERATOR`, not guards that scan the
-#: tree: a match can be incidental. 2026-10-02, at 168 matched, two are known
-#: to examine nothing of the repo -- `hook_self_sync_atomic_test` globs a
+#: tree: a match can be incidental. CENSUS 2026-10-02 at 168 matched (#15826),
+#: each of the 33 `.glob(`-only members resolved by chasing its receiver's
+#: binding, not its name: 30 true, 3 false, 0 unresolved --
+#: `hook_self_sync_atomic_test` and `prepush_hook_sync_17578_test` glob a
 #: `tmp_path`, `sync_to_slm_db_update_classify_14459_test` globs the host
-#: filesystem. That 2 is a lower bound, not a census: a glob receiver's name
-#: cannot tell a repo directory from a fixture one, so bounding it means reading
-#: each `.glob(`-only member (#15826). Quote these numbers as "matched", never
-#: as "guards examined".
+#: filesystem. True tree-scanning population: 165, exactly this floor. The
+#: apparent 3 of headroom ARE the 3 false members, so there is no real margin,
+#: and tightening `.glob(` to exclude them lands at equality -- it needs a floor
+#: decision in the same change. Quote these numbers as "matched", never as
+#: "guards examined", and never quote 168 - 165 as margin.
 #:
 #: Do NOT "fix" the treadmill by deriving this from the tree. A floor computed
 #: by the same enumerator it guards always agrees with itself and can never
