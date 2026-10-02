@@ -105,3 +105,23 @@ env_registry.register_env_var(
         component="orchestrator",
     )
 )
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_DISPOSAL_EXECUTION_WINDOW_DAYS",
+        type=float,
+        default=7.0,
+        description=(
+            "How many days an approved workspace-disposal proposal stays executable (#17738). "
+            "An executed proposal keeps status APPROVED -- execution is recorded in its context, "
+            "not in the status -- so without a window the hourly sweep re-read its entire "
+            "approval history for ever, growing without bound. A time bound also stops a "
+            "decision approved months ago being executed against a workspace whose branch and "
+            "landedness have moved on since a human looked at it. Aged-out approvals are skipped, "
+            "never marked EXPIRED: an unattended change to a human's decision record is what the "
+            "propose-then-approve design exists to prevent. Floored at 1 day, because 0 would "
+            "place every decision outside the window and disable the sweep silently."
+        ),
+        component="orchestrator",
+    )
+)

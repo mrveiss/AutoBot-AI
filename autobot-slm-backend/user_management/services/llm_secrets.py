@@ -22,6 +22,7 @@ Never log secret values.  Never expose them in exception messages.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -69,12 +70,7 @@ async def store_provider_api_key(provider_name: str, provider_dict: dict[str, An
 
     Falls back to legacy inline encryption when the vault is not configured.
     """
-    from user_management.services.vault_client import (
-        VaultClientError,
-        is_configured,
-        vault_create,
-        vault_rotate,
-    )
+    from user_management.services.vault_client import VaultClientError, is_configured
 
     api_key = provider_dict.get(_SENSITIVE_FIELD)
     if not api_key:
@@ -91,15 +87,7 @@ async def store_provider_api_key(provider_name: str, provider_dict: dict[str, An
     name = _vault_name(provider_name)
     existing_vault_id = provider_dict.get(_VAULT_ID_KEY)
     try:
-        if existing_vault_id:
-            import uuid
-
-            await vault_rotate(uuid.UUID(existing_vault_id), api_key)
-            logger.info("unified-vault: rotated LLM api_key for provider=%s", provider_name)
-        else:
-            meta = await vault_create(name, _SECRET_TYPE, api_key)
-            existing_vault_id = str(meta["id"])
-            logger.info("unified-vault: stored LLM api_key for provider=%s", provider_name)
+        existing_vault_id = await _rotate_or_create(name, provider_name, existing_vault_id, api_key)
     except VaultClientError as exc:
         logger.error("unified-vault: failed to store LLM api_key provider=%s: %s", provider_name, type(exc).__name__)
         raise
@@ -108,6 +96,28 @@ async def store_provider_api_key(provider_name: str, provider_dict: dict[str, An
     sanitized["api_key_ref"] = name
     sanitized.pop(_SENSITIVE_FIELD, None)
     return sanitized
+
+
+async def _rotate_or_create(name: str, provider_name: str, vault_id: str | None, api_key: str) -> str:
+    """Rotate the stored secret, or create one when there is none -- or it is gone.
+
+    A stored id whose secret no longer exists is treated as absent (#17826):
+    rotating it would fail every save for that provider, permanently.
+    """
+    from user_management.services.vault_client import VaultSecretNotFound, vault_create, vault_rotate
+
+    if vault_id:
+        import uuid
+
+        try:
+            await vault_rotate(uuid.UUID(vault_id), api_key)
+            logger.info("unified-vault: rotated LLM api_key for provider=%s", provider_name)
+            return vault_id
+        except VaultSecretNotFound:
+            logger.warning("unified-vault: stored LLM api_key id is gone, creating provider=%s", provider_name)
+    meta = await vault_create(name, _SECRET_TYPE, api_key)
+    logger.info("unified-vault: stored LLM api_key for provider=%s", provider_name)
+    return str(meta["id"])
 
 
 async def retrieve_provider_api_key(provider_name: str, provider_dict: dict[str, Any]) -> str:
@@ -181,3 +191,56 @@ async def delete_provider_api_key(provider_name: str, provider_dict: dict[str, A
         pass
     except VaultClientError as exc:
         logger.warning("unified-vault: delete failed provider=%s: %s", provider_name, type(exc).__name__)
+
+
+# ---------------------------------------------------------------------------
+# Client round-trip (#17826)
+# ---------------------------------------------------------------------------
+
+# Every field that locates or holds a stored api_key. None of them is sent to a
+# client, and all of them are carried forward when a client sends no new key.
+_SECRET_REF_FIELDS = (_SENSITIVE_FIELD, _VAULT_ID_KEY, "api_key_ref")
+
+# The display mask the settings API used to send (``sk-a...b3f2`` / ``****``).
+# A tab loaded before #17826 still holds these in its state, and saving it must
+# not write one into the vault as if it were a key.
+_DISPLAY_MASK = re.compile(r"^(\*{4}|.{4}\.\.\..{4})$")
+
+
+class MaskedKeySubmitted(ValueError):
+    """A submitted api_key is a display mask, not a key (#17826)."""
+
+
+def public_provider_view(provider_dict: dict[str, Any]) -> dict[str, Any]:
+    """A provider entry with every secret field omitted, for any client response.
+
+    Omitted rather than masked: a value the client never receives cannot be
+    written back, so a GET-then-PUT round-trip is a no-op for the stored key.
+    """
+    return {k: v for k, v in provider_dict.items() if k not in _SECRET_REF_FIELDS}
+
+
+async def merge_provider_secret(
+    provider_name: str, incoming: dict[str, Any], stored: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Resolve a client-submitted provider entry against what is stored.
+
+    No ``api_key`` submitted: the stored secret reference is carried forward
+    unchanged -- the vault is not touched. A new key: stored under the existing
+    vault id, so it rotates that secret rather than creating a second one.
+    Raises :class:`MaskedKeySubmitted` for a display mask.
+    """
+    merged = public_provider_view(incoming)
+    prior = {k: v for k, v in (stored or {}).items() if k in _SECRET_REF_FIELDS}
+    new_key = incoming.get(_SENSITIVE_FIELD) or ""
+    if not new_key:
+        return {**merged, **prior}
+    if _DISPLAY_MASK.fullmatch(new_key):
+        raise MaskedKeySubmitted(f"api_key for provider {provider_name!r} is a display mask; reload and re-enter it")
+    from user_management.services.vault_client import is_configured
+
+    # A vault id is only meaningful while the vault is configured; carried into an
+    # inline write it would later shadow the new key with the old one.
+    if prior.get(_VAULT_ID_KEY) and is_configured():
+        merged[_VAULT_ID_KEY] = prior[_VAULT_ID_KEY]
+    return await store_provider_api_key(provider_name, {**merged, _SENSITIVE_FIELD: new_key})

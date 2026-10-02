@@ -191,6 +191,26 @@ asymmetry. Text from #15826, landed verbatim apart from two reference fixes.)*
 
 **Remedy: when a count and a list disagree, re-read the instrument's own enumeration before reporting either as a defect -- and name the filter you applied to the list.**
 
+### An empty result that authorises is worse than one that misinforms
+
+An empty result has two possible consequences, and they need opposite responses:
+
+- It **misinforms a report**: someone reads a wrong number. The remedy is a correction, published where the number was.
+- It **authorises an action**: a collision check clears, a cleanup proceeds, a branch is reused, a criterion is ticked. The decision has already been taken on the measurement, so a correction is not enough. **Block the action and re-take the measurement with a different instrument.**
+
+This generalises two things already on this page: the checklist item that a population gating a decision is derived a second way, which covers gating *populations*, and F's closing note that its benign reading "points toward more work or less safety". What it adds is the split by consequence and the test below. It ranks **consequence if wrong**, not likelihood of scrutiny. Family D's point stands alongside it: a refusal is the result nobody audits, and a trusted, unaudited "no" can be the larger hazard in practice.
+
+Two witnesses (2026-10-02, checked against `origin/main` that day). Both are family A's shape, a query narrower than its reading; what differs is what the empty result went on to permit:
+
+| the search | the empty result | what it permitted |
+|---|---|---|
+| `grep` over `autobot-infrastructure/ansible/`, a directory that does not exist (the real tree is `autobot-slm-backend/ansible/`) | no hits | **an edit**, via a collision check that cleared for #17709. The surface had already carried capped-pin reversals on #17706 and #17711 (recorded on #17451), and the real tree held a third. |
+| `ls` / `grep` for `components/TerminalWindow.vue` (the real path is `autobot-frontend/src/components/terminal/TerminalWindow.vue`) | no hits | **a tick**: on a closure sweep, "the flag is gone" and "I looked in the wrong directory" are the same result, and one marks a criterion delivered (caught before the tick; unfiled) |
+
+A different cause reaches the same consequence in the 2026-09-10 worktree-ceiling instance under *A measurement can be true of the process that took it and false elsewhere*. That was a number true only in the reading process, not an empty result, and a working tree was given up on a gate read as cleared. The severity rule here applies to any measurement that authorises, whatever made it wrong.
+
+**How to apply:** before an empty result authorises anything, name what the action would be if the result were wrong. If the answer is "something becomes permitted", the measurement is a gate and needs a second instrument, not a second look.
+
 ## Three gates, one shape
 
 All three report two distinct states identically:
@@ -943,7 +963,7 @@ A test suite that only exercises new code cannot tell you the old path is gone.
 
 - [ ] The sentence reporting a result names the selector that produced it
 - [ ] A known positive is asserted before any count is read
-- [ ] Any population that gates a decision was derived a second way, and the **sets** compared
+- [ ] Any population -- or empty result -- that gates a decision was derived a second way, and the **sets** compared; name the action it authorises first
 - [ ] Every check's output is read by a following line, or deleted
 - [ ] For any refusal: what else produces this, and does it want the same action?
 - [ ] For any field read as evidence: would more data change this answer? If no, name the question it actually answers
