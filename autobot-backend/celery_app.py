@@ -225,6 +225,17 @@ celery_app.conf.beat_schedule = {
         "task": "llc.scheduler.stalled_run_sweep.run_stalled_run_sweep",
         "schedule": crontab(minute=20),
     },
+    # #16818: reclaim workspace leases past their deadline and *propose* disposal
+    # of the workspaces whose work reached the remote. It does not dispose: under
+    # #17038 no agent deletes data on its own, so the sweep raises an approval and
+    # a human decides. Saying "dispose" here would describe a system we are not
+    # allowed to build. Hourly and off-phase from the stalled-run sweep above:
+    # that one releases a stalled run's lease, this one catches a holder that
+    # vanished without any run at all.
+    "llc-workspace-lease-sweep": {
+        "task": "llc.scheduler.workspace_lease_sweep.run_workspace_lease_sweep",
+        "schedule": crontab(minute=50),
+    },
     # GH#7356: background audit daemon — testgaps, dead-code, claims
     # Beat pidfile must NOT reside on tmpfs (/run/autobot/ is wiped on reboot).
     "audit-testgaps-6h": {

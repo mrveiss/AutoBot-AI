@@ -11,6 +11,7 @@ nothing is indistinguishable from the state before it existed.
 """
 
 import importlib
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -137,6 +138,7 @@ class _Run:
     """A row the sweep may close out. Only the fields the sweep touches."""
 
     def __init__(self):
+        self.id = uuid.uuid4()
         self.status = "running"
         self.finished_at = None
         self.error = None
@@ -154,8 +156,14 @@ class _Result:
 
 
 class _Session:
-    def __init__(self, rows):
+    """First execute() answers the candidate query; later ones answer the lease
+    lookup #16818 added. Kept as two queues rather than one so a test can hand the
+    sweep runs without also handing them back as leases."""
+
+    def __init__(self, rows, lease_rows=None):
         self._rows = rows
+        self._lease_rows = lease_rows or []
+        self._calls = 0
         self.committed = False
         self.statement = None
 
@@ -167,7 +175,8 @@ class _Session:
 
     async def execute(self, statement):
         self.statement = statement
-        return _Result(self._rows)
+        self._calls += 1
+        return _Result(self._rows if self._calls == 1 else self._lease_rows)
 
     async def commit(self):
         self.committed = True
@@ -206,3 +215,48 @@ async def test_a_sweep_with_nothing_to_do_reports_zero_rather_than_silence(sweep
 
     assert await sweep._async_sweep() == 0
     assert session.committed is True
+
+
+class _Lease:
+    """A workspace lease the swept run holds. Only what `release` touches."""
+
+    def __init__(self):
+        self.path = "/w/issue-1"
+        self.owner = "session-gone"
+        self.released_at = None
+        self.release_reason = None
+
+
+@pytest.mark.asyncio
+async def test_a_stalled_run_hands_its_workspace_back(sweep, monkeypatch):
+    """#16818's AC2, and the half this sweep was explicitly missing.
+
+    Marking a run stalled while it still holds a workspace is the 2026-09-16 state:
+    a status nobody acts on, and a slot nothing can reclaim. Mutation-checked --
+    removing the `release_for_run` call fails this and nothing else in this file.
+    """
+    run, lease = _Run(), _Lease()
+    session = _Session([run], lease_rows=[lease])
+    monkeypatch.setattr(sweep, "get_async_session_factory", lambda: (lambda: session))
+
+    assert await sweep._async_sweep() == 1
+    assert lease.released_at is not None, "the workspace must be handed back"
+    assert "16818" in lease.release_reason
+    assert lease.release_reason == sweep.STALL_RELEASE_REASON
+
+
+@pytest.mark.asyncio
+async def test_the_release_reason_says_the_run_stalled_not_that_the_lease_expired(sweep, monkeypatch):
+    """Two different failures, two different remedies. A run that died is a bug to
+    investigate; a lease that expired is a holder that walked away. The audit trail
+    has to tell them apart, which a shared reason string would prevent."""
+    run, lease = _Run(), _Lease()
+    session = _Session([run], lease_rows=[lease])
+    monkeypatch.setattr(sweep, "get_async_session_factory", lambda: (lambda: session))
+
+    await sweep._async_sweep()
+
+    from llc.services.workspace_lease import RECLAIM_REASON
+
+    assert lease.release_reason != RECLAIM_REASON
+    assert "stalled" in lease.release_reason

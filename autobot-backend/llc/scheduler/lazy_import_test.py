@@ -43,6 +43,7 @@ _EAGER_TASK_MODULES = {
     "llc.scheduler.project_disposal_sweep": "llc.scheduler.project_disposal_sweep.run_disposal_sweep",
     "llc.scheduler.sprint_autoclose": "llc.scheduler.sprint_autoclose.run_daily_check",
     "llc.scheduler.stalled_run_sweep": "llc.scheduler.stalled_run_sweep.run_stalled_run_sweep",
+    "llc.scheduler.workspace_lease_sweep": "llc.scheduler.workspace_lease_sweep.run_workspace_lease_sweep",
 }
 
 # Scheduler classes that must NOT be imported by package import (PEP 562).
