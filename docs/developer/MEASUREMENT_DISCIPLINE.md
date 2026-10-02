@@ -161,6 +161,36 @@ worktree. These are mine, so take them.* **F's benign reading is the available
 one, and it points toward more work or less safety, so nothing pushes back on
 it.**
 
+### A cross-cutting rule: the output was correct, on-question, and the reader narrowed it
+
+*(A rule that cuts across the families, not a seventh one. F covers a correct output read
+against the wrong question; this covers a correct output on the right question that the
+reader then narrowed. Several instances below are A's shape -- a search narrower than its
+reading -- and A's remedy catches those; what this adds is the count-and-list case and the
+asymmetry. Text from #15826, landed verbatim apart from two reference fixes.)*
+
+> **When a count and a list disagree, suspect the reader before the instrument.** A tool that reports `N` findings and shows you fewer has usually shown you all of them — your filter, window, or search term removed the rest. Re-read the instrument's own enumeration block before reporting the discrepancy as a defect in the tool.
+
+**Why this belongs in the doc rather than as another family-F instance.** Family F is *correct, complete, and about a different question* — it fires when the answer is sound and the question was not. This is the step before that: the output was both correct **and** about the right question, and the reader narrowed it. The doc's existing discriminator ("would more data change the answer?") does not catch it, because more data was already present and discarded.
+
+**Seven instances in one day (recorded on #15826, 2026-10-02), across four sessions**, which is the argument for a rule rather than a note:
+
+| what was searched | what it hid |
+|---|---|
+| `-m "…"` over `.github/workflows` | `ci.yml:419`'s marker expression, in a different quoting style — nearly concluded no workflow selects by marker, which would have *corroborated* a stale claim in #13286 |
+| `autobot-slm-frontend/src/views/settings/` for a nav entry | the tab bar at `src/views/SettingsView.vue`, a **sibling** of that directory |
+| a grep with 60 chars of leading context | a match near the start of a line — the padding could not fit, so a present string read as absent |
+| the two advisory names already known | `axios`, the third unallowed finding, which stayed unnamed until the `Findings judged by this gate` block was read |
+| a scratch-directory copy of a file | made a canonical check report clean while the real file was not |
+| a regex for import **statements** | `pytest.importorskip`, which is a call |
+| `ls-remote` | answered *existence*, which was not the question asked |
+
+**The asymmetry that makes it worth a rule.** A reader-narrowed absence is harder to catch than any instrument fault, because nothing about it looks wrong: the command succeeded, the output is accurate, and the citation is real. It is hardest of all when the narrowed result **agrees with something already written down** — a stale issue claim, a prior diagnosis, an expectation — because agreement reads as corroboration and nothing prompts a second look.
+
+**Operational form, for a guard-audit context specifically:** before reporting that a guard examines nothing, confirm the sweep's own population count and compare it against your enumeration of what it *should* reach. If the two disagree, reconcile the definitions before concluding anything about the tree — which is the same correction #15826's pass-1 audit had to make on itself, where a crude regex gave 111 of 157 guards without a floor against the meta-guard detector's own 4.
+
+**Remedy: when a count and a list disagree, re-read the instrument's own enumeration before reporting either as a defect -- and name the filter you applied to the list.**
+
 ## Three gates, one shape
 
 All three report two distinct states identically:
@@ -917,6 +947,7 @@ A test suite that only exercises new code cannot tell you the old path is gone.
 - [ ] Every check's output is read by a following line, or deleted
 - [ ] For any refusal: what else produces this, and does it want the same action?
 - [ ] For any field read as evidence: would more data change this answer? If no, name the question it actually answers
+- [ ] When a count and a list disagree: re-read the instrument's own enumeration before calling the tool wrong
 - [ ] For any exemption: it is narrow, and the red it produces names its real cause
 - [ ] For any acceptance criterion: ticked against a behaviour, never a name
 - [ ] Before editing a file that carries a constraint comment: the constraint is a test, or you have read the region around your edit
