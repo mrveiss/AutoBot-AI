@@ -103,22 +103,42 @@ def test_an_unmeasured_file_is_seen_but_not_reached(gate) -> None:
     assert reached == 0, "an unmeasured file must not count toward the reach floor"
 
 
-def test_an_unmeasured_grandfathered_file_is_reported_once(gate, monkeypatch) -> None:
+def test_an_unmeasured_grandfathered_file_is_reported_once(gate, tmp_path, monkeypatch) -> None:
     """Not twice, and not as moved-or-deleted.
 
     A KNOWN_LARGE entry absent from `seen` is reported by `audit_ceilings`' second pass
     as having moved or been deleted. For an unreadable-but-present file that message is
     wrong, and emitting it alongside the unmeasured finding tells two stories about one
     file — the worse failure, because someone chases a deletion that did not happen.
+
+    Driven through ``audit_ceilings()`` itself. The first version of this test called
+    ``_scan_tracked_files`` and then computed the ``KNOWN_LARGE - seen`` pass *itself*, so
+    it asserted that my reconstruction reports once -- a wiring change inside
+    ``audit_ceilings`` would have left it green. Review on #17884 caught that: the test
+    for the double-report fix had the shape the fix exists to remove.
+
+    The probe is a real non-UTF-8 file, because that is the reachable case -- it EXISTS,
+    so the walk sees it, and it cannot be decoded, so it is never ruled on. A merely
+    missing path is the other case and stays in its own test above.
     """
-    probe = "autobot-backend/unreadable_but_grandfathered_probe.py"
-    monkeypatch.setattr(gate, "KNOWN_LARGE", {probe: 999})
+    rel = f"probe/unreadable_probe.{gate.SELF_REL[-2:]}"
+    probe = tmp_path / rel
+    probe.parent.mkdir(parents=True, exist_ok=True)
+    probe.write_bytes(b"\xff\xfe not valid utf-8 \x00")
 
-    _, seen, problems = gate._scan_tracked_files(repo_root(), [probe])
-    vanished = [gate._vanished_entry_problem(rel, repo_root()) for rel in sorted(set(gate.KNOWN_LARGE) - seen)]
+    tracked_fn = next(n for n in vars(gate) if n.startswith("tracked_") and callable(getattr(gate, n)))
+    monkeypatch.setattr(gate, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(gate, tracked_fn, lambda root: [rel])
+    monkeypatch.setattr(gate, "KNOWN_LARGE", {gate.normalise(rel): 999})
 
-    assert len(problems) == 1, f"expected exactly one finding, got {problems}"
-    assert not vanished, f"the same file was also reported as vanished: {vanished}"
+    reached, problems = gate.audit_ceilings()
+
+    assert reached == 0, "an unreadable file must not count toward the reach floor"
+    assert len(problems) == 1, f"expected exactly one finding from audit_ceilings, got {problems}"
+    assert "never measured" in problems[0], f"reported, but not as unmeasured: {problems[0]}"
+    assert (
+        "moved or was deleted" not in problems[0]
+    ), f"the file exists and is unreadable; reporting it as vanished is the second story: {problems[0]}"
 
 
 def test_a_reach_breach_does_not_suppress_the_violations(gate, monkeypatch, caplog) -> None:
@@ -136,9 +156,11 @@ def test_a_reach_breach_does_not_suppress_the_violations(gate, monkeypatch, capl
     emitted = "\n".join(record.getMessage() for record in caplog.records)
     assert "a real violation" in emitted, "the reach breach suppressed the violations"
     assert "floor" in emitted, "the reach breach itself was not reported"
-    assert min(r.levelno for r in caplog.records) >= logging.WARNING, (
-        "findings below WARNING vanish under logging's lastResort when configure_logging "
-        "was never called — the gate then refuses a push and says nothing about why"
+    levels = {r.levelno for r in caplog.records}
+    assert levels == {logging.ERROR}, (
+        f"findings were emitted at {sorted(levels)}; the contract is ERROR. A >= WARNING "
+        "assertion accepts a regression to WARNING, which survives lastResort but is not "
+        "what either gate promises — and WARNING is what the shell gate used to use"
     )
 
 
@@ -158,9 +180,11 @@ def test_the_commit_path_reports_above_lastresort(gate, tmp_path, caplog) -> Non
         assert gate.main([str(never_opened)]) == 1, "an unreadable argument must refuse the commit"
 
     assert caplog.records, "the commit path refused the push and emitted nothing"
-    assert min(r.levelno for r in caplog.records) >= logging.WARNING, (
-        f"findings at {min(r.levelno for r in caplog.records)} vanish under lastResort; "
-        "the hook would refuse a push silently"
+    levels = {r.levelno for r in caplog.records}
+    assert levels == {logging.ERROR}, (
+        f"findings were emitted at {sorted(levels)}; below WARNING they vanish under "
+        "lastResort and the hook refuses a push silently, but the contract is ERROR and "
+        "a >= WARNING assertion would accept the regression this batch just removed"
     )
     assert str(never_opened) in "\n".join(r.getMessage() for r in caplog.records), "the finding never named the file"
 
