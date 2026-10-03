@@ -137,7 +137,15 @@ def test_declare_refuses_both_bounds_at_once() -> None:
 #: `implied > old` cannot become false through growth. It would only fail if someone lowered a
 #: fraction below what the old constant demanded, which is exactly the regression to catch.
 _SUPERSEDED = {
-    "hooks-path-override": (6736, 10999),
+    # (superseded floor, the count of the guard's OWN reference when it was measured)
+    #
+    # The second number must be the denominator that declaration's `reference` returns, not the
+    # tracked-tree total. `hooks-path-override` references its suffix-matched population (7106 on
+    # 24a9a1d46f), where an earlier version of this change wrongly took a fraction of all 11000
+    # tracked files -- arithmetically tighter today and not scale-free, because the floor would
+    # then rise with the tree while the counted subset grew at its own rate. Recording the wrong
+    # denominator here would have made this test certify that mistake.
+    "hooks-path-override": (6736, 7106),
     "conflict-marker-scanned-files": (10000, 10999),
 }
 
