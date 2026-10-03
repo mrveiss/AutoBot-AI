@@ -2,34 +2,36 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""A repo found already configured is trusted only if it serves the package (#17897).
+"""A configured apt repo is replaced only on POSITIVE evidence it is broken (#17897).
 
-A one-command install on a host whose image already carried an
-``apt.postgresql.org`` source failed at ``Install PostgreSQL packages`` with::
-
-    No package matching 'postgresql-16' is available
-
-The repo-add helper had detected the existing source, logged "preserving
+A one-command install failed at ``Install PostgreSQL packages`` with
+``No package matching 'postgresql-16' is available``. The repo-add helper had
+found an ``apt.postgresql.org`` source on the host, logged "preserving
 device-shipped config", and skipped adding the canonical ``<codename>-pgdg``
-entry. jammy and older ship ``postgresql-14``, so 16 comes only from pgdg --
-the preserved source was present and useless, and apt's message named neither
-the repository, nor the skip, nor the file responsible.
+entry. jammy and older ship ``postgresql-14``, so 16 comes only from pgdg.
 
-These assertions pin the three halves of the fix, because each can regress
-independently and silently:
+The first fix introduced a worse defect than the one it closed. Its remedy for
+an unusable repo is to **move the host's own source aside**, and it decided
+usability from an empty ``apt-cache policy`` candidate. ``apt-get update``
+**exits 0 with ``W: Failed to fetch``** for an unreachable source -- recorded
+under #6719 at ``roles/nginx/tasks/main.yml:18-20`` -- so a slow mirror
+produced an empty candidate on a perfectly good repository, and a working
+device-shipped source would have been moved to a backup with a message saying
+it "did not serve that package". That claim would have been false.
 
-1. the helper can tell presence from usability at all,
-2. the add still fires when the preserved repo fails verification -- a `when`
-   that only tests ``MISSING`` restores the defect while every task above it
-   still looks right,
-3. the postgresql role actually names the package, since the verification is
-   opt-in and an unnamed package means the old behaviour.
+So the verdict needs positive evidence, and these tests EXECUTE the probe's
+ladder against fake ``apt-get``/``apt-cache`` rather than matching its text.
+A substring test cannot tell ``not X`` from ``X`` -- which is exactly how the
+first version of this file passed over the destructive bug.
 """
 
 from __future__ import annotations
 
+import shlex
+import subprocess
 from pathlib import Path
 
+import jinja2
 import pytest
 import yaml
 
@@ -39,21 +41,17 @@ ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
 HELPER = ANSIBLE / "roles" / "_shared" / "tasks" / "add_apt_repository_idempotent.yml"
 PG_INSTALL = ANSIBLE / "roles" / "postgresql" / "tasks" / "install.yml"
 
-#: The contract parameter that turns presence-checking into usability-checking.
 VERIFY_VAR = "apt_repo_verify_package"
+MATCH = "apt.postgresql.org"
+PKG = "postgresql-16"
 
-#: Below this the file has been gutted or the parse is returning something else,
-#: and every assertion keyed on task names would pass over an empty list.
-MIN_HELPER_TASKS = 7
+#: The helper's full task list. Pinned to the real count, not a loose floor: at 7
+#: against 9 actual, two tasks could be dropped without reddening anything.
+EXPECTED_HELPER_TASKS = 9
 
 
 def _module(task: dict, name: str) -> object | None:
-    """Return a task's module body whether it is written short or fully qualified.
-
-    Ansible accepts both ``set_fact:`` and ``ansible.builtin.set_fact:``. A guard
-    that matches only one form reports a missing mechanism that is present, which
-    is the same class of false negative the fix itself is about.
-    """
+    """A task's module body whether written short or fully qualified."""
     for key in (name, f"ansible.builtin.{name}"):
         if key in task:
             return task[key]
@@ -65,13 +63,18 @@ def _has_module(task: dict, name: str) -> bool:
 
 
 def _tasks(path: Path) -> list[dict]:
-    """Parse an ansible task file, failing loudly rather than returning []."""
     if not path.exists():
         pytest.fail(f"{path.relative_to(repo_root())} does not exist -- the fix's home moved")
     loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(loaded, list):
-        pytest.fail(f"{path.relative_to(repo_root())} did not parse as a task list: {type(loaded)}")
+        pytest.fail(f"{path.relative_to(repo_root())} did not parse as a task list")
     return [t for t in loaded if isinstance(t, dict)]
+
+
+def _named(tasks: list[dict], fragment: str) -> dict:
+    hits = [t for t in tasks if fragment in str(t.get("name", ""))]
+    assert hits, f"no task whose name contains {fragment!r} -- the mechanism was removed"
+    return hits[0]
 
 
 @pytest.fixture(scope="module")
@@ -80,109 +83,211 @@ def helper_tasks() -> list[dict]:
 
 
 @pytest.fixture(scope="module")
-def pg_tasks() -> list[dict]:
-    return _tasks(PG_INSTALL)
-
-
-def test_the_helper_parses_to_a_populated_task_list(helper_tasks: list[dict]) -> None:
-    """FLOOR: an empty or mis-parsed list would make every test below vacuous."""
-    assert len(helper_tasks) >= MIN_HELPER_TASKS, (
-        f"only {len(helper_tasks)} tasks parsed from {HELPER.name}, expected at least "
-        f"{MIN_HELPER_TASKS} -- the assertions below match on task names and would "
-        f"pass over a short or empty list without examining anything"
+def probe_script(helper_tasks: list[dict]) -> str:
+    """The probe's shell, with Jinja rendered as ansible would render it."""
+    body = _module(_named(helper_tasks, "Probe whether the configured repo serves"), "shell")
+    assert isinstance(body, str) and body.strip(), "the probe task carries no shell body"
+    env = jinja2.Environment(autoescape=False)  # noqa: S701 - shell, not markup
+    env.filters["quote"] = shlex.quote
+    return env.from_string(body).render(
+        apt_repo_match=MATCH,
+        apt_repo_verify_package=PKG,
+        apt_repo_probe_timeout=5,
+        apt_repo_probe_retries=0,
     )
 
 
-def test_the_helper_decides_sufficiency_rather_than_only_presence(helper_tasks: list[dict]) -> None:
-    """The fact that distinguishes "a repo is configured" from "it serves the package"."""
-    setters = [t for t in helper_tasks if _has_module(t, "set_fact")]
-    decided = [t for t in setters if "_apt_repo_preserve_ok" in str(_module(t, "set_fact"))]
-    assert decided, (
-        "no task sets `_apt_repo_preserve_ok`. Without it the helper can only answer "
-        "'is a source present', which is the #17897 defect: a present source that cannot "
-        "serve the package still suppresses the add"
+def _run_probe(script: str, tmp_path: Path, *, update_out: str, update_rc: int, candidate: str) -> str:
+    """Execute the probe with apt shadowed, and return its VERDICT."""
+    fake = tmp_path / "bin"
+    fake.mkdir(exist_ok=True)
+    (fake / "apt-get").write_text(
+        f"#!/bin/bash\nprintf '%s' {shlex.quote(update_out)} >&2\nexit {update_rc}\n",
+        encoding="utf-8",
+    )
+    (fake / "apt-cache").write_text(
+        f"#!/bin/bash\nprintf '%s\\n' {shlex.quote(candidate)}\n", encoding="utf-8"
+    )
+    for f in fake.iterdir():
+        f.chmod(0o755)
+    done = subprocess.run(  # noqa: S603 - fixed argv, fakes shadow apt, nothing touches /etc
+        ["/bin/bash", "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env={"PATH": f"{fake}:/usr/bin:/bin", "HOME": str(tmp_path)},
+    )
+    for line in done.stdout.splitlines():
+        if line.startswith("VERDICT="):
+            return line.split("=", 1)[1].strip()
+    pytest.fail(f"probe printed no VERDICT.\nstdout={done.stdout}\nstderr={done.stderr}")
+
+
+def test_the_helper_task_list_is_whole(helper_tasks: list[dict]) -> None:
+    """An exact count, so a dropped task reddens instead of passing a loose floor."""
+    assert len(helper_tasks) == EXPECTED_HELPER_TASKS, (
+        f"{len(helper_tasks)} tasks, expected {EXPECTED_HELPER_TASKS}. Every assertion "
+        f"below selects tasks by name and would pass over a shortened list"
     )
 
 
-def test_the_preserve_branch_is_gated_on_sufficiency(helper_tasks: list[dict]) -> None:
-    """"Preserving device-shipped config" must not be reachable on an unusable repo."""
-    preserve = [t for t in helper_tasks if "Preserve device-shipped repo" in str(t.get("name", ""))]
-    assert preserve, "the preserve task is gone -- #7218's device-shipped behaviour was dropped"
-    for task in preserve:
-        assert "_apt_repo_preserve_ok" in str(task.get("when", "")), (
-            "the preserve task does not test `_apt_repo_preserve_ok`, so it logs "
-            "'preserving device-shipped config' for a repo that serves nothing"
+def test_a_resolved_candidate_is_usable(probe_script: str, tmp_path: Path) -> None:
+    verdict = _run_probe(
+        probe_script, tmp_path, update_out="", update_rc=0, candidate="  Candidate: 16.15-1"
+    )
+    assert verdict == "usable", "a repo that serves the package must be preserved, not replaced"
+
+
+def test_no_candidate_and_no_error_naming_the_repo_is_unusable(
+    probe_script: str, tmp_path: Path
+) -> None:
+    """The original defect: the repo was reached, said nothing, and serves nothing."""
+    verdict = _run_probe(probe_script, tmp_path, update_out="", update_rc=0, candidate="")
+    assert verdict == "unusable", (
+        "a clean update with no candidate is the #17897 case and must be replaced"
+    )
+
+
+def test_a_definitive_server_answer_naming_the_repo_is_unusable(
+    probe_script: str, tmp_path: Path
+) -> None:
+    verdict = _run_probe(
+        probe_script,
+        tmp_path,
+        update_out=f"E: The repository 'https://{MATCH}/pub/repos/apt bogus-pgdg Release'"
+        " does not have a Release file.\n",
+        update_rc=0,
+        candidate="",
+    )
+    assert verdict == "unusable", "a 404 / missing Release naming this repo is positive evidence"
+
+
+def test_a_failed_fetch_naming_the_repo_is_UNDETERMINED_not_unusable(
+    probe_script: str, tmp_path: Path
+) -> None:
+    """THE REGRESSION THAT MATTERS: apt exits 0 on an unreachable mirror (#6719).
+
+    Reading this as "unusable" moves a working device-shipped source to a backup
+    and reports a reason that is false. It must touch nothing.
+    """
+    verdict = _run_probe(
+        probe_script,
+        tmp_path,
+        update_out=f"W: Failed to fetch https://{MATCH}/pub/repos/apt/dists/jammy-pgdg/InRelease"
+        "  Connection timed out [IP: 2001:db8::1 443]\n",
+        update_rc=0,
+        candidate="",
+    )
+    assert verdict == "undetermined", (
+        "a slow or unreachable mirror was read as proof the repository is broken. The "
+        "remedy for 'unusable' MOVES the host's own source aside, so this verdict "
+        "destroys working configuration and states a false reason"
+    )
+
+
+def test_a_timeout_is_undetermined(probe_script: str, tmp_path: Path) -> None:
+    verdict = _run_probe(probe_script, tmp_path, update_out="", update_rc=124, candidate="")
+    assert verdict == "undetermined", "a timed-out update measured nothing about the repo"
+
+
+def test_a_held_lock_is_retried_not_judged(probe_script: str, tmp_path: Path) -> None:
+    verdict = _run_probe(
+        probe_script,
+        tmp_path,
+        update_out="E: Could not get lock /var/lib/apt/lists/lock. It is held by process 900\n",
+        update_rc=100,
+        candidate="",
+    )
+    assert verdict == "locked", (
+        "a dpkg/apt lock must be waited out, never treated as a verdict about the repo"
+    )
+
+
+def _when_of(task: dict) -> str:
+    when = task.get("when")
+    return " and ".join(f"({c})" for c in when) if isinstance(when, list) else str(when)
+
+
+def _eval_when(expr: str, **state: object) -> bool:
+    """Evaluate an ansible `when` as Jinja, modelling the filters it uses."""
+    env = jinja2.Environment(autoescape=False)  # noqa: S701 - condition, not markup
+    env.filters["bool"] = lambda v: str(v).strip().lower() in {"true", "yes", "1", "on"} or v is True
+    return bool(env.compile_expression(expr, undefined_to_none=True)(**state))
+
+
+@pytest.mark.parametrize(
+    "present,verdict,should_add",
+    [
+        ("MISSING", "usable", True),
+        ("PRESENT", "usable", False),
+        ("PRESENT", "unusable", True),
+        ("PRESENT", "undetermined", False),
+    ],
+)
+def test_the_add_fires_exactly_when_it_should(
+    helper_tasks: list[dict], present: str, verdict: str, should_add: bool
+) -> None:
+    """Evaluated, not substring-matched: a dropped `not` or an inversion reddens here."""
+    block = _named(helper_tasks, "Install the canonical repo definition")
+    got = _eval_when(
+        _when_of(block),
+        _apt_repo_present={"stdout": present},
+        _apt_repo_verdict=verdict,
+    )
+    assert got is should_add, (
+        f"present={present} verdict={verdict}: the canonical add "
+        f"{'did not fire when it must' if should_add else 'fired when it must not'}. "
+        f"Firing on 'undetermined' is the destructive case"
+    )
+
+
+def test_undetermined_changes_nothing_on_the_host(helper_tasks: list[dict]) -> None:
+    """The move must be unreachable unless the verdict is positively `unusable`."""
+    block = _named(helper_tasks, "Install the canonical repo definition")
+    move = _named(block.get("block", []), "Move aside")
+    for verdict in ("usable", "undetermined"):
+        assert not _eval_when(_when_of(move), _apt_repo_verdict=verdict), (
+            f"the move aside is reachable on verdict={verdict!r} -- it may run only on "
+            f"positive evidence the repo is broken"
         )
-
-
-def test_the_add_still_fires_when_the_preserved_repo_fails_verification(
-    helper_tasks: list[dict],
-) -> None:
-    """The regression that would be invisible: a `when` testing only MISSING."""
-    adds = [t for t in helper_tasks if _has_module(t, "apt_repository")]
-    assert adds, "the apt_repository task is gone -- nothing adds a repo at all now"
-    for task in adds:
-        when = str(task.get("when", ""))
-        assert "MISSING" in when, f"the add no longer fires for an unconfigured repo: {when}"
-        assert "_apt_repo_preserve_ok" in when, (
-            "the add fires only on MISSING, so a present-but-useless repo is still never "
-            "replaced -- this is exactly the #17897 failure, with the verification above "
-            "it computing a value nothing acts on"
-        )
-
-
-def test_the_displaced_source_is_moved_outside_sources_list_d_not_deleted(
-    helper_tasks: list[dict],
-) -> None:
-    """apt reads every file in that directory, so disabling in place still collides."""
-    movers = [t for t in helper_tasks if "Move aside" in str(t.get("name", ""))]
-    assert movers, (
-        "nothing moves the unusable source out of the way, so adding the canonical entry "
-        "leaves two sources for one URL -- #7218's Signed-By conflict, which aborts "
-        "`apt-get update` outright and is worse than the missing package"
-    )
-    body = str(_module(movers[0], "shell") or "")
-    assert "/var/backups/" in body, (
-        "the displaced source is not kept under /var/backups -- a device-shipped "
-        "configuration must be recoverable, never destroyed"
-    )
-    assert "sources.list.d" not in body.split("BACKUP_DIR=")[-1].split("\n")[0], (
-        "the backup destination is inside sources.list.d, where apt will still read it"
+    assert _eval_when(_when_of(move), _apt_repo_verdict="unusable"), (
+        "the move never runs, so an unusable source is never replaced"
     )
 
 
-def test_the_failure_names_the_cause_instead_of_leaving_it_to_apt(
-    helper_tasks: list[dict],
-) -> None:
-    """apt's "No package matching" names neither the repo nor the preserved file."""
-    fails = [
-        t for t in helper_tasks if _has_module(t, "fail") and "real cause" in str(t.get("name", ""))
+def test_a_failed_add_restores_the_moved_source(helper_tasks: list[dict]) -> None:
+    block = _named(helper_tasks, "Install the canonical repo definition")
+    rescue = block.get("rescue") or []
+    assert rescue, (
+        "the add has no rescue, so a failure after the move leaves the host with no "
+        "source for this repository at all"
+    )
+    restore = _named(rescue, "Restore the moved source")
+    body = str(_module(restore, "shell") or "")
+    assert "/etc/apt/sources.list.d/" in body, "the restore does not put the file back"
+    failures = [t for t in rescue if _has_module(t, "fail")]
+    assert failures, "the rescue restores but never fails -- the deploy would continue"
+    msg = str((_module(failures[0], "fail") or {}).get("msg", ""))
+    assert "apt_repo_backup_dir" in msg or "backups" in msg, (
+        "the failure message does not name the backup location, so the operator cannot "
+        "find the configuration that was moved"
+    )
+
+
+def test_the_postgresql_role_names_the_package_it_needs() -> None:
+    """Verification is opt-in: an unnamed package silently keeps the old behaviour."""
+    pgdg = [
+        t
+        for t in _tasks(PG_INSTALL)
+        if "add_apt_repository_idempotent" in str(t.get("ansible.builtin.include_tasks", ""))
     ]
-    assert fails, (
-        "no task fails with the real cause, so a repository that genuinely does not "
-        "publish the package still surfaces as apt's bare 'No package matching'"
-    )
-    msg = str((_module(fails[0], "fail") or {}).get("msg", ""))
-    for token in (VERIFY_VAR, "apt_repo_match", "apt_repo_spec"):
-        assert token in msg, (
-            f"the failure message does not interpolate `{token}`, so it cannot tell the "
-            f"operator which package, which host source, or which repo was involved"
-        )
-
-
-def test_the_postgresql_role_names_the_package_it_needs(pg_tasks: list[dict]) -> None:
-    """The verification is opt-in: an unnamed package silently keeps the old behaviour."""
-    includes = [t for t in pg_tasks if "include_tasks" in str(t)]
-    pgdg = [t for t in includes if "add_apt_repository_idempotent" in str(t)]
     assert pgdg, "the postgresql role no longer uses the shared repo-add helper"
     passed = str(pgdg[0].get("vars", {}).get(VERIFY_VAR, ""))
     assert "postgresql-" in passed, (
-        f"the postgresql role does not pass `{VERIFY_VAR}` (got {passed!r}). Verification "
-        f"is opt-in, so without it a device-shipped apt.postgresql.org source is trusted "
-        f"unverified again and the install fails at 'Install PostgreSQL packages'"
+        f"the role does not pass `{VERIFY_VAR}` (got {passed!r}), so a device-shipped "
+        f"apt.postgresql.org source is trusted unverified again"
     )
     assert "postgresql_version" in passed, (
         f"`{VERIFY_VAR}` hardcodes a version instead of deriving it from "
-        f"`postgresql_version`, so the check and the install can disagree about which "
-        f"major version is required"
+        f"`postgresql_version`, so the check and the install can disagree"
     )

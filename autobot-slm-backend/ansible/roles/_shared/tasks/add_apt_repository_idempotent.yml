@@ -45,6 +45,21 @@
 #                                 a candidate for this package (#17897).
 #                                 Unset -> presence alone is trusted, which is
 #                                 the pre-#17897 behaviour.
+#   apt_repo_backup_dir (str, opt.)  Where a displaced source is kept.
+#                                 Default /var/backups/autobot-apt-sources.
+#                                 Never inside sources.list.d -- apt reads
+#                                 every file in that directory.
+#   apt_repo_probe_timeout (int, opt.) Seconds the probe's apt-get update may
+#                                 take (default 60). A timeout is undetermined,
+#                                 never unusable.
+#   apt_repo_probe_retries (int, opt.) apt's own Acquire::Retries for the probe
+#                                 (default 3).
+#   apt_repo_lock_retries / apt_repo_lock_delay (int, opt.) How long to wait out
+#                                 a held dpkg/apt lock (default 6 x 10s). The
+#                                 wait is at the ansible level: it is
+#                                 unconfirmed that `apt-get update` honours
+#                                 DPkg::Lock::Timeout for the lists lock, so
+#                                 that option is deliberately not used.
 #
 # Example:
 #   - include_tasks: ../../_shared/tasks/add_apt_repository_idempotent.yml
@@ -95,28 +110,98 @@
 # with apt's "No package matching 'postgresql-16' is available", naming neither the
 # repo, nor the skip, nor the file responsible. When the caller names the package,
 # the preserved repo has to prove it serves it.
-- name: "{{ apt_repo_label }} | Verify the preserved repo serves {{ apt_repo_verify_package | default('(unspecified)') }}"
-  ansible.builtin.shell: >-
-    apt-get update -qq -o Acquire::Retries=1 -o Acquire::http::Timeout=15 >/dev/null 2>&1;
-    apt-cache policy -- '{{ apt_repo_verify_package }}' 2>/dev/null
-    | awk '/Candidate:/ {print $2; exit}'
-  register: _apt_repo_candidate
+
+# #17897: presence is not usability -- a device-shipped source for the right URL can
+# still fail to serve the package the repo exists for. But the inverse error is the
+# destructive one: if the probe cannot MEASURE usability, "no candidate" must never be
+# read as "unusable", because the remedy for unusable is to move the host's own
+# configuration out of the way. `apt-get update` failing for an unrelated reason --
+# the dpkg lock held by unattended-upgrades on a fresh image, a slow mirror -- leaves
+# the candidate empty on a repository that was fine.
+#
+# So the probe reports the update's exit status SEPARATELY from the candidate, and the
+# verdict has three states, not two:
+#   usable        candidate resolved        -> preserve, skip the add
+#   unusable      update OK, no candidate   -> move aside, add ours
+#   undetermined  update FAILED             -> touch nothing, fail saying so
+
+# #17897. Two errors are possible here and only one is recoverable.
+#
+#   presence read as usability   -- the original defect: a device-shipped source for
+#                                   the right URL that serves nothing suppresses our
+#                                   add, and the deploy dies 40 tasks later.
+#   absence read as unusability  -- the DESTRUCTIVE inverse: the remedy for "unusable"
+#                                   is to move the host's own configuration aside, so
+#                                   an unmeasurable probe must never reach that verdict.
+#
+# `apt-get update` EXITS 0 with `W: Failed to fetch ...` for an unreachable source --
+# recorded under #6719 at roles/nginx/tasks/main.yml:18-20 -- so an exit status alone
+# cannot tell a broken repo from a slow mirror. The verdict therefore requires
+# POSITIVE evidence of unusability, and the ladder below is evaluated in the shell
+# where the text is, not in Jinja:
+#
+#   candidate resolved                              -> usable
+#   lock held                                       -> locked, retried at this level
+#   W:/E:/Err: naming THIS repo with a definitive
+#     server answer (404, no Release file, NO_PUBKEY,
+#     bad signature)                                -> unusable
+#   rc 0 and NO line naming this repo               -> unusable
+#   anything else, including timeout rc 124         -> undetermined
+#
+# An empty candidate with no error naming your repository is not evidence your
+# repository is broken: that is `nothing found` versus `did not look`, in apt.
+- name: "{{ apt_repo_label }} | Probe whether the configured repo serves {{ apt_repo_verify_package | default('(unspecified)') }}"
+  ansible.builtin.shell: |
+    set -u
+    MATCH={{ apt_repo_match | quote }}
+    PKG={{ apt_repo_verify_package | quote }}
+    OUT=$(timeout {{ apt_repo_probe_timeout | default(60) }} apt-get update -qq \
+      -o Acquire::Retries={{ apt_repo_probe_retries | default(3) }} 2>&1); RC=$?
+    CAND=$(apt-cache policy -- "$PKG" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
+    # Only lines that NAME THIS REPO count as evidence about this repo.
+    ERRS=$(printf '%s\n' "$OUT" | grep -E '^(W|E|Err):' | grep -F -- "$MATCH" || true)
+    # A definitive server answer: the repo was reached and said no.
+    DEF=$(printf '%s\n' "$ERRS" | grep -Eic '404|does not have a Release file|NO_PUBKEY|signatures could' || true)
+    LOCK=$(printf '%s\n' "$OUT" | grep -Eic 'Could not get lock|dpkg frontend lock|Waiting for cache lock' || true)
+    if [ -n "$CAND" ] && [ "$CAND" != "(none)" ]; then V=usable
+    elif [ "$LOCK" -gt 0 ]; then V=locked
+    elif [ "$DEF" -gt 0 ]; then V=unusable
+    elif [ "$RC" -eq 0 ] && [ -z "$ERRS" ]; then V=unusable
+    else V=undetermined
+    fi
+    echo "VERDICT=$V"
+    echo "UPDATE_RC=$RC"
+    echo "CANDIDATE=$CAND"
+    echo "REPO_ERRORS=$(printf '%s' "$ERRS" | tr '\n' ';')"
+    echo "TAIL=$(printf '%s\n' "$OUT" | tail -4 | tr '\n' ';')"
+  args:
+    executable: /bin/bash
+  register: _apt_repo_probe
   changed_when: false
   failed_when: false
   become: true
+  # The lock is the one transient the probe can wait out. DPkg::Lock::Timeout is NOT
+  # used: it is unconfirmed whether `apt-get update` honours it for the lists lock,
+  # so the wait happens here where its effect is observable.
+  until: "'VERDICT=locked' not in (_apt_repo_probe.stdout | default(''))"
+  retries: "{{ apt_repo_lock_retries | default(6) }}"
+  delay: "{{ apt_repo_lock_delay | default(10) }}"
   when:
     - apt_repo_verify_package | default('', true) | length > 0
     - _apt_repo_present.stdout | trim == 'PRESENT'
   tags: ['packages']
 
-# True means "the repo already on this host is good enough to skip our add".
-# Unset verify-package keeps the pre-#17897 contract: presence alone is trusted.
-- name: "{{ apt_repo_label }} | Decide whether the preserved repo is sufficient"
+- name: "{{ apt_repo_label }} | Record the verdict"
   ansible.builtin.set_fact:
-    _apt_repo_preserve_ok: >-
-      {{ (_apt_repo_present.stdout | trim != 'PRESENT')
-         or (apt_repo_verify_package | default('', true) | length == 0)
-         or ((_apt_repo_candidate.stdout | default('') | trim) not in ['', '(none)']) }}
+    # Not PRESENT, or no package named: the pre-#17897 contract, presence is trusted.
+    # A lock that outlived its retries is undetermined, never unusable.
+    _apt_repo_verdict: >-
+      {{ 'usable'
+         if (_apt_repo_present.stdout | trim != 'PRESENT')
+            or (apt_repo_verify_package | default('', true) | length == 0)
+         else ((_apt_repo_probe.stdout | default('') | regex_search('VERDICT=(\\w+)', '\\1')
+                | first | default('undetermined', true))
+               | replace('locked', 'undetermined')) }}
   tags: ['packages']
 
 - name: "{{ apt_repo_label }} | Preserve device-shipped repo (skip apt_repository)"
@@ -124,82 +209,154 @@
     msg: "{{ apt_repo_label }} repo already configured at /etc/apt/sources.list.d/ — preserving device-shipped config"
   when:
     - _apt_repo_present.stdout | trim == 'PRESENT'
-    - _apt_repo_preserve_ok | bool
+    - _apt_repo_verdict == 'usable'
   tags: ['packages']
 
-# Moved OUTSIDE sources.list.d, not disabled in place: apt reads every file in that
-# directory, so a renamed-but-resident file still collides on Signed-By -- #7218's
-# original failure. Nothing is deleted; the backup keeps the device-shipped config.
-- name: "{{ apt_repo_label }} | Move aside the preserved repo that cannot serve {{ apt_repo_verify_package | default('the package') }}"
-  ansible.builtin.shell: |
-    set -eu
-    BACKUP_DIR=/var/backups/autobot-apt-sources
-    mkdir -p "$BACKUP_DIR"
-    STAMP=$(date -u +%Y%m%dT%H%M%SZ)
-    MOVED=0
-    for f in $(grep -rls -- '{{ apt_repo_match }}' /etc/apt/sources.list.d/ 2>/dev/null); do
-      mv -- "$f" "$BACKUP_DIR/$(basename "$f").${STAMP}.bak"
-      echo "Moved aside $f"
-      MOVED=1
-    done
-    if [ "$MOVED" -eq 0 ]; then echo "No matching source file to move"; fi
-  register: _apt_repo_moved
-  changed_when: "'Moved aside' in _apt_repo_moved.stdout"
-  become: true
-  when:
-    - _apt_repo_present.stdout | trim == 'PRESENT'
-    - not (_apt_repo_preserve_ok | bool)
+# The branch that protects the host: we could not measure, so we do not act.
+- name: "{{ apt_repo_label }} | Stop: could not determine whether the configured repo serves the package"
+  ansible.builtin.fail:
+    msg: >-
+      {{ apt_repo_label }}: whether the source matching '{{ apt_repo_match }}' serves
+      '{{ apt_repo_verify_package }}' is UNDETERMINED — apt reported no candidate and
+      no definitive error naming that repository, so the absence is not evidence the
+      repository is broken. NOTHING on this host has been changed. A slow or
+      unreachable mirror (apt exits 0 for those), a timeout, or a dpkg lock that
+      outlived its retries all produce this. Probe: {{ _apt_repo_probe.stdout | default('') | trim }}
+  when: _apt_repo_verdict == 'undetermined'
   tags: ['packages']
 
-- name: "{{ apt_repo_label }} | Add apt repository (not previously configured)"
-  ansible.builtin.apt_repository:
-    repo: "{{ apt_repo_spec }}"
-    state: present
-    filename: "{{ apt_repo_filename }}"
-  become: true
-  # Fires when nothing was configured, and ALSO when what was configured could not
-  # serve the package and has just been moved aside.
+- name: "{{ apt_repo_label }} | Install the canonical repo definition"
   when: >-
     (_apt_repo_present.stdout | trim == 'MISSING')
-    or not (_apt_repo_preserve_ok | bool)
-  # A `ppa:` spec fetches its signing key from the keyserver here, and a
-  # `deb https://` spec reaches the repository host: one transient failure
-  # used to abort the whole play (#17230). Retry with a bounded budget; once
-  # it is spent the task still fails -- a repo that cannot be added stops
-  # the deploy, it is never downgraded to `failed_when: false`.
-  register: _apt_repo_add
-  until: _apt_repo_add is succeeded
-  retries: "{{ apt_repo_retries | default(5) }}"
-  delay: "{{ apt_repo_retry_delay | default(10) }}"
+    or (_apt_repo_verdict == 'unusable')
   tags: ['packages']
+  block:
+    # Moved OUTSIDE sources.list.d, not disabled in place: apt reads every file in
+    # that directory, so a renamed-but-resident file still collides on Signed-By --
+    # #7218's original failure. NUL-delimited: a path may contain spaces.
+    - name: "{{ apt_repo_label }} | Move aside the configured repo that cannot serve the package"
+      ansible.builtin.shell: |
+        set -eu
+        BACKUP_DIR={{ apt_repo_backup_dir | default('/var/backups/autobot-apt-sources') | quote }}
+        mkdir -p "$BACKUP_DIR"
+        STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+        MOVED=0
+        while IFS= read -r -d '' f; do
+          mv -- "$f" "$BACKUP_DIR/$(basename "$f").${STAMP}.bak"
+          echo "Moved aside $f"
+          MOVED=1
+        done < <(grep -rlsZ -F -- {{ apt_repo_match | quote }} /etc/apt/sources.list.d/ 2>/dev/null)
+        if [ "$MOVED" -eq 0 ]; then echo "No matching source file to move"; fi
+      args:
+        executable: /bin/bash
+      register: _apt_repo_moved
+      changed_when: "'Moved aside' in _apt_repo_moved.stdout"
+      become: true
+      when: _apt_repo_verdict == 'unusable'
 
-- name: "{{ apt_repo_label }} | Confirm {{ apt_repo_verify_package | default('the package') }} is available after the add"
-  ansible.builtin.shell: >-
-    apt-get update -qq -o Acquire::Retries=1 -o Acquire::http::Timeout=15 >/dev/null 2>&1;
-    apt-cache policy -- '{{ apt_repo_verify_package }}' 2>/dev/null
-    | awk '/Candidate:/ {print $2; exit}'
-  register: _apt_repo_candidate_final
+    - name: "{{ apt_repo_label }} | Add apt repository"
+      ansible.builtin.apt_repository:
+        repo: "{{ apt_repo_spec }}"
+        state: present
+        filename: "{{ apt_repo_filename }}"
+      become: true
+      # #17230: a transient keyserver or repo-host failure used to abort the play.
+      register: _apt_repo_add
+      until: _apt_repo_add is succeeded
+      retries: "{{ apt_repo_retries | default(5) }}"
+      delay: "{{ apt_repo_retry_delay | default(10) }}"
+  rescue:
+    # Without this the host keeps NO source for this repo: its own was moved and ours
+    # failed to land. Restore first, then fail naming both.
+    - name: "{{ apt_repo_label }} | Restore the moved source after a failed add"
+      ansible.builtin.shell: |
+        set -eu
+        BACKUP_DIR={{ apt_repo_backup_dir | default('/var/backups/autobot-apt-sources') | quote }}
+        RESTORED=0
+        for b in "$BACKUP_DIR"/*.bak; do
+          [ -e "$b" ] || continue
+          grep -qsF -- {{ apt_repo_match | quote }} "$b" || continue
+          base=$(basename "$b"); orig=${base%.*.bak}
+          mv -- "$b" "/etc/apt/sources.list.d/$orig"
+          echo "Restored $orig"
+          RESTORED=1
+        done
+        if [ "$RESTORED" -eq 0 ]; then echo "Nothing to restore"; fi
+      args:
+        executable: /bin/bash
+      register: _apt_repo_restored
+      changed_when: "'Restored' in _apt_repo_restored.stdout"
+      failed_when: false
+      become: true
+      when: "'Moved aside' in (_apt_repo_moved.stdout | default(''))"
+
+    - name: "{{ apt_repo_label }} | Fail after restoring, naming the add error and the backup"
+      ansible.builtin.fail:
+        msg: >-
+          {{ apt_repo_label }}: adding '{{ apt_repo_spec }}' failed.
+          {{ "The host's own source was moved aside and has been restored: "
+             ~ (_apt_repo_restored.stdout | default('') | trim)
+             if ('Moved aside' in (_apt_repo_moved.stdout | default('')))
+             else "No host source was moved, so nothing needed restoring." }}
+          Backups, if any, are under
+          {{ apt_repo_backup_dir | default('/var/backups/autobot-apt-sources') }}.
+
+# Runs for BOTH paths. A FRESH add can equally land a repo that serves nothing -- a
+# codename this OS has no build in -- which is the same 40-tasks-later failure.
+- name: "{{ apt_repo_label }} | Confirm the package is available after the add"
+  ansible.builtin.shell: |
+    set -u
+    MATCH={{ apt_repo_match | quote }}
+    PKG={{ apt_repo_verify_package | quote }}
+    OUT=$(timeout {{ apt_repo_probe_timeout | default(60) }} apt-get update -qq \
+      -o Acquire::Retries={{ apt_repo_probe_retries | default(3) }} 2>&1); RC=$?
+    CAND=$(apt-cache policy -- "$PKG" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
+    # Only lines that NAME THIS REPO count as evidence about this repo.
+    ERRS=$(printf '%s\n' "$OUT" | grep -E '^(W|E|Err):' | grep -F -- "$MATCH" || true)
+    # A definitive server answer: the repo was reached and said no.
+    DEF=$(printf '%s\n' "$ERRS" | grep -Eic '404|does not have a Release file|NO_PUBKEY|signatures could' || true)
+    LOCK=$(printf '%s\n' "$OUT" | grep -Eic 'Could not get lock|dpkg frontend lock|Waiting for cache lock' || true)
+    if [ -n "$CAND" ] && [ "$CAND" != "(none)" ]; then V=usable
+    elif [ "$LOCK" -gt 0 ]; then V=locked
+    elif [ "$DEF" -gt 0 ]; then V=unusable
+    elif [ "$RC" -eq 0 ] && [ -z "$ERRS" ]; then V=unusable
+    else V=undetermined
+    fi
+    echo "VERDICT=$V"
+    echo "UPDATE_RC=$RC"
+    echo "CANDIDATE=$CAND"
+    echo "REPO_ERRORS=$(printf '%s' "$ERRS" | tr '\n' ';')"
+    echo "TAIL=$(printf '%s\n' "$OUT" | tail -4 | tr '\n' ';')"
+  args:
+    executable: /bin/bash
+  register: _apt_repo_probe_final
   changed_when: false
   failed_when: false
   become: true
+  until: "'VERDICT=locked' not in (_apt_repo_probe_final.stdout | default(''))"
+  retries: "{{ apt_repo_lock_retries | default(6) }}"
+  delay: "{{ apt_repo_lock_delay | default(10) }}"
   when:
     - apt_repo_verify_package | default('', true) | length > 0
-    - not (_apt_repo_preserve_ok | bool)
+    - _apt_repo_verdict != 'usable'
   tags: ['packages']
 
-# The cause is stated here rather than left to apt's "No package matching ...",
-# which names neither the repository nor the preserved file that displaced it.
 - name: "{{ apt_repo_label }} | Fail with the real cause when the repo still cannot serve the package"
   ansible.builtin.fail:
     msg: >-
       {{ apt_repo_label }}: apt has no candidate for '{{ apt_repo_verify_package }}'
-      even after adding '{{ apt_repo_spec }}'. A source matching '{{ apt_repo_match }}'
-      was already present on this host, did not serve that package, and was moved to
-      /var/backups/autobot-apt-sources/. Verify that the repository publishes
-      '{{ apt_repo_verify_package }}' for this OS release
-      ({{ ansible_facts['distribution_release'] | default('unknown release') }}).
+      after adding '{{ apt_repo_spec }}'.
+      {{ "A source matching '" ~ apt_repo_match ~ "' was present, did not serve that "
+         ~ "package, and was moved to "
+         ~ (apt_repo_backup_dir | default('/var/backups/autobot-apt-sources')) ~ "."
+         if ('Moved aside' in (_apt_repo_moved.stdout | default('')))
+         else "No source for this repository was previously configured here." }}
+      Verify the repository publishes it for this OS release
+      ({{ ansible_facts['distribution_release'] | default('unknown release') }}) --
+      a codename with no build produces exactly this.
+      Probe: {{ _apt_repo_probe_final.stdout | default('') | trim }}
   when:
     - apt_repo_verify_package | default('', true) | length > 0
-    - not (_apt_repo_preserve_ok | bool)
-    - (_apt_repo_candidate_final.stdout | default('') | trim) in ['', '(none)']
+    - _apt_repo_verdict != 'usable'
+    - "'VERDICT=unusable' in (_apt_repo_probe_final.stdout | default(''))"
   tags: ['packages']
