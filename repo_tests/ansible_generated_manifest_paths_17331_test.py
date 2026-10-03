@@ -242,6 +242,12 @@ def test_every_role_that_generates_a_manifest_stages_its_includes():
 # the roles; its manifest is resolved through the role's defaults; every relative
 # include in it is resolved where pip will open it. A site whose path cannot be
 # resolved statically must be named in _UNRESOLVED_SITES with its reason.
+#
+# What the path-filter meta-guard cannot see here: the manifests are read as
+# `repo_root() / <resolved path>`, a VARIABLE composition, which
+# python_filter_covers_its_guards_test's detectors do not register (#17632). Its
+# green therefore says nothing about whether a manifest-only change runs this
+# guard; that rests on the filter covering the manifests' trees directly.
 
 _ROLES = _ANSIBLE / "roles"
 _PIP_MODULES = {"pip", "ansible.builtin.pip"}
