@@ -76,57 +76,28 @@ class WorkflowAutomationManager:
         #17014: ``owner_id`` is the authenticated caller, so the workflow records who
         created it and the control routes can scope to them. Callers with no user
         context leave it None, which makes the workflow admin-only rather than open.
+
+        #13809: planned by ``create_workflow_plan``, the canonical LLM planner, with
+        the shell-command contract on. ``plan_workflow_steps`` returned the same
+        fixed skeleton for every request, so every chat workflow echoed its own step
+        names and did nothing. Owner ruling 2026-10-03, recorded on #13809.
         """
         try:
-            # Use orchestrator to analyze request and create workflow steps.
-            # #13730: both are coroutine functions — without await this bound
-            # coroutine objects, the enumerate() below raised TypeError, and the
-            # handler turned every chat request into a silent `return None`.
-            # #13807: the verdict says whether anything actually judged this
-            # request. Every chat request being COMPLEX is a legitimate outcome
-            # and also what a dead classifier produces, so the workflow records
-            # which one it was instead of leaving the two indistinguishable.
-            verdict = await self.orchestrator.classify_request_complexity_verdict(user_request)
-            complexity = verdict.complexity
-            if not verdict.classified:
-                logger.warning(
-                    "Workflow for session %s built on an unclassified request (%s) — complexity defaulted",
-                    session_id,
-                    verdict.state.value,
-                )
-            base_steps = await self.orchestrator.plan_workflow_steps(user_request, complexity)
-
-            # Convert orchestrator steps to workflow steps
-            workflow_steps = []
-            for i, step in enumerate(base_steps):
-                workflow_step = WorkflowStep(
-                    step_id=f"step_{i+1}",
-                    command=self._extract_command_from_step(step),
-                    description=step.action,
-                    explanation=f"This step is part of: {user_request}",
-                    # #13730: canonical WorkflowTask names — `requires_approval`
-                    # and `task_id`; the retired `user_approval_required` / `id`
-                    # would have raised AttributeError once the await landed.
-                    requires_confirmation=step.requires_approval,
-                    dependencies=[
-                        f"step_{j+1}" for j in range(i) if base_steps[j].task_id in (step.dependencies or [])
-                    ],
-                )
-                workflow_steps.append(workflow_step)
-
-            # Create workflow
-            if workflow_steps:
-                workflow_id = await self.create_automated_workflow(
-                    name=f"Chat Request: {user_request[:50]}...",
-                    description=user_request,
-                    steps=workflow_steps,
-                    session_id=session_id,
-                    owner_id=owner_id,
-                )
-                return workflow_id
-
-            return None
-
+            context = {"shell_commands": True, "user_id": owner_id or ""}
+            plan = await self.orchestrator.create_workflow_plan(user_request, context)
+            workflow_steps = self._steps_from_plan(plan.tasks, user_request)
+            if not workflow_steps:
+                # #13809: a plan with no command to run is the hollow workflow this
+                # issue was about; refusing it keeps the failure visible.
+                logger.warning("Chat plan for session %s carried no executable command", session_id)
+                return None
+            return await self.create_automated_workflow(
+                name=f"Chat Request: {user_request[:50]}...",
+                description=user_request,
+                steps=workflow_steps,
+                session_id=session_id,
+                owner_id=owner_id,
+            )
         except Exception as e:
             # #13730: this handler is what made the un-awaited planning calls
             # invisible — a TypeError became a plain `return None`, so both HTTP
@@ -134,6 +105,32 @@ class WorkflowAutomationManager:
             # returning None, but the cause is now in the log.
             logger.error("Failed to create workflow from chat request: %s", e, exc_info=True)
             return None
+
+    def _steps_from_plan(self, tasks, user_request: str) -> List[WorkflowStep]:
+        """Turn planned tasks that carry a command into confirmation-gated steps.
+
+        #13809: the command is LLM-authored from the user's text, so every step
+        requires confirmation — a property of the step that executes, which holds
+        whatever the route's start/approval defaults are. A task without a command
+        is an agent action this terminal executor cannot run; it is named in the
+        log and dropped rather than replaced by a placeholder echo.
+        """
+        runnable = [t for t in tasks if (getattr(t, "inputs", None) or {}).get("command")]
+        step_ids = {task.task_id: f"step_{i + 1}" for i, task in enumerate(runnable)}
+        dropped = [t.action for t in tasks if t.task_id not in step_ids]
+        if dropped:
+            logger.warning("Chat plan tasks without a command were dropped: %s", dropped)
+        return [
+            WorkflowStep(
+                step_id=step_ids[task.task_id],
+                command=self._extract_command_from_step(task),
+                description=task.action,
+                explanation=f"This step is part of: {user_request}",
+                requires_confirmation=True,
+                dependencies=[step_ids[d] for d in (task.dependencies or []) if d in step_ids],
+            )
+            for task in runnable
+        ]
 
     def _extract_command_from_step(self, step) -> str:
         """Extract executable command from workflow step"""
