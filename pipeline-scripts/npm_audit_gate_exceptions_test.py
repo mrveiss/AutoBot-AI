@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 from datetime import date, timedelta
 
+import npm_audit_exceptions as policy
 import npm_audit_gate as gate
 import pytest
 from npm_audit_gate_test import BULK_LOG, _FakeNpm, _report
@@ -65,12 +66,11 @@ def recorded_exception(monkeypatch: pytest.MonkeyPatch) -> None:
     policy instead, so the mechanism's tests and the record's expiry are independent.
     """
     monkeypatch.setattr(
-        gate,
+        policy,
         "ADVISORY_EXCEPTIONS",
         {
-            _EXCUSED: gate.AdvisoryException(
-                expires="2099-01-01",
-                reason="test policy: unfixable, devDependencies only, recorded on #13400",
+            _EXCUSED: policy.AdvisoryException(
+                expires="2099-01-01", reason="test policy: unfixable, devDependencies only, recorded on #13400"
             )
         },
     )
@@ -98,22 +98,22 @@ def test_a_fix_being_available_withdraws_the_exception(recorded_exception) -> No
     verdict = gate.classify(_detailed(("braces", _EXCUSED, True), high=1), BULK_LOG)
 
     assert verdict.result == gate.FOUND
-    assert "fix available" in verdict.reason
+    assert "patched version" in verdict.reason and _EXCUSED in verdict.reason
 
 
 def test_an_expired_exception_fails_and_names_the_date() -> None:
     """Injected date, so the test does not change meaning when the expiry passes."""
-    expiry = date.fromisoformat(gate.ADVISORY_EXCEPTIONS[_EXCUSED].expires)
-    honoured, problems = gate.exception_problems({_EXCUSED}, False, expiry + timedelta(days=1))
+    expiry = date.fromisoformat(policy.ADVISORY_EXCEPTIONS[_EXCUSED].expires)
+    honoured, problems = gate.exception_problems({_EXCUSED: False}, expiry + timedelta(days=1))
 
     assert honoured == set()
-    assert any(gate.ADVISORY_EXCEPTIONS[_EXCUSED].expires in problem for problem in problems)
+    assert any(policy.ADVISORY_EXCEPTIONS[_EXCUSED].expires in problem for problem in problems)
 
 
 def test_the_exception_is_honoured_on_its_last_day() -> None:
     """Contrast for the boundary: expiry is inclusive, so the off-by-one is pinned."""
-    expiry = date.fromisoformat(gate.ADVISORY_EXCEPTIONS[_EXCUSED].expires)
-    honoured, problems = gate.exception_problems({_EXCUSED}, False, expiry)
+    expiry = date.fromisoformat(policy.ADVISORY_EXCEPTIONS[_EXCUSED].expires)
+    honoured, problems = gate.exception_problems({_EXCUSED: False}, expiry)
 
     assert honoured == {_EXCUSED}
     assert problems == []
@@ -121,7 +121,7 @@ def test_the_exception_is_honoured_on_its_last_day() -> None:
 
 def test_a_drained_exception_fails_rather_than_lingering() -> None:
     """Shrink-only, as the ratchet baselines are: a record cannot outlive its advisory."""
-    honoured, problems = gate.exception_problems({_UNKNOWN}, False, date(2026, 10, 3))
+    honoured, problems = gate.exception_problems({_UNKNOWN: False}, date(2026, 10, 3))
 
     assert honoured == set()
     assert any("no longer reported" in problem for problem in problems)
@@ -157,7 +157,7 @@ def test_unreadable_detail_is_never_excused_into_a_pass() -> None:
 
 def test_every_recorded_exception_carries_a_reason_and_an_issue() -> None:
     """A record whose entries need no justification is a silence with a dict around it."""
-    for advisory, exception in gate.ADVISORY_EXCEPTIONS.items():
+    for advisory, exception in policy.ADVISORY_EXCEPTIONS.items():
         assert date.fromisoformat(exception.expires), advisory
         assert len(exception.reason) > 80, f"{advisory} needs a reason, not a label"
         assert "#" in exception.reason, f"{advisory} must cite the issue recording the decision"
@@ -170,7 +170,7 @@ def test_an_empty_record_excuses_nothing(monkeypatch: pytest.MonkeyPatch) -> Non
     old behaviour or a new hole. Here it is the old behaviour: nothing is honoured, every
     failing advisory is unexcused, and the verdict is FOUND.
     """
-    monkeypatch.setattr(gate, "ADVISORY_EXCEPTIONS", {})
+    monkeypatch.setattr(policy, "ADVISORY_EXCEPTIONS", {})
     verdict = gate.classify(_detailed(("braces", _EXCUSED, False), high=6), BULK_LOG)
 
     assert verdict.result == gate.FOUND
@@ -208,7 +208,7 @@ def test_an_excused_pass_names_the_advisory_in_stdout_and_the_summary(
     for place, text in (("stdout", printed), ("the job summary", written)):
         assert _EXCUSED in text, f"the advisory id never reached {place}"
         assert "#13400" in text, f"the issue recording the decision never reached {place}"
-        assert gate.ADVISORY_EXCEPTIONS[_EXCUSED].expires in text, f"the expiry never reached {place}"
+        assert policy.ADVISORY_EXCEPTIONS[_EXCUSED].expires in text, f"the expiry never reached {place}"
     assert "no high or critical advisories" not in printed, (
         "an excused pass must not claim there were none -- six were excused, and that sentence "
         "is the false statement #13400 exists to forbid"
@@ -283,9 +283,9 @@ def test_a_malformed_expiry_fails_closed_without_raising(monkeypatch: pytest.Mon
     1 -- but a crash is a different thing from a verdict, and the docstring claimed the latter.
     """
     monkeypatch.setattr(
-        gate,
+        policy,
         "ADVISORY_EXCEPTIONS",
-        {_EXCUSED: gate.AdvisoryException(expires="not-a-date", reason="x" * 90 + " #13400")},
+        {_EXCUSED: policy.AdvisoryException(expires="not-a-date", reason="x" * 90 + " #13400")},
     )
 
     verdict = gate.classify(_detailed(("braces", _EXCUSED, False), high=1), BULK_LOG)
@@ -397,3 +397,92 @@ def test_the_real_transitive_chain_still_passes(recorded_exception) -> None:
 
     assert verdict.result == gate.PASSED, verdict.reason
     assert _EXCUSED in verdict.reason and "6 excused" in verdict.reason
+
+
+# --- per-advisory attribution, and what counts as a patch ---------------------
+#
+# The gate used ONE boolean meaning "any failing package in this report is fixable" and
+# withdrew an exception on it, so an unrelated advisory revoked an owner ruling. And npm
+# reports a "fix" for three different situations, only one of which is a patch. Fixtures are
+# literals here; the real report that exposed both is quoted in the first test.
+
+
+def _patch_entry(severity: str = "high", *, fix: object = False, rng: str = ">=1.0.0", via: object = None) -> dict:
+    return {"severity": severity, "fixAvailable": fix, "range": rng, "via": via or [_GHSA_VIA]}
+
+
+def test_an_unrelated_fixable_advisory_does_not_withdraw_the_exception(recorded_exception) -> None:
+    """The defect: a global flag let any fixable package revoke a recorded owner ruling.
+
+    Shape taken from the real report on #17887 -- six highs, the excused one unpatchable and a
+    neighbour carrying its own patch. Before this, the neighbour's patch withdrew the exception
+    and the gate failed every frontend-touching PR.
+
+    Takes `recorded_exception` and asserts the reason EXACTLY (CodeRabbit, #17902). Without the
+    fixture this drove the production record, so the negative assertion below passed for three
+    reasons that are not the behaviour under test: the real entry expiring on 2026-11-14, the
+    entry being removed, or the withdrawal message being reworded. A test whose key assertion is
+    "this message is absent" goes green when the mechanism is absent -- which is the vacuity this
+    PR exists to fix, in the test proving the fix. Asserting the whole reason also pins that the
+    excused advisory is NOT listed alongside the neighbour, which a substring check allowed.
+    """
+    other_via = {"url": "https://github.com/advisories/GHSA-zzzz-yyyy-xxxx"}
+    report = _with(
+        {
+            "braces": _patch_entry(rng="*", fix={"name": "stylelint", "version": "7.7.0"}),
+            "neighbour": _patch_entry(fix={"name": "neighbour", "version": "9.9.9"}, via=[other_via]),
+        },
+        high=2,
+    )
+
+    verdict = gate.classify(report, BULK_LOG)
+
+    # The neighbour is still unexcused -- it has no exception -- but the reason must name IT,
+    # not revoke the braces ruling.
+    assert verdict.result == gate.FOUND
+    assert verdict.reason == "not excused: GHSA-zzzz-yyyy-xxxx", verdict.reason
+
+
+def test_the_exception_is_withdrawn_when_its_own_package_is_patched(recorded_exception) -> None:
+    """The other direction: narrower, not softer."""
+    report = _with({"braces": _patch_entry(rng=">=3.0.0", fix={"name": "braces", "version": "3.0.4"})}, high=1)
+
+    verdict = gate.classify(report, BULK_LOG)
+
+    assert verdict.result == gate.FOUND
+    assert "patched version" in verdict.reason
+
+
+@pytest.mark.parametrize(
+    ("case", "entry"),
+    [
+        pytest.param(
+            "parent bump", _patch_entry(rng=">=1.0.0", fix={"name": "stylelint", "version": "7.7.0"}), id="parent"
+        ),
+        pytest.param(
+            "every version vulnerable", _patch_entry(rng="*", fix={"name": "braces", "version": "3.0.4"}), id="star"
+        ),
+        pytest.param(
+            "rollback", _patch_entry(rng=">=7.7.1", fix={"name": "braces", "version": "7.7.0"}), id="downgrade"
+        ),
+    ],
+)
+def test_these_offers_are_not_patches(recorded_exception, case: str, entry: dict) -> None:
+    """Three situations npm reports as a fix; none is a patched version of the package.
+
+    `range == "*"` is npm's own way of saying there is no safe version -- the owner's condition
+    (`first_patched_version: null`) expressed in the gate's own input rather than inferred.
+    """
+    assert not gate.entry_offers_a_patch("braces", entry), case
+    verdict = gate.classify(_with({"braces": entry}, high=1), BULK_LOG)
+    assert verdict.result == gate.PASSED, f"{case}: {verdict.reason}"
+
+
+def test_a_genuine_upgrade_is_a_patch() -> None:
+    """Contrast: without this, a predicate that always answers 'not a patch' passes the three above."""
+    assert gate.entry_offers_a_patch("braces", _patch_entry(rng=">=3.0.0", fix={"name": "braces", "version": "3.0.4"}))
+
+
+def test_an_unreadable_range_counts_as_a_patch_so_the_exception_is_withdrawn() -> None:
+    """A range this cannot parse must not become permission."""
+    assert gate.entry_offers_a_patch("braces", _patch_entry(rng="not a range", fix={"name": "braces", "version": "9"}))

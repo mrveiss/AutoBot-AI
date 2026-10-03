@@ -23,7 +23,7 @@ from models.database import Agent
 from models.schemas import (
     AgentCreateRequest,
     AgentListResponse,
-    AgentLLMConfigWithKey,
+    AgentLLMConfig,
     AgentResponse,
     AgentUpdateRequest,
 )
@@ -53,7 +53,14 @@ def _encrypt_api_key(api_key: str) -> str:
 
 
 def _decrypt_api_key(encrypted_key: str) -> str | None:
-    """Decrypt API key from storage."""
+    """Decrypt a stored provider key for SERVER-SIDE use only.
+
+    The return value must never reach a response model, a log line or an error
+    body. It was previously returned straight out of `GET /{agent_id}/llm`,
+    which is the disclosure this module was fixed for.
+
+    Decrypts a key from storage.
+    """
     if not encrypted_key:
         return None
     try:
@@ -150,13 +157,28 @@ async def get_agent(
     return AgentResponse.model_validate(agent)
 
 
-@router.get("/{agent_id}/llm", response_model=AgentLLMConfigWithKey)
+@router.get("/{agent_id}/llm", response_model=AgentLLMConfig)
 async def get_agent_llm_config(
     agent_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-) -> AgentLLMConfigWithKey:
-    """Get LLM configuration for an agent with decrypted API key."""
+) -> AgentLLMConfig:
+    """Get an agent's LLM configuration. The API key is NEVER included.
+
+    This previously returned the decrypted provider key as a response-model
+    field, to any authenticated caller. The key is omitted rather than masked:
+    a value the client never receives cannot be written back, so a
+    GET-then-PUT round-trip is a no-op for the stored key -- the same reasoning
+    `public_provider_view` records on the settings path.
+
+    **This endpoint is still not ownership-scoped, and cannot be here.** The
+    `agents` table has no company, tenant or owner column -- only a nullable
+    `created_by` -- so there is no predicate to scope by. Adding one against
+    `created_by` would be an authorization check that passes for every row
+    where it is NULL, which is worse than none because it reads as enforcement.
+    The missing tenancy boundary is tracked separately; removing the secret is
+    what closes the disclosure, and it does not depend on that work.
+    """
     result = await db.execute(select(Agent).where(Agent.agent_id == agent_id))
     agent = result.scalar_one_or_none()
 
@@ -166,19 +188,13 @@ async def get_agent_llm_config(
             detail="Agent not found",
         )
 
-    # Decrypt API key
-    api_key = None
-    if agent.llm_api_key_encrypted:
-        api_key = _decrypt_api_key(agent.llm_api_key_encrypted)
-
-    return AgentLLMConfigWithKey(
+    return AgentLLMConfig(
         llm_provider=agent.llm_provider,
         llm_endpoint=agent.llm_endpoint,
         llm_model=agent.llm_model,
         llm_timeout=agent.llm_timeout,
         llm_temperature=agent.llm_temperature,
         llm_max_tokens=agent.llm_max_tokens,
-        llm_api_key=api_key,
     )
 
 

@@ -47,7 +47,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import shlex
 import subprocess
 import sys
@@ -58,17 +57,29 @@ from datetime import date
 from pathlib import Path
 from typing import Callable
 
+# `ADVISORY_EXCEPTIONS` is deliberately NOT re-exported (#13400). A re-exported mutable record
+# has two names and one object, so a test patching `gate.ADVISORY_EXCEPTIONS` leaves
+# `exception_problems` reading the original -- the patch point and the read point diverge, which
+# is the same vacuity #17377 AC2 warns about and it silently un-skipped four tests here. One
+# owner, one name: anything needing the record imports `npm_audit_exceptions`.
+from npm_audit_exceptions import (  # noqa: F401
+    FAILING_SEVERITIES,
+    SEVERITY_ORDER,
+    AdvisoryException,
+    entry_offers_a_patch,
+    exception_problems,
+    excused_phrase,
+    failing_advisories,
+)
+
 DEFAULT_MAX_ATTEMPTS = 3
 DEFAULT_RETRY_DELAY_SECONDS = 15
 DEFAULT_TIMEOUT_SECONDS = 180
 
-SEVERITY_ORDER = ("critical", "high", "moderate", "low", "info")
-FAILING_SEVERITIES = ("critical", "high")
 
 BULK_ENDPOINT = "/-/npm/v1/security/advisories/bulk"
 QUICK_ENDPOINT = "/-/npm/v1/security/audits/quick"
 _ENDPOINT_MARKER = "/-/npm/v1/security/"
-_GHSA = re.compile(r"GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}")
 
 PASSED, FOUND, UNAVAILABLE = "passed", "found", "unavailable"
 EXIT_CODES = {PASSED: 0, FOUND: 1, UNAVAILABLE: 2}
@@ -94,146 +105,6 @@ class Outcome:
     verdict: Verdict
     attempts: int
     report: str
-
-
-@dataclass(frozen=True)
-class AdvisoryException:
-    """One advisory the gate yields to, with the reason and the date it stops counting."""
-
-    expires: str
-    reason: str
-
-
-#: Advisories with NO published fix, which the gate yields to until ``expires``.
-#:
-#: Yielding is deliberate and recorded, which is what the workflow comment above this
-#: gate asks for -- "if an advisory ever has no published fix and the gate has to yield,
-#: change it deliberately and record why on #13400 -- do not silence it as a flake".
-#:
-#: Four conditions, each failing LOUDLY rather than quietly widening the gate:
-#:   * ``expires`` is in the future. An expired entry fails the gate naming itself, so the
-#:     yield cannot outlive the reason for it by inattention.
-#:   * npm reports **no fix available** for any failing package. The moment a bump exists
-#:     the exception stops being honoured and the gate demands the bump -- which is the
-#:     only reason this is not a silence.
-#:   * every entry is still reported. A drained entry fails, the same shrink-only pressure
-#:     the ratchet baselines use, so the record cannot accumulate dead policy.
-#:   * an advisory not listed here still fails. The set is a floor on scrutiny, not a lid.
-#:
-#: The expiry is enforced by THIS GATE and not by the test suite, deliberately: a test
-#: failing on a date would block every Python PR, where the gate blocks only the PRs that
-#: trigger the frontend suite. So the suite stays date-independent and #17890 carries the
-#: reminder to look again before 2026-11-14.
-ADVISORY_EXCEPTIONS: dict[str, AdvisoryException] = {
-    "GHSA-vfj7-8cjw-p6xm": AdvisoryException(
-        expires="2026-11-14",
-        reason=(
-            "braces <= 3.0.3 stack-exhaustion DoS, published 2026-09-18 with "
-            "first_patched_version null -- every lockfile here is already at 3.0.3, so no "
-            "bump exists. Reached only through devDependencies (stylelint and "
-            "@vue/eslint-config-typescript, via micromatch/fast-glob/globby); nothing in a "
-            "shipped bundle imports it. Owner decision 2026-10-03, recorded on #13400."
-        ),
-    ),
-}
-
-
-def _attribute_entry(package: str, entry: dict, detail: dict) -> tuple[set[str], list[str]]:
-    """``(advisory ids this entry names, reasons it is not fully attributed)`` -- per via
-    entry, for the three reasons in the module docstring."""
-    ids: set[str] = set()
-    problems: list[str] = []
-    vias = entry.get("via") or []
-    if not vias:
-        return ids, [f"{package} is a failing advisory with no `via` entries to attribute"]
-    for via in vias:
-        if isinstance(via, dict):
-            match = _GHSA.search(str(via.get("url") or ""))
-            if match:
-                ids.add(match.group(0))
-            else:
-                problems.append(f"{package} names an advisory with no GHSA id: {via.get('url') or via!r}")
-        elif isinstance(via, str):
-            if via not in detail:
-                problems.append(f"{package} is attributed to `{via}`, which the report does not describe")
-        else:
-            problems.append(f"{package} has a `via` entry that is neither an advisory nor a package: {via!r}")
-    return ids, problems
-
-
-def _failing_advisories(report: dict) -> tuple[set[str], bool, list[str]] | None:
-    """``(advisory ids, any failing package is fixable, reasons attribution is incomplete)``.
-
-    ``None`` when the detail is unreadable, which must NOT be read as "nothing to see": the
-    caller keeps a failing verdict. The parse failed OPEN twice before this.
-    """
-    detail = report.get("vulnerabilities")
-    if not isinstance(detail, dict):
-        return None
-    ids: set[str] = set()
-    fixable = False
-    problems: list[str] = []
-    for package, entry in sorted(detail.items()):
-        if not isinstance(entry, dict):
-            problems.append(f"{package}'s entry is not a mapping, so its severity is unknown")
-            continue
-        severity = entry.get("severity")
-        if severity is None:
-            # Skipping it treated "no severity recorded" as "not failing", while
-            # metadata.counts went on reporting it high (second #17889 review).
-            problems.append(f"{package} has no severity recorded, so it cannot be ruled out")
-            continue
-        if severity not in FAILING_SEVERITIES:
-            continue
-        if entry.get("fixAvailable"):
-            fixable = True
-        entry_ids, entry_problems = _attribute_entry(str(package), entry, detail)
-        ids |= entry_ids
-        problems += entry_problems
-    return ids, fixable, problems
-
-
-def _entry_problem(
-    advisory: str, exception: AdvisoryException, ids: set[str], fixable: bool, today: date
-) -> str | None:
-    """Why this entry is not honoured, or ``None`` when it is. Never raises."""
-    if advisory not in ids:
-        return (
-            f"{advisory} is recorded as unfixable but is no longer reported -- remove it from "
-            "ADVISORY_EXCEPTIONS; a record that outlives its advisory is dead policy"
-        )
-    try:
-        expires = date.fromisoformat(exception.expires)
-    except ValueError:
-        return f"{advisory}'s expiry {exception.expires!r} is not a date -- the record is unusable"
-    if expires < today:
-        return (
-            f"{advisory}'s exception expired on {exception.expires} -- re-check for a published "
-            "fix and either bump or renew it deliberately"
-        )
-    if fixable:
-        return (
-            f"{advisory} is recorded as unfixable, but npm reports a fix available for a failing "
-            "package -- bump it; the exception is not honoured while a bump exists"
-        )
-    return None
-
-
-def exception_problems(ids: set[str], fixable: bool, today: date) -> tuple[set[str], list[str]]:
-    """``(ids honoured, reasons the record itself is wrong)``.
-
-    The second half is the point: a record that can only ever widen the gate is a silence
-    with extra steps, so every way it can be stale is a failure that names itself.
-    """
-    honoured: set[str] = set()
-    problems: list[str] = []
-    for advisory, exception in sorted(ADVISORY_EXCEPTIONS.items()):
-        problem = _entry_problem(advisory, exception, ids, fixable, today)
-        if problem:
-            problems.append(problem)
-        else:
-            honoured.add(advisory)
-    return honoured, problems
 
 
 def _emit(text: str, *, err: bool = False) -> None:
@@ -312,7 +183,7 @@ def _clean_or_stale(counts: dict[str, int], endpoint: str, today: date) -> Verdi
     return, so the entry could never be flagged in the only situation where it is stale
     (review on #17889). Shrink-only, the same pressure the ratchet baselines use.
     """
-    _, problems = exception_problems(set(), False, today)
+    _, problems = exception_problems({}, today)
     if problems:
         return Verdict(FOUND, counts=counts, reason="; ".join(problems), endpoint=endpoint)
     return Verdict(PASSED, counts=counts, endpoint=endpoint)
@@ -320,28 +191,26 @@ def _clean_or_stale(counts: dict[str, int], endpoint: str, today: date) -> Verdi
 
 def _excused_or_found(report: dict, counts: dict[str, int], endpoint: str, today: date) -> Verdict:
     """A failing count becomes PASSED only when every advisory in it is a recorded exception."""
-    detail = _failing_advisories(report)
+    detail = failing_advisories(report)
     if detail is None:
         reason = "advisories found, and the per-package detail was unreadable so none could be excused"
         return Verdict(FOUND, counts=counts, reason=reason, endpoint=endpoint)
-    ids, fixable, unattributed = detail
+    patchable_by_advisory, unattributed = detail
     if unattributed:
         reason = "advisories found that could not be attributed to an advisory id: " + "; ".join(unattributed)
         return Verdict(FOUND, counts=counts, reason=reason, endpoint=endpoint)
-    if not ids:
+    if not patchable_by_advisory:
         reason = "advisories found, but the report named no advisory id, so none could be excused"
         return Verdict(FOUND, counts=counts, reason=reason, endpoint=endpoint)
-    honoured, problems = exception_problems(ids, fixable, today)
-    unexcused = sorted(ids - honoured)
+    honoured, problems = exception_problems(patchable_by_advisory, today)
+    unexcused = sorted(set(patchable_by_advisory) - honoured)
     if problems or unexcused:
         # BOTH, never one: reporting only the stale entry sent the reader to remove it while
         # the gate still failed for an advisory nobody had named (review on #17889).
         if unexcused:
             problems.append(f"not excused: {', '.join(unexcused)}")
         return Verdict(FOUND, counts=counts, reason="; ".join(problems), endpoint=endpoint)
-    excused = ", ".join(
-        f"{advisory} (expires {ADVISORY_EXCEPTIONS[advisory].expires})" for advisory in sorted(honoured)
-    )
+    excused = excused_phrase(honoured)
     reason = f"{counts['high'] + counts['critical']} excused by recorded exception: {excused} -- see #13400"
     return Verdict(PASSED, counts=counts, reason=reason, endpoint=endpoint)
 
