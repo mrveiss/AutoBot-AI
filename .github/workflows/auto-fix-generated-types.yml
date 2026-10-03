@@ -68,8 +68,18 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref }}${{ endsWith(github.actor, '[bot]') && github.actor != 'dependabot[bot]' && format('-regen-{0}', github.event.pull_request.head.sha) || '' }}
   cancel-in-progress: true
 
+# #15362: `read`, not `write`. `autofix-types` used to commit the regenerated types
+# back to the PR branch, which invalidated every check already in flight and
+# restarted the whole ~20-minute pass for a codegen nit. It now reports the drift
+# with the command that fixes it.
+#
+# Dropping the permission rather than only deleting the `git push` line is the
+# point: a workflow without `contents: write` CANNOT push, so the property is
+# enforced by the token rather than by whoever edits this file next. The
+# `approve-parked-runs` job below declares its own `contents: read` plus
+# `actions: write`, so it never relied on this default.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   autofix-types:
@@ -193,37 +203,62 @@ jobs:
         working-directory: autobot-slm-frontend
         run: npx --no-install openapi-typescript openapi.json -o src/types/generated/api.ts --additional-properties
 
-      - name: Commit regenerated types if drifted
+      - name: Report drift with the command that fixes it (#15362)
+        shell: bash
         run: |
           rm -f openapi.raw.json openapi.json slm_openapi.raw.json
           rm -rf .venv-slm
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add autobot-frontend/src/types/generated/api.ts \
-            autobot-slm-frontend/openapi.json \
-            autobot-slm-frontend/src/types/generated/api.ts
-          if git diff --staged --quiet; then
-            echo "Generated types already fresh — nothing to commit."
-          else
-            git commit -m "$(cat <<'EOF'
-          chore(types): regenerate generated API types from OpenAPI schema(s)
-
-          Auto-regenerated (py3.14) to match the backend and/or SLM backend
-          schema so the required verify-generated-types gate(s) pass.
-          Triggered by auto-fix-generated-types.yml.
-          EOF
-          )"
-            git push
-            # This push only touches api.ts / openapi.json, the exact paths
-            # this workflow's own `on.pull_request.paths` filter watches, so
-            # it DOES retrigger a new run on the branch. That rerun repeats
-            # the same regeneration, finds the tree already fresh (the diff
-            # below is empty), and takes the "nothing to commit" branch above
-            # instead of pushing again — the loop terminates in two runs, the
-            # same self-limiting shape the backend-only version already had.
-            echo "✅ Generated types regenerated and pushed to the PR branch."
+          GENERATED="autobot-frontend/src/types/generated/api.ts autobot-slm-frontend/openapi.json autobot-slm-frontend/src/types/generated/api.ts"
+          # shellcheck disable=SC2086  # deliberate word splitting over the path list
+          if git diff --quiet -- $GENERATED; then
+            echo "Generated types already fresh - nothing to report."
+            echo "Generated types are in sync with the OpenAPI schema(s)." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
 
+          # The patch goes to an artifact so the fix can be applied without re-deriving
+          # it, and the summary names the command. #15362 AC3: the fix has to be
+          # discoverable, not merely detected.
+          # shellcheck disable=SC2086
+          git diff -- $GENERATED > generated-types.patch
+          {
+            echo "### Generated API types have drifted"
+            echo
+            echo "The committed types do not match the OpenAPI schema(s). This workflow no"
+            echo "longer pushes the fix to your branch: that invalidated every check already"
+            echo "running and cost a full CI pass for a codegen nit (#15362)."
+            echo
+            echo "Apply the patch from this run's artifacts:"
+            echo
+            echo "    git apply generated-types.patch"
+            echo
+            echo "The required verify-generated-types check stays red until the regenerated"
+            echo "files are committed."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "::error title=Generated types drifted::Apply generated-types.patch from this run's artifacts, or regenerate and commit. The required verify-generated-types gate stays red until you do (#15362)."
+          exit 1
+
+      - name: Upload the patch that fixes the drift
+        if: failure()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: generated-types-patch
+          path: generated-types.patch
+          if-no-files-found: warn
+          retention-days: 7
+
+  # #15362: `approve-parked-runs` below is now VESTIGIAL and deliberately kept.
+  # `autofix-types` no longer pushes, so nothing parks and there is nothing for it
+  # to approve: it will run, find no parked run for this PR, and exit clean.
+  #
+  # It is not removed here because nothing in #15362 requires it, and removing it
+  # would retire three guard files that belong to other issues --
+  # `approver_self_cancel_16360_test.py` (#16360),
+  # `git_hooks_formatter_dispatch_16923_test.py` (#16923) and the approval wiring
+  # pinned for #14311. Reversing those rulings inside a PR about CI invalidation
+  # would be a scope change disguised as tidying. Retiring the job and its guards
+  # together is its own issue.
   # #14311: when the token above falls back to the default GITHUB_TOKEN (or
   # even with AUTOBOT_PUSH_TOKEN configured but still resolving to a bot/app
   # identity the fork-PR approval policy does not recognise as a human), the

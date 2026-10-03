@@ -206,6 +206,13 @@ python:
   # green while the guard that reads it never runs.
   - '.github/workflows/sync-main-to-release.yml'
   - 'autobot-frontend/package.json'
+  # #13841: `preroll_reset_is_complete_13841_test.py` reads this composable by literal
+  # path, comparing the fields `_preroll` declares against the fields its `reset()`
+  # clears -- a property nothing behavioural catches, since dropping a field leaves all
+  # 18 pre-roll tests passing. Covered rather than recorded as a bypass: a guard that
+  # does not run when the file it reads is the only thing edited is the vacuity it was
+  # written to prevent, arriving through the path filter instead of the assertion.
+  - 'autobot-frontend/src/composables/useVoiceOutput.ts'
   # #15749: `frontend_reduced_motion_guard_test.py` reads these two by literal
   # path to assert the reduced-motion wiring holds. Without an entry here, a
   # change confined to either is exactly the change that skips the suite

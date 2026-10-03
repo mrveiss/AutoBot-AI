@@ -76,12 +76,26 @@ class GenericProvider(SpeechProvider):
         import os
         import wave
 
+        from autobot_shared.audio_wav import wav_duration_seconds
+
         try:
             # Try to load as WAV file
             with wave.open(audio_path, "rb") as wav:
                 frames = wav.readframes(wav.getnframes())
                 sample_rate = wav.getframerate()
-                duration = wav.getnframes() / float(sample_rate)
+                if sample_rate <= 0:
+                    # Before #13841 this path raised ZeroDivisionError from the inline
+                    # `getnframes() / float(sample_rate)` and landed in the handler below,
+                    # which logged a load error. The shared helper returns 0.0 instead --
+                    # it must never raise, because its other caller is a throughput probe
+                    # that would break synthesis. So the refusal moves HERE, explicitly:
+                    # a corrupt header is a load error, not a zero-duration input nobody
+                    # mentions (review on #17887).
+                    raise ValueError(f"WAV header declares frame rate {sample_rate}")
+                # Arithmetic shared with services/tts_client.py (#13841). The helper
+                # takes the OPEN handle so this keeps one read for frames + rate +
+                # duration; a bytes- or path-taking helper would open the file twice.
+                duration = wav_duration_seconds(wav)
 
                 return AudioInput(
                     audio_id=os.path.basename(audio_path),

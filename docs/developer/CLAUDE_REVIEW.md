@@ -44,6 +44,27 @@ catching," not "what breaks CI." Run through before pushing:
    what the new gate's own suite already asserts.** If updating a test makes it a second copy of a
    neighbour, it has stopped testing its own subject. Fixture fixes preserve coverage; expectation
    fixes spend it.
+10. **Prose, a branch or a default that no input can reach — read it as a wrong gate, not a
+   wrong message.** A conditional message whose else-branch describes a state the surrounding
+   `when:`/`if` excludes is a *readable* trace of a gate hole: the author of the message knew
+   the state was possible, and the gate says it is not. One of the two is wrong, and it is
+   usually the gate. The repair that feels tidy — delete the unreachable text — destroys the
+   only visible evidence and leaves the hole.
+   `add_apt_repository_idempotent.yml` (#17897): the post-add failure message offered "No source
+   for this repository was previously configured here", while both post-add tasks were gated on
+   `_apt_repo_verdict != 'usable'`. That excludes `MISSING` — the one state with no prior source,
+   and the one state where *nothing had been verified at all*, because the verdict short-circuits
+   to `'usable'` whenever presence is not `PRESENT`. So a fresh install added the repo, verified
+   nothing, and died three steps later on apt's bare "No package matching 'postgresql-16' is
+   available". The dead sentence was visible before any of that was understood.
+   **Check:** for each branch of a conditional message or default, name an input that reaches it.
+   None → inspect the gate. Then pin it: derive the firing states by evaluating the **real**
+   predicate, never from the set the test says *should* fire (that version of the guard passes
+   with the defect reinstated).
+   Related tell — a gate written as the **negation of a neighbouring fact** (`!= 'usable'`,
+   `not preserve_ok`) rather than as the condition it means. Both spellings were true in the
+   MISSING case, so renaming the variable preserved the hole across two revisions. Write the
+   predicate the action means — here, mirroring the add's own condition.
 
 ## Code Review Agent Requirements (MANDATORY)
 
