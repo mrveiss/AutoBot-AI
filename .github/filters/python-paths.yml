@@ -335,3 +335,19 @@ python:
   # change that creates the drift -- would take the required-context shim's
   # green while the guard that detects it never runs.
   - 'docs/research/**'
+  # #17930: repo_tests/docs_liquid_tags_are_defined_17930_test.py reads every
+  # front-matter `*.md` under docs/ and `docs/_config.yml`'s own `exclude:` list,
+  # comparing each Liquid tag against what Jekyll defines. A docs-only change
+  # anywhere under this tree is exactly the change that lands an undefined tag --
+  # the site build went dark for days on one -- and without these entries it
+  # computes `python != 'true'`, the shim publishes `python-suite` green, and the
+  # guard reading the file that just changed never runs.
+  #
+  # The tree, not named files: a NEW page can appear in any directory, so a
+  # narrower list would miss the first doc added to a directory not yet named.
+  # Same widening shape as `docs/research/**` above (#17893). The alternative --
+  # recording the dependency in `repo_tests/_glob_declared_uncovered.py` -- is
+  # what that record's own header forbids ("Never add one to make a new uncovered
+  # dependency pass"), and the entry added there for this guard is removed.
+  - 'docs/**/*.md'
+  - 'docs/_config.yml'

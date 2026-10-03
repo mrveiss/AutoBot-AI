@@ -44,7 +44,6 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     "*.md": (
         {
             "repo_tests/doc_sync_hook_resolves_indexer_15845_test.py",
-            "repo_tests/docs_liquid_tags_are_defined_17930_test.py",
             "repo_tests/documented_playbook_invocations_test.py",
             "repo_tests/redis_config_path_is_canonical_17434_test.py",
             "repo_tests/sdk_docs_paths_test.py",

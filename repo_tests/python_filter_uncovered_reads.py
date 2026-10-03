@@ -74,12 +74,6 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         "docker/generate-secrets.sh",
         "docker/secrets-init.sh",
         "docker/with-secrets.sh",
-        "docs/audit/python_314_consistency.md",
-        "docs/developer/CLAUDE_GIT.md",
-        "docs/developer/THREAT_MODEL.md",
-        "docs/developer/WSL2_NETWORKING.md",
-        "docs/development/MCP_DEBUG_SCENARIOS.md",
-        "docs/runbooks/ROTATE_SSH_KEYS.md",
         "pytest.ini",
         "requirements-ci.txt",
         "requirements-gpu-torch.txt",
@@ -90,12 +84,6 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         # never a read of the real root-level file -- same shape as the
         # CLAUDE.md entry above (#17129).
         "README.md",
-        # #17133: secrets_baseline_reasons.py's SPECIFIC_REASONS dict carries
-        # this path as a (filename, type, hash) key, never opens the file --
-        # the guard works off the baseline's stored hash, not this doc's
-        # live content, so covering it would run twelve shards on every
-        # unrelated edit to this doc for a guard that does not depend on it.
-        "docs/developer/GITHUB_FILING_CREDENTIAL_ROTATION.md",
     }
 )
 
@@ -144,7 +132,23 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: (bare name, no slash; #17632). The same change covers the last two in the
 #: filter, so the count is 45 both before and after. Dropping either filter line
 #: makes it 46 and fails the equality.
-MAX_UNCOVERED_READS = 45
+#:
+#: LOWERED 45 -> 38 by #17930, a denominator correction of the only kind this
+#: rule welcomes: the filter now covers `docs/**/*.md`, so seven recorded docs
+#: entries are no longer bypasses and are deleted above. The widening is not for
+#: their sake -- `docs_liquid_tags_are_defined_17930_test.py` parses the Liquid
+#: in every front-matter page, a new page can appear in any directory, and the
+#: site build went dark for days on a tag that reached `main` through exactly
+#: this gap.
+#:
+#: It does REVERSE one recorded trade, which is why it is spelled out rather
+#: than absorbed: #17133 accepted
+#: `docs/developer/GITHUB_FILING_CREDENTIAL_ROTATION.md` as a bypass on the
+#: grounds that covering it would spend twelve shards for a guard that reads
+#: only its hash. That reasoning was about covering it ALONE. The tree is now
+#: covered for an unrelated and stronger reason, so the shards are spent once
+#: for the whole tree and the per-file trade no longer has anything to buy.
+MAX_UNCOVERED_READS = 38
 
 #: A deliberate raise of ``MAX_UNCOVERED_READS`` is recorded here, as
 #: ``(value, "#issue")``. #17650's criterion is that raising is **justified**, not

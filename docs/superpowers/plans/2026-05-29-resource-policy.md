@@ -509,15 +509,6 @@ git commit -m "feat(resource-policy): add drop-in template and per-service syste
 
 - [ ] **Step 1: Create docker-compose.override.yml.j2**
 
-<!-- The raw guard below is load-bearing: this block is an Ansible/Jinja2 template quoted as
-     content, and Jekyll runs Liquid over raw Markdown BEFORE rendering, so a fenced code block
-     does not protect it. Liquid reaches the Jinja "set" tag, which it does not define, and the
-     site build fails (#17930).
-
-     This comment deliberately names those tags in prose rather than writing them out: an HTML
-     comment is not protected either, so a literal example here would be parsed by Liquid and
-     would reintroduce the defect inside its own explanation. -->
-{% raw %}
 ```jinja2
 # autobot-slm-backend/ansible/roles/autobot-resource-policy/templates/docker-compose.override.yml.j2
 # AutoBot - AI-Powered Automation Platform
@@ -547,7 +538,6 @@ services:
 {% endif %}
 {% endfor %}
 ```
-{% endraw %}
 
 - [ ] **Step 2: Create tasks/docker-override.yml**
 
