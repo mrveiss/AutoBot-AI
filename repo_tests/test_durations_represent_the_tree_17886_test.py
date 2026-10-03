@@ -27,11 +27,14 @@ a module is represented at all. A module whose tests are all deselected by the
 generator's marker filter is legitimately absent; that is part of the allowed
 fraction, which is why the ceiling is not zero.
 
-The ceiling: a fresh refresh measured 2.9% (backend) and 3.3% (SLM) unrepresented
-six days after it ran; the stale files measured 48.3% and 57.1%. 15% allows weeks
-of ordinary test growth between weekly refreshes and fails long before the
-splitter is balancing noise. Raise it only with a measurement, never to make red
-go green.
+WHAT IT DETECTS: catastrophic staleness, not moderate drift. A fresh refresh
+measured 2.9% (backend) and 3.3% (SLM) unrepresented six days after it ran; the
+stale files measured 48.3% and 57.1%. 15% is about five times the fresh value and
+allows weeks of ordinary growth between weekly refreshes. What it does NOT claim:
+anything about how well the splitter balances at 14.9% -- that was never measured.
+A shrink-only ratchet on the measured fraction does not fit either: the fraction
+legitimately rises every week and drops at each refresh. Raise the ceiling only
+with a measurement, never to make red go green.
 """
 
 from __future__ import annotations
@@ -50,8 +53,9 @@ _WORKFLOW = ".github/workflows/test-durations.yml"
 MAX_UNREPRESENTED_FRACTION = 0.15
 
 #: Reach floor: the backend file's roots held 2,459 test modules and the SLM file's
-#: 245 when this was written. Far below either means the enumeration broke, and an
-#: empty enumeration would make every fraction 0/0 -- a pass that examined nothing.
+#: 245 when this was written. Far below either means the enumeration broke. (An
+#: empty enumeration would raise ZeroDivisionError rather than pass, but the floor
+#: names the real cause instead of a division error.)
 _MIN_TRACKED_MODULES = {".test_durations": 1500, ".test_durations_slm": 150}
 
 #: One ``python -m pytest <roots> ... --durations-path <file>`` invocation.
@@ -82,7 +86,9 @@ def _invocations() -> dict[str, list[str]]:
 
 def test_the_generator_invocations_are_found():
     """If the workflow's shape changes, this fails first -- not the coverage check, vacuously."""
-    assert set(_invocations()) == set(_MIN_TRACKED_MODULES), f"parsed {sorted(_invocations())} from {_WORKFLOW}"
+    invocations = _invocations()
+    assert set(invocations) == set(_MIN_TRACKED_MODULES), f"parsed {sorted(invocations)} from {_WORKFLOW}"
+    assert all(invocations.values()), f"an invocation parsed with no roots: {invocations}"
 
 
 @pytest.mark.parametrize("durations_file", sorted(_MIN_TRACKED_MODULES))
@@ -120,3 +126,17 @@ def test_the_roots_parser_reads_a_real_shaped_invocation():
         "            --durations-path .test_durations \\\n"
     )
     assert generator_roots(text) == {".test_durations": ["autobot-backend", "repo_tests", "libs"]}
+
+
+@pytest.mark.parametrize(
+    "mangled",
+    [
+        # no --durations-path: a pytest call that stores no durations is not a generator
+        "          python -m pytest \\\n            autobot-backend repo_tests \\\n            -n auto \\\n",
+        # roots on the pytest line itself, not the continuation line the generator uses
+        "          python -m pytest autobot-backend repo_tests \\\n            --durations-path .test_durations \\\n",
+    ],
+)
+def test_the_roots_parser_rejects_a_shape_it_does_not_understand(mangled: str):
+    """The parser must be seen to fail, or a loosened regex could match the wrong thing silently."""
+    assert generator_roots(mangled) == {}
