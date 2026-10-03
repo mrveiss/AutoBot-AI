@@ -29,7 +29,11 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-infrastructure/shared/scripts/install-bare-metal.sh": 882,
     "autobot-infrastructure/shared/scripts/install-slm.sh": 822,
     "autobot-slm-backend/ansible/deploy.sh": 718,
-    "install.sh": 1277,  # #17875: +12 for three first-run fixes; single-file installer cannot be split
+    # #17929: +41 for the /dev/tty prompt helper. The documented one-command
+    # install aborted silently at the password prompt -- stdin is the script
+    # pipe, `read` got EOF, `set -e` killed it. Delivered BY the download
+    # pipeline, so it can neither source a helper nor be split.
+    "install.sh": 1321,  # #17875: +12 for three first-run fixes; single-file installer cannot be split
     "scripts/lib/hardcoded-value-rules.sh": 842,
     "scripts/pr-preflight.sh": 818,
 }
