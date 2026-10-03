@@ -44,6 +44,7 @@ goes red naming that file; delete the `constraints/shared.txt` copy from
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import yaml
 from repo_tests._paths import repo_root
@@ -222,3 +223,149 @@ def test_every_role_that_generates_a_manifest_stages_its_includes():
         f"path but never include {_STAGING_TASKS.name}, so the path is empty "
         "when a playbook other than the updater runs them (#17331):\n  " + "\n  ".join(offenders)
     )
+
+
+# ---------------------------------------------------------------------------
+# Checked-in manifests installed in place (#17892)
+# ---------------------------------------------------------------------------
+#
+# The generated case above is half the family. The other half is a pip task that
+# installs a CHECKED-IN manifest straight from the deployed tree: pip resolves its
+# sibling-relative `-c ../constraints/shared.txt` against the deployed file, so the
+# include lands at `<base_dir>/constraints/shared.txt` -- a path only
+# stage_shared_manifests.yml puts on a node. slm_manager installed
+# `{{ slm_backend_dir }}/requirements.txt` without staging, and a clean-machine
+# install aborted with "Could not open constraint file" (#17892). Two earlier
+# instances are recorded in scripts/build-filtered-requirements.sh's header.
+#
+# Derived, not enumerated: every pip site with `requirements:` is found by walking
+# the roles; its manifest is resolved through the role's defaults; every relative
+# include in it is resolved where pip will open it. A site whose path cannot be
+# resolved statically must be named in _UNRESOLVED_SITES with its reason.
+
+_ROLES = _ANSIBLE / "roles"
+_PIP_MODULES = {"pip", "ansible.builtin.pip"}
+_INCLUDE_MODULES = {"include_tasks", "ansible.builtin.include_tasks", "import_tasks", "ansible.builtin.import_tasks"}
+_BASE_DIR = yaml.safe_load((_ANSIBLE / "inventory" / "group_vars" / "all.yml").read_text(encoding="utf-8"))["autobot"][
+    "base_dir"
+]
+#: What stage_shared_manifests.yml places on a node, relative to base_dir.
+_STAGED_PATHS = {f"{_BASE_DIR}/{rel}" for rel in _REWRITTEN_INCLUDES}
+_RELATIVE_INCLUDE = re.compile(r"^-[cr]\s+(\.\./\S+)", re.M)
+_VAR = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
+_MIN_PIP_SITES_SEEN = 8
+
+#: (role task file, requirements value) -> why the static resolution does not apply.
+_UNRESOLVED_SITES = {
+    (
+        "npu-worker/tasks/main.yml",
+        "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-npu-worker/requirements.txt",
+    ): "installs from the code_source checkout, where its `-c ../constraints` resolves inside that same "
+    "checkout; whether code_source exists on the node is the #17243 family, not this one",
+    (
+        "dependency_patching/tasks/update-venv.yml",
+        "/tmp/requirements-security-update.txt",
+    ): "rendered from templates/requirements-security-update.txt.j2, which declares no -c/-r includes "
+    "(asserted by test_the_patching_template_declares_no_includes)",
+}
+
+
+def _pip_sites() -> list[tuple[str, str, bool]]:
+    """(role-relative task file, requirements value, staged-before) for every pip site with a manifest."""
+    sites = []
+    for path in sorted(_ROLES.glob("*/tasks/*.yml")):
+        doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        staged = False
+        for task in _flat_tasks(doc):
+            if any("stage_shared_manifests" in str(task.get(m, "")) for m in _INCLUDE_MODULES):
+                staged = True
+            module = next((m for m in _PIP_MODULES if m in task), None)
+            requirements = task[module].get("requirements") if module and isinstance(task[module], dict) else None
+            if requirements:
+                sites.append((path.relative_to(_ROLES).as_posix(), str(requirements).strip(), staged))
+    return sites
+
+
+def _flat_tasks(node) -> list[dict]:
+    """Tasks in file order, descending into block/rescue/always."""
+    out: list[dict] = []
+    for task in node if isinstance(node, list) else []:
+        if isinstance(task, dict):
+            out.append(task)
+            for key in ("block", "rescue", "always"):
+                out.extend(_flat_tasks(task.get(key)))
+    return out
+
+
+def resolve_path(value: str, variables: dict[str, str]) -> str | None:
+    """Substitute simple ``{{ var }}`` references until none remain; None if any cannot be."""
+    for _ in range(10):
+        unresolved = _VAR.findall(value)
+        if not unresolved:
+            return None if "{{" in value else value
+        for name in unresolved:
+            if name not in variables:
+                return None
+            value = re.sub(r"\{\{\s*" + name + r"\s*\}\}", variables[name], value)
+    return None
+
+
+def unplaced_includes(manifest_on_node: str, manifest_text: str, placed: set[str]) -> list[str]:
+    """Node paths of relative includes that resolve outside the deployed tree and are not placed."""
+    missing = []
+    for include in _RELATIVE_INCLUDE.findall(manifest_text):
+        target = (Path(manifest_on_node).parent / include).resolve().as_posix()
+        repo_rel = target.removeprefix(f"{_BASE_DIR}/")
+        ships_with_tree = (repo_root() / repo_rel).is_file() and repo_rel not in _REWRITTEN_INCLUDES
+        if target not in placed and not ships_with_tree:
+            missing.append(target)
+    return missing
+
+
+def _role_vars(role_file: str) -> dict[str, str]:
+    defaults = _ROLES / role_file.split("/", 1)[0] / "defaults" / "main.yml"
+    data = yaml.safe_load(defaults.read_text(encoding="utf-8")) if defaults.is_file() else {}
+    return {k: str(v) for k, v in (data or {}).items() if isinstance(v, (str, int))}
+
+
+def test_the_pip_site_walk_reaches_the_sites_it_guards():
+    assert len(_pip_sites()) >= _MIN_PIP_SITES_SEEN, "the role walk found too few pip sites to mean anything"
+
+
+def test_every_installed_manifest_include_resolves_to_a_placed_path():
+    """A relative -c/-r in an installed manifest must land on something the role put there."""
+    failures = []
+    for role_file, requirements, staged in _pip_sites():
+        if staged or (role_file, requirements) in _UNRESOLVED_SITES:
+            continue
+        on_node = resolve_path(requirements, _role_vars(role_file))
+        if on_node is None:
+            failures.append(
+                f"{role_file}: cannot resolve {requirements!r} -- name it in _UNRESOLVED_SITES with a reason"
+            )
+            continue
+        manifest = repo_root() / on_node.removeprefix(f"{_BASE_DIR}/")
+        if not manifest.is_file():
+            continue  # generated on the node; the generated-manifest checks above own that shape
+        for target in unplaced_includes(on_node, manifest.read_text(encoding="utf-8"), placed=set()):
+            failures.append(f"{role_file}: {requirements} includes {target}, which nothing places before pip runs")
+    assert not failures, "\n".join(failures)
+
+
+def test_no_unresolved_site_exemption_is_stale():
+    live = {(role_file, requirements) for role_file, requirements, staged in _pip_sites() if not staged}
+    stale = sorted(set(_UNRESOLVED_SITES) - live)
+    assert not stale, f"exemptions for sites that no longer exist or now stage: {stale}"
+
+
+def test_the_patching_template_declares_no_includes():
+    template = _ROLES / "dependency_patching" / "templates" / "requirements-security-update.txt.j2"
+    assert not _RELATIVE_INCLUDE.search(template.read_text(encoding="utf-8"))
+
+
+def test_an_unstaged_relative_constraint_is_reported():
+    """Contrast pair for the detector: a constraint include with nothing placed is named; once placed, it is not."""
+    on_node = f"{_BASE_DIR}/autobot-slm-backend/requirements.txt"
+    text = "fastapi>=1\n-c ../constraints/shared.txt\n"
+    assert unplaced_includes(on_node, text, placed=set()) == [f"{_BASE_DIR}/constraints/shared.txt"]
+    assert unplaced_includes(on_node, text, placed=_STAGED_PATHS) == []
