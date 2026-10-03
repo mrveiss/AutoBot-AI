@@ -12,14 +12,14 @@ Home: #17258 — this analysis produced no umbrella of its own. The one new gap 
 
 ## What It Is
 
-A single-author Python scraping framework, BSD-3, created 2024-10 and pushed the day this
-was written, that spans three layers normally shipped as separate tools: a selector/parser
+A single-author Python scraping framework, permissively licensed and actively pushed,
+that spans three layers normally shipped as separate tools: a selector/parser
 layer, a set of fetchers (plain HTTP, headless browser, anti-bot "stealth" browser), and a
 spider/crawl engine with pause-resume, proxy rotation and adaptive throttling. Its headline
 differentiator is **element relocation**: you mark a selection as saved, and when the site's
 markup changes later, it re-finds the same element by structural similarity rather than
 failing. Unusually mature distribution for a single maintainer — published package, Docker
-image, 10-language README, an MCP server, and a vendor-authored agent skill. Very high
+image, a multi-language README, an MCP server, and a vendor-authored agent skill. Very high
 adoption by stars, with a fork:star ratio around 0.10 that reads as "library people depend
 on" rather than "template people copy".
 
@@ -29,7 +29,7 @@ on" rather than "template people copy".
   (three interchangeable fetch strategies behind one call signature), `spiders` (crawl
   engine). Each is usable alone; the fetchers return the parser's own type, so the same
   selection API works whatever fetched the page.
-- **Pluggable storage behind an ABC.** `StorageSystemMixin` declares `save`/`retrieve`;
+- **Pluggable storage behind an ABC.** an abstract storage base declares `save`/`retrieve`;
   the shipped implementation is SQLite with `journal_mode=WAL`, `check_same_thread=False`
   and an `RLock`, explicitly so the library survives being used inside threaded frameworks.
 - **Spider engine decomposed into one file per concern** — `scheduler`, `throttle`,
@@ -99,7 +99,7 @@ on" rather than "template people copy".
   element returned confidently, or several elements where one was expected. The caller gets
   no confidence value back — only the elements.
 - **The prompt-injection claim is stronger than the mechanism.** The agent skill states the
-  flag must be used "to protect from Prompt Injection"; what it does is remove main-page
+  flag is advertised as prompt-injection protection; what it does is remove main-page
   chrome and strip elements hidden via **inline style attributes** or `aria-hidden`. Content
   hidden by a stylesheet rule or a class — which is how hidden text is usually hidden — is
   not matched, and *visible* injected text is not addressed at all. A real partial mitigation
@@ -118,10 +118,10 @@ on" rather than "template people copy".
 
 | Claim | Status |
 |---|---|
-| ~85k stars, ~8.7k forks, active daily | independently visible; the low fork:star ratio supports "depended on", not "forked" |
+| very high adoption, active daily | independently visible; the low fork:star ratio supports "depended on", not "forked" |
 | Parser relocates elements after site changes | real, and the implementation matches the claim |
 | Fetchers bypass named anti-bot systems out of the box | self-reported; not verifiable from source, and inherently time-limited |
-| "Blazing fast crawls" | self-reported; a `benchmarks.py` exists in-repo, i.e. the author's own harness |
+| a speed claim in the project's own marketing | self-reported; a `benchmarks.py` exists in-repo, i.e. the author's own harness |
 | Agent skill + MCP server | real, both shipped in-tree |
 
 **Hidden** — what an adopter inherits:
@@ -160,7 +160,8 @@ instructions followed:
    structurally it is fetched content speaking to the agent evaluating it, which is the shape
    the contract exists for. It was read as data and none of its assurances were taken as
    verified.
-2. The same file contains an imperative in bold addressed to the agent ("you MUST use ...").
+2. The same file contains an imperative in bold addressed to the reading agent,
+   directing which tool to use.
    Treated as documentation of a flag, not as an instruction; and the flag's actual behaviour
    was checked against the claim rather than assumed, which is how the gap above was found.
 
