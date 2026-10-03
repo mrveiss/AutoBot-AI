@@ -84,7 +84,10 @@ SELF_REL = "scripts/check_python_file_size.py"
 #: The ratchet test holding RATCHET_BASELINE, the second copy of these numbers.
 #: Every message that asks for an edit here names it too: a ceiling lowered in
 #: one file alone leaves the other holding the old size (#14498).
-RATCHET_REL = "repo_tests/python_file_size_ratchet_test.py"
+RATCHET_REL = "repo_tests/python_file_size_ratchet_baseline.py"  # the DATA module, not the
+#: test that re-exports it (#17377): a developer told to lower "the matching RATCHET_BASELINE
+#: entry" in the test file opens a file whose RATCHET_BASELINE is one re-export line, with no
+#: entries to edit -- the wrong-copy failure #17872 exists to prevent, emitted by the gate.
 
 #: Repo-relative path prefixes the guard does not cover, mirrored from this
 #: hook's own entry in ``.pre-commit-config.yaml`` (its ``exclude:``,
@@ -192,20 +195,20 @@ def _grandfathered_verdict(rel: str, line_count: int, ceiling: int) -> str | Non
     if line_count <= MAX_LINES:
         return (
             f"{rel}: {line_count} lines — now within the {MAX_LINES}-line limit. "
-            f"Delete its KNOWN_LARGE entry in {SELF_REL}, and its RATCHET_BASELINE "
+            f"Delete its KNOWN_LARGE entry in {SELF_REL} and its RATCHET_BASELINE "
             f"entry in {RATCHET_REL}: an entry naming a compliant file exempts "
             "nothing while looking authoritative."
         )
     if line_count > ceiling:
         return (
             f"{rel}: {line_count} lines, over its recorded ceiling of {ceiling}. "
-            "A grandfathered file may not grow (#14236) — the exemption freezes "
+            "A grandfathered file may not grow — the exemption freezes "
             "the size it was granted for, it does not license more."
         )
     if line_count < ceiling:
         return (
             f"{rel}: {line_count} lines, under its recorded ceiling of {ceiling}. "
-            f"Lower the ceiling to {line_count} in {SELF_REL}, and the matching "
+            f"Lower the ceiling to {line_count} in {SELF_REL} and the matching "
             f"RATCHET_BASELINE entry in {RATCHET_REL} — the ratchet only turns "
             "down, and an unlowered ceiling re-licenses the lines just cut."
         )
@@ -231,7 +234,7 @@ def _vanished_entry_problem(rel: str, root: pathlib.Path) -> str:
     return (
         f"{rel}: not found by the tracked-file walk under {root} — this entry "
         f"(ceiling {KNOWN_LARGE[rel]}) names a file that moved or was deleted. "
-        f"Remove it from {SELF_REL}, and its RATCHET_BASELINE entry in {RATCHET_REL}."
+        f"Remove it from {SELF_REL} and its RATCHET_BASELINE entry in {RATCHET_REL}."
     )
 
 
@@ -336,6 +339,21 @@ def configure_logging() -> None:
     logger.addHandler(handler)
 
 
+def _reach_breach_problem(reached: int) -> str:
+    """The reach-breach finding, worded identically in both gates (#17377).
+
+    Extracted so the two gates' wording can be compared by a test instead of by a
+    reader. The actionable half -- which knob to check -- was in the shell gate only;
+    a Python developer got "covers almost nothing" and no next step.
+    """
+    return (
+        f"reach check: the tree walk reached {reached} tracked file(s), under the "
+        f"{MIN_TRACKED_PY_FILES}-file floor — it stopped covering the tree, so this "
+        f"run's verdict covers almost nothing. Check EXCLUDED_PREFIXES in {SELF_REL} "
+        "and that `git ls-files` works from the repo root."
+    )
+
+
 def run_audit() -> int:
     """``--audit-ceilings``: walk the tree and apply the ratchet to it.
 
@@ -346,11 +364,7 @@ def run_audit() -> int:
     """
     reached, problems = audit_ceilings()
     if reached < MIN_TRACKED_PY_FILES:
-        problems.append(
-            f"reach check: the tree walk reached {reached} files, under the "
-            f"{MIN_TRACKED_PY_FILES}-file floor — it stopped covering most of "
-            "the tree, so this run's verdict covers almost nothing."
-        )
+        problems.append(_reach_breach_problem(reached))
     if problems:
         logger.error("%s", "\n".join(problems))
         return 1

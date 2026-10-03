@@ -292,6 +292,21 @@ def audit_ceilings() -> tuple[int, list[str]]:
     return reached, problems
 
 
+def _reach_breach_problem(reached: int) -> str:
+    """The reach-breach finding, worded identically in both gates (#17377).
+
+    Extracted so the two gates' wording can be compared by a test instead of by a
+    reader. The actionable half -- which knob to check -- was in the shell gate only;
+    a Python developer got "covers almost nothing" and no next step.
+    """
+    return (
+        f"reach check: the tree walk reached {reached} tracked file(s), under the "
+        f"{MIN_TRACKED_SH_FILES}-file floor — it stopped covering the tree, so this "
+        f"run's verdict covers almost nothing. Check EXCLUDED_PREFIXES in {SELF_REL} "
+        "and that `git ls-files` works from the repo root."
+    )
+
+
 def run_audit() -> int:
     """``--audit-ceilings``: walk the tree, and assert the walk actually reached it."""
     reached, problems = audit_ceilings()
@@ -300,12 +315,7 @@ def run_audit() -> int:
         # violations used to report only the reach -- and the reach breach is the more
         # alarming of the two precisely because it explains the other, so suppressing
         # the violations hid the evidence of what the short walk missed.
-        problems.append(
-            f"reach check: the tree walk reached {reached} tracked file(s), under the "
-            f"{MIN_TRACKED_SH_FILES}-file floor -- it stopped covering the tree, so this "
-            f"run's verdict covers almost nothing. Check EXCLUDED_PREFIXES in {SELF_REL} "
-            "and that `git ls-files` works from the repo root."
-        )
+        problems.append(_reach_breach_problem(reached))
     if problems:
         logger.error("%s", "\n".join(problems))
         return 1
