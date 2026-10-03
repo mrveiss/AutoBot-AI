@@ -205,12 +205,23 @@
   ansible.builtin.set_fact:
     # Not PRESENT, or no package named: the pre-#17897 contract, presence is trusted.
     # A lock that outlived its retries is undetermined, never unusable.
+    # `default([], true)` sits BEFORE `first`, not after it. `regex_search` returns
+    # None when the pattern does not match, and `None | first` raises TypeError --
+    # which `set_fact` reports as a bare `FAILED! => {"changed": false}` with no
+    # message, so the play stops and says nothing about why. A default placed after
+    # `first` can never run, because `first` has already raised.
+    #
+    # The no-match case is reachable in two ways and both were seen in the wild on
+    # a user's install at 18:06 on 2026-10-03: the probe is skipped by its `when:`
+    # (leaving stdout undefined), or it ran and emitted no VERDICT line because the
+    # shell exited before its echoes. Either way the honest verdict is
+    # `undetermined`, which the ladder below already handles by stopping.
     _apt_repo_verdict: >-
       {{ 'usable'
-         if (_apt_repo_present.stdout | trim != 'PRESENT')
+         if (_apt_repo_present.stdout | default('') | trim != 'PRESENT')
             or (apt_repo_verify_package | default('', true) | length == 0)
          else ((_apt_repo_probe.stdout | default('') | regex_search('VERDICT=(\\w+)', '\\1')
-                | first | default('undetermined', true))
+                | default([], true) | first | default('undetermined', true))
                | replace('locked', 'undetermined')) }}
   tags: ['packages']
 
