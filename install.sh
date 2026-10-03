@@ -15,6 +15,14 @@
 #   sudo ./install.sh --reinstall
 #   sudo ./install.sh --help
 
+# Re-exec under bash; must precede `set -o pipefail`, which dash rejects when
+# started as `sh install.sh`. POSIX here -- dash reads it (#17875).
+if [ -z "${BASH_VERSION:-}" ]; then
+    [ -r "$0" ] && [ "$0" != "sh" ] && exec bash "$0" "$@"
+    echo "AutoBot installer requires bash.  Run:  sudo bash install.sh" >&2
+    exit 1
+fi
+
 set -euo pipefail
 
 # =============================================================================
@@ -47,7 +55,7 @@ readonly DEFAULT_REPO="https://${REPO_HOST}/${REPO_SLUG}.git"
 readonly NODESOURCE_HOST="deb.nodesource.com"
 readonly DEFAULT_BRANCH="main"
 readonly REQUIRED_DISK_MB=5120
-readonly REQUIRED_MEM_MB=2048
+readonly REQUIRED_MEM_MB=1536   # SLM control plane only (#17875): postgres + slm-backend + nginx
 
 # Runtime flags
 UNATTENDED=false
@@ -360,7 +368,7 @@ preflight_checks() {
     local total_mem_mb
     total_mem_mb=$(free -m | awk '/^Mem:/{print $2}')
     if [[ "${total_mem_mb}" -lt "${REQUIRED_MEM_MB}" ]]; then
-        fatal "Insufficient memory: ${total_mem_mb}MB available, ${REQUIRED_MEM_MB}MB required"
+        fatal "Insufficient memory: ${total_mem_mb}MB total, ${REQUIRED_MEM_MB}MB required for the SLM node"
     fi
     success "Memory: ${total_mem_mb}MB total"
 
@@ -463,13 +471,17 @@ system_setup() {
     if [[ ! -f "${ssh_key}" ]]; then
         run_ok "Generating SSH key pair for fleet management" \
             sudo -u "${AUTOBOT_USER}" bash -c "mkdir -p ${AUTOBOT_HOME}/.ssh && ssh-keygen -t ed25519 -f ${ssh_key} -N '' -C 'autobot@slm'"
+    elif [[ ! -f "${ssh_key}.pub" ]]; then
+        # DERIVE, never regenerate: enrolled nodes trust this key (#17875).
+        run_ok "Recovering the public key from the existing private key" \
+            sudo -u "${AUTOBOT_USER}" bash -c "ssh-keygen -y -f ${ssh_key} > ${ssh_key}.pub && chmod 0644 ${ssh_key}.pub"
     else
         success "  SSH key pair already exists"
     fi
 
     # Issue #2828: Copy SSH key to shared location for Ansible (#3268: must be
     # autobot:autobot 0600 — SSH client refuses group-readable private keys).
-    if [[ -f "${ssh_key}" ]]; then
+    if [[ -f "${ssh_key}" && -f "${ssh_key}.pub" ]]; then
         cp "${ssh_key}" /etc/autobot/ssh/autobot_key
         cp "${ssh_key}.pub" /etc/autobot/ssh/autobot_key.pub
         chown "${AUTOBOT_USER}:${AUTOBOT_USER}" /etc/autobot/ssh/autobot_key /etc/autobot/ssh/autobot_key.pub
