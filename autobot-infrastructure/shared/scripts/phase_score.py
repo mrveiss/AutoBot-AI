@@ -211,3 +211,51 @@ def overall(scores: Sequence[Tuple[PhaseScore, float]]) -> Dict[str, Any]:
         # as "assessed and failed" to anything rendering this.
         result["ready_for_production"] = None
     return result
+
+
+#: Top-level keys of the results object that :func:`project_report` REBUILDS
+#: rather than copies. Everything else is carried through verbatim.
+#:
+#: A deny-list, deliberately, and not the allow-list it replaces (#17674). The
+#: old projection enumerated four keys by hand, so ``structural_presence`` --
+#: added to the aggregate by #17505, read by the CI gate from the same change --
+#: never reached the artifact, the gate read ``None``, a defensive default
+#: rendered it as ``0``, and ``0 < 60`` failed the gate for 34 hours. An
+#: allow-list drops silently when the producer grows a key; a deny-list carries
+#: the new key and only needs editing when a key's SHAPE changes, which is a
+#: change you cannot make without touching this module.
+RESTRUCTURED_KEYS = frozenset({"phases", "recommendations", "overall_assessment"})
+
+
+def project_report(results: Dict[str, Any], timestamp: str) -> Dict[str, Any]:
+    """The JSON artifact CI consumes, derived from the in-memory results.
+
+    ``timestamp`` is passed in rather than taken here so this module stays a
+    pure policy with no clock: the same results object projects to the same
+    report, which is what makes the contract testable.
+
+    Per-phase, ``structural_presence_percentage`` stays ``None`` rather than 0
+    for a phase that defers to dedicated gates -- 0 would read as "measured and
+    found empty" (#17089), which is the same confusion one level down.
+    """
+    report: Dict[str, Any] = {key: value for key, value in results.items() if key not in RESTRUCTURED_KEYS}
+    report["timestamp"] = timestamp
+    report["phases"] = [
+        {
+            "name": phase_name,
+            "status": phase_data.get("status", "unknown"),
+            "structural_presence_percentage": phase_data.get("structural_presence_percentage"),
+            "complete": phase_data.get("complete", False),
+            "not_checked": phase_data.get("not_checked", {}),
+            "authoritative_gates": phase_data.get("authoritative_gates", []),
+            # #7496: ``_validate_phase`` stores per-check details under
+            # ``validations`` (plural). The old key ``validation_details``
+            # silently defaulted to ``{}`` in every report.
+            "validation_details": phase_data.get("validations", {}),
+        }
+        for phase_name, phase_data in results.get("phases", {}).items()
+    ]
+    report["recommendations"] = [
+        {"title": rec, "action": "Review and implement"} for rec in results.get("recommendations", [])
+    ]
+    return report

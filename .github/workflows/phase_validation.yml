@@ -1,4 +1,16 @@
 # Phase Validation Integration workflow
+#
+# IS THIS A REQUIRED CONTEXT? (#17674, answered explicitly rather than left
+# implicit.) No, and it CANNOT be one as triggered: `pull_request` below is
+# filtered to `release`, so this workflow never runs on a PR into `main` and a
+# required context that never reports would block every such PR forever. It
+# runs on PUSH to main, i.e. after the merge, where a red result is advisory by
+# construction -- which is how this gate stayed red for 34 hours across 17 runs
+# with nothing blocked and nobody paged. Making it required is a two-part
+# change, both outside this file's reach: add `main` to the `pull_request`
+# branches here AND add the context in branch protection, which is a repo
+# setting and an owner action. Until both happen, treat a red run on main as a
+# merge-blocking defect by convention, not by enforcement.
 
 name: Phase Validation Integration
 
@@ -127,8 +139,12 @@ jobs:
         # Only apply zero-maturity fallback when the script produced no valid JSON
         # (e.g. import error). A non-zero exit due to Redis unavailability still
         # writes valid JSON — overwriting it with 0 was the cause of false failures.
+        # #17674: `structural_presence` is null, NOT 0. This branch means the
+        # validator produced no parseable report, so nothing was measured --
+        # and a 0 here is what let "the instrument is broken" render as "the
+        # repo scores 0%" for 34 hours. The gate below refuses a null loudly.
         python3 -c 'import json; json.load(open("phase_validation_results.json"))' 2>/dev/null \
-          || echo '{"structural_presence": 0, "overall_maturity": null, "measures": "nothing ran", "skipped_detail": {}, "phases": []}' > phase_validation_results.json
+          || echo '{"structural_presence": null, "overall_maturity": null, "measures": "nothing ran -- the validator produced no parseable JSON", "skipped_detail": {}, "phases": []}' > phase_validation_results.json
 
         # Display results summary
         echo "## Phase Validation Results" >> "$GITHUB_STEP_SUMMARY"
@@ -142,7 +158,12 @@ jobs:
         # "App.vue and package.json exist". `overall_maturity` is null whenever
         # a group was skipped, and the summary says so rather than printing a
         # figure with a name it did not earn.
-        python3 -c 'import json; r=json.load(open("phase_validation_results.json")); print("**Structural presence:** {:.1f}%".format(r.get("structural_presence", 0))); print(""); print("Measures: {}".format(r.get("measures", "unknown"))); print("Completion: {}".format("measured" if r.get("overall_maturity") is not None else "NOT measured in CI (no live stack)"))' >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "Results not available" >> "$GITHUB_STEP_SUMMARY"
+        # #17674: `.get("structural_presence", 0)` printed "0.0%" whenever the
+        # producer stopped emitting the key -- a fabricated number, and the
+        # quiet twin of the gate failure below. An absent figure now says so and
+        # lists what the report DID carry. No `2>/dev/null`: a crashed reader is
+        # a third fact and its traceback belongs in the log.
+        python3 -c 'import json; r=json.load(open("phase_validation_results.json")); v=r.get("structural_presence"); shown=("{:.1f}%".format(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else "NOT MEASURED (it is {!r}; top-level keys present: {})".format(v, sorted(r))); print("**Structural presence:** " + shown); print(""); print("Measures: {}".format(r.get("measures", "unknown"))); print("Completion: {}".format("measured" if r.get("overall_maturity") is not None else "NOT measured in CI (no live stack)"))' >> "$GITHUB_STEP_SUMMARY" || echo "Validation summary unavailable -- see the Phase Validation Gate step" >> "$GITHUB_STEP_SUMMARY"
         # One line, and `chr(10)` rather than an escape: a bare newline here made
         # the `for` start at column 0, which YAML read as a new mapping key, and
         # a backslash inside an f-string expression is a SyntaxError (#15122).
@@ -173,7 +194,14 @@ jobs:
         # the live checks contributed to it. `overall_maturity` is null here by
         # design, and `.get("overall_maturity", 0)` would have returned None and
         # broken `bc` rather than failing loudly.
-        MATURITY=$(python3 -c 'import json; f=open("phase_validation_results.json"); r=json.load(f); v=r.get("structural_presence"); print(v if isinstance(v, (int, float)) else 0)' 2>/dev/null || echo "0")
+        # #17674: no `|| echo "0"` and no `2>/dev/null`. An absent key, an
+        # unreadable file and a crashed reader are three different facts and
+        # none of them is "0%". `phase_report_figure.py` exits 3 with a message
+        # naming the key it wanted and the keys the report actually carries;
+        # `set -euo pipefail` turns that into a loud step failure instead of a
+        # silent "0% < 60%". NO PATH HERE PRINTS A NUMBER IT DID NOT READ.
+        MATURITY=$(python3 autobot-infrastructure/shared/scripts/phase_report_figure.py \
+          phase_validation_results.json structural_presence)
 
         echo "Structural presence: ${MATURITY}% (completion is NOT measured in CI mode)"
 
@@ -217,13 +245,20 @@ jobs:
             const results = JSON.parse(fs.readFileSync('phase_validation_results.json', 'utf8'));
 
             let comment = '## AutoBot Phase Validation Results\n\n';
-            comment += `**System Maturity:** ${results.overall_maturity?.toFixed(1)}%\n\n`;
+            // #17674, same class as the gate: this read two names the report
+            // does not carry. `overall_maturity` is null in --ci-mode by design
+            // and `completion_percentage` is omitted entirely for any phase
+            // with a skipped group (#17089) -- both rendered as `undefined%`.
+            // A figure that was not measured now says so by name.
+            const pct = (v) => (typeof v === 'number' ? `${v.toFixed(1)}%` : 'not measured');
+            comment += `**Structural presence:** ${pct(results.structural_presence)}\n`;
+            comment += `**Completion:** ${pct(results.overall_maturity)} (a --ci-mode run has no live stack)\n\n`;
             comment += '### Phase Status:\n\n';
 
             for (const phase of results.phases || []) {
               const emoji = phase.status === 'complete' ? 'PASS' :
                            phase.status === 'in_progress' ? 'IN PROGRESS' : 'FAIL';
-              comment += `${emoji} **${phase.name}**: ${phase.completion_percentage?.toFixed(1)}%\n`;
+              comment += `${emoji} **${phase.name}**: ${pct(phase.structural_presence_percentage)}\n`;
             }
 
             comment += '\n### Recommendations:\n';
@@ -281,17 +316,32 @@ jobs:
         set -euo pipefail
         echo "Checking integration readiness..."
 
-        # Check if validation results indicate system is ready for integration
-        MATURITY=$(python3 -c 'import json; f=open("phase_validation_results.json"); r=json.load(f); print(r.get("overall_maturity", 0))' 2>/dev/null || echo "0")
+        # #17674, THE CHOICE, STATED. This gate read `overall_maturity`, which
+        # the producer sets to null whenever a check group was skipped -- and
+        # --ci-mode, the only mode CI runs, always skips the live-stack groups.
+        # So the key is PRESENT and None, `.get(key, 0)` never reaches its
+        # default, `print(None)` emitted the string "None", and `bc` was handed
+        # `None >= 70`. The gate was unreachable-by-construction, and only
+        # looked healthy because the job it `needs:` was already failing.
+        #
+        # It is NOT retired: the job is wired up and runs on main/release, and a
+        # gate that cannot pass is a defect in the gate, not a reason to drop
+        # the check. It now gates on `structural_presence`, which is the figure
+        # this run actually produces, at the unchanged threshold of 70 -- and it
+        # says outright that completion was not assessed, rather than implying
+        # it. Restoring a completion gate needs a live stack in this job, which
+        # is a separate change.
+        MATURITY=$(python3 autobot-infrastructure/shared/scripts/phase_report_figure.py \
+          phase_validation_results.json structural_presence)
 
         if (( $(echo "$MATURITY >= 70" | bc -l) )); then
-          echo "System ready for integration (${MATURITY}%)"
-          echo "## Integration Ready" >> "$GITHUB_STEP_SUMMARY"
-          echo "System maturity: ${MATURITY}% - Ready for integration testing" >> "$GITHUB_STEP_SUMMARY"
+          echo "Structural presence sufficient for integration (${MATURITY}% >= 70%)"
+          echo "## Integration Ready (structurally)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Structural presence: ${MATURITY}% - completion was NOT assessed (no live stack in CI)" >> "$GITHUB_STEP_SUMMARY"
         else
-          echo "::error::System not ready for integration (${MATURITY}%)"
+          echo "::error::Structural presence below the integration threshold (${MATURITY}% < 70%)"
           echo "## Integration Not Ready" >> "$GITHUB_STEP_SUMMARY"
-          echo "System maturity: ${MATURITY}% - Additional development required" >> "$GITHUB_STEP_SUMMARY"
+          echo "Structural presence: ${MATURITY}% - below the 70% integration threshold" >> "$GITHUB_STEP_SUMMARY"
           exit 1
         fi
 
