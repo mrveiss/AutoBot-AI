@@ -129,3 +129,25 @@ def test_the_commit_path_reports_above_lastresort(gate, tmp_path, caplog) -> Non
         "the hook would refuse a push silently"
     )
     assert str(never_opened) in "\n".join(r.getMessage() for r in caplog.records), "the finding never named the file"
+
+
+def test_both_gates_tell_a_new_oversized_file_to_split(gate) -> None:
+    """The guidance text itself, pinned in full for BOTH gates.
+
+    The shell gate carried this sentence and the Python gate did not (#17377): advice
+    against grandfathering belongs in the gate that HAS a ``KNOWN_LARGE``. Pinned here
+    rather than in ``python_file_size_ratchet_test.py`` for two reasons -- that file sits
+    at the 600-line hard limit with no headroom, and a message both gates emit should be
+    asserted once over both rather than once per gate. Full equality, not a substring, so
+    the wording cannot degrade into something that still contains "Split it".
+
+    The em dash is deliberate and shared: both gates use it throughout their messages, and
+    an ASCII ``--`` in one of them was the drift this assertion would have frozen.
+    """
+    rel = "autobot-backend/api/definitely_not_grandfathered.py"
+    over = gate.MAX_LINES + 1
+    assert gate.verdict(rel, over) == (
+        f"{rel}: {over} lines (max {gate.MAX_LINES}). Split it — do not add a KNOWN_LARGE "
+        f"entry in {gate.SELF_REL}, which grandfathers what already existed and is not a "
+        "way in for new files."
+    )

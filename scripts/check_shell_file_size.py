@@ -230,6 +230,30 @@ def _vanished_entry_problem(rel: str, root: pathlib.Path) -> str:
     )
 
 
+def _report_unmeasured(rel: str, seen: set[str], problems: list[str]) -> None:
+    """Report a file that could not be read, and record it as SEEN but not REACHED.
+
+    NOT a skip (#14975). ``unmeasured`` states the contract -- exit 0 is only entitled to
+    mean *within the limit*, and a file that was never opened has not earned that -- and
+    ``main`` has honoured it since. The scan path did not, so ``--audit-ceilings`` could
+    report "all live and at size" having never read a broken symlink, a bad mode or a
+    non-UTF-8 file.
+
+    ``seen`` and ``reached`` mean different things here, which is why this records one and
+    not the other. ``seen`` answers "did the walk find this path", which it did, so the
+    ``KNOWN_LARGE - seen`` pass in ``audit_ceilings`` must not ALSO call it
+    moved-or-deleted -- that message is wrong for a file that exists and cannot be read,
+    and reporting both tells the developer two stories about one file. ``reached`` stays
+    exclusive, so an unmeasured file cannot prop up the floor check in ``run_audit``
+    without having been ruled on.
+
+    Extracted (#17377) because inlining both rationales took the caller past the 30-line
+    standard; the concept is "classify a file we could not measure", which is one idea.
+    """
+    problems.append(unmeasured(rel))
+    seen.add(normalise(rel))
+
+
 def _scan_tracked_files(root: pathlib.Path, tracked: list[str]) -> tuple[int, set[str], list[str]]:
     """Rule on every readable file in *tracked*. Returns (reached, seen, problems).
 
@@ -243,21 +267,7 @@ def _scan_tracked_files(root: pathlib.Path, tracked: list[str]) -> tuple[int, se
     for rel in sorted(tracked):
         line_count = count_lines(root / rel)
         if line_count is None:
-            # NOT a skip. The docstring's contract is that an unmeasured file is
-            # not a passing one, and a `continue` here would quietly exempt
-            # exactly the files least likely to be readable -- a broken symlink,
-            # a bad mode, a non-UTF-8 script. It is reported and deliberately
-            # does NOT count toward `reached`, so it cannot prop up the floor
-            # check in run_audit() without having been ruled on.
-            problems.append(unmeasured(rel))
-            # Recorded as SEEN but not as REACHED, and the two words mean different
-            # things here. `seen` answers "did the walk find this path", which it did,
-            # so the `KNOWN_LARGE - seen` pass in `audit_ceilings` must not also call it
-            # moved-or-deleted -- that message is wrong for a file that exists and
-            # cannot be read, and reporting both tells the developer two stories about
-            # one file. `reached` stays exclusive, so an unmeasured file still cannot
-            # prop up the floor check.
-            seen.add(normalise(rel))
+            _report_unmeasured(rel, seen, problems)
             continue
         reached += 1
         seen.add(normalise(rel))
