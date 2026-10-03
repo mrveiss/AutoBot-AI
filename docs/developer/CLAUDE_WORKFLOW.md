@@ -223,6 +223,9 @@ Subagents cannot autonomously acquire Bash permission. Run batch file-manipulati
 - **Type:** `bug`, `enhancement`, `technical-debt`, `refactoring`, `security`, `performance`, `testing`, `documentation`
 - **Area:** `backend`, `frontend`, `devops`, `database`, `mcp`, `rag`, `deployment`
 - **Priority:** `priority: critical`, `priority: high`, `priority: medium`, `priority: low`
+  — these four are the **complete** set; the repo defines no other `priority:` label, so a
+  fifth value is a typo that silently applies nothing, not a new tier. `gh label list`
+  is the check (#16447).
 
 **Commit format:** `<type>(scope): <description> (#issue-number)`
 
