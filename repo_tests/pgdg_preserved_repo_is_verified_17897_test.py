@@ -97,7 +97,26 @@ def probe_script(helper_tasks: list[dict]) -> str:
     )
 
 
-def _run_probe(script: str, tmp_path: Path, *, update_out: str, update_rc: int, candidate: str) -> str:
+def _policy(candidate: str | None, origins: tuple[str, ...] = ()) -> str:
+    """A realistic ``apt-cache policy`` block, including the version table.
+
+    The probe reads the table's origin rows to answer "does THIS repository serve the
+    package", so a fixture that prints only a ``Candidate:`` line cannot distinguish
+    our source from any other and would make the origin check untestable.
+    """
+    lines = [f"{PKG}:", "  Installed: (none)", f"  Candidate: {candidate or '(none)'}"]
+    lines.append("  Version table:")
+    if candidate:
+        lines.append(f" *** {candidate} 500")
+        for origin in origins:
+            lines.append(f"        500 {origin} jammy/main amd64 Packages")
+        lines.append("        100 /var/lib/dpkg/status")
+    return "\n".join(lines)
+
+
+def _run_probe(
+    script: str, tmp_path: Path, *, update_out: str, update_rc: int, policy: str
+) -> str:
     """Execute the probe with apt shadowed, and return its VERDICT."""
     fake = tmp_path / "bin"
     fake.mkdir(exist_ok=True)
@@ -106,7 +125,7 @@ def _run_probe(script: str, tmp_path: Path, *, update_out: str, update_rc: int, 
         encoding="utf-8",
     )
     (fake / "apt-cache").write_text(
-        f"#!/bin/bash\nprintf '%s\\n' {shlex.quote(candidate)}\n", encoding="utf-8"
+        f"#!/bin/bash\nprintf '%s\\n' {shlex.quote(policy)}\n", encoding="utf-8"
     )
     for f in fake.iterdir():
         f.chmod(0o755)
@@ -133,7 +152,11 @@ def test_the_helper_task_list_is_whole(helper_tasks: list[dict]) -> None:
 
 def test_a_resolved_candidate_is_usable(probe_script: str, tmp_path: Path) -> None:
     verdict = _run_probe(
-        probe_script, tmp_path, update_out="", update_rc=0, candidate="  Candidate: 16.15-1"
+        probe_script,
+        tmp_path,
+        update_out="",
+        update_rc=0,
+        policy=_policy("16.15-1", (f"https://{MATCH}/pub/repos/apt",)),
     )
     assert verdict == "usable", "a repo that serves the package must be preserved, not replaced"
 
@@ -142,10 +165,87 @@ def test_no_candidate_and_no_error_naming_the_repo_is_unusable(
     probe_script: str, tmp_path: Path
 ) -> None:
     """The original defect: the repo was reached, said nothing, and serves nothing."""
-    verdict = _run_probe(probe_script, tmp_path, update_out="", update_rc=0, candidate="")
+    verdict = _run_probe(probe_script, tmp_path, update_out="", update_rc=0, policy=_policy(None))
     assert verdict == "unusable", (
         "a clean update with no candidate is the #17897 case and must be replaced"
     )
+
+
+def test_a_candidate_from_a_DIFFERENT_source_is_not_usable(
+    probe_script: str, tmp_path: Path
+) -> None:
+    """The false-usable case. ``apt-cache policy``'s candidate is a GLOBAL answer.
+
+    If another enabled source supplies the package, a probe that reads "a candidate
+    exists" as "this source serves it" answers a different question than the helper
+    asks -- and the consequence is the one this whole change exists to prevent: an
+    unusable device-shipped source is PRESERVED and the canonical add is skipped.
+    The install may still succeed from the other source, which is what makes this
+    quiet: the host ends up depending on a source nobody chose, and the broken one
+    stays. Covers the pre-add and post-add probes together, since both run this script.
+    """
+    verdict = _run_probe(
+        probe_script,
+        tmp_path,
+        update_out="",
+        update_rc=0,
+        policy=_policy("16.15-1", ("http://archive.ubuntu.com/ubuntu",)),
+    )
+    assert verdict != "usable", (
+        "a candidate supplied by an unrelated source marked this source usable. The "
+        "helper would preserve a source that serves nothing and skip adding the "
+        "canonical one"
+    )
+
+
+def test_a_candidate_this_repo_serves_at_an_older_version_is_still_usable(
+    probe_script: str, tmp_path: Path
+) -> None:
+    """The contrast case that stops the origin check over-firing.
+
+    Judging by the CANDIDATE's origin alone would call this source unusable because
+    something else ships a newer build -- and the remedy for unusable DISPLACES the
+    host's own configuration. The question is whether this repo serves the package at
+    all, so the check counts origin rows across every version, not just the candidate's.
+    """
+    policy = _policy("16.15-1", ("http://archive.ubuntu.com/ubuntu",))
+    policy += f"\n     16.14-1 500\n        500 https://{MATCH}/pub/repos/apt jammy-pgdg/main amd64 Packages"
+    verdict = _run_probe(probe_script, tmp_path, update_out="", update_rc=0, policy=policy)
+    assert verdict == "usable", (
+        "this repository does serve the package, at an older version than another "
+        "source's candidate, and was judged unusable -- which would move the host's "
+        "own working source aside"
+    )
+
+
+def test_the_post_add_check_fails_unless_the_verdict_is_positively_usable(
+    helper_tasks: list[dict],
+) -> None:
+    """The pre-add path stops on `undetermined`; the post-add path must too.
+
+    Firing only on `unusable` let the play SUCCEED over a post-add probe that never
+    confirmed the repository serves the package, and the failure then surfaced three
+    steps later as a package-install error. Asked the other way: a PASS of the old
+    condition licensed a green play over an unverified provision.
+    """
+    task = _named(helper_tasks, "Fail with the real cause")
+    for verdict, probe, should_fail in [
+        ("unusable", "VERDICT=unusable\nUPDATE_RC=0", True),
+        ("undetermined", "VERDICT=undetermined\nUPDATE_RC=0", True),
+        ("usable", "VERDICT=usable\nUPDATE_RC=0", False),
+    ]:
+        got = _eval_when(
+            _when_of(task),
+            apt_repo_verify_package=PKG,
+            _apt_repo_verdict="unusable",
+            _apt_repo_probe_final={"stdout": probe},
+            _apt_repo_moved={"stdout": ""},
+        )
+        assert got is should_fail, (
+            f"post-add verdict {verdict!r}: the play "
+            f"{'continued' if should_fail else 'failed'} when it must not. An "
+            f"`undetermined` post-add probe means the provision was never confirmed"
+        )
 
 
 def test_a_definitive_server_answer_naming_the_repo_is_unusable(
@@ -157,7 +257,7 @@ def test_a_definitive_server_answer_naming_the_repo_is_unusable(
         update_out=f"E: The repository 'https://{MATCH}/pub/repos/apt bogus-pgdg Release'"
         " does not have a Release file.\n",
         update_rc=0,
-        candidate="",
+        policy=_policy(None),
     )
     assert verdict == "unusable", "a 404 / missing Release naming this repo is positive evidence"
 
@@ -176,7 +276,7 @@ def test_a_failed_fetch_naming_the_repo_is_UNDETERMINED_not_unusable(
         update_out=f"W: Failed to fetch https://{MATCH}/pub/repos/apt/dists/jammy-pgdg/InRelease"
         "  Connection timed out [IP: 2001:db8::1 443]\n",
         update_rc=0,
-        candidate="",
+        policy=_policy(None),
     )
     assert verdict == "undetermined", (
         "a slow or unreachable mirror was read as proof the repository is broken. The "
@@ -186,7 +286,7 @@ def test_a_failed_fetch_naming_the_repo_is_UNDETERMINED_not_unusable(
 
 
 def test_a_timeout_is_undetermined(probe_script: str, tmp_path: Path) -> None:
-    verdict = _run_probe(probe_script, tmp_path, update_out="", update_rc=124, candidate="")
+    verdict = _run_probe(probe_script, tmp_path, update_out="", update_rc=124, policy=_policy(None))
     assert verdict == "undetermined", "a timed-out update measured nothing about the repo"
 
 
@@ -196,7 +296,7 @@ def test_a_held_lock_is_retried_not_judged(probe_script: str, tmp_path: Path) ->
         tmp_path,
         update_out="E: Could not get lock /var/lib/apt/lists/lock. It is held by process 900\n",
         update_rc=100,
-        candidate="",
+        policy=_policy(None),
     )
     assert verdict == "locked", (
         "a dpkg/apt lock must be waited out, never treated as a verdict about the repo"

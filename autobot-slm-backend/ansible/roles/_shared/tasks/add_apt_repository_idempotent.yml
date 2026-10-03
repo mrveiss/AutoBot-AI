@@ -158,13 +158,21 @@
     PKG={{ apt_repo_verify_package | quote }}
     OUT=$(timeout {{ apt_repo_probe_timeout | default(60) }} apt-get update -qq \
       -o Acquire::Retries={{ apt_repo_probe_retries | default(3) }} 2>&1); RC=$?
-    CAND=$(apt-cache policy -- "$PKG" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
+    POLICY=$(apt-cache policy -- "$PKG" 2>/dev/null)
+    CAND=$(printf '%s\n' "$POLICY" | awk '/Candidate:/ {print $2; exit}')
+    # Does THIS repository appear among the package's origins at all? `apt-cache
+    # policy`'s candidate is a global answer: another enabled source supplying the
+    # package would otherwise mark our source "usable" while it serves nothing.
+    # Counted over every version's origin rows rather than only the candidate's,
+    # because a source offering an OLDER version still serves the package -- judging
+    # it by the candidate alone would call it unusable and displace a working source.
+    SERVED=$(printf '%s\n' "$POLICY" | grep -E '^ +[0-9]+ +' | grep -cF -- "$MATCH" || true)
     # Only lines that NAME THIS REPO count as evidence about this repo.
     ERRS=$(printf '%s\n' "$OUT" | grep -E '^(W|E|Err):' | grep -F -- "$MATCH" || true)
     # A definitive server answer: the repo was reached and said no.
     DEF=$(printf '%s\n' "$ERRS" | grep -Eic '404|does not have a Release file|NO_PUBKEY|signatures could' || true)
     LOCK=$(printf '%s\n' "$OUT" | grep -Eic 'Could not get lock|dpkg frontend lock|Waiting for cache lock' || true)
-    if [ -n "$CAND" ] && [ "$CAND" != "(none)" ]; then V=usable
+    if [ -n "$CAND" ] && [ "$CAND" != "(none)" ] && [ "$SERVED" -gt 0 ]; then V=usable
     elif [ "$LOCK" -gt 0 ]; then V=locked
     elif [ "$DEF" -gt 0 ]; then V=unusable
     elif [ "$RC" -eq 0 ] && [ -z "$ERRS" ]; then V=unusable
@@ -173,6 +181,7 @@
     echo "VERDICT=$V"
     echo "UPDATE_RC=$RC"
     echo "CANDIDATE=$CAND"
+    echo "SERVED_BY_THIS_REPO=$SERVED"
     echo "REPO_ERRORS=$(printf '%s' "$ERRS" | tr '\n' ';')"
     echo "TAIL=$(printf '%s\n' "$OUT" | tail -4 | tr '\n' ';')"
   args:
@@ -327,13 +336,21 @@
     PKG={{ apt_repo_verify_package | quote }}
     OUT=$(timeout {{ apt_repo_probe_timeout | default(60) }} apt-get update -qq \
       -o Acquire::Retries={{ apt_repo_probe_retries | default(3) }} 2>&1); RC=$?
-    CAND=$(apt-cache policy -- "$PKG" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
+    POLICY=$(apt-cache policy -- "$PKG" 2>/dev/null)
+    CAND=$(printf '%s\n' "$POLICY" | awk '/Candidate:/ {print $2; exit}')
+    # Does THIS repository appear among the package's origins at all? `apt-cache
+    # policy`'s candidate is a global answer: another enabled source supplying the
+    # package would otherwise mark our source "usable" while it serves nothing.
+    # Counted over every version's origin rows rather than only the candidate's,
+    # because a source offering an OLDER version still serves the package -- judging
+    # it by the candidate alone would call it unusable and displace a working source.
+    SERVED=$(printf '%s\n' "$POLICY" | grep -E '^ +[0-9]+ +' | grep -cF -- "$MATCH" || true)
     # Only lines that NAME THIS REPO count as evidence about this repo.
     ERRS=$(printf '%s\n' "$OUT" | grep -E '^(W|E|Err):' | grep -F -- "$MATCH" || true)
     # A definitive server answer: the repo was reached and said no.
     DEF=$(printf '%s\n' "$ERRS" | grep -Eic '404|does not have a Release file|NO_PUBKEY|signatures could' || true)
     LOCK=$(printf '%s\n' "$OUT" | grep -Eic 'Could not get lock|dpkg frontend lock|Waiting for cache lock' || true)
-    if [ -n "$CAND" ] && [ "$CAND" != "(none)" ]; then V=usable
+    if [ -n "$CAND" ] && [ "$CAND" != "(none)" ] && [ "$SERVED" -gt 0 ]; then V=usable
     elif [ "$LOCK" -gt 0 ]; then V=locked
     elif [ "$DEF" -gt 0 ]; then V=unusable
     elif [ "$RC" -eq 0 ] && [ -z "$ERRS" ]; then V=unusable
@@ -342,6 +359,7 @@
     echo "VERDICT=$V"
     echo "UPDATE_RC=$RC"
     echo "CANDIDATE=$CAND"
+    echo "SERVED_BY_THIS_REPO=$SERVED"
     echo "REPO_ERRORS=$(printf '%s' "$ERRS" | tr '\n' ';')"
     echo "TAIL=$(printf '%s\n' "$OUT" | tail -4 | tr '\n' ';')"
   args:
@@ -371,9 +389,21 @@
       Verify the repository publishes it for this OS release
       ({{ ansible_facts['distribution_release'] | default('unknown release') }}) --
       a codename with no build produces exactly this.
+      {{ "apt reported no definitive error naming this repository, so this is NOT "
+         ~ "evidence the repository is broken -- the provision could not be CONFIRMED, "
+         ~ "and the play stops rather than continue over an unverified repo."
+         if ('VERDICT=unusable' not in (_apt_repo_probe_final.stdout | default('')))
+         else "" }}
       Probe: {{ _apt_repo_probe_final.stdout | default('') | trim }}
+  # Fires unless the post-add verdict is positively `usable`. The pre-add path already
+  # stops on `undetermined` rather than guessing; this one used to fire only on
+  # `unusable`, so an `undetermined` post-add probe let the play SUCCEED without ever
+  # confirming the repository serves the package -- and the failure then surfaced
+  # three steps later as a package-install error. A green play over an unverified
+  # provision is the asymmetry, not a missing check: the rule was right on one path
+  # and absent on the other.
   when:
     - apt_repo_verify_package | default('', true) | length > 0
     - _apt_repo_verdict != 'usable'
-    - "'VERDICT=unusable' in (_apt_repo_probe_final.stdout | default(''))"
+    - "'VERDICT=usable' not in (_apt_repo_probe_final.stdout | default(''))"
   tags: ['packages']
