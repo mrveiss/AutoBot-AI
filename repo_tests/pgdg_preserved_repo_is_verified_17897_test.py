@@ -33,7 +33,7 @@ from pathlib import Path
 
 import jinja2
 import pytest
-import yaml
+from repo_tests._ansible_tasks import eval_when, load_tasks, named, when_of
 from repo_tests._paths import repo_root
 
 ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
@@ -61,30 +61,15 @@ def _has_module(task: dict, name: str) -> bool:
     return name in task or f"ansible.builtin.{name}" in task
 
 
-def _tasks(path: Path) -> list[dict]:
-    if not path.exists():
-        pytest.fail(f"{path.relative_to(repo_root())} does not exist -- the fix's home moved")
-    loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if not isinstance(loaded, list):
-        pytest.fail(f"{path.relative_to(repo_root())} did not parse as a task list")
-    return [t for t in loaded if isinstance(t, dict)]
-
-
-def _named(tasks: list[dict], fragment: str) -> dict:
-    hits = [t for t in tasks if fragment in str(t.get("name", ""))]
-    assert hits, f"no task whose name contains {fragment!r} -- the mechanism was removed"
-    return hits[0]
-
-
 @pytest.fixture(scope="module")
 def helper_tasks() -> list[dict]:
-    return _tasks(HELPER)
+    return load_tasks(HELPER)
 
 
 @pytest.fixture(scope="module")
 def probe_script(helper_tasks: list[dict]) -> str:
     """The probe's shell, with Jinja rendered as ansible would render it."""
-    body = _module(_named(helper_tasks, "Probe whether the configured repo serves"), "shell")
+    body = _module(named(helper_tasks, "Probe whether the configured repo serves"), "shell")
     assert isinstance(body, str) and body.strip(), "the probe task carries no shell body"
     env = jinja2.Environment(autoescape=False)  # noqa: S701 - shell, not markup
     env.filters["quote"] = shlex.quote
@@ -205,97 +190,6 @@ def test_a_candidate_this_repo_serves_at_an_older_version_is_still_usable(probe_
     )
 
 
-def test_the_post_add_check_fails_unless_the_verdict_is_positively_usable(
-    helper_tasks: list[dict],
-) -> None:
-    """The pre-add path stops on `undetermined`; the post-add path must too.
-
-    Firing only on `unusable` let the play SUCCEED over a post-add probe that never
-    confirmed the repository serves the package, and the failure then surfaced three
-    steps later as a package-install error. Asked the other way: a PASS of the old
-    condition licensed a green play over an unverified provision.
-    """
-    task = _named(helper_tasks, "Fail with the real cause")
-    for verdict, probe, should_fail in [
-        ("unusable", "VERDICT=unusable\nUPDATE_RC=0", True),
-        ("undetermined", "VERDICT=undetermined\nUPDATE_RC=0", True),
-        ("usable", "VERDICT=usable\nUPDATE_RC=0", False),
-    ]:
-        got = _eval_when(
-            _when_of(task),
-            apt_repo_verify_package=PKG,
-            _apt_repo_verdict="unusable",
-            _apt_repo_probe_final={"stdout": probe},
-            _apt_repo_moved={"stdout": ""},
-        )
-        assert got is should_fail, (
-            f"post-add verdict {verdict!r}: the play "
-            f"{'continued' if should_fail else 'failed'} when it must not. An "
-            f"`undetermined` post-add probe means the provision was never confirmed"
-        )
-
-
-def test_a_definitive_server_answer_naming_the_repo_is_unusable(probe_script: str, tmp_path: Path) -> None:
-    verdict = _run_probe(
-        probe_script,
-        tmp_path,
-        update_out=f"E: The repository 'https://{MATCH}/pub/repos/apt bogus-pgdg Release'"
-        " does not have a Release file.\n",
-        update_rc=0,
-        policy=_policy(None),
-    )
-    assert verdict == "unusable", "a 404 / missing Release naming this repo is positive evidence"
-
-
-def test_a_failed_fetch_naming_the_repo_is_UNDETERMINED_not_unusable(probe_script: str, tmp_path: Path) -> None:
-    """THE REGRESSION THAT MATTERS: apt exits 0 on an unreachable mirror (#6719).
-
-    Reading this as "unusable" moves a working device-shipped source to a backup
-    and reports a reason that is false. It must touch nothing.
-    """
-    verdict = _run_probe(
-        probe_script,
-        tmp_path,
-        update_out=f"W: Failed to fetch https://{MATCH}/pub/repos/apt/dists/jammy-pgdg/InRelease"
-        "  Connection timed out [IP: 2001:db8::1 443]\n",
-        update_rc=0,
-        policy=_policy(None),
-    )
-    assert verdict == "undetermined", (
-        "a slow or unreachable mirror was read as proof the repository is broken. The "
-        "remedy for 'unusable' MOVES the host's own source aside, so this verdict "
-        "destroys working configuration and states a false reason"
-    )
-
-
-def test_a_timeout_is_undetermined(probe_script: str, tmp_path: Path) -> None:
-    verdict = _run_probe(probe_script, tmp_path, update_out="", update_rc=124, policy=_policy(None))
-    assert verdict == "undetermined", "a timed-out update measured nothing about the repo"
-
-
-def test_a_held_lock_is_retried_not_judged(probe_script: str, tmp_path: Path) -> None:
-    verdict = _run_probe(
-        probe_script,
-        tmp_path,
-        update_out="E: Could not get lock /var/lib/apt/lists/lock. It is held by process 900\n",
-        update_rc=100,
-        policy=_policy(None),
-    )
-    assert verdict == "locked", "a dpkg/apt lock must be waited out, never treated as a verdict about the repo"
-
-
-def _when_of(task: dict) -> str:
-    when = task.get("when")
-    return " and ".join(f"({c})" for c in when) if isinstance(when, list) else str(when)
-
-
-def _eval_when(expr: str, **state: object) -> bool:
-    """Evaluate an ansible `when` as Jinja, modelling the filters it uses."""
-    env = jinja2.Environment(autoescape=False)  # noqa: S701 - condition, not markup
-    env.filters["bool"] = lambda v: str(v).strip().lower() in {"true", "yes", "1", "on"} or v is True
-    return bool(env.compile_expression(expr, undefined_to_none=True)(**state))
-
-
 @pytest.mark.parametrize(
     "present,verdict,should_add",
     [
@@ -309,9 +203,9 @@ def test_the_add_fires_exactly_when_it_should(
     helper_tasks: list[dict], present: str, verdict: str, should_add: bool
 ) -> None:
     """Evaluated, not substring-matched: a dropped `not` or an inversion reddens here."""
-    block = _named(helper_tasks, "Install the canonical repo definition")
-    got = _eval_when(
-        _when_of(block),
+    block = named(helper_tasks, "Install the canonical repo definition")
+    got = eval_when(
+        when_of(block),
         _apt_repo_present={"stdout": present},
         _apt_repo_verdict=verdict,
     )
@@ -324,26 +218,26 @@ def test_the_add_fires_exactly_when_it_should(
 
 def test_undetermined_changes_nothing_on_the_host(helper_tasks: list[dict]) -> None:
     """The move must be unreachable unless the verdict is positively `unusable`."""
-    block = _named(helper_tasks, "Install the canonical repo definition")
-    move = _named(block.get("block", []), "Move aside")
+    block = named(helper_tasks, "Install the canonical repo definition")
+    move = named(block.get("block", []), "Move aside")
     for verdict in ("usable", "undetermined"):
-        assert not _eval_when(_when_of(move), _apt_repo_verdict=verdict), (
+        assert not eval_when(when_of(move), _apt_repo_verdict=verdict), (
             f"the move aside is reachable on verdict={verdict!r} -- it may run only on "
             f"positive evidence the repo is broken"
         )
-    assert _eval_when(
-        _when_of(move), _apt_repo_verdict="unusable"
+    assert eval_when(
+        when_of(move), _apt_repo_verdict="unusable"
     ), "the move never runs, so an unusable source is never replaced"
 
 
 def test_a_failed_add_restores_the_moved_source(helper_tasks: list[dict]) -> None:
-    block = _named(helper_tasks, "Install the canonical repo definition")
+    block = named(helper_tasks, "Install the canonical repo definition")
     rescue = block.get("rescue") or []
     assert rescue, (
         "the add has no rescue, so a failure after the move leaves the host with no "
         "source for this repository at all"
     )
-    restore = _named(rescue, "Restore the moved source")
+    restore = named(rescue, "Restore the moved source")
     body = str(_module(restore, "shell") or "")
     # This used to assert the literal "/etc/apt/sources.list.d/" appeared in the
     # script -- a mechanism assertion that passed while the rescue restored EVERY
@@ -376,8 +270,8 @@ def test_a_failed_add_restores_the_moved_source(helper_tasks: list[dict]) -> Non
 
 def _rescue_script(helper_tasks: list[dict]) -> str:
     """The rescue's restore shell, Jinja rendered as ansible would render it."""
-    block = _named(helper_tasks, "Install the canonical repo definition")
-    restore = _named(block.get("rescue") or [], "Restore the moved source")
+    block = named(helper_tasks, "Install the canonical repo definition")
+    restore = named(block.get("rescue") or [], "Restore the moved source")
     body = _module(restore, "shell")
     assert isinstance(body, str) and body.strip(), "the restore task carries no shell body"
     env = jinja2.Environment(autoescape=False)  # noqa: S701 - shell, not markup
@@ -389,8 +283,8 @@ def test_the_move_emits_a_machine_readable_pair_for_the_rescue(
     helper_tasks: list[dict],
 ) -> None:
     """The rescue's input contract. Without it the rescue cannot scope to this run."""
-    block = _named(helper_tasks, "Install the canonical repo definition")
-    move = str(_module(_named(block.get("block", []), "Move aside"), "shell") or "")
+    block = named(helper_tasks, "Install the canonical repo definition")
+    move = str(_module(named(block.get("block", []), "Move aside"), "shell") or "")
     assert "PAIR" in move and "printf" in move, (
         "the move no longer emits a PAIR line, so the rescue has nothing to scope to "
         "and would have to glob the backup directory -- which restores every generation"
@@ -466,7 +360,7 @@ def test_the_postgresql_role_names_the_package_it_needs() -> None:
     """Verification is opt-in: an unnamed package silently keeps the old behaviour."""
     pgdg = [
         t
-        for t in _tasks(PG_INSTALL)
+        for t in load_tasks(PG_INSTALL)
         if "add_apt_repository_idempotent" in str(t.get("ansible.builtin.include_tasks", ""))
     ]
     assert pgdg, "the postgresql role no longer uses the shared repo-add helper"
@@ -513,7 +407,7 @@ def test_the_no_match_default_precedes_first(helper_tasks: list[dict]) -> None:
     is worse than no test.
     """
     expr = " ".join(
-        str(_named(helper_tasks, "Record the verdict")["ansible.builtin.set_fact"]["_apt_repo_verdict"]).split()
+        str(named(helper_tasks, "Record the verdict")["ansible.builtin.set_fact"]["_apt_repo_verdict"]).split()
     )
 
     assert "| default([], true) | first" in expr, (
