@@ -52,14 +52,13 @@ def hook():
     return module
 
 
-def test_the_two_copies_of_the_ceilings_agree(hook):
-    """A ceiling lowered in one file alone leaves the other licensing the gap."""
-    assert hook.KNOWN_LARGE == RATCHET_BASELINE, (
-        "KNOWN_LARGE in scripts/check_shell_file_size.py and RATCHET_BASELINE in "
-        "repo_tests/shell_file_size_ratchet_baseline.py disagree. Lower a ceiling "
-        "in BOTH in the same commit: the gap between them is exactly the lines "
-        "just cut, and it is spendable."
-    )
+# Equality of this gate's two ceiling records moved to
+# ``ceiling_record_parity_17872_test.py``, which asserts it for BOTH gates and adds what
+# the assertion here lacked: a reach check (two empty records are equal), a message naming
+# both values and neither direction, and the per-key mismatch. The sentence worth keeping
+# -- the gap between a lowered hook and an unlowered mirror is exactly the lines just cut,
+# and it is spendable -- moved into that file's failure message with it (#17872). Removed
+# rather than left duplicated: two records of one check is the shape that issue is about.
 
 
 def test_no_ceiling_exceeds_its_recorded_baseline(hook):

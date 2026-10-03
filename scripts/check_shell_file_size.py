@@ -104,12 +104,20 @@ KNOWN_LARGE: dict[str, int] = {
 
 
 def configure_logging() -> None:
-    """Send findings to stdout as plain lines, once."""
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(handler)
+    """Attach a stderr handler so findings actually reach the developer.
+
+    Run as a bare script the module logger has no handler, and logging's
+    ``lastResort`` fallback emits WARNING and above only -- the informational
+    "all live" line would vanish silently. Findings themselves are logged at
+    ERROR precisely so they survive even when this was never called, which is
+    why the levels below are not interchangeable with INFO.
+    """
     logger.setLevel(logging.INFO)
+    if logger.handlers:
+        return
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    logger.addHandler(handler)
 
 
 def repo_root() -> pathlib.Path:
@@ -196,7 +204,15 @@ def verdict(rel: str, line_count: int) -> str | None:
 
 
 def unmeasured(rel: str) -> str:
-    """Violation message for a file that could not be read at all."""
+    """Violation message for an argument that could not be read at all.
+
+    ``count_lines`` returns None for "missing", "unreadable", "not a file" and
+    "not UTF-8" alike, and ``audit_ceilings`` already treats that None as a
+    finding -- the walk skips such a file rather than counting it toward its
+    reach floor, for the same reason. This is the same verdict on the commit
+    path, which used to skip past it: exit 0 is only entitled to mean *within
+    the limit*, and a file that was never opened has not earned that (#14975).
+    """
     return (
         f"{rel}: could not be read, so its size was never measured. This is not "
         "a size violation — check the path, its permissions, whether it is a "
@@ -214,6 +230,30 @@ def _vanished_entry_problem(rel: str, root: pathlib.Path) -> str:
     )
 
 
+def _report_unmeasured(rel: str, seen: set[str], problems: list[str]) -> None:
+    """Report a file that could not be read, and record it as SEEN but not REACHED.
+
+    NOT a skip (#14975). ``unmeasured`` states the contract -- exit 0 is only entitled to
+    mean *within the limit*, and a file that was never opened has not earned that -- and
+    ``main`` has honoured it since. The scan path did not, so ``--audit-ceilings`` could
+    report "all live and at size" having never read a broken symlink, a bad mode or a
+    non-UTF-8 file.
+
+    ``seen`` and ``reached`` mean different things here, which is why this records one and
+    not the other. ``seen`` answers "did the walk find this path", which it did, so the
+    ``KNOWN_LARGE - seen`` pass in ``audit_ceilings`` must not ALSO call it
+    moved-or-deleted -- that message is wrong for a file that exists and cannot be read,
+    and reporting both tells the developer two stories about one file. ``reached`` stays
+    exclusive, so an unmeasured file cannot prop up the floor check in ``run_audit``
+    without having been ruled on.
+
+    Extracted (#17377) because inlining both rationales took the caller past the 30-line
+    standard; the concept is "classify a file we could not measure", which is one idea.
+    """
+    problems.append(unmeasured(rel))
+    seen.add(normalise(rel))
+
+
 def _scan_tracked_files(root: pathlib.Path, tracked: list[str]) -> tuple[int, set[str], list[str]]:
     """Rule on every readable file in *tracked*. Returns (reached, seen, problems).
 
@@ -227,13 +267,7 @@ def _scan_tracked_files(root: pathlib.Path, tracked: list[str]) -> tuple[int, se
     for rel in sorted(tracked):
         line_count = count_lines(root / rel)
         if line_count is None:
-            # NOT a skip. The docstring's contract is that an unmeasured file is
-            # not a passing one, and a `continue` here would quietly exempt
-            # exactly the files least likely to be readable -- a broken symlink,
-            # a bad mode, a non-UTF-8 script. It is reported and deliberately
-            # does NOT count toward `reached`, so it cannot prop up the floor
-            # check in run_audit() without having been ruled on.
-            problems.append(unmeasured(rel))
+            _report_unmeasured(rel, seen, problems)
             continue
         reached += 1
         seen.add(normalise(rel))
@@ -258,24 +292,39 @@ def audit_ceilings() -> tuple[int, list[str]]:
     return reached, problems
 
 
+def _reach_breach_problem(reached: int) -> str:
+    """The reach-breach finding, worded identically in both gates (#17377).
+
+    Extracted so the two gates' wording can be compared by a test instead of by a
+    reader. The actionable half -- which knob to check -- was in the shell gate only;
+    a Python developer got "covers almost nothing" and no next step.
+    """
+    return (
+        f"reach check: the tree walk reached {reached} tracked file(s), under the "
+        f"{MIN_TRACKED_SH_FILES}-file floor — it stopped covering the tree, so this "
+        f"run's verdict covers almost nothing. Check EXCLUDED_PREFIXES in {SELF_REL} "
+        "and that `git ls-files` works from the repo root."
+    )
+
+
 def run_audit() -> int:
     """``--audit-ceilings``: walk the tree, and assert the walk actually reached it."""
     reached, problems = audit_ceilings()
     if reached < MIN_TRACKED_SH_FILES:
-        logger.info(
-            "shell size audit reached only %d tracked file(s), below the floor of %d. "
-            "The walk is not covering the tree, so a clean result here would assert "
-            "nothing. Check EXCLUDED_PREFIXES in %s and that `git ls-files` works "
-            "from the repo root.",
-            reached,
-            MIN_TRACKED_SH_FILES,
-            SELF_REL,
-        )
+        # Collected, not returned on. A run that is BOTH under-reaching and carrying
+        # violations used to report only the reach -- and the reach breach is the more
+        # alarming of the two precisely because it explains the other, so suppressing
+        # the violations hid the evidence of what the short walk missed.
+        problems.append(_reach_breach_problem(reached))
+    if problems:
+        logger.error("%s", "\n".join(problems))
         return 1
-    for problem in problems:
-        logger.info("%s", problem)
-    logger.info("shell size audit: %d file(s) reached, %d problem(s).", reached, len(problems))
-    return 1 if problems else 0
+    logger.info(
+        "shell-file-size ceilings: %d file(s) scanned, %d grandfathered, all live and at size.",
+        reached,
+        len(KNOWN_LARGE),
+    )
+    return 0
 
 
 def check_paths(paths: list[str]) -> int:
@@ -293,9 +342,14 @@ def check_paths(paths: list[str]) -> int:
         message = verdict(rel, line_count)
         if message is not None:
             problems.append(message)
-    for problem in problems:
-        logger.info("%s", problem)
-    return 1 if problems else 0
+    if problems:
+        # ERROR, not INFO: this is the COMMIT path, so a finding here blocks a push.
+        # Logged below `lastResort`'s WARNING threshold it would vanish on any path
+        # that never called `configure_logging`, leaving a hook that refuses the push
+        # and says nothing about why.
+        logger.error("%s", "\n".join(problems))
+        return 1
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
