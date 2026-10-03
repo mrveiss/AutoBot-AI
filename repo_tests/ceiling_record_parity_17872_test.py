@@ -80,6 +80,10 @@ from repo_tests._paths import repo_root
 _PAIRS = {
     "python": ("scripts/check_python_file_size.py", "repo_tests.python_file_size_ratchet_baseline"),
     "shell": ("scripts/check_shell_file_size.py", "repo_tests.shell_file_size_ratchet_baseline"),
+    # #17885: the frontend gate is registered here at birth rather than after a
+    # drift. Its hook loads KNOWN_LARGE from a sibling data module, as Python's
+    # does, so the data-source difference this mapping already tolerates covers it.
+    "frontend": ("scripts/check_frontend_file_size.py", "repo_tests.frontend_file_size_ratchet_baseline"),
 }
 
 
