@@ -210,31 +210,146 @@ def test_both_wav_duration_sites_use_the_shared_helper() -> None:
         )
 
 
+_NON_POSITIVE = {ast.LtE: (0,), ast.Lt: (0, 1), ast.Eq: (0,)}
+
+
+def refusal_problems(source: str, *, loader: str = "_load_audio_input") -> list[str]:
+    """Why *source*'s loader does not provably refuse a non-positive frame rate.
+
+    A detector over source so fixtures can drive it, because the first version asserted only
+    that *some* ``if`` on ``sample_rate`` led to a ``raise`` -- which accepts
+    ``if sample_rate > 0: raise`` (permitting a zero rate, the exact case it guards) and
+    accepts a refusal placed AFTER the ``AudioInput(...)`` it is meant to protect. Both were
+    raised independently by two reviewers on #17887.
+    """
+    tree = ast.parse(source)
+    fns = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == loader]
+    if not fns:
+        return [f"no function named {loader} -- the detector is looking at nothing"]
+    problems: list[str] = []
+    construction = [
+        n.lineno
+        for n in ast.walk(fns[0])
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "AudioInput"
+    ]
+    refusals = []
+    for node in ast.walk(fns[0]):
+        if not (isinstance(node, ast.If) and isinstance(node.test, ast.Compare)):
+            continue
+        left, ops, comps = node.test.left, node.test.ops, node.test.comparators
+        if not (isinstance(left, ast.Name) and left.id == "sample_rate" and len(ops) == 1):
+            continue
+        if not any(isinstance(stmt, ast.Raise) for stmt in node.body):
+            continue
+        bound = comps[0].value if isinstance(comps[0], ast.Constant) else None
+        allowed = _NON_POSITIVE.get(type(ops[0]), ())
+        if bound not in allowed:
+            problems.append(
+                f"the refusal compares sample_rate with {ast.unparse(node.test)}, which does not "
+                "establish a non-positive rate -- `> 0` permits exactly the zero it guards"
+            )
+            continue
+        refusals.append(node.lineno)
+    if not refusals:
+        problems.append("nothing in the loader refuses a non-positive frame rate")
+    elif construction and min(refusals) > min(construction):
+        problems.append(
+            f"the refusal at line {min(refusals)} comes AFTER the AudioInput built at line "
+            f"{min(construction)} -- it cannot protect what has already been constructed"
+        )
+    return problems
+
+
 def test_a_corrupt_frame_rate_is_still_a_load_error() -> None:
     """The error path the shared helper quietly removed, restored explicitly.
 
     Before #13841 the provider computed ``getnframes() / float(sample_rate)`` inline, so a
-    header declaring rate 0 raised ``ZeroDivisionError``, hit the handler and was logged as
-    a load error. The shared helper returns ``0.0`` instead — it must never raise, because
-    its other caller is a throughput probe that would break synthesis — so without an
-    explicit check a corrupt header became an ``AudioInput`` with ``sample_rate=0`` and
-    ``duration=0.0``, reported nowhere. Found in review on #17887, not by me.
+    header declaring rate 0 raised ``ZeroDivisionError``, hit the handler and was logged as a
+    load error. The shared helper returns ``0.0`` instead -- it must never raise, because its
+    other caller is a throughput probe that would break synthesis -- so without an explicit
+    check a corrupt header became an ``AudioInput`` with ``sample_rate=0`` and
+    ``duration=0.0``, reported nowhere.
 
-    Asserted structurally rather than by running the provider, which is application code:
-    the refusal must exist in the loader, guarding on the rate before the input is built.
+    Asserted structurally rather than by running the provider, which is application code.
     """
-    tree = ast.parse((repo_root() / _PROVIDER).read_text(encoding="utf-8"))
-    guards = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.If)
-        and isinstance(node.test, ast.Compare)
-        and isinstance(node.test.left, ast.Name)
-        and node.test.left.id == "sample_rate"
-        and any(isinstance(stmt, ast.Raise) for stmt in node.body)
-    ]
-    assert guards, (
-        f"{_PROVIDER}: nothing refuses a non-positive frame rate, so a corrupt header "
-        "becomes a zero-duration AudioInput with nothing logged — the silent degradation "
-        "that replaced a reported load error"
-    )
+    problems = refusal_problems((repo_root() / _PROVIDER).read_text(encoding="utf-8"))
+    assert not problems, f"{_PROVIDER}: " + "; ".join(problems)
+
+
+_LOADER = """
+def _load_audio_input(path):
+{body}
+"""
+_REFUSE = "    if sample_rate <= 0:\n        raise ValueError('bad rate')"
+_BUILD = "    return AudioInput(sample_rate=sample_rate)"
+
+
+def test_a_correct_refusal_is_accepted() -> None:
+    """The positive control: without it a detector that always complains passes the rest."""
+    assert refusal_problems(_LOADER.format(body=f"{_REFUSE}\n{_BUILD}")) == []
+
+
+def test_a_refusal_that_permits_zero_is_reported() -> None:
+    """`> 0` passes a name-and-raise check while permitting the exact value it guards."""
+    body = "    if sample_rate > 0:\n        raise ValueError('bad rate')\n" + _BUILD
+    assert any("does not establish a non-positive rate" in p for p in refusal_problems(_LOADER.format(body=body)))
+
+
+def test_a_refusal_after_the_construction_is_reported() -> None:
+    """It cannot protect an AudioInput that already exists."""
+    body = f"{_BUILD.replace('return ', 'built = ')}\n{_REFUSE}\n    return built"
+    assert any("comes AFTER the AudioInput" in p for p in refusal_problems(_LOADER.format(body=body)))
+
+
+def test_no_refusal_at_all_is_reported() -> None:
+    assert any("nothing in the loader refuses" in p for p in refusal_problems(_LOADER.format(body=_BUILD)))
+
+
+def test_a_renamed_loader_is_reported_rather_than_passing_empty() -> None:
+    """The reach half: a detector that finds no loader must say so, not report clean."""
+    assert any("looking at nothing" in p for p in refusal_problems(_LOADER.format(body=_BUILD), loader="gone"))
+
+
+# --- the two source detectors, driven on literals -------------------------
+#
+# Both were asserted only against the live modules, which shows them agreeing with files that
+# already comply and never shows either rejecting anything. `repo_tests/**` requires a positive
+# and a negative fixture per detector, and the absence of one here was raised independently by
+# two reviewers on #17887.
+
+_IMPORT_ONLY = "from autobot_shared.audio_wav import wav_duration_seconds\n\ndef f(wav):\n    return 0.0\n"
+_REAL_CALL = _IMPORT_ONLY.replace("    return 0.0", "    return wav_duration_seconds(wav)")
+_LOCAL_WRAPPER = _IMPORT_ONLY.replace("    return 0.0", "    return _wav_duration_seconds(wav)")
+
+
+def test_a_real_call_satisfies_the_detector() -> None:
+    assert _calls_named(ast.parse(_REAL_CALL), "wav_duration_seconds") == 1
+
+
+def test_an_import_only_mention_does_not() -> None:
+    """The whole reason this is an ast.Call count: a `def`, an import or a comment cannot pass."""
+    assert _calls_named(ast.parse(_IMPORT_ONLY), "wav_duration_seconds") == 0
+
+
+def test_the_underscored_local_wrapper_is_a_different_name() -> None:
+    """`_wav_duration_seconds` is the route's own adapter; calling it is not reaching the helper."""
+    assert _calls_named(ast.parse(_LOCAL_WRAPPER), "wav_duration_seconds") == 0
+
+
+def test_the_division_detector_flags_an_inlined_arithmetic() -> None:
+    assert _divides_frames(ast.parse("def f(wav, rate):\n    return wav.getnframes() / float(rate)\n"))
+
+
+def test_the_division_detector_passes_a_delegating_caller() -> None:
+    """Positive control for the second net: delegation must not read as re-inlining."""
+    assert not _divides_frames(ast.parse(_REAL_CALL))
+
+
+def test_the_division_detector_does_not_claim_to_catch_a_bound_intermediate() -> None:
+    """Pins the documented LIMIT, so a reader does not mistake the net for a proof.
+
+    `n = wav.getnframes()` then `n / rate` is outside what this matches. Asserting the limit
+    rather than leaving it in prose means a future widening has to change this test on purpose.
+    """
+    bound = "def f(wav, rate):\n    n = wav.getnframes()\n    return n / float(rate)\n"
+    assert not _divides_frames(ast.parse(bound))

@@ -157,10 +157,21 @@ class _SynthesisThroughput:
     def _steady_state(self) -> tuple[float, float]:
         """``(audio_seconds, wall_seconds)`` with the warm-up interval removed.
 
-        Dropping the first interval and the audio it produced is what makes this
-        measure the same thing the client's pre-roll measures. A single-chunk
-        synthesis (the whole-utterance route) has no steady state to isolate, so
-        its one interval is the only rate available.
+        Dropping the first interval and the audio it produced removes
+        time-to-first-audio -- connect, upload and model warm-up -- which is not a
+        generation rate. It does NOT make this the client's quantity, and the
+        earlier version of this docstring claimed it did (review on #17887).
+
+        What stays excluded here and is included there: ``throughput.start()``
+        restarts AFTER each yield, so network transit and consumer scheduling are
+        not billed to the worker. The client's ``_observeChunkRate`` measures audio
+        over wall time at the far end of the link, because that is what its pre-roll
+        has to survive. Warm-up removal makes the two comparable in SHAPE; it does
+        not make them the same measurement, and #13841 exists because a sentence
+        like the one this replaces is how they get reconciled by mistake.
+
+        A single-chunk synthesis (the whole-utterance route) has no steady state to
+        isolate, so its one interval is the only rate available.
         """
         if self._chunks > 1 and self._first_chunk_seconds is not None:
             return (
