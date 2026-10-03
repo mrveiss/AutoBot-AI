@@ -264,7 +264,26 @@ def test_a_failed_add_restores_the_moved_source(helper_tasks: list[dict]) -> Non
     )
     restore = _named(rescue, "Restore the moved source")
     body = str(_module(restore, "shell") or "")
-    assert "/etc/apt/sources.list.d/" in body, "the restore does not put the file back"
+    # This used to assert the literal "/etc/apt/sources.list.d/" appeared in the
+    # script -- a mechanism assertion that passed while the rescue restored EVERY
+    # backup generation, because a glob over the backup directory contains that
+    # string too. What matters is that the restore is SCOPED to this run, which the
+    # destination now carries per-file from the move's PAIR line.
+    assert "_AUTOBOT_MOVED" in body or "PAIR" in body, (
+        "the restore does not read the move's own output, so it can only find files "
+        "by globbing the backup directory -- which restores earlier runs' sources too"
+    )
+    # Asserted as "does not need the backup DIRECTORY" rather than by matching a
+    # glob pattern: the pattern as a literal here reads as a glob declaration to
+    # repo_tests/glob_declared_reads_15900_test.py, which is correct about the string
+    # and wrong about this file. A restore scoped to the move's output never needs
+    # the directory, because each backup's full path arrives on its PAIR line.
+    assert "BACKUP_DIR" not in body, (
+        "the restore still resolves the backup directory, which it only needs in order "
+        "to iterate it. Backups are never deleted after a successful add, so that "
+        "directory accumulates generations and iterating it puts an earlier run's "
+        "source back beside the current one -- #7218's collision, reintroduced"
+    )
     failures = [t for t in rescue if _has_module(t, "fail")]
     assert failures, "the rescue restores but never fails -- the deploy would continue"
     msg = str((_module(failures[0], "fail") or {}).get("msg", ""))
@@ -272,6 +291,98 @@ def test_a_failed_add_restores_the_moved_source(helper_tasks: list[dict]) -> Non
         "the failure message does not name the backup location, so the operator cannot "
         "find the configuration that was moved"
     )
+
+
+def _rescue_script(helper_tasks: list[dict]) -> str:
+    """The rescue's restore shell, Jinja rendered as ansible would render it."""
+    block = _named(helper_tasks, "Install the canonical repo definition")
+    restore = _named(block.get("rescue") or [], "Restore the moved source")
+    body = _module(restore, "shell")
+    assert isinstance(body, str) and body.strip(), "the restore task carries no shell body"
+    env = jinja2.Environment(autoescape=False)  # noqa: S701 - shell, not markup
+    env.filters["quote"] = shlex.quote
+    return env.from_string(body).render(
+        apt_repo_match=MATCH, apt_repo_backup_dir="/unused-by-this-path"
+    )
+
+
+def test_the_move_emits_a_machine_readable_pair_for_the_rescue(
+    helper_tasks: list[dict],
+) -> None:
+    """The rescue's input contract. Without it the rescue cannot scope to this run."""
+    block = _named(helper_tasks, "Install the canonical repo definition")
+    move = str(_module(_named(block.get("block", []), "Move aside"), "shell") or "")
+    assert "PAIR" in move and "printf" in move, (
+        "the move no longer emits a PAIR line, so the rescue has nothing to scope to "
+        "and would have to glob the backup directory -- which restores every generation"
+    )
+
+
+def test_the_rescue_restores_only_this_runs_backup_not_every_generation(
+    helper_tasks: list[dict], tmp_path: Path
+) -> None:
+    """Two generations in one backup directory; only this run's may come back.
+
+    Nothing deletes a backup after a SUCCESSFUL add -- a displaced device
+    configuration stays recoverable on purpose -- so the directory accumulates. The
+    first version of this rescue globbed ``$BACKUP_DIR/*.bak`` and filtered on
+    content, so a later run that hit the keyserver transient the ``until:`` exists
+    for would restore an EARLIER run's source as well. Two sources for one repo in
+    ``sources.list.d`` is #7218's Signed-By collision, reintroduced on a host that
+    was fine by the code meant to protect it.
+    """
+    sources, backups = tmp_path / "sources.list.d", tmp_path / "backups"
+    sources.mkdir()
+    backups.mkdir()
+    stale = backups / "pgdg-old.list.20260101T000000Z.bak"
+    stale.write_text(f"deb https://{MATCH}/pub/repos/apt old-pgdg main\n", encoding="utf-8")
+    mine = backups / "pgdg.list.20261003T120000Z.bak"
+    mine.write_text(f"deb https://{MATCH}/pub/repos/apt jammy-pgdg main\n", encoding="utf-8")
+
+    # Exactly what the move would have emitted for THIS run: one file.
+    moved = f"Moved aside {sources / 'pgdg.list'}\nPAIR\t{sources / 'pgdg.list'}\t{mine}\n"
+    done = subprocess.run(  # noqa: S603 - fixed argv, all paths under tmp_path
+        ["/bin/bash", "-c", _rescue_script(helper_tasks)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "_AUTOBOT_MOVED": moved},
+    )
+    assert done.returncode == 0, f"rescue failed: {done.stderr}"
+    assert (sources / "pgdg.list").is_file(), (
+        f"this run's source was not restored, so a failed add leaves the host with no "
+        f"source at all. stdout={done.stdout} stderr={done.stderr}"
+    )
+    assert stale.is_file(), (
+        "an EARLIER run's backup was restored as well. Both sources now sit in "
+        "sources.list.d for one repo, which is the #7218 Signed-By collision this "
+        "file moves files out of that directory to avoid"
+    )
+    assert not (sources / "pgdg-old.list").exists(), (
+        "the stale generation was written into sources.list.d -- apt reads every file "
+        "in that directory, so the collision is live"
+    )
+    assert "Restored" in done.stdout, "the rescue restored silently; the log must say what came back"
+
+
+def test_the_rescue_says_so_when_this_run_moved_nothing(
+    helper_tasks: list[dict], tmp_path: Path
+) -> None:
+    """A MISSING-repo add that fails moved nothing, and must restore nothing."""
+    backups = tmp_path / "backups"
+    backups.mkdir()
+    stale = backups / "pgdg.list.20260101T000000Z.bak"
+    stale.write_text(f"deb https://{MATCH}/pub/repos/apt old-pgdg main\n", encoding="utf-8")
+    done = subprocess.run(  # noqa: S603 - fixed argv, all paths under tmp_path
+        ["/bin/bash", "-c", _rescue_script(helper_tasks)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "_AUTOBOT_MOVED": ""},
+    )
+    assert done.returncode == 0, f"rescue failed on an empty move set: {done.stderr}"
+    assert "Nothing to restore" in done.stdout, f"expected an explicit no-op: {done.stdout}"
+    assert stale.is_file(), "a backup was consumed although this run moved nothing"
 
 
 def test_the_postgresql_role_names_the_package_it_needs() -> None:

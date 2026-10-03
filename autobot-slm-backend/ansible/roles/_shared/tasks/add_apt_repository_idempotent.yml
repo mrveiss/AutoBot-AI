@@ -243,8 +243,14 @@
         STAMP=$(date -u +%Y%m%dT%H%M%SZ)
         MOVED=0
         while IFS= read -r -d '' f; do
-          mv -- "$f" "$BACKUP_DIR/$(basename "$f").${STAMP}.bak"
+          BACKUP="$BACKUP_DIR/$(basename "$f").${STAMP}.bak"
+          mv -- "$f" "$BACKUP"
           echo "Moved aside $f"
+          # Tab-delimited pair for the rescue to read back. The rescue must restore
+          # exactly what THIS run moved: backups are deliberately never deleted (a
+          # displaced device configuration stays recoverable), so the directory
+          # accumulates generations and a glob over it would restore all of them.
+          printf 'PAIR\t%s\t%s\n' "$f" "$BACKUP"
           MOVED=1
         done < <(grep -rlsZ -F -- {{ apt_repo_match | quote }} /etc/apt/sources.list.d/ 2>/dev/null)
         if [ "$MOVED" -eq 0 ]; then echo "No matching source file to move"; fi
@@ -270,19 +276,29 @@
     # Without this the host keeps NO source for this repo: its own was moved and ours
     # failed to land. Restore first, then fail naming both.
     - name: "{{ apt_repo_label }} | Restore the moved source after a failed add"
+      # Restores ONLY the files this run moved, read back from the move's own PAIR
+      # lines. The first version globbed `$BACKUP_DIR/*.bak` and filtered on content,
+      # which restored EVERY generation: a successful earlier run leaves its backup in
+      # place (deliberately -- nothing deletes a displaced device configuration), so a
+      # later run that hit a transient would put the older source back into
+      # sources.list.d alongside the current one. That is #7218's Signed-By collision,
+      # reintroduced on a host that was fine, by the very code meant to protect it.
       ansible.builtin.shell: |
         set -eu
-        BACKUP_DIR={{ apt_repo_backup_dir | default('/var/backups/autobot-apt-sources') | quote }}
         RESTORED=0
-        for b in "$BACKUP_DIR"/*.bak; do
-          [ -e "$b" ] || continue
-          grep -qsF -- {{ apt_repo_match | quote }} "$b" || continue
-          base=$(basename "$b"); orig=${base%.*.bak}
-          mv -- "$b" "/etc/apt/sources.list.d/$orig"
+        while IFS=$'\t' read -r tag orig backup; do
+          [ "$tag" = "PAIR" ] || continue
+          [ -n "$orig" ] && [ -n "$backup" ] || continue
+          [ -e "$backup" ] || continue
+          mv -- "$backup" "$orig"
           echo "Restored $orig"
           RESTORED=1
-        done
+        done <<< "$_AUTOBOT_MOVED"
         if [ "$RESTORED" -eq 0 ]; then echo "Nothing to restore"; fi
+      environment:
+        # Passed through the environment rather than interpolated into the script, so a
+        # path cannot break out of the quoting.
+        _AUTOBOT_MOVED: "{{ _apt_repo_moved.stdout | default('') }}"
       args:
         executable: /bin/bash
       register: _apt_repo_restored
