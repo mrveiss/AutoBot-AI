@@ -39,6 +39,12 @@
 #                                 "Grafana", "NodeSource", "PostgreSQL pgdg".
 #   apt_repo_retries  (int, opt.) Retry budget for the repo add (default 5).
 #   apt_repo_retry_delay (int, opt.) Seconds between retries (default 10).
+#   apt_repo_verify_package (str, opt.) The package this repository exists to
+#                                 provide. When set, a repo found already
+#                                 configured is TRUSTED ONLY IF apt can resolve
+#                                 a candidate for this package (#17897).
+#                                 Unset -> presence alone is trusted, which is
+#                                 the pre-#17897 behaviour.
 #
 # Example:
 #   - include_tasks: ../../_shared/tasks/add_apt_repository_idempotent.yml
@@ -82,10 +88,67 @@
   when: _apt_repo_present.stdout | trim == 'PRESENT'
   tags: ['packages']
 
+# #17897: presence is not usability. A device-shipped source for the right URL can
+# still fail to serve the package the repo exists for -- a suite this OS has no
+# build in, a disabled entry, or a key that cannot verify the index. The flow below
+# used to trust presence and skip its own add, so the deploy failed ~40 tasks later
+# with apt's "No package matching 'postgresql-16' is available", naming neither the
+# repo, nor the skip, nor the file responsible. When the caller names the package,
+# the preserved repo has to prove it serves it.
+- name: "{{ apt_repo_label }} | Verify the preserved repo serves {{ apt_repo_verify_package | default('(unspecified)') }}"
+  ansible.builtin.shell: >-
+    apt-get update -qq -o Acquire::Retries=1 -o Acquire::http::Timeout=15 >/dev/null 2>&1;
+    apt-cache policy -- '{{ apt_repo_verify_package }}' 2>/dev/null
+    | awk '/Candidate:/ {print $2; exit}'
+  register: _apt_repo_candidate
+  changed_when: false
+  failed_when: false
+  become: true
+  when:
+    - apt_repo_verify_package | default('', true) | length > 0
+    - _apt_repo_present.stdout | trim == 'PRESENT'
+  tags: ['packages']
+
+# True means "the repo already on this host is good enough to skip our add".
+# Unset verify-package keeps the pre-#17897 contract: presence alone is trusted.
+- name: "{{ apt_repo_label }} | Decide whether the preserved repo is sufficient"
+  ansible.builtin.set_fact:
+    _apt_repo_preserve_ok: >-
+      {{ (_apt_repo_present.stdout | trim != 'PRESENT')
+         or (apt_repo_verify_package | default('', true) | length == 0)
+         or ((_apt_repo_candidate.stdout | default('') | trim) not in ['', '(none)']) }}
+  tags: ['packages']
+
 - name: "{{ apt_repo_label }} | Preserve device-shipped repo (skip apt_repository)"
   ansible.builtin.debug:
     msg: "{{ apt_repo_label }} repo already configured at /etc/apt/sources.list.d/ — preserving device-shipped config"
-  when: _apt_repo_present.stdout | trim == 'PRESENT'
+  when:
+    - _apt_repo_present.stdout | trim == 'PRESENT'
+    - _apt_repo_preserve_ok | bool
+  tags: ['packages']
+
+# Moved OUTSIDE sources.list.d, not disabled in place: apt reads every file in that
+# directory, so a renamed-but-resident file still collides on Signed-By -- #7218's
+# original failure. Nothing is deleted; the backup keeps the device-shipped config.
+- name: "{{ apt_repo_label }} | Move aside the preserved repo that cannot serve {{ apt_repo_verify_package | default('the package') }}"
+  ansible.builtin.shell: |
+    set -eu
+    BACKUP_DIR=/var/backups/autobot-apt-sources
+    mkdir -p "$BACKUP_DIR"
+    STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+    MOVED=0
+    for f in $(grep -rls -- '{{ apt_repo_match }}' /etc/apt/sources.list.d/ 2>/dev/null); do
+      mv -- "$f" "$BACKUP_DIR/$(basename "$f").${STAMP}.bak"
+      echo "Moved aside $f"
+      MOVED=1
+    done
+    if [ "$MOVED" -eq 0 ]; then echo "No matching source file to move"; fi
+  register: _apt_repo_moved
+  changed_when: "'Moved aside' in _apt_repo_moved.stdout"
+  become: true
+  when:
+    - _apt_repo_present.stdout | trim == 'PRESENT'
+    - not (_apt_repo_preserve_ok | bool)
   tags: ['packages']
 
 - name: "{{ apt_repo_label }} | Add apt repository (not previously configured)"
@@ -94,7 +157,11 @@
     state: present
     filename: "{{ apt_repo_filename }}"
   become: true
-  when: _apt_repo_present.stdout | trim == 'MISSING'
+  # Fires when nothing was configured, and ALSO when what was configured could not
+  # serve the package and has just been moved aside.
+  when: >-
+    (_apt_repo_present.stdout | trim == 'MISSING')
+    or not (_apt_repo_preserve_ok | bool)
   # A `ppa:` spec fetches its signing key from the keyserver here, and a
   # `deb https://` spec reaches the repository host: one transient failure
   # used to abort the whole play (#17230). Retry with a bounded budget; once
@@ -104,4 +171,35 @@
   until: _apt_repo_add is succeeded
   retries: "{{ apt_repo_retries | default(5) }}"
   delay: "{{ apt_repo_retry_delay | default(10) }}"
+  tags: ['packages']
+
+- name: "{{ apt_repo_label }} | Confirm {{ apt_repo_verify_package | default('the package') }} is available after the add"
+  ansible.builtin.shell: >-
+    apt-get update -qq -o Acquire::Retries=1 -o Acquire::http::Timeout=15 >/dev/null 2>&1;
+    apt-cache policy -- '{{ apt_repo_verify_package }}' 2>/dev/null
+    | awk '/Candidate:/ {print $2; exit}'
+  register: _apt_repo_candidate_final
+  changed_when: false
+  failed_when: false
+  become: true
+  when:
+    - apt_repo_verify_package | default('', true) | length > 0
+    - not (_apt_repo_preserve_ok | bool)
+  tags: ['packages']
+
+# The cause is stated here rather than left to apt's "No package matching ...",
+# which names neither the repository nor the preserved file that displaced it.
+- name: "{{ apt_repo_label }} | Fail with the real cause when the repo still cannot serve the package"
+  ansible.builtin.fail:
+    msg: >-
+      {{ apt_repo_label }}: apt has no candidate for '{{ apt_repo_verify_package }}'
+      even after adding '{{ apt_repo_spec }}'. A source matching '{{ apt_repo_match }}'
+      was already present on this host, did not serve that package, and was moved to
+      /var/backups/autobot-apt-sources/. Verify that the repository publishes
+      '{{ apt_repo_verify_package }}' for this OS release
+      ({{ ansible_facts['distribution_release'] | default('unknown release') }}).
+  when:
+    - apt_repo_verify_package | default('', true) | length > 0
+    - not (_apt_repo_preserve_ok | bool)
+    - (_apt_repo_candidate_final.stdout | default('') | trim) in ['', '(none)']
   tags: ['packages']
