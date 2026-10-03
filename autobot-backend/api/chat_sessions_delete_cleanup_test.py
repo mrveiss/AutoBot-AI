@@ -25,6 +25,7 @@ import pytest
 from api.chat_knowledge_manager import MANAGER_STATE_KEY
 from api.chat_sessions import _perform_all_session_cleanup
 from api.chat_sessions_delete_cleanup import _cleanup_chat_knowledge_context
+from api.schemas_chat import SessionDeleteData
 
 SESSION_ID = "session-16490"
 
@@ -118,3 +119,48 @@ class TestSessionDeletionCascadesToChatKnowledge:
         assert terminal_result["terminal_sessions_closed"] == 0
         assert kb_result["facts_deleted"] == 0
         assert transcript_result["transcript_deleted"] is False
+
+
+def test_the_cleanup_result_survives_the_response_model():
+    """#16502: the handler set the key and ``SessionDeleteData`` did not declare it.
+
+    ``_build_delete_session_response`` has always put the cascade's result under
+    ``knowledge_context_cleanup``. The model omitted it and carries no
+    ``extra: allow``, so Pydantic's default ``extra="ignore"`` dropped it at
+    serialization -- which is the step ``response_model=DataResponse[SessionDeleteData]``
+    runs. The caller therefore never learned whether the context was removed,
+    while the other four cleanups were reported.
+
+    This asserts the SERIALIZED shape, not the handler's dict. The handler was
+    never wrong; a test over its return value would have passed throughout the
+    defect.
+    """
+    payload = {
+        "session_id": SESSION_ID,
+        "deleted": True,
+        "knowledge_context_cleanup": {"context_deleted": True, "file_associations_removed": 3},
+    }
+
+    serialized = SessionDeleteData.model_validate(payload).model_dump()
+
+    assert "knowledge_context_cleanup" in serialized, (
+        "the key was dropped at serialization -- SessionDeleteData must declare it, "
+        "because the model has no `extra: allow` to let an undeclared key through"
+    )
+    assert serialized["knowledge_context_cleanup"] == {
+        "context_deleted": True,
+        "file_associations_removed": 3,
+    }
+
+
+def test_an_absent_cleanup_serializes_as_none_rather_than_vanishing():
+    """The contrast: the key is present-and-null when the cascade did not run.
+
+    Without this, the assertion above is satisfiable by a model that always
+    emits the key regardless of input, which would hide the opposite defect --
+    a caller told the context was handled when nothing ran.
+    """
+    serialized = SessionDeleteData.model_validate({"session_id": SESSION_ID, "deleted": True}).model_dump()
+
+    assert "knowledge_context_cleanup" in serialized
+    assert serialized["knowledge_context_cleanup"] is None
