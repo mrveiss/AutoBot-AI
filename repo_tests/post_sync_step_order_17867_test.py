@@ -464,6 +464,24 @@ def _steps_of(src: str, name: str) -> tuple[str, ...]:
     return tuple(awaited_calls_in_source_order(fn))
 
 
+def test_a_reordered_branch_is_caught_end_to_end_in_real_source():
+    """The section header's claim, finally asserted (#17868 review).
+
+    Every other end-to-end run in this file is against the REAL source, where
+    every detector correctly returns clean — so the catching direction was only
+    ever exercised in the passing case. The detectors are covered on synthetic
+    tuples by the parametrized contrast tests, and the extraction path is
+    covered by the real-file tests. What nothing asserted until now is the
+    whole chain on text that is genuinely out of order: source -> ast ->
+    extraction -> verdict. `_MUTATED_BRANCH` and `_steps_of` were written for
+    exactly this and left unwired, which made the header above a claim the
+    section did not support.
+    """
+    steps = _steps_of(_MUTATED_BRANCH, _BACKEND)
+
+    assert out_of_order_pairs(_BACKEND, steps) == [("_run_alembic_migrations", "_restart_component_services")]
+
+
 def test_source_order_differs_from_walk_order_on_the_real_file():
     """The bug this guard was nearly built on.
 
