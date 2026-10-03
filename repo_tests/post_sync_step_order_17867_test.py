@@ -119,10 +119,15 @@ _POST_RESTART_ALLOWED = frozenset({"_wait_component_healthy", "_rollback_compone
 #: family exists to stop, committed by the guard itself (#17867).
 _MUST_EXIST: dict[str, frozenset[str]] = {
     "_run_post_sync_backend_branch": frozenset(
-        {"_install_pip_deps_for_component", "_run_alembic_migrations", "_ensure_autobot_shared_symlink"}
+        {
+            "_install_pip_deps_for_component",
+            "_run_alembic_migrations",
+            "_ensure_autobot_shared_symlink",
+            "reconcile_component",
+        }
     ),
     "_run_post_sync_frontend_branch": frozenset({"_build_npm_frontend_for_component"}),
-    "_run_post_sync_worker_branch": frozenset({"_install_pip_deps_for_component"}),
+    "_run_post_sync_worker_branch": frozenset({"_install_pip_deps_for_component", "reconcile_component"}),
     "_run_post_sync_shared_branch": frozenset({"_ensure_autobot_shared_symlink", "_restart_dependents_with_health"}),
 }
 
@@ -480,6 +485,22 @@ def test_a_reordered_branch_is_caught_end_to_end_in_real_source():
     steps = _steps_of(_MUTATED_BRANCH, _BACKEND)
 
     assert out_of_order_pairs(_BACKEND, steps) == [("_run_alembic_migrations", "_restart_component_services")]
+
+
+@pytest.mark.parametrize("branch", ["_run_post_sync_backend_branch", "_run_post_sync_worker_branch"])
+def test_a_branch_missing_reconcile_is_reported(branch):
+    """The new `reconcile_component` entry fires, rather than merely being present.
+
+    Both branches await it (verified by AST against the real source: backend at
+    2874-2916, worker at 2944-2971); neither listed it. It matters that this is
+    `_MUST_EXIST` and not an ordering entry -- `out_of_order_pairs` drops absent
+    names before comparing, so every ordering and boolean detector in this file is
+    presence-blind by construction. `_MUST_EXIST` is the only absence detector,
+    which makes omission from it silent rather than merely untidy.
+    """
+    steps = tuple(n for n in sorted(_MUST_EXIST[branch]) if n != "reconcile_component")
+
+    assert missing_required_steps(branch, steps) == ["reconcile_component"]
 
 
 def test_source_order_differs_from_walk_order_on_the_real_file():
