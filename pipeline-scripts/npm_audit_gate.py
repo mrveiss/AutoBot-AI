@@ -38,12 +38,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
 import time
 import traceback
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import Callable
 
@@ -57,6 +59,7 @@ FAILING_SEVERITIES = ("critical", "high")
 BULK_ENDPOINT = "/-/npm/v1/security/advisories/bulk"
 QUICK_ENDPOINT = "/-/npm/v1/security/audits/quick"
 _ENDPOINT_MARKER = "/-/npm/v1/security/"
+_GHSA = re.compile(r"GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}")
 
 PASSED, FOUND, UNAVAILABLE = "passed", "found", "unavailable"
 EXIT_CODES = {PASSED: 0, FOUND: 1, UNAVAILABLE: 2}
@@ -80,6 +83,99 @@ class Outcome:
     verdict: Verdict
     attempts: int
     report: str
+
+
+@dataclass(frozen=True)
+class AdvisoryException:
+    """One advisory the gate yields to, with the reason and the date it stops counting."""
+
+    expires: str
+    reason: str
+
+
+#: Advisories with NO published fix, which the gate yields to until ``expires``.
+#:
+#: Yielding is deliberate and recorded, which is what the workflow comment above this
+#: gate asks for -- "if an advisory ever has no published fix and the gate has to yield,
+#: change it deliberately and record why on #13400 -- do not silence it as a flake".
+#:
+#: Four conditions, each failing LOUDLY rather than quietly widening the gate:
+#:   * ``expires`` is in the future. An expired entry fails the gate naming itself, so the
+#:     yield cannot outlive the reason for it by inattention.
+#:   * npm reports **no fix available** for any failing package. The moment a bump exists
+#:     the exception stops being honoured and the gate demands the bump -- which is the
+#:     only reason this is not a silence.
+#:   * every entry is still reported. A drained entry fails, the same shrink-only pressure
+#:     the ratchet baselines use, so the record cannot accumulate dead policy.
+#:   * an advisory not listed here still fails. The set is a floor on scrutiny, not a lid.
+ADVISORY_EXCEPTIONS: dict[str, AdvisoryException] = {
+    "GHSA-vfj7-8cjw-p6xm": AdvisoryException(
+        expires="2026-11-14",
+        reason=(
+            "braces <= 3.0.3 stack-exhaustion DoS, published 2026-09-18 with "
+            "first_patched_version null -- every lockfile here is already at 3.0.3, so no "
+            "bump exists. Reached only through devDependencies (stylelint and "
+            "@vue/eslint-config-typescript, via micromatch/fast-glob/globby); nothing in a "
+            "shipped bundle imports it. Owner decision 2026-10-03, recorded on #13400."
+        ),
+    ),
+}
+
+
+def _failing_advisories(report: dict) -> tuple[set[str], bool] | None:
+    """``(advisory ids at failing severity, any failing package has a fix)``.
+
+    ``None`` when the per-package detail is unreadable, which must NOT be treated as
+    "nothing to see": the caller keeps its counts-based verdict instead. A report whose
+    detail went missing is the shape that would otherwise turn an advisory into a pass.
+    """
+    detail = report.get("vulnerabilities")
+    if not isinstance(detail, dict):
+        return None
+    ids: set[str] = set()
+    fixable = False
+    for entry in detail.values():
+        if not isinstance(entry, dict) or entry.get("severity") not in FAILING_SEVERITIES:
+            continue
+        if entry.get("fixAvailable"):
+            fixable = True
+        for via in entry.get("via") or []:
+            if isinstance(via, dict):
+                match = _GHSA.search(str(via.get("url") or ""))
+                if match:
+                    ids.add(match.group(0))
+    return ids, fixable
+
+
+def exception_problems(ids: set[str], fixable: bool, today: date) -> tuple[set[str], list[str]]:
+    """``(ids honoured, reasons the record itself is wrong)``.
+
+    The second half is the point: a record that can only ever widen the gate is a silence
+    with extra steps, so every way it can be stale is a failure that names itself.
+    """
+    honoured: set[str] = set()
+    problems: list[str] = []
+    for advisory, exception in sorted(ADVISORY_EXCEPTIONS.items()):
+        if advisory not in ids:
+            problems.append(
+                f"{advisory} is recorded as unfixable but is no longer reported -- remove it "
+                "from ADVISORY_EXCEPTIONS; a record that outlives its advisory is dead policy"
+            )
+            continue
+        if date.fromisoformat(exception.expires) < today:
+            problems.append(
+                f"{advisory}'s exception expired on {exception.expires} -- re-check for a "
+                "published fix and either bump or renew it deliberately"
+            )
+            continue
+        if fixable:
+            problems.append(
+                f"{advisory} is recorded as unfixable, but npm reports a fix available for a "
+                "failing package -- bump it; the exception is not honoured while a bump exists"
+            )
+            continue
+        honoured.add(advisory)
+    return honoured, problems
 
 
 def _emit(text: str, *, err: bool = False) -> None:
@@ -140,6 +236,35 @@ def _counts(vulnerabilities: dict) -> dict[str, int] | None:
     return counts  # type: ignore[return-value]
 
 
+def _excused_or_found(report: dict, counts: dict[str, int], endpoint: str) -> Verdict:
+    """A failing count becomes PASSED only when every advisory in it is a recorded exception.
+
+    Split from ``classify`` to keep it inside the 30-line standard, and because this is one
+    idea: does the record account for everything the report found?
+    """
+    detail = _failing_advisories(report)
+    if detail is None:
+        reason = "advisories found, and the per-package detail was unreadable so none could be excused"
+        return Verdict(FOUND, counts=counts, reason=reason, endpoint=endpoint)
+    ids, fixable = detail
+    if not ids:
+        # Checked BEFORE the record: a report naming no advisory id says nothing about
+        # whether a recorded entry is stale, and consulting the record first made the gate
+        # demand its own exception be removed on an unrelated report shape. Found by this
+        # change's own contrast fixture.
+        reason = "advisories found, but the report named no advisory id, so none could be excused"
+        return Verdict(FOUND, counts=counts, reason=reason, endpoint=endpoint)
+    honoured, problems = exception_problems(ids, fixable, date.today())
+    if problems:
+        return Verdict(FOUND, counts=counts, reason="; ".join(problems), endpoint=endpoint)
+    unexcused = sorted(ids - honoured)
+    if unexcused:
+        return Verdict(FOUND, counts=counts, reason=f"not excused: {', '.join(unexcused)}", endpoint=endpoint)
+    excused = ", ".join(sorted(honoured))
+    reason = f"every failing advisory is a recorded unfixable exception ({excused}) -- see #13400"
+    return Verdict(PASSED, counts=counts, reason=reason, endpoint=endpoint)
+
+
 def classify(stdout: str, log: str = "") -> Verdict:
     """One attempt's report as passed / found / unavailable. Never raises."""
     endpoint = endpoint_used(log)
@@ -162,8 +287,10 @@ def classify(stdout: str, log: str = "") -> Verdict:
     if counts is None:
         reason = "the report's severity counts are missing or are not counts"
         return Verdict(UNAVAILABLE, reason=reason, endpoint=endpoint)
-    result = FOUND if any(counts[severity] for severity in FAILING_SEVERITIES) else PASSED
-    return Verdict(result, counts=counts, endpoint=endpoint)
+    if not any(counts[severity] for severity in FAILING_SEVERITIES):
+        return Verdict(PASSED, counts=counts, endpoint=endpoint)
+
+    return _excused_or_found(report, counts, endpoint)
 
 
 Runner = Callable[[list[str]], "subprocess.CompletedProcess[str]"]

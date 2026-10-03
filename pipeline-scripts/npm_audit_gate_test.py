@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from datetime import date, timedelta
 
 import npm_audit_gate as gate
 import pytest
@@ -331,3 +332,121 @@ def test_undecodable_npm_output_is_decoded_not_raised() -> None:
     assert "\ufffd" in completed.stderr  # the U+FFFD replacement character
     verdict = gate.classify(completed.stdout, completed.stderr)
     assert (verdict.result, verdict.endpoint) == (gate.UNAVAILABLE, "audits/quick")
+
+
+# --- recorded unfixable advisories (#13400) --------------------------------
+#
+# Owner decision 2026-10-03: GHSA-vfj7-8cjw-p6xm (braces <= 3.0.3, published 2026-09-18)
+# has `first_patched_version: null`, every lockfile here is already at 3.0.3, and the chain
+# is devDependencies only. The gate yields to it until the recorded expiry.
+#
+# Every fixture below is a literal in this file, so none of them can degrade through a
+# loader, and each failure mode the record can have gets one that trips it.
+
+_EXCUSED = "GHSA-vfj7-8cjw-p6xm"
+_UNKNOWN = "GHSA-aaaa-bbbb-cccc"
+
+
+def _detailed(*advisories: tuple[str, str, bool], **counts: int) -> str:
+    """A report with per-package detail: ``(package, advisory id, fix available)`` each."""
+    vulnerabilities = {key: counts.get(key, 0) for key in ("info", "low", "moderate", "high", "critical")}
+    vulnerabilities["total"] = sum(vulnerabilities.values())
+    detail = {
+        package: {
+            "name": package,
+            "severity": "high",
+            "fixAvailable": fix,
+            "via": [{"source": 1, "name": package, "url": f"https://github.com/advisories/{advisory}"}],
+        }
+        for package, advisory, fix in advisories
+    }
+    return json.dumps(
+        {"auditReportVersion": 2, "vulnerabilities": detail, "metadata": {"vulnerabilities": vulnerabilities}}
+    )
+
+
+def test_a_recorded_unfixable_advisory_passes_and_names_itself() -> None:
+    """The yield is visible in the verdict, not silent -- the whole difference from silencing."""
+    verdict = gate.classify(_detailed(("braces", _EXCUSED, False), high=6), BULK_LOG)
+
+    assert verdict.result == gate.PASSED
+    assert _EXCUSED in verdict.reason and "#13400" in verdict.reason
+    assert verdict.counts["high"] == 6, "the count is still reported; the advisory is excused, not hidden"
+
+
+def test_an_unrecorded_advisory_still_fails_beside_an_excused_one() -> None:
+    """The record is a floor on scrutiny, not a lid: one unknown id fails the whole gate."""
+    verdict = gate.classify(_detailed(("braces", _EXCUSED, False), ("other", _UNKNOWN, False), high=2), BULK_LOG)
+
+    assert verdict.result == gate.FOUND
+    assert _UNKNOWN in verdict.reason
+
+
+def test_a_fix_being_available_withdraws_the_exception() -> None:
+    """The condition that keeps this from being a silence: a bump exists, so bump it."""
+    verdict = gate.classify(_detailed(("braces", _EXCUSED, True), high=1), BULK_LOG)
+
+    assert verdict.result == gate.FOUND
+    assert "fix available" in verdict.reason
+
+
+def test_an_expired_exception_fails_and_names_the_date() -> None:
+    """Injected date, so the test does not change meaning when the expiry passes."""
+    expiry = date.fromisoformat(gate.ADVISORY_EXCEPTIONS[_EXCUSED].expires)
+    honoured, problems = gate.exception_problems({_EXCUSED}, False, expiry + timedelta(days=1))
+
+    assert honoured == set()
+    assert any(gate.ADVISORY_EXCEPTIONS[_EXCUSED].expires in problem for problem in problems)
+
+
+def test_the_exception_is_honoured_on_its_last_day() -> None:
+    """Contrast for the boundary: expiry is inclusive, so the off-by-one is pinned."""
+    expiry = date.fromisoformat(gate.ADVISORY_EXCEPTIONS[_EXCUSED].expires)
+    honoured, problems = gate.exception_problems({_EXCUSED}, False, expiry)
+
+    assert honoured == {_EXCUSED}
+    assert problems == []
+
+
+def test_a_drained_exception_fails_rather_than_lingering() -> None:
+    """Shrink-only, as the ratchet baselines are: a record cannot outlive its advisory."""
+    honoured, problems = gate.exception_problems({_UNKNOWN}, False, date(2026, 10, 3))
+
+    assert honoured == set()
+    assert any("no longer reported" in problem for problem in problems)
+
+
+def test_a_count_without_any_advisory_id_is_never_excused_into_a_pass() -> None:
+    """The existing `_report` shape: counts present, detail empty. FOUND, and says why."""
+    verdict = gate.classify(_report(high=1), BULK_LOG)
+
+    assert verdict.result == gate.FOUND
+    assert "named no advisory id" in verdict.reason
+
+
+def test_unreadable_detail_is_never_excused_into_a_pass() -> None:
+    """Detail that is not a mapping at all is a different failure from an empty one.
+
+    Both must be FOUND, and separating them is the point: "I could not read the detail" and
+    "the detail named nothing" send a reader to different places, and a shared message would
+    have sent them to the wrong one.
+    """
+    broken = json.dumps(
+        {
+            "auditReportVersion": 2,
+            "vulnerabilities": "not a mapping",
+            "metadata": {"vulnerabilities": {"info": 0, "low": 0, "moderate": 0, "high": 1, "critical": 0}},
+        }
+    )
+    verdict = gate.classify(broken, BULK_LOG)
+
+    assert verdict.result == gate.FOUND
+    assert "unreadable" in verdict.reason
+
+
+def test_every_recorded_exception_carries_a_reason_and_an_issue() -> None:
+    """A record whose entries need no justification is a silence with a dict around it."""
+    for advisory, exception in gate.ADVISORY_EXCEPTIONS.items():
+        assert date.fromisoformat(exception.expires), advisory
+        assert len(exception.reason) > 80, f"{advisory} needs a reason, not a label"
+        assert "#" in exception.reason, f"{advisory} must cite the issue recording the decision"
