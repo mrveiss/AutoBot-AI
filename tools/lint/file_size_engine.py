@@ -63,8 +63,10 @@ class GateConfig:
     min_tracked_files: int
     #: Grandfathered files and their recorded ceilings. Shrinks only.
     known_large: Mapping[str, int]
-    #: ``git ls-files`` pattern selecting this gate's language.
-    glob: str
+    #: ``git ls-files`` patterns selecting this gate's language. A tuple because a language
+    #: can have more than one extension -- the frontend gate covers ``*.ts`` and ``*.vue`` --
+    #: and ``git ls-files`` takes several pathspecs in one call, so one subprocess still does.
+    globs: tuple[str, ...]
 
 
 def normalise(path: str) -> str:
@@ -93,7 +95,7 @@ def tracked_files(cfg: GateConfig, root: pathlib.Path) -> list[str]:
     ``exclude:``, so the audit's scope and the staged-file scope are the same set (#14547).
     """
     out = subprocess.run(  # nosec B603 B607  # fixed argv, no shell, no caller input
-        ["git", "ls-files", cfg.glob],
+        ["git", "ls-files", *cfg.globs],
         cwd=root,
         capture_output=True,
         text=True,

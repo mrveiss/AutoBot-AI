@@ -125,7 +125,7 @@ def _config() -> GateConfig:
         excluded_prefixes=EXCLUDED_PREFIXES,
         min_tracked_files=MIN_TRACKED_SH_FILES,
         known_large=KNOWN_LARGE,
-        glob="*.sh",
+        globs=("*.sh",),
     )
 
 

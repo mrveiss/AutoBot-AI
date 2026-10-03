@@ -165,7 +165,7 @@ def _config() -> GateConfig:
         excluded_prefixes=EXCLUDED_PREFIXES,
         min_tracked_files=MIN_TRACKED_PY_FILES,
         known_large=KNOWN_LARGE,
-        glob="*.py",
+        globs=("*.py",),
     )
 
 

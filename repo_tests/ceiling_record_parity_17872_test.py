@@ -80,6 +80,11 @@ from repo_tests._paths import repo_root
 _PAIRS = {
     "python": ("scripts/check_python_file_size.py", "repo_tests.python_file_size_ratchet_baseline"),
     "shell": ("scripts/check_shell_file_size.py", "repo_tests.shell_file_size_ratchet_baseline"),
+    # Third gate, added with the engine (#17885). Parameterising rather than copying the
+    # assertion is the whole argument of this file: a new gate inherits the protection instead
+    # of needing someone to remember it, and the shell pair only got this check because #17882
+    # found the Python one missing it.
+    "frontend": ("scripts/check_frontend_file_size.py", "repo_tests.frontend_file_size_ratchet_baseline"),
 }
 
 

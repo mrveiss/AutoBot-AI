@@ -970,6 +970,19 @@ repos:
         stages: [pre-commit]
         description: "Reject Python files exceeding 600 lines to prevent god-module regressions (#5060)"
 
+      - id: frontend-file-size
+        name: Frontend file size guard (#17885, max 600 lines)
+        entry: python3 scripts/check_frontend_file_size.py
+        language: python
+        files: \.(ts|vue)$
+        # Generated OpenAPI clients are excluded by prefix, not recorded as ceilings: 178,894
+        # lines in one frontend and 26,572 in the other, and a generated file cannot be split
+        # by its author. Mirrored by EXCLUDED_PREFIXES in the hook, which the ratchet test
+        # parses this file to verify.
+        exclude: ^(\.worktrees/|autobot-frontend/src/types/generated/|autobot-slm-frontend/src/types/generated/)
+        stages: [pre-commit]
+        description: "Reject frontend files exceeding 600 lines; grandfathered files may not grow (#17885)"
+
       - id: shell-file-size
         name: Shell file size guard (#17353, max 600 lines)
         entry: python3 scripts/check_shell_file_size.py
