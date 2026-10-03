@@ -14,7 +14,7 @@ The first fix introduced a worse defect than the one it closed. Its remedy for
 an unusable repo is to **move the host's own source aside**, and it decided
 usability from an empty ``apt-cache policy`` candidate. ``apt-get update``
 **exits 0 with ``W: Failed to fetch``** for an unreachable source -- recorded
-under #6719 at ``roles/nginx/tasks/main.yml:18-20`` -- so a slow mirror
+under #6719 by the ``nginx | Refresh apt cache`` task -- so a slow mirror
 produced an empty candidate on a perfectly good repository, and a working
 device-shipped source would have been moved to a backup with a message saying
 it "did not serve that package". That claim would have been false.

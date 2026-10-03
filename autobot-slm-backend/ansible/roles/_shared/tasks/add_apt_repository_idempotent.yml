@@ -135,7 +135,8 @@
 #                                   an unmeasurable probe must never reach that verdict.
 #
 # `apt-get update` EXITS 0 with `W: Failed to fetch ...` for an unreachable source --
-# recorded under #6719 at roles/nginx/tasks/main.yml:18-20 -- so an exit status alone
+# recorded under #6719 in the `nginx | Refresh apt cache (best-effort,
+# bounded; #6719)` task -- so an exit status alone
 # cannot tell a broken repo from a slow mirror. The verdict therefore requires
 # POSITIVE evidence of unusability, and the ladder below is evaluated in the shell
 # where the text is, not in Jinja:
