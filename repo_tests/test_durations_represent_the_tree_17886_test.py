@@ -1,0 +1,122 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""The committed shard durations must represent the tree they split (#17886).
+
+``repo_tests/stable_shard.py`` balances CI shards on weights from
+``.test_durations`` / ``.test_durations_slm``, and its argument is that a weight
+only has to be *proportional* to cost. On 2026-10-03 that premise was false: the
+files dated from 2026-08-17, and **48% of the backend test modules and 57% of the
+SLM ones carried no weight at all** -- 334 of 339 ``repo_tests`` modules among
+them. The splitter balanced a 338-second shadow of a ~98-minute suite.
+
+The weekly ``test-durations.yml`` run measured correctly the whole time. Its
+``land`` job could not open the refresh PR (the repository did not permit GitHub
+Actions to create pull requests), so every refresh was pushed to a branch and
+stranded, and a red 3am cron is nobody's alert. The drift was silent because
+nothing failed when the record went stale. This is that missing failure.
+
+WHAT IT MEASURES: for each durations file, the fraction of git-tracked test
+modules under the roots its generator collects that have **no** recorded timing.
+The roots are parsed from ``test-durations.yml`` itself, so this check cannot
+disagree with the generator about what it collects.
+
+WHAT IT CANNOT SEE: whether a recorded timing is still *accurate* -- only whether
+a module is represented at all. A module whose tests are all deselected by the
+generator's marker filter is legitimately absent; that is part of the allowed
+fraction, which is why the ceiling is not zero.
+
+The ceiling: a fresh refresh measured 2.9% (backend) and 3.3% (SLM) unrepresented
+six days after it ran; the stale files measured 48.3% and 57.1%. 15% allows weeks
+of ordinary test growth between weekly refreshes and fails long before the
+splitter is balancing noise. Raise it only with a measurement, never to make red
+go green.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+
+import pytest
+from repo_tests._paths import repo_root
+
+from tools.lint._scan_helpers import tracked_paths
+
+_WORKFLOW = ".github/workflows/test-durations.yml"
+
+#: Largest fraction of collected test modules allowed to carry no recorded timing.
+MAX_UNREPRESENTED_FRACTION = 0.15
+
+#: Reach floor: the backend file's roots held 2,459 test modules and the SLM file's
+#: 245 when this was written. Far below either means the enumeration broke, and an
+#: empty enumeration would make every fraction 0/0 -- a pass that examined nothing.
+_MIN_TRACKED_MODULES = {".test_durations": 1500, ".test_durations_slm": 150}
+
+#: One ``python -m pytest <roots> ... --durations-path <file>`` invocation.
+_INVOCATION = re.compile(
+    r"python -m pytest \\\n\s+(?P<roots>[^\n\\]+?)\s*\\\n(?:[^\n]*\n)*?\s+--durations-path (?P<path>\S+)"
+)
+_TEST_MODULE = re.compile(r"(^|/)(test_[^/]*|[^/]*_test)\.py$")
+
+
+def generator_roots(workflow_text: str) -> dict[str, list[str]]:
+    """Durations file -> the roots the generator collects for it."""
+    return {m["path"]: m["roots"].split() for m in _INVOCATION.finditer(workflow_text)}
+
+
+def unrepresented_fraction(durations: dict[str, float], tracked_modules: set[str]) -> float:
+    """Fraction of *tracked_modules* with no timing in *durations* (keys are pytest node ids)."""
+    recorded = {node_id.split("::", 1)[0] for node_id in durations}
+    return len(tracked_modules - recorded) / len(tracked_modules)
+
+
+def _tracked_test_modules(roots: list[str]) -> set[str]:
+    return {p for p in tracked_paths(repo_root(), *roots) if _TEST_MODULE.search(p)}
+
+
+def _invocations() -> dict[str, list[str]]:
+    return generator_roots((repo_root() / _WORKFLOW).read_text(encoding="utf-8"))
+
+
+def test_the_generator_invocations_are_found():
+    """If the workflow's shape changes, this fails first -- not the coverage check, vacuously."""
+    assert set(_invocations()) == set(_MIN_TRACKED_MODULES), f"parsed {sorted(_invocations())} from {_WORKFLOW}"
+
+
+@pytest.mark.parametrize("durations_file", sorted(_MIN_TRACKED_MODULES))
+def test_the_committed_durations_represent_the_tree(durations_file: str):
+    tracked = _tracked_test_modules(_invocations()[durations_file])
+    assert (
+        len(tracked) >= _MIN_TRACKED_MODULES[durations_file]
+    ), f"enumerated {len(tracked)} test modules for {durations_file} -- the walk broke"
+    durations = json.loads((repo_root() / durations_file).read_text(encoding="utf-8"))
+
+    fraction = unrepresented_fraction(durations, tracked)
+
+    assert fraction <= MAX_UNREPRESENTED_FRACTION, (
+        f"{durations_file}: {fraction:.1%} of {len(tracked)} collected test modules carry no timing "
+        f"(ceiling {MAX_UNREPRESENTED_FRACTION:.0%}). The shard splitter is balancing a shadow of the suite. "
+        f"Refresh it: run {_WORKFLOW} (workflow_dispatch) and merge the PR it opens."
+    )
+
+
+def test_a_stale_or_truncated_record_is_refused():
+    """The check must be able to fail: a record covering a fraction of the tree is red."""
+    tracked = {f"repo_tests/m{i}_test.py" for i in range(100)}
+    fresh = {f"repo_tests/m{i}_test.py::test_a": 0.1 for i in range(97)}
+    truncated = {f"repo_tests/m{i}_test.py::test_a": 0.1 for i in range(5)}
+
+    assert unrepresented_fraction(fresh, tracked) <= MAX_UNREPRESENTED_FRACTION
+    assert unrepresented_fraction(truncated, tracked) > MAX_UNREPRESENTED_FRACTION
+
+
+def test_the_roots_parser_reads_a_real_shaped_invocation():
+    text = (
+        "          python -m pytest \\\n"
+        "            autobot-backend repo_tests libs \\\n"
+        "            -n auto --dist loadscope \\\n"
+        "            --durations-path .test_durations \\\n"
+    )
+    assert generator_roots(text) == {".test_durations": ["autobot-backend", "repo_tests", "libs"]}
