@@ -379,7 +379,10 @@ preflight_checks() {
     fi
     success "Internet connectivity OK"
 
-    for cmd in curl apt-get; do
+    # openssl is needed BEFORE system_setup installs it: prompt_config runs first
+    # and generate_admin_password shells out to it. Checked here so a missing one
+    # fails with a name, not as another silent set -e abort mid-prompt (#17929).
+    for cmd in curl apt-get openssl; do
         if ! command -v "${cmd}" &>/dev/null; then
             fatal "Required command not found: ${cmd}"
         fi

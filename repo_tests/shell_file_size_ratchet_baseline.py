@@ -33,7 +33,7 @@ RATCHET_BASELINE: dict[str, int] = {
     # install aborted silently at the password prompt -- stdin is the script
     # pipe, `read` got EOF, `set -e` killed it. Delivered BY the download
     # pipeline, so it can neither source a helper nor be split.
-    "install.sh": 1318,  # #17875: +12 for three first-run fixes; single-file installer cannot be split
+    "install.sh": 1321,  # #17875: +12 for three first-run fixes; single-file installer cannot be split
     "scripts/lib/hardcoded-value-rules.sh": 842,
     "scripts/pr-preflight.sh": 818,
 }
