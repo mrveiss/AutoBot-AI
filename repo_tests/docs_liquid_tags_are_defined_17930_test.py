@@ -48,6 +48,7 @@ from pathlib import Path
 import pytest
 import yaml
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 DOCS = "docs"
 
@@ -103,9 +104,37 @@ DEFINED_TAGS = frozenset(
 _TAG = re.compile(r"\{%-?\s*([A-Za-z_][A-Za-z0-9_]*)")
 _RAW_REGION = re.compile(r"\{%-?\s*raw\s*-?%\}.*?\{%-?\s*endraw\s*-?%\}", re.S)
 
+
+def _processed_docs(root: Path) -> list[Path]:
+    """Docs Jekyll actually renders: `*.md` under `docs/`, minus the dirs its own config excludes."""
+    skip = excluded_dirs()
+    docs = root / DOCS
+    return sorted(p for p in docs.rglob("*.md") if not any(part in skip for part in p.relative_to(docs).parts))
+
+
 #: Reach floor. A discovery-based guard that scans nothing reports a clean run having asserted
 #: nothing -- the failure #15826 catalogues across this repo's tree scanners.
-MIN_DOCS_SCANNED = 200
+#:
+#: Measured at 739 on this tree, not carried across from the hand-rolled 200 this replaces
+#: (#15928): that constant was 3.7x below the real population, so it would have gone on passing
+#: after the glob lost three quarters of the tree.
+#:
+#: Deliberately NOT a `min_fraction` against all `*.md` under `docs/` (846, ratio 0.874). That
+#: reference moves the wrong way by construction: `archives/` is excluded and only ever grows --
+#: 107 files today -- so every archived doc leaves the numerator and stays in the denominator,
+#: and ordinary archiving would walk the fraction down into a false fire.
+#:
+#: The window is wide on purpose for the same reason. Archiving shrinks this population without
+#: the glob breaking, so the floor sits 89 below today's count rather than hugging it; what it
+#: still catches is the failure it exists for -- a glob or exclude-parse that reaches near zero.
+DOCS_SCANNED = declare(
+    "jekyll-processed-docs",
+    discover=_processed_docs,
+    floor=650,
+    growth=150,
+    skips=0,
+    what="Jekyll-processed Markdown docs",
+)
 
 
 def excluded_dirs() -> frozenset[str]:
@@ -125,20 +154,9 @@ def undefined_tags(text: str) -> list[str]:
     return sorted({m for m in _TAG.findall(_RAW_REGION.sub("", text)) if m not in DEFINED_TAGS})
 
 
-def _processed_docs() -> list[Path]:
-    skip = excluded_dirs()
-    root = repo_root() / DOCS
-    return sorted(p for p in root.rglob("*.md") if not any(part in skip for part in p.relative_to(root).parts))
-
-
 def test_the_doc_scan_still_reaches_the_tree() -> None:
     """Reach floor, before any assertion that iterates the set."""
-    found = _processed_docs()
-    assert len(found) >= MIN_DOCS_SCANNED, (
-        f"only {len(found)} processed docs found, expected at least {MIN_DOCS_SCANNED} -- the glob "
-        "or the exclude parsing has stopped reaching the tree, and the assertion below would pass "
-        "over almost nothing"
-    )
+    DOCS_SCANNED.examined(repo_root())
 
 
 def test_the_exclude_list_is_read_from_jekylls_own_config() -> None:
@@ -152,7 +170,7 @@ def test_the_exclude_list_is_read_from_jekylls_own_config() -> None:
 
 def test_no_processed_doc_carries_a_liquid_tag_jekyll_cannot_parse() -> None:
     offenders: list[str] = []
-    for path in _processed_docs():
+    for path in DOCS_SCANNED.examined(repo_root()):
         bad = undefined_tags(path.read_text(encoding="utf-8"))
         if bad:
             offenders.append(f"{path.relative_to(repo_root())}: {', '.join(bad)}")
