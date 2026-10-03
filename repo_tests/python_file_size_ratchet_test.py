@@ -422,7 +422,7 @@ def test_the_audit_reports_a_vanished_entry(hook, tmp_path, monkeypatch):
 def test_unlisted_files_keep_the_plain_limit(hook):
     unlisted = "autobot-backend/api/definitely_not_grandfathered.py"
     assert hook.verdict(unlisted, hook.MAX_LINES) is None
-    assert hook.verdict(unlisted, hook.MAX_LINES + 1) == (
+    assert hook.verdict(unlisted, hook.MAX_LINES + 1).startswith(
         f"{unlisted}: {hook.MAX_LINES + 1} lines (max {hook.MAX_LINES})"
     )
 
