@@ -450,3 +450,24 @@ def test_every_recorded_exception_carries_a_reason_and_an_issue() -> None:
         assert date.fromisoformat(exception.expires), advisory
         assert len(exception.reason) > 80, f"{advisory} needs a reason, not a label"
         assert "#" in exception.reason, f"{advisory} must cite the issue recording the decision"
+
+
+def test_an_empty_record_excuses_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With no exceptions recorded the gate is exactly what it was before this mechanism.
+
+    The question a reviewer should ask of any allowlist is whether the empty case is the
+    old behaviour or a new hole. Here it is the old behaviour: nothing is honoured, every
+    failing advisory is unexcused, and the verdict is FOUND.
+    """
+    monkeypatch.setattr(gate, "ADVISORY_EXCEPTIONS", {})
+    verdict = gate.classify(_detailed(("braces", _EXCUSED, False), high=6), BULK_LOG)
+
+    assert verdict.result == gate.FOUND
+    assert _EXCUSED in verdict.reason
+
+
+def test_the_failing_verdict_maps_to_a_non_zero_exit() -> None:
+    """A yield that warned and continued would be the silence this gate forbids."""
+    assert gate.EXIT_CODES[gate.FOUND] != 0
+    assert gate.EXIT_CODES[gate.UNAVAILABLE] != 0
+    assert gate.EXIT_CODES[gate.PASSED] == 0
