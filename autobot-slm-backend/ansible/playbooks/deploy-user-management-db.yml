@@ -169,8 +169,29 @@
 
     - name: Parse Redis VM password
       ansible.builtin.set_fact:
-        autobot_db_password: "{{ redis_creds_b64.content | b64decode | regex_search('AUTOBOT_DB_PASSWORD=(.+)', '\\1') | first }}"
+        # `default([], true)` BEFORE `first`, for the reason given at
+        # roles/_shared/tasks/add_apt_repository_idempotent.yml (#17897): a
+        # `regex_search` that does not match returns None, and `None | first`
+        # raises before a default placed after it could run. Worse here than
+        # there -- `no_log: true` below redacts the task, so the failure arrives
+        # with neither a message nor the value that caused it.
+        #
+        # The empty default is deliberately NOT the end of the story: this is a
+        # credential, and turning a crash into an empty password would trade a
+        # loud failure for a silent one that proceeds. The assert below restores
+        # failing closed, with the diagnosis the bare TypeError never gave.
+        autobot_db_password: "{{ (redis_creds_b64.content | b64decode | regex_search('AUTOBOT_DB_PASSWORD=(.+)', '\\1') | default([], true)) | first | default('') }}"
       no_log: true
+
+    - name: Fail with a reason when the Redis credentials carry no password (#17897)
+      ansible.builtin.fail:
+        msg: >-
+          AUTOBOT_DB_PASSWORD was not found in the decoded Redis credentials file.
+          The file was read and decoded, so this is a missing or renamed key rather
+          than a missing file. Before #17897 this surfaced as a bare
+          'FAILED! => {"changed": false}' from the parse task above, with no message,
+          because the task is no_log.
+      when: autobot_db_password | length == 0
 
     - name: Test connectivity to autobot_users from SLM
       community.postgresql.postgresql_ping:

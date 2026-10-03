@@ -255,10 +255,30 @@ def test_each_declared_floor_is_cleared_by_the_live_tree(reach: Reach) -> None:
 
 
 @pytest.mark.parametrize("reach", _declarations(), ids=lambda r: r.name)
-def test_no_floor_sits_at_zero(reach: Reach) -> None:
-    """A floor of zero is satisfied by discovering nothing, which is the state
-    it exists to reject."""
-    assert reach.floor > 0, f"{reach.name} declares a floor of {reach.floor}"
+def test_no_declaration_can_be_satisfied_by_discovering_nothing(reach: Reach) -> None:
+    """Every declaration must bound its sweep from below, by a floor or by a fraction.
+
+    A floor of zero is satisfied by discovering nothing, which is the state it exists to reject.
+    Since #17142 a declaration may bound itself RELATIVELY instead -- `min_fraction` against an
+    external reference -- and such a declaration carries `floor=0` legitimately, because the
+    constant is the thing being removed.
+
+    The property is unchanged and is the one worth asserting: a declaration satisfied by an empty
+    sweep asserts nothing. `declare()` refuses the neither-case at construction; this asserts it
+    over the live registry, so a declaration that reaches the registry some other way is still
+    caught.
+    """
+    if reach.min_fraction is not None:
+        assert (
+            0 < reach.min_fraction <= 1
+        ), f"{reach.name} declares min_fraction={reach.min_fraction}, which is not a fraction"
+        assert not reach.floor and not reach.growth, (
+            f"{reach.name} declares min_fraction={reach.min_fraction} alongside floor="
+            f"{reach.floor}/growth={reach.growth}; the relative mode does not read them, so a "
+            f"reader cannot tell which bound applies"
+        )
+        return
+    assert reach.floor > 0, f"{reach.name} declares a floor of {reach.floor} and no min_fraction"
 
 
 def test_a_floor_that_cannot_fail_is_rejected_by_this_suite() -> None:

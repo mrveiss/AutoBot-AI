@@ -205,12 +205,33 @@
   ansible.builtin.set_fact:
     # Not PRESENT, or no package named: the pre-#17897 contract, presence is trusted.
     # A lock that outlived its retries is undetermined, never unusable.
+    # `default([], true)` sits BEFORE `first`, not after it. `regex_search` returns
+    # None when the pattern does not match, and `None | first` raises TypeError --
+    # which `set_fact` reports as a bare `FAILED! => {"changed": false}` with no
+    # message, so the play stops and says nothing about why. A default placed after
+    # `first` can never run, because `first` has already raised.
+    #
+    # The no-match case is reachable when the probe RAN and printed no VERDICT line
+    # -- a `become` failure, or the shell exiting before its echoes. It is NOT
+    # reachable via the probe's `when:`, which mirrors the `if` guard above exactly,
+    # and Jinja's conditional is lazy: the else-branch only evaluates when the probe
+    # was not skipped. An earlier revision of this comment claimed that second path
+    # and was wrong. Either way the honest verdict is `undetermined`, which the
+    # ladder below already handles by stopping.
+    #
+    # The regex arguments use SINGLE backslashes because this is a folded (`>-`)
+    # scalar, which performs no YAML unescaping -- `'\\1'` here would reach
+    # `regex_search` as a literal two-character `\\1`, which its own
+    # `re.match(r'\\(\\d+)', arg)` cannot parse, raising before any of the guards
+    # above can run. The double-backslash form is correct only inside a
+    # double-quoted scalar; compare `playbooks/update-all-nodes.yml` (quoted, `\\1`)
+    # against `playbooks/fix-backend-environment.yml` (folded, `\1`).
     _apt_repo_verdict: >-
       {{ 'usable'
-         if (_apt_repo_present.stdout | trim != 'PRESENT')
+         if (_apt_repo_present.stdout | default('') | trim != 'PRESENT')
             or (apt_repo_verify_package | default('', true) | length == 0)
-         else ((_apt_repo_probe.stdout | default('') | regex_search('VERDICT=(\\w+)', '\\1')
-                | first | default('undetermined', true))
+         else ((_apt_repo_probe.stdout | default('') | regex_search('VERDICT=(\w+)', '\1')
+                | default([], true) | first | default('undetermined', true))
                | replace('locked', 'undetermined')) }}
   tags: ['packages']
 
@@ -373,7 +394,15 @@
   delay: "{{ apt_repo_lock_delay | default(10) }}"
   when:
     - apt_repo_verify_package | default('', true) | length > 0
-    - _apt_repo_verdict != 'usable'
+    # MIRRORS the add's own predicate rather than negating the verdict. `!= 'usable'`
+    # looked equivalent and is not: `Record the verdict` sets 'usable' whenever
+    # presence != 'PRESENT', so a FRESH add -- the one path where nothing has ever
+    # been checked -- was the one path that skipped the check. An earlier revision
+    # was told this about `not preserve_ok` and replaced it with `!= 'usable'`, which
+    # is true in the same case: the variable changed and the hole did not.
+    - >-
+      (_apt_repo_present.stdout | trim == 'MISSING')
+      or (_apt_repo_verdict == 'unusable')
   tags: ['packages']
 
 - name: "{{ apt_repo_label }} | Fail with the real cause when the repo still cannot serve the package"
@@ -395,15 +424,28 @@
          if ('VERDICT=unusable' not in (_apt_repo_probe_final.stdout | default('')))
          else "" }}
       Probe: {{ _apt_repo_probe_final.stdout | default('') | trim }}
-  # Fires unless the post-add verdict is positively `usable`. The pre-add path already
-  # stops on `undetermined` rather than guessing; this one used to fire only on
-  # `unusable`, so an `undetermined` post-add probe let the play SUCCEED without ever
-  # confirming the repository serves the package -- and the failure then surfaced
-  # three steps later as a package-install error. A green play over an unverified
-  # provision is the asymmetry, not a missing check: the rule was right on one path
-  # and absent on the other.
+  # Fires on every path that ADDED a repo and still cannot serve the package. The
+  # pre-add path stops on `undetermined` rather than guessing; this one used to fire
+  # only on `unusable`, so an unverified post-add provision let the play SUCCEED and
+  # the failure surfaced three steps later as a package-install error. A green play
+  # over an unverified provision is the asymmetry, not a missing check.
+  #
+  # Note the else-branch of the first conditional below ("No source ... was previously
+  # configured here") was UNREACHABLE while this task was gated on
+  # `_apt_repo_verdict != 'usable'`: that excluded MISSING, the only state in which
+  # nothing was moved aside. Prose reachable in no state is a symptom of a wrong gate,
+  # not of a wrong message -- `pgdg_preserved_repo_is_verified_17897_test.py` now
+  # asserts both branches are reachable across the firing rows.
   when:
     - apt_repo_verify_package | default('', true) | length > 0
-    - _apt_repo_verdict != 'usable'
+    # MIRRORS the add's own predicate rather than negating the verdict. `!= 'usable'`
+    # looked equivalent and is not: `Record the verdict` sets 'usable' whenever
+    # presence != 'PRESENT', so a FRESH add -- the one path where nothing has ever
+    # been checked -- was the one path that skipped the check. An earlier revision
+    # was told this about `not preserve_ok` and replaced it with `!= 'usable'`, which
+    # is true in the same case: the variable changed and the hole did not.
+    - >-
+      (_apt_repo_present.stdout | trim == 'MISSING')
+      or (_apt_repo_verdict == 'unusable')
     - "'VERDICT=usable' not in (_apt_repo_probe_final.stdout | default(''))"
   tags: ['packages']
