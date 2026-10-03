@@ -411,12 +411,20 @@ def _patch_entry(severity: str = "high", *, fix: object = False, rng: str = ">=1
     return {"severity": severity, "fixAvailable": fix, "range": rng, "via": via or [_GHSA_VIA]}
 
 
-def test_an_unrelated_fixable_advisory_does_not_withdraw_the_exception() -> None:
+def test_an_unrelated_fixable_advisory_does_not_withdraw_the_exception(recorded_exception) -> None:
     """The defect: a global flag let any fixable package revoke a recorded owner ruling.
 
     Shape taken from the real report on #17887 -- six highs, the excused one unpatchable and a
     neighbour carrying its own patch. Before this, the neighbour's patch withdrew the exception
     and the gate failed every frontend-touching PR.
+
+    Takes `recorded_exception` and asserts the reason EXACTLY (CodeRabbit, #17902). Without the
+    fixture this drove the production record, so the negative assertion below passed for three
+    reasons that are not the behaviour under test: the real entry expiring on 2026-11-14, the
+    entry being removed, or the withdrawal message being reworded. A test whose key assertion is
+    "this message is absent" goes green when the mechanism is absent -- which is the vacuity this
+    PR exists to fix, in the test proving the fix. Asserting the whole reason also pins that the
+    excused advisory is NOT listed alongside the neighbour, which a substring check allowed.
     """
     other_via = {"url": "https://github.com/advisories/GHSA-zzzz-yyyy-xxxx"}
     report = _with(
@@ -432,8 +440,7 @@ def test_an_unrelated_fixable_advisory_does_not_withdraw_the_exception() -> None
     # The neighbour is still unexcused -- it has no exception -- but the reason must name IT,
     # not revoke the braces ruling.
     assert verdict.result == gate.FOUND
-    assert "GHSA-zzzz-yyyy-xxxx" in verdict.reason
-    assert "recorded as unfixable, but npm offers a patched version" not in verdict.reason
+    assert verdict.reason == "not excused: GHSA-zzzz-yyyy-xxxx", verdict.reason
 
 
 def test_the_exception_is_withdrawn_when_its_own_package_is_patched(recorded_exception) -> None:
