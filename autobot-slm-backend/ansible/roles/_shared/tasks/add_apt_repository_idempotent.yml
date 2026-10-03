@@ -205,12 +205,33 @@
   ansible.builtin.set_fact:
     # Not PRESENT, or no package named: the pre-#17897 contract, presence is trusted.
     # A lock that outlived its retries is undetermined, never unusable.
+    # `default([], true)` sits BEFORE `first`, not after it. `regex_search` returns
+    # None when the pattern does not match, and `None | first` raises TypeError --
+    # which `set_fact` reports as a bare `FAILED! => {"changed": false}` with no
+    # message, so the play stops and says nothing about why. A default placed after
+    # `first` can never run, because `first` has already raised.
+    #
+    # The no-match case is reachable when the probe RAN and printed no VERDICT line
+    # -- a `become` failure, or the shell exiting before its echoes. It is NOT
+    # reachable via the probe's `when:`, which mirrors the `if` guard above exactly,
+    # and Jinja's conditional is lazy: the else-branch only evaluates when the probe
+    # was not skipped. An earlier revision of this comment claimed that second path
+    # and was wrong. Either way the honest verdict is `undetermined`, which the
+    # ladder below already handles by stopping.
+    #
+    # The regex arguments use SINGLE backslashes because this is a folded (`>-`)
+    # scalar, which performs no YAML unescaping -- `'\\1'` here would reach
+    # `regex_search` as a literal two-character `\\1`, which its own
+    # `re.match(r'\\(\\d+)', arg)` cannot parse, raising before any of the guards
+    # above can run. The double-backslash form is correct only inside a
+    # double-quoted scalar; compare `playbooks/update-all-nodes.yml` (quoted, `\\1`)
+    # against `playbooks/fix-backend-environment.yml` (folded, `\1`).
     _apt_repo_verdict: >-
       {{ 'usable'
-         if (_apt_repo_present.stdout | trim != 'PRESENT')
+         if (_apt_repo_present.stdout | default('') | trim != 'PRESENT')
             or (apt_repo_verify_package | default('', true) | length == 0)
-         else ((_apt_repo_probe.stdout | default('') | regex_search('VERDICT=(\\w+)', '\\1')
-                | first | default('undetermined', true))
+         else ((_apt_repo_probe.stdout | default('') | regex_search('VERDICT=(\w+)', '\1')
+                | default([], true) | first | default('undetermined', true))
                | replace('locked', 'undetermined')) }}
   tags: ['packages']
 

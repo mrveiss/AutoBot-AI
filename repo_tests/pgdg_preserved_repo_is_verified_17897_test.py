@@ -34,7 +34,6 @@ from pathlib import Path
 import jinja2
 import pytest
 import yaml
-
 from repo_tests._paths import repo_root
 
 ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
@@ -114,9 +113,7 @@ def _policy(candidate: str | None, origins: tuple[str, ...] = ()) -> str:
     return "\n".join(lines)
 
 
-def _run_probe(
-    script: str, tmp_path: Path, *, update_out: str, update_rc: int, policy: str
-) -> str:
+def _run_probe(script: str, tmp_path: Path, *, update_out: str, update_rc: int, policy: str) -> str:
     """Execute the probe with apt shadowed, and return its VERDICT."""
     fake = tmp_path / "bin"
     fake.mkdir(exist_ok=True)
@@ -124,9 +121,7 @@ def _run_probe(
         f"#!/bin/bash\nprintf '%s' {shlex.quote(update_out)} >&2\nexit {update_rc}\n",
         encoding="utf-8",
     )
-    (fake / "apt-cache").write_text(
-        f"#!/bin/bash\nprintf '%s\\n' {shlex.quote(policy)}\n", encoding="utf-8"
-    )
+    (fake / "apt-cache").write_text(f"#!/bin/bash\nprintf '%s\\n' {shlex.quote(policy)}\n", encoding="utf-8")
     for f in fake.iterdir():
         f.chmod(0o755)
     done = subprocess.run(  # noqa: S603 - fixed argv, fakes shadow apt, nothing touches /etc
@@ -161,19 +156,13 @@ def test_a_resolved_candidate_is_usable(probe_script: str, tmp_path: Path) -> No
     assert verdict == "usable", "a repo that serves the package must be preserved, not replaced"
 
 
-def test_no_candidate_and_no_error_naming_the_repo_is_unusable(
-    probe_script: str, tmp_path: Path
-) -> None:
+def test_no_candidate_and_no_error_naming_the_repo_is_unusable(probe_script: str, tmp_path: Path) -> None:
     """The original defect: the repo was reached, said nothing, and serves nothing."""
     verdict = _run_probe(probe_script, tmp_path, update_out="", update_rc=0, policy=_policy(None))
-    assert verdict == "unusable", (
-        "a clean update with no candidate is the #17897 case and must be replaced"
-    )
+    assert verdict == "unusable", "a clean update with no candidate is the #17897 case and must be replaced"
 
 
-def test_a_candidate_from_a_DIFFERENT_source_is_not_usable(
-    probe_script: str, tmp_path: Path
-) -> None:
+def test_a_candidate_from_a_DIFFERENT_source_is_not_usable(probe_script: str, tmp_path: Path) -> None:
     """The false-usable case. ``apt-cache policy``'s candidate is a GLOBAL answer.
 
     If another enabled source supplies the package, a probe that reads "a candidate
@@ -198,9 +187,7 @@ def test_a_candidate_from_a_DIFFERENT_source_is_not_usable(
     )
 
 
-def test_a_candidate_this_repo_serves_at_an_older_version_is_still_usable(
-    probe_script: str, tmp_path: Path
-) -> None:
+def test_a_candidate_this_repo_serves_at_an_older_version_is_still_usable(probe_script: str, tmp_path: Path) -> None:
     """The contrast case that stops the origin check over-firing.
 
     Judging by the CANDIDATE's origin alone would call this source unusable because
@@ -248,9 +235,7 @@ def test_the_post_add_check_fails_unless_the_verdict_is_positively_usable(
         )
 
 
-def test_a_definitive_server_answer_naming_the_repo_is_unusable(
-    probe_script: str, tmp_path: Path
-) -> None:
+def test_a_definitive_server_answer_naming_the_repo_is_unusable(probe_script: str, tmp_path: Path) -> None:
     verdict = _run_probe(
         probe_script,
         tmp_path,
@@ -262,9 +247,7 @@ def test_a_definitive_server_answer_naming_the_repo_is_unusable(
     assert verdict == "unusable", "a 404 / missing Release naming this repo is positive evidence"
 
 
-def test_a_failed_fetch_naming_the_repo_is_UNDETERMINED_not_unusable(
-    probe_script: str, tmp_path: Path
-) -> None:
+def test_a_failed_fetch_naming_the_repo_is_UNDETERMINED_not_unusable(probe_script: str, tmp_path: Path) -> None:
     """THE REGRESSION THAT MATTERS: apt exits 0 on an unreachable mirror (#6719).
 
     Reading this as "unusable" moves a working device-shipped source to a backup
@@ -298,9 +281,7 @@ def test_a_held_lock_is_retried_not_judged(probe_script: str, tmp_path: Path) ->
         update_rc=100,
         policy=_policy(None),
     )
-    assert verdict == "locked", (
-        "a dpkg/apt lock must be waited out, never treated as a verdict about the repo"
-    )
+    assert verdict == "locked", "a dpkg/apt lock must be waited out, never treated as a verdict about the repo"
 
 
 def _when_of(task: dict) -> str:
@@ -350,9 +331,9 @@ def test_undetermined_changes_nothing_on_the_host(helper_tasks: list[dict]) -> N
             f"the move aside is reachable on verdict={verdict!r} -- it may run only on "
             f"positive evidence the repo is broken"
         )
-    assert _eval_when(_when_of(move), _apt_repo_verdict="unusable"), (
-        "the move never runs, so an unusable source is never replaced"
-    )
+    assert _eval_when(
+        _when_of(move), _apt_repo_verdict="unusable"
+    ), "the move never runs, so an unusable source is never replaced"
 
 
 def test_a_failed_add_restores_the_moved_source(helper_tasks: list[dict]) -> None:
@@ -401,9 +382,7 @@ def _rescue_script(helper_tasks: list[dict]) -> str:
     assert isinstance(body, str) and body.strip(), "the restore task carries no shell body"
     env = jinja2.Environment(autoescape=False)  # noqa: S701 - shell, not markup
     env.filters["quote"] = shlex.quote
-    return env.from_string(body).render(
-        apt_repo_match=MATCH, apt_repo_backup_dir="/unused-by-this-path"
-    )
+    return env.from_string(body).render(apt_repo_match=MATCH, apt_repo_backup_dir="/unused-by-this-path")
 
 
 def test_the_move_emits_a_machine_readable_pair_for_the_rescue(
@@ -465,9 +444,7 @@ def test_the_rescue_restores_only_this_runs_backup_not_every_generation(
     assert "Restored" in done.stdout, "the rescue restored silently; the log must say what came back"
 
 
-def test_the_rescue_says_so_when_this_run_moved_nothing(
-    helper_tasks: list[dict], tmp_path: Path
-) -> None:
+def test_the_rescue_says_so_when_this_run_moved_nothing(helper_tasks: list[dict], tmp_path: Path) -> None:
     """A MISSING-repo add that fails moved nothing, and must restore nothing."""
     backups = tmp_path / "backups"
     backups.mkdir()
@@ -501,4 +478,67 @@ def test_the_postgresql_role_names_the_package_it_needs() -> None:
     assert "postgresql_version" in passed, (
         f"`{VERIFY_VAR}` hardcodes a version instead of deriving it from "
         f"`postgresql_version`, so the check and the install can disagree"
+    )
+
+
+# ── The verdict must survive a probe that named no VERDICT ────────────────────
+#
+# Broke a real install at 18:06 on 2026-10-03, hours after #17897 merged:
+#
+#     TASK [postgresql : PostgreSQL pgdg | Record the verdict]
+#     fatal: [00-SLM-Manager]: FAILED! => {"changed": false}
+#
+# No message. `set_fact` evaluating a raising expression reports the bare dict,
+# so the play stopped and said nothing -- on the documented one-line installer,
+# which is the first thing a new user runs.
+#
+# Cause: `regex_search(...) | first | default('undetermined', true)`. On no match
+# `regex_search` returns None, and `None | first` raises BEFORE the default can
+# apply. A default placed after `first` can never run.
+#
+# Two reachable no-match paths, so this is not a corner: the probe is skipped by
+# its `when:` (stdout undefined), or it ran and emitted no VERDICT line. The
+# second shows as `ok:` because of `failed_when: false` -- which is exactly what
+# the broken install printed one task before the failure.
+
+
+def test_the_no_match_default_precedes_first(helper_tasks: list[dict]) -> None:
+    """`default` must sit BEFORE `first`. That ordering IS the defect.
+
+    Asserted on filter order rather than by rendering, deliberately. Rendering
+    needs a Jinja environment whose `first` behaves as Ansible's does, and a
+    hand-rolled `first` (``next(iter(x))``) raises on an empty list where Jinja's
+    returns Undefined -- so it reports a FALSE FAILURE against correct code. That
+    happened while fixing this, and a test that can cry wolf about a working tree
+    is worse than no test.
+    """
+    expr = " ".join(
+        str(_named(helper_tasks, "Record the verdict")["ansible.builtin.set_fact"]["_apt_repo_verdict"]).split()
+    )
+
+    assert "| default([], true) | first" in expr, (
+        "the no-match guard is missing or misplaced. `regex_search` returns None when "
+        "the pattern does not match and `None | first` raises TypeError, which set_fact "
+        "reports as a bare FAILED with no message. The default must PRECEDE `first`. "
+        f"Expression now reads: {expr}"
+    )
+
+
+def test_an_undetermined_verdict_still_halts_the_play(helper_tasks: list[dict]) -> None:
+    """Routing a no-match to `undetermined` only helps if something still stops.
+
+    The fix turns a raise into a verdict. If nothing downstream halted on that
+    verdict, the change would convert a loud crash into a silent `usable` -- which
+    is strictly worse than the bug it replaces. This pins the halt.
+    """
+    stoppers = [
+        str(t.get("name", ""))
+        for t in helper_tasks
+        if "Stop:" in str(t.get("name", "")) or "could not determine" in str(t.get("name", ""))
+    ]
+
+    assert stoppers, (
+        "no task halts on an undetermined verdict. Without one, a probe that named no "
+        "VERDICT would pass as fine and the unusable-repo case this helper exists for "
+        "would ship silently."
     )
