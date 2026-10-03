@@ -6,6 +6,15 @@
 
 The Security Scan job used to call npm's audit service twice: ``npm audit
 --json`` for the artifact, then ``npm audit --audit-level=high`` as the gate.
+
+Attribution is per ``via`` ENTRY, not per package (#17889, second review). Three defects
+lived in one line of the first version: ids collected across the whole ``via`` list before
+asking whether any were missing, so a second dict with no ``GHSA-`` url was dropped (a
+legacy ``npmjs.com/advisories/N`` url is that shape); one string in ``via`` set a flag that
+suppressed the check entirely; and a string ``via`` was trusted without checking the package
+it names is in the report. A failing entry with no ``severity`` was skipped outright while
+``metadata.counts`` went on reporting it high. Anything that cannot be attributed to a GHSA
+id now fails, because an advisory the gate cannot name is one it cannot excuse.
 The gate repeated a network call for data the first one already had, and when
 that second call failed -- a 400 from npm's retiring ``audits/quick`` fallback
 on 2026-09-11 -- the job went red exactly as it does for a real advisory.
@@ -129,44 +138,59 @@ ADVISORY_EXCEPTIONS: dict[str, AdvisoryException] = {
 }
 
 
-def _entry_advisory_ids(entry: dict) -> set[str]:
-    """The GHSA ids one package's ``via`` list names directly."""
-    ids = set()
-    for via in entry.get("via") or []:
-        if not isinstance(via, dict):
-            continue
-        match = _GHSA.search(str(via.get("url") or ""))
-        if match:
-            ids.add(match.group(0))
-    return ids
+def _attribute_entry(package: str, entry: dict, detail: dict) -> tuple[set[str], list[str]]:
+    """``(advisory ids this entry names, reasons it is not fully attributed)`` -- per via
+    entry, for the three reasons in the module docstring."""
+    ids: set[str] = set()
+    problems: list[str] = []
+    vias = entry.get("via") or []
+    if not vias:
+        return ids, [f"{package} is a failing advisory with no `via` entries to attribute"]
+    for via in vias:
+        if isinstance(via, dict):
+            match = _GHSA.search(str(via.get("url") or ""))
+            if match:
+                ids.add(match.group(0))
+            else:
+                problems.append(f"{package} names an advisory with no GHSA id: {via.get('url') or via!r}")
+        elif isinstance(via, str):
+            if via not in detail:
+                problems.append(f"{package} is attributed to `{via}`, which the report does not describe")
+        else:
+            problems.append(f"{package} has a `via` entry that is neither an advisory nor a package: {via!r}")
+    return ids, problems
 
 
 def _failing_advisories(report: dict) -> tuple[set[str], bool, list[str]] | None:
-    """``(advisory ids, any failing package is fixable, failing packages naming no id)``.
+    """``(advisory ids, any failing package is fixable, reasons attribution is incomplete)``.
 
-    ``None`` when the per-package detail is unreadable, which must NOT be read as "nothing
-    to see": the caller keeps a failing verdict. The third element exists because the
-    parse used to fail OPEN -- a failing package whose ``via`` carried no ``GHSA-`` url
-    contributed no id, so one unidentifiable advisory beside an excused one passed, the
-    ids-empty guard covering only the case where NOTHING was identified (review on #17889).
+    ``None`` when the detail is unreadable, which must NOT be read as "nothing to see": the
+    caller keeps a failing verdict. The parse failed OPEN twice before this.
     """
     detail = report.get("vulnerabilities")
     if not isinstance(detail, dict):
         return None
     ids: set[str] = set()
     fixable = False
-    unidentified: list[str] = []
+    problems: list[str] = []
     for package, entry in sorted(detail.items()):
-        if not isinstance(entry, dict) or entry.get("severity") not in FAILING_SEVERITIES:
+        if not isinstance(entry, dict):
+            problems.append(f"{package}'s entry is not a mapping, so its severity is unknown")
+            continue
+        severity = entry.get("severity")
+        if severity is None:
+            # Skipping it treated "no severity recorded" as "not failing", while
+            # metadata.counts went on reporting it high (second #17889 review).
+            problems.append(f"{package} has no severity recorded, so it cannot be ruled out")
+            continue
+        if severity not in FAILING_SEVERITIES:
             continue
         if entry.get("fixAvailable"):
             fixable = True
-        found = _entry_advisory_ids(entry)
-        transitive = any(isinstance(via, str) for via in entry.get("via") or [])
-        if not found and not transitive:
-            unidentified.append(str(package))
-        ids |= found
-    return ids, fixable, unidentified
+        entry_ids, entry_problems = _attribute_entry(str(package), entry, detail)
+        ids |= entry_ids
+        problems += entry_problems
+    return ids, fixable, problems
 
 
 def _entry_problem(
@@ -270,6 +294,16 @@ def _counts(vulnerabilities: dict) -> dict[str, int] | None:
     return counts  # type: ignore[return-value]
 
 
+def _counts_contradict_detail(report: dict) -> bool:
+    """A zero failing count over a detail entry that IS failing: the report disagrees with
+    itself, which is unreadable rather than clean. Closed rather than recorded (#17890 N2)
+    because nobody will be here when it becomes reachable."""
+    detail = report.get("vulnerabilities")
+    return isinstance(detail, dict) and any(
+        isinstance(entry, dict) and entry.get("severity") in FAILING_SEVERITIES for entry in detail.values()
+    )
+
+
 def _clean_or_stale(counts: dict[str, int], endpoint: str, today: date) -> Verdict:
     """A clean audit still fails while a recorded exception has outlived its advisory.
 
@@ -290,9 +324,9 @@ def _excused_or_found(report: dict, counts: dict[str, int], endpoint: str, today
     if detail is None:
         reason = "advisories found, and the per-package detail was unreadable so none could be excused"
         return Verdict(FOUND, counts=counts, reason=reason, endpoint=endpoint)
-    ids, fixable, unidentified = detail
-    if unidentified:
-        reason = f"advisories found whose report named no advisory id: {', '.join(unidentified)}"
+    ids, fixable, unattributed = detail
+    if unattributed:
+        reason = "advisories found that could not be attributed to an advisory id: " + "; ".join(unattributed)
         return Verdict(FOUND, counts=counts, reason=reason, endpoint=endpoint)
     if not ids:
         reason = "advisories found, but the report named no advisory id, so none could be excused"
@@ -335,6 +369,9 @@ def classify(stdout: str, log: str = "", today: date | None = None) -> Verdict:
         reason = "the report's severity counts are missing or are not counts"
         return Verdict(UNAVAILABLE, reason=reason, endpoint=endpoint)
     if not any(counts[severity] for severity in FAILING_SEVERITIES):
+        if _counts_contradict_detail(report):
+            reason = "the severity counts say nothing failing while the per-package detail lists a failing advisory"
+            return Verdict(UNAVAILABLE, counts=counts, reason=reason, endpoint=endpoint)
         return _clean_or_stale(counts, endpoint, today or date.today())
 
     return _excused_or_found(report, counts, endpoint, today or date.today())

@@ -246,13 +246,10 @@ def test_a_failing_run_names_which_advisory_was_not_excused(tmp_path, monkeypatc
 
 
 def test_a_failing_package_naming_no_advisory_id_is_not_excused_by_another(recorded_exception) -> None:
-    """The fail-OPEN parse the review found, and the test I had not written for my own fix.
+    """The fail-OPEN parse, and the test I had not written for my own fix.
 
-    One package carries the excused advisory; another is high with a ``via`` that names no
-    GHSA id at all. Collecting ids across the report made ``ids == {excused}`` and passed,
-    with an unidentified high advisory in the same report -- the ids-empty guard covering
-    only the case where NOTHING was identified. Mutating the fix away left all 57 tests
-    green, which is how I know this assertion was missing rather than redundant.
+    Mutating the fix away left all 57 tests green, which is how I know this assertion was
+    missing rather than redundant.
     """
     report = json.dumps(
         {
@@ -295,3 +292,108 @@ def test_a_malformed_expiry_fails_closed_without_raising(monkeypatch: pytest.Mon
 
     assert verdict.result == gate.FOUND
     assert "not a date" in verdict.reason and _EXCUSED in verdict.reason
+
+
+# --- attribution: every via entry, not every package ------------------------
+#
+# The second #17889 review found three defects in one line, and the test that existed
+# covered only the single-dict case -- the one that was already working. Each fixture below
+# reached PASS with "excused by recorded exception" while an unnamed advisory sat in the
+# same report.
+
+
+def _entry(severity: str = "high", *via: object, fix: bool = False) -> dict:
+    return {"severity": severity, "fixAvailable": fix, "via": list(via)}
+
+
+def _with(detail: dict, **counts: int) -> str:
+    vulnerabilities = {key: counts.get(key, 0) for key in ("info", "low", "moderate", "high", "critical")}
+    vulnerabilities["total"] = sum(vulnerabilities.values())
+    return json.dumps(
+        {"auditReportVersion": 2, "vulnerabilities": detail, "metadata": {"vulnerabilities": vulnerabilities}}
+    )
+
+
+_GHSA_VIA = {"url": f"https://github.com/advisories/{_EXCUSED}"}
+_LEGACY_VIA = {"title": "legacy advisory", "url": "https://npmjs.com/advisories/1234"}
+
+
+def test_a_second_via_dict_without_an_id_is_not_covered_by_the_first(recorded_exception) -> None:
+    """Ids were collected across the whole list before asking whether any were missing."""
+    report = _with({"braces": _entry("high", _GHSA_VIA, _LEGACY_VIA)}, high=1)
+
+    verdict = gate.classify(report, BULK_LOG)
+
+    assert verdict.result == gate.FOUND
+    assert "no GHSA id" in verdict.reason and "braces" in verdict.reason
+
+
+def test_a_string_via_does_not_suppress_an_unidentified_dict(recorded_exception) -> None:
+    """`["braces", {no GHSA}]` set a `transitive` flag that skipped the check entirely."""
+    report = _with({"braces": _entry("high", _GHSA_VIA), "other": _entry("high", "braces", _LEGACY_VIA)}, high=2)
+
+    verdict = gate.classify(report, BULK_LOG)
+
+    assert verdict.result == gate.FOUND
+    assert "other" in verdict.reason
+
+
+def test_a_failing_entry_with_no_severity_is_not_skipped(recorded_exception) -> None:
+    """`severity not in FAILING_SEVERITIES` dropped a missing key while counts reported it."""
+    report = _with(
+        {"braces": _entry("high", _GHSA_VIA), "mystery": {"fixAvailable": False, "via": [_GHSA_VIA]}}, high=2
+    )
+
+    verdict = gate.classify(report, BULK_LOG)
+
+    assert verdict.result == gate.FOUND
+    assert "no severity recorded" in verdict.reason
+
+
+def test_a_dangling_string_via_is_reported(recorded_exception) -> None:
+    """A string `via` naming a package the report does not describe resolves to nothing."""
+    report = _with({"braces": _entry("high", _GHSA_VIA), "other": _entry("high", "not-in-this-report")}, high=2)
+
+    verdict = gate.classify(report, BULK_LOG)
+
+    assert verdict.result == gate.FOUND
+    assert "does not describe" in verdict.reason
+
+
+def test_a_failing_entry_with_no_via_entries_is_reported(recorded_exception) -> None:
+    """Nothing to attribute is not nothing to worry about."""
+    verdict = gate.classify(_with({"orphan": _entry("high")}, high=1), BULK_LOG)
+
+    assert verdict.result == gate.FOUND
+    assert "no `via` entries" in verdict.reason
+
+
+def test_counts_and_detail_disagreeing_is_unavailable_not_a_pass(recorded_exception) -> None:
+    """A report contradicting itself is an unreadable report, not a clean one (N2)."""
+    verdict = gate.classify(_with({"braces": _entry("high", _GHSA_VIA)}, high=0), BULK_LOG)
+
+    assert verdict.result == gate.UNAVAILABLE
+    assert "disagree" in verdict.reason or "while the per-package detail" in verdict.reason
+
+
+def test_the_real_transitive_chain_still_passes(recorded_exception) -> None:
+    """The contrast that matters: failing CLOSED must not break the actual braces report.
+
+    npm reports one root advisory and five dependents whose `via` names its parent by
+    string. Every string resolves inside the report, so the chain is fully attributed and
+    the exception applies -- if this went red, the gate would stop being an unblock.
+    """
+    detail = {"braces": _entry("high", _GHSA_VIA)}
+    for package, parent in (
+        ("micromatch", "braces"),
+        ("fast-glob", "micromatch"),
+        ("globby", "fast-glob"),
+        ("stylelint", "globby"),
+        ("@vue/eslint-config-typescript", "globby"),
+    ):
+        detail[package] = _entry("high", parent)
+
+    verdict = gate.classify(_with(detail, high=6), BULK_LOG)
+
+    assert verdict.result == gate.PASSED, verdict.reason
+    assert _EXCUSED in verdict.reason and "6 excused" in verdict.reason
