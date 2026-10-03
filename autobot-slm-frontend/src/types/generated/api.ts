@@ -105,7 +105,21 @@ export interface paths {
         };
         /**
          * Get Agent Llm Config
-         * @description Get LLM configuration for an agent with decrypted API key.
+         * @description Get an agent's LLM configuration. The API key is NEVER included.
+         *
+         *     This previously returned the decrypted provider key as a response-model
+         *     field, to any authenticated caller. The key is omitted rather than masked:
+         *     a value the client never receives cannot be written back, so a
+         *     GET-then-PUT round-trip is a no-op for the stored key -- the same reasoning
+         *     `public_provider_view` records on the settings path.
+         *
+         *     **This endpoint is still not ownership-scoped, and cannot be here.** The
+         *     `agents` table has no company, tenant or owner column -- only a nullable
+         *     `created_by` -- so there is no predicate to scope by. Adding one against
+         *     `created_by` would be an authorization check that passes for every row
+         *     where it is NULL, which is worse than none because it reads as enforcement.
+         *     The missing tenancy boundary is tracked separately; removing the secret is
+         *     what closes the disclosure, and it does not depend on that work.
          */
         get: operations["get_agent_llm_config_api_agents__agent_id__llm_get"];
         put?: never;
@@ -7215,12 +7229,10 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * AgentLLMConfigWithKey
-         * @description LLM config including decrypted API key (for backend only).
+         * AgentLLMConfig
+         * @description LLM configuration for an agent (excludes API key).
          */
-        AgentLLMConfigWithKey: {
-            /** Llm Api Key */
-            llm_api_key?: string | null;
+        AgentLLMConfig: {
             /** Llm Endpoint */
             llm_endpoint?: string | null;
             /** Llm Max Tokens */
@@ -14655,7 +14667,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AgentLLMConfigWithKey"];
+                    "application/json": components["schemas"]["AgentLLMConfig"];
                 };
             };
             /** @description Validation Error */

@@ -458,7 +458,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/api/updates.py": 1129,
     "autobot-slm-backend/main.py": 798,  # merge #16444+#17113: local admin socket lifespan wiring + shared 422 handler
     "autobot-slm-backend/models/database.py": 1140,
-    "autobot-slm-backend/models/schemas.py": 2181,
+    "autobot-slm-backend/models/schemas.py": 2180,
     "autobot-slm-backend/monitoring/business_intelligence_dashboard.py": 1159,
     "autobot-slm-backend/monitoring/performance_benchmark.py": 1136,
     "autobot-slm-backend/monitoring/performance_monitor.py": 785,

@@ -20,9 +20,23 @@ from pathlib import Path
 
 from autobot_shared.async_compat import fire_and_forget
 
-# Add project root to Python path
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
+# Add autobot-backend to Python path so the `constants.*` and `utils.*` imports
+# below resolve regardless of the caller's working directory. The previous
+# `Path(__file__).parent.parent.parent` landed on autobot-infrastructure/shared/,
+# which has neither a `constants` nor a `utils` package, so every import below
+# raised at module import time and this script could not start at all (#15643).
+# Same fix as the sibling start_hardware_monitoring.py got in #14129; this twin
+# was never carried along.
+backend_root = Path(__file__).resolve().parents[4] / "autobot-backend"
+sys.path.insert(0, str(backend_root))
+
+# The REPOSITORY root, kept separate from the import root on purpose (#15643).
+# `project_root` previously meant autobot-infrastructure/shared -- not the project
+# root at all -- and was used both for sys.path and for the data directories
+# below. Pointing one name at autobot-backend would have silently moved logs and
+# reports under the backend. They belong beside the repo's other `logs/` and
+# `reports/` trees, which .gitignore already lists.
+project_root = Path(__file__).resolve().parents[4]
 
 from constants.threshold_constants import CategoryDefaults, TimingConstants
 from utils.gpu_acceleration_optimizer import (

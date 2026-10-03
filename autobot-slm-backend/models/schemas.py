@@ -2096,10 +2096,9 @@ class AgentListResponse(BaseModel):
     total: int
 
 
-class AgentLLMConfigWithKey(AgentLLMConfig):
-    """LLM config including decrypted API key (for backend only)."""
-
-    llm_api_key: str | None = None
+# `AgentLLMConfigWithKey` removed (#17865): it carried a decrypted provider key
+# and said "for backend only" while being the `response_model` of a GET. A schema
+# that is safe only when used carefully is not safe.
 
 
 # =============================================================================
