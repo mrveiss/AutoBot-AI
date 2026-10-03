@@ -17,7 +17,9 @@ restarting *after* the yield.
 """
 
 import ast
+import operator
 
+import pytest
 from repo_tests._paths import repo_root
 
 _CLIENT = "autobot-backend/services/tts_client.py"
@@ -216,7 +218,53 @@ def test_both_wav_duration_sites_use_the_shared_helper() -> None:
         )
 
 
-_NON_POSITIVE = {ast.LtE: (0,), ast.Lt: (0, 1), ast.Eq: (0,)}
+#: Comparison spellings that PROVABLY refuse a non-positive frame rate, as
+#: ``{op type: accepted right-hand literals}``.
+#:
+#: Two entries were removed after review on #17887, and both had been admitted because they look
+#: right rather than because they hold:
+#:
+#: * ``ast.Lt: 0`` -- ``if sample_rate < 0: raise`` lets a ZERO rate straight through, since
+#:   ``0 < 0`` is false. Zero is the ``ZeroDivisionError`` case this whole guard exists for, so the
+#:   table admitted a spelling that restores the defect. ``< 1`` is the correct strict form.
+#: * ``ast.Eq: 0`` -- ``== 0`` refuses zero and permits every negative, so it does not establish
+#:   the predicate this table is named for. A negative rate is currently unreachable
+#:   (``wave.getframerate()`` parses an unsigned field), which is exactly why admitting it looked
+#:   harmless -- and exactly why it should not be admitted silently. Production spells the refusal
+#:   ``<= 0``, so nothing depended on either entry.
+#:
+#: ``test_every_admitted_spelling_actually_refuses_a_non_positive_rate`` below evaluates each
+#: entry rather than reading it, so a future addition is checked by MEANING. A table of literals
+#: reviewed by eye is how both removed entries got in.
+_NON_POSITIVE = {ast.LtE: (0,), ast.Lt: (1,)}
+
+#: ast comparison types to the operator that implements them, for the semantic checks.
+_OPERATORS = {
+    ast.Lt: operator.lt,
+    ast.LtE: operator.le,
+    ast.Eq: operator.eq,
+    ast.NotEq: operator.ne,
+    ast.Gt: operator.gt,
+    ast.GtE: operator.ge,
+}
+
+#: Spellings that must NEVER be admitted, each with the non-positive rate it lets through.
+_LETS_A_BAD_RATE_THROUGH = [
+    (ast.Gt, 0, 0),
+    (ast.Lt, 0, 0),
+    (ast.Eq, 0, -1),
+    (ast.GtE, 0, -1),
+    (ast.NotEq, 0, 0),
+    (ast.LtE, -1, 0),
+]
+
+#: Readable spellings for the assertion messages -- `ast.LtE` in a failure message makes the
+#: reader translate before they can see what is wrong.
+_SYMBOL = {ast.Lt: "<", ast.LtE: "<=", ast.Eq: "==", ast.NotEq: "!=", ast.Gt: ">", ast.GtE: ">="}
+
+#: Rates a refusal must reject. 0 is the dividing case; the negatives are the rest of the
+#: predicate the table's name claims.
+_MUST_REFUSE = (0, -1, -48000)
 
 
 def refusal_problems(source: str, *, loader: str = "_load_audio_input") -> list[str]:
@@ -252,7 +300,9 @@ def refusal_problems(source: str, *, loader: str = "_load_audio_input") -> list[
         if bound not in allowed:
             problems.append(
                 f"the refusal compares sample_rate with {ast.unparse(node.test)}, which does not "
-                "establish a non-positive rate -- `> 0` permits exactly the zero it guards"
+                "establish a non-positive rate: it leaves at least one of "
+                f"{_MUST_REFUSE} accepted. `> 0` and `< 0` both permit exactly the zero they "
+                "guard, and `== 0` permits every negative"
             )
             continue
         refusals.append(node.lineno)
@@ -359,3 +409,67 @@ def test_the_division_detector_does_not_claim_to_catch_a_bound_intermediate() ->
     """
     bound = "def f(wav, rate):\n    n = wav.getnframes()\n    return n / float(rate)\n"
     assert not _divides_frames(ast.parse(bound))
+
+
+# --- the table itself, checked by meaning rather than by eye ---------------
+#
+# Both entries removed on #17887 were wrong about what they admitted while looking correct in a
+# literal table, and one of them reintroduced the exact defect `refusal_problems`' own docstring
+# three lines above it describes. So the table is no longer trusted: these tests evaluate every
+# entry, and a future addition that does not hold fails here rather than at review.
+
+
+@pytest.mark.parametrize("op_type,bound", [(o, b) for o, bs in _NON_POSITIVE.items() for b in bs])
+def test_every_admitted_spelling_actually_refuses_a_non_positive_rate(op_type, bound) -> None:
+    compare = _OPERATORS[op_type]
+    for rate in _MUST_REFUSE:
+        assert compare(rate, bound), (
+            f"_NON_POSITIVE admits `sample_rate {_SYMBOL[op_type]} {bound}` as a refusal, but a "
+            f"rate of {rate} does not satisfy it -- that rate reaches the duration arithmetic"
+        )
+
+
+@pytest.mark.parametrize("op_type,bound,escapes", _LETS_A_BAD_RATE_THROUGH)
+def test_a_spelling_that_lets_a_bad_rate_through_is_not_admitted(op_type, bound, escapes) -> None:
+    """Both halves: the table excludes it, AND excluding it is correct.
+
+    Asserting only the exclusion would pass if the table were empty, and asserting only that the
+    comparison is unsound would never notice the table admitting it anyway.
+    """
+    assert not _OPERATORS[op_type](escapes, bound), (
+        f"this case claims `{_SYMBOL[op_type]} {bound}` lets {escapes} through, but it refuses it "
+        "-- the case is wrong, not the table"
+    )
+    assert bound not in _NON_POSITIVE.get(op_type, ()), (
+        f"_NON_POSITIVE admits `sample_rate {_SYMBOL[op_type]} {bound}`, which accepts a rate of " f"{escapes}"
+    )
+
+
+@pytest.mark.parametrize(
+    "spelling,accepted",
+    [
+        ("<= 0", True),
+        ("< 1", True),
+        ("< 0", False),
+        ("== 0", False),
+        ("> 0", False),
+        (">= 0", False),
+        ("!= 0", False),
+        ("<= -1", False),
+    ],
+)
+def test_the_detector_rules_on_each_spelling(spelling: str, accepted: bool) -> None:
+    """Per-spelling contrast through the real detector, not only through the table.
+
+    The table can be right while the detector reads it wrongly, and the previous fixtures covered
+    `<= 0` and `> 0` only -- so `< 0`, the spelling that was admitted and should not have been,
+    had no case at all (CodeRabbit, #17887).
+    """
+    body = f"    if sample_rate {spelling}:\n        raise ValueError('bad rate')\n" + _BUILD
+    problems = refusal_problems(_LOADER.format(body=body))
+    if accepted:
+        assert problems == [], f"`{spelling}` provably refuses a non-positive rate but was rejected"
+    else:
+        assert any(
+            "does not establish a non-positive rate" in p for p in problems
+        ), f"`{spelling}` does not refuse every non-positive rate, but the detector accepted it"
