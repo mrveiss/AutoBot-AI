@@ -259,9 +259,16 @@ _BASE_DIR = yaml.safe_load((_ANSIBLE / "inventory" / "group_vars" / "all.yml").r
 _STAGED_PATHS = {f"{_BASE_DIR}/{rel}" for rel in _REWRITTEN_INCLUDES}
 _RELATIVE_INCLUDE = re.compile(r"^-[cr]\s+(\.\./\S+)", re.M)
 _VAR = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
-_MIN_PIP_SITES_SEEN = 8
+#: Floor on the WORK, not the survey: manifests actually resolved, read and
+#: scanned for includes. Counting pip sites instead left the scan running on zero
+#: real manifests once every live site was staged (#17895 review). Measured: 3
+#: (root requirements.txt via agent_config, browser worker, SLM backend).
+_MIN_MANIFESTS_SCANNED = 3
+_GENERATED_MANIFEST = re.compile(r"(^|/)filtered-requirements[^/]*\.txt$")
 
 #: (role task file, requirements value) -> why the static resolution does not apply.
+#: EQUALITY-pinned by _UNRESOLVED_SITE_COUNT: adding an exemption is a recorded
+#: decision, never a quiet way past this check.
 _UNRESOLVED_SITES = {
     (
         "npu-worker/tasks/main.yml",
@@ -273,13 +280,19 @@ _UNRESOLVED_SITES = {
         "/tmp/requirements-security-update.txt",
     ): "rendered from templates/requirements-security-update.txt.j2, which declares no -c/-r includes "
     "(asserted by test_the_patching_template_declares_no_includes)",
+    (
+        "backend_services/tasks/main.yml",
+        "/opt/autobot/app/requirements.txt",
+    ): "/opt/autobot/app is a synchronize of autobot-slm-backend/, not a repo-mirrored path; its includes resolve "
+    "to the staged files (the role stages first). Install-before-copy ordering is #17896",
 }
+_UNRESOLVED_SITE_COUNT = 3
 
 
-def _pip_sites() -> list[tuple[str, str, bool]]:
+def _pip_sites(roles_dir: Path = _ROLES) -> list[tuple[str, str, bool]]:
     """(role-relative task file, requirements value, staged-before) for every pip site with a manifest."""
     sites = []
-    for path in sorted(_ROLES.glob("*/tasks/*.yml")):
+    for path in sorted(roles_dir.glob("*/tasks/*.yml")):
         doc = yaml.safe_load(path.read_text(encoding="utf-8"))
         staged = False
         for task in _flat_tasks(doc):
@@ -288,7 +301,7 @@ def _pip_sites() -> list[tuple[str, str, bool]]:
             module = next((m for m in _PIP_MODULES if m in task), None)
             requirements = task[module].get("requirements") if module and isinstance(task[module], dict) else None
             if requirements:
-                sites.append((path.relative_to(_ROLES).as_posix(), str(requirements).strip(), staged))
+                sites.append((path.relative_to(roles_dir).as_posix(), str(requirements).strip(), staged))
     return sites
 
 
@@ -328,40 +341,81 @@ def unplaced_includes(manifest_on_node: str, manifest_text: str, placed: set[str
     return missing
 
 
-def _role_vars(role_file: str) -> dict[str, str]:
-    defaults = _ROLES / role_file.split("/", 1)[0] / "defaults" / "main.yml"
+def _role_vars(role_file: str, roles_dir: Path = _ROLES) -> dict[str, str]:
+    defaults = roles_dir / role_file.split("/", 1)[0] / "defaults" / "main.yml"
     data = yaml.safe_load(defaults.read_text(encoding="utf-8")) if defaults.is_file() else {}
     return {k: str(v) for k, v in (data or {}).items() if isinstance(v, (str, int))}
 
 
-def test_the_pip_site_walk_reaches_the_sites_it_guards():
-    assert len(_pip_sites()) >= _MIN_PIP_SITES_SEEN, "the role walk found too few pip sites to mean anything"
+def check_sites(sites: list[tuple[str, str, bool]], roles_dir: Path = _ROLES) -> tuple[list[str], int]:
+    """(failures, manifests scanned). Every resolvable site is scanned, staged or not.
+
+    A staged site's includes may land on the staged paths; an unstaged site's may
+    not. A path that resolves but mirrors no repo manifest FAILS unless it is a
+    generated filtered manifest (owned by the checks above) or a named exemption:
+    a silent skip there is how a diverged base-dir default would go unnoticed.
+    """
+    failures, scanned = [], 0
+    for role_file, requirements, staged in sites:
+        if (role_file, requirements) in _UNRESOLVED_SITES:
+            continue
+        on_node = resolve_path(requirements, _role_vars(role_file, roles_dir))
+        if on_node is None:
+            failures.append(f"{role_file}: cannot resolve {requirements!r} -- name it in _UNRESOLVED_SITES")
+            continue
+        if _GENERATED_MANIFEST.search(on_node):
+            continue
+        manifest = repo_root() / on_node.removeprefix(f"{_BASE_DIR}/")
+        if not manifest.is_file():
+            failures.append(f"{role_file}: {requirements} resolves to {on_node}, which mirrors no repo manifest")
+            continue
+        scanned += 1
+        placed = _STAGED_PATHS if staged else set()
+        for target in unplaced_includes(on_node, manifest.read_text(encoding="utf-8"), placed):
+            failures.append(f"{role_file}: {requirements} includes {target}, which nothing places before pip runs")
+    return failures, scanned
 
 
 def test_every_installed_manifest_include_resolves_to_a_placed_path():
     """A relative -c/-r in an installed manifest must land on something the role put there."""
-    failures = []
-    for role_file, requirements, staged in _pip_sites():
-        if staged or (role_file, requirements) in _UNRESOLVED_SITES:
-            continue
-        on_node = resolve_path(requirements, _role_vars(role_file))
-        if on_node is None:
-            failures.append(
-                f"{role_file}: cannot resolve {requirements!r} -- name it in _UNRESOLVED_SITES with a reason"
-            )
-            continue
-        manifest = repo_root() / on_node.removeprefix(f"{_BASE_DIR}/")
-        if not manifest.is_file():
-            continue  # generated on the node; the generated-manifest checks above own that shape
-        for target in unplaced_includes(on_node, manifest.read_text(encoding="utf-8"), placed=set()):
-            failures.append(f"{role_file}: {requirements} includes {target}, which nothing places before pip runs")
+    failures, scanned = check_sites(_pip_sites())
+    assert (
+        scanned >= _MIN_MANIFESTS_SCANNED
+    ), f"scanned {scanned} manifests for includes (floor {_MIN_MANIFESTS_SCANNED}) -- the work did not happen"
     assert not failures, "\n".join(failures)
 
 
+def test_the_walk_catches_the_slm_manager_defect_it_was_written_for(tmp_path):
+    """The live role with its staging include removed must fail -- proven on the walk, not a string."""
+    role = tmp_path / "slm_manager"
+    (role / "tasks").mkdir(parents=True)
+    (role / "defaults").mkdir()
+    (role / "defaults" / "main.yml").write_text(
+        (_ROLES / "slm_manager" / "defaults" / "main.yml").read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    tasks = yaml.safe_load((_ROLES / "slm_manager" / "tasks" / "main.yml").read_text(encoding="utf-8"))
+    unstaged = [t for t in tasks if "stage_shared_manifests" not in str(t)]
+    assert len(unstaged) == len(tasks) - 1, "the staging include was not found to remove"
+    (role / "tasks" / "main.yml").write_text(yaml.safe_dump(unstaged), encoding="utf-8")
+
+    failures, scanned = check_sites(_pip_sites(tmp_path), roles_dir=tmp_path)
+
+    assert scanned == 1
+    assert failures == [
+        "slm_manager/tasks/main.yml: {{ slm_backend_dir }}/requirements.txt includes "
+        f"{_BASE_DIR}/constraints/shared.txt, which nothing places before pip runs"
+    ]
+
+
 def test_no_unresolved_site_exemption_is_stale():
-    live = {(role_file, requirements) for role_file, requirements, staged in _pip_sites() if not staged}
+    live = {(role_file, requirements) for role_file, requirements, _ in _pip_sites()}
     stale = sorted(set(_UNRESOLVED_SITES) - live)
-    assert not stale, f"exemptions for sites that no longer exist or now stage: {stale}"
+    assert not stale, f"exemptions for sites that no longer exist: {stale}"
+
+
+def test_the_exemption_list_only_changes_on_purpose():
+    """Equality, like the uncovered-reads record: headroom would admit a new exemption silently."""
+    assert len(_UNRESOLVED_SITES) == _UNRESOLVED_SITE_COUNT
 
 
 def test_the_patching_template_declares_no_includes():
@@ -375,3 +429,21 @@ def test_an_unstaged_relative_constraint_is_reported():
     text = "fastapi>=1\n-c ../constraints/shared.txt\n"
     assert unplaced_includes(on_node, text, placed=set()) == [f"{_BASE_DIR}/constraints/shared.txt"]
     assert unplaced_includes(on_node, text, placed=_STAGED_PATHS) == []
+
+
+def test_a_diverged_base_dir_fails_instead_of_passing_silently(tmp_path):
+    """A role whose base-dir default stops matching autobot.base_dir must not be skipped (#17895 review)."""
+    role = tmp_path / "slm_manager"
+    (role / "tasks").mkdir(parents=True)
+    (role / "defaults").mkdir()
+    defaults = yaml.safe_load((_ROLES / "slm_manager" / "defaults" / "main.yml").read_text(encoding="utf-8"))
+    defaults["slm_base_dir"] = "/srv/elsewhere"
+    (role / "defaults" / "main.yml").write_text(yaml.safe_dump(defaults), encoding="utf-8")
+    (role / "tasks" / "main.yml").write_text(
+        (_ROLES / "slm_manager" / "tasks" / "main.yml").read_text(encoding="utf-8"), encoding="utf-8"
+    )
+
+    failures, scanned = check_sites(_pip_sites(tmp_path), roles_dir=tmp_path)
+
+    assert scanned == 0
+    assert failures and "mirrors no repo manifest" in failures[0], failures
