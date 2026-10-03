@@ -193,6 +193,46 @@ duplicated-line count.
 Before freezing a ratio, ask whether a change the rule should welcome can move
 it: deleting unrelated code, or splitting a file.
 
+**A ratio is acceptable when its numerator and denominator are the same
+population**, because then every welcome change moves both. That is the
+discriminator, and it is the question above rather than an exception to it.
+
+jscpd failed because the two were different populations: duplicated lines over
+*all* scanned lines, so deleting unique code moved the denominator alone.
+Contrast the reach floor in #17142, where `hooks-path-override` requires its
+sweep to cover 0.98 of the tracked files carrying its own suffixes. Adding
+`.md`, `.ts` or `.vue` files moves neither side; adding or splitting a `.py`
+file moves both by one. The ratio is the right form there precisely because an
+absolute floor was *not*: the constant was re-pinned seventeen times, and every
+re-pin was correct when written — a constant does not rot, the tree grows past
+it.
+
+**The first version of that change got this wrong in exactly the way this rule
+describes**, and this rule was already written when it did. It took a fraction
+of the whole tracked tree as a floor on a counted subset, so a month heavy in
+`.md` would have closed the floor on the population and tripped the guard with
+nothing wrong. The fix was to reference the population the guard actually
+bounds. So: ask the question for the ratio you are about to freeze, not for
+ratios in general.
+
+### 8. A migration assertion inherits the baseline it records
+
+When a ratchet changes form — a constant becoming a ratio, a floor becoming a
+fraction — the natural way to prove the new bound is no weaker is to record the
+old one and assert the new one exceeds it. That assertion is only as good as the
+figure it recorded.
+
+#17142 recorded the tracked-file count as the denominator for a guard that
+bounds a subset of it. Had the declaration been fixed and the recorded baseline
+left alone, the test written to stop the claim drifting would have gone on
+passing against the wrong denominator — **certifying the drift it existed to
+prevent.** It fails in the one direction nobody re-checks, because a passing
+migration test reads as "the migration was faithful".
+
+So when you change the form of a bound, change the recorded baseline in the same
+commit, and state which quantity the recorded number is of. A baseline whose
+units are implicit is a baseline that cannot be checked.
+
 ## Worked example — the one that passes
 
 `repo_tests/python_file_size_ratchet_baseline.py`, measured against

@@ -70,7 +70,13 @@ def _mock_processed_result(processing_time: float) -> Mock:
     """A Mock shaped like a completed ProcessingResult, shared by the three
     processor.process() benchmarks below. #16990: metadata={} is required --
     processor.py writes result.metadata["persisted"] = ... (#15234), and a
-    plain Mock's auto-generated `.metadata` has no __setitem__."""
+    plain Mock's auto-generated `.metadata` has no __setitem__.
+
+    `Mock`, not `MagicMock`: a MagicMock satisfies that reason for free and every test
+    still passes, but it absorbs the write silently -- a processor that stops recording
+    `persisted`, or records it on the wrong object, would then read exactly like one
+    that does it right. Swapping to MagicMock to clear a new attribute error buys green
+    and spends the assertion; add the attribute instead."""
     return Mock(
         success=True,
         confidence=0.8,

@@ -248,8 +248,16 @@ def test_the_bot_commit_workflow_never_installs_local_hooks() -> None:
     workflow = _REPO_ROOT / ".github" / "workflows" / "auto-fix-generated-types.yml"
     assert workflow.is_file(), f"{workflow} is missing — the named exemption's subject vanished"
     text = workflow.read_text(encoding="utf-8")
-    assert 'user.name "github-actions[bot]"' in text, "this is not the workflow #16923's exemption names"
+    # #15362 removed this workflow's commit entirely: it reports the drift with the patch instead
+    # of pushing a fix, and holds `contents: read`, so it CANNOT commit. AC6's exemption was
+    # "this automation's commits are hook-less by construction"; "it makes no commits" satisfies
+    # that more strongly, so the claim is asserted in its new form rather than deleted.
+    assert "git commit" not in text, (
+        "this workflow commits again -- #15362 made it report drift instead of pushing a fix. "
+        "If a commit is deliberately reinstated, AC6's hook-less-by-construction claim has to be "
+        "re-established, and `pull_request_workflows_cannot_push_15362_test.py` will fail too"
+    )
     assert "install-git-hooks.sh" not in text, (
-        "this workflow now installs local hooks -- github-actions[bot]'s commit is no longer "
-        "hook-less by construction, and the #16923 exemption claim is stale"
+        "this workflow now installs local hooks -- if a commit is ever reinstated it would no "
+        "longer be hook-less by construction, and the #16923 exemption claim would be stale"
     )

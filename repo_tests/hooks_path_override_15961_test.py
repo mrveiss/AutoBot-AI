@@ -95,6 +95,30 @@ SCANNED = ("*.sh", "*.py", "*.yml", "*.yaml")
 EXEMPT = {"repo_tests/hooks_path_override_15961_test.py"}
 
 
+def _suffix_matched_count(root: Path) -> int:
+    """How many tracked files carry one of ``SCANNED``'s suffixes, counted INDEPENDENTLY.
+
+    The denominator for this declaration's ``min_fraction`` (#17142), and it must be this guard's
+    own population class rather than the whole tracked tree: a fraction is scale-free only with
+    respect to the quantity it is a fraction OF, so referencing the tree would make the floor rise
+    at the tree's rate while the thing it bounds grows at the counted subset's.
+
+    Enumerates with NO patterns and filters by suffix in Python, deliberately: the sweep calls
+    ``tracked_paths(root, *SCANNED)``, so a reference passing the same patterns would fail in
+    lockstep with the glob it exists to check. Filtering here keeps the reference independent of
+    ``SCANNED`` while still going through the canonical helper -- which matters, because a bare
+    ``git ls-files`` here was refused by the #15176 hook: an inherited ``GIT_DIR`` outranks ``cwd``
+    and would enumerate ANOTHER checkout's index without erroring, answering confidently about the
+    wrong tree. The sweep legitimately exceeds this count by the extensionless shell scripts it
+    adds and this does not. Arithmetic in the commit message, per the note at `floor`.
+    """
+    try:
+        listed = tracked_paths(root)
+    except EmptyEnumeration:
+        return 0
+    return sum(1 for rel in listed if rel.endswith(tuple(pattern[1:] for pattern in SCANNED)))
+
+
 def _scanned_files(root: Path) -> list[str]:
     """Tracked files this guard reads, enumerated through the canonical helper.
 
@@ -312,7 +336,19 @@ REACH = declare(
     # Re-measured on this rebased tree, not inherited: the mid-window pin
     # absorbs the largest branch in tonight's queue, which is the property
     # `population - growth` never had.
-    floor=6736,
+    # #17142: a FRACTION of the tracked-file count replaces `floor=6736, growth=400`. That pair
+    # was re-pinned SEVENTEEN times, and every one of the seventeen was correct when written --
+    # the constant does not rot, the tree grows past it. On 24a9a1d46f the ceiling (6736+401) sat
+    # at 7137 against a population of 7136: one file of headroom, roughly two hours at the
+    # measured ~33 counting files a day.
+    #
+    # #17142: a fraction of THIS GUARD'S OWN population class, not of the tracked tree, and not an
+    # absolute floor. The constant it replaces was re-pinned seventeen times -- the number never
+    # rotted, the tree grew past it. Tighter than that constant, and the file-type mix cannot move
+    # it because numerator and denominator are the same population. Arithmetic in the commit
+    # message, per the note above: a measured figure in a comment goes stale on the next rebase.
+    min_fraction=0.98,
+    reference=_suffix_matched_count,
     # #13049 note: this branch proposed 6800 and ADOPTS main's 6736. #17318
     # landed first, and the rule the sessions agreed is first-to-land wins, so
     # one measurement does not produce four numbers. 6736 is comfortably valid
@@ -329,7 +365,6 @@ REACH = declare(
     # and also adopts 6736. Two branches, one measurement, one number -- which
     # is what first-to-land is for. Its wording carried a slack figure; that is
     # dropped here rather than merged, for the reason the paragraph above gives.
-    growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",
 )
@@ -379,7 +414,7 @@ def test_no_tracked_script_overrides_the_hooks_path() -> None:
     # Candidates are not coverage: `examined` bounds what was listed, this bounds
     # what was actually opened. Without it a sweep could list 6,413 files, fail to
     # read 6,300 of them, and still report the same green as a clean tree.
-    REACH.completed(read)
+    REACH.completed(read, root)
 
     assert not offenders, "\n".join(
         f"{rel}:{n}: {line}\n"

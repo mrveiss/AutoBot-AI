@@ -50,20 +50,24 @@ def _verify_checked_artifacts() -> set[str]:
     return artifacts
 
 
-def _autofix_committed_artifacts() -> set[str]:
-    """Every file path `auto-fix-generated-types.yml` stages in its commit step."""
+def _autofix_reported_artifacts() -> set[str]:
+    """Every file path `auto-fix-generated-types.yml` checks for drift and reports.
+
+    Read from the step's `GENERATED=` path list rather than from a `git add` (#15362): the
+    workflow no longer commits, so there is no staging to inspect. The invariant is unchanged --
+    the set the verify gate diffs must be the set the autofix covers -- but the autofix now
+    covers a path by REPORTING its drift with the patch, not by pushing a fix for it. A path the
+    verify gate checks and this step omits is still a drift that nothing surfaces.
+    """
     document = yaml.safe_load(_AUTOFIX.read_text(encoding="utf-8"))
-    commit_step = next(
+    step = next(
         step
         for step in document["jobs"]["autofix-types"]["steps"]
-        if step.get("name") == "Commit regenerated types if drifted"
+        if step.get("name", "").startswith("Report drift with the command that fixes it")
     )
-    run = commit_step["run"]
-    match = re.search(r"git add ([^\n]+(?:\n\s+[^\n]+)*)", run)
-    assert match, "commit step has no `git add` -- nothing would ever be pushed back"
-    # `git add a b \\\n  c` across a YAML block scalar -- collapse the
-    # continuation whitespace the same way the shell would.
-    return set(match.group(1).replace("\\", " ").split())
+    match = re.search(r'GENERATED="([^"]+)"', step["run"])
+    assert match, "the drift step has no GENERATED path list -- nothing would ever be reported"
+    return set(match.group(1).split())
 
 
 def _autofix_trigger_paths() -> list[str]:
@@ -74,13 +78,13 @@ def _autofix_trigger_paths() -> list[str]:
 def test_the_scan_actually_found_artifacts_on_both_sides():
     """Empty sets would make every assertion below vacuously true."""
     assert len(_verify_checked_artifacts()) >= 3
-    assert len(_autofix_committed_artifacts()) >= 3
+    assert len(_autofix_reported_artifacts()) >= 3
 
 
-def test_every_artifact_the_verify_gate_checks_is_committed_by_the_autofix():
+def test_every_artifact_the_verify_gate_checks_is_reported_by_the_autofix():
     """The invariant: nothing verify diffs can go stale with no self-heal path."""
     checked = _verify_checked_artifacts()
-    committed = _autofix_committed_artifacts()
+    committed = _autofix_reported_artifacts()
 
     missing = checked - committed
     assert missing == set(), (

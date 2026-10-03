@@ -25,10 +25,11 @@ from contextlib import aclosing
 
 import aiohttp
 
+from autobot_shared.audio_wav import wav_duration_seconds
 from autobot_shared.env_utils import blank_to_none
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.monitoring.metrics.tts import REALTIME_FACTOR_FLOOR
+from autobot_shared.monitoring.metrics.tts import REALTIME_FACTOR_FLOOR, TtsRoute
 from autobot_shared.ssot_config import config, get_config
 from autobot_shared.ssot_constants import TTL_5_MINUTES
 
@@ -89,10 +90,9 @@ def _wav_duration_seconds(wav_bytes: bytes) -> float:
     """
     try:
         with wave.open(io.BytesIO(wav_bytes), "rb") as wav:
-            frame_rate = wav.getframerate()
-            if frame_rate <= 0:
-                return 0.0
-            return wav.getnframes() / float(frame_rate)
+            # Arithmetic shared with generic_provider.py (#13841). This function keeps
+            # the bytes input and the never-raise policy; only the formula is shared.
+            return wav_duration_seconds(wav)
     except Exception:
         logger.debug("Unparseable WAV payload; excluded from throughput", exc_info=True)
         return 0.0
@@ -111,9 +111,22 @@ class _SynthesisThroughput:
     suspended at each ``yield`` for as long as the consumer takes to forward the
     chunk. Billing that back-pressure to the worker would fire the
     below-real-time alert against a healthy one whenever a client is slow.
+
+    NOT THE SAME NUMBER AS THE CLIENT'S (#13841). ``useVoiceOutput.ts``'s
+    ``_observeChunkRate`` also calls its result a real-time factor, and measures
+    something else on purpose: audio over WALL time since its first chunk, so it
+    includes network transit and consumer scheduling. This one answers *is the
+    worker fast enough*; that one answers *will the player starve*.
+
+    So this figure MUST NOT be emitted on the stream for the client to size its
+    pre-roll from. Excluding yield time is exactly what makes it wrong for that
+    use: a healthy worker behind a slow link reports well above 1.0 while audio
+    arrives below it, the client would skip the pre-roll, and the player would
+    stutter -- the case pre-roll exists for. The two are not duplicates and
+    reconciling them would break the consumer that needs the link counted.
     """
 
-    def __init__(self, route: str) -> None:
+    def __init__(self, route: TtsRoute) -> None:
         self.route = route
         self._producing_seconds = 0.0
         self._audio_seconds = 0.0
@@ -141,29 +154,34 @@ class _SynthesisThroughput:
             self._first_chunk_audio = duration
         self._audio_seconds += duration
 
-    def report(self) -> None:
-        """Emit the metrics and warn when the worker ran below real time.
+    def _steady_state(self) -> tuple[float, float]:
+        """``(audio_seconds, wall_seconds)`` with the warm-up interval removed.
 
-        A synthesis that produced no measurable audio (cancelled before the
-        first chunk, or an unparseable payload) carries no rate and is skipped
-        rather than recorded as a 0.0x outlier.
+        Dropping the first interval and the audio it produced removes
+        time-to-first-audio -- connect, upload and model warm-up -- which is not a
+        generation rate. It does NOT make this the client's quantity, and the
+        earlier version of this docstring claimed it did (review on #17887).
+
+        What stays excluded here and is included there: ``throughput.start()``
+        restarts AFTER each yield, so network transit and consumer scheduling are
+        not billed to the worker. The client's ``_observeChunkRate`` measures audio
+        over wall time at the far end of the link, because that is what its pre-roll
+        has to survive. Warm-up removal makes the two comparable in SHAPE; it does
+        not make them the same measurement, and #13841 exists because a sentence
+        like the one this replaces is how they get reconciled by mistake.
+
+        A single-chunk synthesis (the whole-utterance route) has no steady state to
+        isolate, so its one interval is the only rate available.
         """
-        # Steady-state rate: drop the warm-up interval and the audio it produced,
-        # so this measures the same thing the client's pre-roll measures. A
-        # single-chunk synthesis (the whole-utterance route) has no steady state
-        # to isolate, so its one interval is the only rate available.
         if self._chunks > 1 and self._first_chunk_seconds is not None:
-            audio_seconds = self._audio_seconds - self._first_chunk_audio
-            wall_seconds = self._producing_seconds - self._first_chunk_seconds
-        else:
-            audio_seconds = self._audio_seconds
-            wall_seconds = self._producing_seconds
-        # Latency telemetry stands on its own — a payload we could not measure
-        # the duration of still tells us how long the caller waited.
-        if self._first_chunk_seconds is not None:
-            self._record_first_chunk(self._first_chunk_seconds)
-        if audio_seconds <= 0 or wall_seconds <= 0:
-            return
+            return (
+                self._audio_seconds - self._first_chunk_audio,
+                self._producing_seconds - self._first_chunk_seconds,
+            )
+        return self._audio_seconds, self._producing_seconds
+
+    def _emit_metrics(self, audio_seconds: float, wall_seconds: float) -> None:
+        """Record the throughput, or carry on silently if metrics are unavailable."""
         try:
             # Lazy import to avoid a circular dependency with prometheus_metrics.
             from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
@@ -172,6 +190,9 @@ class _SynthesisThroughput:
             metrics.record_tts_synthesis(self.route, audio_seconds, wall_seconds)
         except Exception:
             logger.debug("TTS throughput metrics unavailable", exc_info=True)
+
+    def _warn_if_below_realtime(self, audio_seconds: float, wall_seconds: float) -> None:
+        """The alertable half: a sustained sub-1.0x worker stutters every player."""
         factor = audio_seconds / wall_seconds
         if factor < REALTIME_FACTOR_FLOOR:
             logger.warning(
@@ -182,6 +203,24 @@ class _SynthesisThroughput:
                 wall_seconds,
                 self.route,
             )
+
+    def report(self) -> None:
+        """Emit the metrics and warn when the worker ran below real time.
+
+        A synthesis that produced no measurable audio (cancelled before the
+        first chunk, or an unparseable payload) carries no rate and is skipped
+        rather than recorded as a 0.0x outlier.
+        """
+        audio_seconds, wall_seconds = self._steady_state()
+        # Latency telemetry stands on its own — a payload we could not measure
+        # the duration of still tells us how long the caller waited. So this runs
+        # before the no-measurable-audio return below, not after it.
+        if self._first_chunk_seconds is not None:
+            self._record_first_chunk(self._first_chunk_seconds)
+        if audio_seconds <= 0 or wall_seconds <= 0:
+            return
+        self._emit_metrics(audio_seconds, wall_seconds)
+        self._warn_if_below_realtime(audio_seconds, wall_seconds)
 
     def _record_first_chunk(self, seconds: float) -> None:
         """Report time-to-first-audio, independent of whether a rate was derived."""
@@ -286,6 +325,25 @@ class TTSClient:
         """True while a recent probe showed the worker lacks the stream route."""
         return time.monotonic() < self._stream_absent_until
 
+    def _mark_streaming_absent(self, error: Exception) -> None:
+        """Remember that this worker has no stream route, for ``STREAM_PROBE_TTL``.
+
+        Extracted from `stream_or_synthesize` to bring it out of the 51-65 line
+        "must refactor before merge" band (#13841, CLAUDE_RULES function length).
+        Deliberately NOT the instrumented loop: `throughput.start()` runs after
+        each `yield`, and that ordering is what keeps consumer back-pressure out
+        of the real-time factor. Moving it across the yield would change what the
+        metric measures with no test failing, so the split goes around the
+        instrumentation rather than through it.
+        """
+        self._stream_absent_until = time.monotonic() + STREAM_PROBE_TTL
+        logger.warning(
+            "TTS worker does not serve /tts/synthesize/stream (%s); using the "
+            "whole-utterance route for the next %ds",
+            error,
+            STREAM_PROBE_TTL,
+        )
+
     async def stream_or_synthesize(self, text: str, voice_id: str = "", language: str = "") -> AsyncIterator[bytes]:
         """Yield WAV chunks, degrading to the whole-utterance route (#12886, #13215).
 
@@ -306,7 +364,7 @@ class TTSClient:
         is generating in: it starts after the capability probe has resolved, and
         restarts after each yield so a slow consumer is not billed to the worker.
         """
-        throughput = _SynthesisThroughput("stream")
+        throughput = _SynthesisThroughput(TtsRoute.STREAM)
         try:
             emitted = False
             if not self._streaming_known_absent():
@@ -328,14 +386,8 @@ class TTSClient:
                 except TTSStreamUnsupported as e:
                     if emitted:
                         raise  # cannot restart mid-utterance without repeating audio
-                    self._stream_absent_until = time.monotonic() + STREAM_PROBE_TTL
-                    logger.warning(
-                        "TTS worker does not serve /tts/synthesize/stream (%s); using the "
-                        "whole-utterance route for the next %ds",
-                        e,
-                        STREAM_PROBE_TTL,
-                    )
-            throughput.route = "blob"
+                    self._mark_streaming_absent(e)
+            throughput.route = TtsRoute.BLOB
             throughput.start()
             whole = await self.synthesize(text, voice_id=voice_id, language=language)
             throughput.observe(whole)

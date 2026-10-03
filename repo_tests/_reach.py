@@ -33,6 +33,7 @@ that makes the proof automatic rather than a promise.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Sequence
@@ -73,6 +74,34 @@ REGISTRY: dict[str, "Reach"] = {}
 #: dataclasses cannot cache on the instance, and the same walk was otherwise
 #: paid once per caller per session.
 _MEASURED: dict[tuple[str, str], Sequence[object]] = {}
+
+
+def floor_div_fraction(total: int, fraction: float) -> int:
+    """``total * fraction``, rounded DOWN.
+
+    Down, so a declared fraction is a floor the sweep may sit exactly on rather than one it has
+    to exceed. ``1.0`` therefore means "every file in the reference", which is what
+    ``conflict-marker-scanned-files`` asserts, and rounding up would make that unsatisfiable.
+    """
+    return math.floor(total * fraction)
+
+
+def tracked_file_count(root: Path) -> int:
+    """Total tracked files -- the scale-free denominator for a relative floor (#17142).
+
+    Deliberately NOT derived from any guard's own ``discover``. If the sweep breaks, every
+    number computed from it breaks together, so a reach check comparing two of its outputs
+    compares a number to itself. The first design for #17142 did exactly that -- ``examined()``
+    against ``population()``, which are the same call -- and would have passed unconditionally.
+    The reference has to come from outside the sweep, and ``git ls-files`` is the one
+    enumeration no guard owns.
+    """
+    from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths  # noqa: PLC0415
+
+    try:
+        return len(tracked_paths(root))
+    except EmptyEnumeration:
+        return 0
 
 
 @dataclass(frozen=True)
@@ -117,6 +146,33 @@ class Reach:
     #: different quantity cannot be chosen well**, which is the argument for two
     #: names rather than a bigger one.
     skips: int = 0
+    #: RELATIVE mode (#17142). When set, this declaration's reach is checked as a FRACTION of
+    #: an external reference measured in the same run, and ``floor``/``growth`` are not used.
+    #:
+    #: The absolute form could not be kept current: the floor is a constant, the tree grows,
+    #: and the gap between them is consumed on a schedule. ``hooks-path-override`` was re-pinned
+    #: SEVENTEEN times and `conflict-marker-scanned-files` reached one file of headroom on the
+    #: same afternoon -- two guards, the same mechanism, neither number ever wrong when written.
+    #:
+    #: A fraction does not get consumed, because tree growth moves numerator and denominator
+    #: together. It also changes what the check is ABOUT: the absolute floor fires on a fact
+    #: about the tree (it grew past a constant), where this fires on a fact about the SWEEP (it
+    #: covers a smaller share of the tree than it should). Only the second is what a reach floor
+    #: is for, so this is strictly more sensitive than the floor it replaces, not less.
+    #:
+    #: Declared per guard rather than shared, because expected coverage is a property of the
+    #: guard: ``conflict-marker-scanned-files`` scans every tracked file and states ``1.0``,
+    #: while ``hooks-path-override`` covers 0.6488 of them and states ``0.45``. Two guards an
+    #: order of magnitude apart in slack is the argument for per-declaration values.
+    #:
+    #: Residual limitation, stated rather than discovered later: a large body of files this
+    #: guard does not count -- several thousand docs, say -- grows the denominator alone and
+    #: lowers the fraction with no sweep breakage. At 0.45 against a live 0.6488 the tracked
+    #: total would have to grow about 44% faster than the counted set before it fired.
+    min_fraction: float | None = None
+    #: The denominator for ``min_fraction``. Defaults to :func:`tracked_file_count`. Overridable
+    #: so a guard whose population is not a subset of tracked files can name its own reference.
+    reference: Callable[[Path], int] | None = None
 
     def examined(self, root: Path) -> Sequence[object]:
         """Discover under *root*, or fail loudly having found implausibly little.
@@ -127,7 +183,10 @@ class Reach:
         :meth:`completed`.
         """
         found = self.population(root)
-        self._require(len(found), "reached", self.what)
+        if self.min_fraction is None:
+            self._require(len(found), "reached", self.what)
+        else:
+            self._require_fraction(len(found), root, "reached")
         return found
 
     def population(self, root: Path) -> Sequence[object]:
@@ -184,6 +243,13 @@ class Reach:
         Raises :class:`ReachFloorError` rather than asserting, so a caller can
         tell a floor violation from an unrelated failure.
         """
+        if self.min_fraction is not None:
+            # Nothing to go stale: there is no recorded constant. What this still has to
+            # discharge is that the fraction HOLDS now -- the meta-test runs this for every
+            # declaration, and a declaration whose fraction was already breached would
+            # otherwise only surface when some unrelated PR ran the guard itself.
+            self._require_fraction(len(self.population(root)), root, "reached")
+            return
         count = len(self.population(root))
         slack = count - self.floor
         if slack < 0:
@@ -217,17 +283,61 @@ class Reach:
         """
         return (self.skips + self.growth) - (len(self.population(root)) - self.floor)
 
-    def completed(self, processed: Sequence[object] | int) -> None:
-        """Apply the same floor to what the guard actually **finished**.
+    def completed(self, processed: Sequence[object] | int, root: Path | None = None) -> None:
+        """Apply the same bound to what the guard actually **finished**.
 
         Candidates are not coverage (#15826 review). Both guards converted in
         this slice skip items on failure — an unreadable file, a source that
         will not parse — after the input floor has already cleared, so without
         this the floor measured how much work was *available* rather than how
         much was done. A skip is not a clean file.
+
+        ``root`` is REQUIRED for a relative declaration and refused loudly when absent (#17142).
+        The first version of the relative mode left this method on ``_require``, which compares
+        against ``floor`` — and a relative declaration carries ``floor=0``, so a guard that listed
+        7137 files and opened NONE passed. The mode fixed the input bound and silently removed the
+        completion bound, which is the stronger of the two and the one #15826 is about. Raising on
+        a missing root rather than defaulting to the absolute path is deliberate: a default would
+        reintroduce the same silence for the next declaration that adopts a fraction.
         """
         count = processed if isinstance(processed, int) else len(processed)
-        self._require(count, "completed", self.what)
+        if self.min_fraction is None:
+            self._require(count, "completed", self.what)
+            return
+        if root is None:
+            raise ReachFloorError(
+                f"[{self.name}] completed() needs the root for a relative declaration: the bound "
+                f"is a fraction of a reference that has to be measured. Without it this call "
+                f"would assert nothing, because a relative declaration carries floor=0."
+            )
+        self._require_fraction(count, root, "completed")
+
+    def _require_fraction(self, count: int, root: Path, verb: str) -> None:
+        """Refuse a sweep covering less than ``min_fraction`` of the external reference.
+
+        A reference of zero RAISES rather than passing. ``reach_declarations_test`` hands every
+        declaration an empty repository to prove its floor can fire, and ``count >= 0 * fraction``
+        is true of every sweep including a broken one -- so a fraction check that treated an empty
+        reference as satisfied would be the one declaration in the registry whose floor cannot
+        fire. It is also the right behaviour on its own terms: a reference that found nothing is a
+        failed measurement, not a clean result.
+        """
+        total = (self.reference or tracked_file_count)(root)
+        if total <= 0:
+            raise ReachFloorError(
+                f"[{self.name}] the reference enumeration found {total} files, so a fraction of it "
+                f"asserts nothing about the {count} {self.what} this sweep {verb}. "
+                f"Fix the reference, not the fraction."
+            )
+        required = floor_div_fraction(total, self.min_fraction)
+        if count < required:
+            raise ReachFloorError(
+                f"[{self.name}] {verb} {count} {self.what}, which is "
+                f"{count / total:.4f} of the {total}-file reference -- below the declared "
+                f"min_fraction of {self.min_fraction} ({required} files).\n"
+                f"Fix the sweep, not the fraction: this fires when the sweep covers a smaller "
+                f"share of the tree than it should, which tree growth cannot cause."
+            )
 
     def _require(self, count: int, verb: str, what: str) -> None:
         if count < self.floor:
@@ -241,10 +351,12 @@ def declare(
     name: str,
     *,
     discover: Callable[[Path], Sequence[object]],
-    floor: int,
     what: str,
+    floor: int = 0,
     growth: int = 0,
     skips: int = 0,
+    min_fraction: float | None = None,
+    reference: Callable[[Path], int] | None = None,
 ) -> Reach:
     """Register a reach declaration and return it.
 
@@ -277,6 +389,32 @@ def declare(
     during #15896, #15901 and #15913 was set the same way. The mechanism was
     never the missing part; the number was.
     """
-    reach = Reach(name=name, discover=discover, floor=floor, what=what, growth=growth, skips=skips)
+    # The two modes are mutually exclusive, and refusing the mix is the point: a declaration
+    # carrying both would be read as whichever one the reader happened to look at, and the
+    # absolute fields are exactly what #17142 is removing from the guards that adopt a fraction.
+    if min_fraction is None:
+        if floor <= 0:
+            raise ValueError(
+                f"[{name}] declare() needs either a positive floor or a min_fraction; "
+                f"got floor={floor} and no min_fraction. A floor of zero asserts nothing."
+            )
+    else:
+        if not 0 < min_fraction <= 1:
+            raise ValueError(f"[{name}] min_fraction must be in (0, 1]; got {min_fraction}.")
+        if floor or growth:
+            raise ValueError(
+                f"[{name}] min_fraction replaces floor/growth; got floor={floor}, growth={growth}. "
+                f"Drop them rather than keeping a constant the relative mode does not read."
+            )
+    reach = Reach(
+        name=name,
+        discover=discover,
+        floor=floor,
+        what=what,
+        growth=growth,
+        skips=skips,
+        min_fraction=min_fraction,
+        reference=reference,
+    )
     REGISTRY[name] = reach
     return reach
