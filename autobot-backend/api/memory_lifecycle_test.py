@@ -339,3 +339,24 @@ def test_the_node_limit_ceiling_is_the_shared_one_the_slm_proxy_uses():
     from autobot_shared.ssot_constants import QueryDefaults
 
     assert _enforced_limit_ceiling(memory_lifecycle.router, "/lifecycle") == QueryDefaults.MAX_SEARCH_LIMIT
+
+
+def test_the_node_limit_ceiling_is_bound_to_the_constant_not_a_matching_literal():
+    """#14887 existed because a hard-coded 100 coincided with the shared constant.
+
+    The value comparison above cannot see that recurrence: ``le=100`` equals
+    ``MAX_SEARCH_LIMIT`` today and passes. This asserts the source binds ``le``
+    to the attribute itself, so a literal fails even while it agrees.
+    """
+    import ast
+
+    tree = ast.parse(inspect.getsource(memory_lifecycle))
+    handler = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.AsyncFunctionDef) and any("/lifecycle" in ast.unparse(d) for d in node.decorator_list)
+    )
+    args = handler.args.args
+    default = handler.args.defaults[[a.arg for a in args].index("limit") - (len(args) - len(handler.args.defaults))]
+    le = next(kw.value for kw in default.keywords if kw.arg == "le")
+    assert ast.unparse(le) == "QueryDefaults.MAX_SEARCH_LIMIT", f"limit ceiling is {ast.unparse(le)}, not the constant"
