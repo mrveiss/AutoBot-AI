@@ -29,6 +29,7 @@ them.
 import re
 from pathlib import Path
 
+import pytest
 from repo_tests._paths import repo_root
 
 _SOURCE = Path("autobot-frontend/src/composables/useVoiceOutput.ts")
@@ -157,6 +158,31 @@ def test_an_assignment_to_an_undeclared_field_is_reported() -> None:
     assert any("not declared" in p for p in problems), problems
 
 
+def rate_window_problems(body: str) -> list[str]:
+    """Why *body* does not provably clear every rate field.
+
+    A detector over source so fixtures can drive it. The first version of the test below took
+    only the NAMES — `{name for name, _ in _ASSIGNED.findall(...)}` — and discarded the value, so
+    it asked "is this field assigned?" rather than "is it cleared?". `this.rtfProducedSec =
+    this.rtfProducedSec` satisfied it while clearing nothing, which is the same hole
+    `_CLEARING`'s own docstring describes and which `_reset_problems` had already closed twenty
+    lines above by checking values. One file, two clearing paths, and the check was only applied
+    to one of them (CodeRabbit, #17887).
+
+    Values are validated against the same `_CLEARING` set `_reset_problems` uses, deliberately:
+    a second notion of "cleared" is a second thing to go stale, and the two paths clear the same
+    fields for the same reason.
+    """
+    assigned = {name: value.rstrip(";,") for name, value in _ASSIGNED.findall(body)}
+    problems = [f"{name} is never assigned" for name in sorted(_RATE_WINDOW_FIELDS - set(assigned))]
+    problems += [
+        f"{name} = {value} does not clear it"
+        for name, value in sorted(assigned.items())
+        if name in _RATE_WINDOW_FIELDS and value not in _CLEARING
+    ]
+    return problems
+
+
 def test_end_rate_window_clears_every_rate_field() -> None:
     """The second clearing path, which had no completeness check when it was added.
 
@@ -165,13 +191,47 @@ def test_end_rate_window_clears_every_rate_field() -> None:
     field hides. Dropping `rtfProducedSec` from it passed all six tests here before this existed,
     which is the same shape as the defect the file was written for: a clearing path nobody checks.
     """
-    assigned = {name for name, _ in _ASSIGNED.findall(_method_body("endRateWindow"))}
-    missed = sorted(_RATE_WINDOW_FIELDS - assigned)
-    assert not missed, (
-        f"_preroll.endRateWindow() does not clear {missed}. A rate field surviving the end of an "
-        "utterance is carried into the next one's measurement, which is what biases the rate the "
-        "pre-roll is sized from."
+    problems = rate_window_problems(_method_body("endRateWindow"))
+    assert not problems, (
+        f"_preroll.endRateWindow() does not clear every rate field: {problems}. A rate field "
+        "surviving the end of an utterance is carried into the next one's measurement, which is "
+        "what biases the rate the pre-roll is sized from."
     )
+
+
+_RATE_WINDOW_CLEARED = "".join(f"    this.{name} = 0\n" for name in sorted(_RATE_WINDOW_FIELDS))
+
+
+def test_a_body_clearing_every_rate_field_is_accepted() -> None:
+    """Positive control: without it, a detector that always complains passes the cases below."""
+    assert rate_window_problems(_RATE_WINDOW_CLEARED) == []
+
+
+def test_a_body_that_drops_a_rate_field_is_reported() -> None:
+    dropped = sorted(_RATE_WINDOW_FIELDS)[0]
+    body = "".join(f"    this.{name} = 0\n" for name in sorted(_RATE_WINDOW_FIELDS) if name != dropped)
+    assert any(f"{dropped} is never assigned" in p for p in rate_window_problems(body))
+
+
+def test_a_self_assignment_is_not_a_clearing() -> None:
+    """The hole the name-only version had: assigned, and clearing nothing.
+
+    This is the case that made the finding worth fixing rather than noting — it passes every
+    presence check while preserving exactly the value the field is supposed to lose.
+    """
+    held = sorted(_RATE_WINDOW_FIELDS)[0]
+    body = _RATE_WINDOW_CLEARED.replace(f"    this.{held} = 0\n", f"    this.{held} = this.{held}\n")
+    problems = rate_window_problems(body)
+    assert any(f"{held} = this.{held} does not clear it" in p for p in problems), problems
+
+
+@pytest.mark.parametrize("value", ["1", "Date.now()", "this.estimateSec", "performance.now()"])
+def test_a_non_clearing_value_is_reported(value: str) -> None:
+    """Any live value, not only a self-assignment. `Date.now()` is the realistic mistake here —
+    a rate window reopened instead of closed reads as initialisation at a glance."""
+    held = sorted(_RATE_WINDOW_FIELDS)[0]
+    body = _RATE_WINDOW_CLEARED.replace(f"    this.{held} = 0\n", f"    this.{held} = {value}\n")
+    assert any(f"{held} = {value} does not clear it" in p for p in rate_window_problems(body))
 
 
 def test_the_rate_window_fields_are_all_declared_on_the_object() -> None:
