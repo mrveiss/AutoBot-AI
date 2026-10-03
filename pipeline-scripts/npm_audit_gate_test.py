@@ -62,7 +62,19 @@ class _FakeNpm:
 # --- the three results -----------------------------------------------------
 
 
-def test_low_and_moderate_advisories_pass() -> None:
+@pytest.fixture
+def no_recorded_exceptions(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Empty the exception record for tests about PLUMBING rather than policy.
+
+    Needed because a clean audit is no longer unconditionally a pass: a recorded entry whose
+    advisory is no longer reported fails the gate as dead policy (#13400), which is the point
+    of the record shrinking. A test asserting what `main()` prints on a clean report has to
+    say which world it is in, and that is this one -- no policy in force.
+    """
+    monkeypatch.setattr(gate, "ADVISORY_EXCEPTIONS", {})
+
+
+def test_low_and_moderate_advisories_pass(no_recorded_exceptions) -> None:
     verdict = gate.classify(_report(low=1, moderate=1), BULK_LOG)
 
     assert verdict.result == gate.PASSED
@@ -134,7 +146,7 @@ def test_a_report_that_came_through_audits_quick_is_unavailable() -> None:
 # --- retries ---------------------------------------------------------------
 
 
-def test_an_endpoint_error_is_retried_until_a_report_arrives() -> None:
+def test_an_endpoint_error_is_retried_until_a_report_arrives(no_recorded_exceptions) -> None:
     npm, sleeps = _FakeNpm((ENDPOINT_ERROR, ""), (ENDPOINT_ERROR, ""), (_report(), BULK_LOG)), []
 
     outcome = gate.audit_with_retries(["npm"], 3, 7, run=npm, sleep=sleeps.append)
@@ -230,7 +242,7 @@ def test_an_invalid_constant_falls_back_to_its_default(monkeypatch, name, getter
     ids=["passed", "found", "unavailable"],
 )
 def test_main_states_which_result_happened(
-    tmp_path, monkeypatch, capsys, stdout, log, exit_code, headline, annotation
+    tmp_path, monkeypatch, capsys, stdout, log, exit_code, headline, annotation, no_recorded_exceptions
 ) -> None:
     summary = tmp_path / "summary.md"
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
@@ -297,7 +309,7 @@ def test_a_crash_inside_the_gate_is_could_not_check_never_found(tmp_path, monkey
     ids=["passed", "found", "unavailable"],
 )
 def test_a_failed_report_or_summary_write_never_changes_the_exit_code(
-    tmp_path, monkeypatch, capsys, stdout, log, verdict
+    tmp_path, monkeypatch, capsys, stdout, log, verdict, no_recorded_exceptions
 ) -> None:
     """Real OSErrors, not mocks: the report goes into a directory that does not
     exist, and the step summary path is a directory. Neither may move the exit
