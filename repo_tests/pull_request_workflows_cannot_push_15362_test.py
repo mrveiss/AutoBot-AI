@@ -31,6 +31,7 @@ workaround was wired correctly, this one asserts the cause cannot recur.
 
 from __future__ import annotations
 
+import pytest
 import yaml
 from repo_tests._paths import repo_root
 
@@ -79,20 +80,43 @@ def _is_pull_request_triggered(document) -> bool:
     return triggers == "pull_request"
 
 
-def writers(document) -> list[str | None]:
-    """Scopes granting ``contents: write``: ``None`` for workflow-level, else each job id.
+def grants_write(permissions) -> bool:
+    """Does this ``permissions:`` value grant write access to repository contents?
 
-    Takes a parsed document rather than a path so the contrast test below can drive it with a
+    Handles the SCALAR forms as well as the mapping. ``permissions: write-all`` is a plain string
+    to ``yaml.safe_load``, and the first version of this guard accepted only dicts -- so the
+    broadest possible grant of the very capability this file exists to forbid was skipped at both
+    scopes, and the guard passed while the token held ``contents: write`` (review on #17908).
+
+    That blind spot was invisible in the tree: no workflow uses the spelling today, so "nothing
+    uses write-all" and "the guard cannot see write-all" produced the same clean result. The
+    contrast cases below are what separate them, which is why they exist rather than relying on the
+    real tree staying clean.
+
+    The design argument this guard rests on is that a workflow without the permission cannot push
+    whatever its script says. ``write-all`` is exactly that permission, in a form the parser could
+    not see -- the right design with the wrong coverage.
+    """
+    if isinstance(permissions, str):
+        # `read-all` grants every READ scope and nothing writable; `write-all` grants everything.
+        return permissions.strip() == "write-all"
+    if isinstance(permissions, dict):
+        return permissions.get("contents") == "write"
+    return False
+
+
+def writers(document) -> list[str | None]:
+    """Scopes granting write access to contents: ``None`` for workflow-level, else each job id.
+
+    Takes a parsed document rather than a path so the contrast tests below can drive it with a
     synthetic workflow -- a detector that can only be pointed at the real tree cannot be shown to
     fire, and then "no findings" and "cannot find anything" look identical.
     """
     found: list[str | None] = []
-    top = document.get("permissions")
-    if isinstance(top, dict) and top.get("contents") == "write":
+    if grants_write(document.get("permissions")):
         found.append(None)
     for job_id, spec in (document.get("jobs") or {}).items():
-        permissions = spec.get("permissions") if isinstance(spec, dict) else None
-        if isinstance(permissions, dict) and permissions.get("contents") == "write":
+        if isinstance(spec, dict) and grants_write(spec.get("permissions")):
             found.append(job_id)
     return found
 
@@ -183,3 +207,55 @@ def test_an_allowance_naming_a_vanished_workflow_is_reported() -> None:
         assert (
             WORKFLOWS_DIR / filename
         ).is_file(), f"{filename} is in ALLOWED but absent from {WORKFLOWS_DIR} -- remove the entry"
+
+
+@pytest.mark.parametrize(
+    "value,grants",
+    [
+        ("write-all", True),
+        ("read-all", False),
+        ("  write-all  ", True),
+        ({"contents": "write"}, True),
+        ({"contents": "read"}, False),
+        ({"actions": "write"}, False),
+        (None, False),
+        ({}, False),
+    ],
+    ids=lambda v: repr(v),
+)
+def test_grants_write_reads_every_permissions_spelling(value, grants: bool) -> None:
+    """Including the two scalars, which the first version of this guard could not see at all."""
+    assert grants_write(value) is grants
+
+
+@pytest.mark.parametrize("scope", ["workflow", "job"])
+def test_the_write_all_scalar_is_caught_at_either_scope(scope: str) -> None:
+    """The contrast the real tree cannot provide: nothing uses `write-all` today.
+
+    Without these, "no workflow grants write-all" and "this guard is blind to write-all" are the
+    same passing result -- and the second is how a future violation lands unnoticed.
+    """
+    if scope == "workflow":
+        document = yaml.safe_load(
+            "on:\n  pull_request:\npermissions: write-all\njobs:\n  b:\n    steps:\n      - run: echo\n"
+        )
+        assert writers(document) == [None]
+    else:
+        document = yaml.safe_load(
+            "on:\n  pull_request:\njobs:\n  b:\n    permissions: write-all\n    steps:\n      - run: echo\n"
+        )
+        assert writers(document) == ["b"]
+
+
+@pytest.mark.parametrize("scope", ["workflow", "job"])
+def test_the_read_all_scalar_is_not_treated_as_a_grant(scope: str) -> None:
+    """The other half: a guard that flagged every scalar would be wrong about `read-all`."""
+    if scope == "workflow":
+        document = yaml.safe_load(
+            "on:\n  pull_request:\npermissions: read-all\njobs:\n  b:\n    steps:\n      - run: echo\n"
+        )
+    else:
+        document = yaml.safe_load(
+            "on:\n  pull_request:\njobs:\n  b:\n    permissions: read-all\n    steps:\n      - run: echo\n"
+        )
+    assert writers(document) == []
