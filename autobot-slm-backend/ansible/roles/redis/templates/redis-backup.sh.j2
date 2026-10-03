@@ -35,6 +35,69 @@ ARCHIVE="redis-backup-$TIMESTAMP.tar.gz"
 # The override point is kept where an operator can reach it on the host.
 BGSAVE_TIMEOUT_SECONDS="${REDIS_BACKUP_BGSAVE_TIMEOUT_SECONDS:-300}"
 
+# CLIENT CREDENTIAL (#17932 review). `redis-stack.conf.j2` emits a `requirepass`
+# directive from the role's own password variable whenever one is set (no literal
+# tag is spelled out here - see the whitespace contract at the top), so an
+# auth-enabled host is a rendered configuration of this very role, and these
+# three calls used to send no credential at all: no password, no username, no
+# environment variable. The role's own readiness probe in
+# roles/redis/tasks/main.yml sends the username plus the client password; this
+# mirrors it.
+#
+# The VALUE is not substituted into this script, and that is a ruling rather
+# than a style choice. This file is deployed 0755 and is re-rendered on the
+# code-only update path, where `redis_password` is unresolvable -- the
+# "DELIBERATELY EXCLUDED" note in roles/redis/tasks/code_only.yml keeps every
+# credential-bearing artifact off that path for exactly that reason. Only the
+# PATH below is substituted; it is a role default, not a secret. The file it
+# names is 0600 root, written on the provisioning path, and parsed rather than
+# sourced so a credential is never executed.
+REDIS_BACKUP_ENV_FILE="{{ redis_backup_env_file }}"
+REDIS_USERNAME=""
+if [ -r "$REDIS_BACKUP_ENV_FILE" ]; then
+    REDISCLI_AUTH="$(sed -n 's/^REDISCLI_AUTH=//p' "$REDIS_BACKUP_ENV_FILE" | head -n 1)"
+    REDIS_USERNAME="$(sed -n 's/^REDIS_USERNAME=//p' "$REDIS_BACKUP_ENV_FILE" | head -n 1)"
+fi
+
+# redis-cli reads REDISCLI_AUTH from the environment, so the credential never
+# reaches the process list the way `-a` would. Exported only when non-empty: a
+# blank-but-set REDISCLI_AUTH makes redis-cli send an empty AUTH, which a nopass
+# server rejects -- so the empty case must leave the variable unset, not blank.
+REDIS_CLI_ARGS=(-h 127.0.0.1 -p "$REDIS_PORT")
+if [ -n "${REDIS_USERNAME:-}" ]; then
+    REDIS_CLI_ARGS+=(--user "$REDIS_USERNAME")
+fi
+if [ -n "${REDISCLI_AUTH:-}" ]; then
+    export REDISCLI_AUTH
+else
+    unset REDISCLI_AUTH
+fi
+
+# AN ERROR REPLY IS NOT A MEASUREMENT (#17932 review). Without `-e`, redis-cli
+# prints the server's error text to stdout and still exits 0, so an
+# unauthenticated LASTSAVE yields the literal string "NOAUTH Authentication
+# required." -- which the wait loop below then compares against itself forever,
+# spinning to the timeout or archiving a stale dump.rdb. That is the same
+# "reports success while producing no usable archive" failure this script was
+# rewritten to end, so the reply is validated by SHAPE: a LASTSAVE that is not a
+# bare integer is an error, whatever the server meant by it.
+#
+# Shape rather than `-e`: the flag exists in current redis-cli, but the fleet's
+# redis-cli version could not be established from this repository, and a
+# shape check is version-independent AND strictly broader -- it also catches a
+# zero-exit reply that simply is not a timestamp.
+redis_lastsave() {
+    local reply
+    reply="$(redis-cli "${REDIS_CLI_ARGS[@]}" LASTSAVE)"
+    case "$reply" in
+        '' | *[!0-9]*)
+            echo "[$(date)] ERROR: LASTSAVE did not return a timestamp: ${reply}" >&2
+            return 1
+            ;;
+    esac
+    printf '%s\n' "$reply"
+}
+
 # A FAILING BACKUP MUST BE LOUD (#17932). The first line this script logs is a
 # success line, so an abort anywhere after it reads as a successful backup
 # followed by noise. BACKUP_COMPLETE is set on the last reachable statement and
@@ -63,12 +126,28 @@ mkdir -p "$BACKUP_DIR"
 # Completion is detected by LASTSAVE advancing past its pre-BGSAVE value. The previous
 # loop compared LASTSAVE to `date +%s` and so exited on its first iteration, leaving a
 # fixed 5s sleep as the only real wait and allowing a stale dump.rdb into the archive.
-LAST_SAVE_BEFORE=$(redis-cli -h 127.0.0.1 -p "$REDIS_PORT" LASTSAVE)
-redis-cli -h 127.0.0.1 -p "$REDIS_PORT" BGSAVE
+LAST_SAVE_BEFORE="$(redis_lastsave)"
+# The BGSAVE reply is logged, not gated on. Redis answers "Background saving
+# started", "Background saving scheduled" or the error "Background save already
+# in progress" -- the last of which means a save IS running, so rejecting it
+# would abort a run that is about to succeed. The LASTSAVE loop below is the
+# gate, and it now refuses a non-timestamp, so an unauthenticated call fails at
+# the line above rather than reaching here.
+BGSAVE_REPLY="$(redis-cli "${REDIS_CLI_ARGS[@]}" BGSAVE)"
+echo "[$(date)] BGSAVE requested: ${BGSAVE_REPLY}"
+#
+# The poll is an explicit assignment, not a command substitution inside the
+# `while` condition: a condition is one of the contexts where `set -e` does not
+# abort, so a LASTSAVE that starts failing mid-wait would be re-reported every
+# two seconds until the timeout instead of ending the run at once.
 WAITED_SECONDS=0
-while [ "$(redis-cli -h 127.0.0.1 -p "$REDIS_PORT" LASTSAVE)" = "$LAST_SAVE_BEFORE" ]; do
+while true; do
+    LAST_SAVE_NOW="$(redis_lastsave)"
+    if [ "$LAST_SAVE_NOW" != "$LAST_SAVE_BEFORE" ]; then
+        break
+    fi
     if [ "$WAITED_SECONDS" -ge "$BGSAVE_TIMEOUT_SECONDS" ]; then
-        echo "[$(date)] ERROR: BGSAVE did not complete within ${BGSAVE_TIMEOUT_SECONDS}s" >&2
+        echo "[$(date)] ERROR: BGSAVE did not complete within ${BGSAVE_TIMEOUT_SECONDS}s (BGSAVE replied: ${BGSAVE_REPLY})" >&2
         exit 1
     fi
     echo "Waiting for BGSAVE to complete..."

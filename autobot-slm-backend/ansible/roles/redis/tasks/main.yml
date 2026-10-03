@@ -273,6 +273,40 @@
   until: redis_ping is succeeded
   tags: ['redis', 'validation']
 
+# #17932 review: the nightly backup's three redis-cli calls sent no credential
+# at all, while redis-stack.conf.j2 gives this very role's server a requirepass
+# whenever one is configured. On such a host every call returned an error reply
+# that redis-cli prints and exits 0 on, so LASTSAVE compared two identical error
+# strings and the script spun to its timeout or archived a stale dump.rdb --
+# the same "success line, no usable archive" failure #17932 exists to end.
+#
+# Written HERE and not from tasks/code_only.yml, deliberately: the credential is
+# resolvable on the provisioning path and is not on the update path, and the
+# ruling at the top of code_only.yml is that an artifact whose content depends
+# on `redis_password` must never be re-rendered by the updater. Leaving this
+# file untouched there means an update cannot empty it.
+- name: "Redis | Ensure /etc/autobot dir exists"
+  ansible.builtin.file:
+    path: /etc/autobot
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  become: true
+  tags: ['redis', 'backup']
+
+- name: "Redis | Deploy the backup script's client credential (#17932)"
+  ansible.builtin.template:
+    src: redis-backup.env.j2
+    dest: "{{ redis_backup_env_file }}"
+    owner: root
+    group: root
+    mode: '0600'
+  become: true
+  no_log: true
+  diff: false
+  tags: ['redis', 'backup']
+
 - name: "Redis | Create backup directory"
   file:
     path: /var/backups/redis

@@ -47,52 +47,27 @@ from __future__ import annotations
 import os
 import re
 import shlex
-import shutil
 import subprocess
 import tarfile
 import time
 from pathlib import Path
 
-import jinja2
 import pytest
 from repo_tests._paths import repo_root
-
-TEMPLATE = repo_root() / "autobot-slm-backend" / "ansible" / "roles" / "redis" / "templates" / "redis-backup.sh.j2"
-
-#: The role variables this template substitutes. Kept explicit rather than loaded from
-#: `vars/main.yml` so that a variable renamed in one place and not the other raises an
-#: undefined-name error here instead of silently rendering an empty string.
-RENDER_VARS = {
-    "redis_port": 6379,
-    "redis_backup_retention_days": 30,
-}
-
-#: Reach floor. A render that yields a stub is not evidence about a backup script.
-#: Deliberately well below both the pre-fix script (51 lines) and the current one,
-#: so a defective-but-whole script still reaches the assertions and FAILS on them
-#: rather than erroring in the fixture -- a fixture error is a worse signal.
-MIN_RENDERED_LINES = 30
-
-_BASH = shutil.which("bash")
-_TAR = shutil.which("tar")
-
-
-def render(*, persistence: bool = True, trim_blocks: bool = True) -> str:
-    """Render the template the way ``ansible.builtin.template`` would.
-
-    ``trim_blocks`` is a parameter rather than a constant because the differential
-    check below needs both settings; everything else matches the module's defaults.
-    """
-    env = jinja2.Environment(  # noqa: S701 - shell output, not markup; repo-owned source
-        autoescape=False,
-        trim_blocks=trim_blocks,
-        lstrip_blocks=False,
-        keep_trailing_newline=True,
-        undefined=jinja2.StrictUndefined,
-    )
-    source = TEMPLATE.read_text(encoding="utf-8")
-    assert source.strip(), f"{TEMPLATE} is empty -- nothing was measured"
-    return env.from_string(source).render(redis_persistence=persistence, **RENDER_VARS)
+from repo_tests._redis_backup_harness import (
+    _BASH,
+    _MERGED,
+    _OLD_ARCHIVE_AGE_SECONDS,
+    _RUNNABLE,
+    MIN_RENDERED_LINES,
+    RENDER_VARS,
+    _archives,
+    _command_lines,
+    _retarget,
+    _run,
+    _stage,
+    render,
+)
 
 
 @pytest.fixture(scope="module")
@@ -101,16 +76,6 @@ def script() -> str:
     rendered = render(persistence=True)
     assert len(rendered.splitlines()) >= MIN_RENDERED_LINES, "render produced a stub, not the backup script"
     return rendered
-
-
-def _command_lines(rendered: str) -> list[str]:
-    """Non-blank, non-comment lines, stripped -- what the shell will actually execute."""
-    out = []
-    for raw in rendered.splitlines():
-        line = raw.strip()
-        if line and not line.startswith("#"):
-            out.append(line)
-    return out
 
 
 @pytest.mark.parametrize("persistence", [True, False])
@@ -187,99 +152,6 @@ def test_rendered_script_is_valid_shell(persistence: bool, tmp_path: Path) -> No
         [str(_BASH), "-n", str(path)], capture_output=True, text=True, timeout=60
     )
     assert done.returncode == 0, f"rendered script is not valid bash:\n{done.stderr}"
-
-
-# --------------------------------------------------------------------------------------
-# End-to-end: the rendered script is executed against a fake Redis host.
-#
-# This is what a text assertion cannot do -- it answers "was an archive produced", which
-# is the question the live fleet answered `no` to for 125 days while its log said `yes`.
-# --------------------------------------------------------------------------------------
-
-_RUNNABLE = pytest.mark.skipif(
-    _BASH is None or _TAR is None,
-    reason="bash and tar are required to execute the rendered script; neither was assumed",
-)
-
-#: stdout and stderr are merged because the cron entry merges them
-#: (`redis-backup.sh >> ...log 2>&1`), so the assertions below are about the file an
-#: operator actually opens, not about two streams nobody sees separately.
-_MERGED = subprocess.STDOUT
-
-_OLD_ARCHIVE_AGE_SECONDS = 40 * 24 * 3600
-
-
-def _retarget(script: str, backup_dir: Path, data_dir: Path) -> str:
-    """Point the script's two hardcoded directories at tmpdirs.
-
-    Each substitution must match exactly once: if either variable is renamed, this
-    raises instead of running a script that still writes to /var.
-    """
-    script, backups = re.subn(r"^BACKUP_DIR=.*$", f'BACKUP_DIR="{backup_dir}"', script, count=1, flags=re.M)
-    script, data = re.subn(r"^REDIS_DATA_DIR=.*$", f'REDIS_DATA_DIR="{data_dir}"', script, count=1, flags=re.M)
-    assert backups == 1, "BACKUP_DIR assignment not found -- the harness would test nothing"
-    assert data == 1, "REDIS_DATA_DIR assignment not found -- the harness would test nothing"
-    return script
-
-
-def _fake_redis_cli(bin_dir: Path) -> None:
-    """A redis-cli whose LASTSAVE advances once, so the BGSAVE wait loop terminates."""
-    state = bin_dir / "lastsave.seen"
-    (bin_dir / "redis-cli").write_text(
-        "#!/bin/bash\n"
-        'for arg in "$@"; do\n'
-        '  if [ "$arg" = "LASTSAVE" ]; then\n'
-        f'    if [ -e "{state}" ]; then echo 2000; else : > "{state}"; echo 1000; fi\n'
-        "    exit 0\n"
-        "  fi\n"
-        "done\n"
-        'echo "Background saving started"\n',
-        encoding="utf-8",
-    )
-    (bin_dir / "redis-cli").chmod(0o755)
-
-
-def _stage(tmp_path: Path, *, aof: str) -> tuple[Path, Path, Path]:
-    """A data dir in the requested AOF layout, an empty backup dir, and a fake bin dir."""
-    data_dir = tmp_path / "data"
-    data_dir.mkdir(parents=True)
-    (data_dir / "dump.rdb").write_text("REDIS-fake-rdb", encoding="utf-8")
-    if aof == "appendonlydir":
-        aof_dir = data_dir / "appendonlydir"
-        aof_dir.mkdir()
-        (aof_dir / "appendonly.aof.manifest").write_text("file appendonly.aof.1.base.rdb seq 1 type b\n", "utf-8")
-        (aof_dir / "appendonly.aof.1.incr.aof").write_text("*1\r\n$4\r\nPING\r\n", encoding="utf-8")
-    elif aof == "appendonly.aof":
-        (data_dir / "appendonly.aof").write_text("*1\r\n$4\r\nPING\r\n", encoding="utf-8")
-    backup_dir = tmp_path / "backups"
-    backup_dir.mkdir()
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    _fake_redis_cli(bin_dir)
-    return data_dir, backup_dir, bin_dir
-
-
-def _run(tmp_path: Path, *, aof: str, break_tar: bool = False) -> tuple[int, str, Path]:
-    """Execute the rendered script against the staged fake host; return rc, log, backups."""
-    data_dir, backup_dir, bin_dir = _stage(tmp_path, aof=aof)
-    if break_tar:
-        (bin_dir / "tar").write_text('#!/bin/bash\necho "tar: fake failure" >&2\nexit 2\n', encoding="utf-8")
-        (bin_dir / "tar").chmod(0o755)
-    path = tmp_path / "redis-backup.sh"
-    path.write_text(_retarget(render(persistence=aof != "none"), backup_dir, data_dir), encoding="utf-8")
-    done = subprocess.run(  # noqa: S603 - fixed argv, tmpdir-scoped script, redis-cli shadowed
-        [str(_BASH), str(path)],
-        stdout=subprocess.PIPE,
-        stderr=_MERGED,
-        text=True,
-        timeout=120,
-        env={"PATH": f"{bin_dir}:{os.environ.get('PATH', '/usr/bin:/bin')}", "HOME": str(tmp_path)},
-    )
-    return done.returncode, done.stdout, backup_dir
-
-
-def _archives(backup_dir: Path) -> list[Path]:
-    return sorted(backup_dir.glob("redis-backup-*.tar.gz"))
 
 
 @_RUNNABLE
