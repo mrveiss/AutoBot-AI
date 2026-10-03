@@ -95,8 +95,17 @@ def _conflict_sites(root: pathlib.Path | None = None) -> List[Tuple[str, int, st
 SCANNED_FILES = declare(
     "conflict-marker-scanned-files",
     discover=lambda root: _tracked_text_files(root),
-    floor=10000,
-    growth=1000,
+    # #17142: a FRACTION of the tracked-file count, not an absolute floor. This guard scans
+    # every tracked file, so its live share is exactly 1.0000 (10999 of 10999 on 24a9a1d46f) and
+    # the old `floor=10000, growth=1000` was a constant the tree walked into: ceiling 11000
+    # against a population of 10999 left ONE file of headroom, which the next PR adding a file
+    # would have consumed.
+    #
+    # 0.99 is TIGHTER than what it replaces, not looser: the old floor of 10000 is a fraction of
+    # 0.9092, where this requires 10889 of today's 10999 and rises with the tree. The 110-file
+    # margin is for files a scanner may legitimately be unable to read; it is not growth
+    # headroom, because growth no longer consumes anything here.
+    min_fraction=0.99,
     what="tracked files scanned for conflict markers (#17297)",
 )
 

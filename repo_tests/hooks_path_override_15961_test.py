@@ -312,7 +312,18 @@ REACH = declare(
     # Re-measured on this rebased tree, not inherited: the mid-window pin
     # absorbs the largest branch in tonight's queue, which is the property
     # `population - growth` never had.
-    floor=6736,
+    # #17142: a FRACTION of the tracked-file count replaces `floor=6736, growth=400`. That pair
+    # was re-pinned SEVENTEEN times, and every one of the seventeen was correct when written --
+    # the constant does not rot, the tree grows past it. On 24a9a1d46f the ceiling (6736+401) sat
+    # at 7137 against a population of 7136: one file of headroom, roughly two hours at the
+    # measured ~33 counting files a day.
+    #
+    # 0.615 is TIGHTER than what it replaces. The old floor of 6736 is a fraction of 0.6124 of
+    # the 10999 tracked files; 0.615 requires 6764 today, 28 files above the old floor, and it
+    # rises with the tree instead of being consumed by it. Live share is 0.6488, so the margin is
+    # 372 files of COMPOSITION drift -- the counted set shrinking as a share of the tree -- which
+    # is a different and much slower thing than growth.
+    min_fraction=0.615,
     # #13049 note: this branch proposed 6800 and ADOPTS main's 6736. #17318
     # landed first, and the rule the sessions agreed is first-to-land wins, so
     # one measurement does not produce four numbers. 6736 is comfortably valid
@@ -329,7 +340,6 @@ REACH = declare(
     # and also adopts 6736. Two branches, one measurement, one number -- which
     # is what first-to-land is for. Its wording carried a slack figure; that is
     # dropped here rather than merged, for the reason the paragraph above gives.
-    growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",
 )
