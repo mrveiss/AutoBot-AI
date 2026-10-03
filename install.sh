@@ -586,7 +586,7 @@ INVENTORY
     success "  Localhost inventory generated"
 
     if [[ -z "${ADMIN_PASSWORD}" ]]; then
-        ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 20)
+        ADMIN_PASSWORD=$(generate_admin_password)
     fi
 
     if [[ ! -f "${SECRETS_FILE}" ]] || [[ "${REINSTALL}" == true ]]; then
@@ -932,6 +932,32 @@ EOF
 # Interactive Prompts
 # =============================================================================
 
+# `curl | sudo bash` leaves stdin pointing at the PIPE CARRYING THIS SCRIPT, so a
+# bare `read` gets EOF, returns 1, and `set -euo pipefail` aborts with no message
+# (#17929). /dev/tty reaches the real terminal whatever stdin is. Returns non-zero
+# when there is no terminal at all, so the CALLER decides what that means --
+# `|| true` on the read would have continued with an empty password.
+# Usage: prompt_from_tty <varname> <prompt> [--silent]
+prompt_from_tty() {
+    local __var="$1" __prompt="$2" __silent="${3:-}" __value="" __fd
+    # Probed by OPENING, not `[[ -r /dev/tty ]]`: under setsid or in a container
+    # the node is readable by mode and open() still returns ENXIO -- and the mode
+    # check leaks bash's own "No such device or address" to the operator.
+    if ! { exec {__fd}</dev/tty; } 2>/dev/null; then return 1; fi
+    if [[ "${__silent}" == "--silent" ]]; then
+        IFS= read -rs -p "${__prompt}" __value <&"${__fd}" || { exec {__fd}<&-; return 1; }
+    else
+        IFS= read -r -p "${__prompt}" __value <&"${__fd}" || { exec {__fd}<&-; return 1; }
+    fi
+    exec {__fd}<&-
+    printf -v "${__var}" '%s' "${__value}"
+}
+
+# One generator, so the interactive-blank and no-terminal paths cannot drift.
+generate_admin_password() {
+    openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 20
+}
+
 prompt_config() {
     # #7057: env-var overrides skip the corresponding interactive prompt
     # so the script can run from CI / cron / runbooks without a TTY.
@@ -968,7 +994,7 @@ prompt_config() {
     if ${UNATTENDED}; then
         GIT_BRANCH="${GIT_BRANCH:-${DEFAULT_BRANCH}}"
         if [[ -z "${ADMIN_PASSWORD}" ]]; then
-            ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 20)
+            ADMIN_PASSWORD=$(generate_admin_password)
         fi
         return
     fi
@@ -978,20 +1004,25 @@ prompt_config() {
 
     if [[ -z "${GIT_BRANCH}" ]]; then
         echo -e "  ${CYAN}[1/2]${NC} Git branch to install:"
-        read -rp "  [${DEFAULT_BRANCH}] > " input
+        input=""
+        prompt_from_tty input "  [${DEFAULT_BRANCH}] > " || info "  No terminal — using ${DEFAULT_BRANCH}"
         GIT_BRANCH="${input:-${DEFAULT_BRANCH}}"
     fi
 
     if [[ -z "${ADMIN_PASSWORD}" ]]; then
         echo
         echo -e "  ${CYAN}[2/2]${NC} SLM admin password:"
-        read -rsp "  (leave blank to auto-generate) > " input
-        echo
+        input=""
+        if prompt_from_tty input "  (leave blank to auto-generate) > " --silent; then
+            echo
+        else
+            warn "  No terminal available to read a password — auto-generating one."
+        fi
         if [[ -n "${input}" ]]; then
             ADMIN_PASSWORD="${input}"
         else
-            ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 20)
-            info "  Password will be auto-generated"
+            ADMIN_PASSWORD=$(generate_admin_password)
+            info "  Password auto-generated; it is printed at the end of this run."
         fi
     fi
     echo
@@ -1071,7 +1102,17 @@ uninstall() {
 
     if ! ${CONFIRM_YES}; then
         echo -e "  ${YELLOW}Type 'UNINSTALL' to confirm:${NC}"
-        read -rp "  > " confirmation
+        # The no-terminal branch REFUSES here, where the password prompt
+        # auto-generates (#17929). The direction is deliberate and opposite:
+        # continuing without an answer costs a generated credential there and an
+        # unconfirmed destructive wipe here. Today EOF aborts this via `set -e`,
+        # which is accidentally fail-safe -- this keeps that outcome and makes it
+        # intentional, with a message naming the flag to use instead.
+        if ! prompt_from_tty confirmation "  > "; then
+            error "No terminal available to confirm an uninstall."
+            error "Re-run with --yes if you intend to uninstall non-interactively."
+            exit 1
+        fi
         if [[ "${confirmation}" != "UNINSTALL" ]]; then
             info "Uninstall cancelled."
             exit 0
