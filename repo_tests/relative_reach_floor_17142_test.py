@@ -165,3 +165,43 @@ def test_each_adopted_fraction_is_tighter_than_the_floor_it_replaced(name: str) 
         f"{tracked_then} tracked files it was measured on, which is NOT tighter than the "
         f"{old_floor} it replaced. The change would weaken the guard."
     )
+
+
+# --- the completion bound, which the first version of this mode silently removed -------------
+#
+# `completed()` is the stronger of the two bounds: `examined` says what was listed, `completed`
+# says what was opened, and a sweep can list everything and read almost nothing. The first version
+# left `completed()` on `_require`, which compares against `floor` — and a relative declaration
+# carries `floor=0`, so it passed for any count including zero (CodeRabbit, #17915).
+
+
+def test_a_relative_declaration_refuses_a_collapsed_completion() -> None:
+    """Listing the tree and finishing none of it is the case `completed()` exists for."""
+    reach = _reach(7137, fraction=0.98, reference=7106)
+    with pytest.raises(ReachFloorError) as excinfo:
+        reach.completed(0, _ROOT)
+    assert "completed 0" in str(excinfo.value)
+
+
+def test_a_relative_declaration_accepts_a_completion_holding_its_share() -> None:
+    """Positive control: the bound must be satisfiable by a sweep that did the work."""
+    _reach(7137, fraction=0.98, reference=7106).completed(7136, _ROOT)
+
+
+def test_completed_without_a_root_is_refused_on_a_relative_declaration() -> None:
+    """Refused rather than silently falling back to the absolute path.
+
+    A default would reintroduce the exact silence this fixes: `floor=0` makes `_require` pass for
+    every count, so a call site that forgot the root would assert nothing and look identical to one
+    that did not.
+    """
+    with pytest.raises(ReachFloorError, match="completed\\(\\) needs the root"):
+        _reach(7137, fraction=0.98, reference=7106).completed(0)
+
+
+def test_an_absolute_declaration_still_completes_without_a_root() -> None:
+    """The 25 call sites on absolute declarations are untouched by the new parameter."""
+    absolute = Reach(name="synthetic-absolute", discover=lambda _r: list(range(10)), floor=5, what="items")
+    absolute.completed(7)
+    with pytest.raises(ReachFloorError):
+        absolute.completed(3)

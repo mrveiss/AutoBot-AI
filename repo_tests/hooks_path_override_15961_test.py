@@ -414,7 +414,7 @@ def test_no_tracked_script_overrides_the_hooks_path() -> None:
     # Candidates are not coverage: `examined` bounds what was listed, this bounds
     # what was actually opened. Without it a sweep could list 6,413 files, fail to
     # read 6,300 of them, and still report the same green as a clean tree.
-    REACH.completed(read)
+    REACH.completed(read, root)
 
     assert not offenders, "\n".join(
         f"{rel}:{n}: {line}\n"

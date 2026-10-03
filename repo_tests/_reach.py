@@ -283,17 +283,34 @@ class Reach:
         """
         return (self.skips + self.growth) - (len(self.population(root)) - self.floor)
 
-    def completed(self, processed: Sequence[object] | int) -> None:
-        """Apply the same floor to what the guard actually **finished**.
+    def completed(self, processed: Sequence[object] | int, root: Path | None = None) -> None:
+        """Apply the same bound to what the guard actually **finished**.
 
         Candidates are not coverage (#15826 review). Both guards converted in
         this slice skip items on failure — an unreadable file, a source that
         will not parse — after the input floor has already cleared, so without
         this the floor measured how much work was *available* rather than how
         much was done. A skip is not a clean file.
+
+        ``root`` is REQUIRED for a relative declaration and refused loudly when absent (#17142).
+        The first version of the relative mode left this method on ``_require``, which compares
+        against ``floor`` — and a relative declaration carries ``floor=0``, so a guard that listed
+        7137 files and opened NONE passed. The mode fixed the input bound and silently removed the
+        completion bound, which is the stronger of the two and the one #15826 is about. Raising on
+        a missing root rather than defaulting to the absolute path is deliberate: a default would
+        reintroduce the same silence for the next declaration that adopts a fraction.
         """
         count = processed if isinstance(processed, int) else len(processed)
-        self._require(count, "completed", self.what)
+        if self.min_fraction is None:
+            self._require(count, "completed", self.what)
+            return
+        if root is None:
+            raise ReachFloorError(
+                f"[{self.name}] completed() needs the root for a relative declaration: the bound "
+                f"is a fraction of a reference that has to be measured. Without it this call "
+                f"would assert nothing, because a relative declaration carries floor=0."
+            )
+        self._require_fraction(count, root, "completed")
 
     def _require_fraction(self, count: int, root: Path, verb: str) -> None:
         """Refuse a sweep covering less than ``min_fraction`` of the external reference.
