@@ -60,7 +60,10 @@ _MIN_TRACKED_MODULES = {".test_durations": 1500, ".test_durations_slm": 150}
 
 #: One ``python -m pytest <roots> ... --durations-path <file>`` invocation.
 _INVOCATION = re.compile(
-    r"python -m pytest \\\n\s+(?P<roots>[^\n\\]+?)\s*\\\n(?:[^\n]*\n)*?\s+--durations-path (?P<path>\S+)"
+    # `(?!\s*python -m pytest)` stops the search at the next invocation, so an
+    # invocation with no --durations-path cannot lend its roots to the next one's path.
+    r"python -m pytest \\\n\s+(?P<roots>[^\n\\]+?)\s*\\\n(?:(?!\s*python -m pytest)[^\n]*\n)*?"
+    r"\s+--durations-path (?P<path>\S+)"
 )
 _TEST_MODULE = re.compile(r"(^|/)(test_[^/]*|[^/]*_test)\.py$")
 
@@ -140,3 +143,13 @@ def test_the_roots_parser_reads_a_real_shaped_invocation():
 def test_the_roots_parser_rejects_a_shape_it_does_not_understand(mangled: str):
     """The parser must be seen to fail, or a loosened regex could match the wrong thing silently."""
     assert generator_roots(mangled) == {}
+
+
+def test_an_unrecorded_invocation_does_not_lend_its_roots_to_the_next():
+    """Adjacent invocations stay separate: roots belong to the invocation that names the path."""
+    text = (
+        "          python -m pytest \\\n            unrecorded_root \\\n            -n auto \\\n"
+        "          python -m pytest \\\n            slm_root \\\n            --durations-path .test_durations_slm \\\n"
+        "          python -m pytest \\\n            backend_root \\\n            --durations-path .test_durations \\\n"
+    )
+    assert generator_roots(text) == {".test_durations_slm": ["slm_root"], ".test_durations": ["backend_root"]}
