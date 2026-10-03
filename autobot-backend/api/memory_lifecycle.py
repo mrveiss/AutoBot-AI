@@ -30,15 +30,16 @@ from fastapi import APIRouter, Depends, Query
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import QueryDefaults
 
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["memory-lifecycle"])
 
-# Hard server-side ceiling. The `limit` query param is bounded by FastAPI, but the
-# prune preview is bounded separately: it is the list an operator reviews before
-# enabling enforcement, and an unbounded one is not reviewable.
-_MAX_LIMIT = 100
+# The prune preview is the list an operator reviews before enabling enforcement,
+# and an unbounded one is not reviewable. This bounds that list only; it is
+# deliberately separate from the `limit` query ceiling below and may differ (#14887).
+_MAX_PRUNE_PREVIEW = 100
 
 _LAST_RUN_KEY = "memory:consolidate_facts:last_run"
 
@@ -109,7 +110,7 @@ async def _decay_section(limit: int) -> Dict[str, Any]:
         section["last_run_unavailable"] = True
 
     preview = await kb.consolidate_facts(dry_run=True)
-    section["prune_preview"] = (preview.get("candidate_details") or [])[:_MAX_LIMIT]
+    section["prune_preview"] = (preview.get("candidate_details") or [])[:_MAX_PRUNE_PREVIEW]
     section["epoch_unset"] = bool(preview.get("epoch_unset"))
     return section
 
@@ -117,7 +118,9 @@ async def _decay_section(limit: int) -> Dict[str, Any]:
 @router.get("/lifecycle")
 @with_error_handling(error_code_prefix="MEMORY_LIFECYCLE")
 async def get_memory_lifecycle(
-    limit: int = Query(20, ge=1, le=_MAX_LIMIT),
+    # The ceiling is the shared constant the SLM proxy also bounds `limit` by, so the
+    # proxy never forwards a value this tier would reject with a 422 (#14887).
+    limit: int = Query(20, ge=1, le=QueryDefaults.MAX_SEARCH_LIMIT),
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
     """Read-only view of the memory lifecycle. Never mutates, never 500s."""
