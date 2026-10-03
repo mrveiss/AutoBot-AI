@@ -387,6 +387,16 @@
   changed_when: true
   tags: ['slm', 'backend']
 
+# #17892: requirements.txt declares `-c ../constraints/shared.txt`, which pip
+# resolves against the deployed file -- {{ slm_base_dir }}/constraints/shared.txt.
+# Nothing placed it there, so a clean-machine install aborted here with
+# "Could not open constraint file". The shared staging task is how every other
+# role puts the repo-root manifests on the node; this role had not included it.
+- name: "SLM | Stage the shared manifests this pip step reads (#17892)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/stage_shared_manifests.yml
+  when: not (autobot_shared_manifests_staged | default(false))
+  tags: ['slm', 'backend']
+
 # #16641: without this, pip falls back to shelling out to the standalone
 # `virtualenv` executable, absent from these hosts -- matches the
 # interpreter the earlier `python3.14 -m venv {{ slm_backend_dir }}/venv`

@@ -60,6 +60,13 @@
     apt_repo_spec: "deb [signed-by=/usr/share/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt {{ _pgdg_release }}-pgdg main"
     apt_repo_filename: "pgdg"
     apt_repo_label: "PostgreSQL pgdg"
+    # #17897: jammy and older ship postgresql-14, so 16 comes only from pgdg.
+    # A device image that already carries an apt.postgresql.org source used to
+    # make the helper skip its own add, and the deploy then died at "Install
+    # PostgreSQL packages" with apt reporting no package -- naming neither the
+    # preserved source nor the skip. Naming the package here makes the preserve
+    # conditional on that source actually serving it.
+    apt_repo_verify_package: "postgresql-{{ postgresql_version }}"
   when: "'ok installed' not in _pg_installed.stdout"
 
 # #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.

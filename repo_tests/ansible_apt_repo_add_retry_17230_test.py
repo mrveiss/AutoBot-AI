@@ -40,6 +40,19 @@ yaml = pytest.importorskip("yaml")
 _ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
 _HELPER = _ANSIBLE / "roles" / "_shared" / "tasks" / "add_apt_repository_idempotent.yml"
 _MODULES = ("ansible.builtin.apt_repository", "apt_repository")
+#: Keys whose value is itself a task list. A task moved into one of these is still a
+#: task, but a top-level-only scan reports a population of zero for it (#17897).
+_NESTING_KEYS = ("block", "rescue", "always")
+#: Floor on the whole parsed task list, not on the matches. Measured: the helper holds
+#: 9 top-level tasks and 13 once ``block``/``rescue`` are descended into, so this leaves
+#: 3 of headroom for ordinary edits. A floor rather than an exact count because seven
+#: roles include this file and it legitimately gains tasks -- but not a loose one, since
+#: headroom is what a gutted parse hides in.
+#:
+#: It sits on what was EXAMINED, not on what matched, and that is the whole point: an
+#: "every task found carries the retry budget" assertion is vacuously true of nothing,
+#: so a floor on the matches would certify a property of an empty set.
+_MIN_TASKS_EXAMINED = 10
 #: Each budget key, the variable it must read, and that variable's documented default.
 _BUDGETS = {"retries": ("apt_repo_retries", 5), "delay": ("apt_repo_retry_delay", 10)}
 _BUDGET_VARS = tuple(var for var, _ in _BUDGETS.values())
@@ -51,15 +64,44 @@ _ASSIGNMENT = re.compile(r"(?:^\s*(?:-\s*)?|[{,]\s*)(?:(?:" + _VAR + r')|"(?:' +
 _VAR_FILE_SUFFIXES = {".yml", ".yaml", ".json", ".ini", ".cfg", ""}
 
 
+def _walk(tasks: object) -> list[dict]:
+    """Every task in an Ansible task list, descending into nested task lists.
+
+    #17897 wrapped the repo-add in a ``block:`` with a ``rescue:`` that restores a
+    displaced source, which left the add nested one level down. A top-level-only
+    scan then found zero apt_repository tasks -- and the only reason that failed
+    loudly is that the assertion here is ``== 1``. A guard phrased as "every task
+    found carries the retry budget" would have PASSED on the empty set, certifying
+    a property of nothing. So traversal and the floor below are one fix, not two.
+    """
+    found: list[dict] = []
+    if not isinstance(tasks, list):
+        return found
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        found.append(task)
+        for key in _NESTING_KEYS:
+            found.extend(_walk(task.get(key)))
+    return found
+
+
 def _add_tasks() -> list[dict]:
-    """Every apt_repository task in the shared helper, loaded from YAML."""
+    """Every apt_repository task in the shared helper, at any nesting depth."""
     assert _HELPER.is_file(), (
         f"{_HELPER.relative_to(repo_root())} is missing. Seven roles include it to add apt repos; "
         "if it moved, move this guard with it rather than deleting the guard."
     )
     loaded = yaml.safe_load(_HELPER.read_text(encoding="utf-8"))
     assert isinstance(loaded, list) and loaded, "expected a non-empty Ansible task list"
-    return [t for t in loaded if isinstance(t, dict) and any(m in t for m in _MODULES)]
+    examined = _walk(loaded)
+    assert len(examined) >= _MIN_TASKS_EXAMINED, (
+        f"only {len(examined)} task(s) parsed from {_HELPER.name}, expected at least "
+        f"{_MIN_TASKS_EXAMINED}. A short parse makes the assertions below vacuous: they "
+        f"describe the tasks that were found, and finding none is not the same as finding "
+        f"none that violate the rule."
+    )
+    return [t for t in examined if any(m in t for m in _MODULES)]
 
 
 def _budget(value, var: str) -> int | None:
