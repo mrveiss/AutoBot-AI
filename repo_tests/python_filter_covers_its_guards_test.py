@@ -187,6 +187,40 @@ def _record(candidate: str, guard: str, patterns: list[str], reads: dict[str, se
     reads.setdefault(candidate, set()).add(guard)
 
 
+#: #17798: the second population. A file a WORKFLOW reads by literal path is as
+#: load-bearing as one a guard reads -- `.test_durations_slm` sets the SLM suite's
+#: shard split via `ci.yml`, yet sat in no filter, because no guard happened to
+#: read it. So the python-gated jobs' own step text is swept too.
+#:
+#: Scope of THIS population: literal tokens in `run:` and `with:` values of the
+#: jobs whose `if:` reads the python filter output. It sees bare root files (the
+#: guard-source detectors above need a slash or a composition) but not a path
+#: assembled from a `${{ }}` expression or an env var. Guard reads built from a
+#: variable remain invisible to the guard-source detectors -- recorded on #17632.
+_CI_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "ci.yml"
+_WORKFLOW_TOKEN = re.compile(r"(?<![\w./-])(\.?[A-Za-z0-9_][A-Za-z0-9_.-]*(?:/[A-Za-z0-9_.*-]+)*)")
+_MIN_GATED_JOBS = 1
+
+
+def workflow_reads(workflow: dict) -> dict[str, set[str]]:
+    """Literal repo-path tokens read by each job gated on the python filter output."""
+    reads: dict[str, set[str]] = {}
+    for job, spec in (workflow.get("jobs") or {}).items():
+        if not isinstance(spec, dict) or "outputs.python" not in str(spec.get("if", "")):
+            continue
+        steps = spec.get("steps") or []
+        text = " ".join(
+            f"{step.get('run', '')} {' '.join(map(str, (step.get('with') or {}).values()))}" for step in steps
+        )
+        for token in _WORKFLOW_TOKEN.findall(text):
+            reads.setdefault(token.rstrip("."), set()).add(job)
+    return reads
+
+
+def _gated_jobs(workflow: dict) -> list[str]:
+    return [j for j, spec in (workflow.get("jobs") or {}).items() if "outputs.python" in str(spec.get("if", ""))]
+
+
 def _uncovered_reads(patterns: list[str]) -> tuple[dict[str, set[str]], int]:
     """`uncovered path -> guards reading it`, and how many guards were parsed."""
     reads: dict[str, set[str]] = {}
@@ -211,6 +245,11 @@ def _uncovered_reads(patterns: list[str]) -> tuple[dict[str, set[str]], int]:
     # outside the filter undetected -- the exact bypass this guard exists for.
     for own in (_FILTER,):
         _record(own.relative_to(_REPO_ROOT).as_posix(), _SELF, patterns, reads)
+
+    workflow = yaml.safe_load(_CI_WORKFLOW.read_text(encoding="utf-8"))
+    for candidate, jobs in workflow_reads(workflow).items():
+        for job in jobs:
+            _record(candidate, f"ci.yml:{job}", patterns, reads)
     return reads, parsed
 
 
@@ -236,7 +275,8 @@ def test_python_filter_covers_every_tree_a_guard_reads() -> None:
     new = {path: guards for path, guards in uncovered.items() if path not in UNCOVERED_READS}
 
     assert not new, (
-        "these trees are read by repo_tests guards BY CONCRETE LITERAL but the python-suite "
+        "these trees are read BY CONCRETE LITERAL -- by repo_tests guards or by a python-gated ci.yml job "
+        "(#17798) -- but the python-suite "
         "filter does not cover them, so a change confined to one takes the required-context "
         "shim's green while the guard never runs. Glob-declared reads are outside this "
         "check — see glob_declared_reads_15900_test.py (#15900):\n  "
@@ -455,3 +495,33 @@ def test_this_modules_own_reads_are_swept() -> None:
         f"{own} is read by this guard on every run but the filter does not cover it — "
         "editing it would skip the suite that reads it"
     )
+
+
+def test_the_workflow_sweep_reaches_the_gated_jobs() -> None:
+    """The second population's reach: the python-gated jobs exist and are read."""
+    workflow = yaml.safe_load(_CI_WORKFLOW.read_text(encoding="utf-8"))
+    assert len(_gated_jobs(workflow)) >= _MIN_GATED_JOBS, "no ci.yml job is gated on the python filter output"
+    assert ".test_durations_slm" in workflow_reads(workflow), "the SLM shard-durations read (#17798) is no longer seen"
+
+
+def test_a_workflow_read_absent_from_the_filter_is_reported() -> None:
+    """Contrast pair (#17798): a gated job reading an uncovered literal path trips; covered, it does not."""
+    workflow = {
+        "jobs": {
+            "gated": {
+                "if": "needs.changes.outputs.python == 'true'",
+                "steps": [{"run": "pytest --shard-durations .test_durations_slm"}],
+            },
+            "ungated": {"steps": [{"run": "cat pytest.ini"}]},
+        }
+    }
+    reads = workflow_reads(workflow)
+    assert reads[".test_durations_slm"] == {"gated"}
+    assert "pytest.ini" not in reads, "a job not gated on the python filter is not this guard's population"
+
+    uncovered: dict[str, set[str]] = {}
+    _record(".test_durations_slm", "ci.yml:gated", ["**/*.py"], uncovered)
+    assert ".test_durations_slm" in uncovered, "an uncovered workflow read must be reported"
+    covered: dict[str, set[str]] = {}
+    _record(".test_durations_slm", "ci.yml:gated", ["**/*.py", ".test_durations_slm"], covered)
+    assert not covered, "once the filter names it, it is covered"

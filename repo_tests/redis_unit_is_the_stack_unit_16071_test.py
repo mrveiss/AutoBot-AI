@@ -43,8 +43,8 @@ from __future__ import annotations
 import re
 
 import pytest
-
 from repo_tests._paths import repo_root
+
 from tools.lint._scan_helpers import tracked_paths
 
 _ROOT = repo_root()
@@ -86,8 +86,15 @@ _ROOT = repo_root()
 #: which is what the rule always meant. Records stay excluded by tree, because
 #: there the location IS the statement -- a plan or an audit should keep saying
 #: what was true when it was written.
+#: The pytest-split duration records are excluded by exact NAME, the same kind as
+#: `openapi.json` and lock files: generated, and their keys are test node IDs --
+#: including this guard's own parametrized fixtures (`...known_offence[apt-get
+#: install redis-server]`). Once a refresh recorded those tests (#17886) the guard
+#: read its own fixtures back as offences. A record of test names is not code that
+#: operates a unit.
 _SKIP = re.compile(
     r"(_test\.(py|sh)$|/test_[^/]*\.(py|sh)$|baseline|\.lock$|node_modules/|openapi\.json$"
+    r"|^\.test_durations(_slm)?$"
     r"|^docs/archives/|^docs/audit/|^docs/planning/"
     r"|^autobot-infrastructure/shared/tests/results/)"
 )
@@ -107,7 +114,10 @@ _UNIT = r"redis(?:-server)?(?![-\w])"
 
 _OPERATES = [
     ("a systemctl verb", re.compile(rf"systemctl\s+(?:--\S+\s+)*(?:{_VERBS})\s+{_UNIT}")),
-    ("a unit dependency", re.compile(r"\b(?:After|Wants|Requires|BindsTo|PartOf)=[^\n]*(?<![-\w])redis(?:-server)?\.service\b")),
+    (
+        "a unit dependency",
+        re.compile(r"\b(?:After|Wants|Requires|BindsTo|PartOf)=[^\n]*(?<![-\w])redis(?:-server)?\.service\b"),
+    ),
     ("an apt install target", re.compile(rf"\bapt(?:-get)?\s+install\b[^\n]*(?<![-\w]){_UNIT}")),
 ]
 
@@ -244,11 +254,11 @@ def test_the_detector_finds_a_known_offence(line: str) -> None:
     [
         "ExecStart=/opt/redis-stack/bin/redis-server /opt/autobot/redis.conf",
         'logfile "/var/log/redis-stack/redis-server.log"',
-        'if pgrep redis-server >/dev/null; then',
+        "if pgrep redis-server >/dev/null; then",
         '    ("redis-server", "redis-stack-server", "Both bind to port 6379", "port"),',
-        '        systemctl enable redis-stack-server',
-        '# and `services/backup.py` issued `systemctl stop redis-server` against nothing',
-        'and `services/backup.py` issued `systemctl stop redis-server` against nothing',
+        "        systemctl enable redis-stack-server",
+        "# and `services/backup.py` issued `systemctl stop redis-server` against nothing",
+        "and `services/backup.py` issued `systemctl stop redis-server` against nothing",
     ],
 )
 def test_the_detector_leaves_the_legitimate_uses_alone(line: str) -> None:

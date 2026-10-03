@@ -311,3 +311,13 @@ python:
   # one file that sets shard balance is the one file whose change is invisible
   # to the balance guard, and the PR takes the required-context shim's green.
   - '.test_durations'
+  # #17798, #17886: the SLM suite's shard weights, read by --shard-durations in
+  # this same suite and, since #17886, by the durations-coverage guard. Without
+  # it a change confined to this file (e.g. a bot refresh) ran nothing, so the
+  # guard added to judge that file could not run on it.
+  - '.test_durations_slm'
+  # #17798: the test-only dependencies the python suite installs (ci.yml reads
+  # it in the gated job). A change to it alone -- e.g. an unpinned test dep --
+  # alters how every test runs, so it must run the suite (#17839 was exactly
+  # that: an upstream fakeredis release broke every shard with no diff here).
+  - 'requirements-ci-test.txt'

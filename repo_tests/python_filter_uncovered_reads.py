@@ -136,6 +136,14 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: reads it by concrete literal path to pin its WebSocket URL against the real
 #: backend route, and `autobot-frontend/src/components/` is outside the python
 #: filter's trees. A new bypass, not a denominator correction.
+#: RE-DERIVED at 45 by #17798, unchanged on purpose and measured, not assumed:
+#: the sweep now also reads the python-gated ci.yml jobs. That population found
+#: 3 uncovered reads -- `pytest.ini` and `requirements-ci.txt` (already recorded
+#: above via guards) and `requirements-ci-test.txt` (new) -- and would also have
+#: found `.test_durations_slm`, which the guard-source detectors could not see
+#: (bare name, no slash; #17632). The same change covers the last two in the
+#: filter, so the count is 45 both before and after. Dropping either filter line
+#: makes it 46 and fails the equality.
 MAX_UNCOVERED_READS = 45
 
 #: A deliberate raise of ``MAX_UNCOVERED_READS`` is recorded here, as
