@@ -321,3 +321,10 @@ python:
   # alters how every test runs, so it must run the suite (#17839 was exactly
   # that: an upstream fakeredis release broke every shard with no diff here).
   - 'requirements-ci-test.txt'
+  # #17893: repo_tests/research_index_phase_claims_17893_test.py reads
+  # docs/research/_index.md AND every document it links, comparing each row's
+  # phase claim against its document's headings. Both sides of that comparison
+  # live here, so a change confined to docs/research/ -- which is exactly the
+  # change that creates the drift -- would take the required-context shim's
+  # green while the guard that detects it never runs.
+  - 'docs/research/**'
