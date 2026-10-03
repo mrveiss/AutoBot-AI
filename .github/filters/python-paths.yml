@@ -316,3 +316,8 @@ python:
   # it a change confined to this file (e.g. a bot refresh) ran nothing, so the
   # guard added to judge that file could not run on it.
   - '.test_durations_slm'
+  # #17798: the test-only dependencies the python suite installs (ci.yml reads
+  # it in the gated job). A change to it alone -- e.g. an unpinned test dep --
+  # alters how every test runs, so it must run the suite (#17839 was exactly
+  # that: an upstream fakeredis release broke every shard with no diff here).
+  - 'requirements-ci-test.txt'
