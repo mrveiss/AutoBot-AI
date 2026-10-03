@@ -49,7 +49,7 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
-from tools.lint._scan_helpers import tracked_paths, TRACKED_PY_FLOOR
+from tools.lint._scan_helpers import TRACKED_PY_FLOOR, tracked_paths
 
 REPO_ROOT = repo_root()
 _SCRIPT = REPO_ROOT / "scripts" / "check_python_file_size.py"
@@ -290,13 +290,20 @@ def test_an_entry_singled_out_as_live_keeps_its_note(hook):
             assert "#14630" in above and opened_under in above, f"{path.name}: {rel} lost its annotation"
 
 
-def test_no_ceiling_may_be_raised(hook):
-    raised = {
+def test_no_ceiling_may_exceed_its_baseline(hook):
+    """One direction, named as one. Renamed and explained: see the parity test (#17872)."""
+    exceeding = {
         rel: (ceiling, RATCHET_BASELINE[rel])
         for rel, ceiling in hook.KNOWN_LARGE.items()
         if rel in RATCHET_BASELINE and ceiling > RATCHET_BASELINE[rel]
     }
-    assert raised == {}, f"ceilings raised (now, baseline): {raised}"
+    assert exceeding == {}, (
+        f"the hook's ceiling exceeds its baseline (hook, baseline): {exceeding}. Which "
+        "record moved is not established here -- ceiling_record_parity_17872_test.py "
+        "reports it symmetrically. In THIS direction the fix is to lower the hook to its "
+        "baseline, or find the raise that put it above -- lowering both would RECORD the "
+        "raise instead of undoing it."
+    )
 
 
 def test_growing_past_the_ceiling_fails(hook):
