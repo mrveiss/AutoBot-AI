@@ -68,7 +68,7 @@ useful datum in the source (see *Hidden metrics*): the distribution model is
 ## Notable Implementation Details
 
 - **Citations as a markup tag, not a text convention.** The RAG prompt instructs
-  the model to end its answer with `{% citation items=[{name,id}] /%}`; the
+  the model to end its answer with {% raw %}`{% citation items=[{name,id}] /%}`{% endraw %}; the
   renderer registers `citation` as a Markdoc custom tag
   (`features/ui/markdown/config.tsx`) so the model's own output token stream
   materialises into an interactive component with a slide-out source panel. The

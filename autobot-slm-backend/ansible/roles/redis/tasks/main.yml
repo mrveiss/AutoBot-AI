@@ -46,6 +46,13 @@
     apt_repo_spec: "deb https://packages.redis.io/deb {{ redis_stack_suite }} main"
     apt_repo_filename: "redis"
     apt_repo_label: "Redis Stack"
+    # #17897: derived from this file's own "Redis | Install Redis Stack" task
+    # (name: redis-stack-server). This is precisely the package the suite
+    # fallback above exists for -- the comment at the top of this block records
+    # that Ubuntu's own archive ships redis-server/redis-sentinel and NOT
+    # redis-stack-server, so a candidate for it can only come from
+    # packages.redis.io.
+    apt_repo_verify_package: "redis-stack-server"
   when: "'ok installed' not in _redis_installed.stdout"
   tags: ['redis', 'packages']
 

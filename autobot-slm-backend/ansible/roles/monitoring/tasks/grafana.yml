@@ -60,6 +60,10 @@
     apt_repo_spec: "deb [signed-by=/usr/share/keyrings/grafana.key] https://apt.grafana.com stable main"
     apt_repo_filename: "grafana"
     apt_repo_label: "Grafana (monitoring)"
+    # #17897: derived from this file's own "Install Grafana" task
+    # (ansible.builtin.apt, name: grafana), the same name its `dpkg-query`
+    # presence check at the top of the file asks about.
+    apt_repo_verify_package: "grafana"
   when:
     - ansible_facts['os_family'] == "Debian"
     - "'ok installed' not in _grafana_installed.stdout"

@@ -51,6 +51,13 @@
     apt_repo_spec: "ppa:deadsnakes/ppa"
     apt_repo_filename: "deadsnakes"
     apt_repo_label: "deadsnakes (Python {{ python_interpreter_version }})"
+    # #17897: derived from `python_interpreter_packages` (defaults/main.yml)
+    # rather than restated, so the check and the install cannot disagree -- the
+    # same reason the pgdg call site derives its name from
+    # `postgresql_version`. `first` is the interpreter itself
+    # (`python<version>`); the `-venv` and `-dev` siblings come from the same
+    # PPA, so the interpreter's absence is what makes the PPA useless.
+    apt_repo_verify_package: "{{ python_interpreter_packages | first }}"
   when: _py_check.rc != 0
   tags: ['deps', 'python_interpreter', 'python314']
 
