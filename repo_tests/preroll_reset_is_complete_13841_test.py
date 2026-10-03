@@ -45,6 +45,25 @@ _ASSIGNED = re.compile(r"^\s+this\.([a-zA-Z][a-zA-Z0-9]*)\s*=\s*(.+?)\s*$", re.M
 _CLEARING = {"[]", "0", "0.0", "false", "null", "''", '""', "undefined"}
 
 
+#: Fields `endRateWindow()` must clear, declared here because the method deliberately clears a
+#: SUBSET -- it closes the rate window and the lead-in while keeping whatever audio is still
+#: held, which is the difference between it and `reset()`. Declared rather than derived for that
+#: reason: a prefix rule would either miss `prerollSec`/`estimateSec` or wrongly demand the
+#: buffer fields. Added because `endRateWindow` was a second clearing path with no completeness
+#: check, and dropping a field from it passed every test (#13841 item 2).
+_RATE_WINDOW_FIELDS = frozenset(
+    {"rtfFirstChunkAt", "rtfProducedSec", "rtfLastChunkAt", "prerollSec", "estimateSec", "rtf"}
+)
+
+
+def _method_body(name: str) -> str:
+    """The body of one `_preroll` method, by name."""
+    literal, _ = _object_literal_and_reset()
+    source = (repo_root() / _SOURCE).read_text(encoding="utf-8")
+    start = source.index(f"  {name}(")
+    return source[start : source.index("\n  },", start)]
+
+
 def _object_literal_and_reset() -> tuple[str, str]:
     """The `_preroll` object literal, and the body of its `reset` method."""
     source = (repo_root() / _SOURCE).read_text(encoding="utf-8")
@@ -136,3 +155,28 @@ def test_an_assignment_to_an_undeclared_field_is_reported() -> None:
         fields, "reset(): void {\n    this.pendingSec = 0\n    this.holding = false\n    this.gone = 0\n  },"
     )
     assert any("not declared" in p for p in problems), problems
+
+
+def test_end_rate_window_clears_every_rate_field() -> None:
+    """The second clearing path, which had no completeness check when it was added.
+
+    `reset()` clears everything; `endRateWindow()` closes the rate window and the lead-in while
+    keeping held audio, so it clears a subset — and a subset with no guard is where a forgotten
+    field hides. Dropping `rtfProducedSec` from it passed all six tests here before this existed,
+    which is the same shape as the defect the file was written for: a clearing path nobody checks.
+    """
+    assigned = {name for name, _ in _ASSIGNED.findall(_method_body("endRateWindow"))}
+    missed = sorted(_RATE_WINDOW_FIELDS - assigned)
+    assert not missed, (
+        f"_preroll.endRateWindow() does not clear {missed}. A rate field surviving the end of an "
+        "utterance is carried into the next one's measurement, which is what biases the rate the "
+        "pre-roll is sized from."
+    )
+
+
+def test_the_rate_window_fields_are_all_declared_on_the_object() -> None:
+    """The reach half: a renamed field must fail here, not silently leave the set unsatisfiable."""
+    fields_block, _ = _object_literal_and_reset()
+    declared = set(_FIELD.findall(fields_block))
+    unknown = sorted(_RATE_WINDOW_FIELDS - declared)
+    assert not unknown, f"_RATE_WINDOW_FIELDS names {unknown}, which `_preroll` does not declare"

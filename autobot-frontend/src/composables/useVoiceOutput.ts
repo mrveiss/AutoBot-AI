@@ -147,6 +147,77 @@ const _preroll = {
    */
   rtfLastChunkAt: 0,
 
+  /** Start an utterance's lead-in from a measured rate (#13841; rationale in the guard test). */
+  begin(rtf: number, estimateSec: number, prerollSec: number): void {
+    this.rtf = rtf
+    this.estimateSec = estimateSec
+    this.prerollSec = prerollSec
+    // A zero or negative lead-in means there is nothing to hold back, and the caller used
+    // to express that as an early return BEFORE setting `holding` — leaving the other three
+    // fields written. Deciding it here reproduces that state exactly while removing a branch
+    // whose two outcomes differed only in this flag.
+    this.holding = prerollSec > 0
+  },
+
+  /**
+   * Fold one chunk into the rate window; null while the window is too short to mean anything.
+   * `now` and `minWindowSec` are arguments so this is a pure function of its own fields.
+   */
+  observe(durationSec: number, now: number, minWindowSec: number): number | null {
+    this.rtfLastChunkAt = now
+    if (this.rtfFirstChunkAt === 0) {
+      this.rtfFirstChunkAt = now
+      return null
+    }
+    this.rtfProducedSec += durationSec
+    const elapsedSec = (now - this.rtfFirstChunkAt) / 1000
+    if (elapsedSec < minWindowSec) return null
+    return this.rtfProducedSec / elapsedSec
+  },
+
+  /** The rate achieved, or null if the window never opened. Measured to the LAST chunk, not now. */
+  carriedRate(): number | null {
+    const elapsedSec =
+      this.rtfFirstChunkAt > 0 && this.rtfLastChunkAt > this.rtfFirstChunkAt
+        ? (this.rtfLastChunkAt - this.rtfFirstChunkAt) / 1000
+        : 0
+    if (elapsedSec <= 0 || this.rtfProducedSec <= 0) return null
+    return this.rtfProducedSec / elapsedSec
+  },
+
+  /** Close the rate window and the lead-in, keeping whatever audio is still held. */
+  endRateWindow(): void {
+    this.rtfFirstChunkAt = 0
+    this.rtfProducedSec = 0
+    this.rtfLastChunkAt = 0
+    this.prerollSec = 0
+    this.estimateSec = 0
+    this.rtf = 0
+  },
+
+  /**
+   * Stop holding and hand over what was held. Only the STATE transition: scheduling needs the
+   * AudioContext, so the audio layer stays in the composable and `restore()` takes buffers back.
+   */
+  take(): AudioBuffer[] {
+    if (this.timer) {
+      clearTimeout(this.timer)
+      this.timer = null
+    }
+    this.holding = false
+    const buffers = this.pendingBuffers
+    this.pendingBuffers = []
+    this.pendingSec = 0
+    return buffers
+  },
+
+  /** Put handed-over buffers back, for a context that froze while they were held (#12503). */
+  restore(buffers: AudioBuffer[]): void {
+    this.pendingBuffers = buffers
+    this.pendingSec = buffers.reduce((total, buffer) => total + buffer.duration, 0)
+    this.holding = true
+  },
+
   /** Clear the lead-in and the rate window. One call, every field. */
   reset(): void {
     if (this.timer) {
@@ -167,12 +238,12 @@ const _preroll = {
 
 // Bumped per utterance so a chunk that finishes decoding after its own
 // utterance ended is not folded into the next one's buffer or rate.
-// NOT part of `_preroll`: monotonic, and must survive its reset.
-let _utteranceSeq = 0
-// Bumped by every explicit stop, so a chunk decoded after a barge-in is
-// dropped rather than spoken as a fragment of the superseded reply.
-// NOT part of `_preroll`: monotonic, and must survive its reset.
-let _stopSeq = 0
+//
+// MUST NEVER BE RESET — a CONSTRAINT, not a description (#13841). `_preroll.reset()`
+// zeroes every field it owns, and a reset counter makes a stale chunk's sequence match
+// the current utterance's, so the guard that drops it stops dropping it: the #13736
+// defect, reintroduced by a refactor that looks like consolidation. Increment-only, and
+// deliberately NOT in `_preroll`. Full reasoning in preroll_reset_is_complete_13841_test.
 
 // Single shared WebSocket to /api/voice/stream (#6788).
 // Was: useVoiceOutput + useVoiceConversation each opened their own socket to the
@@ -446,19 +517,9 @@ function _scheduleBuffer(ctx: AudioContext, audioBuffer: AudioBuffer): void {
 
 /** Hand every held chunk to the timeline and stop holding back (#12460). */
 function _releasePending(): void {
-  if (_preroll.timer) {
-    clearTimeout(_preroll.timer)
-    _preroll.timer = null
-  }
-  _preroll.holding = false
-  if (_preroll.pendingBuffers.length === 0) {
-    _preroll.pendingSec = 0
-    return
-  }
+  const buffers = _preroll.take()
+  if (buffers.length === 0) return
   const ctx = _getOrCreateContext()
-  const buffers = _preroll.pendingBuffers
-  _preroll.pendingBuffers = []
-  _preroll.pendingSec = 0
   if (ctx.state === 'suspended') {
     // The context was running when these chunks were held but the tab has been
     // backgrounded since. Starting sources on a frozen timeline never fires
@@ -467,9 +528,7 @@ function _releasePending(): void {
     // lead-in, i.e. the opening of the reply. The next chunk, the end of the
     // utterance, or an explicit stop retries or clears them — no timer is
     // re-armed here, so a still-suspended context cannot spin.
-    _preroll.pendingBuffers = buffers
-    _preroll.pendingSec = buffers.reduce((total, buffer) => total + buffer.duration, 0)
-    _preroll.holding = true
+    _preroll.restore(buffers)
     _armGestureUnlock()
     _notifyTapToEnableAudio()
     if (_activeChunkCount <= 0) isSpeaking.value = false
@@ -506,16 +565,7 @@ function _armStallTimer(): void {
  * measurement, which is the part this one exists to capture.
  */
 function _observeChunkRate(durationSec: number): number | null {
-  const now = Date.now()
-  _preroll.rtfLastChunkAt = now
-  if (_preroll.rtfFirstChunkAt === 0) {
-    _preroll.rtfFirstChunkAt = now
-    return null
-  }
-  _preroll.rtfProducedSec += durationSec
-  const elapsedSec = (now - _preroll.rtfFirstChunkAt) / 1000
-  if (elapsedSec < _RTF_MIN_WINDOW_SEC) return null
-  return _preroll.rtfProducedSec / elapsedSec
+  return _preroll.observe(durationSec, Date.now(), _RTF_MIN_WINDOW_SEC)
 }
 
 /** Blend an utterance's measured production rate into the carried one (#12460). */
@@ -544,11 +594,8 @@ function _beginUtterance(text: string): void {
   _utteranceSeq++
   const rtf = _measuredRtf
   if (rtf === null) return
-  _preroll.rtf = rtf
-  _preroll.estimateSec = text.trim().length * _SEC_PER_CHAR
-  _preroll.prerollSec = _prerollTargetSec(rtf, _preroll.estimateSec)
-  if (_preroll.prerollSec <= 0) return
-  _preroll.holding = true
+  const estimateSec = text.trim().length * _SEC_PER_CHAR
+  _preroll.begin(rtf, estimateSec, _prerollTargetSec(rtf, estimateSec))
   // The watchdog is armed by the first held chunk, NOT here: a slow first chunk
   // would otherwise fire it against an empty buffer, and that release clears
   // _preroll.holding — silently disabling pre-roll for the whole utterance.
@@ -561,19 +608,9 @@ function _beginUtterance(text: string): void {
  */
 function _endUtterance(): void {
   _releasePending()
-  const elapsedSec =
-    _preroll.rtfFirstChunkAt > 0 && _preroll.rtfLastChunkAt > _preroll.rtfFirstChunkAt
-      ? (_preroll.rtfLastChunkAt - _preroll.rtfFirstChunkAt) / 1000
-      : 0
-  if (elapsedSec > 0 && _preroll.rtfProducedSec > 0) {
-    _recordRtfSample(_preroll.rtfProducedSec / elapsedSec)
-  }
-  _preroll.rtfFirstChunkAt = 0
-  _preroll.rtfProducedSec = 0
-  _preroll.rtfLastChunkAt = 0
-  _preroll.prerollSec = 0
-  _preroll.estimateSec = 0
-  _preroll.rtf = 0
+  const carried = _preroll.carriedRate()
+  if (carried !== null) _recordRtfSample(carried)
+  _preroll.endRateWindow()
 }
 
 /**

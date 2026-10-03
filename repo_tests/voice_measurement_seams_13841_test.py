@@ -161,7 +161,13 @@ def _calls_named(tree: ast.AST, name: str) -> int:
 
 
 def _divides_frames(tree: ast.AST) -> bool:
-    """True when the module divides ``getnframes()`` by anything, in CODE.
+    """True when ``getnframes()`` is the IMMEDIATE left operand of a ``/``, in CODE.
+
+    The narrower claim is the accurate one and it is deliberate (#17891): ``n =
+    wav.getnframes()`` then ``n / rate`` is OUTSIDE this, and
+    ``test_the_division_detector_does_not_claim_to_catch_a_bound_intermediate`` pins that so a
+    future widening has to be deliberate. The load-bearing assertion is the ``ast.Call`` count
+    for ``wav_duration_seconds``; this is a second net, and a net is not a proof.
 
     AST rather than a pattern over source, and the reason is a failure this test produced
     on itself: the widened regex matched the *comment* in `generic_provider.py` explaining
