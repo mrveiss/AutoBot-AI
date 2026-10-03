@@ -244,6 +244,17 @@ const _preroll = {
 // the current utterance's, so the guard that drops it stops dropping it: the #13736
 // defect, reintroduced by a refactor that looks like consolidation. Increment-only, and
 // deliberately NOT in `_preroll`. Full reasoning in preroll_reset_is_complete_13841_test.
+let _utteranceSeq = 0
+
+// Bumped by every explicit stop, so a chunk that finishes decoding after a barge-in is
+// dropped rather than spoken as a fragment of the superseded reply.
+//
+// MUST NEVER BE RESET, for the same reason as `_utteranceSeq` above, and equally NOT in
+// `_preroll` (#13841). Both declarations were lost in the `_preroll` extraction while the
+// comments describing them survived -- six call sites referenced names that no longer
+// existed, and `vue-tsc` caught it as TS2304 at pre-push. A comment that outlives the code
+// it describes reads as documentation of a decision that is no longer implemented.
+let _stopSeq = 0
 
 // Single shared WebSocket to /api/voice/stream (#6788).
 // Was: useVoiceOutput + useVoiceConversation each opened their own socket to the
