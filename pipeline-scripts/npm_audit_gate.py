@@ -64,6 +64,8 @@ _GHSA = re.compile(r"GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}")
 PASSED, FOUND, UNAVAILABLE = "passed", "found", "unavailable"
 EXIT_CODES = {PASSED: 0, FOUND: 1, UNAVAILABLE: 2}
 ANNOTATION_TITLES = {FOUND: "npm audit: advisories found", UNAVAILABLE: "npm audit: could not check"}
+EXCUSED_TITLE = "npm audit: passed with a recorded exception"
+STALE_TITLE = "npm audit: the exception record is stale"
 
 
 @dataclass
@@ -108,6 +110,11 @@ class AdvisoryException:
 #:   * every entry is still reported. A drained entry fails, the same shrink-only pressure
 #:     the ratchet baselines use, so the record cannot accumulate dead policy.
 #:   * an advisory not listed here still fails. The set is a floor on scrutiny, not a lid.
+#:
+#: The expiry is enforced by THIS GATE and not by the test suite, deliberately: a test
+#: failing on a date would block every Python PR, where the gate blocks only the PRs that
+#: trigger the frontend suite. So the suite stays date-independent and #17890 carries the
+#: reminder to look again before 2026-11-14.
 ADVISORY_EXCEPTIONS: dict[str, AdvisoryException] = {
     "GHSA-vfj7-8cjw-p6xm": AdvisoryException(
         expires="2026-11-14",
@@ -122,29 +129,70 @@ ADVISORY_EXCEPTIONS: dict[str, AdvisoryException] = {
 }
 
 
-def _failing_advisories(report: dict) -> tuple[set[str], bool] | None:
-    """``(advisory ids at failing severity, any failing package has a fix)``.
+def _entry_advisory_ids(entry: dict) -> set[str]:
+    """The GHSA ids one package's ``via`` list names directly."""
+    ids = set()
+    for via in entry.get("via") or []:
+        if not isinstance(via, dict):
+            continue
+        match = _GHSA.search(str(via.get("url") or ""))
+        if match:
+            ids.add(match.group(0))
+    return ids
 
-    ``None`` when the per-package detail is unreadable, which must NOT be treated as
-    "nothing to see": the caller keeps its counts-based verdict instead. A report whose
-    detail went missing is the shape that would otherwise turn an advisory into a pass.
+
+def _failing_advisories(report: dict) -> tuple[set[str], bool, list[str]] | None:
+    """``(advisory ids, any failing package is fixable, failing packages naming no id)``.
+
+    ``None`` when the per-package detail is unreadable, which must NOT be read as "nothing
+    to see": the caller keeps a failing verdict. The third element exists because the
+    parse used to fail OPEN -- a failing package whose ``via`` carried no ``GHSA-`` url
+    contributed no id, so one unidentifiable advisory beside an excused one passed, the
+    ids-empty guard covering only the case where NOTHING was identified (review on #17889).
     """
     detail = report.get("vulnerabilities")
     if not isinstance(detail, dict):
         return None
     ids: set[str] = set()
     fixable = False
-    for entry in detail.values():
+    unidentified: list[str] = []
+    for package, entry in sorted(detail.items()):
         if not isinstance(entry, dict) or entry.get("severity") not in FAILING_SEVERITIES:
             continue
         if entry.get("fixAvailable"):
             fixable = True
-        for via in entry.get("via") or []:
-            if isinstance(via, dict):
-                match = _GHSA.search(str(via.get("url") or ""))
-                if match:
-                    ids.add(match.group(0))
-    return ids, fixable
+        found = _entry_advisory_ids(entry)
+        transitive = any(isinstance(via, str) for via in entry.get("via") or [])
+        if not found and not transitive:
+            unidentified.append(str(package))
+        ids |= found
+    return ids, fixable, unidentified
+
+
+def _entry_problem(
+    advisory: str, exception: AdvisoryException, ids: set[str], fixable: bool, today: date
+) -> str | None:
+    """Why this entry is not honoured, or ``None`` when it is. Never raises."""
+    if advisory not in ids:
+        return (
+            f"{advisory} is recorded as unfixable but is no longer reported -- remove it from "
+            "ADVISORY_EXCEPTIONS; a record that outlives its advisory is dead policy"
+        )
+    try:
+        expires = date.fromisoformat(exception.expires)
+    except ValueError:
+        return f"{advisory}'s expiry {exception.expires!r} is not a date -- the record is unusable"
+    if expires < today:
+        return (
+            f"{advisory}'s exception expired on {exception.expires} -- re-check for a published "
+            "fix and either bump or renew it deliberately"
+        )
+    if fixable:
+        return (
+            f"{advisory} is recorded as unfixable, but npm reports a fix available for a failing "
+            "package -- bump it; the exception is not honoured while a bump exists"
+        )
+    return None
 
 
 def exception_problems(ids: set[str], fixable: bool, today: date) -> tuple[set[str], list[str]]:
@@ -156,25 +204,11 @@ def exception_problems(ids: set[str], fixable: bool, today: date) -> tuple[set[s
     honoured: set[str] = set()
     problems: list[str] = []
     for advisory, exception in sorted(ADVISORY_EXCEPTIONS.items()):
-        if advisory not in ids:
-            problems.append(
-                f"{advisory} is recorded as unfixable but is no longer reported -- remove it "
-                "from ADVISORY_EXCEPTIONS; a record that outlives its advisory is dead policy"
-            )
-            continue
-        if date.fromisoformat(exception.expires) < today:
-            problems.append(
-                f"{advisory}'s exception expired on {exception.expires} -- re-check for a "
-                "published fix and either bump or renew it deliberately"
-            )
-            continue
-        if fixable:
-            problems.append(
-                f"{advisory} is recorded as unfixable, but npm reports a fix available for a "
-                "failing package -- bump it; the exception is not honoured while a bump exists"
-            )
-            continue
-        honoured.add(advisory)
+        problem = _entry_problem(advisory, exception, ids, fixable, today)
+        if problem:
+            problems.append(problem)
+        else:
+            honoured.add(advisory)
     return honoured, problems
 
 
@@ -236,36 +270,49 @@ def _counts(vulnerabilities: dict) -> dict[str, int] | None:
     return counts  # type: ignore[return-value]
 
 
-def _excused_or_found(report: dict, counts: dict[str, int], endpoint: str) -> Verdict:
-    """A failing count becomes PASSED only when every advisory in it is a recorded exception.
+def _clean_or_stale(counts: dict[str, int], endpoint: str, today: date) -> Verdict:
+    """A clean audit still fails while a recorded exception has outlived its advisory.
 
-    Split from ``classify`` to keep it inside the 30-line standard, and because this is one
-    idea: does the record account for everything the report found?
+    This is the drain case and the one that actually matters: braces being fixed is exactly
+    when the counts go to zero, and the staleness check used to sit AFTER the zero-count
+    return, so the entry could never be flagged in the only situation where it is stale
+    (review on #17889). Shrink-only, the same pressure the ratchet baselines use.
     """
+    _, problems = exception_problems(set(), False, today)
+    if problems:
+        return Verdict(FOUND, counts=counts, reason="; ".join(problems), endpoint=endpoint)
+    return Verdict(PASSED, counts=counts, endpoint=endpoint)
+
+
+def _excused_or_found(report: dict, counts: dict[str, int], endpoint: str, today: date) -> Verdict:
+    """A failing count becomes PASSED only when every advisory in it is a recorded exception."""
     detail = _failing_advisories(report)
     if detail is None:
         reason = "advisories found, and the per-package detail was unreadable so none could be excused"
         return Verdict(FOUND, counts=counts, reason=reason, endpoint=endpoint)
-    ids, fixable = detail
+    ids, fixable, unidentified = detail
+    if unidentified:
+        reason = f"advisories found whose report named no advisory id: {', '.join(unidentified)}"
+        return Verdict(FOUND, counts=counts, reason=reason, endpoint=endpoint)
     if not ids:
-        # Checked BEFORE the record: a report naming no advisory id says nothing about
-        # whether a recorded entry is stale, and consulting the record first made the gate
-        # demand its own exception be removed on an unrelated report shape. Found by this
-        # change's own contrast fixture.
         reason = "advisories found, but the report named no advisory id, so none could be excused"
         return Verdict(FOUND, counts=counts, reason=reason, endpoint=endpoint)
-    honoured, problems = exception_problems(ids, fixable, date.today())
-    if problems:
-        return Verdict(FOUND, counts=counts, reason="; ".join(problems), endpoint=endpoint)
+    honoured, problems = exception_problems(ids, fixable, today)
     unexcused = sorted(ids - honoured)
-    if unexcused:
-        return Verdict(FOUND, counts=counts, reason=f"not excused: {', '.join(unexcused)}", endpoint=endpoint)
-    excused = ", ".join(sorted(honoured))
-    reason = f"every failing advisory is a recorded unfixable exception ({excused}) -- see #13400"
+    if problems or unexcused:
+        # BOTH, never one: reporting only the stale entry sent the reader to remove it while
+        # the gate still failed for an advisory nobody had named (review on #17889).
+        if unexcused:
+            problems.append(f"not excused: {', '.join(unexcused)}")
+        return Verdict(FOUND, counts=counts, reason="; ".join(problems), endpoint=endpoint)
+    excused = ", ".join(
+        f"{advisory} (expires {ADVISORY_EXCEPTIONS[advisory].expires})" for advisory in sorted(honoured)
+    )
+    reason = f"{counts['high'] + counts['critical']} excused by recorded exception: {excused} -- see #13400"
     return Verdict(PASSED, counts=counts, reason=reason, endpoint=endpoint)
 
 
-def classify(stdout: str, log: str = "") -> Verdict:
+def classify(stdout: str, log: str = "", today: date | None = None) -> Verdict:
     """One attempt's report as passed / found / unavailable. Never raises."""
     endpoint = endpoint_used(log)
     try:
@@ -288,9 +335,9 @@ def classify(stdout: str, log: str = "") -> Verdict:
         reason = "the report's severity counts are missing or are not counts"
         return Verdict(UNAVAILABLE, reason=reason, endpoint=endpoint)
     if not any(counts[severity] for severity in FAILING_SEVERITIES):
-        return Verdict(PASSED, counts=counts, endpoint=endpoint)
+        return _clean_or_stale(counts, endpoint, today or date.today())
 
-    return _excused_or_found(report, counts, endpoint)
+    return _excused_or_found(report, counts, endpoint, today or date.today())
 
 
 Runner = Callable[[list[str]], "subprocess.CompletedProcess[str]"]
@@ -348,13 +395,28 @@ def audit_with_retries(
 
 
 def _headline(outcome: Outcome, attempts: int) -> str:
+    """The one line a reader sees. It must never describe a state that did not happen.
+
+    ``verdict.reason`` was computed and dropped here (review on #17889), so an excused pass
+    printed "no high or critical advisories" while six were excused -- the false statement
+    being exactly what #13400 forbids, in the one place the mechanism is accountable. Every
+    reason now reaches the headline, and a pass through an exception says so.
+    """
     verdict = outcome.verdict
     if verdict.result == PASSED:
+        if verdict.reason:
+            return f"**Passed WITH recorded exception(s):** {verdict.reason}"
         return "**Passed:** no high or critical advisories in autobot-frontend."
     if verdict.result == FOUND:
+        failing = verdict.counts["critical"] + verdict.counts["high"]
+        if not failing:
+            # A clean audit that fails is the stale-record case, and "advisories found: 0"
+            # would send the reader hunting an advisory that is not there.
+            return f"**Failed, the exception record is stale:** {verdict.reason}"
         return (
             f"**Failed, advisories found:** {verdict.counts['critical']} critical and "
             f"{verdict.counts['high']} high. Bump the dependency; do not silence the gate (#13400)."
+            + (f" {verdict.reason}." if verdict.reason else "")
         )
     return (
         f"**Failed, could not check:** no usable audit report after {outcome.attempts} of {attempts} "
@@ -394,9 +456,21 @@ def _write_summary(lines: list[str]) -> None:
 
 
 def _announce(outcome: Outcome, attempts: int) -> None:
-    title = ANNOTATION_TITLES.get(outcome.verdict.result)
+    """One annotation. An excused pass is a WARNING, not silence: it is a pass nobody
+    asked for on its merits, and it belongs in the checks UI rather than only the log."""
+    verdict = outcome.verdict
+    title = ANNOTATION_TITLES.get(verdict.result)
+    if verdict.result == FOUND and not (verdict.counts.get("critical", 0) + verdict.counts.get("high", 0)):
+        # The title is read on its own in the checks list, so "advisories found" over a
+        # stale-record failure contradicts its own headline (found by this change's own test).
+        title = STALE_TITLE
     headline = _headline(outcome, attempts).replace("**", "")
-    _emit(f"::error title={title}::{headline}" if title else headline)
+    if title:
+        _emit(f"::error title={title}::{headline}")
+    elif verdict.result == PASSED and verdict.reason:
+        _emit(f"::warning title={EXCUSED_TITLE}::{headline}")
+    else:
+        _emit(headline)
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
