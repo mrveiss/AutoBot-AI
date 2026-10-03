@@ -970,9 +970,9 @@ repos:
         stages: [pre-commit]
         description: "Reject Python files exceeding 600 lines to prevent god-module regressions (#5060)"
 
-      - id: frontend-file-size
-        name: Frontend file size guard (#17885, max 600 lines)
-        entry: python3 scripts/check_frontend_file_size.py
+      - id: typescript-file-size
+        name: TypeScript file size guard (#17885, max 600 lines)
+        entry: python3 scripts/check_typescript_file_size.py
         language: python
         files: \.(ts|vue)$
         # Generated OpenAPI clients are excluded by prefix, not recorded as ceilings: 178,894

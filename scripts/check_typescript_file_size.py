@@ -3,6 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """Pre-commit hook: reject oversized `.ts`/`.vue` files (#17885).
 
+Named for the LANGUAGE, not for `autobot-frontend/`, because that is what it measures: the
+glob is every tracked `.ts`/`.vue` file, and 3 of the 184 recorded are TypeScript outside both
+frontends -- a VS Code extension and two MCP tools under `autobot-infrastructure/`. The first
+draft called this the "frontend" gate and would have shipped a name narrower than its own
+scope, which is the mismatch its siblings avoid by being called python- and shell-file-size.
+
 The third configuration of `tools/lint/file_size_engine.py`, after the Python (#5060) and
 shell (#17353) gates. Nothing measured `.ts`/`.vue` length before this: the only two size
 hooks in `.pre-commit-config.yaml` were those two, `function-length-check` is
@@ -34,12 +40,12 @@ from tools.lint.file_size_engine import GateConfig  # noqa: E402
 MAX_LINES = 600
 
 #: Repo-relative path of this hook, quoted in every message that asks for an edit.
-SELF_REL = "scripts/check_frontend_file_size.py"
+SELF_REL = "scripts/check_typescript_file_size.py"
 
 #: The data module holding RATCHET_BASELINE, the second copy of these numbers. Two
 #: hand-kept records on purpose: neither derives from the other, so no ceiling can be raised
 #: by editing one file alone (#17872).
-RATCHET_REL = "repo_tests/frontend_file_size_ratchet_baseline.py"
+RATCHET_REL = "repo_tests/typescript_file_size_ratchet_baseline.py"
 
 #: Out of scope, mirroring this hook's ``exclude:`` in ``.pre-commit-config.yaml``.
 #: ``types/generated/`` is emitted by the OpenAPI generator -- 178,894 lines in one frontend
@@ -51,7 +57,7 @@ EXCLUDED_PREFIXES = (
 )
 
 #: Floor for the tree walk: below this it stopped covering the frontends (#14547).
-MIN_TRACKED_FE_FILES = 1200
+MIN_TRACKED_TS_FILES = 1200
 
 #: Grandfathered files: over MAX_LINES when this gate landed, mapped to the line count
 #: recorded for each. THIS MAPPING ONLY SHRINKS -- entries leave when a file reaches
@@ -59,8 +65,11 @@ MIN_TRACKED_FE_FILES = 1200
 #: file pass; split the file instead.
 #:
 #: All 184 came from this gate's own first run over the tree (#17885), not from a number chosen
+#: RE-TAKE these before landing: see the baseline module's note on first
+#: measurement versus ratchet step -- a record generated from one tree and landed against
+#: another is stale by construction (#17885).
 #: in advance: 1,779 tracked `.ts`/`.vue` files in scope, 184 of them over 600 lines, the
-#: largest at 2,947. Mirrored in ``repo_tests/frontend_file_size_ratchet_baseline.py`` -- lower
+#: largest at 2,947. Mirrored in ``repo_tests/typescript_file_size_ratchet_baseline.py`` -- lower
 #: an entry here and lower it there in the same commit, or the lines just cut stay spendable in
 #: the gap between the two (#17872).
 KNOWN_LARGE: dict[str, int] = {
@@ -259,12 +268,12 @@ def repo_root() -> pathlib.Path:
 def _config() -> GateConfig:
     """This gate's configuration, read from the module globals at call time (#17377 AC2)."""
     return GateConfig(
-        label="frontend-file-size",
+        label="typescript-file-size",
         max_lines=MAX_LINES,
         self_rel=SELF_REL,
         ratchet_rel=RATCHET_REL,
         excluded_prefixes=EXCLUDED_PREFIXES,
-        min_tracked_files=MIN_TRACKED_FE_FILES,
+        min_tracked_files=MIN_TRACKED_TS_FILES,
         known_large=KNOWN_LARGE,
         globs=("*.ts", "*.vue"),
     )
@@ -278,7 +287,7 @@ def count_lines(path: pathlib.Path) -> int | None:
     return engine.count_lines(path)
 
 
-def tracked_frontend_files(root: pathlib.Path) -> list[str]:
+def tracked_typescript_files(root: pathlib.Path) -> list[str]:
     return engine.tracked_files(_config(), root)
 
 
@@ -308,7 +317,7 @@ def _scan_tracked_files(root: pathlib.Path, tracked: list[str]) -> tuple[int, se
 
 def audit_ceilings() -> tuple[int, list[str]]:
     return engine.audit_ceilings(
-        _config(), repo_root(), enumerate_files=tracked_frontend_files, scan=_scan_tracked_files
+        _config(), repo_root(), enumerate_files=tracked_typescript_files, scan=_scan_tracked_files
     )
 
 

@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """The frontend size ceilings only ratchet down, and the walk really reaches the tree (#17885).
 
-The third gate's half of the two-anchor mechanism. ``scripts/check_frontend_file_size.py``
-holds one copy of the ceilings and ``frontend_file_size_ratchet_baseline.py`` the other;
+The third gate's half of the two-anchor mechanism. ``scripts/check_typescript_file_size.py``
+holds one copy of the ceilings and ``typescript_file_size_ratchet_baseline.py`` the other;
 ``ceiling_record_parity_17872_test.py`` asserts the two are EQUAL in both directions, and this
 file asserts each recorded number is still true of the file it names.
 
@@ -25,10 +25,10 @@ import importlib.util
 import pytest
 import yaml
 from repo_tests._paths import repo_root
-from repo_tests.frontend_file_size_ratchet_baseline import RATCHET_BASELINE
+from repo_tests.typescript_file_size_ratchet_baseline import RATCHET_BASELINE
 
 REPO_ROOT = repo_root()
-HOOK_PATH = REPO_ROOT / "scripts" / "check_frontend_file_size.py"
+HOOK_PATH = REPO_ROOT / "scripts" / "check_typescript_file_size.py"
 
 #: Reach floor for this test's own enumeration, independent of the hook's: a walk that stopped
 #: covering the frontends would report on almost nothing and call it clean (#14547).
@@ -38,7 +38,7 @@ _MIN_TRACKED = 1200
 @pytest.fixture(scope="module")
 def hook():
     """Load the gate by path -- scripts/ is not an importable package."""
-    spec = importlib.util.spec_from_file_location("_check_frontend_file_size", HOOK_PATH)
+    spec = importlib.util.spec_from_file_location("_check_typescript_file_size", HOOK_PATH)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -47,8 +47,8 @@ def hook():
 def test_the_two_records_agree_on_every_entry(hook):
     """Belt to the parity test's braces: equality here too, so neither file is the only check."""
     assert hook.KNOWN_LARGE == RATCHET_BASELINE, (
-        "KNOWN_LARGE in scripts/check_frontend_file_size.py and RATCHET_BASELINE in "
-        "repo_tests/frontend_file_size_ratchet_baseline.py disagree. Lower a ceiling in BOTH in "
+        "KNOWN_LARGE in scripts/check_typescript_file_size.py and RATCHET_BASELINE in "
+        "repo_tests/typescript_file_size_ratchet_baseline.py disagree. Lower a ceiling in BOTH in "
         "the same commit: the gap between them is exactly the lines just cut, and it is spendable."
     )
 
@@ -70,7 +70,7 @@ def test_every_recorded_ceiling_is_still_true_of_its_file(hook):
 
 def test_no_unlisted_frontend_file_is_oversized(hook):
     """The walk, not the record: a file that grew past the limit without being added must fail."""
-    tracked = hook.tracked_frontend_files(REPO_ROOT)
+    tracked = hook.tracked_typescript_files(REPO_ROOT)
     assert len(tracked) >= _MIN_TRACKED, f"enumerated only {len(tracked)} files — the walk broke"
     unlisted = {
         rel: n
@@ -93,7 +93,7 @@ def test_excluded_prefixes_mirror_the_pre_commit_config(hook):
     pre-commit was never configured to gate, or skip files it was.
     """
     config = yaml.safe_load((REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
-    entry = next(h for repo in config["repos"] for h in repo.get("hooks", []) if h["id"] == "frontend-file-size")
+    entry = next(h for repo in config["repos"] for h in repo.get("hooks", []) if h["id"] == "typescript-file-size")
     # `\.` in the YAML is a regex-escaped dot; the hook stores the literal prefix. Unescaping
     # rather than comparing raw strings, because the shell gate's equivalent test learned the
     # same thing -- a mirror check that fails on escaping compares spellings, not scope.
@@ -107,13 +107,24 @@ def test_excluded_prefixes_mirror_the_pre_commit_config(hook):
 
 def test_the_generated_clients_are_out_of_scope(hook):
     """Named deliberately: this is the exclusion the record would otherwise be dominated by."""
+    # One literal is unavoidable: this test's subject IS that the generated client is out of
+    # scope, so it must name it. The python filter does not cover `.ts` paths, but this one was
+    # ALREADY in `UNCOVERED_READS` before this gate existed -- another guard reads it -- so this
+    # test joins an existing entry rather than creating a bypass. No new entry, and
+    # MAX_UNCOVERED_READS is unchanged at 45.
     generated = "autobot-frontend/src/types/generated/api.ts"
     assert (REPO_ROOT / generated).exists(), "the generated client moved; re-check the exclusion"
-    assert generated not in hook.tracked_frontend_files(REPO_ROOT), "generated output must be excluded"
+    assert generated not in hook.tracked_typescript_files(REPO_ROOT), "generated output must be excluded"
     assert generated not in hook.KNOWN_LARGE, "a generated file must not be recorded as a ceiling"
 
 
-_SAMPLE = "autobot-frontend/src/App.vue"
+#: Any recorded entry drives the verdict cases below; they assert the THREE-WAY semantics, not
+#: anything about a particular file. Derived rather than hardcoded for two reasons: the test
+#: stops depending on one file continuing to exist, and a literal `.ts`/`.vue` path in a
+#: `repo_tests` module is recorded by `python_filter_covers_its_guards_test.py` as an uncovered
+#: guard input -- correctly, since the filter does not cover those trees -- even though these
+#: cases never READ the file. Naming no file means there is no bypass to record (#17885).
+_SAMPLE = sorted(RATCHET_BASELINE)[0]
 _CEILING = RATCHET_BASELINE[_SAMPLE]
 
 

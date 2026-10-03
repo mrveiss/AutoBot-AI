@@ -52,6 +52,19 @@ _GUARD_DIR = _REPO_ROOT / "repo_tests"
 #: rule is not decidable, and would quietly shrink the sweep everywhere.
 _SELF = Path(__file__).name
 
+#: Modules whose path literals are DATA, not reads, and which perform no read at all.
+#:
+#: Same justification this file already applies to its own text, and the same compensating
+#: condition: skipping a module's text must not hide a read it actually performs, so
+#: ``test_a_skipped_data_module_reads_nothing`` asserts each of these contains no read call.
+#: ``typescript_file_size_ratchet_baseline.py`` is a dict of 184 ``.ts``/``.vue`` ceilings; the
+#: files are read by ``typescript_file_size_ratchet_test.py`` via ``REPO_ROOT / rel``, and that
+#: population is gated at commit time by the ``typescript-file-size`` hook on
+#: ``files: \.(ts|vue)$``. Recording 184 entries in ``UNCOVERED_READS`` would describe a read
+#: this module does not perform and would swamp a record whose value is being short enough to
+#: review (#17885; detector blind spots tracked on #17632).
+_DATA_MODULES = frozenset({"typescript_file_size_ratchet_baseline.py"})
+
 #: A repo-relative path mentioned in a guard's source. Deliberately anchored on
 #: a quote: an unquoted match picks up prose and import paths, which are not
 #: reads of the tree.
@@ -192,6 +205,9 @@ def _uncovered_reads(patterns: list[str]) -> tuple[dict[str, set[str]], int]:
     reads: dict[str, set[str]] = {}
     parsed = 0
     for path in sorted(_GUARD_DIR.glob("*.py")):
+        if path.name in _DATA_MODULES:
+            # Its literals are ceilings, not inputs; see _DATA_MODULES.
+            continue
         if path.name == _SELF:
             # Skip the TEXT of this module -- its contrast fixtures are path
             # literals by construction. Its real reads are fed in below, so
@@ -455,3 +471,26 @@ def test_this_modules_own_reads_are_swept() -> None:
         f"{own} is read by this guard on every run but the filter does not cover it — "
         "editing it would skip the suite that reads it"
     )
+
+
+@pytest.mark.parametrize("name", sorted(_DATA_MODULES))
+def test_a_skipped_data_module_reads_nothing(name: str) -> None:
+    """The condition that makes the skip safe, asserted rather than assumed.
+
+    Skipping a module's text hides every path literal in it. That is only acceptable while the
+    module performs no read, so a real uncovered input cannot hide behind the skip -- the same
+    hazard this file names for its own exemption. If one of these ever starts reading a file,
+    this fails and the module stops being data.
+    """
+    source = (_GUARD_DIR / name).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    reads = [
+        node.func.attr if isinstance(node.func, ast.Attribute) else node.func.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and (
+            (isinstance(node.func, ast.Attribute) and node.func.attr in {"read_text", "read_bytes", "open"})
+            or (isinstance(node.func, ast.Name) and node.func.id == "open")
+        )
+    ]
+    assert not reads, f"{name} performs {reads} — it is not data, so its literals must be scanned"

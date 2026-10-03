@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Second copy of the frontend size ceilings (#17885).
 
-This mirrors ``KNOWN_LARGE`` in ``scripts/check_frontend_file_size.py``. Two copies is the
+This mirrors ``KNOWN_LARGE`` in ``scripts/check_typescript_file_size.py``. Two copies is the
 point, not an accident: the ratchet test asserts they agree, so lowering a ceiling means
 editing BOTH in the same commit.
 
@@ -12,6 +12,15 @@ what makes a shrink irreversible: the gap between a lowered hook and an unlowere
 exactly the lines just cut, and the test refuses to let that gap exist. Same mechanism as the
 Python (#14498) and shell (#17353) gates, for the same reason, and the equality is asserted in
 both directions by ``repo_tests/ceiling_record_parity_17872_test.py`` rather than one way.
+
+FIRST MEASUREMENT VERSUS RATCHET STEP, because the difference decides whether a change here
+is allowed. These numbers are this gate's opening measurement, not a ceiling anyone lowered
+to. Until the gate lands they must be RE-TAKEN against whatever `main` holds at that moment:
+`useVoiceOutput.ts` was recorded at 995 while #17887 was approved and pending at 1039, so a
+record generated from one tree and landed against another is stale by construction, and the
+ratchet test is what catches it. Re-taking the opening measurement is not raising a ceiling.
+
+AFTER it lands, the rule is absolute: this mapping only shrinks.
 
 NEVER raise a number here. Never add an entry to admit a new oversized file -- entries are
 grandfathered history, not a way in.

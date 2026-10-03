@@ -84,7 +84,7 @@ _PAIRS = {
     # assertion is the whole argument of this file: a new gate inherits the protection instead
     # of needing someone to remember it, and the shell pair only got this check because #17882
     # found the Python one missing it.
-    "frontend": ("scripts/check_frontend_file_size.py", "repo_tests.frontend_file_size_ratchet_baseline"),
+    "typescript": ("scripts/check_typescript_file_size.py", "repo_tests.typescript_file_size_ratchet_baseline"),
 }
 
 
