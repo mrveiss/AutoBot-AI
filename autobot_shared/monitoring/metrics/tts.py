@@ -31,18 +31,19 @@ class TtsRoute(StrEnum):
     nothing anywhere reports an error. A ``StrEnum`` is still a ``str`` for
     labelling, so this changes no metric name or value -- it moves the typo from
     runtime-invisible to author-time.
+
+    The recorders below accept ``TtsRoute | str``, not ``TtsRoute``, and the union is a
+    constraint rather than a preference: ``prometheus_metrics.py`` delegates to them and
+    passes ``route: str``, typing it through would need one import line there, and that
+    file sits AT its ratchet ceiling (949), which may not grow. So the enum is enforced
+    where route values are authored -- ``tts_client.py``, the only place that constructs
+    one -- and the delegating layer stays as it is. A typo there is still possible; a
+    typo at the producer is now an ``AttributeError`` at import of that line, not a label
+    nobody notices.
     """
 
     STREAM = "stream"
     BLOB = "blob"
-
-    # The recorders below accept `TtsRoute | str`, not `TtsRoute`, and the union is a
-    # constraint rather than a preference. `prometheus_metrics.py` delegates to them
-    # and passes `route: str`; typing it through would need one import line there, and
-    # that file sits AT its ratchet ceiling (949), which may not grow. So the enum is
-    # enforced where route values are authored -- `tts_client.py`, the only place that
-    # constructs one -- and the delegating layer stays as it is. A typo there is still
-    # possible; a typo at the producer is now a NameError. Tracked on #13841.
 
 
 class TTSMetricsRecorder(BaseMetricsRecorder):

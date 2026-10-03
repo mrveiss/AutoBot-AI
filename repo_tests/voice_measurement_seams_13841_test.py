@@ -17,7 +17,6 @@ restarting *after* the yield.
 """
 
 import ast
-import re
 
 from repo_tests._paths import repo_root
 
@@ -38,67 +37,204 @@ def _loop_bodies(tree: ast.AST):
             yield node.body
 
 
-def _call_name(stmt: ast.stmt) -> str:
-    """``throughput.observe(x)`` -> ``observe``; anything else -> ``""``."""
-    if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
-        func = stmt.value.func
-        if isinstance(func, ast.Attribute):
-            return func.attr
-    return ""
+_CLOCK = "throughput"
 
 
-def test_the_worker_clock_restarts_after_the_yield() -> None:
-    """``observe`` -> ``yield`` -> ``start``, in that order, in one block.
+def _is_clock_call(stmt: ast.stmt, attr: str) -> bool:
+    """``throughput.<attr>(...)`` -- the RECEIVER is checked, not only the method name.
 
-    This ordering IS the difference between the two real-time factors. Moving
-    ``throughput.start()`` above the ``yield`` makes the backend figure include the time
-    the consumer spent away, which is wall time -- the frontend's quantity. The two
-    numbers would then agree, nothing would fail, and the measurement that answers "is
-    the worker fast enough" would be gone. That is the reconciliation #13841 exists to
-    prevent, and it is a one-line edit.
+    Review on #17887: matching any ``.start()`` meant another object's ``start()`` after the
+    yield satisfied the assertion even with ``throughput.start()`` moved above it, so the
+    detector passed on the exact edit it exists to catch.
     """
-    tree = ast.parse((repo_root() / _CLIENT).read_text(encoding="utf-8"))
-    instrumented = 0
-    for block in _loop_bodies(tree):
-        names = [_call_name(s) for s in block]
-        yields = [i for i, s in enumerate(block) if isinstance(s, ast.Expr) and isinstance(s.value, ast.Yield)]
-        if "observe" not in names or not yields:
-            continue
-        yield_at, observe_at = yields[0], names.index("observe")
-        restarts_after = [i for i, n in enumerate(names) if n == "start" and i > yield_at]
-        assert restarts_after, (
-            f"{_CLIENT}: the instrumented loop observes@{observe_at} and yields@{yield_at} but "
-            "never restarts the clock after the yield. The worker's real-time factor then "
-            "includes the time the consumer spent away -- which is wall time, the frontend's "
-            "quantity -- and the two measures collapse into one"
-        )
-        assert observe_at == yield_at - 1, (
-            f"{_CLIENT}: observe@{observe_at} is not immediately before yield@{yield_at}; "
-            "anything between them is billed to the worker"
-        )
-        instrumented += 1
-
-    assert instrumented, (
-        f"{_CLIENT}: no loop body contained an observe and a yield — the instrumented stream "
-        "was moved, renamed or unrolled, so this guard is no longer looking at anything"
+    if not (isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call)):
+        return False
+    func = stmt.value.func
+    return (
+        isinstance(func, ast.Attribute)
+        and func.attr == attr
+        and isinstance(func.value, ast.Name)
+        and func.value.id == _CLOCK
     )
 
 
-def test_both_wav_duration_sites_use_the_shared_helper() -> None:
-    """One arithmetic, two callers — asserted at the call sites, not in the helper's own test.
+def _ordering_problems(source: str) -> list[str]:
+    """Every way the instrumented loop can break its contract, as a list.
 
-    ``audio_wav_test.py`` pins what the helper computes. It cannot notice a caller that
-    stops calling it: re-inlining ``getnframes() / float(getframerate())`` in either file
-    leaves every test green and the duplication back. jscpd will not see a one-line clone
-    either.
+    A list rather than assertions so fixtures can drive it: the repo's rule is that a
+    detector needs one fixture that trips it and one that does not, and a detector only ever
+    run against a complying file has never been seen to fail.
     """
-    inlined = re.compile(r"getnframes\(\)\s*/\s*(float\()?\s*\w*(getframerate\(\)|frame_rate|sample_rate)")
+    problems: list[str] = []
+    instrumented = 0
+    for block in _loop_bodies(ast.parse(source)):
+        observes = [i for i, s in enumerate(block) if _is_clock_call(s, "observe")]
+        yields = [i for i, s in enumerate(block) if isinstance(s, ast.Expr) and isinstance(s.value, ast.Yield)]
+        if not observes or not yields:
+            continue
+        instrumented += 1
+        observe_at, yield_at = observes[0], yields[0]
+        starts = [i for i, s in enumerate(block) if _is_clock_call(s, "start")]
+        early = [i for i in starts if i < observe_at]
+        if early:
+            problems.append(
+                f"the clock restarts at {early} BEFORE observing at {observe_at}, which zeroes "
+                "the interval the chunk was produced in"
+            )
+        if not any(i > yield_at for i in starts):
+            problems.append(
+                f"no {_CLOCK}.start() after the yield at {yield_at}: the worker's figure then "
+                "includes the time the consumer spent away, which is wall time -- the frontend's "
+                "quantity -- and the two measures collapse into one"
+            )
+        if observe_at != yield_at - 1:
+            problems.append(f"observe@{observe_at} is not immediately before yield@{yield_at}")
+    if not instrumented:
+        problems.append(f"no loop body contained a {_CLOCK}.observe() and a yield -- nothing was examined")
+    return problems
+
+
+def test_the_worker_clock_restarts_after_the_yield() -> None:
+    """``observe`` -> ``yield`` -> ``start``, in that order, in one loop body.
+
+    This ordering IS the difference between the two real-time factors. Moving
+    ``throughput.start()`` above the ``yield`` makes the backend figure include the time the
+    consumer spent away, which is wall time -- the frontend's quantity. The two numbers would
+    then agree, nothing would fail, and the measurement that answers "is the worker fast
+    enough" would be gone. That is the reconciliation #13841 exists to prevent, and it is a
+    one-line edit.
+    """
+    problems = _ordering_problems((repo_root() / _CLIENT).read_text(encoding="utf-8"))
+    assert not problems, f"{_CLIENT}: " + "; ".join(problems)
+
+
+_LOOP = """
+async def stream():
+    throughput = Clock()
+    async for chunk in source():
+{body}
+"""
+
+
+def test_the_correct_ordering_is_accepted() -> None:
+    """The contrast half: without it, a detector that always complains passes everything below."""
+    body = "        throughput.observe(chunk)\n        yield chunk\n        throughput.start()"
+    assert _ordering_problems(_LOOP.format(body=body)) == []
+
+
+def test_a_clock_restarted_before_the_yield_is_reported() -> None:
+    body = "        throughput.observe(chunk)\n        throughput.start()\n        yield chunk"
+    assert any("after the yield" in p for p in _ordering_problems(_LOOP.format(body=body)))
+
+
+def test_another_objects_start_does_not_satisfy_the_contract() -> None:
+    """The review finding: a receiver-blind detector passes this, which is the bug plus noise."""
+    body = (
+        "        throughput.observe(chunk)\n        throughput.start()\n        yield chunk\n" "        other.start()"
+    )
+    assert any("after the yield" in p for p in _ordering_problems(_LOOP.format(body=body)))
+
+
+def test_a_clock_restarted_before_observing_is_reported() -> None:
+    body = (
+        "        throughput.start()\n        throughput.observe(chunk)\n        yield chunk\n"
+        "        throughput.start()"
+    )
+    assert any("BEFORE observing" in p for p in _ordering_problems(_LOOP.format(body=body)))
+
+
+def test_an_unexamined_module_is_reported_rather_than_passing_empty() -> None:
+    """A rename or an unrolled loop must fail here, not read as compliant."""
+    assert any("nothing was examined" in p for p in _ordering_problems("async def stream():\n    yield 1\n"))
+
+
+def _calls_named(tree: ast.AST, name: str) -> int:
+    """Calls to exactly *name* -- the local ``_``-prefixed wrapper is a different name."""
+    found = 0
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        called = func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else ""
+        found += called == name
+    return found
+
+
+def _divides_frames(tree: ast.AST) -> bool:
+    """True when the module divides ``getnframes()`` by anything, in CODE.
+
+    AST rather than a pattern over source, and the reason is a failure this test produced
+    on itself: the widened regex matched the *comment* in `generic_provider.py` explaining
+    the arithmetic it forbids. A source pattern cannot tell code from prose, which is the
+    recurring shape -- a substring check matching its own docstring. It also removes the
+    need to enumerate denominators: `float(rate)`, `wav.getframerate()` and `audio.frame_rate`
+    are one node shape here, where the first version of this caught one spelling of six.
+    """
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)):
+            continue
+        left = node.left
+        inner = left.func if isinstance(left, ast.Call) else None
+        name = inner.attr if isinstance(inner, ast.Attribute) else inner.id if isinstance(inner, ast.Name) else ""
+        if name == "getnframes":
+            return True
+    return False
+
+
+def test_both_wav_duration_sites_use_the_shared_helper() -> None:
+    """One arithmetic, two callers — asserted as a CALL, because a mention is not a call.
+
+    The first version of this test asserted ``"wav_duration_seconds" in source``, which is
+    **always true** of ``tts_client.py``: the import line and ``def _wav_duration_seconds``
+    both contain the substring, so the caller could revert to inline arithmetic and this
+    still passed. I wrote this guard precisely because the helper's own test cannot notice a
+    departing caller, and the first version had the same blind spot through a different
+    mechanism (review on #17887). An ``ast.Call`` to the exact name is the thing that is
+    false when a caller leaves.
+
+    The second assertion is AST too, for the same reason: the regex it replaced matched one
+    of six plausible re-inline spellings (a ``word`` class cannot cross a ``.``), and when widened it
+    matched the *comment* in the provider describing the arithmetic it forbids. The call
+    check carries the claim; the division check catches a duplicate inline added *beside* a
+    surviving call.
+    """
     for rel in (_CLIENT, _PROVIDER):
-        source = (repo_root() / rel).read_text(encoding="utf-8")
-        assert (
-            "wav_duration_seconds" in source
-        ), f"{rel} no longer reaches the shared helper; the duration arithmetic has forked again"
-        assert not inlined.search(source), (
-            f"{rel} computes the WAV duration inline again — that arithmetic belongs to "
+        tree = ast.parse((repo_root() / rel).read_text(encoding="utf-8"))
+        assert _calls_named(tree, "wav_duration_seconds") >= 1, (
+            f"{rel} mentions wav_duration_seconds but never CALLS it; the duration "
+            "arithmetic has forked again, and a substring check would not have seen it"
+        )
+        assert not _divides_frames(tree), (
+            f"{rel} divides getnframes() by a rate again — that arithmetic belongs to "
             "autobot_shared/audio_wav.py, which is the one place its zero-frame-rate guard lives"
         )
+
+
+def test_a_corrupt_frame_rate_is_still_a_load_error() -> None:
+    """The error path the shared helper quietly removed, restored explicitly.
+
+    Before #13841 the provider computed ``getnframes() / float(sample_rate)`` inline, so a
+    header declaring rate 0 raised ``ZeroDivisionError``, hit the handler and was logged as
+    a load error. The shared helper returns ``0.0`` instead — it must never raise, because
+    its other caller is a throughput probe that would break synthesis — so without an
+    explicit check a corrupt header became an ``AudioInput`` with ``sample_rate=0`` and
+    ``duration=0.0``, reported nowhere. Found in review on #17887, not by me.
+
+    Asserted structurally rather than by running the provider, which is application code:
+    the refusal must exist in the loader, guarding on the rate before the input is built.
+    """
+    tree = ast.parse((repo_root() / _PROVIDER).read_text(encoding="utf-8"))
+    guards = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.If)
+        and isinstance(node.test, ast.Compare)
+        and isinstance(node.test.left, ast.Name)
+        and node.test.left.id == "sample_rate"
+        and any(isinstance(stmt, ast.Raise) for stmt in node.body)
+    ]
+    assert guards, (
+        f"{_PROVIDER}: nothing refuses a non-positive frame rate, so a corrupt header "
+        "becomes a zero-duration AudioInput with nothing logged — the silent degradation "
+        "that replaced a reported load error"
+    )
