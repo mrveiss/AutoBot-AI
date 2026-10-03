@@ -29,18 +29,54 @@ with no KNOWN_LARGE entry, so the rationale lives here, where there is room for 
 Asserted here for BOTH pairs rather than only the one that was broken: the defect was
 two hand-kept copies per gate with an asymmetric comparison, and a fix that covers one
 gate leaves the identical arrangement one directory away with nothing pointing at it.
+
+**This file now owns equality for both gates.** Review on #17882 caught the PR's own
+thesis turned on itself: parametrising over ``"shell"`` made a second record of a check
+``shell_file_size_ratchet_test.test_the_two_copies_of_the_ceilings_agree`` already
+performed. Reasoning about the file being edited was right for Python, where no equality
+test existed -- that absence is why #17872 was filed -- and silently wrong for shell,
+where one did. That test is removed and its insight kept, because it stated something
+neither of mine did: **the gap between a lowered hook and an unlowered mirror is exactly
+the lines just cut, and it is spendable.** That is what a disagreement *means*, so it
+belongs in the failure message a reader actually sees.
+
+Why the reach check is a non-empty assert and not a declared floor (``repo_tests._reach``):
+both records only ever SHRINK -- the hook's header says *"THIS MAPPING ONLY SHRINKS --
+entries leave when the file reaches MAX_LINES"* -- so a static floor near today's size
+fails the first time a file is legitimately split, and a floor an order of magnitude below
+is the number-chosen-by-feel that ``declare``'s own docstring names as that mechanism's
+recurring failure. A floor needing to be lowered every time the ratchet succeeds is an
+incentive against doing the work. Nor can these records degrade *partially*: each is a
+literal dict executed by ``exec_module``, so a broken loader raises rather than returning
+a subset. Empty is the only reachable silent degradation. **What would reopen the floor
+question: a loader that parses or filters rather than executing a literal.**
+
+Left alone deliberately: ``test_no_ceiling_may_exceed_its_baseline`` here and
+``test_no_ceiling_exceeds_its_recorded_baseline`` in the shell file are both logically
+subsumed by this equality -- if the records are equal, neither can exceed the other. They
+are kept because each gives the common direction a specific diagnosis, and because the
+redundancy is pre-existing and symmetric across both gates rather than something this
+change introduced. Recorded so the next reader does not have to re-derive it (#17882).
+
+The tree-anchored direction -- every file over ``MAX_LINES`` must be recorded -- is owned
+by ``python_file_size_ratchet_test.test_recorded_ceilings_match_the_files_today``, which
+does fail on an emptied record (mutation: 3 failed). Not asserted here, for the same
+reason the shell duplicate was removed.
 """
 
 import importlib
 import importlib.util
+from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
 
 #: ``(hook, baseline module)``. The hook is the authority for ``KNOWN_LARGE`` in both
-#: cases even though they obtain it differently -- Python loads 479 entries from
-#: ``scripts/python_file_size_known_large.py``, shell declares 10 inline. That is a
-#: data-source difference, not a structural one, so it is a parameter here.
+#: cases even though they obtain it differently -- Python executes a sibling data module,
+#: shell declares the mapping inline. That is a data-source difference, not a structural
+#: one, so it is a parameter here. No entry counts are quoted: both records shrink by
+#: design, so a count written here would go stale for the same reason a numeric floor
+#: would be wrong.
 _PAIRS = {
     "python": ("scripts/check_python_file_size.py", "repo_tests.python_file_size_ratchet_baseline"),
     "shell": ("scripts/check_shell_file_size.py", "repo_tests.shell_file_size_ratchet_baseline"),
@@ -64,11 +100,9 @@ def pair(request):
 def _disagreement_report(known: dict, recorded: dict, hook_rel: str, baseline_mod: str) -> str:
     """The failure message for one pair of ceiling records, or ``""`` when they agree.
 
-    Split out from the assertion because **the message is the deliverable** (#17872): the
-    old failure said *"no ceiling may be raised"* for an edit that raised nothing, and a
-    wrong diagnosis costs more than a vague one. A message only ever produced by a real
-    disagreement in the checked-in records cannot be asserted on, so the reporter takes
-    its two records as arguments and the tests below feed it synthetic ones.
+    Split out because **the message is the deliverable** (#17872), and a message only ever
+    produced by a real disagreement in the checked-in records cannot be asserted on: this
+    takes its two records as arguments, so the tests below can feed it synthetic ones.
     """
     only_in_hook = {rel: known[rel] for rel in set(known) - set(recorded)}
     only_in_baseline = {rel: recorded[rel] for rel in set(recorded) - set(known)}
@@ -88,36 +122,21 @@ def _disagreement_report(known: dict, recorded: dict, hook_rel: str, baseline_mo
         f"  disagreeing (hook, baseline): {disagreeing}\n"
         "Both are checked in by hand and neither derives from the other, deliberately: "
         "two independent anchors are what stop a ceiling being raised by editing one "
-        "file. Lower BOTH in the same commit, and never raise either."
+        "file. Lower BOTH in the same commit, and never raise either -- the gap between "
+        "a lowered hook and an unlowered mirror is exactly the lines just cut, and it is "
+        "spendable."
     )
 
 
 def _empty_record_failure(known: dict, recorded: dict, hook_rel: str, baseline_mod: str) -> str:
     """Message when either record is empty, else ``""`` -- the reach half of this guard.
 
-    Equality is satisfied by two EMPTY dicts, so without this the file reports "the two
-    ceiling records agree" having read nothing: the exact shape it was written to catch,
-    one level up (review on #17882). Ask what the PASS licenses -- "they agree" is a
-    claim about two populations, and there were none.
-
-    **A non-empty assert and deliberately NOT a declared floor** from ``repo_tests._reach``.
-    Both records only ever SHRINK -- the hook's own header says "THIS MAPPING ONLY SHRINKS
-    -- entries leave when the file reaches MAX_LINES" -- so a static floor near today's
-    size fails the first time a file is legitimately split, and a floor an order of
-    magnitude below it is precisely the number-chosen-by-feel that ``declare``'s docstring
-    names as that mechanism's recurring failure. A floor that has to be lowered every time
-    the ratchet succeeds is an incentive against doing the work.
-
-    Nor can these records degrade *partially*: each is a literal dict executed by
-    ``exec_module``, so the loader raises rather than returning a subset. Empty is the only
-    reachable degradation, and empty is what this catches.
-
-    The tree-anchored direction -- every file over ``MAX_LINES`` must be recorded -- is
-    already owned by ``python_file_size_ratchet_test.test_recorded_ceilings_match_the_files_today``,
-    which does fail on an emptied record (verified by mutation: 3 failed). Asserting it here
-    as well would make two records of one check, which is the shape #17872 is about.
+    Equality is satisfied by two EMPTY dicts, so without this the file reports agreement
+    having read nothing (review on #17882). Why a non-empty assert rather than a declared
+    floor, and what would reopen that question, is in the module docstring.
     """
-    empty = [label for label, rec in ((hook_rel, known), (f"{baseline_mod.replace('.', '/')}.py", recorded)) if not rec]
+    labels = ((hook_rel, known), (f"{baseline_mod.replace('.', '/')}.py", recorded))
+    empty = [label for label, record in labels if not record]
     if not empty:
         return ""
     return (
@@ -141,6 +160,14 @@ def test_the_two_records_are_equal(pair) -> None:
     """
     hook, baseline, hook_rel, baseline_mod = pair
     known, recorded = hook.KNOWN_LARGE, baseline.RATCHET_BASELINE
+
+    # *"A list only ever compared against itself can drift anywhere"* -- the baselines' own
+    # words for why the two copies exist. If a future edit pointed both halves of a pair at
+    # one module, or aliased one record to the other, equality would pass trivially and this
+    # guard would be the thing that looked fine. Two files, two objects, asserted.
+    assert known is not recorded, f"{hook_rel} and {baseline_mod} yielded the SAME object"
+    hook_file, baseline_file = Path(hook.__file__).resolve(), Path(baseline.__file__).resolve()
+    assert hook_file != baseline_file, f"both records were read from one file: {hook_file}"
 
     # Reach before findings: equality over two empty dicts is a pass that means nothing.
     unread = _empty_record_failure(known, recorded, hook_rel, baseline_mod)

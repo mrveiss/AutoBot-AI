@@ -300,7 +300,9 @@ def test_no_ceiling_may_exceed_its_baseline(hook):
     assert exceeding == {}, (
         f"the hook's ceiling exceeds its baseline (hook, baseline): {exceeding}. Which "
         "record moved is not established here -- ceiling_record_parity_17872_test.py "
-        "reports it symmetrically. Lower BOTH in the same commit."
+        "reports it symmetrically. In THIS direction the fix is to lower the hook to its "
+        "baseline, or find the raise that put it above -- lowering both would RECORD the "
+        "raise instead of undoing it."
     )
 
 
