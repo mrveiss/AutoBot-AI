@@ -122,15 +122,15 @@
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents",
     "agentActivity": "פעילות סוכן",
-    "mainNavigation": "Main navigation",
+    "mainNavigation": "ניווט ראשי",
     "plugins": "Plugins",
     "switchLanguage": "Switch language",
     "automation": "Automation",
     "secrets": "Secrets",
-    "skipToContent": "Skip to content",
+    "skipToContent": "דלג לתוכן הראשי",
     "systemStatus": "System Status",
     "services": "Services",
-    "skipToNavigation": "Skip to navigation",
+    "skipToNavigation": "דלג לניווט",
     "openMainMenu": "Open main menu",
     "operations": "פעולות",
     "remoteDesktop": "Remote Desktop",
@@ -201,7 +201,17 @@
     "adminPricing": "תמחור דגמים",
     "adminMcpServers": "שרתוני MCP",
     "adminPermissionScopes": "היקפי הרשאות",
-    "llcRoles": "תפקידים"
+    "llcRoles": "תפקידים",
+    "keywords": {
+      "knowledge": "מסמכים קבצים ספרייה תמלול הערות",
+      "companyOs": "חברה עסק ארגון",
+      "automation": "תהליך עבודה צינור תזמון משימות",
+      "analytics": "מבקרים מדדים סטטיסטיקה תרשימים דוחות",
+      "preferences": "הגדרות אפשרויות שפה ערכת נושא",
+      "budgetPolicies": "עלות הוצאות מגבלות כסף",
+      "systemHealth": "מצב זמינות אבחון ניטור",
+      "vault": "אישורים מפתחות סיסמאות אסימונים כספת"
+    }
   },
   "llcCompanyStatus": {
     "showArchived": "הצג בארכיון",
@@ -8006,7 +8016,20 @@
     "newCode": "New Code Agent",
     "newCodeDesc": "Start a code analysis session",
     "newAnalysis": "New Analysis",
-    "newAnalysisDesc": "Start an analysis session"
+    "newAnalysisDesc": "Start an analysis session",
+    "openPage": "פתח את {page}",
+    "types": {
+      "task": "משימה",
+      "research": "מחקר",
+      "code": "קוד",
+      "analysis": "ניתוח",
+      "navigate": "דף"
+    },
+    "hints": {
+      "navigate": "ניווט",
+      "select": "בחירה",
+      "close": "סגירה"
+    }
   },
   "slm": {
     "novnc": {

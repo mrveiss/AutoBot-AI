@@ -98,15 +98,15 @@ BASELINE = {
     # cross-referencing sibling admin views) -- this pair is documented above
     # as measuring page SIZE, not duplication, and is interim until #15455
     # replaces them with a real duplication measure.
-    "distinct_class_names": 5615,  # #17020: Terminal.vue removed -- pure deletion of
-    # dead code (zero live callers, confirmed by grep), not a new page's own layout,
-    # so lowered rather than held at the prior owner-approved figure.
+    "distinct_class_names": 5613,  # #17565: App.vue's hand-rolled .skip-links/.skip-link
+    # replaced by the shared kit SkipLink (lowered from 5615). Earlier: #17020,
+    # Terminal.vue removed -- pure deletion of dead code, lowered, not held.
     # Total CSS rule declarations.
     #
     # #16972/#15455: same owner-approved, one-off exception as distinct_class_names
     # directly above -- see that comment.
-    "css_rule_declarations": 9381,  # #17020: Terminal.vue removed, same reason as
-    # distinct_class_names above
+    "css_rule_declarations": 9379,  # #17565: the App.vue skip-link rules moved to
+    # the kit (lowered from 9381); earlier #17020, same reason as distinct_class_names
     # Files declaring at least one `.btn-*` CSS rule. Target is 1 — a single
     # shared stylesheet.
     "button_definition_files": 101,
