@@ -23,6 +23,10 @@ on:
     - cron: '0 3 * * 0'
   workflow_dispatch:
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ release, main ]
     paths:
       # A workflow that only ever runs on a schedule is never exercised until
@@ -41,6 +45,7 @@ concurrency:
 
 jobs:
   store-durations:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     # Renamed (#17313): it measures and uploads; the `land` job below is what
     # stores. The old name described an outcome this job never produced.
     name: Measure per-test durations

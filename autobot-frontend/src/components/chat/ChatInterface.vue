@@ -330,7 +330,7 @@ import VoiceConversationOverlay from './VoiceConversationOverlay.vue'
 import VoiceConversationPanel from './VoiceConversationPanel.vue'
 import ChatSettingsModal from './ChatSettingsModal.vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { extractCompleteSentences } from '@/utils/ttsSentences'
+import { createSpeechShaper, extractCompleteSentences } from '@/utils/ttsSentences'
 // Issue #3232: chain-of-thought reasoning trace
 import ReasoningTrace from './ReasoningTrace.vue'
 import { useReasoningTrace } from '@/composables/useReasoningTrace'
@@ -1313,6 +1313,9 @@ watch(
 const _SPEAKABLE_TYPES = new Set(['response', 'message'])
 let _lastSpokenIdx = 0
 let _lastStreamingMsgId: string | null = null
+// Shapes each reply's spoken slices; fence state spans slices (#13102)
+const _newSpeechShaper = () => createSpeechShaper({ url: t('voice.speech.url'), path: t('voice.speech.path') })
+let _speechShaper = _newSpeechShaper()
 
 /** Prime TTS cursor to end of current last message. Used on voice-enable and session switch. */
 function _primeTtsCursor(): void {
@@ -1324,6 +1327,9 @@ function _primeTtsCursor(): void {
     if (m.type && !_SPEAKABLE_TYPES.has(m.type)) continue
     _lastStreamingMsgId = m.id
     _lastSpokenIdx = m.content.length
+    // Read the skipped text unspoken so an open code fence is known (#13102)
+    _speechShaper = _newSpeechShaper()
+    _speechShaper.push(m.content)
     break
   }
 }
@@ -1364,6 +1370,7 @@ watch(
       if (store.isTyping) stopSpeaking()
       _lastStreamingMsgId = current.id
       _lastSpokenIdx = store.isTyping ? 0 : current.content.length
+      _speechShaper = _newSpeechShaper()
     }
 
     if (store.isTyping && current.content) {
@@ -1372,18 +1379,19 @@ watch(
       // by the summed sentence lengths, which drift over multi-paragraph replies
       // and drop/duplicate slices (#12502).
       const newText = current.content.slice(_lastSpokenIdx)
-      const { sentences, consumed } = extractCompleteSentences(
+      const { spans, consumed } = extractCompleteSentences(
         newText,
         _MIN_TTS_SENTENCE_CHARS,
       )
-      for (const s of sentences) speakStreaming(s)
+      for (const span of spans) speakStreaming(_speechShaper.push(span))
       _lastSpokenIdx += consumed
     } else if (!store.isTyping && current.content) {
       // Stream ended: ALWAYS flush the remaining tail (all text after the cursor).
       // Lists, code blocks and unpunctuated endings have no terminal ". "/"! "/"? "
       // so they only ever reach TTS via this remainder flush (#12502).
-      const remainder = current.content.slice(_lastSpokenIdx).trim()
-      if (remainder) speakStreaming(remainder)
+      const remainder = current.content.slice(_lastSpokenIdx)
+      if (remainder.trim()) speakStreaming(_speechShaper.push(remainder))
+      speakStreaming(_speechShaper.flush())
       flushStreaming()
       // Mark all content as spoken — do NOT reset to 0/null here.
       // Resetting _lastStreamingMsgId to null would cause any subsequent reactive

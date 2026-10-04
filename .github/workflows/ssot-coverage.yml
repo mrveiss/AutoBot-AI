@@ -17,6 +17,10 @@ on:
   push:
     branches: [ release, main, develop ]
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ release, main, develop ]
     # #13388: SAFE — "SSOT Configuration Compliance" is not a required context.
     # pipeline-scripts/detect-hardcoded-values.sh scans with
@@ -54,6 +58,7 @@ permissions:
 
 jobs:
   ssot-coverage:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: SSOT Configuration Compliance
     runs-on: ubuntu-latest
 
