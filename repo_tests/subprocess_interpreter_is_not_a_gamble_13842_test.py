@@ -64,24 +64,21 @@ _SPAWN = frozenset(
 #: Each entry is a (path, reason) pair so a reader can tell a deliberate
 #: exception from an unmigrated one without opening the file.
 #:
-#: One NPU probe remains listed, for a reason that is NOT "nobody got to it".
-#: `performance_monitor.py` is now fixed: extracting its four pure dataclasses
-#: to `metrics_types.py` (#16282) took it 785 -> 732, which made room for
-#: `import sys`. `performance_benchmark.py` has no comparable cohesive piece
-#: to lift, so it stays at its 1136 ceiling and keeps the bare interpreter. That guard is
-#: explicit that a grandfathered file may not grow -- the exemption freezes
-#: the size it was granted for. Splitting a 1140-line monitoring module to
-#: change one argv[0] is a bigger change than the one it enables, and
-#: `sys.executable` would not make these probes correct anyway: OpenVINO
-#: lives only in the NPU worker's venv (#17988). So the interpreter fix rides
-#: whichever change splits those files or resolves #17988, not this guard.
-_PENDING: dict[str, str] = {
-    "autobot-slm-backend/monitoring/performance_benchmark.py": (
-        "#17988 -- NPU probe. Blocked on the file-size ceiling (1136): adding "
-        "`import sys` grows a grandfathered file. sys.executable would not fix "
-        "the probe anyway; the SLM venv has no OpenVINO."
-    ),
-}
+#: EMPTY, and that took three attempts to earn. Both NPU probes were listed
+#: here as "blocked by the file-size ceiling" -- each file is grandfathered
+#: and `import sys` would grow it. That was true and it was the wrong unit of
+#: work: both modules held pure `@dataclass` records with no external
+#: importers, and lifting those to `metrics_types.py` and `benchmark_types.py`
+#: (#16282) freed far more room than the fix needed.
+#:
+#: Worth keeping because the mistake is reusable: I accepted my own "blocked"
+#: three times before looking at the files' structure. A blocker deserves the
+#: same scrutiny as a green test.
+#:
+#: Neither extraction makes the probes CORRECT -- OpenVINO lives only in the
+#: NPU worker's venv, so both still answer "no NPU" unconditionally (#17988).
+#: Naming the interpreter only stops the answer depending on PATH.
+_PENDING: dict[str, str] = {}
 
 
 def _bare_interpreter_spawns(tree: ast.AST) -> list[int]:
