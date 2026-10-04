@@ -151,6 +151,28 @@ async def test_the_redis_write_and_the_return_now_agree() -> None:
     graph.redis_client.json().set.assert_awaited()
 
 
+@pytest.mark.asyncio
+async def test_the_property_graph_mirror_runs_and_carries_name_and_type() -> None:
+    """#13811's third verification item, and the cause of its null-name symptom.
+
+    ``EntityOperationsMixin.create_entity`` raised before
+    ``PropertyGraphMixin.create_entity`` could mirror the entity, so a later
+    ``create_relation`` auto-created a bare node and ``/api/graph-rag/path``
+    returned ``{"name": null, "type": null}``. Asserting the *properties*, not
+    merely that ``add_node`` was called: a mirror that runs with empty props
+    reproduces the original symptom exactly.
+    """
+    graph = _graph_without_hand_fed_state()
+    await graph.create_entity(entity_type="DECISION", name="ZZPROBE3", observations=["probe"])
+
+    graph._property_graph.add_node.assert_awaited()
+    props = graph._property_graph.add_node.await_args.kwargs.get("properties")
+    if props is None:
+        props = next(a for a in graph._property_graph.add_node.await_args.args if isinstance(a, dict))
+    assert props["name"] == "ZZPROBE3", f"mirrored node has no name: {props}"
+    assert props["type"] == "DECISION", f"mirrored node has no type: {props}"
+
+
 def test_every_core_attribute_entities_reads_is_assigned_by_init() -> None:
     """Catches the next attribute dropped by a split, not just these two."""
     assigned = _init_assigned_attributes(_CORE)
