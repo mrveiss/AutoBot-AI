@@ -21,6 +21,10 @@ name: Stylelint Token Guard
 
 on:
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "autobot-frontend/**/*.vue"
       - "autobot-frontend/**/*.css"
@@ -51,6 +55,7 @@ permissions:
 
 jobs:
   stylelint-changed:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: Stylelint (changed CSS/Vue)
     runs-on: ubuntu-latest
     continue-on-error: true

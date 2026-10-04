@@ -21,6 +21,8 @@ import { usePreferences } from '@/composables/usePreferences'
 import { getApiBase } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+import { shapeForSpeech } from '@/utils/ttsSentences'
+import i18n from '@/i18n'
 
 const logger = createLogger('useVoiceConversation')
 
@@ -142,7 +144,7 @@ function _getMicContextError(modeLabel: string): string {
   return `Mic access required for ${modeLabel} mode.`
 }
 
-/** Strip tool-call markup and truncate to a TTS-safe length. */
+/** Strip tool-call markup, shape for speech, and truncate to a TTS-safe length. */
 function _sanitizeForSpeech(text: string): string {
   // #1721: Remove script tags first (complete multi-char sanitization), then strip remaining HTML
   let clean = text
@@ -155,7 +157,11 @@ function _sanitizeForSpeech(text: string): string {
     prev = clean
     clean = clean.replace(/<[^>]+>/g, '')
   }
-  clean = clean.replace(/\s+/g, ' ').trim()
+  // #13102: markdown, URLs, paths and fenced code are shaped for speech
+  clean = shapeForSpeech(clean, {
+    url: i18n.global.t('voice.speech.url'),
+    path: i18n.global.t('voice.speech.path'),
+  })
   if (clean.length <= _MAX_SPEECH_CHARS) return clean
   const truncated = clean.slice(0, _MAX_SPEECH_CHARS)
   const lastBreak = Math.max(
