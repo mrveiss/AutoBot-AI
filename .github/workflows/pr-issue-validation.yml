@@ -12,7 +12,7 @@ name: Validate PR Issue Link
 
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
 
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever
@@ -34,6 +34,7 @@ permissions:
 
 jobs:
   validate:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: Check PR links to its issue
     runs-on: ubuntu-latest
 
@@ -187,6 +188,7 @@ jobs:
   # outright, and 0-with-a-`::warning::` (rather than 1) for any other
   # single-issue or closes-nothing PR that has not stated a rationale.
   batching:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: Check same-scope batching
     runs-on: ubuntu-latest
 

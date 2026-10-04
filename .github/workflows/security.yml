@@ -54,6 +54,10 @@ on:
   push:
     branches: [ release, dev, main ]
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ release, main ]  # Issue #6597: Semgrep blocks merge on all feature PRs
     # #13388: SAFE — this workflow publishes no required status context (none of
     # the ten on main comes from here), so skipping the run cannot deadlock
@@ -103,6 +107,11 @@ permissions:
 
 jobs:
   changes:
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
+    # every `always()` aggregate below reads `needs.changes.result`.
+    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # context would report FAILED on every draft -- worse than no gate.
+    # Gate the expensive jobs, never the cheap thing others read.
     name: Detect changed paths
     runs-on: ubuntu-latest
     outputs:
@@ -484,6 +493,11 @@ jobs:
   # exactly the change this job exists to catch. Replaces the SAST job's old
   # "Secret Detection" step, which grepped three shapes in three directories.
   secret-detection:
+    # DELIBERATELY UNGATED (#17957). Every other heavy job here is gated on
+    # draft == false, this one must not be: `no_tracked_key_material_test`
+    # asserts secret detection runs on every event with no `needs` and no
+    # `if`. Gating it would let a draft carry key material past the one scan
+    # that looks at the whole tree, and a draft is still a pushed branch.
     name: Secret Detection (whole tree)
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -573,6 +587,7 @@ jobs:
         exit "${status}"
 
   compliance-check:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: Security Compliance Check
     runs-on: ubuntu-latest
 

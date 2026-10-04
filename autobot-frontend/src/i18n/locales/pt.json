@@ -972,7 +972,11 @@
     "confirmDeleteVoice": "Excluir voz \"{name}\"?",
     "languageVoicesActive": "Vozes específicas do idioma {count} configuradas",
     "confirmDeleteVoiceTitle": "Excluir perfil de voz",
-    "tapToEnableAudio": "Toque em qualquer lugar para ativar a reprodução de áudio"
+    "tapToEnableAudio": "Toque em qualquer lugar para ativar a reprodução de áudio",
+    "speech": {
+      "url": "um link",
+      "path": "um caminho de arquivo"
+    }
   },
   "analytics": {
     "title": "Análise",
@@ -4963,7 +4967,7 @@
       "stepSkippedByUser": "⏭️ PASSO {step} IGNORADO PELO USUÁRIO",
       "workflowSaved": "💾 FLUXO DE TRABALHO SALVO: {name}",
       "workflowUpdated": "📋 FLUXO DE TRABALHO ATUALIZADO: passos configurados: {count}",
-      "manualCommand": "👤 MANUAL: {command}",
+      "manualCommand": "👤 MODO MANUAL: {command}",
       "example": {
         "name": "Atualização do sistema e instalação de pacotes",
         "updateDesc": "Atualizar repositórios de pacotes",

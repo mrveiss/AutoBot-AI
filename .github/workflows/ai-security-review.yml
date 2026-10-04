@@ -53,7 +53,11 @@ permissions:
 jobs:
   changes:
     name: Detect changed paths
-    if: github.event.pull_request.draft == false
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
+    # every `always()` aggregate below reads `needs.changes.result`.
+    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # context would report FAILED on every draft -- worse than no gate.
+    # Gate the expensive jobs, never the cheap thing others read.
     runs-on: ubuntu-latest
     outputs:
       reviewable: ${{ steps.filter.outputs.reviewable }}
