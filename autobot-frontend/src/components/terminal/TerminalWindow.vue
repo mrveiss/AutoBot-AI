@@ -154,6 +154,7 @@ import TerminalHeader from './TerminalHeader.vue';
 import { createLogger } from '@/utils/debugUtils';
 import { useTabCompletion } from '@/composables/useTabCompletion';
 import { escapeHtml } from '@/utils/sanitize';
+import { buildAutomationSteps, exampleWorkflow, useAutomationPacing, workflowStartedLines } from '@/composables/useAutomationPacing';
 
 const logger = createLogger('TerminalWindow');
 
@@ -514,7 +515,7 @@ export default {
 
         // Add emergency kill message to terminal
         addOutputLine({
-          content: '🛑 EMERGENCY KILL: All processes terminated by user',
+          content: t('terminal.events.emergencyKill'),
           type: 'system_message',
           timestamp: new Date()
         });
@@ -524,7 +525,7 @@ export default {
       } catch (error) {
         logger.error('Emergency kill failed:', error);
         addOutputLine({
-          content: '❌ Emergency kill failed: ' + error.message,
+          content: t('terminal.events.emergencyKillFailed', { message: error.message }),
           type: 'error',
           timestamp: new Date()
         });
@@ -540,7 +541,7 @@ export default {
       sendInput(sessionId.value, '\u0003');
 
       addOutputLine({
-        content: '^C (Process interrupted by user)',
+        content: t('terminal.events.interrupted'),
         type: 'system_message',
         timestamp: new Date()
       });
@@ -576,7 +577,7 @@ export default {
       if (automationPaused.value) {
         // Pause automation - user takes control
         addOutputLine({
-          content: '⏸️ AUTOMATION PAUSED - Manual control activated. Type commands freely.',
+          content: t('terminal.automation.paused'),
           type: 'system_message',
           timestamp: new Date()
         });
@@ -587,7 +588,7 @@ export default {
       } else {
         // Resume automation
         addOutputLine({
-          content: '▶️ AUTOMATION RESUMED - Continuing workflow execution.',
+          content: t('terminal.automation.resumed'),
           type: 'system_message',
           timestamp: new Date()
         });
@@ -634,13 +635,13 @@ export default {
       waitingForUserConfirmation.value = true;
 
       addOutputLine({
-        content: `🤖 AI WORKFLOW: About to execute "${stepInfo.command}"`,
+        content: t('terminal.automation.aboutToExecute', { command: stepInfo.command }),
         type: 'system_message',
         timestamp: new Date()
       });
 
       addOutputLine({
-        content: `📋 Step ${stepInfo.stepNumber}/${stepInfo.totalSteps}: ${stepInfo.description}`,
+        content: t('terminal.automation.stepProgress', { step: stepInfo.stepNumber, total: stepInfo.totalSteps, description: stepInfo.description }),
         type: 'workflow_info',
         timestamp: new Date()
       });
@@ -665,7 +666,7 @@ export default {
     const skipWorkflowStep = () => {
       if (pendingWorkflowStep.value) {
         addOutputLine({
-          content: `⏭️ SKIPPED: ${pendingWorkflowStep.value.command}`,
+          content: t('terminal.automation.skipped', { command: pendingWorkflowStep.value.command }),
           type: 'system_message',
           timestamp: new Date()
         });
@@ -689,7 +690,7 @@ export default {
       waitingForUserConfirmation.value = false;
 
       addOutputLine({
-        content: '👤 MANUAL CONTROL TAKEN - Complete your manual steps, then click RESUME to continue workflow.',
+        content: t('terminal.automation.manualControlTaken'),
         type: 'system_message',
         timestamp: new Date()
       });
@@ -704,7 +705,7 @@ export default {
     const executeAutomatedCommand = (command) => {
       // Mark as automated execution
       addOutputLine({
-        content: `🤖 AUTOMATED: ${command}`,
+        content: t('terminal.automation.automated', { command }),
         type: 'automated_command',
         timestamp: new Date()
       });
@@ -718,32 +719,25 @@ export default {
       return sent;
     };
 
-    const processNextAutomationStep = () => {
-      if (automationQueue.value.length > 0 && !automationPaused.value) {
-        const nextStep = automationQueue.value.shift();
-
-        // Small delay between steps for readability
-        setTimeout(() => {
-          requestManualStepConfirmation(nextStep);
-        }, 1000);
-      }
-    };
-
-    const scheduleNextAutomationStep = () => {
-      currentWorkflowStep.value++;
-
-      // Small delay before next step
-      setTimeout(() => {
-        processNextAutomationStep();
-      }, 2000);
-    };
+    // Pacing between steps; its timers are cleared on unmount (#16396, #17942)
+    const {
+      processNextAutomationStep,
+      scheduleNextAutomationStep,
+      startFirstAutomationStep,
+      scheduleTracked
+    } = useAutomationPacing({
+      queue: automationQueue,
+      paused: automationPaused,
+      currentStep: currentWorkflowStep,
+      onStepDue: (step) => requestManualStepConfirmation(step)
+    });
 
     // Enhanced command execution with automation awareness
     const executeCommandWithAutomation = (command) => {
       if (automationPaused.value || waitingForUserConfirmation.value) {
         // Manual command during paused automation
         addOutputLine({
-          content: `👤 MANUAL: ${command}`,
+          content: t('terminal.automation.manualCommand', { command }),
           type: 'manual_command',
           timestamp: new Date()
         });
@@ -760,73 +754,15 @@ export default {
       currentWorkflowStep.value = 0;
       workflowSteps.value = workflowData.steps || [];
 
-      // Clear any previous automation queue
-      automationQueue.value = [];
+      automationQueue.value = buildAutomationSteps(workflowData, t);
 
-      // Add all steps to automation queue
-      workflowData.steps.forEach((step, index) => {
-        automationQueue.value.push({
-          stepNumber: index + 1,
-          totalSteps: workflowData.steps.length,
-          command: step.command,
-          description: step.description || `Execute: ${step.command}`,
-          explanation: step.explanation || null,
-          requiresConfirmation: step.requiresConfirmation !== false // Default to true
-        });
-      });
+      workflowStartedLines(workflowData, t).forEach((line) => addOutputLine(line));
 
-      addOutputLine({
-        content: `🚀 AUTOMATED WORKFLOW STARTED: ${workflowData.name || 'Unnamed Workflow'}`,
-        type: 'system_message',
-        timestamp: new Date()
-      });
-
-      addOutputLine({
-        content: `📋 ${workflowSteps.value.length} steps planned. Use PAUSE button to take manual control at any time.`,
-        type: 'workflow_info',
-        timestamp: new Date()
-      });
-
-      // Start the first step
-      setTimeout(() => {
-        processNextAutomationStep();
-      }, 1500);
+      startFirstAutomationStep();
     };
 
     // Example workflow for testing
-    const startExampleWorkflow = () => {
-      const exampleWorkflow = {
-        name: "System Update and Package Installation",
-        steps: [
-          {
-            command: "sudo apt update",
-            description: "Update package repositories",
-            explanation: "This updates the list of available packages from configured repositories.",
-            requiresConfirmation: true
-          },
-          {
-            command: "sudo apt upgrade -y",
-            description: "Upgrade installed packages",
-            explanation: "This upgrades all installed packages to their latest versions.",
-            requiresConfirmation: true
-          },
-          {
-            command: "sudo apt install -y git curl wget",
-            description: "Install essential tools",
-            explanation: "Install commonly needed development tools.",
-            requiresConfirmation: true
-          },
-          {
-            command: "git --version && curl --version",
-            description: "Verify installations",
-            explanation: "Check that the tools were installed correctly.",
-            requiresConfirmation: false
-          }
-        ]
-      };
-
-      startAutomatedWorkflow(exampleWorkflow);
-    };
+    const startExampleWorkflow = () => startAutomatedWorkflow(exampleWorkflow(t));
 
     // Listen for workflow events from backend
     const handleWorkflowMessage = (message) => {
@@ -838,14 +774,14 @@ export default {
         } else if (data.type === 'pause_workflow') {
           automationPaused.value = true;
           addOutputLine({
-            content: '⏸️ WORKFLOW PAUSED BY SYSTEM',
+            content: t('terminal.automation.pausedBySystem'),
             type: 'system_message',
             timestamp: new Date()
           });
         } else if (data.type === 'resume_workflow') {
           automationPaused.value = false;
           addOutputLine({
-            content: '▶️ WORKFLOW RESUMED BY SYSTEM',
+            content: t('terminal.automation.resumedBySystem'),
             type: 'system_message',
             timestamp: new Date()
           });
@@ -1033,11 +969,11 @@ export default {
         // Ensure input is focused and interactive when connection is established
         nextTick(() => {
           // Wait for canInput computed to update
-          setTimeout(() => {
+          scheduleTracked(() => {
             if (canInput.value) {
               focusInput();
               // Additional focus attempt for automated testing reliability
-              setTimeout(() => {
+              scheduleTracked(() => {
                 if (canInput.value && terminalInput.value && document.activeElement !== terminalInput.value) {
                   focusInput();
                 }
@@ -1054,7 +990,7 @@ export default {
 
     const handleError = (error) => {
       addOutputLine({
-        content: `Error: ${error}`,
+        content: t('terminal.events.error', { error: String(error) }),
         type: 'error',
         timestamp: new Date()
       });
@@ -1115,8 +1051,9 @@ export default {
     };
 
     // Cursor blinking effect
+    let cursorBlinkInterval = null;
     const startCursorBlink = () => {
-      setInterval(() => {
+      cursorBlinkInterval = setInterval(() => {
         showCursor.value = !showCursor.value;
       }, 500);
     };
@@ -1198,6 +1135,8 @@ export default {
       document.removeEventListener('click', handleTerminalFocusClick);
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('beforeunload', handleBeforeUnload);
+
+      clearInterval(cursorBlinkInterval);
 
       // Clean up focus interval for automated testing
       if (window.terminalFocusInterval) {
@@ -1310,7 +1249,7 @@ export default {
       // Advanced Modal Methods
       executeConfirmedStep: (stepData) => {
         addOutputLine({
-          content: `🤖 EXECUTING: ${stepData.command}`,
+          content: t('terminal.automation.executing', { command: stepData.command }),
           type: 'system_message',
           timestamp: new Date()
         });
@@ -1319,7 +1258,7 @@ export default {
       },
       skipCurrentStep: (stepIndex) => {
         addOutputLine({
-          content: `⏭️ STEP ${stepIndex + 1} SKIPPED BY USER`,
+          content: t('terminal.automation.stepSkippedByUser', { step: stepIndex + 1 }),
           type: 'system_message',
           timestamp: new Date()
         });

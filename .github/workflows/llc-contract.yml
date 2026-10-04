@@ -25,6 +25,10 @@ on:
       - 'scripts/audit_api_wiring.py'
       - '.github/workflows/llc-contract.yml'
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ release, main ]
     paths: *paths
 
@@ -37,6 +41,7 @@ permissions:
 
 jobs:
   llc-wiring-audit:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -68,6 +73,7 @@ jobs:
             --fail-on-unwired
 
   llc-e2e:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
