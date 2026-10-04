@@ -489,7 +489,11 @@ jobs:
   # exactly the change this job exists to catch. Replaces the SAST job's old
   # "Secret Detection" step, which grepped three shapes in three directories.
   secret-detection:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    # DELIBERATELY UNGATED (#17957). Every other heavy job here is gated on
+    # draft == false, this one must not be: `no_tracked_key_material_test`
+    # asserts secret detection runs on every event with no `needs` and no
+    # `if`. Gating it would let a draft carry key material past the one scan
+    # that looks at the whole tree, and a draft is still a pushed branch.
     name: Secret Detection (whole tree)
     runs-on: ubuntu-latest
     timeout-minutes: 45
