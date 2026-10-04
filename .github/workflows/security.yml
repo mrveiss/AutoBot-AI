@@ -54,6 +54,10 @@ on:
   push:
     branches: [ release, dev, main ]
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ release, main ]  # Issue #6597: Semgrep blocks merge on all feature PRs
     # #13388: SAFE — this workflow publishes no required status context (none of
     # the ten on main comes from here), so skipping the run cannot deadlock
@@ -103,6 +107,7 @@ permissions:
 
 jobs:
   changes:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: Detect changed paths
     runs-on: ubuntu-latest
     outputs:
@@ -484,6 +489,7 @@ jobs:
   # exactly the change this job exists to catch. Replaces the SAST job's old
   # "Secret Detection" step, which grepped three shapes in three directories.
   secret-detection:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: Secret Detection (whole tree)
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -573,6 +579,7 @@ jobs:
         exit "${status}"
 
   compliance-check:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: Security Compliance Check
     runs-on: ubuntu-latest
 
