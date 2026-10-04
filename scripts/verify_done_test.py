@@ -432,6 +432,13 @@ class TestDeletePath:
         assert "CANDIDATE" not in res.stdout, (
             "base holds a tab, the branch holds 4 spaces — the fix is NOT in base\n" + res.stdout
         )
+        # The verdict, not only the absence of the instruction (#13986 AC3).
+        # The patch-ids DO collide here, so `git cherry` says landed and the
+        # tree comparison is the only thing that disagrees -- which is the
+        # whole claim. Asserting the absence alone would hold just as well if
+        # the branch were reported plainly unlanded, i.e. if the collision had
+        # never happened and the test were exercising nothing.
+        assert VERDICT["content moved"] in res.stdout, res.stdout
 
     def test_reverted_work_is_not_still_landed(self, repo: Path) -> None:
         """`git cherry` answers "was it ever applied", not "is it in base now"."""
