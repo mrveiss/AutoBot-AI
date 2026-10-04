@@ -310,11 +310,22 @@ class TestNeverDeletesUnlandedWork:
         A branch whose commits base already contains looks identical to a
         worktree created seconds ago that has done nothing yet. Keeping a
         removable worktree costs disk; deleting an active one costs work.
+
+        ``merged_pr`` is load-bearing and was the last absence-only assertion in
+        this suite (#13986). Without the stub the real ``gh`` finds no GitHub
+        remote for a tmp repo, the merged-PR signal reads ``(gh failed)``, and
+        the CANDIDATE branch is unreachable WHATEVER ``branch_state`` returns --
+        so "CANDIDATE not in stdout" held for a reason unrelated to the
+        ``ahead == 0`` guard it claimed to check. With the stub supplying the
+        second signal, the only thing still keeping the instruction away is the
+        guard itself, and the positive assertion below names the verdict rather
+        than the absence of a string.
         """
         add_worktree(repo, "wt-ff", [("ff.txt", "fix(y): work (#8)")])
         sha = _git(repo, "rev-parse", "wt-ff").stdout.strip()
         _git(repo, "cherry-pick", sha)  # fast-forwards base onto that commit
-        res = run(repo, "--base", "base")
+        res = run(repo, "--base", "base", merged_pr="4305")
+        assert VERDICT["no commits"] in res.stdout, res.stdout
         assert "CANDIDATE" not in res.stdout, res.stdout
         assert res.returncode == 0
 

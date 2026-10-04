@@ -52,6 +52,7 @@ from check_run_status import (  # noqa: E402
     ACCEPTABLE,
     RUNNING,
     all_pages,
+    check_runs_for,
     latest_per_name,
 )
 
@@ -61,6 +62,63 @@ from check_run_status import (  # noqa: E402
 #: reads are aliased; the rest were used solely by the grouping logic that moved.
 _ACCEPTABLE = ACCEPTABLE
 _RUNNING = RUNNING
+
+#: Verdict reserved for a PR that is not open. Carried as a name because it is
+#: the one verdict that takes a detail suffix -- `NOT-OPEN (MERGED)` -- and a
+#: suffixed string is not a member of :data:`VERDICTS` by equality.
+NOT_OPEN = "NOT-OPEN"
+
+#: THE verdict vocabulary -- every string this tool can print as a verdict
+#: (#16044 AC3/AC4).
+#:
+#: The tool's history is five blind spots found one at a time, each fixed by
+#: adding a case, and the module docstring says to assume a sixth. What that
+#: history makes cheap is adding a case **without saying so**: a new
+#: `return "GREEN-SOMETHING"` reads as a refinement of an existing green and
+#: joins the merge-clearing answers unannounced. A reader cannot tell the set
+#: apart from the literals unless the set is written down.
+#:
+#: So the set is declared, :func:`declared` is the only producer, and
+#: `pr_required_gate_test.py` fails on any verdict string that reaches the
+#: output without passing through here. Adding a condition is therefore a
+#: two-line diff -- the branch and its entry -- rather than one line absorbed
+#: into a function nobody re-reads.
+VERDICTS = frozenset(
+    {
+        "CONTEXTS-GREEN",
+        "GREEN-BUT-OTHERS-RUNNING",
+        "GREEN-BUT-OTHERS-FAILING",
+        "PENDING",
+        "BLOCKED",
+        NOT_OPEN,
+    }
+)
+
+#: The subset that means "nothing this tool examined objects". Named rather than
+#: inferred from the `GREEN` substring: `GREEN-BUT-OTHERS-FAILING` contains it
+#: and is the opposite of clearance, so matching on the word is how a failing
+#: verdict gets counted as a passing one.
+CLEARING_VERDICTS = frozenset({"CONTEXTS-GREEN"})
+
+
+def declared(verdict: str, detail: str = "") -> str:
+    """Stamp a verdict, refusing one that is not in :data:`VERDICTS`.
+
+    Every verdict string this module emits is produced here, which is what makes
+    the set above the whole set rather than a list of the ones someone
+    remembered. An undeclared verdict raises at the moment it is produced: a
+    gate that invented a state is not a gate whose exit code should be read.
+    """
+    if verdict not in VERDICTS:
+        raise ValueError(
+            f"undeclared verdict {verdict!r} -- add it to VERDICTS (#16044), " f"or use one of {sorted(VERDICTS)}"
+        )
+    return f"{verdict} ({detail})" if detail else verdict
+
+
+def base_verdict(verdict: str) -> str:
+    """The declared token inside a verdict string, detail suffix stripped."""
+    return verdict.split(" (", 1)[0]
 
 
 def _split_required(
@@ -87,18 +145,18 @@ def _split_required(
 def _required_result(never: list, running: list, not_green: list) -> str:
     """The verdict from the required contexts alone, before unrequired checks weigh in."""
     if not never and not running and not not_green:
-        return "CONTEXTS-GREEN"
+        return declared("CONTEXTS-GREEN")
     if not_green or never:
         # `never` BLOCKS rather than pends, and the distinction is the whole point.
         # A context that has not reported is ambiguous between "has not started
         # yet" and "will never start" -- a branch conflicting with base produces
         # ZERO required contexts and waits forever. Only looking distinguishes
         # them, so the verdict must send someone to look.
-        return "BLOCKED"
+        return declared("BLOCKED")
     # Every required context is running and none has disagreed: the answer is not
     # yet knowable. Distinct from BLOCKED so a caller can tell "wait" from "act"
     # without parsing lists.
-    return "PENDING"
+    return declared("PENDING")
 
 
 def _unrequired(observed: dict[str, str], required_set: set[str]) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
@@ -133,9 +191,9 @@ def _qualify(result: str, failing_unrequired: list, running_unrequired: list) ->
     would be read at the label -- which is how #15972 nearly landed.
     """
     if failing_unrequired and result in ("CONTEXTS-GREEN", "GREEN-BUT-OTHERS-RUNNING"):
-        return "GREEN-BUT-OTHERS-FAILING"
+        return declared("GREEN-BUT-OTHERS-FAILING")
     if running_unrequired and result == "CONTEXTS-GREEN":
-        return "GREEN-BUT-OTHERS-RUNNING"
+        return declared("GREEN-BUT-OTHERS-RUNNING")
     return result
 
 
@@ -223,7 +281,12 @@ def _fetch(pr: int, repo: str, base: str) -> dict:
     # run hide a red status of the same name, which is that bug itself.
     # `/statuses` (plural) paginates; `/status` (singular) silently caps at 30,
     # and a required status past the cap reads as never-reported.
-    runs = _all_pages(f"repos/{repo}/commits/{head}/check-runs?per_page=100", "check_runs")
+    # The check-runs endpoint is spelled ONCE, in the shared helper (#16120).
+    # This line used to build it here -- importing the grouping rules and then
+    # hand-rolling the query they are about, which is the shape the helper
+    # exists to remove. `/statuses` has no helper because nothing else reads
+    # it; it stays on the shared paginator.
+    runs = check_runs_for(repo, head)
     statuses = _all_pages(f"repos/{repo}/commits/{head}/statuses?per_page=100")
     return {
         "required": required,
@@ -325,7 +388,7 @@ def main(argv: list[str] | None = None) -> int:
     # Overriding AFTER `verdict()` rather than short-circuiting before the fetch
     # keeps the context detail in `--json` for anyone auditing why it looked green.
     if result["pr_state"] != "OPEN":
-        result["verdict"] = f"NOT-OPEN ({result['pr_state']})"
+        result["verdict"] = declared(NOT_OPEN, result["pr_state"])
     # Carried into the output rather than dropped: branch protection can require a
     # context only when a PARTICULAR app publishes it, and matching on name alone
     # cannot check that. Saying so is the difference between a verdict with a
@@ -338,7 +401,7 @@ def main(argv: list[str] | None = None) -> int:
         _report(args.pr, result)
     # PENDING and BLOCKED are both non-zero: neither is mergeable, and a caller
     # branching on the exit status alone must not read "wait" as "go".
-    return 0 if result["verdict"] == "CONTEXTS-GREEN" else 1
+    return 0 if base_verdict(result["verdict"]) in CLEARING_VERDICTS else 1
 
 
 if __name__ == "__main__":
