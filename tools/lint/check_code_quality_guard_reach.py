@@ -50,6 +50,8 @@ import pathlib
 import re
 import sys
 
+from tools.lint._scan_helpers import configure_logging
+
 # Plain stdlib logging (matching every other tools/lint/check_*.py in this
 # repo): this runs inside `code-quality`, which installs linters only, never
 # the application's own dependencies -- so no third-party YAML parser here.
@@ -222,14 +224,6 @@ def audit_reach(root: pathlib.Path | None = None) -> tuple[int, list[str]]:
     return total, problems
 
 
-def configure_logging() -> None:
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stderr)
-        handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-
-
 def run_audit() -> int:
     reached, problems = audit_reach()
     if problems:
@@ -241,7 +235,7 @@ def run_audit() -> int:
 
 
 def main(argv: list[str]) -> int:
-    configure_logging()
+    configure_logging(logger)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--audit",

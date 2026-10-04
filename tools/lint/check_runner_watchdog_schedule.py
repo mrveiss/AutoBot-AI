@@ -59,6 +59,8 @@ import sys
 
 import yaml
 
+from tools.lint._scan_helpers import configure_logging
+
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
@@ -251,16 +253,8 @@ def audit(
     return reached, problems
 
 
-def configure_logging() -> None:
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stderr)
-        handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-
-
 def main(argv: list[str]) -> int:
-    configure_logging()
+    configure_logging(logger)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--audit",

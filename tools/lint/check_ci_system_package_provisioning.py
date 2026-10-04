@@ -68,7 +68,7 @@ import sys
 # same trap as #15914.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from _scan_helpers import scrubbed_git_env, tracked_paths  # noqa: E402
+from _scan_helpers import configure_logging, scrubbed_git_env, tracked_paths  # noqa: E402
 
 # Plain stdlib logging (matching check_flake8_exclude_anchoring.py and
 # check_requirements_ci_drift.py): this runs inside `code-quality`, which
@@ -394,14 +394,6 @@ def audit_provisioning(root: pathlib.Path | None = None) -> tuple[int, list[str]
     return len(findings), problems
 
 
-def configure_logging() -> None:
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stderr)
-        handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-
-
 def run_audit() -> int:
     reached, problems = audit_provisioning()
     if problems:
@@ -413,7 +405,7 @@ def run_audit() -> int:
 
 
 def main(argv: list[str]) -> int:
-    configure_logging()
+    configure_logging(logger)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--audit",

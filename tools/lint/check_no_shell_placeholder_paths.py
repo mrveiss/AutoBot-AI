@@ -62,6 +62,8 @@ import pathlib
 import sys
 from dataclasses import dataclass
 
+from tools.lint._scan_helpers import configure_logging
+
 # Plain stdlib logging, deliberately (#1082). This runs as a bare script inside a
 # lint job, and `autobot_shared.logging_manager` would drag config loading into
 # that path. Same trade as `tools/lint/check_undefined_names.py`.
@@ -336,21 +338,8 @@ def audit(base: pathlib.Path | None = None) -> tuple[int, list[str]]:
     return len(files), problems
 
 
-def configure_logging() -> None:
-    """Attach a stderr handler so findings actually reach the developer.
-
-    Run as a bare script the module logger has no handler, and logging's
-    last-resort path drops anything below WARNING.
-    """
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stderr)
-        handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-
-
 def main(argv: list[str]) -> int:
-    configure_logging()
+    configure_logging(logger)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--audit",

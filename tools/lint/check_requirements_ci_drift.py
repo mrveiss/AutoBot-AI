@@ -51,6 +51,8 @@ import pathlib
 import re
 import sys
 
+from tools.lint._scan_helpers import configure_logging
+
 # Plain stdlib logging, deliberately (#1082, matching check_flake8_exclude_anchoring.py
 # and check_python_file_size.py): this runs inside `code-quality`, which installs
 # linters only — never the application's own dependencies — so
@@ -382,14 +384,6 @@ def audit_drift(root: pathlib.Path | None = None) -> tuple[int, list[str]]:
     return len(production), problems
 
 
-def configure_logging() -> None:
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stderr)
-        handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-
-
 def run_audit() -> int:
     reached, problems = audit_drift()
     pairs, constraint_problems = audit_constraint_drift()
@@ -413,7 +407,7 @@ def run_audit() -> int:
 
 
 def main(argv: list[str]) -> int:
-    configure_logging()
+    configure_logging(logger)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--audit",

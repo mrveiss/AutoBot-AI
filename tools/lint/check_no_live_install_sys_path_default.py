@@ -47,6 +47,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _scan_helpers import PY_FLOOR, enforce_reach, scan_python_files  # noqa: E402
 
+from tools.lint._scan_helpers import configure_logging
+
 # Plain stdlib logging, deliberately (#1082). This runs as a bare script inside a
 # lint job, and `autobot_shared.logging_manager` would drag config loading into
 # that path. Same trade as `tools/lint/check_no_shell_placeholder_paths.py`.
@@ -58,19 +60,6 @@ LIVE_INSTALL_ROOT = "/" + "opt/autobot"
 
 #: The canonical replacement every finding is told to use.
 RESOLVER = "autobot_shared.paths.project_root()"
-
-
-def _configure_logging() -> None:
-    """Attach a stderr handler so findings actually reach the developer.
-
-    Run as a bare script the module logger has no handler, and logging's
-    last-resort path drops anything below WARNING.
-    """
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stderr)
-        handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
 
 
 def _is_sys_path_mutation(func: ast.AST) -> bool:
@@ -118,7 +107,7 @@ def live_install_default_sites(path: Path) -> List[Tuple[int, str]]:
 
 
 def main(argv: List[str]) -> int:
-    _configure_logging()
+    configure_logging(logger)
     repo_root = Path(__file__).resolve().parents[2]
     files, full_repo = scan_python_files(argv[1:], repo_root)
     # Vacuity floor (#14896): full-repo mode only -- pre-commit legitimately

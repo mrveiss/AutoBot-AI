@@ -62,6 +62,8 @@ import re
 import sys
 from typing import Iterable, NamedTuple
 
+from tools.lint._scan_helpers import configure_logging
+
 # Plain stdlib logging, deliberately (#1082). This runs as a bare script inside a lint
 # job, and `autobot_shared.logging_manager` would drag config loading into it.
 logger = logging.getLogger(__name__)
@@ -221,8 +223,7 @@ def scan_document(rel: str, text: str, pattern: re.Pattern[str]) -> tuple[list[F
         hits = _block_hits(rel, block, pattern)
         if pending == EXEMPT_BLOCK and not hits:
             problems.append(
-                f"{rel}:{block.start}: stranded {EXEMPT_BLOCK} marker — "
-                "the block it covers carries no address"
+                f"{rel}:{block.start}: stranded {EXEMPT_BLOCK} marker — " "the block it covers carries no address"
             )
         if pending != EXEMPT_BLOCK:
             findings.extend(hits)
@@ -306,15 +307,6 @@ def _selected_paths(paths: list[str], base: pathlib.Path) -> list[pathlib.Path]:
     return [p for p in resolved if p.suffix == ".md" and p.is_file()]
 
 
-def configure_logging() -> None:
-    """Attach a stderr handler so findings actually reach the developer."""
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stderr)
-        handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-
-
 def _run(args: argparse.Namespace, base: pathlib.Path) -> tuple[str, list[str]]:
     """Execute the requested scope, returning (scope description, problems)."""
     if args.audit:
@@ -328,7 +320,7 @@ def _run(args: argparse.Namespace, base: pathlib.Path) -> tuple[str, list[str]]:
 
 
 def main(argv: list[str]) -> int:
-    configure_logging()
+    configure_logging(logger)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--audit", action="store_true", help=f"sweep every Markdown file under {DOCS_DIR}/")
     parser.add_argument("paths", nargs="*", help="Markdown files to check")
