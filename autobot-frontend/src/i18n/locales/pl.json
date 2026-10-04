@@ -4944,6 +4944,12 @@
       "editCommand": "Edit",
       "editCancel": "Cancel",
       "editSave": "Save"
+    },
+    "automation": {
+      "started": "🚀 ROZPOCZĘTO ZAUTOMATYZOWANY PRZEPŁYW PRACY: {name}",
+      "stepsPlanned": "📋 Zaplanowano kroki: {count}. Użyj przycisku PAUZA, aby w dowolnym momencie przejąć sterowanie ręczne.",
+      "unnamedWorkflow": "Przepływ pracy bez nazwy",
+      "executeStep": "Wykonaj: {command}"
     }
   },
   "llm": {

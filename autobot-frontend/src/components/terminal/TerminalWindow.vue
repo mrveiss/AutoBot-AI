@@ -154,6 +154,7 @@ import TerminalHeader from './TerminalHeader.vue';
 import { createLogger } from '@/utils/debugUtils';
 import { useTabCompletion } from '@/composables/useTabCompletion';
 import { escapeHtml } from '@/utils/sanitize';
+import { buildAutomationSteps, useAutomationPacing, workflowStartedLines } from '@/composables/useAutomationPacing';
 
 const logger = createLogger('TerminalWindow');
 
@@ -718,25 +719,18 @@ export default {
       return sent;
     };
 
-    const processNextAutomationStep = () => {
-      if (automationQueue.value.length > 0 && !automationPaused.value) {
-        const nextStep = automationQueue.value.shift();
-
-        // Small delay between steps for readability
-        setTimeout(() => {
-          requestManualStepConfirmation(nextStep);
-        }, 1000);
-      }
-    };
-
-    const scheduleNextAutomationStep = () => {
-      currentWorkflowStep.value++;
-
-      // Small delay before next step
-      setTimeout(() => {
-        processNextAutomationStep();
-      }, 2000);
-    };
+    // Pacing between steps; its timers are cleared on unmount (#16396, #17942)
+    const {
+      processNextAutomationStep,
+      scheduleNextAutomationStep,
+      startFirstAutomationStep,
+      scheduleTracked
+    } = useAutomationPacing({
+      queue: automationQueue,
+      paused: automationPaused,
+      currentStep: currentWorkflowStep,
+      onStepDue: (step) => requestManualStepConfirmation(step)
+    });
 
     // Enhanced command execution with automation awareness
     const executeCommandWithAutomation = (command) => {
@@ -760,37 +754,11 @@ export default {
       currentWorkflowStep.value = 0;
       workflowSteps.value = workflowData.steps || [];
 
-      // Clear any previous automation queue
-      automationQueue.value = [];
+      automationQueue.value = buildAutomationSteps(workflowData, t);
 
-      // Add all steps to automation queue
-      workflowData.steps.forEach((step, index) => {
-        automationQueue.value.push({
-          stepNumber: index + 1,
-          totalSteps: workflowData.steps.length,
-          command: step.command,
-          description: step.description || `Execute: ${step.command}`,
-          explanation: step.explanation || null,
-          requiresConfirmation: step.requiresConfirmation !== false // Default to true
-        });
-      });
+      workflowStartedLines(workflowData, t).forEach((line) => addOutputLine(line));
 
-      addOutputLine({
-        content: `🚀 AUTOMATED WORKFLOW STARTED: ${workflowData.name || 'Unnamed Workflow'}`,
-        type: 'system_message',
-        timestamp: new Date()
-      });
-
-      addOutputLine({
-        content: `📋 ${workflowSteps.value.length} steps planned. Use PAUSE button to take manual control at any time.`,
-        type: 'workflow_info',
-        timestamp: new Date()
-      });
-
-      // Start the first step
-      setTimeout(() => {
-        processNextAutomationStep();
-      }, 1500);
+      startFirstAutomationStep();
     };
 
     // Example workflow for testing
@@ -1033,11 +1001,11 @@ export default {
         // Ensure input is focused and interactive when connection is established
         nextTick(() => {
           // Wait for canInput computed to update
-          setTimeout(() => {
+          scheduleTracked(() => {
             if (canInput.value) {
               focusInput();
               // Additional focus attempt for automated testing reliability
-              setTimeout(() => {
+              scheduleTracked(() => {
                 if (canInput.value && terminalInput.value && document.activeElement !== terminalInput.value) {
                   focusInput();
                 }

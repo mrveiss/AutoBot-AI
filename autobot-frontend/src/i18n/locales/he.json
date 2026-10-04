@@ -4216,7 +4216,13 @@
     "emergencyKillTitle": "Emergency Kill All Processes",
     "infrastructureHosts": "Infrastructure Hosts",
     "resumeAutomation": "Resume Automation",
-    "host": "Host:"
+    "host": "Host:",
+    "automation": {
+      "started": "🚀 תהליך עבודה אוטומטי התחיל: {name}",
+      "stepsPlanned": "📋 תוכננו {count} שלבים. השתמש בכפתור השהיה כדי לקחת שליטה ידנית בכל עת.",
+      "unnamedWorkflow": "תהליך עבודה ללא שם",
+      "executeStep": "בצע: {command}"
+    }
   },
   "manpage": {
     "manager": {

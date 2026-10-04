@@ -4216,7 +4216,13 @@
     "emergencyKillTitle": "Emergency Kill All Processes",
     "infrastructureHosts": "Infrastructure Hosts",
     "resumeAutomation": "Resume Automation",
-    "host": "Host:"
+    "host": "Host:",
+    "automation": {
+      "started": "🚀 خودکار ورک فلو شروع ہو گیا: {name}",
+      "stepsPlanned": "📋 {count} مراحل طے کیے گئے۔ کسی بھی وقت دستی کنٹرول سنبھالنے کے لیے توقف کا بٹن استعمال کریں۔",
+      "unnamedWorkflow": "بے نام ورک فلو",
+      "executeStep": "چلائیں: {command}"
+    }
   },
   "manpage": {
     "manager": {

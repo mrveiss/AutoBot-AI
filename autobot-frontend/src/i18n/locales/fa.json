@@ -4216,7 +4216,13 @@
     "emergencyKillTitle": "Emergency Kill All Processes",
     "infrastructureHosts": "Infrastructure Hosts",
     "resumeAutomation": "Resume Automation",
-    "host": "Host:"
+    "host": "Host:",
+    "automation": {
+      "started": "🚀 گردش کار خودکار آغاز شد: {name}",
+      "stepsPlanned": "📋 {count} مرحله برنامه‌ریزی شد. برای در دست گرفتن کنترل دستی در هر زمان از دکمه توقف استفاده کنید.",
+      "unnamedWorkflow": "گردش کار بدون نام",
+      "executeStep": "اجرا: {command}"
+    }
   },
   "manpage": {
     "manager": {

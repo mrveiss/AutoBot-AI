@@ -4944,6 +4944,12 @@
       "editCancel": "Cancel",
       "editReset": "Reset to original",
       "editedBadge": "Edited"
+    },
+    "automation": {
+      "started": "🚀 AUTOMATED WORKFLOW STARTED: {name}",
+      "stepsPlanned": "📋 {count} steps planned. Use PAUSE button to take manual control at any time.",
+      "unnamedWorkflow": "Unnamed Workflow",
+      "executeStep": "Execute: {command}"
     }
   },
   "llm": {

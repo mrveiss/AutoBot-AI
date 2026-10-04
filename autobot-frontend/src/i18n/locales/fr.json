@@ -4944,6 +4944,12 @@
       "editCommand": "Edit",
       "editCancel": "Cancel",
       "editSave": "Save"
+    },
+    "automation": {
+      "started": "🚀 WORKFLOW AUTOMATISÉ DÉMARRÉ : {name}",
+      "stepsPlanned": "📋 {count} étapes prévues. Utilisez le bouton PAUSE pour reprendre le contrôle manuel à tout moment.",
+      "unnamedWorkflow": "Workflow sans nom",
+      "executeStep": "Exécuter : {command}"
     }
   },
   "llm": {

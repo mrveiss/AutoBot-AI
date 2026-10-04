@@ -7,34 +7,19 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
+import {
+  buildAutomationSteps,
+  useAutomationPacing,
+  workflowStartedLines,
+  type AutomationOutputLine as TerminalOutputLine,
+  type AutomationStep as WorkflowStep,
+  type AutomationWorkflow as WorkflowData
+} from '@/composables/useAutomationPacing'
 
 const logger = createLogger('WorkflowAutomation')
-
-interface WorkflowStep {
-  stepNumber: number
-  totalSteps: number
-  command: string
-  description?: string
-  explanation?: string
-  requiresConfirmation?: boolean
-}
-
-interface WorkflowData {
-  name: string
-  steps: Array<{
-    command: string
-    description?: string
-    explanation?: string
-    requiresConfirmation?: boolean
-  }>
-}
-
-interface TerminalOutputLine {
-  content: string
-  type: string
-  timestamp: Date
-}
+const { t } = useI18n()
 
 interface Props {
   automationPaused: boolean
@@ -98,6 +83,14 @@ const automationQueue = computed({
 const waitingForUserConfirmation = computed({
   get: () => props.waitingForUserConfirmation,
   set: (value: boolean) => emit('update:waiting-for-user-confirmation', value)
+})
+
+// Pacing between steps; its timers are cleared on unmount (#16396, #17942)
+const { processNextAutomationStep, scheduleNextAutomationStep, startFirstAutomationStep } = useAutomationPacing({
+  queue: automationQueue,
+  paused: automationPaused,
+  currentStep: currentWorkflowStep,
+  onStepDue: (step) => requestManualStepConfirmation(step)
 })
 
 // Automation Control Methods
@@ -218,74 +211,17 @@ const executeAutomatedCommand = (command: string) => {
   emit('add-running-process', `[AUTO] ${command}`)
 }
 
-const processNextAutomationStep = () => {
-  if (automationQueue.value.length > 0 && !automationPaused.value) {
-    const queue = [...automationQueue.value]
-    const nextStep = queue.shift()
-    automationQueue.value = queue
-
-    if (nextStep) {
-      // Small delay between steps for readability
-      setTimeout(() => {
-        requestManualStepConfirmation(nextStep)
-      }, 1000)
-    }
-  }
-}
-
-const scheduleNextAutomationStep = () => {
-  currentWorkflowStep.value++
-
-  // Small delay before next step
-  setTimeout(() => {
-    processNextAutomationStep()
-  }, 2000)
-}
-
 // API Integration for Workflow Automation
 const startAutomatedWorkflow = (workflowData: WorkflowData) => {
   hasAutomatedWorkflow.value = true
   automationPaused.value = false
   currentWorkflowStep.value = 0
-  workflowSteps.value = workflowData.steps?.map((step, index) => ({
-    stepNumber: index + 1,
-    totalSteps: workflowData.steps.length,
-    command: step.command,
-    description: step.description || `Execute: ${step.command}`,
-    explanation: step.explanation,
-    requiresConfirmation: step.requiresConfirmation !== false // Default to true
-  })) || []
+  workflowSteps.value = buildAutomationSteps(workflowData, t)
+  automationQueue.value = buildAutomationSteps(workflowData, t)
 
-  // Clear any previous automation queue
-  automationQueue.value = []
+  for (const line of workflowStartedLines(workflowData, t)) emit('add-output-line', line)
 
-  // Add all steps to automation queue
-  const queue = workflowData.steps.map((step, index) => ({
-    stepNumber: index + 1,
-    totalSteps: workflowData.steps.length,
-    command: step.command,
-    description: step.description || `Execute: ${step.command}`,
-    explanation: step.explanation,
-    requiresConfirmation: step.requiresConfirmation !== false // Default to true
-  }))
-  automationQueue.value = queue
-
-  emit('add-output-line', {
-    content: `🚀 AUTOMATED WORKFLOW STARTED: ${workflowData.name || 'Unnamed Workflow'}`,
-    type: 'system_message',
-    timestamp: new Date()
-  })
-
-  emit('add-output-line', {
-    content: `📋 ${workflowSteps.value.length} steps planned. Use PAUSE button to take manual control at any time.`,
-    type: 'workflow_info',
-    timestamp: new Date()
-  })
-
-  // Start the first step
-  setTimeout(() => {
-    processNextAutomationStep()
-  }, 1500)
+  startFirstAutomationStep()
 }
 
 // Example workflow for testing

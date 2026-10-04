@@ -4944,6 +4944,12 @@
       "editCommand": "Edit",
       "editCancel": "Cancel",
       "editSave": "Save"
+    },
+    "automation": {
+      "started": "🚀 بدأ سير العمل الآلي: {name}",
+      "stepsPlanned": "📋 تم تخطيط {count} خطوات. استخدم زر الإيقاف المؤقت لتولي التحكم اليدوي في أي وقت.",
+      "unnamedWorkflow": "سير عمل بدون اسم",
+      "executeStep": "تنفيذ: {command}"
     }
   },
   "llm": {
