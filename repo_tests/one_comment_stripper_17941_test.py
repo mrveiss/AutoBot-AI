@@ -39,11 +39,27 @@ _MARKERS = frozenset({"#", "//", "/*"})
 #: `tools.lint._comment_syntax`. **This list only ever shrinks.** An entry is
 #: removed when that file adopts the shared helper; nothing may be added.
 #:
-#: Not every entry is a defect. Several parse a file FORMAT where a leading
-#: `#` is part of the format (`requirements.txt`, a baseline list), which is
-#: not the prose-satisfaction hazard. They stay listed anyway, because the
-#: cost of deciding case by case is what produced 31 copies, and a shared
-#: helper serves the format readers just as well.
+#: NOT EVERY ENTRY IS THE SAME DEFECT, and migrating them alike would be an
+#: error. Three shapes are mixed in here:
+#:
+#:   (a) SOURCE SCANNERS -- read a source file looking for a construct. These
+#:       carry the #17941 hazard: the file's own comment about the construct
+#:       satisfies the search. Migrate these.
+#:
+#:   (b) FORMAT PARSERS -- read a line-oriented config where a leading `#` is
+#:       part of the format (`requirements.txt`, the CodeQL ceiling list, a
+#:       distributions list). There is no prose to be fooled by; the concept
+#:       is "parse a config line", not "ignore a comment". Forcing these onto
+#:       a comment-syntax helper conflates two concepts, which is the error
+#:       this module exists to stop, pointed the other way. They need their
+#:       own shared parser, or they stay.
+#:
+#:   (c) COMMENTS AS DATA -- `detect-hardcoded-values_test` extracts a comment
+#:       HEADER; `comment_line_number_citations_test`'s whole subject is
+#:       comment line numbers. Migrating these would delete their input.
+#:
+#: So an entry leaving this list must be argued, not batched. The count going
+#: down is necessary but not sufficient.
 #: The canonical implementation itself. It necessarily tests strings against
 #: comment markers -- that is what it is for -- so it is exempt by identity,
 #: not pending migration. Kept separate from the shrink list below on purpose:
@@ -58,16 +74,13 @@ _PENDING_PRIVATE_STRIPPERS = frozenset(
         "pipeline-scripts/detect-hardcoded-values_test.py",
         "pipeline-scripts/detect_hardcoded_values_audit_test.py",
         "pipeline-scripts/pytest_root_collection_floor_test.py",
-        "pipeline-scripts/release_sync_main.py",
         "repo_tests/_redis_backup_harness.py",
-        "repo_tests/ansible_backend_path_defects_15560_test.py",
         "repo_tests/ansible_inventory_path_exists_test.py",
         "repo_tests/ansible_requirements_parity_test.py",
         "repo_tests/branch_sweep_landing_evidence_test.py",
         "repo_tests/codeql_alert_ceiling_is_wired_15333_test.py",
         "repo_tests/comment_line_number_citations_test.py",
         "repo_tests/declared_distributions.py",
-        "repo_tests/doc_index_worktree_contamination_16934_test.py",
         "repo_tests/git_merge_rejects_pull_only_flags_15938_test.py",
         "repo_tests/hardcoded_values_scope_agreement_test.py",
         "repo_tests/hook_suites_run_in_ci_test.py",

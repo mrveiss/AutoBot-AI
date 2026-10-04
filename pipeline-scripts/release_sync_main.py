@@ -106,6 +106,8 @@ from ci_dispatch_watchdog import (  # noqa: E402
 # The one definition of "the release-sync PR", shared with the watchdog (#16272).
 from release_sync_pull import RELEASE_SYNC_BASE, RELEASE_SYNC_HEAD, is_sync_pull  # noqa: E402
 
+from tools.lint._comment_syntax import code_lines
+
 SYNC_TITLE = "release: sync release from main"
 DEFAULT_HEAD = RELEASE_SYNC_HEAD
 DEFAULT_SOURCE = "main"
@@ -188,14 +190,11 @@ def decide(open_sync_pulls: Sequence[Dict[str, Any]], ahead_by: int) -> SyncDeci
 
 def _uncommented(text: str) -> List[str]:
     """Non-blank lines with whole-line and trailing `#` comments removed."""
-    lines: List[str] = []
-    for line in text.splitlines():
-        if line.lstrip().startswith("#"):
-            continue
-        code = line.split(" #", 1)[0].rstrip()
-        if code.strip():
-            lines.append(code)
-    return lines
+    # #17941: the previous trailing strip was `line.split(" #", 1)[0]`, which
+    # is not quote-aware -- a `#` inside a string, as in `echo "a # b"`,
+    # truncated a real line at its own data. The shared scanner tracks quote
+    # state, so only a marker outside quotes ends a line.
+    return [entry.text.rstrip() for entry in code_lines(text, name="x.sh", strip_trailing=True) if entry.text.strip()]
 
 
 def _on_block(lines: Sequence[str]) -> List[str]:
