@@ -35,6 +35,25 @@ from .templates import WorkflowTemplateManager
 logger = get_logger(__name__)
 
 
+def _planned_command(task: object) -> str | None:
+    """The task's command when it is one that can actually be run, else None.
+
+    #13809 review: `inputs.get("command")` was filtered on truthiness alone, so
+    a list or a dict passed and `WorkflowStep.command` -- declared `str` and not
+    validated at runtime -- could carry a non-string into workflow status and
+    snapshots. A non-dict `inputs` raised `AttributeError` into the broad
+    handler above and became a plain `return None`, which is the #13730 shape
+    of an error disappearing. Both are rejected here instead.
+    """
+    inputs = getattr(task, "inputs", None)
+    if not isinstance(inputs, dict):
+        return None
+    command = inputs.get("command")
+    if not isinstance(command, str) or not command.strip():
+        return None
+    return command
+
+
 class WorkflowAutomationManager:
     """Manages automated workflow execution with user intervention points"""
 
@@ -115,11 +134,27 @@ class WorkflowAutomationManager:
         is an agent action this terminal executor cannot run; it is named in the
         log and dropped rather than replaced by a placeholder echo.
         """
-        runnable = [t for t in tasks if (getattr(t, "inputs", None) or {}).get("command")]
+        runnable = [t for t in tasks if _planned_command(t) is not None]
         step_ids = {task.task_id: f"step_{i + 1}" for i, task in enumerate(runnable)}
         dropped = [t.action for t in tasks if t.task_id not in step_ids]
         if dropped:
-            logger.warning("Chat plan tasks without a command were dropped: %s", dropped)
+            logger.warning("Chat plan tasks without a usable command were dropped: %s", dropped)
+
+        # #13809 review: the planner copies the model's `dependencies` through
+        # unchanged, and the model has no task id to reference -- the schema
+        # asks for `["task_ids"]` but gives it no id field to assign, so the
+        # ids it invents can never match the server-generated ones. Every such
+        # reference was filtered out silently, leaving steps that look
+        # independent. The filter stays (an unresolvable id cannot be ordered
+        # against) but it no longer happens quietly. Root cause is in the
+        # shared planning prompt, which other callers use: #17979.
+        unresolved = sorted({d for task in runnable for d in (task.dependencies or []) if d not in step_ids})
+        if unresolved:
+            logger.warning(
+                "Chat plan dependencies did not resolve to a step and were dropped: %s. "
+                "The steps below are ordered as listed, not as the planner intended (#17979).",
+                unresolved,
+            )
         return [
             WorkflowStep(
                 step_id=step_ids[task.task_id],

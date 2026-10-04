@@ -136,3 +136,96 @@ def test_the_route_starts_nothing_unless_asked(monkeypatch):
     assert result["status"] == "awaiting_approval"
     manager.present_plan_for_approval.assert_awaited_once()
     manager.start_workflow_execution.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# #13809 review: what counts as a runnable command, and what happens to a
+# dependency the planner could never have resolved.
+# ---------------------------------------------------------------------------
+
+
+def _task(task_id: str, inputs, dependencies=None):
+    return SimpleNamespace(task_id=task_id, action=f"act {task_id}", inputs=inputs, dependencies=dependencies or [])
+
+
+@pytest.mark.parametrize(
+    "label,inputs,expected",
+    [
+        ("a plain string command", {"command": "ls -la"}, "ls -la"),
+        ("a list command", {"command": ["ls", "-la"]}, None),
+        ("a dict command", {"command": {"argv": ["ls"]}}, None),
+        ("an integer command", {"command": 7}, None),
+        ("an empty string", {"command": ""}, None),
+        ("whitespace only", {"command": "   "}, None),
+        ("no command key at all", {}, None),
+        ("inputs is a string, not a dict", "command=ls", None),
+        ("inputs is None", None, None),
+    ],
+)
+def test_only_a_non_empty_string_command_is_runnable(label, inputs, expected):
+    """`WorkflowStep.command` is declared `str` and not validated at runtime.
+
+    The filter used to be truthiness alone, so a non-empty list or dict passed
+    it and travelled into workflow status and snapshots as a `command`. A
+    non-dict `inputs` raised `AttributeError` into the broad handler and became
+    a plain `return None` -- the #13730 shape, an error disappearing into a
+    "no workflow" result.
+    """
+    from services.workflow_automation.manager import _planned_command
+
+    assert _planned_command(_task("t1", inputs)) == expected, (
+        f"{label} should map to {expected!r}; a truthiness check accepts the "
+        "non-string cases and puts a non-str into a field typed str"
+    )
+
+
+def test_a_dependency_that_cannot_resolve_is_logged_rather_than_dropped_in_silence(caplog):
+    """The planner's schema asks for ids it never gives the model.
+
+    `dependencies: ["task_ids"]` is requested, but no task carries an id field
+    the model can assign -- ids are generated server-side. So every reference
+    the model writes is unresolvable by construction, and filtering it left two
+    steps that look independent when the plan said one waits for the other.
+    The filter is still right; the silence was not. Root cause: #17979.
+    """
+    from services.workflow_automation.manager import WorkflowAutomationManager
+
+    manager = object.__new__(WorkflowAutomationManager)
+    tasks = [
+        _task("gen-1", {"command": "first"}),
+        _task("gen-2", {"command": "second"}, dependencies=["task_0", "gen-1"]),
+    ]
+
+    with caplog.at_level("WARNING"):
+        steps = manager._steps_from_plan(tasks, "do the thing")
+
+    assert [s.step_id for s in steps] == ["step_1", "step_2"]
+    # The resolvable one survives; only the model-invented id is dropped.
+    assert steps[1].dependencies == ["step_1"]
+
+    warnings = " ".join(r.getMessage() for r in caplog.records if r.levelname == "WARNING")
+    assert "task_0" in warnings, (
+        "an unresolvable dependency was filtered without a word in the log, so a plan whose "
+        f"ordering was silently discarded looks identical to one that had none: {warnings!r}"
+    )
+    assert "gen-1" not in warnings.replace(
+        "step_1", ""
+    ), "a dependency that DID resolve must not be reported as dropped"
+
+
+def test_nothing_is_logged_when_every_dependency_resolves(caplog):
+    """The contrast pair: without it the assertion above is satisfied by a
+    module that warns on every plan, which would train the warning away."""
+    from services.workflow_automation.manager import WorkflowAutomationManager
+
+    manager = object.__new__(WorkflowAutomationManager)
+    tasks = [
+        _task("gen-1", {"command": "first"}),
+        _task("gen-2", {"command": "second"}, dependencies=["gen-1"]),
+    ]
+
+    with caplog.at_level("WARNING"):
+        manager._steps_from_plan(tasks, "do the thing")
+
+    dropped = [r.getMessage() for r in caplog.records if "did not resolve" in r.getMessage()]
+    assert not dropped, f"a fully resolvable plan reported dropped dependencies: {dropped}"
