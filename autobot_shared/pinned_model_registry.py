@@ -147,6 +147,32 @@ def get_pinned_revision(repo_id: str) -> str:
         ) from None
 
 
+def pinned_revision_kwargs(model_ref: str) -> dict[str, str]:
+    """``{"revision": <pin>}`` when *model_ref* is registered here, else ``{}``.
+
+    For the call sites that take a **caller-supplied** model name rather than a
+    fixed repo id -- ``llm_shared/optimization/layer_inference.py`` and
+    ``model_inspector.py``, whose ``model_name`` reaches them from a routing
+    request and may equally be a local path or a provider-specific tag that is
+    not a Hub repo id at all. :func:`get_pinned_revision` raises for those by
+    design, so a fixed call site cannot omit a pin by accident; this function
+    is the deliberate soft counterpart for the dynamic ones.
+
+    What it is NOT: a second registry, and not a claim that the dynamic sites
+    are pinned. ``{}`` means *this name is not registered*, the load resolves
+    against the mutable default branch exactly as before, and the call site
+    keeps its ``# nosec B615`` for that reason -- an honest suppression over a
+    real residual gap, which #13034 tracks as remaining scope (see
+    ``docs/developer/MODEL_REVISION_PINNING.md``). Returning ``{}`` silently
+    while *dropping* the suppression is the shape this deliberately avoids: it
+    would read as safe and load whatever the hub serves today.
+    """
+    pinned = _REGISTRY.get(model_ref)
+    if pinned is None:
+        return {}
+    return {"revision": pinned.revision}
+
+
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as f:
