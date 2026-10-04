@@ -25,6 +25,8 @@ import re
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_text
+
 _REPO_ROOT = repo_root()
 _WORKFLOW = _REPO_ROOT / ".github/workflows/auto-merge-base-into-parked-branches.yml"
 
@@ -45,8 +47,9 @@ def _shell_bodies() -> list[str]:
     for job in spec["jobs"].values():
         for step in job.get("steps", []):
             if "run" in step:
-                stripped = "\n".join(line for line in step["run"].splitlines() if not line.lstrip().startswith("#"))
-                bodies.append(stripped)
+                # #17941: shared stripper. A workflow `run:` body is shell,
+                # so the shell syntax applies and a `#` inside quotes is data.
+                bodies.append(code_text(step["run"], name="x.sh"))
     return bodies
 
 

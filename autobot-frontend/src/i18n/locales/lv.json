@@ -7853,9 +7853,9 @@
     "agentActivity": "Aģenta aktivitāte",
     "switchLanguage": "Switch language",
     "openMainMenu": "Open main menu",
-    "skipToContent": "Skip to content",
+    "skipToContent": "Pāriet uz galveno saturu",
     "services": "Services",
-    "skipToNavigation": "Skip to navigation",
+    "skipToNavigation": "Pāriet uz navigāciju",
     "profile": "Profile",
     "systemStatus": "System Status",
     "operations": "Darbības",
@@ -7927,7 +7927,17 @@
     "adminPricing": "Modeļu cenas",
     "adminMcpServers": "MCP serveri",
     "adminPermissionScopes": "Atļauju tvērumi",
-    "llcRoles": "Lomas"
+    "llcRoles": "Lomas",
+    "keywords": {
+      "knowledge": "dokumenti faili bibliotēka transkripcija piezīmes",
+      "companyOs": "uzņēmums sabiedrība bizness organizācija",
+      "automation": "darbplūsma konveijers grafiks darbi",
+      "analytics": "apmeklētāji metrikas statistika diagrammas atskaites",
+      "preferences": "iestatījumi opcijas valoda tēma",
+      "budgetPolicies": "izmaksas tēriņi limiti nauda",
+      "systemHealth": "statuss pieejamība diagnostika uzraudzība",
+      "vault": "akreditācijas dati atslēgas paroles žetoni seifs"
+    }
   },
   "llcCompanyStatus": {
     "showArchived": "Rādīt arhivētos",
@@ -8006,7 +8016,20 @@
     "newCode": "New Code Agent",
     "newCodeDesc": "Start a code analysis session",
     "newAnalysis": "New Analysis",
-    "newAnalysisDesc": "Start an analysis session"
+    "newAnalysisDesc": "Start an analysis session",
+    "openPage": "Atvērt: {page}",
+    "types": {
+      "task": "Uzdevums",
+      "research": "Izpēte",
+      "code": "Kods",
+      "analysis": "Analīze",
+      "navigate": "Lapa"
+    },
+    "hints": {
+      "navigate": "pārvietoties",
+      "select": "izvēlēties",
+      "close": "aizvērt"
+    }
   },
   "slm": {
     "novnc": {

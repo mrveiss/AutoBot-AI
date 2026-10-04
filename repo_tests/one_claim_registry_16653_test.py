@@ -192,9 +192,17 @@ def _iter_sources(root: Path | None = None) -> list[Path]:
 REACH = declare(
     "one-claim-registry",
     discover=_iter_sources,
-    floor=3_002,
+    # Re-pinned MID-window 2026-10-04 (#17356): `_reach.verify_floor` now refuses a floor in
+    # the bottom tenth of `growth`, because that is zero tolerance dressed as an allowance.
+    # Re-measured by the mechanism itself, not carried across (#15928); the arithmetic is in
+    # the commit message, which cannot drift from the tree it describes.
+    floor=3_022,
     what="Python modules swept for claim-or-lock primitives",
     growth=50,
+    # Scope as data (#17844). Five trees, including `scripts/` and `pipeline-scripts/` that no
+    # sibling guard reaches -- `verify_scope` fails if the sweep stops reaching any one of them,
+    # which the single floor over all five cannot see.
+    roots=_ROOTS,
 )
 
 

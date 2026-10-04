@@ -36,7 +36,13 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Any, Callable, Generic, Sequence, TypeVar
+
+#: What one ``discover`` returns. ``Reach`` is generic over it so a caller's own element type
+#: survives into ``examined()`` instead of being flattened to ``object`` (#16987). Every guard
+#: doing ``root / rel`` on an ``examined()`` result was correct at runtime and unverifiable
+#: statically; ``repo_tests/`` is outside CI's mypy scope, so nothing reported it.
+T = TypeVar("T")
 
 
 class ReachDiscoveryError(AssertionError):
@@ -66,14 +72,31 @@ class ReachFloorError(AssertionError):
     """
 
 
+class ReachScopeError(AssertionError):
+    """The declared scope and the sweep disagree (#17844).
+
+    Separate from :class:`ReachFloorError` because the floor and the scope are different claims
+    about the same call. A floor says *how much* the sweep found; ``roots=`` says *where it was
+    entitled to look*. A guard can be floored correctly over the wrong population, and that
+    state raises neither of the other two errors -- it is the third of the three coverage
+    states in #17844's table, and the only one nothing used to catch.
+    """
+
+
 #: Every declaration made by an imported guard module. Populated by ``declare``
 #: at import time so the meta-test can enumerate without importing by path.
-REGISTRY: dict[str, "Reach"] = {}
+REGISTRY: dict[str, "Reach[Any]"] = {}
 
 #: Memoised discoveries, keyed on (declaration name, resolved root). Frozen
 #: dataclasses cannot cache on the instance, and the same walk was otherwise
 #: paid once per caller per session.
-_MEASURED: dict[tuple[str, str], Sequence[object]] = {}
+_MEASURED: dict[tuple[str, str], Sequence[Any]] = {}
+
+
+#: How much of ``growth`` must remain unspent for a floor to be accepted (#17356). A tenth:
+#: large enough that a floor pinned at the very bottom is refused on the spot, small enough that
+#: a deliberate mid-window pin is not re-litigated by the next merge.
+_WINDOW_MARGIN = 0.10
 
 
 def floor_div_fraction(total: int, fraction: float) -> int:
@@ -84,6 +107,12 @@ def floor_div_fraction(total: int, fraction: float) -> int:
     ``conflict-marker-scanned-files`` asserts, and rounding up would make that unsatisfiable.
     """
     return math.floor(total * fraction)
+
+
+#: Reference enumerations, keyed on the resolved root. Same reason as ``_MEASURED``: every
+#: relative declaration measures the same denominator, and #17810 found the suite paying one
+#: ``git ls-files`` per declaration for an answer that cannot differ within a session.
+_REFERENCE: dict[str, int] = {}
 
 
 def tracked_file_count(root: Path) -> int:
@@ -98,14 +127,19 @@ def tracked_file_count(root: Path) -> int:
     """
     from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths  # noqa: PLC0415
 
+    key = str(root.resolve())
+    if key in _REFERENCE:
+        return _REFERENCE[key]
     try:
-        return len(tracked_paths(root))
+        total = len(tracked_paths(root))
     except EmptyEnumeration:
-        return 0
+        total = 0
+    _REFERENCE[key] = total
+    return total
 
 
 @dataclass(frozen=True)
-class Reach:
+class Reach(Generic[T]):
     """What one guard examines, and the least it may find and still be believed.
 
     ``floor`` is bound to what the sweep **discovered**, never to what it
@@ -114,7 +148,7 @@ class Reach:
     """
 
     name: str
-    discover: Callable[[Path], Sequence[object]]
+    discover: Callable[[Path], Sequence[T]]
     floor: int
     what: str
     #: How far the live population may sit **above** ``floor`` before
@@ -173,8 +207,19 @@ class Reach:
     #: The denominator for ``min_fraction``. Defaults to :func:`tracked_file_count`. Overridable
     #: so a guard whose population is not a subset of tracked files can name its own reference.
     reference: Callable[[Path], int] | None = None
+    #: The population's SCOPE, as data rather than as prose inside ``what`` (#17844).
+    #:
+    #: ``floor`` is a number the framework verifies; ``what`` was free text nobody verified, and
+    #: the two sit in the same call. Seven guards claimed some form of *"production python
+    #: files"* over floors spanning 2555..3247 -- a 692-file spread explained entirely by
+    #: differing scan roots, and invisible because only two of them said so.
+    #:
+    #: Each entry is a repository-relative path PREFIX. When set, ``declare`` renders it into
+    #: ``what`` so the string cannot disagree with the data, and :meth:`verify_scope` holds the
+    #: sweep to it in both directions.
+    roots: tuple[str, ...] | None = None
 
-    def examined(self, root: Path) -> Sequence[object]:
+    def examined(self, root: Path) -> Sequence[T]:
         """Discover under *root*, or fail loudly having found implausibly little.
 
         This bounds the sweep's **input**. It is not sufficient on its own: a
@@ -189,7 +234,7 @@ class Reach:
             self._require_fraction(len(found), root, "reached")
         return found
 
-    def population(self, root: Path) -> Sequence[object]:
+    def population(self, root: Path) -> Sequence[T]:
         """What ``discover`` returns for *root*, measured once per root.
 
         Each discovery shells out to ``git ls-files`` and some open files on top
@@ -259,6 +304,8 @@ class Reach:
                 f"{count} only if the population genuinely shrank."
             )
         allowance = self.skips + self.growth
+        if allowance and slack <= allowance:
+            self._require_mid_window(count, slack)
         if slack > allowance:
             raise ReachFloorError(
                 f"[{self.name}] floor {self.floor} sits {slack} below its live "
@@ -270,8 +317,89 @@ class Reach:
                 f"  skips=  items this guard cannot COMPLETE (unreadable, unparseable). "
                 f"Measure it from a `completed` failure; do not estimate it.\n"
                 f"  growth= ordinary growth tolerated before a deliberate ratchet.\n"
-                f"If neither is short, the floor is stale: ratchet it toward {count}."
+                f"If neither is short, the floor is stale: {self._window_sentence(count)}"
             )
+
+    def window(self, root: Path) -> tuple[int, int, int]:
+        """``(lowest legal floor, highest legal floor, the value to pin)`` -- #17356.
+
+        BOTH bounds, because a floor has two and every re-pin comment in
+        ``hooks_path_override_15961_test.py`` quotes only the first -- which is why there are
+        seventeen of them. The lower bound is the gap bound :meth:`verify_floor` enforces; the
+        upper is the most :meth:`completed` can clear, since a guard that skips ``skips`` items
+        finishes ``population - skips`` of them and a floor above that fails the stronger of the
+        two checks while satisfying the weaker.
+
+        The third value is the one to write down. ``population - (skips + growth)`` -- the
+        arithmetic every re-pin reached for -- is the BOTTOM of the window and has zero
+        tolerance by construction: correct at the instant of measurement, red for every tree
+        with one more file.
+        """
+        return self._bounds(len(self.population(root)))
+
+    def _bounds(self, count: int) -> tuple[int, int, int]:
+        """The arithmetic, in ONE place. :meth:`window` and the failure messages had a copy
+        each, and two copies of a formula are two chances for a message to recommend a value
+        the check would then refuse."""
+        highest = count - self.skips
+        return highest - self.growth, highest, highest - self.growth // 2
+
+    def _window_sentence(self, count: int) -> str:
+        lowest, highest, mid = self._bounds(count)
+        return (
+            f"the window against a population of {count} is "
+            f"[{lowest}, {highest}] -- its bottom is the gap bound "
+            f"(skips={self.skips} + growth={self.growth}) and its top is the most completed() "
+            f"can clear (population - skips). Pin MID-window, at {mid}."
+        )
+
+    def _require_mid_window(self, count: int, slack: int) -> None:
+        """Refuse a floor pinned at the bottom of its own window (#17356).
+
+        A convention was not enough, and that is measured rather than argued: the author who
+        wrote up *"`population - growth` has zero tolerance"* pinned two new declarations at
+        exactly that value within the hour, and both went red on the next rebase. Seven reds,
+        five declarations, one night. A rule its own author violates belongs in the tool.
+
+        The margin is a tenth of ``growth`` -- the band the caller declared as ordinary
+        movement, not a number chosen here. ``growth=0`` is exempt: an equality pin is the
+        deliberate choice ``growth``'s own docstring asks for when normal work does not move the
+        number, and it has no window to sit in the bottom of.
+        """
+        if not self.growth:
+            return
+        margin = max(1, math.ceil(self.growth * _WINDOW_MARGIN))
+        if slack <= self.skips + self.growth - margin:
+            return
+        raise ReachFloorError(
+            f"[{self.name}] floor {self.floor} sits in the bottom {margin} of its window, which "
+            f"is zero tolerance dressed as an allowance: the next "
+            f"{self.skips + self.growth - slack} file(s) of ordinary growth turn it red on a PR "
+            f"that did not touch this guard.\n"
+            f"{self._window_sentence(count)}\n"
+            f"Re-measure rather than carrying a number across (#15928): the value above is this "
+            f"run's measurement, not a figure from a comment."
+        )
+
+    def verify_scope(self, root: Path) -> None:
+        """Refuse a declared scope the sweep does not match, in either direction (#17844).
+
+        Separate from :meth:`verify_floor` and raising its own type, because the two answer
+        different questions about the same call: the floor asks *how much* was found, this asks
+        *where*. Collapsing them is how "the guard is floored" came to be read as "the guard is
+        floored over the population it names".
+
+        A declaration with no ``roots`` is not checked -- ``_reach_scope``'s docstring states
+        that boundary and ``reach_declarations_test`` records the un-scoped set so it shrinks.
+        """
+        if self.roots is None:
+            return
+        from repo_tests._reach_scope import relative_paths, scope_complaint  # noqa: PLC0415
+
+        rels = relative_paths(self.population(root), root)
+        complaint = scope_complaint(self.name, self.what, self.roots, rels)
+        if complaint:
+            raise ReachScopeError(complaint)
 
     def headroom(self, root: Path) -> int:
         """Files this population may still gain before the floor goes red.
@@ -322,6 +450,8 @@ class Reach:
         fire. It is also the right behaviour on its own terms: a reference that found nothing is a
         failed measurement, not a clean result.
         """
+        fraction = self.min_fraction
+        assert fraction is not None, "_require_fraction is only reachable on a relative declaration"
         total = (self.reference or tracked_file_count)(root)
         if total <= 0:
             raise ReachFloorError(
@@ -329,7 +459,7 @@ class Reach:
                 f"asserts nothing about the {count} {self.what} this sweep {verb}. "
                 f"Fix the reference, not the fraction."
             )
-        required = floor_div_fraction(total, self.min_fraction)
+        required = floor_div_fraction(total, fraction)
         if count < required:
             raise ReachFloorError(
                 f"[{self.name}] {verb} {count} {self.what}, which is "
@@ -350,14 +480,15 @@ class Reach:
 def declare(
     name: str,
     *,
-    discover: Callable[[Path], Sequence[object]],
+    discover: Callable[[Path], Sequence[T]],
     what: str,
     floor: int = 0,
     growth: int = 0,
     skips: int = 0,
     min_fraction: float | None = None,
     reference: Callable[[Path], int] | None = None,
-) -> Reach:
+    roots: tuple[str, ...] | None = None,
+) -> Reach[T]:
     """Register a reach declaration and return it.
 
     Registration is the point: an undeclared guard is invisible to the meta-test
@@ -406,6 +537,16 @@ def declare(
                 f"[{name}] min_fraction replaces floor/growth; got floor={floor}, growth={growth}. "
                 f"Drop them rather than keeping a constant the relative mode does not read."
             )
+    if roots is not None:
+        if not roots or any(not prefix or not isinstance(prefix, str) for prefix in roots):
+            raise ValueError(f"[{name}] roots= must be a non-empty tuple of path prefixes; got {roots!r}.")
+        if " under " in what:
+            raise ValueError(
+                f"[{name}] what={what!r} already spells a scope out longhand while roots= carries "
+                f"it as data. Pass the bare population noun; the scope is rendered from roots, so "
+                f"the string cannot drift from the tuple the check reads."
+            )
+        what = f"{what} under {', '.join(roots)}"
     reach = Reach(
         name=name,
         discover=discover,
@@ -415,6 +556,7 @@ def declare(
         skips=skips,
         min_fraction=min_fraction,
         reference=reference,
+        roots=roots,
     )
     REGISTRY[name] = reach
     return reach

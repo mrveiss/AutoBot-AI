@@ -32,6 +32,8 @@ import pathlib
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import code_text
+
 #: `repo_root()`, never `__file__.parents[N]` -- #15925 pins one spelling.
 _ROOT = repo_root()
 
@@ -110,8 +112,11 @@ def _syspath_insertions(tree: ast.AST) -> list[ast.AST]:
 
 
 def _code_lines(text: str) -> str:
-    """Whole-line comments stripped, so a comment about the shape is not a finding (#16750)."""
-    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    """Whole-line comments stripped, so a comment about the shape is not a finding (#16750).
+
+    Delegates to the shared stripper (#17941) -- one of seven private copies.
+    """
+    return code_text(text, name="x.py")
 
 
 def _parse(path: pathlib.Path) -> ast.AST | None:
