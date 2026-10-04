@@ -4944,6 +4944,43 @@
       "editCommand": "Edit",
       "editCancel": "Cancel",
       "editSave": "Save"
+    },
+    "automation": {
+      "started": "🚀 AUTOMATIZĒTAIS DARBPLŪSMS SĀKTS: {name}",
+      "stepsPlanned": "📋 Ieplānoti soļi: {count}. Izmantojiet pogu PAUZE, lai jebkurā brīdī pārņemtu manuālo vadību.",
+      "unnamedWorkflow": "Darbplūsma bez nosaukuma",
+      "executeStep": "Izpildīt: {command}",
+      "paused": "⏸️ AUTOMATIZĀCIJA APTURĒTA - Aktivizēta manuālā vadība. Ievadiet komandas brīvi.",
+      "resumed": "▶️ AUTOMATIZĀCIJA ATSĀKTA - Turpina darbplūsmas izpildi.",
+      "aboutToExecute": "🤖 MI DARBPLŪSMA: Tūlīt tiks izpildīts \"{command}\"",
+      "stepProgress": "📋 Solis {step}/{total}: {description}",
+      "skipped": "⏭️ IZLAISTS: {command}",
+      "manualControlTaken": "👤 MANUĀLĀ VADĪBA PĀRŅEMTA - Pabeidziet manuālos soļus un pēc tam noklikšķiniet uz ATSĀKT, lai turpinātu darbplūsmu.",
+      "automated": "🤖 AUTOMATIZĒTI: {command}",
+      "pausedBySystem": "⏸️ SISTĒMA APTURĒJA DARBPLŪSMU",
+      "resumedBySystem": "▶️ SISTĒMA ATSĀKA DARBPLŪSMU",
+      "executing": "🤖 IZPILDA: {command}",
+      "stepSkippedByUser": "⏭️ LIETOTĀJS IZLAIDA SOLI {step}",
+      "workflowSaved": "💾 DARBPLŪSMA SAGLABĀTA: {name}",
+      "workflowUpdated": "📋 DARBPLŪSMA ATJAUNINĀTA: konfigurēti soļi: {count}",
+      "manualCommand": "👤 MANUĀLI: {command}",
+      "example": {
+        "name": "Sistēmas atjaunināšana un pakotņu instalēšana",
+        "updateDesc": "Atjaunināt pakotņu repozitorijus",
+        "updateExpl": "Atjaunina pieejamo pakotņu sarakstu no konfigurētajiem repozitorijiem.",
+        "upgradeDesc": "Jaunināt instalētās pakotnes",
+        "upgradeExpl": "Jaunina visas instalētās pakotnes uz jaunākajām versijām.",
+        "installDesc": "Instalēt pamatrīkus",
+        "installExpl": "Instalē bieži nepieciešamos izstrādes rīkus.",
+        "verifyDesc": "Pārbaudīt instalācijas",
+        "verifyExpl": "Pārbauda, vai rīki ir instalēti pareizi."
+      }
+    },
+    "events": {
+      "emergencyKill": "🛑 ĀRKĀRTAS APTURĒŠANA: Lietotājs pārtrauca visus procesus",
+      "emergencyKillFailed": "❌ Ārkārtas apturēšana neizdevās: {message}",
+      "interrupted": "^C (Lietotājs pārtrauca procesu)",
+      "error": "Kļūda: {error}"
     }
   },
   "llm": {
