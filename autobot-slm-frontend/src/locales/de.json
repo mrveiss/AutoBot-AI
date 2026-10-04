@@ -2698,14 +2698,14 @@
       "uRLToAccessGrafana": "URL to access Grafana",
       "uRLToAccessPrometheus": "URL to access Prometheus",
       "useAnsibleToDeploy": "Use Ansible to deploy or migrate the monitoring stack to a different node.",
-      "settingSaved": "Einstellung gespeichert",
-      "prometheusConnected": "Verbindung zu Prometheus erfolgreich",
-      "prometheusFailed": "Verbindung zu Prometheus fehlgeschlagen",
-      "prometheusUnreachable": "Prometheus-Server nicht erreichbar",
-      "grafanaConnected": "Verbindung zu Grafana erfolgreich",
-      "grafanaFailed": "Verbindung zu Grafana fehlgeschlagen",
-      "grafanaUnreachable": "Grafana-Server nicht erreichbar",
-      "deployViaAnsible": "Die Bereitstellung der Monitoring-Rolle wird über Ansible ausgelöst"
+      "settingSaved": "Setting saved successfully",
+      "prometheusConnected": "Prometheus connection successful",
+      "prometheusFailed": "Prometheus connection failed",
+      "prometheusUnreachable": "Cannot reach the Prometheus server",
+      "grafanaConnected": "Grafana connection successful",
+      "grafanaFailed": "Grafana connection failed",
+      "grafanaUnreachable": "Cannot reach the Grafana server",
+      "deployViaAnsible": "Monitoring role deployment will be triggered via Ansible"
     },
     "notificationsSettings": {
       "adminExampleCom": "admin{'@'}example.com",

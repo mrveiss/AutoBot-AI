@@ -134,7 +134,7 @@
       "selectAnAgentTo": "Select an agent to view details and delegate tasks",
       "selectReport": "Select report...",
       "submit": "إرسال",
-      "task": "Task",
+      "task": "مهمة",
       "total": "Total"
     },
     "orgTreeNode": {
@@ -386,7 +386,7 @@
       "healthy": "Healthy:",
       "highContrast": "High Contrast",
       "logOutAria": "Log out",
-      "mainNavigationAria": "Main navigation",
+      "mainNavigationAria": "التنقل الرئيسي",
       "maintenance": "Maintenance",
       "monitoring": "المراقبة",
       "orchestration": "Orchestration",
@@ -2698,14 +2698,14 @@
       "uRLToAccessGrafana": "URL to access Grafana",
       "uRLToAccessPrometheus": "URL to access Prometheus",
       "useAnsibleToDeploy": "Use Ansible to deploy or migrate the monitoring stack to a different node.",
-      "settingSaved": "تم حفظ الإعداد",
-      "prometheusConnected": "نجح الاتصال بـ Prometheus",
-      "prometheusFailed": "فشل الاتصال بـ Prometheus",
-      "prometheusUnreachable": "تعذر الوصول إلى خادم Prometheus",
-      "grafanaConnected": "نجح الاتصال بـ Grafana",
-      "grafanaFailed": "فشل الاتصال بـ Grafana",
-      "grafanaUnreachable": "تعذر الوصول إلى خادم Grafana",
-      "deployViaAnsible": "سيتم تشغيل نشر دور المراقبة عبر Ansible"
+      "settingSaved": "Setting saved successfully",
+      "prometheusConnected": "Prometheus connection successful",
+      "prometheusFailed": "Prometheus connection failed",
+      "prometheusUnreachable": "Cannot reach the Prometheus server",
+      "grafanaConnected": "Grafana connection successful",
+      "grafanaFailed": "Grafana connection failed",
+      "grafanaUnreachable": "Cannot reach the Grafana server",
+      "deployViaAnsible": "Monitoring role deployment will be triggered via Ansible"
     },
     "notificationsSettings": {
       "adminExampleCom": "admin{'@'}example.com",

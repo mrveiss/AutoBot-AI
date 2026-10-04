@@ -134,7 +134,7 @@
       "selectAnAgentTo": "Select an agent to view details and delegate tasks",
       "selectReport": "Select report...",
       "submit": "שלח",
-      "task": "Task",
+      "task": "משימה",
       "total": "Total"
     },
     "orgTreeNode": {
@@ -386,7 +386,7 @@
       "healthy": "Healthy:",
       "highContrast": "High Contrast",
       "logOutAria": "Log out",
-      "mainNavigationAria": "Main navigation",
+      "mainNavigationAria": "ניווט ראשי",
       "maintenance": "Maintenance",
       "monitoring": "ניטור",
       "orchestration": "Orchestration",
@@ -2698,14 +2698,14 @@
       "uRLToAccessGrafana": "URL to access Grafana",
       "uRLToAccessPrometheus": "URL to access Prometheus",
       "useAnsibleToDeploy": "Use Ansible to deploy or migrate the monitoring stack to a different node.",
-      "settingSaved": "ההגדרה נשמרה",
-      "prometheusConnected": "החיבור ל-Prometheus הצליח",
-      "prometheusFailed": "החיבור ל-Prometheus נכשל",
-      "prometheusUnreachable": "לא ניתן להגיע לשרת Prometheus",
-      "grafanaConnected": "החיבור ל-Grafana הצליח",
-      "grafanaFailed": "החיבור ל-Grafana נכשל",
-      "grafanaUnreachable": "לא ניתן להגיע לשרת Grafana",
-      "deployViaAnsible": "פריסת תפקיד הניטור תופעל באמצעות Ansible"
+      "settingSaved": "Setting saved successfully",
+      "prometheusConnected": "Prometheus connection successful",
+      "prometheusFailed": "Prometheus connection failed",
+      "prometheusUnreachable": "Cannot reach the Prometheus server",
+      "grafanaConnected": "Grafana connection successful",
+      "grafanaFailed": "Grafana connection failed",
+      "grafanaUnreachable": "Cannot reach the Grafana server",
+      "deployViaAnsible": "Monitoring role deployment will be triggered via Ansible"
     },
     "notificationsSettings": {
       "adminExampleCom": "admin{'@'}example.com",
