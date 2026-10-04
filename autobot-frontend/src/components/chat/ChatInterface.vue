@@ -330,7 +330,7 @@ import VoiceConversationOverlay from './VoiceConversationOverlay.vue'
 import VoiceConversationPanel from './VoiceConversationPanel.vue'
 import ChatSettingsModal from './ChatSettingsModal.vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { createSpeechShaper, extractCompleteSentences } from '@/utils/ttsSentences'
+import { createSpeechShaper, createTtsStream } from '@/utils/ttsSentences'
 // Issue #3232: chain-of-thought reasoning trace
 import ReasoningTrace from './ReasoningTrace.vue'
 import { useReasoningTrace } from '@/composables/useReasoningTrace'
@@ -1316,6 +1316,7 @@ let _lastStreamingMsgId: string | null = null
 // Shapes each reply's spoken slices; fence state spans slices (#13102)
 const _newSpeechShaper = () => createSpeechShaper({ url: t('voice.speech.url'), path: t('voice.speech.path') })
 let _speechShaper = _newSpeechShaper()
+let _ttsStream = createTtsStream()
 
 /** Prime TTS cursor to end of current last message. Used on voice-enable and session switch. */
 function _primeTtsCursor(): void {
@@ -1330,6 +1331,7 @@ function _primeTtsCursor(): void {
     // Read the skipped text unspoken so an open code fence is known (#13102)
     _speechShaper = _newSpeechShaper()
     _speechShaper.push(m.content)
+    _ttsStream = createTtsStream(true)
     break
   }
 }
@@ -1371,6 +1373,7 @@ watch(
       _lastStreamingMsgId = current.id
       _lastSpokenIdx = store.isTyping ? 0 : current.content.length
       _speechShaper = _newSpeechShaper()
+      _ttsStream = createTtsStream(!store.isTyping)
     }
 
     if (store.isTyping && current.content) {
@@ -1379,10 +1382,7 @@ watch(
       // by the summed sentence lengths, which drift over multi-paragraph replies
       // and drop/duplicate slices (#12502).
       const newText = current.content.slice(_lastSpokenIdx)
-      const { spans, consumed } = extractCompleteSentences(
-        newText,
-        _MIN_TTS_SENTENCE_CHARS,
-      )
+      const { spans, consumed } = _ttsStream.next(newText)
       for (const span of spans) speakStreaming(_speechShaper.push(span))
       _lastSpokenIdx += consumed
     } else if (!store.isTyping && current.content) {
@@ -1402,11 +1402,6 @@ watch(
     }
   }
 )
-
-// Minimum chars a candidate sentence must have before it is dispatched to TTS (#1485).
-// Short fragments like "Hello there! " (13 chars) sound choppy when spoken alone —
-// buffer them until they combine with the next sentence or flush as a remainder.
-const _MIN_TTS_SENTENCE_CHARS = 20
 
 </script>
 

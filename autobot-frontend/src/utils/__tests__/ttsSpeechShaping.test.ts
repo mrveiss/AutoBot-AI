@@ -103,6 +103,36 @@ describe('createSpeechShaper — fenced code (#13102)', () => {
     expect(shaper.push('\nrm -rf build\n```\nDone.')).toBe('Done.')
   })
 
+  it('drops an indented code block that follows a blank line (#17953)', () => {
+    expect(shape('Intro:\n\n    secret()\n    more()\n\nOutro.')).toBe('Intro: Outro.')
+  })
+
+  it('keeps an indented line that continues a paragraph (#17953)', () => {
+    expect(shape('Intro line\n    continues here.')).toBe('Intro line continues here.')
+  })
+
+  it('keeps indented list content, nested items included (#17953)', () => {
+    expect(shape('- item\n\n    - nested item\n    second para')).toBe('item nested item second para')
+  })
+
+  it('drops an indented block that arrives over several streamed slices (#17953)', () => {
+    const shaper = createSpeechShaper(PH)
+    const spoken = [shaper.push('Example below.\n\n'), shaper.push('    run()\n'), shaper.push('\nDone.')]
+    expect(spoken).toEqual(['Example below.', '', 'Done.'])
+  })
+
+  it('keeps a paragraph continuation that arrives after a slice ending in a newline (#17953)', () => {
+    const shaper = createSpeechShaper(PH)
+    expect([shaper.push('Intro.\n'), shaper.push('    continued here.')]).toEqual(['Intro.', 'continued here.'])
+  })
+
+  it('classifies a line only once its indent and list marker are complete (#17953)', () => {
+    const indent = createSpeechShaper(PH)
+    expect([indent.push('Example.\n\n  '), indent.push('  run()\n\nDone.')]).toEqual(['Example.', 'Done.'])
+    const marker = createSpeechShaper(PH)
+    expect([marker.push('Steps:\n-'), marker.push(' item\n\n    more about it')]).toEqual(['Steps:', 'item more about it'])
+  })
+
   it('treats a split single backtick as inline code', () => {
     const shaper = createSpeechShaper(PH)
     expect(shaper.push('Run `')).toBe('Run')
