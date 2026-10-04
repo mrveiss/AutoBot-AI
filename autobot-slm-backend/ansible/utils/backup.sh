@@ -82,11 +82,19 @@ backup_redis() {
             return 1
         fi
 
-        # Copy AOF file if it exists
-        if scp "autobot@$DATABASE_HOST:/var/lib/redis-stack/appendonly.aof" "$backup_dir/redis-appendonly.aof" 2>/dev/null; then
-            log "INFO" "✅ Redis AOF backup completed"
+        # Copy the AOF data if it exists.
+        #
+        # Redis 7 keeps it in a DIRECTORY -- `appenddirname` defaults to `appendonlydir`
+        # -- holding the manifest plus the base and incr files; Redis 6 and earlier keep
+        # a single `appendonly.aof` at the data root. Asking only for the pre-7 file
+        # matched nothing on a Redis 7 host and the `2>/dev/null` turned that into a
+        # warning nobody reads. Same defect as the nightly template's (#17932).
+        if scp -r "autobot@$DATABASE_HOST:/var/lib/redis-stack/appendonlydir" "$backup_dir/redis-appendonlydir" 2>/dev/null; then
+            log "INFO" "✅ Redis AOF backup completed (appendonlydir)"
+        elif scp "autobot@$DATABASE_HOST:/var/lib/redis-stack/appendonly.aof" "$backup_dir/redis-appendonly.aof" 2>/dev/null; then
+            log "INFO" "✅ Redis AOF backup completed (appendonly.aof)"
         else
-            log "WARN" "⚠️ Redis AOF file not found or not accessible"
+            log "WARN" "⚠️ Redis AOF data not found or not accessible"
         fi
 
         # Export individual databases

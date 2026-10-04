@@ -89,6 +89,16 @@ chromadb_auth_token: ""
 # remove-role.yml wipe.
 chromadb_authn_env_file: /etc/autobot/chromadb.env
 
+# The one file the nightly backup script reads its client credential from
+# (#17932). The script itself is deployed 0755 AND is re-rendered on the
+# code-only update path, where `redis_password` is unresolvable -- so the value
+# cannot live in the script without either disclosing it or being silently
+# emptied by an update (see the "DELIBERATELY EXCLUDED" ruling in
+# tasks/code_only.yml). This file is 0600 root and is written on the
+# provisioning path only. Lives under /etc/autobot with the other credential
+# stores, like `chromadb_authn_env_file` above.
+redis_backup_env_file: /etc/autobot/redis-backup.env
+
 # #13870: which role owns /etc/systemd/system/autobot-chromadb.service.
 #
 # This default is the role's OWN name, and it is a FAIL-SAFE FLOOR, not the
