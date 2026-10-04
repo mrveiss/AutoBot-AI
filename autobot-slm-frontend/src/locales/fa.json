@@ -410,7 +410,9 @@
       "user": "کاربر",
       "languageLabel": "Language"
     },
-    "skipLink": {},
+    "skipLink": {
+      "mainContent": "رفتن به محتوای اصلی"
+    },
     "toastContainer": {
       "dismissNotification": "Dismiss notification",
       "notifications": "اعلان‌ها"

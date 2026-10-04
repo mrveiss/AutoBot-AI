@@ -410,7 +410,9 @@
       "user": "Użytkownik",
       "languageLabel": "Język"
     },
-    "skipLink": {},
+    "skipLink": {
+      "mainContent": "Przejdź do treści głównej"
+    },
     "toastContainer": {
       "dismissNotification": "Dismiss notification",
       "notifications": "Powiadomienia"

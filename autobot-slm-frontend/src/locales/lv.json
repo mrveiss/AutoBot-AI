@@ -410,7 +410,9 @@
       "user": "Lietotājs",
       "languageLabel": "Valoda"
     },
-    "skipLink": {},
+    "skipLink": {
+      "mainContent": "Pāriet uz galveno saturu"
+    },
     "toastContainer": {
       "dismissNotification": "Dismiss notification",
       "notifications": "Paziņojumi"
