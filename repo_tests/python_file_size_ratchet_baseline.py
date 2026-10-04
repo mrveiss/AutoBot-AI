@@ -506,7 +506,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot_shared/ssot_constants.py": 896,
     "autobot_shared/user_management/team_service.py": 725,
     "pipeline-scripts/check-pre-commit-hook-pr_test.py": 747,
-    "pipeline-scripts/ci_dispatch_watchdog.py": 1424,
+    "pipeline-scripts/ci_dispatch_watchdog.py": 1370,  # #13439: supersession split to ci_run_supersession.py
     "pipeline-scripts/detect-hardcoded-values_test.py": 653,
     "repo_tests/ci_dispatch_watchdog_test.py": 1273,
     "repo_tests/enum_union_guard_test.py": 801,
