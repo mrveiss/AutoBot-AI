@@ -258,3 +258,57 @@ def test_community_ids_follow_size_then_membership() -> None:
 
     assert sorted(members) == list(range(len(members)))
     assert keys == sorted(keys)
+
+
+def test_the_centroid_of_a_tied_community_does_not_depend_on_member_order() -> None:
+    """The gap the edge-order tests above cannot see.
+
+    `_reordered` varies edge order inside one process, where the string hash
+    seed is fixed, so the whole suite above is blind to the one source of
+    nondeterminism that actually survived: `louvain_communities` returns *sets*,
+    and a list built by iterating one is in hash order, which differs between
+    processes. `max(nodes, key=degree)` returns the first maximal element, so a
+    degree tie resolved to whichever member happened to come first.
+
+    Ties are the common case, not an edge case -- every node of a triangle has
+    degree 2 -- so this decided real anchors. Permuting the member list directly
+    reproduces across processes what a differing `PYTHONHASHSEED` would produce
+    between them, without the cost of spawning one.
+    """
+    import itertools
+
+    import networkx as nx
+
+    from services.mesh_brain.community_clusterer import _pick_centroid
+
+    triangle = nx.Graph()
+    triangle.add_edges_from([("a", "b"), ("b", "c"), ("c", "a")])
+    assert len({triangle.degree(n) for n in "abc"}) == 1, "fixture must be fully tied on degree"
+
+    picks = {_pick_centroid(triangle, list(perm)) for perm in itertools.permutations("abc")}
+
+    assert picks == {"a"}, (
+        f"the centroid of a degree-tied community depends on member order: {sorted(picks)}. "
+        "Member order comes from set iteration, so the anchor differs between processes "
+        "on an unchanged mesh (#13473)."
+    )
+
+
+def test_a_higher_degree_node_still_wins_over_the_name_tie_break() -> None:
+    """The contrast pair: the tie-break must not have replaced the ranking.
+
+    Without this, `_pick_centroid` could return `min(nodes)` outright and the
+    permutation test above would still pass -- the cheapest way to satisfy a
+    determinism check is to stop measuring what it was ranking.
+    """
+    import networkx as nx
+
+    from services.mesh_brain.community_clusterer import _pick_centroid
+
+    star = nx.Graph()
+    star.add_edges_from([("z", "a"), ("z", "b"), ("z", "c")])
+
+    assert _pick_centroid(star, ["a", "b", "c", "z"]) == "z", (
+        "the highest-degree node lost to the alphabetical tie-break, so the centroid is "
+        "no longer the most connected node"
+    )

@@ -38,7 +38,11 @@ def _detect_communities(graph: Any) -> dict[Any, int]:
     # #13473: ids follow (-size, sorted members), never the partitioner's
     # enumeration order, so an unchanged grouping keeps its id.
     ordered = sorted(communities, key=lambda nodes: (-len(nodes), tuple(sorted(map(str, nodes)))))
-    return {node: comm_id for comm_id, nodes in enumerate(ordered) for node in nodes}
+    # `louvain_communities` hands back *sets*, so iterating one directly would
+    # seed this dict in hash order and every list built from it downstream would
+    # vary per process. Ordering the members as well as the communities is what
+    # makes the whole return value reproducible, not just the ids.
+    return {node: comm_id for comm_id, nodes in enumerate(ordered) for node in sorted(nodes, key=str)}
 
 
 def _edge_order(edge: dict) -> tuple:
@@ -117,8 +121,17 @@ def cluster_graph(edges: list[dict]) -> list[str]:
 
 
 def _pick_centroid(subgraph, nodes: list[str]) -> str:
-    """Return the highest-degree node in nodes within subgraph."""
-    return max(nodes, key=lambda n: subgraph.degree(n))
+    """The highest-degree node in *nodes*, ties broken by name.
+
+    #13473: `max(nodes, key=degree)` returns the *first* maximal element, so on a
+    degree tie the answer was whatever order `nodes` happened to arrive in. Ties
+    are the common case rather than an edge case -- every node of a triangle has
+    degree 2 -- so the anchors promoted for an unchanged mesh differed between
+    processes even after community ids were made stable. Ordering the members
+    upstream fixes the observed symptom; a total order here is what makes it a
+    property of the function instead of a property of its caller.
+    """
+    return min(nodes, key=lambda n: (-subgraph.degree(n), str(n)))
 
 
 def _split_community(subgraph) -> list[str]:
