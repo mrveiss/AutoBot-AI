@@ -316,3 +316,124 @@ async def test_a_removal_that_cannot_find_the_document_is_recorded_not_swallowed
 
     assert service._stats["f1"]["errors"] == 1
     assert "500" in service._stats["f1"]["last_error"]
+
+
+# ---------------------------------------------------------------------------
+# #17547 AC3 — a dropped event is observable
+# ---------------------------------------------------------------------------
+#
+# `kb_folder_events.py` bound `logger` and then made zero `logger.` calls, while
+# `kb_folder_watcher.py` -- the module it was split out of -- made 30. Every
+# `return` in `_handle_change` therefore dropped a watch-folder event leaving no
+# trace at all, so "the KB ignored my file" and "watchdog never fired" looked the
+# same to anyone reading the log. These pin the reason, not merely that something
+# was said: each assertion names the discriminating word, because a test that only
+# counts records passes on a log line that explains nothing.
+
+
+def _drop_records(caplog):
+    return [r for r in caplog.records if r.name == kb_folder_events.__name__]
+
+
+def test_an_unsupported_extension_says_so(caplog):
+    _, handler = _handler()
+    with caplog.at_level("DEBUG", logger=kb_folder_events.__name__):
+        handler.on_created(_event("/watched/photo.jpeg"))
+    [record] = _drop_records(caplog)
+    message = record.getMessage()
+    assert "photo.jpeg" in message and "created" in message and "f1" in message
+    assert ".jpeg" in message, "the reason must name the extension that was refused"
+
+
+def test_a_file_type_disabled_for_the_folder_says_so(caplog):
+    """`.csv` is a supported extension but is not in this folder's `file_types`.
+
+    The contrast with the test above is the point: both drop the event, and the
+    two reasons need different fixes -- add a parser, or tick a box on the folder.
+    A single "ignored" line would conflate them.
+    """
+    _, handler = _handler()
+    with caplog.at_level("DEBUG", logger=kb_folder_events.__name__):
+        handler.on_created(_event("/watched/rows.csv"))
+    [record] = _drop_records(caplog)
+    message = record.getMessage()
+    assert "rows.csv" in message and "not enabled for this folder" in message
+    assert "csv" in message
+
+
+def test_a_debounced_edit_says_it_was_coalesced_and_not_refused(caplog):
+    watcher, handler = _handler()
+    handler.on_modified(_event("/watched/notes.txt"))
+    with caplog.at_level("DEBUG", logger=kb_folder_events.__name__):
+        handler.on_modified(_event("/watched/notes.txt"))
+    assert len(watcher.dispatched) == 1
+    [record] = _drop_records(caplog)
+    assert "coalescing" in record.getMessage()
+    assert "debounce" in record.getMessage()
+
+
+def test_a_failed_handoff_is_a_warning_naming_the_file(caplog):
+    """#15636's silent failure. This is the one drop that is not routine.
+
+    It is a `warning` where the other three are `debug`: the other three are the
+    handler deciding correctly, this one is work the user asked for going nowhere.
+    """
+    watcher, handler = _handler(accept=False)
+    with caplog.at_level("DEBUG", logger=kb_folder_events.__name__):
+        handler.on_modified(_event("/watched/notes.txt"))
+    assert watcher.dispatched, "the hand-off must have been attempted"
+    [record] = _drop_records(caplog)
+    assert record.levelname == "WARNING", f"a dropped dispatch logged at {record.levelname}"
+    assert "notes.txt" in record.getMessage() and "DROPPED" in record.getMessage()
+
+
+def test_a_dispatched_event_is_not_reported_as_a_drop(caplog):
+    """The contrast pair for all four above: the success path logs no drop.
+
+    Without this, every assertion above is satisfied by a module that logs the
+    same sentence unconditionally -- which would be `MEASUREMENT_DISCIPLINE.md`'s
+    legend that never consults its data.
+    """
+    watcher, handler = _handler()
+    with caplog.at_level("DEBUG", logger=kb_folder_events.__name__):
+        handler.on_modified(_event("/watched/notes.txt"))
+    assert len(watcher.dispatched) == 1
+    assert _drop_records(caplog) == []
+
+
+def test_every_return_in_handle_change_logs_first():
+    """The structural guard, so a future `return` added here cannot be silent.
+
+    The four tests above cover the four returns that exist today; this one fails
+    if a fifth is added without a reason beside it. A sweep over the source rather
+    than over behaviour, deliberately -- the behaviour of a branch nobody thought
+    to write a test for is exactly what is unreachable from a behavioural test.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    tree = ast.parse(textwrap.dedent(inspect.getsource(KBFolderChangeHandler._handle_change)))
+    [function] = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
+    bare_returns = [n for n in ast.walk(function) if isinstance(n, ast.Return) and n.value is None]
+    assert len(bare_returns) == 4, f"expected the 4 known drop sites, found {len(bare_returns)}"
+
+    logged = [
+        node
+        for node in ast.walk(function)
+        if isinstance(node, ast.If)
+        and any(isinstance(stmt, ast.Return) and stmt.value is None for stmt in node.body)
+        and any(
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Call)
+            and isinstance(stmt.value.func, ast.Attribute)
+            and isinstance(stmt.value.func.value, ast.Name)
+            and stmt.value.func.value.id == "logger"
+            for stmt in node.body
+        )
+    ]
+    assert len(logged) == 4, (
+        f"{4 - len(logged)} of the 4 early returns in `_handle_change` drop a watch-folder "
+        "event without logging a reason (#17547 AC3). A silent return is indistinguishable "
+        "from watchdog never firing, which is the state this issue exists to end."
+    )
