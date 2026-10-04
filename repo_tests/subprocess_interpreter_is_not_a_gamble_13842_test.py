@@ -64,10 +64,11 @@ _SPAWN = frozenset(
 #: Each entry is a (path, reason) pair so a reader can tell a deliberate
 #: exception from an unmigrated one without opening the file.
 #:
-#: The two NPU probes are listed for a reason that is NOT "nobody got to them".
-#: I migrated both to `sys.executable` and had to revert: each file is
-#: grandfathered by the file-size guard at a recorded ceiling (1136 and 785
-#: lines), and `import sys` plus any comment pushes them over. That guard is
+#: One NPU probe remains listed, for a reason that is NOT "nobody got to it".
+#: `performance_monitor.py` is now fixed: extracting its four pure dataclasses
+#: to `metrics_types.py` (#16282) took it 785 -> 732, which made room for
+#: `import sys`. `performance_benchmark.py` has no comparable cohesive piece
+#: to lift, so it stays at its 1136 ceiling and keeps the bare interpreter. That guard is
 #: explicit that a grandfathered file may not grow -- the exemption freezes
 #: the size it was granted for. Splitting a 1140-line monitoring module to
 #: change one argv[0] is a bigger change than the one it enables, and
@@ -80,7 +81,6 @@ _PENDING: dict[str, str] = {
         "`import sys` grows a grandfathered file. sys.executable would not fix "
         "the probe anyway; the SLM venv has no OpenVINO."
     ),
-    "autobot-slm-backend/monitoring/performance_monitor.py": ("#17988 -- same probe, same ceiling (785), same reason."),
 }
 
 
