@@ -2697,7 +2697,15 @@
       "testConnection": "Test Connection",
       "uRLToAccessGrafana": "URL to access Grafana",
       "uRLToAccessPrometheus": "URL to access Prometheus",
-      "useAnsibleToDeploy": "Use Ansible to deploy or migrate the monitoring stack to a different node."
+      "useAnsibleToDeploy": "Use Ansible to deploy or migrate the monitoring stack to a different node.",
+      "settingSaved": "Iestatījums saglabāts",
+      "prometheusConnected": "Savienojums ar Prometheus izdevās",
+      "prometheusFailed": "Savienojums ar Prometheus neizdevās",
+      "prometheusUnreachable": "Nevar sasniegt Prometheus serveri",
+      "grafanaConnected": "Savienojums ar Grafana izdevās",
+      "grafanaFailed": "Savienojums ar Grafana neizdevās",
+      "grafanaUnreachable": "Nevar sasniegt Grafana serveri",
+      "deployViaAnsible": "Uzraudzības lomas izvietošana tiks palaista ar Ansible"
     },
     "notificationsSettings": {
       "adminExampleCom": "admin{'@'}example.com",

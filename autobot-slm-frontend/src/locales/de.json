@@ -2697,7 +2697,15 @@
       "testConnection": "Verbindung testen",
       "uRLToAccessGrafana": "URL to access Grafana",
       "uRLToAccessPrometheus": "URL to access Prometheus",
-      "useAnsibleToDeploy": "Use Ansible to deploy or migrate the monitoring stack to a different node."
+      "useAnsibleToDeploy": "Use Ansible to deploy or migrate the monitoring stack to a different node.",
+      "settingSaved": "Einstellung gespeichert",
+      "prometheusConnected": "Verbindung zu Prometheus erfolgreich",
+      "prometheusFailed": "Verbindung zu Prometheus fehlgeschlagen",
+      "prometheusUnreachable": "Prometheus-Server nicht erreichbar",
+      "grafanaConnected": "Verbindung zu Grafana erfolgreich",
+      "grafanaFailed": "Verbindung zu Grafana fehlgeschlagen",
+      "grafanaUnreachable": "Grafana-Server nicht erreichbar",
+      "deployViaAnsible": "Die Bereitstellung der Monitoring-Rolle wird über Ansible ausgelöst"
     },
     "notificationsSettings": {
       "adminExampleCom": "admin{'@'}example.com",

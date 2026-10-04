@@ -13,6 +13,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useAutobotApi, type LogForwardingDestination } from '@/composables/useAutobotApi'
 import config from '@/config/ssot-config'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('LogForwardingSettings')
 
 const api = useAutobotApi()
 
@@ -81,6 +84,7 @@ async function fetchStatus(): Promise<void> {
     }
   } catch (e) {
     // Status endpoint may not be available
+    logger.debug('Log forwarding status unavailable:', e)
   }
 }
 

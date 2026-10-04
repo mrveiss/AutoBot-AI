@@ -12,6 +12,9 @@
 
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useAutobotApi, type NPUWorker } from '@/composables/useAutobotApi'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('NPUWorkersSettings')
 
 const api = useAutobotApi()
 
@@ -91,6 +94,7 @@ async function fetchLoadBalancingConfig(): Promise<void> {
     }
   } catch (e) {
     // Config endpoint may not be available
+    logger.debug('NPU load-balancing config unavailable:', e)
   }
 }
 
