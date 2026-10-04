@@ -6839,7 +6839,44 @@
       "timeHoursAgo": "{count}h ago",
       "timeInHours": "in {count}h",
       "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d"
+      "timeInDays": "in {count}d",
+      "categories": {
+        "api_key": "Chaves de API",
+        "token": "Tokens de acesso",
+        "oauth_refresh_token": "Tokens de atualização OAuth",
+        "connector_oauth_token": "Tokens de conectores",
+        "password": "Senhas",
+        "ssh_key": "Chaves SSH",
+        "infrastructure_host": "Hosts de infraestrutura",
+        "database_url": "Bancos de dados",
+        "certificate": "Certificados",
+        "other": "Outros"
+      },
+      "kinds": {
+        "api_key": "Chave de API",
+        "token": "Token de acesso",
+        "oauth_refresh_token": "Token de atualização OAuth",
+        "connector_oauth_token": "Token de conector",
+        "password": "Senha",
+        "ssh_key": "Chave SSH",
+        "infrastructure_host": "Host de infraestrutura",
+        "database_url": "Banco de dados",
+        "certificate": "Certificado",
+        "other": "Outro"
+      },
+      "templates": {
+        "openaiDesc": "Acesso à API do GPT",
+        "anthropicDesc": "Acesso à API do Claude",
+        "awsDesc": "Serviços de nuvem da Amazon",
+        "githubDesc": "Token pessoal do GitHub",
+        "postgresDesc": "Conexão com banco de dados",
+        "redisDesc": "Conexão com o Redis",
+        "sshLabel": "Chave SSH",
+        "sshDesc": "Acesso ao servidor",
+        "slackDesc": "Token do bot do Slack",
+        "serverLabel": "Host do servidor",
+        "serverDesc": "Acesso a servidor SSH/VNC"
+      }
     },
     "threatDashboard": {
       "title": "Threat Intelligence",

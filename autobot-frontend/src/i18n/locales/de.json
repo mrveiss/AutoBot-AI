@@ -6839,7 +6839,44 @@
       "timeHoursAgo": "{count}h ago",
       "timeInHours": "in {count}h",
       "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d"
+      "timeInDays": "in {count}d",
+      "categories": {
+        "api_key": "API-Schlüssel",
+        "token": "Zugriffstoken",
+        "oauth_refresh_token": "OAuth-Aktualisierungstoken",
+        "connector_oauth_token": "Connector-Zugriffstoken",
+        "password": "Passwörter",
+        "ssh_key": "SSH-Schlüssel",
+        "infrastructure_host": "Infrastruktur-Hosts",
+        "database_url": "Datenbanken",
+        "certificate": "Zertifikate",
+        "other": "Sonstiges"
+      },
+      "kinds": {
+        "api_key": "API-Schlüssel",
+        "token": "Zugriffstoken",
+        "oauth_refresh_token": "OAuth-Aktualisierungstoken",
+        "connector_oauth_token": "Connector-Zugriffstoken",
+        "password": "Passwort",
+        "ssh_key": "SSH-Schlüssel",
+        "infrastructure_host": "Infrastruktur-Host",
+        "database_url": "Datenbank",
+        "certificate": "Zertifikat",
+        "other": "Sonstiges"
+      },
+      "templates": {
+        "openaiDesc": "Zugriff auf die GPT-API",
+        "anthropicDesc": "Zugriff auf die Claude-API",
+        "awsDesc": "Amazon-Cloud-Dienste",
+        "githubDesc": "Persönliches GitHub-Token",
+        "postgresDesc": "Datenbankverbindung",
+        "redisDesc": "Redis-Verbindung",
+        "sshLabel": "SSH-Schlüssel",
+        "sshDesc": "Serverzugriff",
+        "slackDesc": "Slack-Bot-Token",
+        "serverLabel": "Server-Host",
+        "serverDesc": "SSH/VNC-Serverzugriff"
+      }
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
