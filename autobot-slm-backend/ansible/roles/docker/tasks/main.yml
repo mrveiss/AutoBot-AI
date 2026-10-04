@@ -82,6 +82,14 @@
       {{ ansible_facts['distribution_release'] }} {{ docker_apt_repo_channel }}
     apt_repo_filename: "docker"
     apt_repo_label: "Docker"
+    # #17897: derived from this file's own "Docker | Install Docker Engine
+    # (Debian)" task. That task installs five packages; `docker-ce` is the one
+    # whose absence makes the repository pointless -- it is the engine, and the
+    # distribution archive has no `docker-ce` at all (its own Docker is
+    # `docker.io`), so a candidate for this name can only come from
+    # download.docker.com. `containerd.io` would also do, but naming the engine
+    # states what the repo is for.
+    apt_repo_verify_package: "docker-ce"
   when: _docker_is_debian | bool
   tags: ['docker', 'packages']
 
