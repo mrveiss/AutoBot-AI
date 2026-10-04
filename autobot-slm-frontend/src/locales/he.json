@@ -2201,7 +2201,8 @@
         "update": "Update",
         "username": "שם משתמש",
         "varLogAutobotForwardedLog": "/var/log/autobot-forwarded.log",
-        "warning": "Warning"
+        "warning": "Warning",
+        "statusUnknown": "לא ידוע"
       },
       "nPUWorkersSettings": {
         "actions": "פעולות",

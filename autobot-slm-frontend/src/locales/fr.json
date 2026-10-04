@@ -2201,7 +2201,8 @@
         "update": "Mettre à jour",
         "username": "Nom d'utilisateur",
         "varLogAutobotForwardedLog": "/var/log/autobot-forwarded.log",
-        "warning": "Avertissement"
+        "warning": "Avertissement",
+        "statusUnknown": "Inconnu"
       },
       "nPUWorkersSettings": {
         "actions": "Actes",

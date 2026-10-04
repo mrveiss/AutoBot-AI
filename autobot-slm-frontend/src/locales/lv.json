@@ -2201,7 +2201,8 @@
         "update": "Atjaunināt",
         "username": "Lietotājvārds",
         "varLogAutobotForwardedLog": "/var/log/autobot-forwarded.log",
-        "warning": "Brīdinājums"
+        "warning": "Brīdinājums",
+        "statusUnknown": "Nezināms"
       },
       "nPUWorkersSettings": {
         "actions": "Darbības",
