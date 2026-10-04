@@ -59,6 +59,8 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import strip_trailing_comment
+
 _SCANNED_SUFFIXES = (".yml", ".yaml", ".sh", ".py")
 _DPKG_LIST = re.compile(r"\bdpkg\s+-l\b")
 #: A dpkg *listing query*, not any mention of dpkg. `fuser /var/lib/dpkg/lock`
@@ -203,11 +205,14 @@ def _code_lines_using_dpkg_list(root: pathlib.Path | None = None) -> List[Tuple[
             )
             continue
         for number, line in enumerate(text.splitlines(), start=1):
-            match = _DPKG_LIST.search(line)
+            # #17941: was `line.find("#") < match.start()`, which is positional
+            # and not quote-aware -- `echo "a # b" && dpkg -l` has a `#` before
+            # the match that is data, so the real invocation was skipped. The
+            # shared stripper tracks quote state, so the comment is removed for
+            # the reason it is a comment.
+            code = strip_trailing_comment(line, ("#",), escapes=True)
+            match = _DPKG_LIST.search(code)
             if not match:
-                continue
-            comment = line.find("#")
-            if comment != -1 and comment < match.start():
                 continue
             # Prose naming the command rather than running it. A YAML `msg:`
             # block is not a comment, so the position check above does not see
