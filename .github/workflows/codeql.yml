@@ -34,6 +34,10 @@ on:
   push:
     branches: [release, main]
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [release, main]
     paths:
       # python
@@ -83,6 +87,11 @@ permissions:
 
 jobs:
   changes:
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
+    # every `always()` aggregate below reads `needs.changes.result`.
+    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # context would report FAILED on every draft -- worse than no gate.
+    # Gate the expensive jobs, never the cheap thing others read.
     name: Detect changed languages
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -128,7 +137,7 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     needs: changes
-    if: needs.changes.outputs.languages != '[]'
+    if: ${{ (needs.changes.outputs.languages != '[]') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

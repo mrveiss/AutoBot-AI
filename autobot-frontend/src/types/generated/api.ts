@@ -79031,6 +79031,22 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * KnowledgeContextCleanupResult
+         * @description Nested chat-knowledge-context cleanup sub-payload within SessionDeleteData.
+         *
+         *     Fields mirror exactly what ``_cleanup_chat_knowledge_context`` returns
+         *     (#16490) -- no ``cleanup_error`` here, unlike its siblings, because that
+         *     producer has no error branch to report.
+         */
+        KnowledgeContextCleanupResult: {
+            /** Context Deleted */
+            context_deleted: boolean;
+            /** File Associations Removed */
+            file_associations_removed: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * KnowledgeDebugRedisResponse
          * @description Response for GET /debug_redis.
          *
@@ -94639,6 +94655,7 @@ export interface components {
             terminal_cleanup?: components["schemas"]["TerminalCleanupResult"] | null;
             kb_cleanup?: components["schemas"]["KbCleanupResult"] | null;
             transcript_cleanup?: components["schemas"]["TranscriptCleanupResult"] | null;
+            knowledge_context_cleanup?: components["schemas"]["KnowledgeContextCleanupResult"] | null;
         } & {
             [key: string]: unknown;
         };

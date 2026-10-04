@@ -24,6 +24,7 @@ already shipped once.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -141,6 +142,32 @@ def test_code_only_carries_no_provisioning():
         )
 
 
+#: Jinja comment regions. Only these are safe to ignore: a ``{# ... #}`` is removed before
+#: rendering, so it cannot carry a value into the output. A SHELL ``#`` comment is NOT safe --
+#: Jinja does not know about shell syntax, so ``# {{ redis_password }}`` would still be
+#: substituted and the credential would land in the rendered file.
+_JINJA_COMMENT = re.compile(r"\{#.*?#\}", re.S)
+
+#: A Jinja expression or statement -- the only constructs that can put a value into the output.
+_JINJA_CONSTRUCT = re.compile(r"\{\{.*?\}\}|\{%.*?%\}", re.S)
+
+
+def _emits_credential(text: str, name: str = "redis_password") -> bool:
+    """Whether rendering *text* can put ``name``'s VALUE into the output.
+
+    Asking "does the file mention the variable" is a different question, and the wrong one:
+    it is satisfied by the file's own prose. ``redis-backup.sh.j2`` documents, in a shell
+    comment, that the credential is deliberately NOT substituted into it -- and a substring
+    check read that explanation as the violation it describes, failing CI for documenting the
+    fix (the #15771 shape, catalogued as a class in #17941).
+
+    Only a ``{{ ... }}`` or ``{% ... %}`` referencing the variable can emit it, so that is what
+    this looks for. Jinja comments are stripped first because they are removed before rendering;
+    shell comments deliberately are not, since Jinja substitutes inside them.
+    """
+    return any(name in m.group(0) for m in _JINJA_CONSTRUCT.finditer(_JINJA_COMMENT.sub("", text)))
+
+
 def test_code_only_renders_nothing_that_carries_the_redis_password():
     """A code-only render must not be able to strip the data store's credential.
 
@@ -156,7 +183,7 @@ def test_code_only_renders_nothing_that_carries_the_redis_password():
         for t in _iter_mappings(_tasks(_CODE_ONLY))
     } - {""}
 
-    offenders = {src for src in rendered if "redis_password" in (_ROLE / "templates" / src).read_text(encoding="utf-8")}
+    offenders = {src for src in rendered if _emits_credential((_ROLE / "templates" / src).read_text(encoding="utf-8"))}
     assert not offenders, (
         f"roles/redis/tasks/code_only.yml renders {sorted(offenders)}, whose content "
         "depends on redis_password — an update-path render emits them without the "
@@ -173,3 +200,38 @@ def test_main_includes_code_only_rather_than_duplicating_it():
         "roles/redis/tasks/main.yml must include code_only.yml, not repeat its "
         "tasks — an inline copy is how the provisioning and update paths drift"
     )
+
+
+def test_a_comment_EXPLAINING_the_credential_is_not_an_emission():
+    """The control for the bug this guard had: documenting the ruling must not trip it.
+
+    `redis-backup.sh.j2` carries a shell comment stating that the credential is deliberately
+    not substituted into it. A whole-file substring check read that sentence as the violation
+    it describes and failed CI -- so the fix for #17932 could not land while explaining itself.
+    This pins the distinction the guard now makes: MENTIONING the variable is not EMITTING it.
+    """
+    assert not _emits_credential("# the value of redis_password is NOT substituted here\n")
+    assert not _emits_credential("{# redis_password is set elsewhere #}\n")
+
+
+def test_a_jinja_construct_IS_an_emission():
+    """The contrast. Without this the guard above is satisfiable by never firing at all."""
+    assert _emits_credential("requirepass {{ redis_password }}\n")
+    assert _emits_credential("{% if redis_password %}x{% endif %}\n")
+
+
+def test_a_shell_comment_is_NOT_stripped_because_jinja_substitutes_inside_it():
+    """Jinja has no notion of shell syntax, so a `#` line still renders.
+
+    Stripping shell comments would have been the obvious way to fix the guard, and it would
+    have opened a real hole: `# {{ redis_password }}` lands the credential in the rendered
+    file, commented out but present and readable.
+    """
+    assert _emits_credential("# {{ redis_password }}\n")
+
+
+def test_the_real_offenders_are_still_caught():
+    """Narrowing must not cost the guard its actual subjects."""
+    for src in ("redis-stack.conf.j2",):
+        text = (_ROLE / "templates" / src).read_text(encoding="utf-8")
+        assert _emits_credential(text), f"{src} emits the credential and must still be flagged"
