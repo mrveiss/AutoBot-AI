@@ -26,6 +26,14 @@
     apt_repo_spec: "deb https://apt.grafana.com stable main"
     apt_repo_filename: "grafana"
     apt_repo_label: "Grafana"
+    # #17897: derived from this file's own "Grafana | Install Grafana" task
+    # (ansible.builtin.apt, name: grafana) -- the one package this repo exists
+    # to provide here. A device image carrying an inert
+    # `grafana.list.distUpgrade` made the helper report the repo PRESENT and
+    # preserve it; with no package named the verdict short-circuited to
+    # `usable`, the canonical source was never written, and the install died
+    # four tasks later with "No package matching 'grafana' is available".
+    apt_repo_verify_package: "grafana"
   when: grafana_install | bool
   tags: ['grafana', 'packages']
 

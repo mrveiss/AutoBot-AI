@@ -4944,6 +4944,43 @@
       "editCommand": "Edit",
       "editCancel": "Cancel",
       "editSave": "Save"
+    },
+    "automation": {
+      "started": "🚀 بدأ سير العمل الآلي: {name}",
+      "stepsPlanned": "📋 تم تخطيط {count} خطوات. استخدم زر الإيقاف المؤقت لتولي التحكم اليدوي في أي وقت.",
+      "unnamedWorkflow": "سير عمل بدون اسم",
+      "executeStep": "تنفيذ: {command}",
+      "paused": "⏸️ تم إيقاف الأتمتة مؤقتًا - تم تفعيل التحكم اليدوي. اكتب الأوامر بحرية.",
+      "resumed": "▶️ تم استئناف الأتمتة - متابعة تنفيذ سير العمل.",
+      "aboutToExecute": "🤖 سير عمل الذكاء الاصطناعي: على وشك تنفيذ \"{command}\"",
+      "stepProgress": "📋 الخطوة {step}/{total}: {description}",
+      "skipped": "⏭️ تم التخطي: {command}",
+      "manualControlTaken": "👤 تم تولي التحكم اليدوي - أكمل خطواتك اليدوية، ثم انقر على استئناف لمتابعة سير العمل.",
+      "automated": "🤖 آلي: {command}",
+      "pausedBySystem": "⏸️ أوقف النظام سير العمل مؤقتًا",
+      "resumedBySystem": "▶️ استأنف النظام سير العمل",
+      "executing": "🤖 جارٍ التنفيذ: {command}",
+      "stepSkippedByUser": "⏭️ تخطى المستخدم الخطوة {step}",
+      "workflowSaved": "💾 تم حفظ سير العمل: {name}",
+      "workflowUpdated": "📋 تم تحديث سير العمل: الخطوات المهيأة: {count}",
+      "manualCommand": "👤 يدوي: {command}",
+      "example": {
+        "name": "تحديث النظام وتثبيت الحزم",
+        "updateDesc": "تحديث مستودعات الحزم",
+        "updateExpl": "يحدّث قائمة الحزم المتاحة من المستودعات المهيأة.",
+        "upgradeDesc": "ترقية الحزم المثبتة",
+        "upgradeExpl": "يرقّي جميع الحزم المثبتة إلى أحدث إصداراتها.",
+        "installDesc": "تثبيت الأدوات الأساسية",
+        "installExpl": "يثبّت أدوات التطوير الشائعة الاستخدام.",
+        "verifyDesc": "التحقق من التثبيتات",
+        "verifyExpl": "يتحقق من تثبيت الأدوات بشكل صحيح."
+      }
+    },
+    "events": {
+      "emergencyKill": "🛑 إيقاف طارئ: أنهى المستخدم جميع العمليات",
+      "emergencyKillFailed": "❌ فشل الإيقاف الطارئ: {message}",
+      "interrupted": "^C (قاطع المستخدم العملية)",
+      "error": "خطأ: {error}"
     }
   },
   "llm": {

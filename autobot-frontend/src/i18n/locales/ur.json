@@ -4216,7 +4216,44 @@
     "emergencyKillTitle": "Emergency Kill All Processes",
     "infrastructureHosts": "Infrastructure Hosts",
     "resumeAutomation": "Resume Automation",
-    "host": "Host:"
+    "host": "Host:",
+    "automation": {
+      "started": "🚀 خودکار ورک فلو شروع ہو گیا: {name}",
+      "stepsPlanned": "📋 {count} مراحل طے کیے گئے۔ کسی بھی وقت دستی کنٹرول سنبھالنے کے لیے توقف کا بٹن استعمال کریں۔",
+      "unnamedWorkflow": "بے نام ورک فلو",
+      "executeStep": "چلائیں: {command}",
+      "paused": "⏸️ آٹومیشن روک دی گئی - دستی کنٹرول فعال۔ آزادی سے کمانڈز لکھیں۔",
+      "resumed": "▶️ آٹومیشن دوبارہ شروع - ورک فلو کا نفاذ جاری ہے۔",
+      "aboutToExecute": "🤖 اے آئی ورک فلو: \"{command}\" چلانے والا ہے",
+      "stepProgress": "📋 مرحلہ {step}/{total}: {description}",
+      "skipped": "⏭️ چھوڑ دیا گیا: {command}",
+      "manualControlTaken": "👤 دستی کنٹرول سنبھال لیا گیا - اپنے دستی مراحل مکمل کریں، پھر ورک فلو جاری رکھنے کے لیے دوبارہ شروع پر کلک کریں۔",
+      "automated": "🤖 خودکار: {command}",
+      "pausedBySystem": "⏸️ سسٹم نے ورک فلو روک دیا",
+      "resumedBySystem": "▶️ سسٹم نے ورک فلو دوبارہ شروع کیا",
+      "executing": "🤖 چل رہا ہے: {command}",
+      "stepSkippedByUser": "⏭️ صارف نے مرحلہ {step} چھوڑ دیا",
+      "workflowSaved": "💾 ورک فلو محفوظ ہو گیا: {name}",
+      "workflowUpdated": "📋 ورک فلو اپ ڈیٹ ہو گیا: ترتیب شدہ مراحل: {count}",
+      "manualCommand": "👤 دستی: {command}",
+      "example": {
+        "name": "سسٹم اپ ڈیٹ اور پیکیج کی تنصیب",
+        "updateDesc": "پیکیج ریپوزٹریز اپ ڈیٹ کریں",
+        "updateExpl": "ترتیب شدہ ریپوزٹریز سے دستیاب پیکیجز کی فہرست اپ ڈیٹ کرتا ہے۔",
+        "upgradeDesc": "نصب شدہ پیکیجز اپ گریڈ کریں",
+        "upgradeExpl": "تمام نصب شدہ پیکیجز کو تازہ ترین ورژن پر اپ گریڈ کرتا ہے۔",
+        "installDesc": "ضروری ٹولز نصب کریں",
+        "installExpl": "عام طور پر درکار ڈیولپمنٹ ٹولز نصب کرتا ہے۔",
+        "verifyDesc": "تنصیبات کی تصدیق کریں",
+        "verifyExpl": "جانچتا ہے کہ ٹولز درست طریقے سے نصب ہوئے ہیں۔"
+      }
+    },
+    "events": {
+      "emergencyKill": "🛑 ہنگامی بندش: صارف نے تمام عمل ختم کر دیے",
+      "emergencyKillFailed": "❌ ہنگامی بندش ناکام: {message}",
+      "interrupted": "^C (صارف نے عمل روک دیا)",
+      "error": "خرابی: {error}"
+    }
   },
   "manpage": {
     "manager": {

@@ -4944,6 +4944,43 @@
       "editCommand": "Edit",
       "editCancel": "Cancel",
       "editSave": "Save"
+    },
+    "automation": {
+      "started": "🚀 WORKFLOW AUTOMATISÉ DÉMARRÉ : {name}",
+      "stepsPlanned": "📋 {count} étapes prévues. Utilisez le bouton PAUSE pour reprendre le contrôle manuel à tout moment.",
+      "unnamedWorkflow": "Workflow sans nom",
+      "executeStep": "Exécuter : {command}",
+      "paused": "⏸️ AUTOMATISATION EN PAUSE - Contrôle manuel activé. Saisissez librement des commandes.",
+      "resumed": "▶️ AUTOMATISATION REPRISE - Poursuite de l'exécution du workflow.",
+      "aboutToExecute": "🤖 WORKFLOW IA : Sur le point d'exécuter « {command} »",
+      "stepProgress": "📋 Étape {step}/{total} : {description}",
+      "skipped": "⏭️ IGNORÉ : {command}",
+      "manualControlTaken": "👤 CONTRÔLE MANUEL PRIS - Terminez vos étapes manuelles, puis cliquez sur REPRENDRE pour continuer le workflow.",
+      "automated": "🤖 AUTOMATISÉ : {command}",
+      "pausedBySystem": "⏸️ WORKFLOW MIS EN PAUSE PAR LE SYSTÈME",
+      "resumedBySystem": "▶️ WORKFLOW REPRIS PAR LE SYSTÈME",
+      "executing": "🤖 EXÉCUTION : {command}",
+      "stepSkippedByUser": "⏭️ ÉTAPE {step} IGNORÉE PAR L'UTILISATEUR",
+      "workflowSaved": "💾 WORKFLOW ENREGISTRÉ : {name}",
+      "workflowUpdated": "📋 WORKFLOW MIS À JOUR : étapes configurées : {count}",
+      "manualCommand": "👤 MANUEL : {command}",
+      "example": {
+        "name": "Mise à jour du système et installation de paquets",
+        "updateDesc": "Mettre à jour les dépôts de paquets",
+        "updateExpl": "Met à jour la liste des paquets disponibles depuis les dépôts configurés.",
+        "upgradeDesc": "Mettre à niveau les paquets installés",
+        "upgradeExpl": "Met à niveau tous les paquets installés vers leurs dernières versions.",
+        "installDesc": "Installer les outils essentiels",
+        "installExpl": "Installe les outils de développement couramment nécessaires.",
+        "verifyDesc": "Vérifier les installations",
+        "verifyExpl": "Vérifie que les outils ont été correctement installés."
+      }
+    },
+    "events": {
+      "emergencyKill": "🛑 ARRÊT D'URGENCE : Tous les processus arrêtés par l'utilisateur",
+      "emergencyKillFailed": "❌ Échec de l'arrêt d'urgence : {message}",
+      "interrupted": "^C (Processus interrompu par l'utilisateur)",
+      "error": "Erreur : {error}"
     }
   },
   "llm": {

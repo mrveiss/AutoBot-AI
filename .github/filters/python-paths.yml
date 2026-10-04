@@ -335,3 +335,16 @@ python:
   # change that creates the drift -- would take the required-context shim's
   # green while the guard that detects it never runs.
   - 'docs/research/**'
+  # #17930: `repo_tests/_glob_declared_uncovered.py` names this workflow by
+  # concrete literal, and `glob_declared_reads_15900_test.py` parses it to verify
+  # the claim that the Liquid guard's `docs/**/*.md` declaration runs on its own
+  # trigger rather than being uncovered debt -- that the `paths:` filter fires on
+  # that tree and that a `run:` step invokes the guard. A change confined to this
+  # workflow is precisely the change that can falsify that claim, so it must run
+  # the suite holding the check.
+  #
+  # ONE FILE, not `docs/**`: covering the docs tree here would run the twelve-shard
+  # suite on every documentation edit, which is the cost this whole arrangement
+  # exists to avoid (owner decision, #17930 review). Same shape as the
+  # `auto-fix-generated-types.yml` and `stylelint-tokens.yml` entries above.
+  - '.github/workflows/docs-liquid-tags.yml'

@@ -4944,6 +4944,43 @@
       "editCommand": "Edit",
       "editCancel": "Cancel",
       "editSave": "Save"
+    },
+    "automation": {
+      "started": "🚀 AUTOMATISIERTER WORKFLOW GESTARTET: {name}",
+      "stepsPlanned": "📋 {count} Schritte geplant. Mit der PAUSE-Taste können Sie jederzeit die manuelle Steuerung übernehmen.",
+      "unnamedWorkflow": "Unbenannter Workflow",
+      "executeStep": "Ausführen: {command}",
+      "paused": "⏸️ AUTOMATISIERUNG PAUSIERT - Manuelle Steuerung aktiviert. Befehle frei eingeben.",
+      "resumed": "▶️ AUTOMATISIERUNG FORTGESETZT - Workflow-Ausführung wird fortgesetzt.",
+      "aboutToExecute": "🤖 KI-WORKFLOW: Gleich wird \"{command}\" ausgeführt",
+      "stepProgress": "📋 Schritt {step}/{total}: {description}",
+      "skipped": "⏭️ ÜBERSPRUNGEN: {command}",
+      "manualControlTaken": "👤 MANUELLE STEUERUNG ÜBERNOMMEN - Führen Sie Ihre manuellen Schritte aus und klicken Sie dann auf FORTSETZEN, um den Workflow fortzusetzen.",
+      "automated": "🤖 AUTOMATISIERT: {command}",
+      "pausedBySystem": "⏸️ WORKFLOW VOM SYSTEM PAUSIERT",
+      "resumedBySystem": "▶️ WORKFLOW VOM SYSTEM FORTGESETZT",
+      "executing": "🤖 WIRD AUSGEFÜHRT: {command}",
+      "stepSkippedByUser": "⏭️ SCHRITT {step} VOM BENUTZER ÜBERSPRUNGEN",
+      "workflowSaved": "💾 WORKFLOW GESPEICHERT: {name}",
+      "workflowUpdated": "📋 WORKFLOW AKTUALISIERT: Konfigurierte Schritte: {count}",
+      "manualCommand": "👤 MANUELL: {command}",
+      "example": {
+        "name": "Systemaktualisierung und Paketinstallation",
+        "updateDesc": "Paketquellen aktualisieren",
+        "updateExpl": "Aktualisiert die Liste der verfügbaren Pakete aus den konfigurierten Quellen.",
+        "upgradeDesc": "Installierte Pakete aktualisieren",
+        "upgradeExpl": "Aktualisiert alle installierten Pakete auf die neuesten Versionen.",
+        "installDesc": "Wichtige Werkzeuge installieren",
+        "installExpl": "Installiert häufig benötigte Entwicklungswerkzeuge.",
+        "verifyDesc": "Installationen überprüfen",
+        "verifyExpl": "Prüft, ob die Werkzeuge korrekt installiert wurden."
+      }
+    },
+    "events": {
+      "emergencyKill": "🛑 NOTABSCHALTUNG: Alle Prozesse vom Benutzer beendet",
+      "emergencyKillFailed": "❌ Notabschaltung fehlgeschlagen: {message}",
+      "interrupted": "^C (Prozess vom Benutzer unterbrochen)",
+      "error": "Fehler: {error}"
     }
   },
   "llm": {

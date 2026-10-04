@@ -4944,6 +4944,43 @@
       "editCommand": "Edit",
       "editCancel": "Cancel",
       "editSave": "Save"
+    },
+    "automation": {
+      "started": "🚀 FLUXO DE TRABALHO AUTOMATIZADO INICIADO: {name}",
+      "stepsPlanned": "📋 {count} passos planejados. Use o botão PAUSA para assumir o controle manual a qualquer momento.",
+      "unnamedWorkflow": "Fluxo de trabalho sem nome",
+      "executeStep": "Executar: {command}",
+      "paused": "⏸️ AUTOMAÇÃO PAUSADA - Controle manual ativado. Digite comandos livremente.",
+      "resumed": "▶️ AUTOMAÇÃO RETOMADA - Continuando a execução do fluxo de trabalho.",
+      "aboutToExecute": "🤖 FLUXO DE IA: Prestes a executar \"{command}\"",
+      "stepProgress": "📋 Passo {step}/{total}: {description}",
+      "skipped": "⏭️ IGNORADO: {command}",
+      "manualControlTaken": "👤 CONTROLE MANUAL ASSUMIDO - Conclua seus passos manuais e clique em RETOMAR para continuar o fluxo de trabalho.",
+      "automated": "🤖 AUTOMATIZADO: {command}",
+      "pausedBySystem": "⏸️ FLUXO DE TRABALHO PAUSADO PELO SISTEMA",
+      "resumedBySystem": "▶️ FLUXO DE TRABALHO RETOMADO PELO SISTEMA",
+      "executing": "🤖 EXECUTANDO: {command}",
+      "stepSkippedByUser": "⏭️ PASSO {step} IGNORADO PELO USUÁRIO",
+      "workflowSaved": "💾 FLUXO DE TRABALHO SALVO: {name}",
+      "workflowUpdated": "📋 FLUXO DE TRABALHO ATUALIZADO: passos configurados: {count}",
+      "manualCommand": "👤 MANUAL: {command}",
+      "example": {
+        "name": "Atualização do sistema e instalação de pacotes",
+        "updateDesc": "Atualizar repositórios de pacotes",
+        "updateExpl": "Atualiza a lista de pacotes disponíveis dos repositórios configurados.",
+        "upgradeDesc": "Atualizar pacotes instalados",
+        "upgradeExpl": "Atualiza todos os pacotes instalados para as versões mais recentes.",
+        "installDesc": "Instalar ferramentas essenciais",
+        "installExpl": "Instala ferramentas de desenvolvimento comumente necessárias.",
+        "verifyDesc": "Verificar instalações",
+        "verifyExpl": "Verifica se as ferramentas foram instaladas corretamente."
+      }
+    },
+    "events": {
+      "emergencyKill": "🛑 PARADA DE EMERGÊNCIA: Todos os processos encerrados pelo usuário",
+      "emergencyKillFailed": "❌ A parada de emergência falhou: {message}",
+      "interrupted": "^C (Processo interrompido pelo usuário)",
+      "error": "Erro: {error}"
     }
   },
   "llm": {
