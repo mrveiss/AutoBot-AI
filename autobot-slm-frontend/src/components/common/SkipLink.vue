@@ -13,16 +13,19 @@
 import { SkipLink } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   /** CSS selector of the element that receives focus. */
   target?: string
+  /** Translated label for a non-default target; defaults to "skip to main content". */
+  label?: string
 }>(), {
   target: '#main-content',
+  label: undefined,
 })
 
 const { t } = useI18n()
 </script>
 
 <template>
-  <SkipLink :target="target" :label="t('common.skipLink.mainContent')" />
+  <SkipLink :target="props.target" :label="props.label ?? t('common.skipLink.mainContent')" />
 </template>

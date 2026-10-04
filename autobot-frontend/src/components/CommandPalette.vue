@@ -233,7 +233,8 @@ const getAgentEmoji = (type: string): string => {
 }
 
 const getShortcutText = (command: Command): string => {
-  if (!command.shortcut) return 'Enter'
+  // The locale-neutral key glyph the footer uses, not English "Enter"
+  if (!command.shortcut) return '↵'
   // Show OS-specific shortcut
   const isMac = /Mac/.test(navigator.platform)
   return command.shortcut.replace('Cmd', isMac ? '⌘' : 'Ctrl')

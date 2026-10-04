@@ -289,7 +289,9 @@ onUnmounted(() => {
 /* Panel */
 .source-preview-panel {
   height: 100%;
-  /* #14771: a fixed drawer at the right/bottom edges clears the insets */
+  /* #14771: the drawer is teleported to body, outside #app's padding, and
+     spans the full height -- clear the top, right and bottom insets */
+  padding-top: var(--safe-top);
   padding-right: var(--safe-right);
   padding-bottom: var(--safe-bottom);
   background: var(--bg-card);

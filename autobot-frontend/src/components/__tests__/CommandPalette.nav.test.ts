@@ -90,4 +90,12 @@ describe('CommandPalette navigation section (#17561)', () => {
 
     expect(mockPush).toHaveBeenCalledWith('/automation')
   })
+
+  it('shows the locale-neutral ↵ key for a navigation row, never English "Enter"', () => {
+    const vm = mount(CommandPalette, { global: { plugins: [i18n] } }).vm as unknown as PaletteVm & {
+      getShortcutText: (c: unknown) => string
+    }
+    const nav = vm.commands.find((c) => c.id === 'nav:/home')!
+    expect(vm.getShortcutText(nav)).toBe('↵')
+  })
 })

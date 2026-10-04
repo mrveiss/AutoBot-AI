@@ -11,6 +11,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import indexHtml from '../../index.html?raw'
+import { safeAreaInsets } from '@/utils/safeAreaInsets'
 
 // Vitest's CSS handling returns '' for a `?raw` .css import, so read from disk.
 const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf-8')
@@ -48,5 +49,20 @@ describe('safe-area insets (#14771)', () => {
     expect(app.style.getPropertyValue('padding').trim()).toBe(
       'var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left)',
     )
+  })
+})
+
+describe('safeAreaInsets() (#14771)', () => {
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it("reads the resolved insets from #app's computed padding, in px", () => {
+    document.body.innerHTML = '<div id="app" style="padding: 44px 12px 34px 8px"></div>'
+    expect(safeAreaInsets()).toEqual({ top: 44, right: 12, bottom: 34, left: 8 })
+  })
+
+  it('reports no insets when there is no #app to read', () => {
+    expect(safeAreaInsets()).toEqual({ top: 0, right: 0, bottom: 0, left: 0 })
   })
 })
