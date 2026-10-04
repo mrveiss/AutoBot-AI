@@ -562,3 +562,28 @@ SPECIFIC_REASONS: dict[BaselineKey, str] = {
         "display heading either way."
     ),
 }
+
+
+# #15008: the Secrets page's translated category headings for API keys and
+# passwords. The keys `api_key`/`password` trip the Secret Keyword denylist; each
+# value is a display label, confirmed by re-hashing the literal (plain SHA1 of the
+# label reproduces the stored hashed_secret).
+_SECRETS_CATEGORY_LABELS = (
+    ("ar", "d27284876a7b732ef49257da961c9359499c51cf", "api_key", "مفاتيح API"),  # pragma: allowlist secret
+    ("es", "5de6e06c5bcb3cc07690af0096b73df4bb060e51", "api_key", "Claves de API"),  # pragma: allowlist secret
+    ("fa", "1ab08a21b8d719b395908b421d08bfff87c8bb54", "api_key", "کلیدهای API"),  # pragma: allowlist secret
+    ("he", "6fd45fcadd7fb7acb7022e777547f47c53b18d7f", "api_key", "מפתחות API"),  # pragma: allowlist secret
+    ("pt", "5476ca656516c77b4fd2f3b209f3a56ce4838a6e", "api_key", "Chaves de API"),  # pragma: allowlist secret
+    ("pt", "e33dc67583b5ca424d6ec11b74ceee559d2aba6c", "password", "Senhas"),  # pragma: allowlist secret
+    ("ur", "93ed2b9190fc912659d2145123a9c319963da152", "api_key", "API کلیدیں"),  # pragma: allowlist secret
+)
+SPECIFIC_REASONS.update(
+    {
+        (f"autobot-frontend/src/i18n/locales/{loc}.json", "Secret Keyword", digest): (
+            f"the i18n display label `{label}` (security.secretsManager.categories.{kind}), "
+            f"a Secrets-page category heading, not a credential; the key `{kind}` trips the "
+            "Secret Keyword denylist. Plain SHA1 of the literal label reproduces this hash."
+        )
+        for loc, digest, kind, label in _SECRETS_CATEGORY_LABELS
+    }
+)
