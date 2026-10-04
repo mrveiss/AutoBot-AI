@@ -325,3 +325,61 @@ def test_the_commit_path_reports_an_unreadable_staged_file(hook, tmp_path, monke
     """End to end on the path that blocks a push, not just on the message builder."""
     monkeypatch.setattr(hook, "repo_root", lambda: tmp_path)
     assert hook.check_paths(["autobot-frontend/src/never_written.vue"]) == 1
+
+
+#: The sum of every recorded ceiling, which only ever moves DOWN.
+#:
+#: WHY A THIRD NUMBER (#17970). The two records are compared against each other
+#: by `test_no_ceiling_exceeds_its_recorded_baseline`, so that check fires when
+#: ONE anchor is raised and is blind when BOTH are. Moving both is the
+#: documented way to grow a grandfathered file here --
+#: `autobot-backend/api/schemas_system.py` went 4306 -> 4346 across five merged
+#: commits exactly that way -- so "no ceiling may be raised" was a claim the
+#: Python ratchet made and did not enforce.
+#:
+#: A mirrored pair detects a transcription error between the copies. It cannot
+#: detect movement OF the pair, because both sides of the comparison move
+#: together. Direction needs a figure that does not move with the edit, which
+#: is what this is.
+#:
+#: The repo reached this conclusion once already and applied it to the other
+#: half: `MAX_KNOWN_LARGE_ENTRIES` exists because a two-sided *addition* passes
+#: the record-to-record check. This is the same argument one step over, for
+#: ceiling VALUES rather than entry COUNT.
+#:
+#: Re-pin DOWN when files shrink. Raising it is the thing being prevented, so a
+#: raise needs a recorded reason in the pull request, not a quiet edit.
+MAX_CEILING_TOTAL = 184571
+
+
+def test_the_ceiling_total_only_shrinks(hook):
+    """A two-sided raise is invisible to the record-to-record check; this sees it.
+
+    `test_no_ceiling_exceeds_its_recorded_baseline` compares KNOWN_LARGE against
+    RATCHET_BASELINE. Raise an entry in both and they agree again, so it passes
+    while a grandfathered file just grew. The total is pinned against a constant
+    that does not move with either record, so the raise shows up here.
+    """
+    total = sum(hook.KNOWN_LARGE.values())
+
+    assert total <= MAX_CEILING_TOTAL, (
+        f"recorded ceilings now total {total}, over the pinned {MAX_CEILING_TOTAL} "
+        f"(+{total - MAX_CEILING_TOTAL}). A grandfathered file grew. Raising both "
+        "records agrees with itself and passes every other check here (#17970) -- "
+        "this is the one that sees it. Split the file, or state in the PR why the "
+        "ceiling must rise and move this number with it."
+    )
+
+
+def test_the_ceiling_total_is_not_stale(hook):
+    """The contrast. Without it, the pin above could drift far above the real sum
+    and silently license growth up to the gap -- a floor that permits anything is
+    not a floor. Mirrors how `MAX_KNOWN_LARGE_ENTRIES` is kept honest.
+    """
+    total = sum(hook.KNOWN_LARGE.values())
+
+    assert total == MAX_CEILING_TOTAL, (
+        f"ceilings total {total} but the pin says {MAX_CEILING_TOTAL}. Files shrank "
+        "and the pin was not lowered, which re-licenses the lines just cut. Set "
+        f"MAX_CEILING_TOTAL = {total}."
+    )
