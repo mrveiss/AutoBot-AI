@@ -55,6 +55,7 @@ than by a heuristic that has to be kept ahead of how people write comments.
 from __future__ import annotations
 
 import ast
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -116,12 +117,52 @@ def _defines_symbol(path: Path, symbol: str = _SYMBOL) -> bool:
 
 
 def _forwards_by_name(node: ast.Call, symbol: str) -> bool:
-    """True for `getattr(obj, "symbol")` and its siblings."""
+    """True for `getattr(obj, "symbol")` and its siblings.
+
+    Only the **attribute-name position** counts. All four builtins take the name
+    second, so `getattr("is_accessible_by", "other")` looks up `other` on a string
+    that merely spells the symbol -- the constant is in the *object* position and
+    is not a reference to anything. Scanning every argument made that a match.
+    """
     func = node.func
     called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
     if called not in _FORWARDING_BUILTINS:
         return False
-    return any(isinstance(arg, ast.Constant) and arg.value == symbol for arg in node.args)
+    if len(node.args) < 2:
+        return False
+    name_arg = node.args[1]
+    return isinstance(name_arg, ast.Constant) and name_arg.value == symbol
+
+
+#: Statements after which the rest of their own block cannot execute. A call
+#: placed below one of these is dead code, so it is not evidence that anything
+#: is wired -- and "return early, leave the call behind" is precisely the owner's
+#: mutation this guard exists to catch.
+_TERMINATORS = (ast.Return, ast.Raise, ast.Continue, ast.Break)
+
+
+def _reachable_nodes(node: ast.AST) -> Iterator[ast.AST]:
+    """Every node execution can reach, pruning each block after its terminator.
+
+    This is deliberately *syntactic* reachability, not control-flow analysis:
+    within one statement list nothing after a `return`/`raise`/`continue`/`break`
+    can run, and that is the whole claim. It does not try to prove a branch is
+    never taken -- an `if False:` body is still yielded -- because guessing in
+    that direction drops real references, and a guard blind in the permissive
+    direction is vacuous (`MEASUREMENT_DISCIPLINE.md`). Pruning applies per
+    statement list, so code after `if cond: return` stays reachable, as it is.
+    """
+    yield node
+    for _field, value in ast.iter_fields(node):
+        if isinstance(value, list):
+            for item in value:
+                if not isinstance(item, ast.AST):
+                    continue
+                yield from _reachable_nodes(item)
+                if isinstance(item, _TERMINATORS):
+                    break  # the rest of this block is unreachable
+        elif isinstance(value, ast.AST):
+            yield from _reachable_nodes(value)
 
 
 def _references_symbol(path: Path, symbol: str = _SYMBOL) -> bool:
@@ -145,7 +186,7 @@ def _references_symbol(path: Path, symbol: str = _SYMBOL) -> bool:
     tree = _parsed(path)
     if tree is None:
         return False
-    for node in ast.walk(tree):
+    for node in _reachable_nodes(tree):
         if isinstance(node, ast.Name) and node.id == symbol:
             return True
         if isinstance(node, ast.Attribute) and node.attr == symbol:
@@ -247,6 +288,38 @@ _IMPORT_ONLY = "from models.secret import is_accessible_by  # re-exported\n"
 _RENAMED_IMPORT = "from models.secret import is_accessible_by as _check\n"
 _GETATTR = 'def f(s, u):\n    return getattr(s, "is_accessible_by")(u)\n'
 
+#: Dead-code shapes. The symbol is present *as code* and still proves nothing,
+#: because execution cannot reach it. These are not prose, so comment-stripping
+#: would not catch them -- only reachability does.
+_UNREACHABLE_AFTER_RETURN = """def scope_permits(secret, facts):
+    return True
+    return secret.is_accessible_by(facts.user_id)
+"""
+_UNREACHABLE_AFTER_RAISE = """def scope_permits(secret, facts):
+    raise NotImplementedError
+    return secret.is_accessible_by(facts.user_id)
+"""
+
+#: The symbol in the *object* position of a forwarding builtin. `other` is the
+#: attribute actually looked up; the constant only spells our symbol.
+_GETATTR_OBJECT_POSITION = 'def f():\n    return getattr("is_accessible_by", "other")\n'
+
+#: Reachable despite an early return above it -- the control for the pruning.
+#: Without this, `_reachable_nodes` could prune whole functions and the
+#: dead-code pair above would still pass.
+_CALL_AFTER_CONDITIONAL_RETURN = """def scope_permits(secret, facts):
+    if facts is None:
+        return False
+    return secret.is_accessible_by(facts.user_id)
+"""
+_CALL_AFTER_A_SIBLING_FUNCTION_RETURNS = """def unrelated():
+    return True
+
+
+def scope_permits(secret, facts):
+    return secret.is_accessible_by(facts.user_id)
+"""
+
 #: Prose-only shapes other than a module docstring.
 _COMMENT_ONLY = "# TODO(#16982): call is_accessible_by here.\ndef f(s, u):\n    return True\n"
 _FUNCTION_DOCSTRING_ONLY = 'def f(s, u):\n    """Equivalent to is_accessible_by."""\n    return True\n'
@@ -284,6 +357,8 @@ def test_prose_alone_is_not_a_reference(tmp_path: Path, label: str, source: str)
         ("an import with no call in this module", _IMPORT_ONLY),
         ("an aliased import", _RENAMED_IMPORT),
         ("a getattr forward", _GETATTR),
+        ("a call below an early return in a branch", _CALL_AFTER_CONDITIONAL_RETURN),
+        ("a call in a function after a sibling function returns", _CALL_AFTER_A_SIBLING_FUNCTION_RETURNS),
     ],
 )
 def test_real_code_is_a_reference(tmp_path: Path, label: str, source: str) -> None:
@@ -295,6 +370,29 @@ def test_real_code_is_a_reference(tmp_path: Path, label: str, source: str) -> No
     assert _references_symbol(_module(tmp_path, "code", source)), (
         f"`{_SYMBOL}` reached by {label} was not counted. The finder is now blind in "
         "the permissive direction, which makes the wiring assertion vacuous."
+    )
+
+
+@pytest.mark.parametrize(
+    "label,source",
+    [
+        ("a call below a bare `return`", _UNREACHABLE_AFTER_RETURN),
+        ("a call below a `raise`", _UNREACHABLE_AFTER_RAISE),
+        ("the symbol in a forwarding builtin's object position", _GETATTR_OBJECT_POSITION),
+    ],
+)
+def test_code_that_cannot_run_is_not_a_reference(tmp_path: Path, label: str, source: str) -> None:
+    """A third way to be present without being wired, after prose and definition.
+
+    Stripping comments does not catch these: the symbol really is in the AST as
+    code. Only reachability (and, for the last one, argument position) separates
+    "the call is there" from "the call happens". The first two are the owner's
+    #17822 mutation in its most faithful form -- return early, leave the call
+    sitting underneath -- which the comment-stripping fix would have passed.
+    """
+    assert not _references_symbol(_module(tmp_path, "dead", source)), (
+        f"`{_SYMBOL}` reached only as {label} was counted as a production reference. "
+        "Execution never gets there, so the wiring assertion it satisfies is vacuous."
     )
 
 

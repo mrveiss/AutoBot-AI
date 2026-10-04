@@ -21,6 +21,9 @@ dispatching or the processor stops branching, because a deleted file leaves no s
 its own.
 """
 
+import ast
+import inspect
+import textwrap
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -30,7 +33,14 @@ import pytest
 from services import kb_folder_events
 from services.kb_folder_events import KBFolderChangeHandler
 
-CONFIG = SimpleNamespace(folder_id="f1", file_types=["txt", "md"], category="uploads", tags=[], collection="notes")
+CONFIG = SimpleNamespace(
+    folder_id="f1",
+    path="/watched",
+    file_types=["txt", "md"],
+    category="uploads",
+    tags=[],
+    collection="notes",
+)
 
 
 class _Watcher:
@@ -387,6 +397,31 @@ def test_a_failed_handoff_is_a_warning_naming_the_file(caplog):
     assert "notes.txt" in record.getMessage() and "DROPPED" in record.getMessage()
 
 
+def test_two_files_with_the_same_name_in_different_folders_are_told_apart(caplog):
+    """The drop log must identify *which* file, not just what it was called.
+
+    A watch folder is recursive, so `notes.txt` is not a unique name within it.
+    Logging only the basename produced two identical DROPPED lines for two
+    different files, which is the one thing a reader of this log needs to
+    distinguish. The root is stripped rather than logged, so the line stays
+    specific without carrying the host's filesystem layout.
+    """
+    watcher, handler = _handler(accept=False)
+    with caplog.at_level("DEBUG", logger=kb_folder_events.__name__):
+        handler.on_modified(_event("/watched/alpha/notes.txt"))
+        handler.on_modified(_event("/watched/beta/notes.txt"))
+
+    messages = [r.getMessage() for r in _drop_records(caplog)]
+    assert len(messages) == 2, f"expected both drops to be logged, got {len(messages)}"
+    assert messages[0] != messages[1], (
+        "both dropped files logged the identical line, so the log cannot say which " f"file was lost: {messages[0]!r}"
+    )
+    assert "alpha/notes.txt" in messages[0] and "beta/notes.txt" in messages[1]
+    assert (
+        "/watched" not in messages[0]
+    ), "the watched root leaked into the log line; only the part relative to it belongs there"
+
+
 def test_a_dispatched_event_is_not_reported_as_a_drop(caplog):
     """The contrast pair for all four above: the success path logs no drop.
 
@@ -401,6 +436,82 @@ def test_a_dispatched_event_is_not_reported_as_a_drop(caplog):
     assert _drop_records(caplog) == []
 
 
+def _is_logger_call(stmt: ast.stmt) -> bool:
+    """True for a bare `logger.<level>(...)` statement."""
+    return (
+        isinstance(stmt, ast.Expr)
+        and isinstance(stmt.value, ast.Call)
+        and isinstance(stmt.value.func, ast.Attribute)
+        and isinstance(stmt.value.func.value, ast.Name)
+        and stmt.value.func.value.id == "logger"
+    )
+
+
+def _drop_sites(function: ast.FunctionDef) -> tuple[int, int]:
+    """(blocks ending in a bare `return`, those that log *before* it).
+
+    Order is the whole point. The first version of this guard asked whether a
+    `logger` call appeared anywhere in the same block as the return, which a
+    call placed *after* the return satisfies just as well -- and such a call can
+    never execute, so it is precisely the silent drop the guard exists to
+    forbid. Only statements preceding the first bare return are counted.
+    """
+    total = logged = 0
+    for node in ast.walk(function):
+        for field in ("body", "orelse", "finalbody"):
+            block = getattr(node, field, None)
+            if not isinstance(block, list):
+                continue
+            idx = next(
+                (i for i, st in enumerate(block) if isinstance(st, ast.Return) and st.value is None),
+                None,
+            )
+            if idx is None:
+                continue
+            total += 1
+            if any(_is_logger_call(st) for st in block[:idx]):
+                logged += 1
+    return total, logged
+
+
+#: Contrast trio for `_drop_sites`. The middle one is the mutation the original
+#: order-blind check accepted; without it, reordering the guard back would be
+#: invisible.
+_LOGGED_FIRST = """def f(self, x):
+    if x:
+        logger.debug("dropping %s", x)
+        return
+"""
+_LOGGED_AFTER_RETURN = """def f(self, x):
+    if x:
+        return
+        logger.debug("dropping %s", x)
+"""
+_NOT_LOGGED = """def f(self, x):
+    if x:
+        return
+"""
+
+
+@pytest.mark.parametrize(
+    "label,source,expected_logged",
+    [
+        ("the logger call precedes the return", _LOGGED_FIRST, 1),
+        ("the logger call sits below the return, so it cannot run", _LOGGED_AFTER_RETURN, 0),
+        ("there is no logger call at all", _NOT_LOGGED, 0),
+    ],
+)
+def test_the_drop_site_check_requires_the_log_to_come_first(label: str, source: str, expected_logged: int) -> None:
+    """The guard's own contrast pair -- without it the ordering fix is untested."""
+    [function] = [n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef)]
+    total, logged = _drop_sites(function)
+    assert total == 1, f"fixture should have exactly one drop site, found {total}"
+    assert logged == expected_logged, (
+        f"with {label}, `_drop_sites` reported {logged} logged drop sites, expected "
+        f"{expected_logged}. An order-blind check reports 1 for all three."
+    )
+
+
 def test_every_return_in_handle_change_logs_first():
     """The structural guard, so a future `return` added here cannot be silent.
 
@@ -409,31 +520,14 @@ def test_every_return_in_handle_change_logs_first():
     than over behaviour, deliberately -- the behaviour of a branch nobody thought
     to write a test for is exactly what is unreachable from a behavioural test.
     """
-    import ast
-    import inspect
-    import textwrap
-
     tree = ast.parse(textwrap.dedent(inspect.getsource(KBFolderChangeHandler._handle_change)))
     [function] = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
-    bare_returns = [n for n in ast.walk(function) if isinstance(n, ast.Return) and n.value is None]
-    assert len(bare_returns) == 4, f"expected the 4 known drop sites, found {len(bare_returns)}"
 
-    logged = [
-        node
-        for node in ast.walk(function)
-        if isinstance(node, ast.If)
-        and any(isinstance(stmt, ast.Return) and stmt.value is None for stmt in node.body)
-        and any(
-            isinstance(stmt, ast.Expr)
-            and isinstance(stmt.value, ast.Call)
-            and isinstance(stmt.value.func, ast.Attribute)
-            and isinstance(stmt.value.func.value, ast.Name)
-            and stmt.value.func.value.id == "logger"
-            for stmt in node.body
-        )
-    ]
-    assert len(logged) == 4, (
-        f"{4 - len(logged)} of the 4 early returns in `_handle_change` drop a watch-folder "
-        "event without logging a reason (#17547 AC3). A silent return is indistinguishable "
-        "from watchdog never firing, which is the state this issue exists to end."
+    total, logged = _drop_sites(function)
+    assert total == 4, f"expected the 4 known drop sites, found {total}"
+    assert logged == 4, (
+        f"{total - logged} of the {total} early returns in `_handle_change` drop a watch-folder "
+        "event without logging a reason first (#17547 AC3). A silent return is indistinguishable "
+        "from watchdog never firing, which is the state this issue exists to end. A `logger` call "
+        "placed after the return does not count -- it cannot execute."
     )
