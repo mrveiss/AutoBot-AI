@@ -47,6 +47,10 @@ on:
   # python-required-context.yml serves `python-suite` (#14353).
   # Branch-protection promotion to required happened separately (#10022).
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [release, main, develop]
 
 concurrency:
@@ -58,6 +62,11 @@ permissions:
 
 jobs:
   changes:
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
+    # every `always()` aggregate below reads `needs.changes.result`.
+    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # context would report FAILED on every draft -- worse than no gate.
+    # Gate the expensive jobs, never the cheap thing others read.
     name: Detect changed paths
     runs-on: ubuntu-latest
     outputs:

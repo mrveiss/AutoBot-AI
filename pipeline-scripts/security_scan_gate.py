@@ -82,6 +82,19 @@ def parse_bandit(payload: str) -> list[Finding]:
             + (f" ({document.get('errors') or 'unrecognised document'})" if isinstance(document, dict) else "")
             + ". A scan that did not run is not a scan that found nothing."
         )
+    # A PARSE FAILURE KEEPS `results` AND FILLS `errors` (#16185). The check above
+    # only catches a document with no `results` at all; real bandit output for a file
+    # it could not parse is `{"results": [], "errors": [...]}` -- `results` present,
+    # empty, and byte-identical in outcome to a genuinely clean scan. Measured: that
+    # payload returned 0 findings and the gate PASSED. Every file bandit choked on was
+    # reported as having nothing wrong with it.
+    scan_errors = document.get("errors") or []
+    if scan_errors:
+        raise ReportError(
+            f"bandit reported {len(scan_errors)} scan error(s), so its `results` cover "
+            f"fewer files than were submitted: {scan_errors}. "
+            "A file that was never parsed is not a file without findings."
+        )
     return [
         Finding(
             severity=_normalise(result.get("issue_severity", "")),

@@ -13,6 +13,10 @@ on:
     # never reports blocks forever, which is why the queue (#15937 / #14054)
     # could not be enabled while this was missing.
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     # #14747: NO `branches:` FILTER, DELIBERATE. It used to read
     # `[ release, main ]`, which excluded STACKED pull requests -- one whose
     # base is another feature branch. Those never triggered this workflow, so
@@ -84,6 +88,11 @@ permissions:
 
 jobs:
   changes:
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
+    # every `always()` aggregate below reads `needs.changes.result`.
+    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # context would report FAILED on every draft -- worse than no gate.
+    # Gate the expensive jobs, never the cheap thing others read.
     name: Detect changed paths
     runs-on: ubuntu-latest
     outputs:
@@ -132,7 +141,7 @@ jobs:
   python-shard:
     name: python-suite shard ${{ matrix.shard }}/12
     needs: changes
-    if: needs.changes.outputs.python == 'true'
+    if: ${{ (needs.changes.outputs.python == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
     # #16320: first in, first out across PRs.
     #
