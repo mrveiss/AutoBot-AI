@@ -424,8 +424,7 @@ class SecurityConstants:
     # a format to the route guard alone admits a file the validator was never
     # taught to accept, and dropping one from the security module alone leaves
     # two paths still advertising it. One set removes that failure mode. A
-    # genuine difference between the three belongs here as a named subset,
-    # never as a fourth literal.
+    # genuine difference belongs below as a named subset, never as a literal.
     ALLOWED_AUDIO_EXTENSIONS: Set[str] = {
         ".wav",
         ".mp3",
@@ -435,6 +434,10 @@ class SecurityConstants:
         ".flac",
         ".webm",
     }
+
+    # Derived supersets, never literals (#13615); deltas+controls in repo_tests/audio_extension_allowlist_test.py
+    KB_AUDIO_INGEST_EXTENSIONS: Set[str] = ALLOWED_AUDIO_EXTENSIONS | {".mkv"}
+    MEDIA_CONNECTOR_EXTENSIONS: Set[str] = ALLOWED_AUDIO_EXTENSIONS | {".mkv", ".avi", ".mov"}
 
     USER_AGENT_POOL: List[str] = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",  # noqa: E501
@@ -713,11 +716,8 @@ class WorkflowConfig:
     DEFAULT_ESTIMATED_DURATION_MIN = 30
     DEFAULT_TIMEOUT_MIN = 120
     MIN_DURATION_FACTOR = 0.5
-    COMPLEXITY_SIMPLE = 0.8
-    COMPLEXITY_RESEARCH = 1.0
-    COMPLEXITY_INSTALL = 1.1
-    COMPLEXITY_COMPLEX = 1.2
-    COMPLEXITY_SECURITY_SCAN = 1.3
+    COMPLEXITY_SIMPLE = 0.8  # one per TaskComplexity member (#376); there are two
+    COMPLEXITY_COMPLEX = 1.3  # declared 1.2, applied 1.3: the aliases collapsed (#13806)
 
 
 class ServiceDiscoveryConfig:

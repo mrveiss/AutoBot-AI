@@ -17,7 +17,7 @@ import aiofiles
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from autobot_shared.code_graph import compute_node_id, module_path_from_rel_path
+from autobot_shared.code_graph import compute_node_id, extract_dotted_callee, module_path_from_rel_path
 from autobot_shared.code_graph import resolve_callee as _shared_resolve_callee
 from autobot_shared.env_utils import blank_to_none, env_float
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
@@ -236,7 +236,7 @@ def _extract_callee_name(node) -> str | None:
     if isinstance(node.func, ast.Name):
         return node.func.id
     elif isinstance(node.func, ast.Attribute):
-        return node.func.attr
+        return node.func.attr  # bare: the dotted form would break resolution -- see extract_dotted_callee (#13492)
     return None
 
 
@@ -275,6 +275,7 @@ def _resolve_callee_id(
     current_class: str,
     functions: Dict,
     import_context: ImportContext | None = None,
+    dotted_name: str | None = None,
 ) -> tuple[str | None, bool]:
     """
     Resolve a callee name to its full function ID.
@@ -288,10 +289,8 @@ def _resolve_callee_id(
     straight through as the resolver's ``known_ids`` container; dict
     membership checks by key, so this is not a behaviour change.
 
-    The trailing dotted-name check below is retained for exact behaviour
-    parity even though ``FunctionCallVisitor._extract_callee_name`` never
-    actually returns a name containing "." (attribute calls yield only the
-    final ``.attr`` component) — filed as a follow-up (#13470 remaining work).
+    Issue #13492: the dotted-name check below was unreachable from the AST path
+    and is now wired in via ``dotted_name`` -- see ``call_graph_resolution_test``.
 
     Args:
         callee_name: Name of the called function
@@ -311,8 +310,8 @@ def _resolve_callee_id(
     if resolved_id or is_external:
         return resolved_id, is_external
 
-    if callee_name and "." in callee_name:
-        base = callee_name.split(".")[0]
+    if (dotted := dotted_name or callee_name) and "." in dotted:  # fallback: direct callers (#13492)
+        base = dotted.split(".")[0]
         if base in STDLIB_MODULES or base in COMMON_THIRD_PARTY:
             return None, True
 
@@ -479,25 +478,26 @@ class FunctionCallVisitor(ast.NodeVisitor):
 
         callee_name = _extract_callee_name(node)
         if callee_name and callee_name not in BUILTIN_FUNCS:
-            self._record_call(callee_name, node.lineno)
+            self._record_call(callee_name, node.lineno, extract_dotted_callee(node))
 
         self.generic_visit(node)
 
-    def _record_call(self, callee_name: str, line: int):
-        """Record a function call edge. Issue #713: Extracted for brevity."""
+    def _record_call(self, callee_name: str, line: int, dotted_name: str | None = None):
+        """Record a call edge (#713). ``dotted_name`` decides externality only (#13492)."""
         callee_id, is_external = _resolve_callee_id(
             callee_name,
             self.module_path,
             self.current_class,
             self.functions,
             self.import_context,
+            dotted_name=dotted_name,
         )
 
         if is_external and self.external_calls is not None:
             self.external_calls.append(
                 {
                     "from": self.current_function,
-                    "to_name": callee_name,
+                    "to_name": dotted_name or callee_name,  # dotted: "loads" collides (#13492)
                     "line": line,
                 }
             )
