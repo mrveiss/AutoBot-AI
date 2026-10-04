@@ -159,6 +159,7 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
 #: and that is the point -- the scope is a decision, so it is written twice on purpose.
 _DECLARED_SCOPES = {
     "direct-secrets-service-callers": ("autobot-backend", "autobot_shared"),
+    "jekyll-processed-docs": ("docs",),
     "kb-admin-read-bypass": ("autobot-backend/", "autobot_shared/"),
     "kb-read-visibility-production-sweep": (
         "autobot-backend/",
@@ -186,6 +187,7 @@ def test_every_scoped_declaration_claims_the_roots_recorded_here() -> None:
     stays green over two thirds of the population -- the exact state #17844 was filed about.
     """
     import repo_tests.direct_secrets_service_callers_17773_test  # noqa: F401, PLC0415
+    import repo_tests.docs_liquid_tags_are_defined_17930_test  # noqa: F401, PLC0415
     import repo_tests.kb_admin_read_bypass_guard_test  # noqa: F401, PLC0415
     import repo_tests.model_revision_pinning_enforced_17804_test  # noqa: F401, PLC0415
     import repo_tests.one_claim_registry_16653_test  # noqa: F401, PLC0415
