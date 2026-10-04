@@ -11,7 +11,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Tuple
 
+from autobot_shared.logging_manager import get_logger
+
 from .enums import MemoryCategory, TaskPriority, TaskStatus
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -47,6 +51,44 @@ class TaskExecutionRecord:
     parent_task_id: str | None = None
     subtask_ids: List[str] | None = None
     metadata: Dict[str, Any] | None = None
+
+    def elapsed_seconds(self, completed_at: datetime) -> float | None:
+        """Seconds from ``started_at`` to *completed_at*, or ``None`` if unknowable.
+
+        #13344: ``MemoryManager.update_task_status`` rejects a negative
+        ``duration_seconds``, and that ``ValueError`` escaped through
+        ``TaskExecutionTracker.track_task``, which re-raises — so a bookkeeping
+        inconsistency failed the caller's *real* work. One observed run reported
+        "Contextual decision making failed" for a decision that had succeeded.
+
+        **The cause of ``started_at > completed_at`` is not established.** Every
+        production writer stores an aware UTC value and the SQLite round-trip is
+        lossless, so neither hypothesis on #13344 is demonstrable from the code;
+        a wall-clock step and an untyped ``update_task_status(started_at=...)``
+        kwarg both remain possible and neither is provable here.
+
+        What does not depend on the cause: an unknowable duration must not be
+        invented, and must not abort the tracked operation. So this returns
+        ``None`` — *we do not know* — and logs both instants and the delta, so
+        the next occurrence names its own cause. It deliberately does **not**
+        clamp to ``0``: a zero is a measurement, and writing one would hide the
+        skew behind a plausible number.
+        """
+        if not self.started_at:
+            return None
+        duration = (completed_at - self.started_at).total_seconds()
+        if duration >= 0:
+            return duration
+        logger.error(
+            "Task %s: started_at (%s) is AFTER completed_at (%s) by %.3fs — recording "
+            "duration_seconds=None rather than a clamped value. The tracked operation is "
+            "unaffected; this is skew in the bookkeeping clock or round-trip (#13344).",
+            self.task_id,
+            self.started_at.isoformat(),
+            completed_at.isoformat(),
+            -duration,
+        )
+        return None
 
     def to_db_tuple(self) -> Tuple:
         """Convert to tuple for SQLite insertion (Issue #372 - reduces feature envy).
