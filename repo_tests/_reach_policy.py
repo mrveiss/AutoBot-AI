@@ -117,6 +117,15 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
         "FIXED_INVENTORY",
         "Single-digit compose files; a fraction of any reference is noise at this size.",
     ),
+    "jekyll-processed-docs": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Markdown under `docs/` carrying front matter -- the only files Jekyll renders through "
+        "Liquid. All `docs/**/*.md` is the obvious reference and it is the wrong one: it is the "
+        "`archives/` case named in this module's own header. Archived pages are added without "
+        "front matter and never removed, so the processed share sinks with nothing wrong, and a "
+        "fraction of the whole would fire on that drift rather than on a guard going blind.",
+    ),
     "chromadb-compose-port-sites": (ABSOLUTE, "NOT_PATHS", "Parsed `ports:` entries, not files."),
     "chromadb-compose-services": (ABSOLUTE, "NOT_PATHS", "Parsed compose services, not files."),
     "collectable-modules-inert-on-import": (
