@@ -972,7 +972,11 @@
     "confirmDeleteVoice": "¿Eliminar la voz \"{name}\"?",
     "languageVoicesActive": "Voces específicas del idioma {count} configuradas",
     "confirmDeleteVoiceTitle": "Eliminar perfil de voz",
-    "tapToEnableAudio": "Toca en cualquier lugar para habilitar la reproducción de audio"
+    "tapToEnableAudio": "Toca en cualquier lugar para habilitar la reproducción de audio",
+    "speech": {
+      "url": "un enlace",
+      "path": "una ruta de archivo"
+    }
   },
   "analytics": {
     "title": "Analítica",
@@ -4963,7 +4967,7 @@
       "stepSkippedByUser": "⏭️ PASO {step} OMITIDO POR EL USUARIO",
       "workflowSaved": "💾 FLUJO DE TRABAJO GUARDADO: {name}",
       "workflowUpdated": "📋 FLUJO DE TRABAJO ACTUALIZADO: pasos configurados: {count}",
-      "manualCommand": "👤 MANUAL: {command}",
+      "manualCommand": "👤 MODO MANUAL: {command}",
       "example": {
         "name": "Actualización del sistema e instalación de paquetes",
         "updateDesc": "Actualizar repositorios de paquetes",
@@ -4980,7 +4984,7 @@
       "emergencyKill": "🛑 PARADA DE EMERGENCIA: Todos los procesos terminados por el usuario",
       "emergencyKillFailed": "❌ La parada de emergencia falló: {message}",
       "interrupted": "^C (Proceso interrumpido por el usuario)",
-      "error": "Error: {error}"
+      "error": "Se produjo un error: {error}"
     }
   },
   "llm": {

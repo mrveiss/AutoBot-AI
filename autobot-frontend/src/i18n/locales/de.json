@@ -972,7 +972,11 @@
     "confirmDeleteVoice": "Stimme „{name}“ löschen?",
     "languageVoicesActive": "{count} sprachspezifische(n) Stimme(n) konfiguriert",
     "confirmDeleteVoiceTitle": "Stimmprofil löschen",
-    "tapToEnableAudio": "Tippen Sie irgendwo, um die Audiowiedergabe zu aktivieren"
+    "tapToEnableAudio": "Tippen Sie irgendwo, um die Audiowiedergabe zu aktivieren",
+    "speech": {
+      "url": "ein Link",
+      "path": "ein Dateipfad"
+    }
   },
   "analytics": {
     "title": "Analytik",

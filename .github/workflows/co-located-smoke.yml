@@ -29,6 +29,10 @@ name: Co-located Smoke
 
 on:
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - main
     paths:
@@ -66,6 +70,7 @@ permissions:
 jobs:
   # Classes (c) + (d): pytest-shaped regression pins. Fast, no containers.
   authz-and-selection:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -116,6 +121,7 @@ jobs:
   # Classes (a) + (b): live co-located compose stack (frontend at /, SLM at
   # /slm — the same single-host topology as bare-metal co-located installs).
   colocated-stack:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
