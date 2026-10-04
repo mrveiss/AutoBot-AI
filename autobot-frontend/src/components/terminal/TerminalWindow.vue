@@ -1083,8 +1083,9 @@ export default {
     };
 
     // Cursor blinking effect
+    let cursorBlinkInterval = null;
     const startCursorBlink = () => {
-      setInterval(() => {
+      cursorBlinkInterval = setInterval(() => {
         showCursor.value = !showCursor.value;
       }, 500);
     };
@@ -1166,6 +1167,8 @@ export default {
       document.removeEventListener('click', handleTerminalFocusClick);
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('beforeunload', handleBeforeUnload);
+
+      clearInterval(cursorBlinkInterval);
 
       // Clean up focus interval for automated testing
       if (window.terminalFocusInterval) {

@@ -114,8 +114,10 @@ describe('buildAutomationSteps / workflowStartedLines (#17942)', () => {
   it('announces a nameless workflow under the translated fallback name', () => {
     const [started, planned] = workflowStartedLines(workflow, t)
 
-    expect(started.content).toContain('terminal.automation.started')
-    expect(started.content).toContain('terminal.automation.unnamedWorkflow')
+    expect(started).toMatchObject({
+      type: 'system_message',
+      content: 'terminal.automation.started{"name":"terminal.automation.unnamedWorkflow"}'
+    })
     expect(planned).toMatchObject({ type: 'workflow_info', content: 'terminal.automation.stepsPlanned{"count":2}' })
   })
 })
