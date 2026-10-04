@@ -4216,7 +4216,44 @@
     "emergencyKillTitle": "Emergency Kill All Processes",
     "infrastructureHosts": "Infrastructure Hosts",
     "resumeAutomation": "Resume Automation",
-    "host": "Host:"
+    "host": "Host:",
+    "automation": {
+      "started": "🚀 תהליך עבודה אוטומטי התחיל: {name}",
+      "stepsPlanned": "📋 תוכננו {count} שלבים. השתמש בכפתור השהיה כדי לקחת שליטה ידנית בכל עת.",
+      "unnamedWorkflow": "תהליך עבודה ללא שם",
+      "executeStep": "בצע: {command}",
+      "paused": "⏸️ האוטומציה הושהתה - שליטה ידנית הופעלה. הקלד פקודות בחופשיות.",
+      "resumed": "▶️ האוטומציה חודשה - ממשיך בביצוע תהליך העבודה.",
+      "aboutToExecute": "🤖 תהליך AI: עומד לבצע \"{command}\"",
+      "stepProgress": "📋 שלב {step}/{total}: {description}",
+      "skipped": "⏭️ דולג: {command}",
+      "manualControlTaken": "👤 נלקחה שליטה ידנית - השלם את השלבים הידניים ולאחר מכן לחץ על המשך כדי להמשיך בתהליך העבודה.",
+      "automated": "🤖 אוטומטי: {command}",
+      "pausedBySystem": "⏸️ תהליך העבודה הושהה על ידי המערכת",
+      "resumedBySystem": "▶️ תהליך העבודה חודש על ידי המערכת",
+      "executing": "🤖 מבצע: {command}",
+      "stepSkippedByUser": "⏭️ שלב {step} דולג על ידי המשתמש",
+      "workflowSaved": "💾 תהליך העבודה נשמר: {name}",
+      "workflowUpdated": "📋 תהליך העבודה עודכן: שלבים מוגדרים: {count}",
+      "manualCommand": "👤 ידני: {command}",
+      "example": {
+        "name": "עדכון מערכת והתקנת חבילות",
+        "updateDesc": "עדכון מאגרי חבילות",
+        "updateExpl": "מעדכן את רשימת החבילות הזמינות מהמאגרים המוגדרים.",
+        "upgradeDesc": "שדרוג חבילות מותקנות",
+        "upgradeExpl": "משדרג את כל החבילות המותקנות לגרסאות האחרונות.",
+        "installDesc": "התקנת כלים חיוניים",
+        "installExpl": "מתקין כלי פיתוח נפוצים.",
+        "verifyDesc": "אימות התקנות",
+        "verifyExpl": "בודק שהכלים הותקנו כראוי."
+      }
+    },
+    "events": {
+      "emergencyKill": "🛑 עצירת חירום: כל התהליכים הופסקו על ידי המשתמש",
+      "emergencyKillFailed": "❌ עצירת החירום נכשלה: {message}",
+      "interrupted": "^C (התהליך נקטע על ידי המשתמש)",
+      "error": "שגיאה: {error}"
+    }
   },
   "manpage": {
     "manager": {

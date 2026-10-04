@@ -4216,7 +4216,44 @@
     "emergencyKillTitle": "Emergency Kill All Processes",
     "infrastructureHosts": "Infrastructure Hosts",
     "resumeAutomation": "Resume Automation",
-    "host": "Host:"
+    "host": "Host:",
+    "automation": {
+      "started": "🚀 گردش کار خودکار آغاز شد: {name}",
+      "stepsPlanned": "📋 {count} مرحله برنامه‌ریزی شد. برای در دست گرفتن کنترل دستی در هر زمان از دکمه توقف استفاده کنید.",
+      "unnamedWorkflow": "گردش کار بدون نام",
+      "executeStep": "اجرا: {command}",
+      "paused": "⏸️ خودکارسازی متوقف شد - کنترل دستی فعال شد. دستورات را آزادانه وارد کنید.",
+      "resumed": "▶️ خودکارسازی از سر گرفته شد - ادامه اجرای گردش کار.",
+      "aboutToExecute": "🤖 گردش کار هوش مصنوعی: در آستانه اجرای \"{command}\"",
+      "stepProgress": "📋 مرحله {step}/{total}: {description}",
+      "skipped": "⏭️ رد شد: {command}",
+      "manualControlTaken": "👤 کنترل دستی در دست گرفته شد - مراحل دستی خود را کامل کنید، سپس برای ادامه گردش کار روی ادامه کلیک کنید.",
+      "automated": "🤖 خودکار: {command}",
+      "pausedBySystem": "⏸️ گردش کار توسط سیستم متوقف شد",
+      "resumedBySystem": "▶️ گردش کار توسط سیستم از سر گرفته شد",
+      "executing": "🤖 در حال اجرا: {command}",
+      "stepSkippedByUser": "⏭️ مرحله {step} توسط کاربر رد شد",
+      "workflowSaved": "💾 گردش کار ذخیره شد: {name}",
+      "workflowUpdated": "📋 گردش کار به‌روزرسانی شد: مراحل پیکربندی‌شده: {count}",
+      "manualCommand": "👤 دستی: {command}",
+      "example": {
+        "name": "به‌روزرسانی سیستم و نصب بسته‌ها",
+        "updateDesc": "به‌روزرسانی مخازن بسته",
+        "updateExpl": "فهرست بسته‌های موجود را از مخازن پیکربندی‌شده به‌روزرسانی می‌کند.",
+        "upgradeDesc": "ارتقای بسته‌های نصب‌شده",
+        "upgradeExpl": "همه بسته‌های نصب‌شده را به آخرین نسخه ارتقا می‌دهد.",
+        "installDesc": "نصب ابزارهای ضروری",
+        "installExpl": "ابزارهای توسعه پرکاربرد را نصب می‌کند.",
+        "verifyDesc": "بررسی نصب‌ها",
+        "verifyExpl": "بررسی می‌کند که ابزارها به درستی نصب شده باشند."
+      }
+    },
+    "events": {
+      "emergencyKill": "🛑 توقف اضطراری: همه فرایندها توسط کاربر خاتمه یافت",
+      "emergencyKillFailed": "❌ توقف اضطراری ناموفق بود: {message}",
+      "interrupted": "^C (فرایند توسط کاربر قطع شد)",
+      "error": "خطا: {error}"
+    }
   },
   "manpage": {
     "manager": {
