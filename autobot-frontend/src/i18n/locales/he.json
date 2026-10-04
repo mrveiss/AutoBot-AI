@@ -7494,7 +7494,11 @@
     "stopListening": "Stop listening",
     "stop": "Stop",
     "confirmDeleteVoiceTitle": "מחיקת פרופיל קול",
-    "tapToEnableAudio": "הקש בכל מקום כדי להפעיל את השמעת האודיו"
+    "tapToEnableAudio": "הקש בכל מקום כדי להפעיל את השמעת האודיו",
+    "speech": {
+      "url": "קישור",
+      "path": "נתיב קובץ"
+    }
   },
   "auth": {
     "login": {

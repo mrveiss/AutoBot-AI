@@ -33,6 +33,10 @@ name: import-hermeticity-sweep
 # update or close an issue: those describe the base, not a diff that may never merge.
 on:
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
     paths:
       - 'autobot-backend/**'
@@ -72,6 +76,7 @@ concurrency:
 
 jobs:
   sweep:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     # issues: write so a red sweep on the base reaches a reader. A push or scheduled
