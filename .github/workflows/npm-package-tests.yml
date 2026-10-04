@@ -27,6 +27,10 @@ on:
       - 'autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking/**'
       - '.github/workflows/npm-package-tests.yml'
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [release, main, develop]
     # SAFE under #13388: "NPM Package Tests" is not one of the required contexts
     # on main, so this workflow may skip its run entirely. The job-level
@@ -52,6 +56,11 @@ env:
 jobs:
   # Always runs so the check reports a conclusion even when nothing matched.
   changes:
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
+    # every `always()` aggregate below reads `needs.changes.result`.
+    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # context would report FAILED on every draft -- worse than no gate.
+    # Gate the expensive jobs, never the cheap thing others read.
     name: Detect changed packages
     runs-on: ubuntu-latest
     outputs:
@@ -79,6 +88,7 @@ jobs:
               - '.github/workflows/npm-package-tests.yml'
 
   npm-package-tests:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: NPM Package Tests
     needs: changes
     runs-on: ubuntu-latest
