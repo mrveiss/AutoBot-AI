@@ -2232,7 +2232,9 @@
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "لم يتم تشغيل فحص التكرارات، لذا هذه ليست نتيجة. تحقق من مصدر الشيفرة المحدد وأعد تشغيل الفحص.",
+      "notScanned": "لم يتم تشغيل أي فحص للتكرارات لمصدر الشيفرة هذا بعد."
     },
     "hardcodes": {
       "title": "قيم مشفرة ثابتة",

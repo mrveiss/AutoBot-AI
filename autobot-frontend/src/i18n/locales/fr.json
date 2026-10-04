@@ -2232,7 +2232,9 @@
         "high": "Haute similarité",
         "medium": "Similarité moyenne",
         "low": "Faible similarité"
-      }
+      },
+      "scanFailed": "L'analyse des doublons n'a pas été exécutée : ceci n'est donc pas un résultat. Vérifiez la source de code sélectionnée et relancez l'analyse.",
+      "notScanned": "Aucune analyse des doublons n'a encore été exécutée pour cette source de code."
     },
     "hardcodes": {
       "title": "Valeurs codées en dur",

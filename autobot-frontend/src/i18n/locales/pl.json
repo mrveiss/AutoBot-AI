@@ -2232,7 +2232,9 @@
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "Skanowanie duplikatów nie zostało wykonane, więc to nie jest wynik. Sprawdź wybrane źródło kodu i uruchom skanowanie ponownie.",
+      "notScanned": "Dla tego źródła kodu nie wykonano jeszcze skanowania duplikatów."
     },
     "hardcodes": {
       "title": "Wartości zakodowane",

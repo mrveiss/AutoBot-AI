@@ -2232,7 +2232,9 @@
         "high": "Alta similitud",
         "medium": "Similitud media",
         "low": "Baja similitud"
-      }
+      },
+      "scanFailed": "El análisis de duplicados no se ejecutó, así que esto no es un resultado. Revise el origen de código seleccionado y vuelva a ejecutar el análisis.",
+      "notScanned": "Aún no se ha ejecutado ningún análisis de duplicados para este origen de código."
     },
     "hardcodes": {
       "title": "Valores codificados",

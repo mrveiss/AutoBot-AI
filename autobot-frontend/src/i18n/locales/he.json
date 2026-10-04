@@ -1604,7 +1604,9 @@
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "סריקת הכפילויות לא רצה, ולכן זו אינה תוצאה. בדוק את מקור הקוד שנבחר והפעל את הסריקה שוב.",
+      "notScanned": "עדיין לא הורצה סריקת כפילויות עבור מקור קוד זה."
     },
     "hardcodes": {
       "title": "ערכים קשיחים",

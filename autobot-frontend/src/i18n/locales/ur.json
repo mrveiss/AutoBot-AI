@@ -1604,7 +1604,9 @@
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "ڈپلیکیٹ اسکین نہیں چلا، اس لیے یہ نتیجہ نہیں ہے۔ منتخب کوڈ سورس چیک کریں اور اسکین دوبارہ چلائیں۔",
+      "notScanned": "اس کوڈ سورس کے لیے ابھی تک کوئی ڈپلیکیٹ اسکین نہیں چلا۔"
     },
     "hardcodes": {
       "title": "ہارڈ کوڈڈ ویلیوز",

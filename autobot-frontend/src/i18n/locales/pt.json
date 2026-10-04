@@ -2232,7 +2232,9 @@
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "A verificação de duplicados não foi executada, portanto isto não é um resultado. Verifique a origem de código selecionada e execute a verificação novamente.",
+      "notScanned": "Nenhuma verificação de duplicados foi executada para esta origem de código ainda."
     },
     "hardcodes": {
       "title": "Valores codificados",

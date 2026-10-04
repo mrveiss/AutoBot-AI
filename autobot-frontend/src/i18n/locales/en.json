@@ -2232,7 +2232,9 @@
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "The duplicate scan did not run, so this is not a result. Check the selected code source and run the scan again.",
+      "notScanned": "No duplicate scan has run for this code source yet."
     },
     "hardcodes": {
       "title": "Hardcoded Values",

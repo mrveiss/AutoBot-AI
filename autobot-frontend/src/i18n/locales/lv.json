@@ -2232,7 +2232,9 @@
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "Dublikātu skenēšana netika palaista, tāpēc šis nav rezultāts. Pārbaudiet izvēlēto koda avotu un palaidiet skenēšanu vēlreiz.",
+      "notScanned": "Šim koda avotam dublikātu skenēšana vēl nav palaista."
     },
     "hardcodes": {
       "title": "Kodētas vērtības",

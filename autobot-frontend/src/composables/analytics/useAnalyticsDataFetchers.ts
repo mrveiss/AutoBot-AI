@@ -31,6 +31,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import type { ToastType } from '@/composables/useToast'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
+import { readDuplicatePayload, type DuplicateScanState } from './duplicatePayload'
 import { runTimed } from '@/composables/api/useTimedNotify'
 import {
   CODE_SMELL_TYPES,
@@ -109,6 +110,13 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   const codebaseStats = ref<Record<string, unknown> | null>(null)
   const problemsReport = ref<Problem[]>([])
   const duplicateAnalysis = ref<DuplicateCode[]>([])
+  // #17983: a failed scan is its own state, never "0 duplicates found"
+  const duplicateScanState = ref<DuplicateScanState>('not_scanned')
+  const applyDuplicates = (raw: unknown) => {
+    const reading = readDuplicatePayload(raw)
+    duplicateAnalysis.value = reading.duplicates
+    duplicateScanState.value = reading.state
+  }
   const declarationAnalysis = ref<Declaration[]>([])
   const hardcodeAnalysis = ref<HardcodedValue[]>([])
   const unifiedReport = ref<UnifiedReportData | null>(null)
@@ -215,44 +223,36 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   // --- Silent loaders (populate array state, no toasts) ---
 
   const declarationsSilent = useFetchEndpoint<
-    { declarations?: Declaration[] },
+    { status?: string; declarations?: Declaration[] },
     Declaration[]
   >(
     {
       path: '/api/analytics/codebase/declarations',
       scopeToSource: true,
       label: 'Declarations endpoint',
-      pickData: (raw) => raw.declarations ?? [],
+      pickData: (raw) => (raw.status === 'success' || raw.status === 'no_data' ? raw.declarations ?? [] : null),
       onSuccess: (d) => { declarationAnalysis.value = d },
     },
     { withSourceId },
   )
 
   const hardcodesSilent = useFetchEndpoint<
-    { hardcodes?: HardcodedValue[] },
+    { status?: string; hardcodes?: HardcodedValue[] },
     HardcodedValue[]
   >(
     {
       path: '/api/analytics/codebase/hardcodes',
       scopeToSource: true,
       label: 'Hardcodes endpoint',
-      pickData: (raw) => raw.hardcodes ?? [],
+      pickData: (raw) => (raw.status === 'success' || raw.status === 'no_data' ? raw.hardcodes ?? [] : null),
       onSuccess: (d) => { hardcodeAnalysis.value = d },
     },
     { withSourceId },
   )
 
-  const duplicatesSilent = useFetchEndpoint<
-    { duplicates?: DuplicateCode[] },
-    DuplicateCode[]
-  >(
-    {
-      path: '/api/analytics/codebase/duplicates',
-      scopeToSource: true,
-      label: 'Duplicates endpoint',
-      pickData: (raw) => raw.duplicates ?? [],
-      onSuccess: (d) => { duplicateAnalysis.value = d },
-    },
+  const duplicatesSilent = useFetchEndpoint<unknown, unknown>(
+    { path: '/api/analytics/codebase/duplicates', scopeToSource: true, label: 'Duplicates endpoint',
+      pickData: (raw) => raw, onSuccess: applyDuplicates },
     { withSourceId },
   )
 
@@ -289,20 +289,9 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     { withSourceId },
   )
 
-  const cachedDuplicatesEndpoint = useFetchEndpoint<
-    { status: string; duplicates?: DuplicateCode[] },
-    DuplicateCode[]
-  >(
-    {
-      path: '/api/analytics/codebase/duplicates/cached',
-      scopeToSource: true,
-      label: 'Cached duplicates endpoint',
-      pickData: (raw) =>
-        raw.status === 'success' && Array.isArray(raw.duplicates)
-          ? raw.duplicates
-          : null,
-      onSuccess: (d) => { duplicateAnalysis.value = d },
-    },
+  const cachedDuplicatesEndpoint = useFetchEndpoint<unknown, unknown>(
+    { path: '/api/analytics/codebase/duplicates/cached', scopeToSource: true,
+      label: 'Cached duplicates endpoint', pickData: (raw) => raw, onSuccess: applyDuplicates },
     { withSourceId },
   )
 
@@ -377,13 +366,10 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     loadingProgress.duplicates = true
     try {
       const ok = await dupTask.start(undefined, sourceIdQuery.value)
-      if (ok && dupTask.result.value) {
-        const data = dupTask.result.value as Record<string, unknown>
-        duplicateAnalysis.value = Array.isArray(data.duplicates)
-          ? (data.duplicates as DuplicateCode[])
-          : []
-      }
+      if (ok && dupTask.result.value) applyDuplicates(dupTask.result.value)
+      else duplicateScanState.value = 'failed'
     } catch (error: unknown) {
+      duplicateScanState.value = 'failed'
       logger.error('Failed to load duplicates:', error)
     } finally {
       loadingProgress.duplicates = false
@@ -456,7 +442,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
       'analytics.codebase.status.findingDuplicates',
       async () => {
         await duplicatesSilent.load()
-        if (duplicatesSilent.error.value) return null
+        if (duplicatesSilent.error.value || duplicateScanState.value === 'failed') return null
         return { count: duplicateAnalysis.value.length }
       },
       'analytics.codebase.notify.duplicatesFound',
@@ -653,6 +639,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     codebaseStats,
     problemsReport,
     duplicateAnalysis,
+    duplicateScanState,
     declarationAnalysis,
     hardcodeAnalysis,
     chartData: chartEndpoint.data,
