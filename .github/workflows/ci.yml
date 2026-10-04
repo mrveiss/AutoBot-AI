@@ -88,7 +88,11 @@ permissions:
 
 jobs:
   changes:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
+    # every `always()` aggregate below reads `needs.changes.result`.
+    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # context would report FAILED on every draft -- worse than no gate.
+    # Gate the expensive jobs, never the cheap thing others read.
     name: Detect changed paths
     runs-on: ubuntu-latest
     outputs:
@@ -137,7 +141,7 @@ jobs:
   python-shard:
     name: python-suite shard ${{ matrix.shard }}/12
     needs: changes
-    if: needs.changes.outputs.python == 'true'
+    if: ${{ (needs.changes.outputs.python == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
     # #16320: first in, first out across PRs.
     #

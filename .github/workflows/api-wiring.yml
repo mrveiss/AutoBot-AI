@@ -70,7 +70,11 @@ permissions:
 jobs:
   # Job 0: detect relevant paths — always runs so the required context reports.
   changes:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
+    # every `always()` aggregate below reads `needs.changes.result`.
+    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # context would report FAILED on every draft -- worse than no gate.
+    # Gate the expensive jobs, never the cheap thing others read.
     name: Detect changed paths
     runs-on: ubuntu-latest
     outputs:
@@ -94,7 +98,7 @@ jobs:
 
   api-wiring:
     needs: changes
-    if: github.event_name == 'merge_group' || needs.changes.outputs.wiring == 'true'
+    if: ${{ (github.event_name == 'merge_group' || needs.changes.outputs.wiring == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
 
     steps:
