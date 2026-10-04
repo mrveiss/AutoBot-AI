@@ -69,6 +69,25 @@ export function workflowStartedLines(workflow: AutomationWorkflow, t: Translate)
   ]
 }
 
+/** The built-in demo workflow behind the terminal's "Test Workflow" button. */
+export function exampleWorkflow(t: Translate): AutomationWorkflow {
+  const step = (command: string, description: string, explanation: string, requiresConfirmation = true) => ({
+    command,
+    description,
+    explanation,
+    requiresConfirmation
+  })
+  return {
+    name: t('terminal.automation.example.name'),
+    steps: [
+      step('sudo apt update', t('terminal.automation.example.updateDesc'), t('terminal.automation.example.updateExpl')),
+      step('sudo apt upgrade -y', t('terminal.automation.example.upgradeDesc'), t('terminal.automation.example.upgradeExpl')),
+      step('sudo apt install -y git curl wget', t('terminal.automation.example.installDesc'), t('terminal.automation.example.installExpl')),
+      step('git --version && curl --version', t('terminal.automation.example.verifyDesc'), t('terminal.automation.example.verifyExpl'), false)
+    ]
+  }
+}
+
 interface PacingOptions {
   queue: Ref<AutomationStep[]>
   paused: Ref<boolean>

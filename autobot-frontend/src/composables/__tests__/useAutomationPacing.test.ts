@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { effectScope, ref } from 'vue'
 import {
   buildAutomationSteps,
+  exampleWorkflow,
   useAutomationPacing,
   workflowStartedLines,
   FIRST_STEP_DELAY_MS,
@@ -94,7 +95,7 @@ describe('useAutomationPacing (#16396, #17942)', () => {
   })
 })
 
-describe('buildAutomationSteps / workflowStartedLines (#17942)', () => {
+describe('buildAutomationSteps / workflowStartedLines / exampleWorkflow (#17942)', () => {
   const workflow = {
     steps: [
       { command: 'ls', description: 'List' },
@@ -119,5 +120,18 @@ describe('buildAutomationSteps / workflowStartedLines (#17942)', () => {
       content: 'terminal.automation.started{"name":"terminal.automation.unnamedWorkflow"}'
     })
     expect(planned).toMatchObject({ type: 'workflow_info', content: 'terminal.automation.stepsPlanned{"count":2}' })
+  })
+
+  it('builds the demo workflow from translated text, with only the verify step unconfirmed', () => {
+    const demo = exampleWorkflow(t)
+
+    expect(demo.name).toBe('terminal.automation.example.name')
+    expect(demo.steps.map((s) => s.requiresConfirmation)).toEqual([true, true, true, false])
+    expect(demo.steps[0]).toEqual({
+      command: 'sudo apt update',
+      description: 'terminal.automation.example.updateDesc',
+      explanation: 'terminal.automation.example.updateExpl',
+      requiresConfirmation: true
+    })
   })
 })
