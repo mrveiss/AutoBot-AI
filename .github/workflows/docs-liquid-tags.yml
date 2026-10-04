@@ -1,0 +1,87 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Liquid-tag guard for the docs site (#17930).
+#
+# The site stopped building at `125c083ca0` and nobody noticed for days:
+#
+#   Liquid syntax error (line 64): Unknown tag 'citation' (Liquid::SyntaxError)
+#
+# Jekyll runs Liquid over the raw Markdown of every front-matter page before
+# rendering, so a tag it does not define fails the build even inside a fenced
+# code block. `repo_tests/docs_liquid_tags_are_defined_17930_test.py` compares
+# every tag in those pages against the set Liquid and Jekyll define, and checks
+# that the blocks balance.
+#
+# WHY THIS WORKFLOW EXISTS RATHER THAN A PATH-FILTER ENTRY. The guard lives in
+# `repo_tests/`, which runs only when `.github/filters/python-paths.yml` says
+# `python == 'true'`. That filter does not reach `docs/`, so a docs-only pull
+# request takes the required-context shim's green and the guard never runs --
+# which is exactly how the breaking tag reached `main`. Widening the filter to
+# `docs/**/*.md` would fix it by running the TWELVE-SHARD python suite on every
+# documentation edit; this job runs one test file in a few seconds instead.
+# That is the trade, made deliberately (owner decision, #17930 review).
+#
+# WHY `pages.yml` CANNOT SERVE THIS PURPOSE. It is `push: branches: [main]`
+# only, so it reports a broken site AFTER the merge that broke it. The whole
+# point of this guard is to fail on the pull request.
+#
+# The `paths:` list below is load-bearing twice over: it is this job's trigger,
+# AND `repo_tests/glob_declared_reads_15900_test.py` reads it to verify that
+# the guard's `docs/**/*.md` declaration really does run on its own trigger --
+# which is what lets that declaration stay OUT of
+# `repo_tests/_glob_declared_uncovered.py`, whose header forbids an entry added
+# merely to make a check pass. Narrowing this list without widening the python
+# filter fails that verification rather than silently un-covering the guard.
+#
+# Security: no untrusted event data is interpolated into run: commands.
+
+name: docs-liquid-tags
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**/*.md'
+      - 'docs/_config.yml'
+      - 'repo_tests/docs_liquid_tags_are_defined_17930_test.py'
+      - '.github/workflows/docs-liquid-tags.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**/*.md'
+      - 'docs/_config.yml'
+      - 'repo_tests/docs_liquid_tags_are_defined_17930_test.py'
+      - '.github/workflows/docs-liquid-tags.yml'
+
+# Same rationale as every other path-gated job here (#14434): a superseded run
+# is work nothing will read. Guarded on the event rather than a bare `true`,
+# because cancelling base-branch runs means each merge cancels the previous
+# merge's verification (#13432).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  docs-liquid-tags:
+    name: No doc may carry a Liquid tag Jekyll cannot parse
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # #13517: the shared composite action, so interpreter version and pip
+      # cache live in one place. pyyaml: the guard reads `docs/_config.yml`'s
+      # own `exclude:` list rather than hand-copying it. pytest-asyncio:
+      # pytest.ini sets --asyncio-mode=auto, so the plugin is required even
+      # though this guard is synchronous. The same three packages carry
+      # `ansible-file-references.yml`, which runs a guard from this rootdir and
+      # therefore loads the same root conftest and its two plugins.
+      - uses: ./.github/actions/setup-python-ci
+        with:
+          extra-packages: pyyaml pytest pytest-asyncio
+
+      - name: Every Liquid-rendered doc parses
+        run: python3 -m pytest repo_tests/docs_liquid_tags_are_defined_17930_test.py -q

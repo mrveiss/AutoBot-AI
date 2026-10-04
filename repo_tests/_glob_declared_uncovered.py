@@ -14,6 +14,24 @@ land in a small data file instead of colliding inside a long test.
 
 The shrink-only rule travels with the data and is restated below, because a
 reader who lands here from an append will not have seen the guard's docstring.
+
+TWO RECORDS, AND THEY MEAN OPPOSITE THINGS (#17930).
+
+``GLOB_DECLARED_UNCOVERED`` is DEBT: the guard does not run when its tree
+changes, and that is accepted for now. It only ever shrinks.
+
+``GLOB_RUN_BY_A_DEDICATED_WORKFLOW`` is COVERAGE by the other route this file's
+own rule names -- "when a cheaper route runs that guard on its own trigger".
+It is not an exemption and cannot be used as one: every entry is VERIFIED, not
+asserted. ``glob_declared_reads_15900_test`` requires the named workflow to
+exist, to carry a ``pull_request`` ``paths:`` list that actually fires on that
+tree, and to invoke each named guard from a ``run:`` step -- parsed from the
+YAML, so a comment quoting the path satisfies none of it. An entry whose
+workflow stops firing on the tree, or stops running the guard, fails; it does
+not quietly degrade into the first record.
+
+Adding an entry here instead of fixing coverage is therefore not possible
+without also shipping the workflow that provides it.
 """
 
 from __future__ import annotations
@@ -230,5 +248,24 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     "scripts/lib/*.sh": (
         {"repo_tests/comment_line_number_citations_test.py"},
         "tree `scripts/` is outside the python filter; the per-tree trade #15900 declines to make wholesale",
+    ),
+}
+
+#: Glob declarations the python filter does not cover BECAUSE A DEDICATED,
+#: PATH-GATED WORKFLOW runs the guard instead -- the second branch of the rule
+#: above. Each entry is ``glob -> (guards, workflow, why not the filter)`` and
+#: every part of it is checked against the workflow's parsed YAML, so this
+#: records a route that exists rather than a decision that was made.
+#:
+#: This also only shrinks, by the same logic: an entry leaves when the python
+#: filter covers the tree, when the guard stops declaring the glob, or when the
+#: workflow is retired -- and the third case FAILS rather than lapsing.
+GLOB_RUN_BY_A_DEDICATED_WORKFLOW: dict[str, tuple[set[str], str, str]] = {
+    "docs/**/*.md": (
+        {"repo_tests/docs_liquid_tags_are_defined_17930_test.py"},
+        ".github/workflows/docs-liquid-tags.yml",
+        "the Liquid-tag guard runs on its own docs-gated job in seconds; covering `docs/**/*.md` "
+        "in the python filter would instead spend the twelve-shard suite on every documentation "
+        "edit, which is the trade this record exists to keep visible (owner decision, #17930)",
     ),
 }

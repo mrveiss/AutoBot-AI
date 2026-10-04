@@ -27,6 +27,7 @@ first version of this file passed over the destructive bug.
 
 from __future__ import annotations
 
+import re
 import shlex
 import subprocess
 from pathlib import Path
@@ -265,6 +266,52 @@ def test_a_failed_add_restores_the_moved_source(helper_tasks: list[dict]) -> Non
     assert "apt_repo_backup_dir" in msg or "backups" in msg, (
         "the failure message does not name the backup location, so the operator cannot "
         "find the configuration that was moved"
+    )
+
+
+#: The file-name rule apt itself applies: sources.list(5) parses only names ending
+#: `.list` or `.sources`, and #17897 is the outage caused by reading an inert
+#: `.list.distUpgrade` as a configured repo. Spelled as SUFFIXES and assembled below,
+#: never as a quoted glob: a `*.list` literal in a repo_tests file reads as a glob
+#: DECLARATION to glob_declared_reads_15900_test -- correct about the string and wrong
+#: about this file, the same trade recorded in the restore test above.
+_APT_SOURCE_SUFFIXES = (".list", ".sources")
+
+
+def test_the_move_acts_on_the_same_files_the_detect_step_measured(helper_tasks: list[dict]) -> None:
+    """One decision, two steps, and they must agree on what an apt source file IS.
+
+    #17897 scoped the DETECT step to apt's own name rule. The move-aside kept a bare
+    recursive grep, so an `unusable` verdict displaced the inert `.distUpgrade`,
+    `.save` and `.bak` siblings too -- files that were not in the population the
+    verdict was computed over, and that apt had never read. Harmless in isolation
+    (they are backed up, and the rescue restores them), but a step acting on a set
+    wider than the one that was measured is how the next wrong verdict gets executed.
+
+    `-F` is checked on both for the same reason: `apt_repo_match` is a URL whose dots
+    are regex wildcards, so one step reading the pattern as a regex and the other as a
+    fixed string is the same disagreement in a second dialect.
+    """
+    detect = str(_module(named(helper_tasks, "Detect existing apt repo"), "shell") or "")
+    block = named(helper_tasks, "Install the canonical repo definition")
+    move = str(_module(named(block.get("block", []), "Move aside"), "shell") or "")
+    assert detect.strip() and move.strip(), "one of the two steps was not found -- nothing was compared"
+
+    for step, body in (("detect", detect), ("move", move)):
+        for suffix in _APT_SOURCE_SUFFIXES:
+            assert f"-name '*{suffix}'" in body, (
+                f"the {step} step does not restrict to *{suffix} files, so it reads names apt "
+                f"ignores -- #17897's `.list.distUpgrade` is exactly such a name"
+            )
+        # `-F` may be bundled (`grep -lsF`) or separate (`grep -lsZ -F`); both spellings
+        # are the same instruction, and pinning one of them would be a style assertion.
+        assert re.search(r"grep\b(?:\s+-[A-Za-z]+)*\s+-[A-Za-z]*F[A-Za-z]*\b", body), (
+            f"the {step} step matches {{{{ apt_repo_match }}}} as a REGEX; it is a URL, and its "
+            f"dots are wildcards. The other step uses -F, so the two can disagree"
+        )
+    assert "grep -r" not in move, (
+        "the move is recursively grepping sources.list.d again, which reaches the inert "
+        "siblings the detect step is scoped away from (#17897 review)"
     )
 
 

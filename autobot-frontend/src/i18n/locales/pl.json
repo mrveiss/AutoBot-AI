@@ -4944,6 +4944,43 @@
       "editCommand": "Edit",
       "editCancel": "Cancel",
       "editSave": "Save"
+    },
+    "automation": {
+      "started": "🚀 ROZPOCZĘTO ZAUTOMATYZOWANY PRZEPŁYW PRACY: {name}",
+      "stepsPlanned": "📋 Zaplanowano kroki: {count}. Użyj przycisku PAUZA, aby w dowolnym momencie przejąć sterowanie ręczne.",
+      "unnamedWorkflow": "Przepływ pracy bez nazwy",
+      "executeStep": "Wykonaj: {command}",
+      "paused": "⏸️ AUTOMATYZACJA WSTRZYMANA - Włączono sterowanie ręczne. Wpisuj polecenia swobodnie.",
+      "resumed": "▶️ AUTOMATYZACJA WZNOWIONA - Kontynuowanie wykonywania przepływu pracy.",
+      "aboutToExecute": "🤖 PRZEPŁYW AI: Za chwilę zostanie wykonane \"{command}\"",
+      "stepProgress": "📋 Krok {step}/{total}: {description}",
+      "skipped": "⏭️ POMINIĘTO: {command}",
+      "manualControlTaken": "👤 PRZEJĘTO STEROWANIE RĘCZNE - Wykonaj kroki ręczne, a następnie kliknij WZNÓW, aby kontynuować przepływ pracy.",
+      "automated": "🤖 ZAUTOMATYZOWANE: {command}",
+      "pausedBySystem": "⏸️ PRZEPŁYW PRACY WSTRZYMANY PRZEZ SYSTEM",
+      "resumedBySystem": "▶️ PRZEPŁYW PRACY WZNOWIONY PRZEZ SYSTEM",
+      "executing": "🤖 WYKONYWANIE: {command}",
+      "stepSkippedByUser": "⏭️ KROK {step} POMINIĘTY PRZEZ UŻYTKOWNIKA",
+      "workflowSaved": "💾 ZAPISANO PRZEPŁYW PRACY: {name}",
+      "workflowUpdated": "📋 ZAKTUALIZOWANO PRZEPŁYW PRACY: skonfigurowane kroki: {count}",
+      "manualCommand": "👤 RĘCZNIE: {command}",
+      "example": {
+        "name": "Aktualizacja systemu i instalacja pakietów",
+        "updateDesc": "Zaktualizuj repozytoria pakietów",
+        "updateExpl": "Aktualizuje listę dostępnych pakietów ze skonfigurowanych repozytoriów.",
+        "upgradeDesc": "Uaktualnij zainstalowane pakiety",
+        "upgradeExpl": "Uaktualnia wszystkie zainstalowane pakiety do najnowszych wersji.",
+        "installDesc": "Zainstaluj niezbędne narzędzia",
+        "installExpl": "Instaluje często potrzebne narzędzia programistyczne.",
+        "verifyDesc": "Sprawdź instalacje",
+        "verifyExpl": "Sprawdza, czy narzędzia zostały poprawnie zainstalowane."
+      }
+    },
+    "events": {
+      "emergencyKill": "🛑 AWARYJNE ZATRZYMANIE: Wszystkie procesy zakończone przez użytkownika",
+      "emergencyKillFailed": "❌ Awaryjne zatrzymanie nie powiodło się: {message}",
+      "interrupted": "^C (Proces przerwany przez użytkownika)",
+      "error": "Błąd: {error}"
     }
   },
   "llm": {

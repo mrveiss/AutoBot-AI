@@ -4944,6 +4944,43 @@
       "editCancel": "Cancel",
       "editReset": "Reset to original",
       "editedBadge": "Edited"
+    },
+    "automation": {
+      "started": "🚀 AUTOMATED WORKFLOW STARTED: {name}",
+      "stepsPlanned": "📋 {count} steps planned. Use PAUSE button to take manual control at any time.",
+      "unnamedWorkflow": "Unnamed Workflow",
+      "executeStep": "Execute: {command}",
+      "paused": "⏸️ AUTOMATION PAUSED - Manual control activated. Type commands freely.",
+      "resumed": "▶️ AUTOMATION RESUMED - Continuing workflow execution.",
+      "aboutToExecute": "🤖 AI WORKFLOW: About to execute \"{command}\"",
+      "stepProgress": "📋 Step {step}/{total}: {description}",
+      "skipped": "⏭️ SKIPPED: {command}",
+      "manualControlTaken": "👤 MANUAL CONTROL TAKEN - Complete your manual steps, then click RESUME to continue workflow.",
+      "automated": "🤖 AUTOMATED: {command}",
+      "pausedBySystem": "⏸️ WORKFLOW PAUSED BY SYSTEM",
+      "resumedBySystem": "▶️ WORKFLOW RESUMED BY SYSTEM",
+      "executing": "🤖 EXECUTING: {command}",
+      "stepSkippedByUser": "⏭️ STEP {step} SKIPPED BY USER",
+      "workflowSaved": "💾 WORKFLOW SAVED: {name}",
+      "workflowUpdated": "📋 WORKFLOW UPDATED: {count} steps configured",
+      "manualCommand": "👤 MANUAL: {command}",
+      "example": {
+        "name": "System Update and Package Installation",
+        "updateDesc": "Update package repositories",
+        "updateExpl": "This updates the list of available packages from configured repositories.",
+        "upgradeDesc": "Upgrade installed packages",
+        "upgradeExpl": "This upgrades all installed packages to their latest versions.",
+        "installDesc": "Install essential tools",
+        "installExpl": "Install commonly needed development tools.",
+        "verifyDesc": "Verify installations",
+        "verifyExpl": "Check that the tools were installed correctly."
+      }
+    },
+    "events": {
+      "emergencyKill": "🛑 EMERGENCY KILL: All processes terminated by user",
+      "emergencyKillFailed": "❌ Emergency kill failed: {message}",
+      "interrupted": "^C (Process interrupted by user)",
+      "error": "Error: {error}"
     }
   },
   "llm": {

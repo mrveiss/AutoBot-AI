@@ -69,11 +69,45 @@
 #       apt_repo_filename: "grafana"
 #       apt_repo_label: "Grafana"
 
+# #17897: PRESENT must mean "apt reads a source for this repo", not "the string
+# appears somewhere under sources.list.d". sources.list(5) is explicit that apt
+# parses ONLY files in that directory whose name ends `.list` or `.sources`;
+# every other name is inert, however correct its contents.
+#
+# The inert names are not hypothetical. A failing node carried:
+#
+#     /etc/apt/sources.list.d/grafana.list.distUpgrade   <- correct content, INERT
+#     /usr/share/keyrings/grafana.key                    <- present
+#     $ apt-cache policy grafana  ->  Candidate: (none)
+#
+# `do-release-upgrade` renames every third-party `.list` to `.list.distUpgrade`
+# and the suffix was then baked into the device image. The recursive grep below
+# found `apt.grafana.com` in that inert file, reported PRESENT, and the helper
+# preserved a "configured" repo that apt had never read -- so the canonical
+# `grafana.list` was never written and `Install Grafana` died with
+# "No package matching 'grafana' is available". The same image showed the
+# contrast that proves this is about the suffix and not the content:
+# `nodesource.list.distUpgrade` was equally inert but `nodesource.sources` sat
+# beside it and nodesource installed fine.
+#
+# Matching semantics are otherwise unchanged -- same pattern, same directory,
+# same non-recursive reach (`-maxdepth 1`, which is all `grep -r` reached here
+# anyway since apt does not read subdirectories either). `! -type d` rather
+# than `-type f` so a symlinked source file still counts, as it does for apt.
+#
+# `-F` (#17897 review): `apt_repo_match` is a URL, and an unescaped `.` is a
+# regex wildcard, so this step matched marginally more than the move-aside step
+# below -- which has always used `-F`. Two steps in one decision must not read
+# the pattern in two dialects.
 - name: "{{ apt_repo_label }} | Detect existing apt repo for {{ apt_repo_match }}"
-  ansible.builtin.shell: >-
-    grep -rqs -- "{{ apt_repo_match }}" /etc/apt/sources.list.d/ 2>/dev/null
-    && echo PRESENT
-    || echo MISSING
+  ansible.builtin.shell: |
+    set -u
+    HIT=$(find /etc/apt/sources.list.d/ -maxdepth 1 ! -type d \
+            \( -name '*.list' -o -name '*.sources' \) \
+            -exec grep -lsF -- {{ apt_repo_match | quote }} {} + 2>/dev/null | head -1)
+    if [ -n "$HIT" ]; then echo PRESENT; else echo MISSING; fi
+  args:
+    executable: /bin/bash
   register: _apt_repo_present
   changed_when: false
   failed_when: false
@@ -265,6 +299,14 @@
     # Moved OUTSIDE sources.list.d, not disabled in place: apt reads every file in
     # that directory, so a renamed-but-resident file still collides on Signed-By --
     # #7218's original failure. NUL-delimited: a path may contain spaces.
+    #
+    # #17897 review: scoped to the same `*.list`/`*.sources` set the detect step
+    # above uses. A bare recursive grep also matched the inert `.distUpgrade`,
+    # `.save` and `.bak` siblings that #17897 established apt never reads, so an
+    # `unusable` verdict moved aside files that were not part of the verdict and
+    # could not have caused it. Harmless on its own -- they are backed up and the
+    # rescue restores them -- but the two steps have to agree on what a source
+    # file IS, or the set this one acts on is not the set the other measured.
     - name: "{{ apt_repo_label }} | Move aside the configured repo that cannot serve the package"
       ansible.builtin.shell: |
         set -eu
@@ -282,7 +324,9 @@
           # accumulates generations and a glob over it would restore all of them.
           printf 'PAIR\t%s\t%s\n' "$f" "$BACKUP"
           MOVED=1
-        done < <(grep -rlsZ -F -- {{ apt_repo_match | quote }} /etc/apt/sources.list.d/ 2>/dev/null)
+        done < <(find /etc/apt/sources.list.d/ -maxdepth 1 ! -type d \
+                   \( -name '*.list' -o -name '*.sources' \) \
+                   -exec grep -lsZ -F -- {{ apt_repo_match | quote }} {} + 2>/dev/null)
         if [ "$MOVED" -eq 0 ]; then echo "No matching source file to move"; fi
       args:
         executable: /bin/bash
