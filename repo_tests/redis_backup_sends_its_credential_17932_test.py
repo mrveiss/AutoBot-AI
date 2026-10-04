@@ -97,6 +97,24 @@ def test_the_credential_file_carries_the_role_password() -> None:
     assert FIXTURE_PASSWORD not in nopass
 
 
+def _redis_cli_call_lines(script: str) -> list[str]:
+    """Executable lines invoking `redis-cli`, read as LOGICAL lines, not physical ones.
+
+    `_command_lines` splits on newlines, so a call continued across lines --
+    `redis-cli\\` then its arguments -- produces no line containing `redis-cli `, and the
+    detector walks straight past it. The remaining calls still clear the count floor, so
+    the sweep reports a number and the miss is invisible: the guard would be measuring
+    the lines it can see rather than the calls that run.
+
+    Backslash-newline is joined first, which is what the shell itself does before
+    executing. Latent today -- no call in the template is continued -- and fixed anyway,
+    because the cost of the guard being wrong here is an unauthenticated call shipping
+    unnoticed, which is the whole defect (#17932).
+    """
+    joined = re.sub(r"\\\r?\n[ \t]*", " ", script)
+    return [line for line in _command_lines(joined) if "redis-cli " in line]
+
+
 def test_no_redis_cli_call_is_bare(script: str) -> None:
     """Every call must carry the shared argument array, or one of them skips auth.
 
@@ -104,7 +122,7 @@ def test_no_redis_cli_call_is_bare(script: str) -> None:
     true if it is true of ALL of them. Counted over executable lines, because the
     explanatory comments above name `redis-cli` too.
     """
-    calls = [line for line in _command_lines(script) if "redis-cli " in line]
+    calls = _redis_cli_call_lines(script)
     assert len(calls) >= 2, f"the sweep found {len(calls)} redis-cli calls -- it stopped reading the script"
     bare = [line for line in calls if '"${REDIS_CLI_ARGS[@]}"' not in line]
     assert not bare, f"these redis-cli calls do not carry the client arguments: {bare}"
@@ -115,7 +133,8 @@ def test_the_credential_is_never_put_on_a_command_line(script: str) -> None:
     # The ARGUMENT ASSEMBLY lines count too, not only the call sites: a flag added to
     # `REDIS_CLI_ARGS` reaches every call while appearing on no line that says
     # `redis-cli`. A detector keyed on the call sites alone misses the easiest way in.
-    calls = [line for line in _command_lines(script) if "redis-cli " in line or "REDIS_CLI_ARGS" in line]
+    joined = re.sub(r"\\\r?\n[ \t]*", " ", script)
+    calls = [line for line in _command_lines(joined) if "redis-cli " in line or "REDIS_CLI_ARGS" in line]
     assert calls, "no redis-cli call was found -- the sweep read nothing"
     for line in calls:
         for flag in (" -a ", " --pass ", " --askpass"):
@@ -181,3 +200,27 @@ def test_an_error_reply_is_not_mistaken_for_a_timestamp(tmp_path: Path) -> None:
     assert "did not return a timestamp" in log, f"the refusal did not name what was wrong:\n{log}"
     assert "FAILED" in log.splitlines()[-1], f"the final log line does not report the failure:\n{log}"
     assert "Redis Stack backup complete" not in log, "an unauthenticated run logged the completion line"
+
+
+@pytest.mark.parametrize(
+    ("command", "expect_bare"),
+    [
+        ("redis-cli PING\n", True),
+        ('redis-cli "${REDIS_CLI_ARGS[@]}" PING\n', False),
+        ("redis-cli\\\n    PING\n", True),
+        ('redis-cli\\\n    "${REDIS_CLI_ARGS[@]}" PING\n', False),
+    ],
+    ids=["bare", "authenticated", "bare-continued", "authenticated-continued"],
+)
+def test_the_bare_call_detector_sees_a_continued_call(command: str, expect_bare: bool) -> None:
+    """The contrast pair the guard above needs, including the continued forms.
+
+    Without the two `-continued` cases this detector cannot be shown to catch anything a
+    line-oriented one would miss -- and the line-oriented version it replaces passed the
+    real template happily while being blind to exactly that shape. A guard whose
+    discriminating case is untested is a guard with an unmeasured blind spot.
+    """
+    calls = _redis_cli_call_lines(command)
+    assert calls, "the detector found no redis-cli call at all -- it is not reading the input"
+    bare = [line for line in calls if '"${REDIS_CLI_ARGS[@]}"' not in line]
+    assert bool(bare) is expect_bare
