@@ -33,6 +33,13 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
+#: Exit status for "the run completed and completion was NOT measured" (#17674).
+#: Distinct from 1/2 (a measured figure below a threshold) and from 3 (the run
+#: itself failed), because a caller that cannot tell those apart is the defect
+#: this issue is about.
+EXIT_NOT_MEASURED = 4
+
+
 #: This script's own directory, as a repo-relative path. Four feature checks
 #: point at siblings of this file; naming it once keeps them readable and means
 #: a future move updates one line rather than four.
@@ -486,9 +493,17 @@ class PhaseValidator:
         Helper for _validate_phase (#825).
         """
         empty_validation = {"passed": 0, "total": 0, "details": []}
+        # #17674: `structural_presence_percentage` is NOT seeded here. Every
+        # non-deferring phase has it written by `PhaseScore.as_report()` a few
+        # lines later, and a DEFERRING phase must not have it at all -- its
+        # report deliberately omits the key, so a seeded 0 survived the update
+        # and shipped "Phase 6: Enhanced UI/UX: 0.0% structural presence" for a
+        # phase that reports no figure by design. It also put that 0 into the
+        # `_generate_recommendations` average, which filters on the key being
+        # present. Absent is the honest value; `.get()` is how every consumer
+        # already reads it.
         return {
             "phase_name": phase_name,
-            "structural_presence_percentage": 0,
             "complete": False,
             "status": "incomplete",
             "validations": {
@@ -994,8 +1009,18 @@ def _output_summary_results(results: Dict[str, Any]):
     """
     logger.info("AutoBot Phase Validation Results")
     logger.info("==================================")
-    maturity = results.get("overall_maturity", 0)
-    logger.info("Overall System Maturity: %.1f%%", maturity)
+    # #17674: `"%.1f" % None` raises, and the default never fired because the
+    # key is present and null. Say which figure is missing instead.
+    maturity = results.get("overall_maturity")
+    if maturity is None:
+        logger.info("Overall System Maturity: NOT MEASURED (a check group was skipped -- no live stack)")
+    else:
+        logger.info("Overall System Maturity: %.1f%%", maturity)
+    structural = results.get("structural_presence")
+    if isinstance(structural, (int, float)) and not isinstance(structural, bool):
+        logger.info("Structural presence: %.1f%%", structural)
+    else:
+        logger.info("Structural presence: NOT MEASURED (it is %r)", structural)
     logger.info("")
 
     for phase_name, phase_data in results.get("phases", {}).items():
@@ -1045,7 +1070,22 @@ def main() -> None:
         else:
             _output_summary_results(results)
 
-        maturity = results.get("overall_maturity", 0)
+        # #17674: this was `results.get("overall_maturity", 0)`. The key is
+        # PRESENT and null whenever a check group was skipped -- which
+        # `--ci-mode` always does -- so the default never fired and `None < 50`
+        # raised TypeError. The bare handler below then logged "Validation
+        # failed" and exited 3, AFTER a complete and correct report had already
+        # been written. Every CI run has been doing this; the workflow's
+        # `|| true` is the only reason it went unnoticed. An unmeasured figure
+        # gets its own exit code, not a comparison.
+        maturity = results.get("overall_maturity")
+        if maturity is None:
+            logger.info(
+                "Completion was not measured (a check group was skipped -- no live stack). "
+                "Exiting %d: this is NOT a low score.",
+                EXIT_NOT_MEASURED,
+            )
+            sys.exit(EXIT_NOT_MEASURED)
         if maturity < 50:
             sys.exit(2)
         elif maturity < 75:

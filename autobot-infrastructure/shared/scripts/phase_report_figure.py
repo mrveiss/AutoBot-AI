@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from typing import Any, Dict
 
@@ -69,8 +70,10 @@ def read_figure(path: str, key: str) -> float:
     """
     report = _load(path)
     value = report.get(key)
-    # ``bool`` is an ``int``; ``True`` is not a measurement.
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    # ``bool`` is an ``int``; ``True`` is not a measurement. ``NaN`` and
+    # ``Infinity`` are floats that `json` happily round-trips and that `bc`
+    # reads as 0 -- a number-shaped non-measurement, which is this issue.
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
         raise NoMeasurement(
             f"phase-validation: no numeric {key!r} in {path!r}. "
             f"It is {value!r}. Top-level keys present: {sorted(report)}. "

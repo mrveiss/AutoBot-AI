@@ -111,40 +111,76 @@ def _system_tree() -> ast.Module:
 def _ci_mode_results() -> Dict[str, Any]:
     """A results object shaped like a real ``--ci-mode`` run.
 
-    Built from the REAL ``PhaseScore``/``overall`` policy rather than from a
-    literal dict: a hand-written fixture would pin whatever the test author
-    believed the aggregate emits, which is the same mistake as a hand-written
-    projection. Every phase carries a skipped live-stack group, because
-    ``--ci-mode`` brings no stack up -- which is what makes ``overall_maturity``
-    null and ``structural_presence`` the only figure a gate can read.
+    Both halves come from the real policy. The earlier version of this fixture
+    wrote the per-phase dicts as literals, and that is how it managed to assert
+    a deferring phase reports ``None`` while the live artifact carried
+    ``structural_presence_percentage: 0`` -- the literal simply omitted the key
+    the producer was seeding. A fixture that is hand-written on the side being
+    measured can only confirm what its author already believed, so the phase
+    dicts are built by ``_validate_phase``'s own two steps: the empty skeleton
+    from ``_empty_phase_result``, then ``PhaseScore.as_report()`` over it.
+
+    Every phase carries a skipped live-stack group, because ``--ci-mode``
+    brings no stack up -- which is what makes ``overall_maturity`` null and
+    ``structural_presence`` the only figure a gate can read.
     """
     policy = _policy()
-    scores = [
-        (policy.PhaseScore(ran=4, passed=4, skipped=("endpoints", "services")), 100.0),
-        (policy.PhaseScore(ran=3, passed=2, skipped=("ui_features",)), 60.0),
-        (policy.PhaseScore(ran=0, passed=0, defers_to=("frontend-quality.yml",)), 80.0),
+    scored = [
+        ("Phase 1: Core Infrastructure", policy.PhaseScore(ran=4, passed=4, skipped=("endpoints", "services")), 100.0),
+        ("Phase 2: Knowledge Base and Memory", policy.PhaseScore(ran=3, passed=2, skipped=("services",)), 60.0),
+        ("Phase 6: Enhanced UI/UX", policy.PhaseScore(ran=0, passed=0, defers_to=("frontend-quality.yml",)), 80.0),
     ]
+    phases: Dict[str, Any] = {}
+    for name, score, _weight in scored:
+        # The same two steps `_validate_phase` performs, in the same order.
+        phase = _empty_phase_skeleton(name)
+        phase.update(score.as_report())
+        phases[name] = phase
+
     results: Dict[str, Any] = {
         "timestamp": "ignored -- the projection is handed its own",
-        "phases": {
-            "Phase 1: Core Infrastructure": {
-                "status": "structural-presence-only",
-                "structural_presence_percentage": 100.0,
-                "complete": False,
-                "not_checked": {"endpoints": policy.NOT_CHECKED},
-                "validations": {"files": {"passed": 4, "total": 4}},
-            },
-            "Phase 6: Enhanced UI/UX": {
-                "status": "deferred-to-dedicated-gates",
-                "complete": False,
-                "authoritative_gates": ["frontend-quality.yml"],
-            },
-        },
+        "phases": phases,
         "overall_assessment": {"structural_presence_score": 84.0},
         "recommendations": ["Finish Phase 2"],
     }
-    results.update(policy.overall(scores))
+    results.update(policy.overall([(score, weight) for _name, score, weight in scored]))
     return results
+
+
+def _empty_phase_skeleton(phase_name: str) -> Dict[str, Any]:
+    """``_empty_phase_result``'s literal, evaluated out of the heavy module.
+
+    Read as data rather than imported, for the reason in the module docstring.
+    Evaluating the producer's own literal is what makes the fixture able to
+    catch a key seeded there -- a hand-copied skeleton would not.
+    """
+    function = next(
+        node
+        for node in ast.walk(_system_tree())
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "_empty_phase_result"
+    )
+    returned = next(stmt for stmt in ast.walk(function) if isinstance(stmt, ast.Return))
+    skeleton: Dict[str, Any] = {}
+    for key, value in zip(returned.value.keys, returned.value.values):
+        name = ast.literal_eval(key)
+        try:
+            skeleton[name] = ast.literal_eval(value)
+        except ValueError:
+            # `validations` is a comprehension over a name defined above; its
+            # content does not matter to the report contract.
+            skeleton[name] = {}
+    skeleton["phase_name"] = phase_name
+    return skeleton
+
+
+def _non_comment_lines(text: str) -> list[str]:
+    """Workflow lines that are not comments.
+
+    Comments explaining a removed construct quote it verbatim, so a scanner
+    that reads a quotation as an occurrence is measuring the prose. That was a
+    real finding on this very file's first guard, not a hypothetical.
+    """
+    return [line for line in text.splitlines() if not line.lstrip().startswith(("#", "//"))]
 
 
 def _keys_the_workflow_reads() -> set[str]:
@@ -208,17 +244,49 @@ class TestNothingTheWorkflowReadsIsMissing:
         assert isinstance(report["phases"], list), "phases must be projected to a list, not copied as the dict"
         assert [p["name"] for p in report["phases"]] == [
             "Phase 1: Core Infrastructure",
+            "Phase 2: Knowledge Base and Memory",
             "Phase 6: Enhanced UI/UX",
         ]
         assert report["recommendations"] == [{"title": "Finish Phase 2", "action": "Review and implement"}]
         assert report["timestamp"] == _STAMP
 
     def test_a_deferring_phase_reports_no_percentage_rather_than_zero(self) -> None:
+        # The fixture's phase dicts come from `_empty_phase_result` + the real
+        # `as_report()`, so this reads the producer, not a literal. It failed
+        # against `main`, where `_empty_phase_result` seeded a 0 that
+        # `as_report()` never overrides for a deferring phase -- the live
+        # artifact shipped "Phase 6: Enhanced UI/UX: 0.0% structural presence".
         report = _policy().project_report(_ci_mode_results(), _STAMP)
         deferred = next(p for p in report["phases"] if p["name"] == "Phase 6: Enhanced UI/UX")
         assert (
             deferred["structural_presence_percentage"] is None
         ), "a phase verified by dedicated gates must report None, not 0 -- 0 reads as measured and empty"
+
+    def test_the_deliberately_dropped_keys_are_declared_and_absent(self) -> None:
+        policy = _policy()
+        report = policy.project_report(_ci_mode_results(), _STAMP)
+        # Named, not just iterated: emptying DROPPED_KEYS would make a bare
+        # loop pass having checked nothing, which is the vacuity failure this
+        # file exists to prevent. The drop must stay DECLARED, because a key
+        # that disappears from the artifact for no recorded reason is the
+        # silent-drop class this issue is about.
+        assert "overall_assessment" in policy.DROPPED_KEYS, (
+            "overall_assessment is no longer declared in DROPPED_KEYS. Either carry it through, or "
+            "re-declare the drop with its reason -- an undeclared omission is the #17674 class"
+        )
+        for key, reason in policy.DROPPED_KEYS.items():
+            assert key not in report, f"{key} is declared dropped ({reason}) but reached the artifact"
+            assert reason, f"{key} is dropped with no stated reason"
+        assert not (policy.REBUILT_KEYS & set(policy.DROPPED_KEYS)), "a key cannot be both rebuilt and dropped"
+
+    def test_nothing_weighable_is_not_a_zero(self) -> None:
+        # Every phase deferring means no denominator, not a 0% repo. A 0.0 here
+        # is a number the gate's reader would accept and fail on.
+        policy = _policy()
+        aggregate = policy.overall([(policy.PhaseScore(ran=0, passed=0, defers_to=("x.yml",)), 50.0)])
+        assert aggregate["structural_presence"] is None
+        assert aggregate["overall_maturity"] is None
+        assert "could be weighed" in aggregate["measures"]
 
 
 class TestAnAbsentFigureIsNotAZero:
@@ -260,6 +328,15 @@ class TestAnAbsentFigureIsNotAZero:
         with pytest.raises(reader.NoMeasurement):
             reader.read_figure(path, "structural_presence")
 
+    @pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity"])
+    def test_a_non_finite_float_is_not_a_measurement(self, tmp_path: Path, literal: str) -> None:
+        # `json` round-trips these happily and `bc` reads them as 0, so they
+        # are number-shaped non-measurements -- this issue in another costume.
+        path = self._write(tmp_path, '{"structural_presence": %s}' % literal)
+        reader = _reader()
+        with pytest.raises(reader.NoMeasurement):
+            reader.read_figure(path, "structural_presence")
+
     def test_a_missing_file_says_unreadable_and_not_zero(self, tmp_path: Path) -> None:
         reader = _reader()
         with pytest.raises(reader.NoMeasurement) as excinfo:
@@ -291,12 +368,24 @@ class TestAnAbsentFigureIsNotAZero:
 class TestNoGateFabricatesANumber:
     """The workflow may not re-create the default this issue removed."""
 
-    def test_both_gates_read_through_the_shared_reader(self) -> None:
-        text = _workflow_text()
-        uses = text.count(_READER.name)
-        assert uses >= 2, (
-            f"{_READER.name} is referenced {uses} time(s); both the phase gate and the integration gate "
-            "must read through it, or the next fix lands in only one of them"
+    def test_every_gate_assignment_reads_through_the_shared_reader(self) -> None:
+        # NOT a count of occurrences: the first version of this test counted
+        # every line containing the reader's name, and one of those lines was
+        # the COMMENT explaining the reader. Gate 2 could have reverted to an
+        # inline one-liner with the count still reading 2. What has to hold is
+        # that each `MATURITY=$(...)` assignment calls the reader, so that is
+        # what is asserted, over non-comment lines only.
+        assignments = [
+            line.strip() for line in _non_comment_lines(_workflow_text()) if re.search(r"^\s*MATURITY=\$\(", line)
+        ]
+        assert len(assignments) == 2, (
+            f"expected the two gate assignments, found {len(assignments)}: {assignments}. "
+            "A new gate must read through the shared reader, and a removed one must update this guard"
+        )
+        inline = [line for line in assignments if _READER.name not in line]
+        assert not inline, (
+            f"these gate assignments do not call {_READER.name}, so they re-create the "
+            f"absent-reads-as-zero path in their own copy: {inline}"
         )
 
     @pytest.mark.parametrize(
@@ -311,11 +400,7 @@ class TestNoGateFabricatesANumber:
         # Comment lines are excluded deliberately: the comments explaining what
         # was removed quote the removed code verbatim, and a scanner that reads
         # a quotation as an occurrence is measuring the prose.
-        hits = [
-            line.strip()
-            for line in _workflow_text().splitlines()
-            if not line.lstrip().startswith(("#", "//")) and re.search(pattern, line)
-        ]
+        hits = [line.strip() for line in _non_comment_lines(_workflow_text()) if re.search(pattern, line)]
         assert not hits, f"a zero-default for an unread figure is back in the workflow: {hits}"
 
     def test_the_nothing_ran_fallback_does_not_claim_a_zero(self) -> None:
@@ -327,65 +412,132 @@ class TestNoGateFabricatesANumber:
         assert '"structural_presence": null' in text
 
 
-class TestEveryDeclaredFeatureHasAValidator:
-    """#17559: a feature with no validator used to report implemented."""
+class TestTheProducerIsActuallyWiredToTheProjection:
+    """The regression is the WIRING, and the rest of this file does not test it.
+
+    Every other test here calls ``phase_score.project_report`` directly. That
+    proves the helper is correct and proves nothing about ``_output_json_results``,
+    which is the function that was wrong -- reverting it to the hand-written
+    four-key dict leaves all of them green while the artifact loses
+    ``structural_presence`` again. ``phase_validation_system`` cannot be
+    imported here (see the module docstring), so the call is asserted as data.
+    """
 
     @staticmethod
-    def _criteria_block() -> ast.Dict:
+    def _output_json_results() -> ast.AST:
         return next(
-            stmt.value
+            node
             for node in ast.walk(_system_tree())
-            if isinstance(node, ast.ClassDef)
-            for stmt in node.body
-            if isinstance(stmt, ast.Assign) and any(getattr(t, "id", "") == "PHASE_CRITERIA" for t in stmt.targets)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "_output_json_results"
         )
 
-    @classmethod
-    def _declared_features(cls) -> set[str]:
-        found: set[str] = set()
-        for criteria in cls._criteria_block().values:
-            for key, value in zip(criteria.keys, criteria.values):
-                # `performance_metrics` is a dict of thresholds handled by its
-                # own validator, not a list of feature names.
-                if ast.literal_eval(key).endswith("_features"):
-                    found.update(ast.literal_eval(element) for element in value.elts)
-        return found
+    def test_it_calls_project_report(self) -> None:
+        called = {
+            node.func.id
+            for node in ast.walk(self._output_json_results())
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        }
+        assert "project_report" in called, (
+            "_output_json_results does not call project_report, so the artifact is built by something "
+            "other than the shared projection -- which is exactly the #17674 regression"
+        )
+
+    def test_it_builds_no_report_dict_of_its_own(self) -> None:
+        # The specific shape that broke: a dict literal enumerating the
+        # top-level report keys by hand.
+        literals = [
+            sorted(ast.literal_eval(key) for key in node.keys if isinstance(key, ast.Constant))
+            for node in ast.walk(self._output_json_results())
+            if isinstance(node, ast.Dict)
+        ]
+        offending = [keys for keys in literals if {"overall_maturity", "structural_presence"} & set(keys)]
+        assert not offending, (
+            "_output_json_results builds its own dict of top-level report keys again: "
+            f"{offending}. That hand-written whitelist is what dropped structural_presence"
+        )
+
+    def test_project_report_is_imported_from_the_policy_module(self) -> None:
+        imported = {
+            alias.name
+            for node in ast.walk(_system_tree())
+            if isinstance(node, ast.ImportFrom) and node.module == "phase_score"
+            for alias in node.names
+        }
+        assert "project_report" in imported, "project_report is not imported from phase_score"
+
+
+class TestTheProducerDoesNotCrashOnAnUnmeasuredFigure:
+    """``None < 50`` ran on every CI run, after the report was already written."""
 
     @staticmethod
-    def _validator_names() -> set[str]:
-        function = next(
+    def _function(name: str) -> ast.AST:
+        return next(
             node
             for node in ast.walk(_system_tree())
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "_get_feature_validators"
-        )
-        returned = next(stmt for stmt in ast.walk(function) if isinstance(stmt, ast.Return))
-        return {ast.literal_eval(key) for key in returned.value.keys}
-
-    def test_the_parse_found_both_sides(self) -> None:
-        assert len(self._declared_features()) >= 20, "the criteria parse collapsed -- this guard would pass vacuously"
-        assert len(self._validator_names()) >= 20, "the validator-map parse collapsed"
-
-    def test_no_declared_feature_is_unvalidated(self) -> None:
-        missing = sorted(self._declared_features() - self._validator_names())
-        assert not missing, (
-            "these features are declared in PHASE_CRITERIA with no entry in _get_feature_validators(), so "
-            f"nothing checks them: {missing}. Give each one a validator, or remove the claim (#17559)"
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name
         )
 
-    def test_an_unvalidated_feature_is_not_reported_implemented(self) -> None:
-        # Read as data rather than imported: see the module docstring.
-        function = next(
-            node
+    @pytest.mark.parametrize("name", ["main", "_output_summary_results"])
+    def test_overall_maturity_is_not_read_with_a_zero_default(self, name: str) -> None:
+        # `.get("overall_maturity", 0)` cannot fire its default: the key is
+        # PRESENT and null whenever a group was skipped. It reads as a safe
+        # idiom and is the bug.
+        source = ast.unparse(self._function(name))
+        assert "'overall_maturity', 0" not in source and '"overall_maturity", 0' not in source, (
+            f"{name} still defaults overall_maturity to 0. The key is present and None in --ci-mode, "
+            "so the default never fires and the None reaches a comparison or a format spec"
+        )
+
+    @pytest.mark.parametrize("name", ["main", "_output_summary_results"])
+    def test_a_none_maturity_is_handled_before_it_is_used(self, name: str) -> None:
+        source = ast.unparse(self._function(name))
+        assert "maturity is None" in source, (
+            f"{name} does not test `maturity is None` before using it; `None < 50` raises TypeError and "
+            "`'%.1f' % None` raises, both AFTER a correct report has been written"
+        )
+
+    def test_the_not_measured_exit_code_is_distinct(self) -> None:
+        constants = {
+            target.id: ast.literal_eval(node.value)
             for node in ast.walk(_system_tree())
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "_validate_single_feature"
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant)
+            for target in node.targets
+            if isinstance(target, ast.Name)
+        }
+        assert constants.get("EXIT_NOT_MEASURED") not in (0, 1, 2, 3), (
+            "EXIT_NOT_MEASURED must not collide with a measured verdict (0/1/2) or with a failed "
+            f"run (3); it is {constants.get('EXIT_NOT_MEASURED')!r}"
         )
-        returned = [
-            stmt.value.value
-            for stmt in ast.walk(function)
-            if isinstance(stmt, ast.Return) and isinstance(stmt.value, ast.Constant)
-        ]
-        assert returned, "no literal return found in _validate_single_feature -- the parse missed the fallback"
-        assert True not in returned, (
-            "_validate_single_feature returns a literal True. A feature nobody wrote a check for would "
-            "then be indistinguishable from one that was checked and found present (#17559)"
+
+
+class TestTheEmptySkeletonSeedsNoFigure:
+    """#17674: the 0 that survived `as_report()` for a deferring phase."""
+
+    def test_empty_phase_result_does_not_seed_a_percentage(self) -> None:
+        assert "structural_presence_percentage" not in _empty_phase_skeleton("Phase 6: Enhanced UI/UX"), (
+            "_empty_phase_result seeds structural_presence_percentage. A deferring phase's as_report() "
+            "omits the key, so the seed survives and the artifact reports 0.0% for a phase that "
+            "reports no figure by design"
         )
+
+    def test_a_non_deferring_phase_still_gets_one(self) -> None:
+        # The seed's removal must not leave an ordinary phase without a figure.
+        phase = _empty_phase_skeleton("Phase 1: Core Infrastructure")
+        phase.update(_policy().PhaseScore(ran=4, passed=3, skipped=("endpoints",)).as_report())
+        assert phase["structural_presence_percentage"] == 75.0
+
+
+class TestTheValidatorExitCodeIsNotSwallowed:
+    """A blanket `|| true` is the same absent-reads-as-fine failure, in bash."""
+
+    def test_the_run_step_reports_the_exit_code(self) -> None:
+        lines = _non_comment_lines(_workflow_text())
+        invocation = [line for line in lines if "phase_validation_system.py" in line]
+        assert invocation, "the validator invocation vanished from the workflow"
+        assert not any("|| true" in line for line in invocation), (
+            f"the validator's exit code is swallowed by `|| true`: {invocation}. A crash and a clean "
+            "run then produce the same silence"
+        )
+        assert any(
+            "VALIDATOR_RC" in line for line in lines
+        ), "the validator's exit code is neither reported nor acted on; capture it and echo it"

@@ -184,16 +184,24 @@ def overall(scores: Sequence[Tuple[PhaseScore, float]]) -> Dict[str, Any]:
     counted = [(score, weight) for score, weight in scores if not score.defers_to]
     deferred = sorted({gate for score, _ in scores if score.defers_to for gate in score.defers_to})
 
+    # #17674: ``None``, not 0.0. No weight means every phase deferred (or the
+    # run scored nothing at all), so there was no figure to average -- and a
+    # 0.0 here is a measurement-shaped value the CI gate would accept and fail
+    # on. The gate's reader rejects a non-number loudly and names what it
+    # found, which is the honest outcome for "nothing could be weighed".
     total_weight = sum(weight for _, weight in counted)
-    if total_weight <= 0:
-        weighted = 0.0
-    else:
-        weighted = sum(score.percentage * weight for score, weight in counted) / total_weight
+    weighted = (
+        sum(score.percentage * weight for score, weight in counted) / total_weight if total_weight > 0 else None
+    )
 
     skipped_groups = sorted({group for score, _ in counted for group in score.skipped})
     result: Dict[str, Any] = {
-        "structural_presence": round(weighted, 2),
-        "measures": "completion" if not skipped_groups else "structural presence only",
+        "structural_presence": round(weighted, 2) if weighted is not None else None,
+        "measures": (
+            "nothing could be weighed -- every phase defers to a dedicated gate"
+            if weighted is None
+            else ("completion" if not skipped_groups else "structural presence only")
+        ),
         "checks_skipped": len(skipped_groups),
         "skipped_detail": {group: NOT_CHECKED for group in skipped_groups},
         "phases_complete": sum(1 for score, _ in scores if score.complete),
@@ -202,7 +210,7 @@ def overall(scores: Sequence[Tuple[PhaseScore, float]]) -> Dict[str, Any]:
         "phases_excluded_from_score": sum(1 for score, _ in scores if score.defers_to),
         "verified_by_dedicated_gates": deferred,
     }
-    if not skipped_groups:
+    if not skipped_groups and weighted is not None:
         result["overall_maturity"] = round(weighted, 2)
         result["ready_for_production"] = weighted >= 85
     else:
@@ -213,18 +221,32 @@ def overall(scores: Sequence[Tuple[PhaseScore, float]]) -> Dict[str, Any]:
     return result
 
 
-#: Top-level keys of the results object that :func:`project_report` REBUILDS
-#: rather than copies. Everything else is carried through verbatim.
+#: Top-level keys :func:`project_report` REBUILDS into a different shape.
+#: Everything else at the top level is carried through verbatim.
 #:
 #: A deny-list, deliberately, and not the allow-list it replaces (#17674). The
 #: old projection enumerated four keys by hand, so ``structural_presence`` --
 #: added to the aggregate by #17505, read by the CI gate from the same change --
 #: never reached the artifact, the gate read ``None``, a defensive default
-#: rendered it as ``0``, and ``0 < 60`` failed the gate for 34 hours. An
-#: allow-list drops silently when the producer grows a key; a deny-list carries
-#: the new key and only needs editing when a key's SHAPE changes, which is a
-#: change you cannot make without touching this module.
-RESTRUCTURED_KEYS = frozenset({"phases", "recommendations", "overall_assessment"})
+#: rendered it as ``0``, and ``0 < 60`` failed the gate. An allow-list drops
+#: silently when the producer grows a key; a deny-list carries the new key and
+#: only needs editing when a key's SHAPE changes, which is a change you cannot
+#: make without touching this module.
+REBUILT_KEYS = frozenset({"phases", "recommendations"})
+
+#: Top-level keys deliberately NOT carried into the artifact, each with its
+#: reason. Separate from :data:`REBUILT_KEYS` because "rebuilt in another shape"
+#: and "dropped on purpose" are different facts, and a single set called
+#: "restructured" told the second one as if it were the first -- the same
+#: conflation, in the fix for it.
+DROPPED_KEYS = {
+    # A nested restatement of the aggregate keys that are already top-level
+    # here (``structural_presence``, ``measures``, ``skipped_detail``,
+    # ``phases_complete``, ``ready_for_production``). Two copies of one figure
+    # in one artifact is how a consumer ends up reading the stale one. The
+    # full object is still written by ``save_validation_report``.
+    "overall_assessment": "a nested duplicate of the top-level aggregate keys",
+}
 
 
 def project_report(results: Dict[str, Any], timestamp: str) -> Dict[str, Any]:
@@ -238,7 +260,9 @@ def project_report(results: Dict[str, Any], timestamp: str) -> Dict[str, Any]:
     for a phase that defers to dedicated gates -- 0 would read as "measured and
     found empty" (#17089), which is the same confusion one level down.
     """
-    report: Dict[str, Any] = {key: value for key, value in results.items() if key not in RESTRUCTURED_KEYS}
+    report: Dict[str, Any] = {
+        key: value for key, value in results.items() if key not in REBUILT_KEYS and key not in DROPPED_KEYS
+    }
     report["timestamp"] = timestamp
     report["phases"] = [
         {
