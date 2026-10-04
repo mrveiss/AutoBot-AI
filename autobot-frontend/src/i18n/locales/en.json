@@ -972,7 +972,11 @@
     "confirmDeleteVoice": "Delete voice \"{name}\"?",
     "languageVoicesActive": "{count} language-specific voice(s) configured",
     "confirmDeleteVoiceTitle": "Delete voice profile",
-    "tapToEnableAudio": "Tap anywhere to enable audio playback"
+    "tapToEnableAudio": "Tap anywhere to enable audio playback",
+    "speech": {
+      "url": "a link",
+      "path": "a file path"
+    }
   },
   "analytics": {
     "title": "Analytics",

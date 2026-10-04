@@ -972,7 +972,11 @@
     "confirmDeleteVoice": "Excluir voz \"{name}\"?",
     "languageVoicesActive": "Vozes específicas do idioma {count} configuradas",
     "confirmDeleteVoiceTitle": "Excluir perfil de voz",
-    "tapToEnableAudio": "Toque em qualquer lugar para ativar a reprodução de áudio"
+    "tapToEnableAudio": "Toque em qualquer lugar para ativar a reprodução de áudio",
+    "speech": {
+      "url": "um link",
+      "path": "um caminho de arquivo"
+    }
   },
   "analytics": {
     "title": "Análise",

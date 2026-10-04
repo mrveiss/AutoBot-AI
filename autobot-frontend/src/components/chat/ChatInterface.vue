@@ -330,7 +330,7 @@ import VoiceConversationOverlay from './VoiceConversationOverlay.vue'
 import VoiceConversationPanel from './VoiceConversationPanel.vue'
 import ChatSettingsModal from './ChatSettingsModal.vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { extractCompleteSentences } from '@/utils/ttsSentences'
+import { createSpeechShaper, extractCompleteSentences } from '@/utils/ttsSentences'
 // Issue #3232: chain-of-thought reasoning trace
 import ReasoningTrace from './ReasoningTrace.vue'
 import { useReasoningTrace } from '@/composables/useReasoningTrace'
@@ -1313,6 +1313,9 @@ watch(
 const _SPEAKABLE_TYPES = new Set(['response', 'message'])
 let _lastSpokenIdx = 0
 let _lastStreamingMsgId: string | null = null
+// Shapes each reply's spoken slices; fence state spans slices (#13102)
+const _newSpeechShaper = () => createSpeechShaper({ url: t('voice.speech.url'), path: t('voice.speech.path') })
+let _speechShaper = _newSpeechShaper()
 
 /** Prime TTS cursor to end of current last message. Used on voice-enable and session switch. */
 function _primeTtsCursor(): void {
@@ -1364,6 +1367,7 @@ watch(
       if (store.isTyping) stopSpeaking()
       _lastStreamingMsgId = current.id
       _lastSpokenIdx = store.isTyping ? 0 : current.content.length
+      _speechShaper = _newSpeechShaper()
     }
 
     if (store.isTyping && current.content) {
@@ -1376,14 +1380,15 @@ watch(
         newText,
         _MIN_TTS_SENTENCE_CHARS,
       )
-      for (const s of sentences) speakStreaming(s)
+      for (const s of sentences) speakStreaming(_speechShaper.push(s))
       _lastSpokenIdx += consumed
     } else if (!store.isTyping && current.content) {
       // Stream ended: ALWAYS flush the remaining tail (all text after the cursor).
       // Lists, code blocks and unpunctuated endings have no terminal ". "/"! "/"? "
       // so they only ever reach TTS via this remainder flush (#12502).
       const remainder = current.content.slice(_lastSpokenIdx).trim()
-      if (remainder) speakStreaming(remainder)
+      if (remainder) speakStreaming(_speechShaper.push(remainder))
+      speakStreaming(_speechShaper.flush())
       flushStreaming()
       // Mark all content as spoken — do NOT reset to 0/null here.
       // Resetting _lastStreamingMsgId to null would cause any subsequent reactive
