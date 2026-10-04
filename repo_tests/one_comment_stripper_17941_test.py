@@ -54,6 +54,14 @@ _MARKERS = frozenset({"#", "//", "/*"})
 #:       this module exists to stop, pointed the other way. They need their
 #:       own shared parser, or they stay.
 #:
+#:   (d) DEPENDENCY-CONSTRAINED -- `check_ci_system_package_provisioning`
+#:       runs in a CI job that installs linters and NOT the application's
+#:       dependencies, and `ci_system_package_provisioning_test` enforces
+#:       that with a stdlib-only import check plus a second test keeping its
+#:       one exemption (`_scan_helpers`) dependency-free. Importing the shared
+#:       helper there means relaxing both guards to buy a straight move that
+#:       fixes no bug. The deliberate boundary wins; this entry stays.
+#:
 #:   (c) COMMENTS AS DATA -- `detect-hardcoded-values_test` extracts a comment
 #:       HEADER; `comment_line_number_citations_test`'s whole subject is
 #:       comment line numbers. Migrating these would delete their input.
@@ -82,18 +90,15 @@ _PENDING_PRIVATE_STRIPPERS = frozenset(
         "repo_tests/comment_line_number_citations_test.py",
         "repo_tests/declared_distributions.py",
         "repo_tests/git_merge_rejects_pull_only_flags_15938_test.py",
-        "repo_tests/hardcoded_values_scope_agreement_test.py",
         "repo_tests/hook_suites_run_in_ci_test.py",
         "repo_tests/hooks_path_override_15961_test.py",
         "repo_tests/infra_libs_test_wiring_guard_15051_test.py",
         "repo_tests/mcp_verification_script_coverage_14219_test.py",
         "repo_tests/no_repo_relative_phantom_path_test.py",
         "repo_tests/no_tracked_path_into_worktrees_15203_test.py",
-        "repo_tests/parked_branch_merge_workflow_test.py",
         "repo_tests/phase_validation_paths_and_skips_17089_test.py",
         "repo_tests/redis_config_path_is_canonical_17434_test.py",
         "repo_tests/redis_unit_name_is_canonical_16060_test.py",
-        "repo_tests/release_sync_main_test.py",
         "repo_tests/slm_frontend_shell_publish_test.py",
         "repo_tests/stranded_recorder_entries_test.py",
         "repo_tests/sync_deletions_target_pinning_and_shell_safety_16310_test.py",
