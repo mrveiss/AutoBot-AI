@@ -1327,6 +1327,9 @@ function _primeTtsCursor(): void {
     if (m.type && !_SPEAKABLE_TYPES.has(m.type)) continue
     _lastStreamingMsgId = m.id
     _lastSpokenIdx = m.content.length
+    // Read the skipped text unspoken so an open code fence is known (#13102)
+    _speechShaper = _newSpeechShaper()
+    _speechShaper.push(m.content)
     break
   }
 }
@@ -1376,18 +1379,18 @@ watch(
       // by the summed sentence lengths, which drift over multi-paragraph replies
       // and drop/duplicate slices (#12502).
       const newText = current.content.slice(_lastSpokenIdx)
-      const { sentences, consumed } = extractCompleteSentences(
+      const { spans, consumed } = extractCompleteSentences(
         newText,
         _MIN_TTS_SENTENCE_CHARS,
       )
-      for (const s of sentences) speakStreaming(_speechShaper.push(s))
+      for (const span of spans) speakStreaming(_speechShaper.push(span))
       _lastSpokenIdx += consumed
     } else if (!store.isTyping && current.content) {
       // Stream ended: ALWAYS flush the remaining tail (all text after the cursor).
       // Lists, code blocks and unpunctuated endings have no terminal ". "/"! "/"? "
       // so they only ever reach TTS via this remainder flush (#12502).
-      const remainder = current.content.slice(_lastSpokenIdx).trim()
-      if (remainder) speakStreaming(_speechShaper.push(remainder))
+      const remainder = current.content.slice(_lastSpokenIdx)
+      if (remainder.trim()) speakStreaming(_speechShaper.push(remainder))
       speakStreaming(_speechShaper.flush())
       flushStreaming()
       // Mark all content as spoken — do NOT reset to 0/null here.

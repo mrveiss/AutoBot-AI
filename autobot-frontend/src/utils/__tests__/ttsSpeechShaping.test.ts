@@ -31,6 +31,7 @@ describe('shapeForSpeech — URLs and paths (#13102)', () => {
     expect(shape('Edit autobot-backend/llc/adapters/base.py today.')).toBe('Edit PATH today.')
     expect(shape('Open /etc/hosts and ./run.sh and ~/notes/todo.')).toBe('Open PATH and PATH and PATH.')
     expect(shape('The bug is in ChatInterface.vue.')).toBe('The bug is in PATH.')
+    expect(shape('Open C:\\Users\\Alex\\report.txt now.')).toBe('Open PATH now.')
   })
 })
 
@@ -60,7 +61,7 @@ describe('createSpeechShaper — fenced code (#13102)', () => {
   it('drops the block when the ``` marker splits across two streamed deltas', () => {
     const shaper = createSpeechShaper(PH)
     const spoken = [
-      shaper.push('Before ``'),
+      shaper.push('Before\n``'),
       shaper.push('`py\nsecret()\n`'),
       shaper.push('``\nAfter.'),
       shaper.flush(),
@@ -74,6 +75,32 @@ describe('createSpeechShaper — fenced code (#13102)', () => {
     expect(shaper.push('Code:\n```')).toBe('Code:')
     expect(shaper.push('rm -rf build. ')).toBe('')
     expect(shaper.flush()).toBe('')
+  })
+
+  it('does not treat ``` in the middle of a line as a fence', () => {
+    expect(shape('Use ``` to mark code. Then continue.')).toBe('Use to mark code. Then continue.')
+  })
+
+  it('keeps a four-backtick block closed against an inner ``` line', () => {
+    expect(shape('Intro.\n````md\n```\nsecret()\n```\n````\nAfter.')).toBe('Intro. After.')
+  })
+
+  it('drops a ~~~ fence, including when its marker splits across slices', () => {
+    expect(shape('Intro.\n~~~\nsecret()\n~~~\nOutro.')).toBe('Intro. Outro.')
+    const shaper = createSpeechShaper(PH)
+    expect([shaper.push('Intro\n~~'), shaper.push('~\nsecret()\n~~~\nOutro.')]).toEqual(['Intro', 'Outro.'])
+  })
+
+  it('does not swallow ~~strikethrough~~ at the start of a slice', () => {
+    const shaper = createSpeechShaper(PH)
+    expect([shaper.push('Intro\n~~'), shaper.push('old~~ news.')]).toEqual(['Intro', 'old news.'])
+  })
+
+  it('knows a fence is open after being primed with skipped text', () => {
+    // ChatInterface primes the shaper with the text voice was enabled after
+    const shaper = createSpeechShaper(PH)
+    shaper.push('Setup:\n```bash\nmake')
+    expect(shaper.push('\nrm -rf build\n```\nDone.')).toBe('Done.')
   })
 
   it('treats a split single backtick as inline code', () => {
@@ -107,12 +134,13 @@ describe('transcript is unaffected by shaping (#13102)', () => {
     const before = transcript
     const shaper = createSpeechShaper(PH)
 
-    const { sentences, consumed } = extractCompleteSentences(transcript, 20)
-    const spoken = sentences.map((s) => shaper.push(s))
+    const { sentences, spans, consumed } = extractCompleteSentences(transcript, 20)
+    const spoken = spans.map((span) => shaper.push(span))
 
     expect(transcript).toBe(before)
     expect(consumed).toBe(transcript.length)
     expect(sentences.map((s) => s.trim()).join(' ')).toBe(transcript.trim())
+    expect(spans.join('')).toBe(transcript.slice(0, consumed))
     expect(spoken).toEqual(['First see docs now.', 'Then edit PATH please.'])
   })
 })

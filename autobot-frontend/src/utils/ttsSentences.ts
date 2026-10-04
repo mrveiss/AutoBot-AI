@@ -15,6 +15,13 @@ export interface ExtractedSentences {
   /** Complete sentences (>= minChars) ready to dispatch to TTS. */
   sentences: string[]
   /**
+   * The same sentences as exact raw spans of `text`, each INCLUDING its whole
+   * trailing whitespace run, so the spans concatenate to `text.slice(0, consumed)`.
+   * A speech shaper needs them: a newline in that run is what puts the next
+   * sentence at the start of a line, where a code fence can open (#13102).
+   */
+  spans: string[]
+  /**
    * Number of characters consumed from `text` — the end offset of the last
    * accepted sentence INCLUDING its trailing whitespace run. Callers must
    * advance their streaming cursor by exactly this amount. Advancing by the
@@ -35,6 +42,7 @@ export function extractCompleteSentences(
   minChars: number,
 ): ExtractedSentences {
   const sentences: string[] = []
+  const spans: string[] = []
   const terminators = /(?<=[.!?])\s+/g
   let lastEnd = 0
   let match: RegExpExecArray | null
@@ -42,10 +50,11 @@ export function extractCompleteSentences(
     const candidate = text.slice(lastEnd, match.index + 1)
     if (candidate.length >= minChars) {
       sentences.push(candidate)
+      spans.push(text.slice(lastEnd, match.index + match[0].length))
       lastEnd = match.index + match[0].length
     }
   }
-  return { sentences, consumed: lastEnd }
+  return { sentences, spans, consumed: lastEnd }
 }
 
 // ─── Speech shaping (#13102) ─────────────────────────────────────────────
@@ -59,13 +68,13 @@ export interface SpeechPlaceholders {
   path: string
 }
 
-const FENCE = '```'
 const URL_RE = /\b(?:https?:\/\/|www\.)[^\s<>()]+[^\s<>().,;:!?'"]/gi
 const CODE_EXT = 'py|pyi|ts|tsx|js|jsx|mjs|cjs|vue|json|ya?ml|toml|ini|cfg|md|sh|bash|rs|go|java|kt|c|h|cpp|hpp|cs|rb|php|css|scss|html|sql|lock|log|env'
-// A token with 2+ slashes, a rooted/relative prefix, or a code-file extension.
+// A token with 2+ slashes, a rooted/relative prefix, a code-file extension, or
+// a Windows drive path (C:\Users\...).
 // One bare slash ("and/or", "24/7") is prose and survives.
 const PATH_RE = new RegExp(
-  String.raw`(?<![\w/.-])(?:(?:~|\.{1,2})?\/(?:[\w.-]+\/)*[\w.-]*[\w-]|[\w.-]+(?:\/[\w.-]+)+\/[\w.-]*[\w-]|(?:[\w.-]+\/)*[\w-][\w.-]*\.(?:${CODE_EXT}))(?![\w/])`,
+  String.raw`(?<![\w/.-])(?:(?:~|\.{1,2})?\/(?:[\w.-]+\/)*[\w.-]*[\w-]|[\w.-]+(?:\/[\w.-]+)+\/[\w.-]*[\w-]|(?:[\w.-]+\/)*[\w-][\w.-]*\.(?:${CODE_EXT})|[A-Za-z]:\\(?:[\w.-]+\\)*[\w.-]*[\w-])(?![\w/\\])`,
   'g',
 )
 // "Node.js"-style product names: capitalised word + .js — prose, not a file.
@@ -97,38 +106,70 @@ function shapeProse(text: string, ph: SpeechPlaceholders): string {
     .replace(/([a-z])([.!?])([A-Z])/g, '$1$2 $3') // "now.Right" -> "now. Right"
 }
 
+interface OpenFence {
+  char: string
+  len: number
+}
+
+// A fence line per CommonMark: up to 3 spaces of indent, then 3+ backticks or
+// tildes. A backtick fence's info string may not itself contain a backtick.
+const FENCE_LINE_RE = /^[ \t]{0,3}(`{3,}|~{3,})(.*)$/
+// A line that so far is only a 1-2 character marker run: it may become a
+// fence once the next slice arrives, so it is held rather than shaped.
+const PARTIAL_FENCE_RE = /^[ \t]{0,3}(?:`{1,2}|~{1,2})$/
+
+/** Opens a fence? Returns the fence, or null for an ordinary line. */
+function openingFence(line: string): OpenFence | null {
+  const m = FENCE_LINE_RE.exec(line)
+  if (!m || (m[1][0] === '`' && m[2].includes('`'))) return null
+  return { char: m[1][0], len: m[1].length }
+}
+
+/** Closes `fence`? Same character, at least as long, nothing after it. */
+function closesFence(line: string, fence: OpenFence): boolean {
+  const m = FENCE_LINE_RE.exec(line)
+  return !!m && m[1][0] === fence.char && m[1].length >= fence.len && m[2].trim() === ''
+}
+
 /**
  * Stateful speech shaper for one reply. `push()` takes successive streamed
- * slices and returns the speakable text; fenced code blocks are dropped whole,
- * with fence state — and a trailing partial ``` marker — carried across slices.
+ * slices and returns the speakable text. Fenced code blocks (``` or ~~~) are
+ * dropped whole by CommonMark's rules -- a fence opens and closes only at the
+ * start of a line, and closes only on the same character at least as long --
+ * with fence state, line position and a partial marker carried across slices.
  */
 export function createSpeechShaper(ph: SpeechPlaceholders) {
-  let inFence = false
+  let fence: OpenFence | null = null
+  let atLineStart = true
   let held = ''
 
-  const shapeSlice = (slice: string): string => {
-    const parts = slice.split(FENCE)
-    let out = ''
-    parts.forEach((part, i) => {
-      if (i > 0) inFence = !inFence
-      if (!inFence) out += part
-    })
-    return shapeProse(out, ph).replace(/\s+/g, ' ').trim()
+  const keepLine = (line: string, lineStart: boolean): boolean => {
+    if (fence) {
+      if (lineStart && closesFence(line, fence)) fence = null
+      return false
+    }
+    const opened = lineStart ? openingFence(line) : null
+    if (opened) fence = opened
+    return !opened
   }
 
   return {
     push(slice: string): string {
-      const text = held + slice
-      // Only a run at the start or after whitespace can begin a fence; a run
-      // closing inline code (`ls`) is spoken now, not held.
-      const tail = /(?:^|\s)(`{1,2})$/.exec(text)
-      held = tail && !text.endsWith(FENCE) ? tail[1] : ''
-      return shapeSlice(held ? text.slice(0, -held.length) : text)
+      let text = held + slice
+      const lastBreak = text.lastIndexOf('\n')
+      const tailStart = lastBreak + 1
+      const tailAtLineStart = lastBreak >= 0 || atLineStart
+      held = tailAtLineStart && PARTIAL_FENCE_RE.test(text.slice(tailStart)) ? text.slice(tailStart) : ''
+      if (held) text = text.slice(0, tailStart)
+      const kept = text.split('\n').filter((line, i) => keepLine(line, i > 0 || atLineStart))
+      atLineStart = held !== '' || text.endsWith('\n')
+      return shapeProse(kept.join('\n'), ph).replace(/\s+/g, ' ').trim()
     },
-    /** End of reply: a held partial marker is only backticks — never spoken. */
+    /** End of reply: a held partial marker is only backticks or tildes -- never spoken. */
     flush(): string {
       held = ''
-      inFence = false
+      fence = null
+      atLineStart = true
       return ''
     },
   }
