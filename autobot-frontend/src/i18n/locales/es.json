@@ -4944,6 +4944,43 @@
       "editCommand": "Edit",
       "editCancel": "Cancel",
       "editSave": "Save"
+    },
+    "automation": {
+      "started": "🚀 FLUJO DE TRABAJO AUTOMATIZADO INICIADO: {name}",
+      "stepsPlanned": "📋 {count} pasos planificados. Use el botón PAUSA para tomar el control manual en cualquier momento.",
+      "unnamedWorkflow": "Flujo de trabajo sin nombre",
+      "executeStep": "Ejecutar: {command}",
+      "paused": "⏸️ AUTOMATIZACIÓN EN PAUSA - Control manual activado. Escriba comandos libremente.",
+      "resumed": "▶️ AUTOMATIZACIÓN REANUDADA - Continuando la ejecución del flujo de trabajo.",
+      "aboutToExecute": "🤖 FLUJO DE IA: A punto de ejecutar \"{command}\"",
+      "stepProgress": "📋 Paso {step}/{total}: {description}",
+      "skipped": "⏭️ OMITIDO: {command}",
+      "manualControlTaken": "👤 CONTROL MANUAL TOMADO - Complete sus pasos manuales y luego pulse REANUDAR para continuar el flujo de trabajo.",
+      "automated": "🤖 AUTOMATIZADO: {command}",
+      "pausedBySystem": "⏸️ FLUJO DE TRABAJO PAUSADO POR EL SISTEMA",
+      "resumedBySystem": "▶️ FLUJO DE TRABAJO REANUDADO POR EL SISTEMA",
+      "executing": "🤖 EJECUTANDO: {command}",
+      "stepSkippedByUser": "⏭️ PASO {step} OMITIDO POR EL USUARIO",
+      "workflowSaved": "💾 FLUJO DE TRABAJO GUARDADO: {name}",
+      "workflowUpdated": "📋 FLUJO DE TRABAJO ACTUALIZADO: pasos configurados: {count}",
+      "manualCommand": "👤 MANUAL: {command}",
+      "example": {
+        "name": "Actualización del sistema e instalación de paquetes",
+        "updateDesc": "Actualizar repositorios de paquetes",
+        "updateExpl": "Actualiza la lista de paquetes disponibles de los repositorios configurados.",
+        "upgradeDesc": "Actualizar paquetes instalados",
+        "upgradeExpl": "Actualiza todos los paquetes instalados a sus últimas versiones.",
+        "installDesc": "Instalar herramientas esenciales",
+        "installExpl": "Instala herramientas de desarrollo de uso común.",
+        "verifyDesc": "Verificar instalaciones",
+        "verifyExpl": "Comprueba que las herramientas se instalaron correctamente."
+      }
+    },
+    "events": {
+      "emergencyKill": "🛑 PARADA DE EMERGENCIA: Todos los procesos terminados por el usuario",
+      "emergencyKillFailed": "❌ La parada de emergencia falló: {message}",
+      "interrupted": "^C (Proceso interrumpido por el usuario)",
+      "error": "Error: {error}"
     }
   },
   "llm": {
