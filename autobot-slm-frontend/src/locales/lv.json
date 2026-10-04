@@ -410,7 +410,9 @@
       "user": "Lietotājs",
       "languageLabel": "Valoda"
     },
-    "skipLink": {},
+    "skipLink": {
+      "mainContent": "Pāriet uz galveno saturu"
+    },
     "toastContainer": {
       "dismissNotification": "Dismiss notification",
       "notifications": "Paziņojumi"
@@ -2199,7 +2201,8 @@
         "update": "Atjaunināt",
         "username": "Lietotājvārds",
         "varLogAutobotForwardedLog": "/var/log/autobot-forwarded.log",
-        "warning": "Brīdinājums"
+        "warning": "Brīdinājums",
+        "statusUnknown": "Nezināms"
       },
       "nPUWorkersSettings": {
         "actions": "Darbības",
@@ -2695,7 +2698,15 @@
       "testConnection": "Test Connection",
       "uRLToAccessGrafana": "URL to access Grafana",
       "uRLToAccessPrometheus": "URL to access Prometheus",
-      "useAnsibleToDeploy": "Use Ansible to deploy or migrate the monitoring stack to a different node."
+      "useAnsibleToDeploy": "Use Ansible to deploy or migrate the monitoring stack to a different node.",
+      "settingSaved": "Setting saved successfully",
+      "prometheusConnected": "Prometheus connection successful",
+      "prometheusFailed": "Prometheus connection failed",
+      "prometheusUnreachable": "Cannot reach the Prometheus server",
+      "grafanaConnected": "Grafana connection successful",
+      "grafanaFailed": "Grafana connection failed",
+      "grafanaUnreachable": "Cannot reach the Grafana server",
+      "deployViaAnsible": "Monitoring role deployment will be triggered via Ansible"
     },
     "notificationsSettings": {
       "adminExampleCom": "admin{'@'}example.com",

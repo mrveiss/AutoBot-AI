@@ -33,6 +33,8 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_text
+
 _INSTALL = Path("install.sh")
 
 
@@ -55,8 +57,12 @@ def _code_lines(source: str) -> str:
     A text guard that scans the whole file matches the comment explaining the
     rule as readily as a violation of it -- this one did, on the very comment
     saying why `[[ -r /dev/tty ]]` is insufficient.
+
+    Delegates to the shared stripper (#17941). This was one of seven private
+    copies; the duplication was the enabler, because each new text-keyed guard
+    had to rediscover the hazard and forgetting is silent.
     """
-    return "\n".join(line for line in source.splitlines() if not line.lstrip().startswith("#"))
+    return code_text(source, name="install.sh")
 
 
 def test_no_prompt_reads_from_stdin() -> None:

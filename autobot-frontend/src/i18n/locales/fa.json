@@ -122,15 +122,15 @@
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents",
     "agentActivity": "فعالیت عامل",
-    "mainNavigation": "Main navigation",
+    "mainNavigation": "ناوبری اصلی",
     "plugins": "Plugins",
     "switchLanguage": "Switch language",
     "automation": "Automation",
     "secrets": "Secrets",
-    "skipToContent": "Skip to content",
+    "skipToContent": "رفتن به محتوای اصلی",
     "systemStatus": "System Status",
     "services": "Services",
-    "skipToNavigation": "Skip to navigation",
+    "skipToNavigation": "رفتن به ناوبری",
     "openMainMenu": "Open main menu",
     "operations": "عملیات",
     "remoteDesktop": "Remote Desktop",
@@ -201,7 +201,17 @@
     "adminPricing": "قیمت‌گذاری مدل‌ها",
     "adminMcpServers": "سرورهای MCP",
     "adminPermissionScopes": "دامنه‌های مجوز",
-    "llcRoles": "نقش‌ها"
+    "llcRoles": "نقش‌ها",
+    "keywords": {
+      "knowledge": "اسناد فایل‌ها کتابخانه رونویسی یادداشت",
+      "companyOs": "شرکت سازمان کسب‌وکار",
+      "automation": "گردش کار خط لوله زمان‌بندی کارها",
+      "analytics": "بازدیدکنندگان معیارها آمار نمودار گزارش",
+      "preferences": "تنظیمات گزینه‌ها زبان پوسته",
+      "budgetPolicies": "هزینه مخارج محدودیت پول",
+      "systemHealth": "وضعیت دسترس‌پذیری عیب‌یابی پایش",
+      "vault": "اعتبارنامه کلید رمز عبور توکن گاوصندوق"
+    }
   },
   "llcCompanyStatus": {
     "showArchived": "نمایش بایگانی‌شده‌ها",
@@ -8006,7 +8016,20 @@
     "newCode": "New Code Agent",
     "newCodeDesc": "Start a code analysis session",
     "newAnalysis": "New Analysis",
-    "newAnalysisDesc": "Start an analysis session"
+    "newAnalysisDesc": "Start an analysis session",
+    "openPage": "باز کردن {page}",
+    "types": {
+      "task": "وظیفه",
+      "research": "پژوهش",
+      "code": "کد",
+      "analysis": "تحلیل",
+      "navigate": "صفحه"
+    },
+    "hints": {
+      "navigate": "پیمایش",
+      "select": "انتخاب",
+      "close": "بستن"
+    }
   },
   "slm": {
     "novnc": {

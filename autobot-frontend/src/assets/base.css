@@ -45,6 +45,13 @@ body {
   color: var(--text-primary);
 }
 
+/* #14771: viewport-fit=cover lets the page reach under the notch and home
+ * indicator; the app shell keeps everything in flow inside the safe area.
+ * position: fixed chrome escapes this padding and applies its own insets. */
+#app {
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+}
+
 /* ============================================
  * GLOBAL SCROLLBAR STYLING
  * Consistent scrollbars across all browsers
