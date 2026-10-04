@@ -494,9 +494,7 @@ def test_a_bandit_parse_failure_is_not_a_clean_scan() -> None:
     findings and the gate PASSED, so every file bandit could not parse was reported as
     having nothing wrong with it.
     """
-    payload = json.dumps(
-        {"results": [], "errors": [{"filename": "a.py", "reason": "syntax error"}]}
-    )
+    payload = json.dumps({"results": [], "errors": [{"filename": "a.py", "reason": "syntax error"}]})
 
     with pytest.raises(ReportError) as excinfo:
         _gate.parse_bandit(payload)
@@ -538,4 +536,3 @@ def test_findings_are_still_returned_when_errors_is_absent() -> None:
 
     assert len(findings) == 1
     assert findings[0].identifier == "B101"
-
