@@ -92,6 +92,22 @@ class KBFolderChangeHandler(FileSystemEventHandler):
         if dest:
             self._handle_change(dest, "created")
 
+    def _loggable(self, path: Path) -> str:
+        """The event path relative to the watched root, for the drop logs.
+
+        `path.name` alone cannot tell two files called `notes.txt` in different
+        subfolders apart, which is exactly what a reader of a DROPPED line needs
+        to know. The absolute path would put the host's filesystem layout into
+        the log, which the project forbids, so only the part that varies inside
+        the watched folder is kept. A path outside the root (a symlink target,
+        say) has no meaningful relative form, so it degrades to the basename
+        rather than leaking the root it actually sits under.
+        """
+        try:
+            return str(path.relative_to(self.config.path))
+        except ValueError:
+            return path.name
+
     def _handle_change(self, file_path: str, change_type: str) -> None:
         """Process a file change event with debouncing.
 
@@ -116,7 +132,7 @@ class KBFolderChangeHandler(FileSystemEventHandler):
                 "Watch folder %s: ignoring %s of %s -- extension %r is not one the KB ingests (%s)",
                 folder_id,
                 change_type,
-                path.name,
+                self._loggable(path),
                 path.suffix.lower(),
                 ", ".join(sorted(SUPPORTED_EXTENSIONS)),
             )
@@ -129,7 +145,7 @@ class KBFolderChangeHandler(FileSystemEventHandler):
                 "Watch folder %s: ignoring %s of %s -- file type %r is not enabled for this folder " "(enabled: %s)",
                 folder_id,
                 change_type,
-                path.name,
+                self._loggable(path),
                 file_ext,
                 ", ".join(sorted(self.config.file_types)) or "none",
             )
@@ -143,7 +159,7 @@ class KBFolderChangeHandler(FileSystemEventHandler):
                 "Watch folder %s: coalescing %s of %s -- %.2fs since the last dispatch, " "under the %.1fs debounce",
                 folder_id,
                 change_type,
-                path.name,
+                self._loggable(path),
                 now - last_seen,
                 DEBOUNCE_SECONDS,
             )
@@ -162,7 +178,7 @@ class KBFolderChangeHandler(FileSystemEventHandler):
                 "is retried rather than coalesced.",
                 folder_id,
                 change_type,
-                path.name,
+                self._loggable(path),
             )
             return
 
