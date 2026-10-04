@@ -54,10 +54,13 @@ class ApprovalSender(Protocol):
 
 @dataclass(frozen=True)
 class RemoteTarget:
-    """Where a given session's approvals should be asked."""
+    """Where a given session's approvals should be asked, and who may answer."""
 
     platform: str
     channel_id: str
+    #: Sender ids allowed to decide this session's approvals (#14068). Empty is
+    #: a target nobody may answer from — see ``DeliveredApproval``.
+    allowed_senders: tuple[str, ...] = ()
 
 
 class RemoteApprovalRouting:
@@ -78,7 +81,14 @@ class RemoteApprovalRouting:
             if target is None:
                 await redis.delete(key)
                 return True
-            await redis.hset(key, mapping={"platform": target.platform, "channel_id": target.channel_id})
+            await redis.hset(
+                key,
+                mapping={
+                    "platform": target.platform,
+                    "channel_id": target.channel_id,
+                    "allowed_senders": ",".join(sid for sid in target.allowed_senders if sid),
+                },
+            )
             await redis.expire(key, REMOTE_FLAG_TTL_SECONDS)
             return True
         except Exception as exc:  # noqa: BLE001 - a routing change is not worth crashing a turn
@@ -103,7 +113,11 @@ class RemoteApprovalRouting:
         channel_id = _field(data, "channel_id")
         if not platform or not channel_id:
             return None
-        return RemoteTarget(platform=platform, channel_id=channel_id)
+        return RemoteTarget(
+            platform=platform,
+            channel_id=channel_id,
+            allowed_senders=tuple(part for part in _field(data, "allowed_senders").split(",") if part),
+        )
 
 
 def _field(mapping: dict, key: str) -> str:
@@ -143,7 +157,12 @@ async def deliver_approval(
 
     delivery_store = store or RemoteApprovalStore()
     recorded = await delivery_store.record_delivery(
-        DeliveredApproval(approval_id=approval_id, platform=target.platform, channel_id=target.channel_id)
+        DeliveredApproval(
+            approval_id=approval_id,
+            platform=target.platform,
+            channel_id=target.channel_id,
+            allowed_senders=target.allowed_senders,
+        )
     )
     if not recorded:
         logger.warning("Not delivering approval %s: correlation could not be recorded", approval_id)

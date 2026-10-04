@@ -108,6 +108,12 @@ class DeliveredApproval:
     approval_id: str
     platform: str
     channel_id: str
+    #: Sender ids permitted to answer this approval, recorded at delivery time
+    #: (#14068). Empty means nobody: an approval nobody is authorised to answer
+    #: stays pending, which is the fail-closed reading. Posting into the right
+    #: channel is not authorisation -- channels have more members than the
+    #: operator, and a reply is a decision.
+    allowed_senders: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -118,6 +124,8 @@ class ResolvedReply:
     approved: bool
     platform: str
     channel_id: str
+    #: Who decided. Always one of the delivery's ``allowed_senders`` (#14068).
+    sender_id: str = ""
 
 
 class RemoteApprovalStore:
@@ -132,7 +140,11 @@ class RemoteApprovalStore:
         try:
             await redis.hset(
                 f"{_DELIVERY_KEY_PREFIX}{delivery.approval_id}",
-                mapping={"platform": delivery.platform, "channel_id": delivery.channel_id},
+                mapping={
+                    "platform": delivery.platform,
+                    "channel_id": delivery.channel_id,
+                    "allowed_senders": _join_senders(delivery.allowed_senders),
+                },
             )
             await redis.expire(f"{_DELIVERY_KEY_PREFIX}{delivery.approval_id}", REMOTE_APPROVAL_TTL_SECONDS)
             return True
@@ -156,7 +168,12 @@ class RemoteApprovalStore:
         channel_id = _decoded(data, "channel_id")
         if not platform or not channel_id:
             return None
-        return DeliveredApproval(approval_id=approval_id, platform=platform, channel_id=channel_id)
+        return DeliveredApproval(
+            approval_id=approval_id,
+            platform=platform,
+            channel_id=channel_id,
+            allowed_senders=_split_senders(_decoded(data, "allowed_senders")),
+        )
 
     async def forget(self, approval_id: str) -> None:
         """Drop the correlation once the approval is resolved."""
@@ -167,6 +184,16 @@ class RemoteApprovalStore:
             await redis.delete(f"{_DELIVERY_KEY_PREFIX}{approval_id}")
         except Exception as exc:  # noqa: BLE001
             logger.error("Failed to clear approval delivery %s: %s", approval_id, exc)
+
+
+def _join_senders(senders: tuple[str, ...]) -> str:
+    """The allowlist as one Redis hash field. ``,`` is not a sender-id char."""
+    return ",".join(s for s in senders if s)
+
+
+def _split_senders(raw: str) -> tuple[str, ...]:
+    """Parse :func:`_join_senders` back. An unreadable field yields nobody."""
+    return tuple(part for part in raw.split(",") if part)
 
 
 def _decoded(mapping: dict, key: str) -> str:
@@ -184,6 +211,7 @@ async def resolve_from_reply(
     *,
     platform: str,
     channel_id: str,
+    sender_id: str,
     store: Optional[RemoteApprovalStore] = None,
 ) -> Optional[ResolvedReply]:
     """Tie a channel reply back to a pending approval, or return None.
@@ -195,7 +223,13 @@ async def resolve_from_reply(
     * a token we never delivered, or one that expired — not ours to act on;
     * a reply arriving on a different platform or channel than the delivery —
       the reply must come back where the question was asked, or anyone able to
-      post the token anywhere could answer for the operator.
+      post the token anywhere could answer for the operator;
+    * a reply from a sender outside the delivery's allowlist (#14068) — the
+      channel is where the question was asked, not who may answer it.
+
+    ``sender_id`` is a required keyword rather than an optional one on purpose:
+    an approval is a safety control, and a caller that has not established who
+    is answering must fail to compile, not silently resolve.
     """
     approval_id = extract_token(text)
     if approval_id is None:
@@ -211,6 +245,13 @@ async def resolve_from_reply(
         logger.info("Approval reply names unknown or expired approval %s", approval_id)
         return None
 
+    if not sender_id or sender_id not in delivery.allowed_senders:
+        logger.warning(
+            "Approval reply for %s from a sender outside the allowlist — ignored, request stays pending",
+            approval_id,
+        )
+        return None
+
     if delivery.platform != platform or delivery.channel_id != channel_id:
         logger.warning(
             "Approval reply for %s arrived on %s:%s but was delivered to %s:%s — ignored",
@@ -222,7 +263,13 @@ async def resolve_from_reply(
         )
         return None
 
-    return ResolvedReply(approval_id=approval_id, approved=decision, platform=platform, channel_id=channel_id)
+    return ResolvedReply(
+        approval_id=approval_id,
+        approved=decision,
+        platform=platform,
+        channel_id=channel_id,
+        sender_id=sender_id,
+    )
 
 
 __all__ = [

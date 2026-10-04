@@ -91,7 +91,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1326,
     "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 756,
     "autobot-backend/api/codebase_analytics/endpoints/duplicates.py": 660,  # #17758: triplicated cached body collapsed
-    "autobot-backend/api/codebase_analytics/endpoints/environment.py": 694,
+    "autobot-backend/api/codebase_analytics/endpoints/environment.py": 698,  # #13602: sanitised traversal log
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 827,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2267,
     "autobot-backend/api/codebase_analytics/endpoints/stats.py": 663,
@@ -162,7 +162,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/chat_workflow/graph.py": 1682,
     "autobot-backend/chat_workflow/llm_handler.py": 1343,
     "autobot-backend/chat_workflow/manager.py": 3976,  # #17513: markers extracted
-    "autobot-backend/chat_workflow/tool_handler.py": 3721,  # #11542: external MCP dispatch merged into MCPDispatcher
+    "autobot-backend/chat_workflow/tool_handler.py": 3731,  # #11542: MCP dispatch merged; #14068: approval mirrored to the routed channel
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
     "autobot-backend/circuit_breaker.py": 689,
