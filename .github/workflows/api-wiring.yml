@@ -45,6 +45,10 @@ on:
       - 'requirements*.txt'
       - '.github/workflows/api-wiring.yml'
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     # NOTE: no pull_request.paths filter (#12934). This workflow ALWAYS runs on
     # PRs so its required-check context ("api-wiring") always reports a
     # conclusion. A path-filtered required check simply never triggers, and an
@@ -66,6 +70,11 @@ permissions:
 jobs:
   # Job 0: detect relevant paths — always runs so the required context reports.
   changes:
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
+    # every `always()` aggregate below reads `needs.changes.result`.
+    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # context would report FAILED on every draft -- worse than no gate.
+    # Gate the expensive jobs, never the cheap thing others read.
     name: Detect changed paths
     runs-on: ubuntu-latest
     outputs:
@@ -89,7 +98,7 @@ jobs:
 
   api-wiring:
     needs: changes
-    if: github.event_name == 'merge_group' || needs.changes.outputs.wiring == 'true'
+    if: ${{ (github.event_name == 'merge_group' || needs.changes.outputs.wiring == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
 
     steps:

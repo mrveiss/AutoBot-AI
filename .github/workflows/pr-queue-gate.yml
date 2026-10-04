@@ -2,7 +2,7 @@ name: PR Queue Gate
 
 on:
   pull_request:
-    types: [opened, reopened]
+    types: [opened, reopened, ready_for_review]
 
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever
@@ -21,6 +21,7 @@ concurrency:
 
 jobs:
   check-pr-limit:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     permissions:
       # Declaring any `permissions:` sets every unlisted scope to `none`, so the

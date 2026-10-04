@@ -79,6 +79,10 @@ on:
   # Branch-protection promotion to required is the separate owner-confirmed
   # follow-up (#10022).
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ release, main, develop ]
 
 concurrency:
@@ -93,6 +97,11 @@ permissions:
 
 jobs:
   changes:
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
+    # every `always()` aggregate below reads `needs.changes.result`.
+    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # context would report FAILED on every draft -- worse than no gate.
+    # Gate the expensive jobs, never the cheap thing others read.
     name: Detect changed paths
     runs-on: ubuntu-latest
     outputs:
@@ -120,7 +129,7 @@ jobs:
 
   code-quality:
     needs: changes
-    if: github.event_name == 'merge_group' || needs.changes.outputs.backend == 'true'
+    if: ${{ (github.event_name == 'merge_group' || needs.changes.outputs.backend == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     # ubuntu-latest (#15395). This job publishes a REQUIRED context, and a
     # required context pinned to a two-machine pool cannot report when that
     # pool is down -- the #13401 deadlock, recurring as #15185 and #14444.
