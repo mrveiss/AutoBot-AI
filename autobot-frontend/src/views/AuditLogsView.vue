@@ -474,6 +474,9 @@ async function performCleanup() {
   right: 0;
   top: 0;
   bottom: 0;
+  /* #14771: the fixed drawer touches the right/bottom edges */
+  padding-right: var(--safe-right);
+  padding-bottom: var(--safe-bottom);
   width: 480px;
   max-width: 100%;
   background: var(--bg-primary);

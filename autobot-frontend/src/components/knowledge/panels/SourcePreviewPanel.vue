@@ -289,6 +289,9 @@ onUnmounted(() => {
 /* Panel */
 .source-preview-panel {
   height: 100%;
+  /* #14771: a fixed drawer at the right/bottom edges clears the insets */
+  padding-right: var(--safe-right);
+  padding-bottom: var(--safe-bottom);
   background: var(--bg-card);
   box-shadow: var(--shadow-2xl);
   display: flex;
