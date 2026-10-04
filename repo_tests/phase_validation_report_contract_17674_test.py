@@ -183,6 +183,30 @@ def _non_comment_lines(text: str) -> list[str]:
     return [line for line in text.splitlines() if not line.lstrip().startswith(("#", "//"))]
 
 
+def _logical_lines(text: str) -> list[str]:
+    """Non-comment lines with backslash continuations joined into one line.
+
+    A shell command split over continuations is one command, and the pieces a
+    guard cares about land on different physical lines: the validator call is
+    on one, its redirect on the next. A per-physical-line scan for `|| true`
+    therefore inspects the line naming the script and never sees an operator
+    appended after the redirect -- which is exactly where it would go. Joining
+    first makes the guard read the command the shell runs.
+    """
+    joined: list[str] = []
+    buffer = ""
+    for line in _non_comment_lines(text):
+        stripped = line.rstrip()
+        if stripped.endswith("\\"):
+            buffer += stripped[:-1].rstrip() + " "
+            continue
+        joined.append((buffer + stripped.strip()).strip() if buffer else line)
+        buffer = ""
+    if buffer:
+        joined.append(buffer.strip())
+    return joined
+
+
 def _keys_the_workflow_reads() -> set[str]:
     """Top-level report keys the workflow consumes, read out of its source.
 
@@ -531,11 +555,12 @@ class TestTheValidatorExitCodeIsNotSwallowed:
     """A blanket `|| true` is the same absent-reads-as-fine failure, in bash."""
 
     def test_the_run_step_reports_the_exit_code(self) -> None:
-        lines = _non_comment_lines(_workflow_text())
-        invocation = [line for line in lines if "phase_validation_system.py" in line]
+        lines = _logical_lines(_workflow_text())
+        invocation = [line for line in lines if "phase_validation_system.py" in line and "python" in line]
         assert invocation, "the validator invocation vanished from the workflow"
-        assert not any("|| true" in line for line in invocation), (
-            f"the validator's exit code is swallowed by `|| true`: {invocation}. A crash and a clean "
+        swallowed = [line for line in invocation if "|| true" in line or "|| :" in line]
+        assert not swallowed, (
+            f"the validator's exit code is swallowed: {swallowed}. A crash and a clean "
             "run then produce the same silence"
         )
         assert any(
