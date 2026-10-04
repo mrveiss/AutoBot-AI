@@ -76,14 +76,29 @@ fi
 # `target-version` in pyproject.toml controls the syntax it *emits* and stays
 # at py312 until #13747 has host evidence that the NPU worker is actually
 # running 3.14, not merely configured for it (see pyproject.toml).
+#
+# The CI-parity venv is searched FIRST and by absolute path (#13842 F4). It is
+# built by scripts/setup-ci-parity-env.sh at $HOME/.venv-python-suite with the
+# same 3.14 CI uses, and it is deliberately NOT on PATH -- so without this the
+# search skipped a perfectly good 3.14 sitting on the box and fell through to
+# whatever older interpreter happened to have black, which is the drift F4
+# describes. Honour CI_PARITY_VENV so the location stays overridable, exactly
+# as the setup script does.
 PYTHON_BIN=""
-for candidate in python3.14 python3.13 python3.12 python3.11 python3.10 python3; do
-    command -v "$candidate" >/dev/null 2>&1 || continue
-    if "$candidate" -m black --version >/dev/null 2>&1; then
-        PYTHON_BIN="$candidate"
-        break
-    fi
-done
+PARITY_PY="${CI_PARITY_VENV:-$HOME/.venv-python-suite}/bin/python"
+if [ -x "$PARITY_PY" ] && "$PARITY_PY" -m black --version >/dev/null 2>&1; then
+    PYTHON_BIN="$PARITY_PY"
+fi
+
+if [ -z "$PYTHON_BIN" ]; then
+    for candidate in python3.14 python3.13 python3.12 python3.11 python3.10 python3; do
+        command -v "$candidate" >/dev/null 2>&1 || continue
+        if "$candidate" -m black --version >/dev/null 2>&1; then
+            PYTHON_BIN="$candidate"
+            break
+        fi
+    done
+fi
 
 if [ -z "$PYTHON_BIN" ]; then
     echo "format.sh: no python3 on PATH has 'black' installed (try: pip install black)" >&2
@@ -101,9 +116,12 @@ case "$actual_ver" in
         ;;
     *)
         echo "format.sh: WARNING — using Python $actual_ver but the project runs 3.14." >&2
-        echo "  Black will emit a 'cannot parse code formatted for Python 3.12'" >&2
-        echo "  warning and its output can differ from CI's. To silence:" >&2
-        echo "    python3.14 -m pip install black==26.3.1 isort==8.0.1" >&2
+        echo "  Black's output can differ from CI's at this version, so a clean" >&2
+        echo "  local run may still fail the CI format check." >&2
+        echo "  One command fixes this for good -- it builds CI's exact 3.14 at" >&2
+        echo "  \$HOME/.venv-python-suite, needs no sudo, and installs nothing" >&2
+        echo "  outside the venv. format.sh finds it automatically afterwards:" >&2
+        echo "    bash scripts/setup-ci-parity-env.sh" >&2
         echo "" >&2
         ;;
 esac
