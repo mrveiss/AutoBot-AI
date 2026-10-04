@@ -34,6 +34,10 @@ on:
       - 'autobot-backend/llc/**/replay*'
       - '.github/workflows/trajectory-eval.yml'
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ release, main ]
     paths: *paths
 
@@ -46,6 +50,7 @@ permissions:
 
 jobs:
   trajectory-eval:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     # NON-BLOCKING: report drift without gating the merge (GH#10546).
     continue-on-error: true
