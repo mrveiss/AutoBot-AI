@@ -41,12 +41,13 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 
 #: The record this guard enforces. It lives in its own module because this file
 #: reached the 600-line ceiling (#5060); the split is along data/assertions
 #: rather than at an arbitrary line, and appends now land in a small data file
 #: instead of colliding inside a long test.
-from repo_tests._glob_declared_uncovered import GLOB_DECLARED_UNCOVERED
+from repo_tests._glob_declared_uncovered import GLOB_DECLARED_UNCOVERED, GLOB_RUN_BY_A_DEDICATED_WORKFLOW
 
 #: The two modules whose own text must never enter the scanned population: this
 #: guard and the record it imports. Both hold quoted glob strings that are the
@@ -187,12 +188,158 @@ def test_every_uncovered_glob_declaration_is_recorded() -> None:
     patterns = _filter_patterns()
     uncovered = {g for g in declarations if not _is_covered(_probe_path(g), patterns)}
 
-    unrecorded = sorted(uncovered - set(GLOB_DECLARED_UNCOVERED))
+    # Two records, and the difference matters: `GLOB_DECLARED_UNCOVERED` is accepted DEBT,
+    # `GLOB_RUN_BY_A_DEDICATED_WORKFLOW` is coverage by the other route this guard's own rule
+    # names -- "a cheaper route runs that guard on its own trigger". Membership of the second
+    # is worth something only because `test_a_dedicated_workflow_entry_really_runs_that_guard`
+    # below verifies the named workflow fires on that tree AND invokes the guard; without that
+    # check it would be an exemption, which the record's own header forbids.
+    unrecorded = sorted(uncovered - set(GLOB_DECLARED_UNCOVERED) - set(GLOB_RUN_BY_A_DEDICATED_WORKFLOW))
     assert not unrecorded, (
         "these guards declare a glob into a tree the python filter does not cover, and the "
         "dependency is recorded nowhere — so the guard silently does not run when that tree "
         "changes (#15900):\n  " + "\n  ".join(f"{g}  <- {', '.join(sorted(declarations[g]))}" for g in unrecorded)
     )
+
+
+def workflow_triggers(document: dict) -> dict:
+    """A workflow's ``on:`` block.
+
+    PyYAML reads a bare ``on`` key as the BOOLEAN ``True`` (YAML 1.1's
+    yes/no/on/off), so ``document["on"]`` is ``KeyError`` on every GitHub Actions
+    file written the normal way. Both spellings are accepted rather than one, because
+    a quoted ``"on":`` is also legal and the difference is invisible in the diff.
+    """
+    for key in (True, "on"):
+        value = document.get(key)
+        if value:
+            return value
+    return {}
+
+
+def run_step_bodies(document: dict) -> list[str]:
+    """Every ``run:`` script in the workflow -- what the job will actually EXECUTE.
+
+    Parsed from the YAML rather than grepped out of the file, and this is the whole
+    point of the function. A comment naming a guard, a `name:` that quotes it, or a
+    path listed in prose all satisfy a text search while running nothing; twice in one
+    day a check keyed on text was satisfied by a sentence that merely resembled the
+    thing it was looking for. Only a `run:` value is evidence.
+    """
+    bodies: list[str] = []
+    for job in (document.get("jobs") or {}).values():
+        for step in (job or {}).get("steps") or []:
+            script = (step or {}).get("run")
+            if isinstance(script, str):
+                bodies.append(script)
+    return bodies
+
+
+def test_a_dedicated_workflow_entry_really_runs_that_guard() -> None:
+    """The second record is VERIFIED, not asserted (#17930).
+
+    `_glob_declared_uncovered.py`'s rule has always had two exits: an entry leaves when
+    the filter covers its tree, "or when a cheaper route runs that guard on its own
+    trigger". The second exit had no mechanism, so taking it meant writing a sentence --
+    and a record whose entries are sentences is the exemption its own header forbids.
+
+    Three facts, each independently checkable, and all three have to hold:
+
+      * the named workflow EXISTS;
+      * its `pull_request` `paths:` fire on the tree the glob names -- checked with the
+        same matcher the python filter is checked with, so the two cannot drift;
+      * a `run:` step in it INVOKES each guard recorded against the glob.
+
+    Plus the staleness direction, because a record that cannot go stale is not checked:
+    an entry whose glob the python filter now covers, or that no guard declares any
+    more, must be deleted rather than left as decoration.
+    """
+    declarations, _ = _declared()
+    patterns = _filter_patterns()
+
+    for glob, (recorded, workflow, reason) in GLOB_RUN_BY_A_DEDICATED_WORKFLOW.items():
+        assert len(reason) > 25, f"{glob}: reason too thin to act on -- {reason!r}"
+
+        discovered = declarations.get(glob, set())
+        assert discovered, f"{glob}: recorded, but no guard declares it any more -- delete the entry"
+        assert recorded == discovered, (
+            f"{glob}: the record names {sorted(recorded)} but the guards declaring it are "
+            f"{sorted(discovered)}. A workflow verified against the wrong guard list proves "
+            f"nothing about the guards actually declaring this glob"
+        )
+        assert not _is_covered(_probe_path(glob), patterns), (
+            f"{glob}: the python filter reaches this tree now, so the dedicated workflow is no "
+            f"longer the reason it is covered -- delete this entry"
+        )
+
+        path = REPO_ROOT / workflow
+        assert path.is_file(), (
+            f"{glob}: {workflow} does not exist, so nothing runs " f"{sorted(recorded)} when that tree changes"
+        )
+        document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        triggers = workflow_triggers(document)
+        paths = [str(entry) for entry in (triggers.get("pull_request") or {}).get("paths") or []]
+        assert paths, (
+            f"{glob}: {workflow} has no `pull_request:` `paths:` filter. Without one it either "
+            f"never runs on a pull request or runs on all of them -- neither is the targeted "
+            f"trigger this entry claims"
+        )
+        assert _is_covered(_probe_path(glob), paths), (
+            f"{glob}: {workflow}'s pull_request paths {paths} do not fire on that tree, so a "
+            f"change confined to it runs neither the python suite nor this workflow -- which is "
+            f"the exact bypass this record exists to rule out"
+        )
+
+        bodies = run_step_bodies(document)
+        for guard in sorted(recorded):
+            assert any(guard in body for body in bodies), (
+                f"{glob}: no `run:` step in {workflow} invokes {guard}. The workflow fires on the "
+                f"right paths and then does not run the guard, which reads as coverage and is not"
+            )
+
+
+def test_a_workflow_that_only_MENTIONS_the_guard_does_not_count() -> None:
+    """The control for the check above, which is otherwise satisfied by prose.
+
+    Every string here names the guard somewhere a text search would find it -- a step
+    name, an `env:` value, a comment that YAML discards -- and none of them runs it.
+    Without this, `run_step_bodies` could be reduced to reading the file and the
+    verification would still pass.
+    """
+    guard = "repo_tests/docs_liquid_tags_are_defined_17930_test.py"
+    document = yaml.safe_load(
+        "name: looks-right\n"
+        "'on':\n"
+        "  pull_request:\n"
+        "    paths: ['docs/**/*.md']\n"
+        "jobs:\n"
+        "  j:\n"
+        "    steps:\n"
+        f"      # runs {guard}\n"
+        f"      - name: Run {guard}\n"
+        f"        env:\n"
+        f"          GUARD: {guard}\n"
+        "        uses: ./.github/actions/setup-python-ci\n"
+    )
+    assert not any(guard in body for body in run_step_bodies(document)), (
+        "a step that merely NAMES the guard was read as running it -- the detector is keyed on "
+        "text somewhere in the file rather than on a `run:` script"
+    )
+    # The contrast, so "ignore mentions" cannot degenerate into ignoring everything.
+    real = yaml.safe_load(f"jobs:\n  j:\n    steps:\n      - run: python3 -m pytest {guard} -q\n")
+    assert any(guard in body for body in run_step_bodies(real)), "a real `run:` step was not seen"
+
+
+def test_the_trigger_block_is_read_through_yamls_boolean_on_key() -> None:
+    """`on:` parses as `True`, and a lookup by the string silently finds nothing.
+
+    A helper that returned `{}` here would make every path assertion above vacuous while
+    the test still passed -- the failure is invisible precisely because it looks clean.
+    """
+    document = yaml.safe_load("on:\n  pull_request:\n    paths: ['docs/**/*.md']\n")
+    assert "on" not in document, "PyYAML no longer folds a bare `on` key to True; simplify the helper"
+    assert workflow_triggers(document).get("pull_request", {}).get("paths") == ["docs/**/*.md"]
+    assert workflow_triggers(yaml.safe_load("'on':\n  pull_request:\n    paths: ['x']\n"))
 
 
 def test_the_record_only_shrinks() -> None:
