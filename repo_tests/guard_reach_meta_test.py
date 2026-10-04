@@ -58,76 +58,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pytest  # noqa: E402
+from repo_tests._guard_reach_census import (  # noqa: E402
+    _ENUMERATOR,
+    _EXEMPT_BASELINE,
+    _EXEMPT_NON_SCANNING,
+    MIN_GUARDS_EXAMINED,
+    _examined_with,
+    _tracked_guards,
+)
 from repo_tests._paths import repo_root  # noqa: E402
-
-from tools.lint._scan_helpers import tracked_paths  # noqa: E402
-
-#: What counts as enumerating the tree.
-#:
-#: ``.glob(`` was missing until #16147, and its absence was the same defect this
-#: module exists to catch, one level up: the sweep reported every guard compliant
-#: while 21 tree-scanning guards were outside the set it read. A blind spot in a
-#: detector is indistinguishable from a clean result, which is why the floor below
-#: is bound to guards EXAMINED rather than to guards found wanting.
-#:
-#: ``.glob(`` is listed after ``rglob(`` deliberately -- ``rglob`` contains no
-#: literal ``.glob(``, so the two are independent alternatives rather than one
-#: subsuming the other.
-_ENUMERATOR = re.compile(r"tracked_paths|ls-files|rglob\(|os\.walk\(|\.iterdir\(|\.glob\(")
-
-#: Bound to guards EXAMINED, never to guards found wanting. A `git ls-files`
-#: returning nothing would otherwise pass this module having read zero guards --
-#: the exact failure it exists to catch, inside itself.
-#:
-#: MEASURED 2026-09-10 against `origin/main`: 201 tracked
-#: `repo_tests/*_test.py`, of which 101 matched `_ENUMERATOR` (80 before
-#: `.glob(` was added, 21 reachable only through it). The previous value of 60
-#: sat 20 below the then-current 80 and 41 below the true population, so it
-#: could not have fired on the very blind spot #16147 reports.
-#:
-#: RE-MEASURED 2026-09-11: 104 tracked `repo_tests/*_test.py` match
-#: `_ENUMERATOR` -- 3 more than the day before. #16147 AC1 (option A): pin the
-#: floor to the exact measured count instead of trailing it by roughly 6%,
-#: since that gap was the blind spot #16147 was filed for. A legitimate guard
-#: removal now needs a same-PR floor lowering, same as every other reach
-#: floor in this module (#15928).
-#:
-#: RE-MEASURED 2026-09-19 on the ws-auth train (#17048): 273 tracked
-#: `repo_tests/*_test.py`, 132 match `_ENUMERATOR` and 104 match it without
-#: `.glob(`. Guard growth had carried the no-`.glob(` reach up to the old floor
-#: of 104, so dropping the term no longer failed anything -- re-pinned to the
-#: exact full reach so the mutation below fires again.
-#: RE-MEASURED 2026-09-29 on the pinning-guard train (#17804): 165 tracked
-#: `repo_tests/*_test.py` match `_ENUMERATOR`, 132 match it without `.glob(`.
-#: Ten days of guard growth carried the no-`.glob(` reach from 104 to 131, and
-#: this PR's own new guard -- reached via `rglob(`, so it lands in the narrowed
-#: set -- made it the 132nd, exactly the old floor. At equality the mutation
-#: test below reads as clean while detecting nothing, which is the third time
-#: this floor has been caught from below (2026-09-11, 2026-09-19, today).
-#:
-#: This is maintenance, not a patch: the floor does double duty -- a reach floor
-#: on line ~257 and, on line ~355, the yardstick for whether that floor could
-#: still notice a lost enumerator term. The second job is only healthy while the
-#: number tracks full reach, so growth in the narrowed reach silently eats the
-#: detection margin and the pin has to be re-measured.
-#:
-#: Every count above is files MATCHING `_ENUMERATOR`, not guards that scan the
-#: tree: a match can be incidental. CENSUS 2026-10-02 at 168 matched (#15826),
-#: each of the 33 `.glob(`-only members resolved by chasing its receiver's
-#: binding, not its name: 30 true, 3 false, 0 unresolved --
-#: `hook_self_sync_atomic_test` and `prepush_hook_sync_17578_test` glob a
-#: `tmp_path`, `sync_to_slm_db_update_classify_14459_test` globs the host
-#: filesystem. True tree-scanning population: 165, exactly this floor. The
-#: apparent 3 of headroom ARE the 3 false members, so there is no real margin,
-#: and tightening `.glob(` to exclude them lands at equality -- it needs a floor
-#: decision in the same change. Quote these numbers as "matched", never as
-#: "guards examined", and never quote 168 - 165 as margin.
-#:
-#: Do NOT "fix" the treadmill by deriving this from the tree. A floor computed
-#: by the same enumerator it guards always agrees with itself and can never
-#: fail; the hand-pinned number is the whole mechanism, and paying it forward on
-#: each guard change is the cost of having a check that can fail.
-MIN_GUARDS_EXAMINED = 165
 
 #: WHAT THIS MODULE CHECKS, AND WHAT IT DOES NOT (#16154).
 #:
@@ -247,28 +186,26 @@ def has_floor(source: str) -> bool:
     return any(isinstance(node, ast.Assert) and _assert_binds_a_floor(node.test) for node in ast.walk(tree))
 
 
-def _tracked_guards() -> list[Path]:
-    """Enumerated through the canonical helper (#15926), not a direct git call.
-
-    `tracked_paths` lets **git** do the pathspec matching, so the filter and the
-    returned paths cannot disagree -- which is what #15510 cost when an
-    exclusion was tested against the absolute path.
-    """
-    root = repo_root()
-    return [root / rel for rel in tracked_paths(root, "repo_tests/*_test.py")]
-
-
 def _scanning_guards() -> dict[str, bool]:
-    """Relative path -> whether it binds a floor, for guards that enumerate."""
+    """Relative path -> whether it binds a floor, for guards that enumerate the TREE.
+
+    `_EXEMPT_NON_SCANNING` is removed here rather than filtered by the caller, so every count
+    in this module is of the same population (#17870): the floor, the mutation's narrowed
+    reach, and the unfloored sweep all have to agree about who is in the set or the window
+    below is comparing two different ones.
+    """
     root = repo_root()
     found = {}
     for path in _tracked_guards():
+        rel = path.relative_to(root).as_posix()
+        if rel in _EXEMPT_NON_SCANNING:
+            continue
         try:
             source = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
         if _ENUMERATOR.search(source):
-            found[path.relative_to(root).as_posix()] = has_floor(source)
+            found[rel] = has_floor(source)
     return found
 
 
@@ -485,20 +422,6 @@ def test_the_growth_check_finds_an_added_entry() -> None:
     ]
 
 
-def _examined_with(pattern: re.Pattern[str]) -> set[str]:
-    """Guards a given enumerator pattern reaches. Used to mutate the detector."""
-    root = repo_root()
-    reached = set()
-    for path in _tracked_guards():
-        try:
-            source = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        if pattern.search(source):
-            reached.add(path.relative_to(root).as_posix())
-    return reached
-
-
 def test_dropping_glob_from_the_enumerator_breaks_the_sweep() -> None:
     """#16147 mutation: the `.glob(` alternative must be load-bearing.
 
@@ -520,12 +443,11 @@ def test_dropping_glob_from_the_enumerator_breaks_the_sweep() -> None:
     full = _examined_with(_ENUMERATOR)
     narrowed = _examined_with(without_glob)
 
+    # `narrowed < full` is RETAINED and is not the window (#17818 AC3): it says the term is
+    # load-bearing at all. Whether the FLOOR would notice the loss is a different property,
+    # asserted once in `test_the_floor_sits_inside_its_window` rather than reconstructed from
+    # two assertions in two tests -- which is what made a stale pin a puzzle.
     assert narrowed < full, "removing `.glob(` reached the same guards -- the term is decoration"
-    assert len(narrowed) < MIN_GUARDS_EXAMINED, (
-        f"removing `.glob(` still reaches {len(narrowed)} guards, at or above the floor of "
-        f"{MIN_GUARDS_EXAMINED}. The floor cannot detect the loss, so it is not protecting "
-        "the extension -- raise it or the mutation is unguarded."
-    )
 
 
 def test_glob_reaches_guards_no_other_term_does() -> None:
@@ -556,7 +478,7 @@ def test_a_raising_discover_is_named_as_the_cause_not_a_bare_traceback() -> None
     def _raises(_root):
         raise RuntimeError("enumeration exploded")
 
-    reach = Reach(name="synthetic", discover=_raises, floor=1, what="things")
+    reach: Reach[object] = Reach(name="synthetic", discover=_raises, floor=1, what="things")
 
     with pytest.raises(ReachDiscoveryError) as caught:
         reach.examined(repo_root())
@@ -578,7 +500,56 @@ def test_a_floor_breach_is_still_a_floor_error() -> None:
     """
     from repo_tests._reach import Reach, ReachFloorError
 
-    reach = Reach(name="synthetic-floor", discover=lambda _root: [], floor=5, what="things")
+    reach: Reach[object] = Reach(name="synthetic-floor", discover=lambda _root: [], floor=5, what="things")
 
     with pytest.raises(ReachFloorError):
         reach.examined(repo_root())
+
+
+def test_the_non_scanning_exemptions_still_match_the_enumerator() -> None:
+    """A stale exemption hides a guard that has started scanning (#17870).
+
+    These three are exempt because they match `_ENUMERATOR` and scan nothing. An entry that no
+    longer matches at all is either a deleted file or a rewritten guard, and in the second case
+    the exemption would be silently excusing a real tree-scanning guard from needing a floor.
+    """
+    root = repo_root()
+    tracked = {path.relative_to(root).as_posix() for path in _tracked_guards()}
+    missing = sorted(_EXEMPT_NON_SCANNING - tracked)
+    assert (
+        not missing
+    ), "exempt entries that are no longer tracked `repo_tests/*_test.py` -- remove them:\n  " + "\n  ".join(missing)
+    unmatched = sorted(
+        rel for rel in _EXEMPT_NON_SCANNING if not _ENUMERATOR.search((root / rel).read_text(encoding="utf-8"))
+    )
+    assert not unmatched, (
+        "exempt entries that no longer match `_ENUMERATOR` at all, so the exemption is doing "
+        "nothing and may be excusing a guard that has started scanning:\n  " + "\n  ".join(unmatched)
+    )
+
+
+def test_the_exemption_list_only_shrinks() -> None:
+    """Same #16147 AC4 shape as GRANDFATHERED: two copies, compared as SETS in both directions."""
+    grown = sorted(_EXEMPT_NON_SCANNING - _EXEMPT_BASELINE)
+    assert not grown, (
+        "_EXEMPT_NON_SCANNING gained entries missing from _EXEMPT_BASELINE -- a member that "
+        "matches the enumerator and scans nothing needs resolving by binding, not exempting on "
+        "sight:\n  " + "\n  ".join(grown)
+    )
+    unmirrored = sorted(_EXEMPT_BASELINE - _EXEMPT_NON_SCANNING)
+    assert not unmirrored, (
+        "entries removed from _EXEMPT_NON_SCANNING but not from _EXEMPT_BASELINE -- mirror the "
+        "shrink, or a removed exemption can quietly return:\n  " + "\n  ".join(unmirrored)
+    )
+
+
+def test_the_exemptions_do_not_drop_a_real_sub_tree_glob() -> None:
+    """#17870 AC3: an exclusion that also removed true members would pass a count check.
+
+    Named guards rather than a count, for the same reason `test_glob_reaches_guards_no_other_
+    term_does` names them: a count is satisfied by any 30 files. Both of these reach the
+    examined set only through `.glob(` over a real repository sub-tree.
+    """
+    examined = set(_scanning_guards())
+    assert "repo_tests/promtool_rules_test.py" in examined
+    assert "repo_tests/workflow_concurrency_guard_test.py" in examined

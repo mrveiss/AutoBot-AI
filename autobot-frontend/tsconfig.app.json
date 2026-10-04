@@ -7,6 +7,7 @@
     "skipLibCheck": true,
     "paths": {
       "@/*": ["./src/*"],
+      "@autobot/ui": ["../libs/autobot-ui/index.ts"],
       "vue": ["./node_modules/vue"],
       "pinia": ["./node_modules/pinia"],
       "@xterm/xterm": ["./node_modules/@xterm/xterm"],

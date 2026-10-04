@@ -133,7 +133,10 @@ REACH = declare(
     floor=2900,
     growth=200,
     skips=0,
+    # Scope as data (#17844). This one spans THREE trees where its siblings span two, which is
+    # most of the 692-file spread #17844 measured across guards sharing one phrase.
     what="production Python modules that could load a model",
+    roots=_TREES,
 )
 
 

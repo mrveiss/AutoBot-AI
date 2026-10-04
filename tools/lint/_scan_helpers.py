@@ -177,7 +177,7 @@ def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) 
     # one that fails because the result comes back plausible and full-length.
     # `EmptyEnumeration` cannot catch it: the list is non-empty, just wrong.
     positive_prefixes = sorted({posixpath.dirname(p) for p in patterns}) or [""]
-    excludes = []
+    excludes: list[str] = []
     for entry in exclude:
         if "/" in entry:
             rooted = [entry]  # already rooted; re-prefixing would move it

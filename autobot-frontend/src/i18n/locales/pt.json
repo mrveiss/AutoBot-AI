@@ -7853,9 +7853,9 @@
     "agentActivity": "Atividade do agente",
     "switchLanguage": "Switch language",
     "openMainMenu": "Open main menu",
-    "skipToContent": "Skip to content",
+    "skipToContent": "Pular para o conteúdo principal",
     "services": "Services",
-    "skipToNavigation": "Skip to navigation",
+    "skipToNavigation": "Pular para a navegação",
     "profile": "Profile",
     "systemStatus": "System Status",
     "operations": "Operações",
@@ -7927,7 +7927,17 @@
     "adminPricing": "Preços de modelos",
     "adminMcpServers": "Servidores MCP",
     "adminPermissionScopes": "Escopos de permissão",
-    "llcRoles": "Funções"
+    "llcRoles": "Funções",
+    "keywords": {
+      "knowledge": "documentos arquivos biblioteca transcrição notas",
+      "companyOs": "empresa companhia negócio organização",
+      "automation": "fluxo pipeline agendamento tarefas",
+      "analytics": "visitantes métricas estatísticas gráficos relatórios",
+      "preferences": "configurações opções idioma tema",
+      "budgetPolicies": "custo gastos limites dinheiro",
+      "systemHealth": "status disponibilidade diagnóstico monitoramento",
+      "vault": "credenciais chaves senhas tokens cofre"
+    }
   },
   "llcCompanyStatus": {
     "showArchived": "Mostrar arquivadas",
@@ -8006,7 +8016,20 @@
     "newCode": "New Code Agent",
     "newCodeDesc": "Start a code analysis session",
     "newAnalysis": "New Analysis",
-    "newAnalysisDesc": "Start an analysis session"
+    "newAnalysisDesc": "Start an analysis session",
+    "openPage": "Abrir {page}",
+    "types": {
+      "task": "Tarefa",
+      "research": "Pesquisa",
+      "code": "Código",
+      "analysis": "Análise",
+      "navigate": "Página"
+    },
+    "hints": {
+      "navigate": "navegar",
+      "select": "selecionar",
+      "close": "fechar"
+    }
   },
   "slm": {
     "novnc": {

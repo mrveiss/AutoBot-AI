@@ -64,8 +64,8 @@ const getIcon = (type: string): IconName => {
 /* Issue #704: Migrated to CSS design tokens */
 .toast-container {
   position: fixed;
-  top: 80px;
-  right: 20px;
+  top: calc(80px + var(--safe-top));
+  right: calc(20px + var(--safe-right));
   z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
@@ -196,9 +196,9 @@ const getIcon = (type: string): IconName => {
 /* Responsive adjustments */
 @media (max-width: 480px) {
   .toast-container {
-    left: var(--spacing-3);
-    right: var(--spacing-3);
-    top: 70px;
+    left: calc(var(--spacing-3) + var(--safe-left));
+    right: calc(var(--spacing-3) + var(--safe-right));
+    top: calc(70px + var(--safe-top));
     max-width: none;
   }
 

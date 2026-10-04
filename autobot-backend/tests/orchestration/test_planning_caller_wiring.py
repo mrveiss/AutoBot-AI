@@ -68,10 +68,26 @@ async def test_get_plan_summary_returns_a_populated_summary(orchestrator):
     assert all(isinstance(step["requires_approval"], bool) for step in summary["steps"])
 
 
-async def test_create_workflow_from_chat_request_builds_steps(orchestrator):
-    """The live HTTP path: a chat request must yield a workflow, not None."""
+async def test_create_workflow_from_chat_request_builds_steps(orchestrator, monkeypatch):
+    """The live HTTP path: a chat request must yield a workflow, not None.
+
+    #13809: the chat path plans with ``create_workflow_plan``. Only the LLM call
+    is faked, so the real prompt/parse/plan-build chain is what gets awaited.
+    """
+    import json
+    from types import SimpleNamespace
+
+    from agents.llm_failsafe_agent import LLMTier
     from services.workflow_automation.manager import WorkflowAutomationManager
 
+    plan = {"tasks": [{"action": "install", "inputs": {"command": "apt-get install -y docker.io"}}]}
+
+    async def fake_llm(prompt, context=None):
+        return SimpleNamespace(tier_used=LLMTier.PRIMARY, content=json.dumps(plan))
+
+    monkeypatch.setattr("agents.llm_failsafe_agent.get_robust_llm_response", fake_llm)
+    orchestrator._fetch_planning_context = AsyncMock(side_effect=lambda *_a, **_k: {})
+    orchestrator._strategy_planner._bind_skill_to_task = AsyncMock(return_value=None)
     # __init__ wires messenger/executor/controller/template_manager, none of
     # which this method touches. Build the instance without them and inject only
     # the two collaborators the body actually uses.
@@ -84,16 +100,9 @@ async def test_create_workflow_from_chat_request_builds_steps(orchestrator):
     # Before #13730 this returned None: enumerate() over a coroutine raised
     # TypeError straight into the handler.
     assert workflow_id == "workflow-1"
-
-    manager.create_automated_workflow.assert_awaited_once()
     steps = manager.create_automated_workflow.await_args.kwargs["steps"]
-    assert len(steps) == 3
-    assert [step.step_id for step in steps] == ["step_1", "step_2", "step_3"]
-    assert all(step.command for step in steps)
-    # step_2 is the approval gate, and its dependency on step_1 must have been
-    # resolved through task_id — the retired `.id` read is what broke this.
-    assert [step.requires_confirmation for step in steps] == [False, True, False]
-    assert steps[1].dependencies == ["step_1"]
+    assert [(s.step_id, s.command) for s in steps] == [("step_1", "apt-get install -y docker.io")]
+    assert steps[0].requires_confirmation is True
 
 
 async def test_generate_smart_steps_awaits_the_plan(orchestrator):

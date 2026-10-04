@@ -66,16 +66,16 @@ _LOCALES = _REPO_ROOT / "autobot-frontend" / "src" / "i18n" / "locales"
 # Lower these as translations land. Never raise one to admit a new untranslated
 # string: translate it, or leave the key out until it can be translated.
 BASELINE = {
-    "ar": 3722,  # #16973: recounted, main had drifted 3 below the frozen figure
-    "de": 1615,  # #16973: recounted, main had drifted 1 below the frozen figure
-    "es": 1663,  # #16973: recounted, main had drifted 2 below the frozen figure
-    "fa": 3785,  # #16973: recounted, main had drifted 3 below the frozen figure
-    "fr": 1860,  # #16973: recounted, main had drifted 2 below the frozen figure
-    "he": 3785,  # #16973: recounted, main had drifted 3 below the frozen figure
-    "lv": 2255,  # #16973: recounted, main had drifted 2 below the frozen figure
-    "pl": 2221,  # #16973: recounted, main had drifted 2 below the frozen figure
-    "pt": 2058,  # #16973: recounted, main had drifted 2 below the frozen figure
-    "ur": 3785,  # #16973: recounted, main had drifted 3 below the frozen figure
+    "ar": 3719,  # #17561/#17565: skip-link labels and palette strings translated
+    "de": 1613,  # #17561/#17565: skip-link labels and palette strings translated
+    "es": 1661,  # #17561/#17565: skip-link labels and palette strings translated
+    "fa": 3782,  # #17561/#17565: skip-link labels and palette strings translated
+    "fr": 1858,  # #17561/#17565: skip-link labels and palette strings translated
+    "he": 3782,  # #17561/#17565: skip-link labels and palette strings translated
+    "lv": 2253,  # #17561/#17565: skip-link labels and palette strings translated
+    "pl": 2219,  # #17561/#17565: skip-link labels and palette strings translated
+    "pt": 2056,  # #17561/#17565: skip-link labels and palette strings translated
+    "ur": 3782,  # #17561/#17565: skip-link labels and palette strings translated
 }
 
 # Below this length a match is far more likely to be a shared token than an
