@@ -38,6 +38,10 @@ on:
       # uneditable (#16260) -- restored here now that it does not.
       - 'autobot-plugins/terminal/**'
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     # main is the integration branch every frontend PR merges into, so the
     # suite must run pre-merge, not only post-merge on the push trigger
     # (#10019). release/develop kept for promotion PRs.
@@ -82,6 +86,11 @@ permissions:
 jobs:
   # Job 0: Detect changed paths — always runs so the required contexts report
   changes:
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
+    # every `always()` aggregate below reads `needs.changes.result`.
+    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # context would report FAILED on every draft -- worse than no gate.
+    # Gate the expensive jobs, never the cheap thing others read.
     name: Detect changed paths
     runs-on: ubuntu-latest
     outputs:
@@ -376,6 +385,7 @@ jobs:
 
   # Job 3: Build Test
   build-test:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: Build Test
     runs-on: ubuntu-latest
     timeout-minutes: 30  # #11077: fail fast; not GitHub's 24h default

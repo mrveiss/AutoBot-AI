@@ -16,6 +16,7 @@ import { useVoiceProfiles } from '@/composables/useVoiceProfiles'
 import { usePreferences } from '@/composables/usePreferences'
 import { useToast } from '@/composables/useToast'
 import { getBackendWsUrl, getApiBase } from '@/config/ssot-config'
+import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
 import i18n from '@/i18n'
 
 const logger = createLogger('useVoiceOutput')
@@ -755,7 +756,8 @@ function _connectTtsWs(): Promise<WebSocket> {
 
   _ttsWsConnecting = new Promise<WebSocket>((resolve, reject) => {
     const url = `${getBackendWsUrl()}/api/voice/stream`
-    const ws = new WebSocket(url)
+    // The route authenticates; the bearer subprotocol carries the token (#17004)
+    const ws = new WebSocket(url, buildAuthenticatedWsSubprotocols() ?? undefined)
 
     ws.onopen = () => {
       _ttsWs = ws
