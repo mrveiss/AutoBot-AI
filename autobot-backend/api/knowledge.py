@@ -1328,7 +1328,7 @@ async def upload_file_to_knowledge(
 # Issue #3243: Audio / Video / YouTube ingestion endpoint
 # =============================================================================
 
-_AUDIO_ALLOWED_EXTS = SecurityConstants.KB_AUDIO_INGEST_EXTENSIONS  # canonical + .mkv (#13615)
+_AUDIO_ALLOWED_EXTS = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS  # one set, no endpoint-local delta (#13615)
 # Max audio upload size: 200 MB
 _AUDIO_MAX_BYTES = 200 * 1024 * 1024
 

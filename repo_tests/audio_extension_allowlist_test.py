@@ -202,7 +202,13 @@ REACH = declare(
 
 
 def test_canonical_set_holds_the_expected_formats():
-    """Guards the contents, so consolidation cannot quietly change behaviour."""
+    """Guards the contents, so consolidation cannot quietly change behaviour.
+
+    Written out element for element rather than recomputed from the constant,
+    so this disagrees with it if either moves. The last three are the formats
+    the KB route and the connector already admitted before #13615 collapsed
+    the three sets into one; no format was lost in the collapse.
+    """
     assert SecurityConstants.ALLOWED_AUDIO_EXTENSIONS == {
         ".wav",
         ".mp3",
@@ -211,6 +217,9 @@ def test_canonical_set_holds_the_expected_formats():
         ".ogg",
         ".flac",
         ".webm",
+        ".mkv",
+        ".avi",
+        ".mov",
     }
 
 
@@ -306,68 +315,65 @@ def test_no_fourth_literal_copy_exists():
 
 
 # ---------------------------------------------------------------------------
-# #13615 — the two copies that had already drifted
+# #13615 — the two copies that had already drifted, now on the one set
 # ---------------------------------------------------------------------------
 
 
-def test_the_two_wider_paths_share_the_canonical_object():
-    """Identity again, not equality — and the delta is pinned either way.
+def test_every_gate_shares_the_one_canonical_object():
+    """Identity, not equality, on all five gates.
 
-    ``is`` on the derived constant proves the call site did not re-write the
-    set; the delta assertions prove the derivation is the one intended. Both
-    are needed: a copy equal to ``KB_AUDIO_INGEST_EXTENSIONS`` would pass the
-    delta check while re-introducing exactly the drift #13615 is about.
+    Equality would pass for a re-written literal that happens to agree today,
+    which is the state #13615 found: copies that matched once and no longer
+    did. `is` can only hold if the call site took the object.
     """
     import sys
 
     sys.path.insert(0, str(REPO_ROOT / "autobot-backend"))
     from api.knowledge import _AUDIO_ALLOWED_EXTS
     from knowledge.connectors.audio_connector import _MEDIA_EXTS
+    from media.audio.ffmpeg_service import ALLOWED_EXTENSIONS as _FFMPEG_EXTS
+    from transcriber.routes.recordings import _ALLOWED_EXTENSIONS as _ROUTE_EXTS
+    from transcriber.upload_security import ALLOWED_EXTENSIONS as _UPLOAD_EXTS
 
-    assert _AUDIO_ALLOWED_EXTS is SecurityConstants.KB_AUDIO_INGEST_EXTENSIONS
-    assert _MEDIA_EXTS is SecurityConstants.MEDIA_CONNECTOR_EXTENSIONS
-
-
-def test_the_deliberate_deltas_are_exactly_what_they_were():
-    """No silent behaviour change: these are the pre-#13615 sets, element for element.
-
-    The literals these replaced were ``canonical | {".mkv"}`` on the knowledge
-    route, and ``{.mp3 .wav .m4a .ogg .flac} | {.mp4 .mkv .webm .avi .mov}`` in
-    the connector — which is ``canonical | {".mkv", ".avi", ".mov"}``. Written
-    out here rather than recomputed from the constants, so this test disagrees
-    with the constants if either moves.
-    """
     canonical = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
+    for name, gate in (
+        ("api.knowledge", _AUDIO_ALLOWED_EXTS),
+        ("audio_connector", _MEDIA_EXTS),
+        ("ffmpeg_service", _FFMPEG_EXTS),
+        ("routes.recordings", _ROUTE_EXTS),
+        ("upload_security", _UPLOAD_EXTS),
+    ):
+        assert gate is canonical, f"{name} does not share the canonical object"
 
-    assert SecurityConstants.KB_AUDIO_INGEST_EXTENSIONS == {
-        ".wav",
-        ".mp3",
-        ".mp4",
-        ".m4a",
-        ".ogg",
-        ".flac",
-        ".webm",
-        ".mkv",
-    }
-    assert SecurityConstants.MEDIA_CONNECTOR_EXTENSIONS == {
-        ".wav",
-        ".mp3",
-        ".mp4",
-        ".m4a",
-        ".ogg",
-        ".flac",
-        ".webm",
-        ".mkv",
-        ".avi",
-        ".mov",
-    }
 
-    # Supersets, both of them. The connector was reported as a *subset*
-    # omitting .mp4/.webm; that described `_AUDIO_EXTS`, not the gate.
-    assert canonical < SecurityConstants.KB_AUDIO_INGEST_EXTENSIONS
-    assert canonical < SecurityConstants.MEDIA_CONNECTOR_EXTENSIONS
-    assert SecurityConstants.KB_AUDIO_INGEST_EXTENSIONS - canonical == {".mkv"}
-    assert SecurityConstants.MEDIA_CONNECTOR_EXTENSIONS - canonical == {".mkv", ".avi", ".mov"}
+def test_there_is_exactly_one_named_allowlist():
+    """The derived supersets are gone, not renamed.
+
+    `KB_AUDIO_INGEST_EXTENSIONS` and `MEDIA_CONNECTOR_EXTENSIONS` expressed the
+    drift as a requirement. Nothing stated a reason for either delta, and the
+    pair was incoherent -- the KB endpoint rejected `.avi` while the connector
+    it feeds accepted it. Three sets differing for no reason are three copies
+    with extra steps (owner, 2026-10-05).
+    """
+    extra = [n for n in ("KB_AUDIO_INGEST_EXTENSIONS", "MEDIA_CONNECTOR_EXTENSIONS") if hasattr(SecurityConstants, n)]
+    assert not extra, f"a per-call-site allowlist came back: {extra}. One set, or state the capability reason."
+
+
+def test_the_transcriber_widening_is_deliberate_and_visible():
+    """The collapse ADMITS three containers the transcriber used to refuse.
+
+    Recorded as a test rather than a comment because it is the one behavioural
+    consequence of #13615: `upload_security` gates on extension alone, with no
+    magic-byte check, so this set is the only thing standing between a user
+    string and a file on disk. If these three are ever meant to be refused
+    there, this test is where that decision gets made -- visibly.
+    """
+    widened = {".mkv", ".avi", ".mov"}
+    assert widened < SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
+    # Containers already demuxed by ffmpeg and already identified by magic
+    # bytes in media/video/pipeline.py, and no more complex than .mp4/.webm,
+    # which every one of these gates has always admitted.
+    assert {".mp4", ".webm"} < SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
 
 
 def test_the_near_copy_detector_finds_the_shapes_it_is_for():
@@ -378,10 +384,15 @@ def test_the_near_copy_detector_finds_the_shapes_it_is_for():
     """
     canonical = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
 
-    assert _is_near_copy(canonical | {".mkv"}, canonical), "the knowledge-route shape"
-    assert _is_near_copy(canonical - {".mp4", ".webm"}, canonical), "the shape #13615 reported"
-    assert _is_near_copy((canonical - {".webm"}) | {".mkv"}, canonical), "drifted both ways"
-    assert _is_near_copy(canonical | {".mkv", ".avi"}, canonical), "two extras is still a copy"
+    # The drifted shapes #13615 found were `canonical | {.mkv}` and
+    # `canonical | {.mkv,.avi,.mov}`. Those three are now MEMBERS of the one
+    # set, so re-using them here would compare the set with itself and the
+    # controls would silently stop witnessing anything. Formats outside the
+    # allowlist stand in for the same four directions of drift.
+    assert _is_near_copy(canonical | {".wma"}, canonical), "one extra: the wider shape"
+    assert _is_near_copy(canonical - {".mp4", ".webm"}, canonical), "two missing: the narrower shape"
+    assert _is_near_copy((canonical - {".webm"}) | {".wma"}, canonical), "drifted both ways"
+    assert _is_near_copy(canonical | {".wma", ".aac"}, canonical), "two extras is still a copy"
 
 
 def test_the_near_copy_detector_leaves_the_legitimate_sets_alone():
@@ -423,7 +434,11 @@ ALLOWED = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
 
     with_literal = prose_only + '\nOTHER = {".wav", ".mp3", ".mp4", ".m4a", ".ogg", ".flac", ".webm"}\n'
     found = _literal_string_sets(with_literal)
-    assert found == [SecurityConstants.ALLOWED_AUDIO_EXTENSIONS], f"detector went blind: {found}"
+    # Compared against what the FIXTURE wrote, not against the live constant.
+    # This test is about the detector; `test_canonical_set_holds_the_expected_formats`
+    # owns the contents. Coupling the two made editing the allowlist fail here,
+    # which reads as "the detector broke" when nothing about it changed.
+    assert found == [{".wav", ".mp3", ".mp4", ".m4a", ".ogg", ".flac", ".webm"}], f"detector went blind: {found}"
 
 
 def test_unparseable_source_is_distinguished_from_clean_source():

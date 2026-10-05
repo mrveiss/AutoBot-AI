@@ -55,7 +55,7 @@ logger = get_logger(__name__)
 # its own -- both call sites below use the union, so the audio-only name read
 # as an allowlist it never was. The union's delta from canonical (.mkv, .avi,
 # .mov) and the reason for it are recorded on the constant.
-_MEDIA_EXTS = SecurityConstants.MEDIA_CONNECTOR_EXTENSIONS
+_MEDIA_EXTS = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS  # one set, no connector-local delta (#13615)
 
 # YouTube URL patterns
 _YT_PATTERN = re.compile(r"(https?://)?(www\.)?(youtube\.com/watch\?v=|youtu\.be/)[\w\-]+")

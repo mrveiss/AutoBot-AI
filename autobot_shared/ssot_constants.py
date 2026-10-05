@@ -411,20 +411,21 @@ class SecurityConstants:
     # Web ports permitted for outbound/domain network validation (#10384).
     ALLOWED_WEB_PORTS: List[int] = [80, 443, 8080, 8443]
 
-    # Audio/container extensions accepted for transcriber upload, route
-    # admission, and ffmpeg processing (#13512).
+    # Container extensions accepted wherever a file is offered for audio
+    # processing: upload, route guard, ffmpeg, KB ingest, connector.
     #
-    # This existed as three byte-identical literals: the upload security
-    # boundary (``transcriber/upload_security.py``), the route guard
-    # (``transcriber/routes/recordings.py``) and the processing guard
-    # (``media/audio/ffmpeg_service.py``). The last carried the comment
-    # "must match upload_security.py" — an invariant nothing enforced.
+    # ONE SET, DEFINED BY A CAPABILITY, NOT BY HISTORY. Membership rule: a
+    # container ffmpeg can demux audio from, and `media/video/pipeline.py`
+    # identifies by magic bytes -- a rule that says whether a NEW format
+    # belongs, which "what these call sites happened to accept" never could.
+    # #13512 collapsed three byte-identical literals; #13615 then found two
+    # that had DRIFTED (+.mkv, and +.mkv/.avi/.mov) with no reason recorded for
+    # either, leaving the KB route rejecting .avi that the connector it feeds
+    # accepted. Collapsed to one (owner, 2026-10-05).
     #
-    # Three copies of a security-relevant allowlist drift independently: adding
-    # a format to the route guard alone admits a file the validator was never
-    # taught to accept, and dropping one from the security module alone leaves
-    # two paths still advertising it. One set removes that failure mode. A
-    # genuine difference belongs below as a named subset, never as a literal.
+    # Adding one here widens a security boundary -- `upload_security` gates on
+    # extension alone -- and needs an EXTENSION_TO_FORMAT entry, or the demuxer
+    # goes unpinned.
     ALLOWED_AUDIO_EXTENSIONS: Set[str] = {
         ".wav",
         ".mp3",
@@ -433,11 +434,10 @@ class SecurityConstants:
         ".ogg",
         ".flac",
         ".webm",
+        ".mkv",
+        ".avi",
+        ".mov",
     }
-
-    # Derived supersets, never literals (#13615); deltas+controls in repo_tests/audio_extension_allowlist_test.py
-    KB_AUDIO_INGEST_EXTENSIONS: Set[str] = ALLOWED_AUDIO_EXTENSIONS | {".mkv"}
-    MEDIA_CONNECTOR_EXTENSIONS: Set[str] = ALLOWED_AUDIO_EXTENSIONS | {".mkv", ".avi", ".mov"}
 
     USER_AGENT_POOL: List[str] = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",  # noqa: E501
