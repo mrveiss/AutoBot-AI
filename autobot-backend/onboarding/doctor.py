@@ -198,7 +198,19 @@ async def run_doctor() -> dict[str, Any]:
         "hardware": hardware,
         "services": services,
         "recommendation": recommendation,
-        # #13780: the startup validator's one production call site. Last, so a
-        # slow validator never delays the hardware and service sections above.
+        # #13780: the startup validator's one production call site.
+        #
+        # Being last in this literal delays nothing: the dict is one response,
+        # so the caller waits for this await regardless of where it sits. An
+        # earlier revision of this comment claimed the opposite.
+        #
+        # It is not free, either. `validate_startup_dependencies` runs its OWN
+        # Redis ping and its own Ollama `GET /api/tags` (startup_validator.py,
+        # 5s timeout), and this handler has already probed both above -- so a
+        # /doctor call pays each twice, sequentially. That is accepted here
+        # because /doctor is an operator-invoked diagnostic, not a hot path,
+        # and the duplicate probe is the honest reading of the validator's own
+        # view rather than a cached one. Collapse the two only if /doctor ever
+        # becomes something polled.
         "dependencies": await _validate_dependencies(),
     }
