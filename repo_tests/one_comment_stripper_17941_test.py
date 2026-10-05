@@ -78,10 +78,16 @@ _CANONICAL = frozenset({"tools/lint/_comment_syntax.py"})
 
 _PENDING_PRIVATE_STRIPPERS = frozenset(
     {
+        # BLOCKED BY THE SIZE RATCHET, not by the concept (#17941). The file
+        # sits at its recorded ceiling of 1424 exactly, and adopting the shared
+        # helper costs two lines it cannot spend: the import, plus the blank
+        # isort requires between import groups. A file pinned at its ceiling
+        # cannot adopt a shared helper until it is split -- the dedup goal and
+        # the size ratchet pull against each other here, and the ratchet wins
+        # because it only ever turns down. Split the file, then migrate.
         "pipeline-scripts/ci_dispatch_watchdog.py",
         "pipeline-scripts/detect-hardcoded-values_test.py",
         "pipeline-scripts/detect_hardcoded_values_audit_test.py",
-        "repo_tests/ansible_inventory_path_exists_test.py",
         "repo_tests/comment_line_number_citations_test.py",
         "repo_tests/declared_distributions.py",
         "repo_tests/mcp_verification_script_coverage_14219_test.py",
@@ -89,9 +95,7 @@ _PENDING_PRIVATE_STRIPPERS = frozenset(
         "repo_tests/redis_config_path_is_canonical_17434_test.py",
         "repo_tests/sync_deletions_target_pinning_and_shell_safety_16310_test.py",
         "repo_tests/test_dockerignore_test_file_coverage_14127.py",
-        "repo_tests/validate_access_control_reporting_test.py",
         "tools/lint/_scan_helpers.py",
-        "tools/lint/check_ci_system_package_provisioning.py",
         "tools/lint/check_git_write_env_scrubbed_test.py",
     }
 )
