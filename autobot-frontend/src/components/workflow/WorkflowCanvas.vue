@@ -572,6 +572,7 @@ import {
 } from './canvasNode';
 import { useFocusTrap, useFocusRestore, useInitialFocus } from '@autobot/ui';
 import type { CanvasNode, CanvasNodeType, CanvasTab } from './canvasNode';
+import { safeAreaInsets } from '@/utils/safeAreaInsets';
 import {
   RULE_DIMENSIONS,
   STATUS_RULES,
@@ -2410,10 +2411,12 @@ const CONTEXT_MENU_MAX_HEIGHT = 280;
  * bounds either way.
  */
 function openContextMenuAt(nodeId: string, clientX: number, clientY: number): void {
-  const maxX = Math.max(8, window.innerWidth - CONTEXT_MENU_WIDTH - 8);
-  const maxY = Math.max(8, window.innerHeight - CONTEXT_MENU_MAX_HEIGHT - 8);
-  contextMenu.x = Math.max(8, Math.min(clientX, maxX));
-  contextMenu.y = Math.max(8, Math.min(clientY, maxY));
+  // #14771: the fixed menu escapes #app's padding, so clamp it inside the insets
+  const safe = safeAreaInsets();
+  const maxX = Math.max(safe.left + 8, window.innerWidth - safe.right - CONTEXT_MENU_WIDTH - 8);
+  const maxY = Math.max(safe.top + 8, window.innerHeight - safe.bottom - CONTEXT_MENU_MAX_HEIGHT - 8);
+  contextMenu.x = Math.max(safe.left + 8, Math.min(clientX, maxX));
+  contextMenu.y = Math.max(safe.top + 8, Math.min(clientY, maxY));
   contextMenu.nodeId = nodeId;
   contextMenu.open = true;
   void nextTick(() => contextMenuEl.value?.focus());

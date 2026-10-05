@@ -527,7 +527,18 @@ jobs:
     # for the matrix, including when shards fail. The `changes` guard is
     # required too, or this would run when no Python path changed and every
     # shard was skipped.
-    if: ${{ !cancelled() && needs.changes.outputs.python == 'true' }}
+    #
+    # The draft guard is the THIRD condition and must mirror `python-shard`'s
+    # exactly (#17957). The shards are draft-gated; this job is not a matrix
+    # job, so nothing gates it by inheritance. Without the same condition it
+    # ran against twelve skipped shards and the step below re-asserted
+    # `result != 'success'`, which `skipped` satisfies -- so every draft PR
+    # reported a red `python-suite` for shards that were deliberately not run.
+    # Marking a PR ready fires `ready_for_review`, which is in this workflow's
+    # trigger types, so the real verdict arrives before the PR can merge.
+    if: >-
+      ${{ !cancelled() && needs.changes.outputs.python == 'true'
+          && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
