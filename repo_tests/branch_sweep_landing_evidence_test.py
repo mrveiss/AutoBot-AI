@@ -38,6 +38,7 @@ import yaml
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint._comment_syntax import code_text
 
 _REPO_ROOT = repo_root()
 _WORKFLOWS = _REPO_ROOT / ".github/workflows"
@@ -85,11 +86,7 @@ def _shell_bodies(path: Path) -> list[str]:
             run = step.get("run") if isinstance(step, dict) else None
             if not isinstance(run, str):
                 continue
-            bodies.append(
-                "\n".join(
-                    line for line in run.splitlines() if not line.lstrip().startswith("#")
-                )
-            )
+            bodies.append(code_text(run))
     return bodies
 
 
@@ -149,10 +146,7 @@ def test_reporting_sweeps_use_the_shared_landing_evidence() -> None:
             offenders.append(f"{name}: does not source scripts/lib/branch-guards.sh")
         if "branch_landing_evidence" not in joined:
             offenders.append(f"{name}: never calls branch_landing_evidence")
-    assert not offenders, (
-        "reporting sweeps not using the shared landing check (#15036):\n"
-        + "\n".join(offenders)
-    )
+    assert not offenders, "reporting sweeps not using the shared landing check (#15036):\n" + "\n".join(offenders)
 
 
 def test_reporting_sweeps_have_a_failing_vacuity_floor() -> None:
@@ -173,9 +167,7 @@ def test_reporting_sweeps_have_a_failing_vacuity_floor() -> None:
             offenders.append(f"{name}: no call to branch_sweep_assert_reach")
         if not any("set -euo pipefail" in body or "set -e" in body for body in bodies):
             offenders.append(f"{name}: no `set -e`, so a failing floor would not abort")
-    assert not offenders, (
-        "reporting sweeps whose vacuity floor cannot fail the job:\n" + "\n".join(offenders)
-    )
+    assert not offenders, "reporting sweeps whose vacuity floor cannot fail the job:\n" + "\n".join(offenders)
 
 
 def test_the_floor_helper_actually_fails() -> None:
@@ -261,8 +253,7 @@ def test_the_ancestry_exemption_still_explains_itself() -> None:
     for name in _ANCESTRY_ALLOWED:
         path = _WORKFLOWS / name
         assert path.is_file(), (
-            f"{name} is exempt from the ancestry sweep but no longer exists; "
-            "remove its _ANCESTRY_ALLOWED entry"
+            f"{name} is exempt from the ancestry sweep but no longer exists; " "remove its _ANCESTRY_ALLOWED entry"
         )
         text = path.read_text(encoding="utf-8")
         assert "ancestor-based" in text, (
@@ -298,9 +289,7 @@ def _repo_with_branch(tmp_path: Path) -> Path:
     repo.mkdir()
     # #15246: scrubbed -- an inherited GIT_DIR (the pre-push hook exports one)
     # would init the real repo instead of tmp_path.
-    run = lambda *a: subprocess.run(  # noqa: E731
-        a, cwd=repo, capture_output=True, check=True, env=scrubbed_git_env()
-    )
+    run = lambda *a: subprocess.run(a, cwd=repo, capture_output=True, check=True, env=scrubbed_git_env())  # noqa: E731
     run("git", "init", "-q", ".")
     run("git", "config", "user.email", "t@t")
     run("git", "config", "user.name", "t")
@@ -342,9 +331,7 @@ def test_a_branch_whose_new_file_landed_and_then_changed_is_not_reported(tmp_pat
     repo = _repo_with_branch(tmp_path)
     # #15246: scrubbed -- an inherited GIT_DIR (the pre-push hook exports one)
     # would init the real repo instead of tmp_path.
-    run = lambda *a: subprocess.run(  # noqa: E731
-        a, cwd=repo, capture_output=True, check=True, env=scrubbed_git_env()
-    )
+    run = lambda *a: subprocess.run(a, cwd=repo, capture_output=True, check=True, env=scrubbed_git_env())  # noqa: E731
     # The file lands on trunk, then diverges completely from the branch's copy.
     (repo / "src" / "introduced.py").write_text("landed, then rewritten entirely\n", encoding="utf-8")
     run("git", "add", "-A")
@@ -366,9 +353,7 @@ def test_a_modified_file_alone_is_not_landing_evidence(tmp_path) -> None:
     repo = _repo_with_branch(tmp_path)
     # #15246: scrubbed -- an inherited GIT_DIR (the pre-push hook exports one)
     # would init the real repo instead of tmp_path.
-    run = lambda *a: subprocess.run(  # noqa: E731
-        a, cwd=repo, capture_output=True, check=True, env=scrubbed_git_env()
-    )
+    run = lambda *a: subprocess.run(a, cwd=repo, capture_output=True, check=True, env=scrubbed_git_env())  # noqa: E731
     run("git", "checkout", "-qb", "edit-only", "trunk")
     (repo / "src" / "existing.py").write_text("original\nan unlanded edit\n", encoding="utf-8")
     run("git", "add", "-A")

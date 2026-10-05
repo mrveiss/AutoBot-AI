@@ -80,6 +80,7 @@ from typing import Callable, Dict, Iterable, List, Sequence, Set, Tuple
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint._comment_syntax import code_lines
 
 REPO_ROOT = repo_root()
 
@@ -125,7 +126,7 @@ _DIRISH = re.compile(r"^[\w.\-]+(/[\w.\-]+)+/?$")
 
 def _one_path_per_line(text: str) -> List[str]:
     """Every non-comment, non-blank line, whole."""
-    return [line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    return [cl.text.strip() for cl in code_lines(text) if cl.text.strip()]
 
 
 def _pipe_field_two(text: str) -> List[str]:
@@ -574,4 +575,3 @@ def test_a_pinned_ledger_is_censused_below_the_discovery_floor():
         "the pins are no longer being exercised, so re-read whether they still "
         "describe a real risk rather than deleting them reflexively."
     )
-
