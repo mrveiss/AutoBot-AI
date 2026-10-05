@@ -64,6 +64,7 @@ from auth_middleware import check_admin_permission, get_auth_middleware, get_cur
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import redact_content
+from autobot_shared.ssot_constants import SecurityConstants
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from exceptions import InternalError
 from knowledge.ingestion_visibility import stamp_if_document
@@ -1327,8 +1328,7 @@ async def upload_file_to_knowledge(
 # Issue #3243: Audio / Video / YouTube ingestion endpoint
 # =============================================================================
 
-# Allowed audio/video extensions for direct upload (mirrors AudioConnector)
-_AUDIO_ALLOWED_EXTS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".mp4", ".mkv", ".webm"}
+_AUDIO_ALLOWED_EXTS = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS  # one set, no endpoint-local delta (#13615)
 # Max audio upload size: 200 MB
 _AUDIO_MAX_BYTES = 200 * 1024 * 1024
 

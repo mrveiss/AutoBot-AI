@@ -23,7 +23,8 @@ import psutil
 import requests
 
 # Import centralized Redis client
-from phase_score import LIVE_STACK_GROUPS, PhaseScore, overall
+from phase_feature_checks import declares_compose_services, defines_callable
+from phase_score import LIVE_STACK_GROUPS, PhaseScore, overall, project_report
 
 from autobot_shared.network_constants import ServiceURLs
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client  # noqa: F401
@@ -31,6 +32,13 @@ from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
+
+
+#: Exit status for "the run completed and completion was NOT measured" (#17674).
+#: Distinct from 1/2 (a measured figure below a threshold) and from 3 (the run
+#: itself failed), because a caller that cannot tell those apart is the defect
+#: this issue is about.
+EXIT_NOT_MEASURED = 4
 
 
 #: This script's own directory, as a repo-relative path. Four feature checks
@@ -339,9 +347,15 @@ class PhaseValidationCriteria:
                 ".dockerignore",
             ],
             "directories": ["docker/", "autobot-infrastructure/", "autobot-slm-backend/"],
+            # #17559: "scalability" was removed rather than given a validator.
+            # Whether this system scales is not a question a file-existence
+            # sweep can answer at any percentage -- the nearest candidate was
+            # "docs/operations/scaling-strategy.md exists", which measures that
+            # someone wrote a document. Declaring a name no honest check can
+            # settle is how the other two came to report "implemented" with
+            # nothing looked at. It belongs to a load gate, not to this sweep.
             "production_features": [
                 "containerization",
-                "scalability",
                 "deployment_automation",
             ],
             "weight": 60,
@@ -480,9 +494,17 @@ class PhaseValidator:
         Helper for _validate_phase (#825).
         """
         empty_validation = {"passed": 0, "total": 0, "details": []}
+        # #17674: `structural_presence_percentage` is NOT seeded here. Every
+        # non-deferring phase has it written by `PhaseScore.as_report()` a few
+        # lines later, and a DEFERRING phase must not have it at all -- its
+        # report deliberately omits the key, so a seeded 0 survived the update
+        # and shipped "Phase 6: Enhanced UI/UX: 0.0% structural presence" for a
+        # phase that reports no figure by design. It also put that 0 into the
+        # `_generate_recommendations` average, which filters on the key being
+        # present. Absent is the honest value; `.get()` is how every consumer
+        # already reads it.
         return {
             "phase_name": phase_name,
-            "structural_presence_percentage": 0,
             "complete": False,
             "status": "incomplete",
             "validations": {
@@ -820,18 +842,39 @@ class PhaseValidator:
             "task_planning": lambda: any((root / "autobot-backend").glob("*orchestrat*")),
             "agent_coordination": lambda: (root / "autobot-backend/orchestrator.py").exists(),
             "workflow_management": lambda: (root / "autobot-backend/api/orchestration.py").exists(),
+            # #17559: both were declared in `production_features` since the
+            # dict was written, with no validator -- so both reported
+            # "implemented" with nothing looked at. (The third name declared
+            # there, "scalability", was removed instead; see PHASE_CRITERIA.)
+            "containerization": lambda: declares_compose_services(root / "docker-compose.yml"),
+            "deployment_automation": lambda: defines_callable(root / _SHARED_SCRIPTS / "zero_downtime_deploy.py"),
         }
 
     async def _validate_single_feature(self, feature_type: str, feature: str) -> bool:
-        """Validate a single feature implementation."""
+        """Validate a single feature implementation.
+
+        #17559: a feature name with no validator used to return ``True`` --
+        indistinguishable from a feature that was checked and found present, and
+        the same inversion #17089 removed one layer up. It now reports NOT
+        implemented and says why, so an unmeasured feature can never raise the
+        phase score. ``TestEveryDeclaredFeatureHasAValidator`` in
+        ``repo_tests/phase_validation_report_contract_17674_test.py`` fails CI
+        before this path can be reached by a newly declared feature.
+        """
         validators = self._get_feature_validators()
         validator = validators.get(feature)
-        if validator:
-            try:
-                return validator()
-            except Exception:
-                return False
-        return True
+        if validator is None:
+            logger.warning(
+                "No validator for feature %r (%s): reporting NOT implemented. "
+                "An unchecked feature is not a present one (#17559).",
+                feature,
+                feature_type,
+            )
+            return False
+        try:
+            return validator()
+        except Exception:
+            return False
 
     def _check_endpoint_sync(self, endpoint: str) -> bool:
         """Synchronous endpoint check for feature validation"""
@@ -940,35 +983,15 @@ def _output_json_results(results: Dict[str, Any], output_file: str = None):
     """Format and output validation results as JSON.
 
     Helper for main (#825).
+
+    The projection itself lives in ``phase_score.project_report`` (#17674): it
+    is a contract two CI gates read, it must be exercisable without importing
+    this module's ``aiohttp``/``psutil``/``requests``/``autobot_shared`` stack,
+    and it is no longer a hand-written key whitelist -- every top-level key the
+    aggregate produces is carried through, which is what ``structural_presence``
+    needed and did not get.
     """
-    output = {
-        "timestamp": datetime.now().isoformat(),
-        "overall_maturity": results.get("overall_maturity", 0),
-        "phases": [],
-        "recommendations": [],
-    }
-
-    for phase_name, phase_data in results.get("phases", {}).items():
-        output["phases"].append(
-            {
-                "name": phase_name,
-                "status": phase_data.get("status", "unknown"),
-                # `None`, not 0: a deferring phase has no score, and 0 would
-                # render as "measured and found empty" (#17089).
-                "structural_presence_percentage": phase_data.get("structural_presence_percentage"),
-                "complete": phase_data.get("complete", False),
-                "not_checked": phase_data.get("not_checked", {}),
-                "authoritative_gates": phase_data.get("authoritative_gates", []),
-                # #7496: ``_validate_phase`` stores per-check details under
-                # ``validations`` (plural). The old key ``validation_details``
-                # silently defaulted to ``{}`` in every report.
-                "validation_details": phase_data.get("validations", {}),
-            }
-        )
-
-    output["recommendations"] = [
-        {"title": rec, "action": "Review and implement"} for rec in results.get("recommendations", [])
-    ]
+    output = project_report(results, datetime.now().isoformat())
 
     if output_file:
         with open(output_file, "w", encoding="utf-8") as f:
@@ -987,8 +1010,18 @@ def _output_summary_results(results: Dict[str, Any]):
     """
     logger.info("AutoBot Phase Validation Results")
     logger.info("==================================")
-    maturity = results.get("overall_maturity", 0)
-    logger.info("Overall System Maturity: %.1f%%", maturity)
+    # #17674: `"%.1f" % None` raises, and the default never fired because the
+    # key is present and null. Say which figure is missing instead.
+    maturity = results.get("overall_maturity")
+    if maturity is None:
+        logger.info("Overall System Maturity: NOT MEASURED (a check group was skipped -- no live stack)")
+    else:
+        logger.info("Overall System Maturity: %.1f%%", maturity)
+    structural = results.get("structural_presence")
+    if isinstance(structural, (int, float)) and not isinstance(structural, bool):
+        logger.info("Structural presence: %.1f%%", structural)
+    else:
+        logger.info("Structural presence: NOT MEASURED (it is %r)", structural)
     logger.info("")
 
     for phase_name, phase_data in results.get("phases", {}).items():
@@ -1038,7 +1071,22 @@ def main() -> None:
         else:
             _output_summary_results(results)
 
-        maturity = results.get("overall_maturity", 0)
+        # #17674: this was `results.get("overall_maturity", 0)`. The key is
+        # PRESENT and null whenever a check group was skipped -- which
+        # `--ci-mode` always does -- so the default never fired and `None < 50`
+        # raised TypeError. The bare handler below then logged "Validation
+        # failed" and exited 3, AFTER a complete and correct report had already
+        # been written. Every CI run has been doing this; the workflow's
+        # `|| true` is the only reason it went unnoticed. An unmeasured figure
+        # gets its own exit code, not a comparison.
+        maturity = results.get("overall_maturity")
+        if maturity is None:
+            logger.info(
+                "Completion was not measured (a check group was skipped -- no live stack). "
+                "Exiting %d: this is NOT a low score.",
+                EXIT_NOT_MEASURED,
+            )
+            sys.exit(EXIT_NOT_MEASURED)
         if maturity < 50:
             sys.exit(2)
         elif maturity < 75:

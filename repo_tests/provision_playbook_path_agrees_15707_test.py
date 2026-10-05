@@ -33,6 +33,8 @@ import re
 
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_text
+
 REPO_ROOT = repo_root()
 _PLAYBOOK = REPO_ROOT / "autobot-slm-backend/ansible/playbooks/configure-python-provision-permissions.yml"
 _CODE_SYNC = REPO_ROOT / "autobot-slm-backend/api/code_sync.py"
@@ -45,8 +47,11 @@ def _strip_comments(text: str) -> str:
     Both files explain this coupling in prose immediately above the code that
     implements it, and those comments quote the path. Matching raw text, a
     check can be satisfied by the explanation rather than the value.
+
+    Delegates to the shared stripper (#17941) -- one of seven private copies.
+    Both subjects are YAML, which shares the `#` marker.
     """
-    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    return code_text(text, name="x.yml")
 
 
 def ansible_playbook_path() -> str:

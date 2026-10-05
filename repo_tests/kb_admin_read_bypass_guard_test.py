@@ -88,7 +88,10 @@ REACH = declare(
     floor=2567,
     growth=200,
     skips=0,
-    what="production python files under autobot-backend/ and autobot_shared/",
+    # The scope moves from prose to data (#17844): `declare` renders the same sentence from
+    # `roots`, so the string cannot drift from the tuple `verify_scope` reads.
+    what="production python files",
+    roots=SCAN_ROOTS,
 )
 
 

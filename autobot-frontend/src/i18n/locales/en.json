@@ -7912,7 +7912,7 @@
     "openMainMenu": "Open main menu",
     "profile": "Profile",
     "services": "Services",
-    "skipToContent": "Skip to content",
+    "skipToContent": "Skip to main content",
     "skipToNavigation": "Skip to navigation",
     "systemStatus": "System Status",
     "marketplace": "Marketplace",
@@ -7976,7 +7976,17 @@
     "documents": "AI Documents",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
-    "llcRoles": "Roles"
+    "llcRoles": "Roles",
+    "keywords": {
+      "knowledge": "documents files library transcriber notes",
+      "companyOs": "company llc business organization",
+      "automation": "workflow pipeline schedule jobs",
+      "analytics": "visitors metrics statistics charts reports",
+      "preferences": "settings options language theme",
+      "budgetPolicies": "cost spending limits money",
+      "systemHealth": "status uptime diagnostics monitoring",
+      "vault": "credentials keys passwords tokens vault"
+    }
   },
   "llcCompanyStatus": {
     "showArchived": "Show archived",
@@ -8048,7 +8058,20 @@
     "newCode": "New Code Agent",
     "newCodeDesc": "Start a code analysis session",
     "newAnalysis": "New Analysis",
-    "newAnalysisDesc": "Start an analysis session"
+    "newAnalysisDesc": "Start an analysis session",
+    "openPage": "Open {page}",
+    "types": {
+      "task": "Task",
+      "research": "Research",
+      "code": "Code",
+      "analysis": "Analysis",
+      "navigate": "Page"
+    },
+    "hints": {
+      "navigate": "navigate",
+      "select": "select",
+      "close": "close"
+    }
   },
   "llc": {
     "templates": {

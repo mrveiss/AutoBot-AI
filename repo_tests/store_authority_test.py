@@ -41,6 +41,7 @@ from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.store_authority import STORE_AUTHORITY, Store, system_of_record
+from tools.lint._comment_syntax import code_lines
 
 REPO_ROOT = repo_root()
 
@@ -187,13 +188,14 @@ def baseline_entries() -> set[str]:
     allow one: taking the whole line would bake ``# #15670`` into the path and
     every entry would read as BOTH an undeclared finding and a stale record.
     """
-    lines = _BASELINE.read_text(encoding="utf-8").splitlines()
-    entries = set()
-    for line in lines:
-        text = line.split("#", 1)[0].strip() if not line.lstrip().startswith("#") else ""
-        if text:
-            entries.add(text)
-    return entries
+    # #17941: the trailing strip was `line.split("#", 1)[0]`, which is not
+    # quote-aware -- a baseline entry containing a quoted `#` was truncated at
+    # its own data. The shared scanner tracks quote state.
+    return {
+        entry.text.strip()
+        for entry in code_lines(_BASELINE.read_text(encoding="utf-8"), name="x.txt", strip_trailing=True)
+        if entry.text.strip()
+    }
 
 
 def test_the_walk_reaches_the_tree():

@@ -147,6 +147,14 @@ _SUPERSEDED = {
     # denominator here would have made this test certify that mistake.
     "hooks-path-override": (6736, 7106),
     "conflict-marker-scanned-files": (10000, 10999),
+    # #17914's first conversion. The second number is `_scannable_tracked_count`'s own answer on
+    # `baec13de40`, NOT the tracked-tree total -- recording the wrong denominator here is how
+    # this test would come to certify the mistake it exists to catch (RATCHET_BASELINES rule 8).
+    "tts-address-env-name-sweep": (10000, 10327),
+    # #17914's second conversion. 8139 is `_extension_matched_count`'s own answer, not the
+    # tracked-tree total -- the denominator has to be the one that declaration's `reference`
+    # returns or this test certifies the mistake it exists to catch (RATCHET_BASELINES rule 8).
+    "redis-config-path-census": (6500, 8139),
 }
 
 
@@ -154,6 +162,8 @@ _SUPERSEDED = {
 def test_each_adopted_fraction_is_tighter_than_the_floor_it_replaced(name: str) -> None:
     import repo_tests.hooks_path_override_15961_test  # noqa: F401, PLC0415
     import repo_tests.no_conflict_markers_in_tracked_files_17297_test  # noqa: F401, PLC0415
+    import repo_tests.redis_config_path_is_canonical_17434_test  # noqa: F401, PLC0415
+    import repo_tests.tts_address_env_names_17782_test  # noqa: F401, PLC0415
     from repo_tests._reach import REGISTRY
 
     reach = REGISTRY[name]
