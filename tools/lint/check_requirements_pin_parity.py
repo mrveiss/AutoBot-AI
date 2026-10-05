@@ -45,9 +45,14 @@ import pathlib
 import re
 import sys
 
-from tools.lint._scan_helpers import configure_logging
+# #13842: sibling-directory insert, so this resolves whether the checker
+# runs as a script (`python3 tools/lint/<name>.py`, which CI does) or is
+# imported as a module. A `tools.lint.` path works only in the second
+# case and fails the first with ModuleNotFoundError.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-# Plain stdlib logging, deliberately (#1082, matching check_requirements_ci_drift.py
+from _scan_helpers import configure_logging  # noqa: E402
+
 # and check_python_file_size.py): this runs inside `code-quality`, which installs
 # linters only — never the application's own dependencies — so
 # `autobot_shared.logging_manager` is not importable here.

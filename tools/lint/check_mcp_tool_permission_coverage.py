@@ -86,9 +86,15 @@ from autobot_shared.auth.mcp_tool_permissions import (  # noqa: E402
     _DECLARED_AHEAD_OF_TIME,
     TOOL_PERMISSIONS,
 )
-from tools.lint._scan_helpers import configure_logging
 
-# Plain stdlib logging, deliberately (#1082) — same trade as
+# #13842: sibling-directory insert, so this resolves whether the checker
+# runs as a script (`python3 tools/lint/<name>.py`, which CI does) or is
+# imported as a module. A `tools.lint.` path works only in the second
+# case and fails the first with ModuleNotFoundError.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from _scan_helpers import configure_logging  # noqa: E402
+
 # `check_undefined_names.py`: this runs as a bare script inside a
 # required check, and `autobot_shared.logging_manager` would drag config
 # loading into that path.

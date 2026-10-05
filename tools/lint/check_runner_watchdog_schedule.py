@@ -59,7 +59,13 @@ import sys
 
 import yaml
 
-from tools.lint._scan_helpers import configure_logging
+# #13842: sibling-directory insert, so this resolves whether the checker
+# runs as a script (`python3 tools/lint/<name>.py`, which CI does) or is
+# imported as a module. A `tools.lint.` path works only in the second
+# case and fails the first with ModuleNotFoundError.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from _scan_helpers import configure_logging  # noqa: E402
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:

@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import ast
 import logging
+import pathlib
 import sys
 from pathlib import Path
 from typing import List, Tuple
@@ -47,9 +48,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _scan_helpers import PY_FLOOR, enforce_reach, scan_python_files  # noqa: E402
 
-from tools.lint._scan_helpers import configure_logging
+# #13842: sibling-directory insert, so this resolves whether the checker
+# runs as a script (`python3 tools/lint/<name>.py`, which CI does) or is
+# imported as a module. A `tools.lint.` path works only in the second
+# case and fails the first with ModuleNotFoundError.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-# Plain stdlib logging, deliberately (#1082). This runs as a bare script inside a
+from _scan_helpers import configure_logging  # noqa: E402
+
 # lint job, and `autobot_shared.logging_manager` would drag config loading into
 # that path. Same trade as `tools/lint/check_no_shell_placeholder_paths.py`.
 logger = logging.getLogger(__name__)

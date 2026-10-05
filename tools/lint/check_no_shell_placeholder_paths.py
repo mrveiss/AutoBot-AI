@@ -62,9 +62,14 @@ import pathlib
 import sys
 from dataclasses import dataclass
 
-from tools.lint._scan_helpers import configure_logging
+# #13842: sibling-directory insert, so this resolves whether the checker
+# runs as a script (`python3 tools/lint/<name>.py`, which CI does) or is
+# imported as a module. A `tools.lint.` path works only in the second
+# case and fails the first with ModuleNotFoundError.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-# Plain stdlib logging, deliberately (#1082). This runs as a bare script inside a
+from _scan_helpers import configure_logging  # noqa: E402
+
 # lint job, and `autobot_shared.logging_manager` would drag config loading into
 # that path. Same trade as `tools/lint/check_undefined_names.py`.
 logger = logging.getLogger(__name__)

@@ -50,7 +50,13 @@ import pathlib
 import re
 import sys
 
-from tools.lint._scan_helpers import configure_logging
+# #13842: the sibling-directory insert, so this resolves whether the
+# checker is run as a script (`python3 tools/lint/<name>.py`, which CI
+# does) or imported as a module. A `tools.lint.` path import works only
+# in the second case and fails the first with ModuleNotFoundError.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from _scan_helpers import configure_logging  # noqa: E402
 
 # Plain stdlib logging (matching every other tools/lint/check_*.py in this
 # repo): this runs inside `code-quality`, which installs linters only, never
