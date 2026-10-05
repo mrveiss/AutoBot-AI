@@ -335,8 +335,18 @@ PASSTHROUGH_ROUTES: frozenset[tuple[str, str, str]] = frozenset(
 #: guard should stop asking.
 PASSTHROUGH_FROZEN_AT = 174
 
-#: Files the pass-through sweep reaches today. A floor, not a target: a
+#: Routes the sweep INDEXES, which is its reach. A floor, not a target: a
 #: detector that broke and found nothing would otherwise report an empty
 #: unverifiable set, which reads exactly like "every route is auditable"
 #: (MEASUREMENT_DISCIPLINE.md).
-MIN_PASSTHROUGH_FILES = 35
+#:
+#: BOUND TO REACH, NOT TO FINDINGS (CodeRabbit, #17899). This was
+#: `MIN_PASSTHROUGH_FILES = 35`, measured against the files that produced a
+#: finding -- 48 today. Two things were wrong with that. Draining the findings
+#: by FIXING the routes would have driven 48 below 35 and failed the guard as
+#: "a broken detector reported as a clean tree", so the guard punished the
+#: repair it exists to prompt. And a detector that silently stopped parsing
+#: most of the tree could still clear a floor of 35 on a handful of findings.
+#: Reach today is 5075 files parsed / 2766 routes indexed, so the floor sits
+#: well below it and only a real collapse of the sweep trips it.
+MIN_ROUTES_INDEXED = 2000

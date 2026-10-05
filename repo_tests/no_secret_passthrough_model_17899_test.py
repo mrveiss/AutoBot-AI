@@ -40,7 +40,7 @@ from repo_tests.no_secret_passthrough_detect_17899 import (
     unverifiable_routes,
 )
 from repo_tests.no_secret_passthrough_routes_17899 import (
-    MIN_PASSTHROUGH_FILES,
+    MIN_ROUTES_INDEXED,
     PASSTHROUGH_FROZEN_AT,
     PASSTHROUGH_ROUTES,
 )
@@ -112,12 +112,24 @@ def test_the_motivating_route_is_actually_caught():
 
 
 def test_the_sweep_reaches_enough_files_to_mean_something():
-    """A floor: an empty unverifiable set must mean 'looked', not 'did not look'."""
-    reached = {rel for rel, _route, _model in record_keys(_index())}
-    assert len(reached) >= MIN_PASSTHROUGH_FILES, (
-        f"the pass-through sweep found routes in only {len(reached)} file(s), under the "
-        f"{MIN_PASSTHROUGH_FILES}-file floor. An unverifiable set this small is a broken "
-        "detector reported as a clean tree."
+    """A floor: an empty unverifiable set must mean 'looked', not 'did not look'.
+
+    MEASURED ON REACH, NOT ON FINDINGS (CodeRabbit, #17899). This counted the
+    files that produced a finding, so the number it guarded went DOWN as the
+    routes got fixed -- draining them would have tripped the floor and reported
+    "a broken detector" about a sweep that worked and a tree that improved. It
+    also could not see the failure it exists for: a detector that stopped
+    parsing most of the tree still clears a findings floor on a few hits.
+
+    `idx.routes` is what the sweep actually examined, and it does not move when
+    a route is repaired.
+    """
+    idx = _index()
+    assert len(idx.routes) >= MIN_ROUTES_INDEXED, (
+        f"the pass-through sweep indexed only {len(idx.routes)} route(s) across "
+        f"{len(idx.files)} file(s), under the {MIN_ROUTES_INDEXED}-route floor. An "
+        "unverifiable set computed from a sweep this small is a broken detector "
+        "reported as a clean tree."
     )
 
 
@@ -150,11 +162,26 @@ _FIXTURES = [
         True,
     ),
     (
+        # The TWIN for the spelling above: one token, "allow" -> "forbid".
+        # Without it the ConfigDict positive was witnessed only against the
+        # dict-literal twin, so the detector could have been keyed on the
+        # SPELLING rather than on the decision (CodeRabbit, #17899).
+        "configdict-extras-forbidden",
+        'class Shape(BaseModel):\n    model_config = ConfigDict(extra="forbid")\n',
+        False,
+    ),
+    (
         # The pydantic v1 inner class. A model written in the old style is no
         # less a pass-through for it.
         "passthrough-inner-config-class",
         'class Shape(BaseModel):\n    class Config:\n        extra = "allow"\n',
         True,
+    ),
+    (
+        # The TWIN for the v1 spelling, same one-token difference.
+        "inner-config-class-extras-forbidden",
+        'class Shape(BaseModel):\n    class Config:\n        extra = "forbid"\n',
+        False,
     ),
     (
         # extra FORBIDDEN and no fields: nothing can travel, so nothing to say.
