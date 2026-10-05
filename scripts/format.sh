@@ -84,10 +84,21 @@ fi
 # whatever older interpreter happened to have black, which is the drift F4
 # describes. Honour CI_PARITY_VENV so the location stays overridable, exactly
 # as the setup script does.
+#
+# The parity venv must BE 3.14 to be worth preferring. CI_PARITY_VENV is
+# overridable, so it can point at an older environment that happens to have
+# black; selecting that over an available python3.14 would reintroduce the very
+# drift this block exists to remove, and the version `case` further down only
+# prints a note -- it never revises the choice (CodeRabbit, #13916).
 PYTHON_BIN=""
 PARITY_PY="${CI_PARITY_VENV:-$HOME/.venv-python-suite}/bin/python"
 if [ -x "$PARITY_PY" ] && "$PARITY_PY" -m black --version >/dev/null 2>&1; then
-    PYTHON_BIN="$PARITY_PY"
+    parity_ver=$("$PARITY_PY" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || true)
+    if [ "$parity_ver" = "3.14" ]; then
+        PYTHON_BIN="$PARITY_PY"
+    else
+        echo "format.sh: NOTE — the parity venv is Python ${parity_ver:-unknown}, not 3.14; searching PATH instead." >&2
+    fi
 fi
 
 if [ -z "$PYTHON_BIN" ]; then
@@ -118,10 +129,13 @@ case "$actual_ver" in
         echo "format.sh: WARNING — using Python $actual_ver but the project runs 3.14." >&2
         echo "  Black's output can differ from CI's at this version, so a clean" >&2
         echo "  local run may still fail the CI format check." >&2
-        echo "  One command fixes this for good -- it builds CI's exact 3.14 at" >&2
-        echo "  \$HOME/.venv-python-suite, needs no sudo, and installs nothing" >&2
-        echo "  outside the venv. format.sh finds it automatically afterwards:" >&2
+        echo "  Fixing this needs a Python 3.14 interpreter on the box first:" >&2
+        echo "  setup-ci-parity-env.sh builds the VENV, not the interpreter, and" >&2
+        echo "  exits if it cannot find 3.14 (install it via your OS package" >&2
+        echo "  manager, or point CI_PARITY_PYTHON at one). With 3.14 present:" >&2
         echo "    bash scripts/setup-ci-parity-env.sh" >&2
+        echo "  builds CI's env at \$HOME/.venv-python-suite without sudo and" >&2
+        echo "  installs nothing outside it; format.sh then finds it itself." >&2
         echo "" >&2
         ;;
 esac

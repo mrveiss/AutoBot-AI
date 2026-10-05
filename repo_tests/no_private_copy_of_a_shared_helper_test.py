@@ -199,6 +199,7 @@ def test_a_script_invoked_checker_imports_the_helper_as_a_sibling() -> None:
     assert len(invoked) > 8, f"only {len(invoked)} script-invoked checkers found -- the scan is wrong"
 
     offenders: list[str] = []
+    parsed = 0
     for rel in sorted(invoked):
         path = root / rel
         if not path.exists():
@@ -206,11 +207,21 @@ def test_a_script_invoked_checker_imports_the_helper_as_a_sibling() -> None:
             continue
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
-        except (OSError, SyntaxError, UnicodeDecodeError):
+        except (OSError, SyntaxError, UnicodeDecodeError) as exc:
+            # An unreadable checker is a checker this guard did not examine. A
+            # `continue` here let it escape while still counting toward the
+            # floor above, so the guard reported clean about a file nobody read
+            # (CodeRabbit, #13916).
+            offenders.append(f"{rel}: could not be parsed ({type(exc).__name__}: {exc})")
             continue
+        parsed += 1
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("tools.lint"):
                 offenders.append(f"{rel}:{node.lineno}: `from {node.module} import ...`")
+
+    # The floor above binds to DISCOVERY; this one binds to REACH. They differ
+    # exactly when a file fails to parse.
+    assert parsed > 8, f"only {parsed} script-invoked checkers PARSED -- the guard's reach collapsed"
 
     assert not offenders, (
         f"{len(offenders)} script-invoked checker(s) import through the `tools.lint` package:\n  "
