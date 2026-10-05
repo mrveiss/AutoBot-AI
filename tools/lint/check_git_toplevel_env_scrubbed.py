@@ -132,6 +132,12 @@ import sys
 from pathlib import Path
 from typing import List, Set, Tuple
 
+# Run as a SCRIPT by pre-commit, where the repo root is not on sys.path;
+# a `tools.lint.` path fails there (#13916).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _comment_syntax import code_lines  # noqa: E402
+
 # tools/lint/ is not a Python package; ensure the sibling helper is importable
 # regardless of invocation mode (script / importlib from tests).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -485,9 +491,7 @@ def scan_shell(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
     except (OSError, UnicodeDecodeError):
         return []
     findings: List[Tuple[int, str]] = []
-    for line_no, line in enumerate(lines, start=1):
-        if line.strip().startswith("#"):
-            continue
+    for line_no, line in code_lines("\n".join(lines)):
         if SHELL_LS_FILES_CALL.search(line):
             findings.append(
                 (
