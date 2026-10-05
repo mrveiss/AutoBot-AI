@@ -178,3 +178,10 @@ a4768fd323f51a10a4c8d1c5504ac5d153e73e90  # fix(knowledge): an unreadable graph 
 31a01bdb387f4aba774f8837761eeb90f1af1d5d  # fix(plugins): stop passing grant_capabilities= to loader that rejects it (#17420) (#17427)
 b0f3ac188c81f4462cd4df1b07d5d99a5a12b0cd  # fix(ansible): retry the shared apt repository add on a transient keyserver failure (#17230) (#17525)
 c9b412b4481c07cfaa3c0695ea24a5a44c17eee8  # fix(agent-terminal): refuse binding a conversation the creator does not own (#17422) (#17426)
+
+# 2026-10-05. Fifth recurrence, and self-inflicted: the squash message for #17948
+# was composed with the harness attribution trailer, which this repo's rule
+# overrides. Caught minutes after the merge by re-reading the rule, not by a
+# check -- the originating PR's gate cannot see a trailer the squash creates.
+# Forward-only: main is protected and is not rewritten for this.
+dfe7e150d66feca0ed4e7a525124b0e676530e6f  # fix(mesh-brain): community ids and centroids no longer depend on enumeration order (#13473) (#17948)
