@@ -49,6 +49,8 @@ from typing import Any, Dict
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines
+
 _SCRIPTS = Path("autobot-infrastructure/shared/scripts")
 _SYSTEM = _SCRIPTS / "phase_validation_system.py"
 _POLICY = _SCRIPTS / "phase_score.py"
@@ -179,8 +181,11 @@ def _non_comment_lines(text: str) -> list[str]:
     Comments explaining a removed construct quote it verbatim, so a scanner
     that reads a quotation as an occurrence is measuring the prose. That was a
     real finding on this very file's first guard, not a hypothetical.
+
+    Delegates to the canonical stripper (#17941): a private copy here would be
+    the thirty-second, and the guard that counts them is right to refuse it.
     """
-    return [line for line in text.splitlines() if not line.lstrip().startswith(("#", "//"))]
+    return [cl.text for cl in code_lines(text, name="x.sh")]
 
 
 def _logical_lines(text: str) -> list[str]:
@@ -192,19 +197,11 @@ def _logical_lines(text: str) -> list[str]:
     therefore inspects the line naming the script and never sees an operator
     appended after the redirect -- which is exactly where it would go. Joining
     first makes the guard read the command the shell runs.
+
+    `code_lines(join_continuations=True)` is both halves, so neither is
+    re-derived here (#17941, #16414).
     """
-    joined: list[str] = []
-    buffer = ""
-    for line in _non_comment_lines(text):
-        stripped = line.rstrip()
-        if stripped.endswith("\\"):
-            buffer += stripped[:-1].rstrip() + " "
-            continue
-        joined.append((buffer + stripped.strip()).strip() if buffer else line)
-        buffer = ""
-    if buffer:
-        joined.append(buffer.strip())
-    return joined
+    return [cl.text for cl in code_lines(text, name="x.sh", join_continuations=True)]
 
 
 def _keys_the_workflow_reads() -> set[str]:

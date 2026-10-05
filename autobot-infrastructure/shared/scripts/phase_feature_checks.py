@@ -40,10 +40,18 @@ def declares_compose_services(path: Path) -> bool:
         return False
     in_services = False
     for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        if not raw.strip() or raw.lstrip().startswith("#"):
+        if not raw.strip():
+            continue
+        key = raw.split(":", 1)[0].strip()
+        # NO COMMENT TEST HERE, deliberately (#17941). A key must start with an
+        # identifier character, so `# services:` and `  # web:` fail the same
+        # check that rejects any other non-key line -- one rule instead of a
+        # private comment stripper beside it. This module is stdlib-only and
+        # loaded by path, so it cannot import the canonical `_comment_syntax`.
+        if not key[:1].isalnum() and key[:1] != "_":
             continue
         if not raw[:1].isspace():
-            in_services = raw.split(":", 1)[0].strip() == "services"
+            in_services = key == "services"
             continue
         # A service key is the first indent level inside `services:`.
         if in_services and raw.endswith(":") and len(raw) - len(raw.lstrip()) <= 4:
