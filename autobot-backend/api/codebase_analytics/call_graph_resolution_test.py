@@ -479,3 +479,46 @@ def test_extract_callee_name_never_returns_a_dotted_name():
         node = next(n for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call))
         name = _extract_callee_name(node)
         assert name is not None and "." not in name, f"{src!r} -> {name!r}"
+
+
+def test_an_aliased_import_is_external_not_unresolved():
+    """`import json as j; j.loads(x)` (CodeRabbit, #13492).
+
+    The dotted check tested the raw first token against the module sets, and
+    `j` is in neither -- the alias lives in the import context. So a plainly
+    external call was recorded as an unresolved edge, which is the one verdict
+    that means "the graph does not know", reserved for calls it genuinely
+    cannot place.
+    """
+    ctx = ImportContext()
+    ctx.add_import("json", alias="j")
+
+    assert _resolve_callee_id("loads", "m", None, {}, ctx, dotted_name="j.loads") == (None, True)
+
+
+def test_a_local_name_does_not_capture_an_external_dotted_call():
+    """`def get(): ...` in a module that also calls `requests.get(url)`.
+
+    `_shared_resolve_callee` matches on the BARE name, so it resolved to the
+    local `get` and returned before the dotted check ran -- recording a false
+    local edge and losing the external call entirely. The receiver decides:
+    `a.b()` is never a call to a local `b`.
+    """
+    ctx = ImportContext()
+    ctx.add_import("requests")
+    functions = {"m.get": {"name": "get"}}
+
+    assert _resolve_callee_id("get", "m", None, functions, ctx, dotted_name="requests.get") == (None, True)
+
+
+def test_a_genuine_bare_local_call_still_resolves_locally():
+    """The contrast, and the one that stops the fix above from being a regression.
+
+    Classifying dotted calls first must not make every call external: with no
+    receiver, the same local `get` must still resolve to its own id.
+    """
+    ctx = ImportContext()
+    ctx.add_import("requests")
+    functions = {"m.get": {"name": "get"}}
+
+    assert _resolve_callee_id("get", "m", None, functions, ctx, dotted_name=None) == ("m.get", False)

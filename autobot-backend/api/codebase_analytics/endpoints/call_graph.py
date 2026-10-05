@@ -304,18 +304,18 @@ def _resolve_callee_id(
         - resolved_id: Function ID if found, None otherwise
         - is_external: True if call is to external library (not unresolved)
     """
-    resolved_id, is_external = _shared_resolve_callee(
-        callee_name, module_path, current_class, functions, import_context
-    )
-    if resolved_id or is_external:
-        return resolved_id, is_external
-
-    if (dotted := dotted_name or callee_name) and "." in dotted:  # fallback: direct callers (#13492)
+    # Dotted calls classify BEFORE the bare-name match, first token resolved via
+    # the import context (#13492). Cases in call_graph_resolution_test.py.
+    if (dotted := dotted_name or callee_name) and "." in dotted:
         base = dotted.split(".")[0]
-        if base in STDLIB_MODULES or base in COMMON_THIRD_PARTY:
+        if (
+            (import_context and import_context.is_external(base))
+            or base in STDLIB_MODULES
+            or base in COMMON_THIRD_PARTY
+        ):
             return None, True
 
-    return None, False
+    return _shared_resolve_callee(callee_name, module_path, current_class, functions, import_context)
 
 
 def _build_function_info(

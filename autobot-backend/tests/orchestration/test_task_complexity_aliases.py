@@ -33,6 +33,7 @@ proves it can see anything at all.
 
 import ast
 import enum
+import math
 import pathlib
 
 from autobot_types import TaskComplexity
@@ -108,6 +109,44 @@ def test_scheduler_multiplier_has_one_entry_per_complexity():
     # Collapsing the aliases was held to zero behaviour change, which means this
     # number: re-tuning it is a scheduling decision and is not this issue.
     assert applied[TaskComplexity.COMPLEX] == 1.3
+
+    # AND THE SCHEDULER MUST ACTUALLY APPLY THEM (CodeRabbit, #13806). Every
+    # assertion above reads a mapping this test rebuilt, so all of them pass
+    # unchanged if `_calculate_priority_score` uses 1.0, or swaps the two
+    # factors. The ratio of two real scores, with every other input held
+    # constant, is the only thing here that can tell those apart.
+    ratio = _scored(TaskComplexity.COMPLEX) / _scored(TaskComplexity.SIMPLE)
+    expected = applied[TaskComplexity.COMPLEX] / applied[TaskComplexity.SIMPLE]
+    assert math.isclose(ratio, expected, rel_tol=1e-9), (
+        f"the scheduler applies a complexity ratio of {ratio}, not the {expected} these "
+        "constants declare -- the mapping and the code that uses it have diverged"
+    )
+
+
+def _scored(complexity) -> float:
+    """`_calculate_priority_score` for one complexity, everything else fixed.
+
+    A future-dated `scheduled_time` keeps the overdue bonus out: it is
+    time-dependent, and it is added BEFORE the complexity factor multiplies,
+    so leaving it in would make the ratio drift with the clock.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from workflow_scheduler import ScheduledWorkflow, WorkflowPriority, WorkflowQueue, WorkflowStatus
+
+    now = datetime.now(tz=timezone.utc)
+    workflow = ScheduledWorkflow(
+        id="t",
+        name="t",
+        template_id=None,
+        user_message="t",
+        scheduled_time=now + timedelta(hours=1),
+        priority=WorkflowPriority.NORMAL,
+        status=WorkflowStatus.PENDING,
+        created_at=now,
+        complexity=complexity,
+    )
+    return WorkflowQueue()._calculate_priority_score(workflow)
 
 
 def _alias_names(enum_cls) -> set:
