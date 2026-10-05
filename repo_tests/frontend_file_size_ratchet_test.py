@@ -26,12 +26,13 @@ tests hold the four things that make it real rather than decorative:
 from __future__ import annotations
 
 import importlib.util
-import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 
 import pytest
 import yaml
 from repo_tests._paths import repo_root
 from repo_tests.frontend_file_size_ratchet_baseline import RATCHET_BASELINE
+
+from tools.lint._scan_helpers import tracked_paths
 
 #: Asks git first, so a worktree resolves to its own tree (#15925). Deriving it
 #: from __file__ here would answer confidently and wrongly under a nested
@@ -198,16 +199,10 @@ def test_the_uncovered_oversized_population_has_not_grown(hook):
     """
     root = hook.repo_root()
     found = {}
-    listing = subprocess.run(  # nosec B603 B607  # fixed argv, no shell, no caller input
-        ["git", "ls-files", *[f"{tree}**" for tree in _FRONTEND_TREES]],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=True,
-        env=hook.scrubbed_git_env(),
-    )
-    for rel in listing.stdout.splitlines():
+    # #15926: one enumeration helper, not a private `git ls-files`. The helper
+    # also scrubs the git env and roots the pathspec, which this call spelled
+    # out for itself -- a second spelling of one question is how the two drift.
+    for rel in tracked_paths(root, *[f"{tree}**" for tree in _FRONTEND_TREES]):
         if not rel.endswith(_UNCOVERED_SUFFIXES) or rel.startswith(hook.EXCLUDED_PREFIXES):
             continue
         measured = hook.count_lines(root / rel)
