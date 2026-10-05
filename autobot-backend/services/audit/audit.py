@@ -85,8 +85,33 @@ class AuditEvent:
 # ---------------------------------------------------------------------------
 
 
+async def _analyse_for_threats(event: AuditEvent) -> None:
+    """Hand one audit event to the threat detection engine (#13562).
+
+    Imported inside the function on purpose. The engine's module imports
+    scikit-learn at top level, so a module-scope import here would make the
+    audit bus — which every router touches — fail to import wherever
+    scikit-learn is absent.
+    """
+    try:
+        from security.enterprise.threat_detection.ingest import analyze_audit_event
+
+        await analyze_audit_event(event.to_dict())
+    except Exception as exc:  # noqa: BLE001 — the audit write must survive it
+        logger.error("Threat analysis could not run for %s: %s", event.action, type(exc).__name__)
+
+
 async def record(event: AuditEvent) -> None:
-    """Persist a single audit event to the unified Redis sorted set."""
+    """Persist a single audit event to the unified Redis sorted set.
+
+    #13562: this is also where the bus feeds ``ThreatDetectionEngine``. Every
+    producer — ``emit``, ``emit_security``, ``emit_compliance``,
+    ``emit_knowledge``, ``audit_record`` — funnels here, so one call site covers
+    the bus rather than N. Analysis runs BEFORE the Redis write and never
+    depends on it: a detector that only sees the events Redis accepted is
+    blindest exactly when the platform is degraded.
+    """
+    await _analyse_for_threats(event)
     redis = await get_async_redis_client(database="main")
     if redis is None:
         logger.debug(

@@ -39,6 +39,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 # Most severe first. "unknown" is last and is still a finding: a scanner that
@@ -170,14 +171,127 @@ def parse_npm_audit(payload: str) -> list[Finding]:
             "npm audit produced no `vulnerabilities` map" + detail + ". A scan that did not "
             "run is not a scan that found nothing -- fix the audit, do not read this as clean."
         )
-    return [
-        Finding(
-            severity=_normalise(entry.get("severity", "")),
-            identifier=str(name),
-            location=str(entry.get("range", "?")),
+    vulnerabilities = document.get("vulnerabilities") or {}
+    advisory_ids = _npm_advisory_closure(vulnerabilities)
+    findings: list[Finding] = []
+    for name, entry in vulnerabilities.items():
+        severity = _normalise(entry.get("severity", ""))
+        location = str(entry.get("range", "?"))
+        direct = _npm_direct_advisories(entry)
+        if direct:
+            # ONE FINDING PER ADVISORY. A package can carry several: npm puts
+            # each in its own `via` object. Emitting one finding per PACKAGE
+            # with the union of their ids let a single recorded allowance
+            # excuse the package while a second, UNRECORDED high-severity
+            # advisory on it went unjudged -- `not_allowed` accepts a finding
+            # when ANY alias matches, so the blocking gate would have returned
+            # success with a real finding unaddressed (CodeRabbit, review of
+            # this PR). Split, so each advisory is judged on its own record.
+            for ids in direct:
+                findings.append(Finding(severity=severity, identifier=str(name), location=location, aliases=ids))
+            continue
+        # Purely transitive: no advisory of its own, so it exists only because
+        # of its roots and inherits their ids. Safe because an unexcused root
+        # still appears as its own finding and still fails.
+        findings.append(
+            Finding(severity=severity, identifier=str(name), location=location, aliases=advisory_ids[str(name)])
         )
-        for name, entry in (document.get("vulnerabilities") or {}).items()
-    ]
+    return findings
+
+
+def _npm_direct_advisories(entry: dict) -> "list[tuple[str, ...]]":
+    """Ids for each advisory this entry names DIRECTLY, one tuple per advisory.
+
+    Grouped per advisory rather than unioned, so two advisories on one package
+    stay independently judgeable. A `via` entry that is a package-name string
+    is a transitive link, not an advisory, and is excluded here.
+    """
+    grouped = []
+    for via in entry.get("via") or ():
+        if not isinstance(via, dict):
+            continue
+        ids = set()
+        url = str(via.get("url") or "")
+        marker = url.rstrip("/").rsplit("/", 1)[-1]
+        if marker.startswith("GHSA-"):
+            ids.add(marker)
+        source = via.get("source")
+        if source is not None:
+            ids.add(f"npm:{source}")
+        grouped.append(tuple(sorted(ids)))
+    return grouped
+
+
+def _npm_advisory_closure(vulnerabilities: dict) -> "dict[str, tuple[str, ...]]":
+    """Advisory ids per package, propagated along npm's `via` chains.
+
+    npm keys `vulnerabilities` by PACKAGE and puts the advisory one level down
+    in `via[].url`, but only on the package the advisory is actually against.
+    A transitive dependent carries `via` as a list of package-name STRINGS, so
+    it has no id of its own. One root advisory therefore surfaces as N findings
+    of which only one can be matched by an advisory-id allowance -- the other
+    N-1 fail with nothing able to excuse them.
+
+    GHSA-vfj7-8cjw-p6xm is the live example: `braces` names it, while
+    `micromatch`, `fast-glob`, `globby`, `stylelint` and
+    `@vue/eslint-config-typescript` only name each other.
+
+    Inheritance is sound because an UNEXCUSED root still appears as its own
+    finding and still fails the gate. Excusing a dependent can therefore never
+    hide a real problem -- it can only stop one decision being demanded six
+    times. A package carrying its own advisory keeps that id too, so it is
+    never excused by a neighbour's alone.
+    """
+    direct = {str(name): set(_npm_advisory_ids(entry)) for name, entry in vulnerabilities.items()}
+    resolved = {name: set(ids) for name, ids in direct.items()}
+
+    # ONLY purely-transitive entries inherit. A package naming an advisory of
+    # its own is judged on that advisory, or an excused neighbour would launder
+    # it: matching is "any recorded name wins", so a single inherited id would
+    # excuse a package that also carries an unexcused one. A test asserts this
+    # precisely because the first version of this function got it wrong.
+    for _ in range(len(vulnerabilities) + 1):
+        changed = False
+        for name, entry in vulnerabilities.items():
+            key = str(name)
+            if direct[key]:
+                continue
+            for via in entry.get("via") or ():
+                if isinstance(via, str) and via in resolved:
+                    gained = resolved[via] - resolved[key]
+                    if gained:
+                        resolved[key] |= gained
+                        changed = True
+        if not changed:
+            break
+    return {name: tuple(sorted(ids)) for name, ids in resolved.items()}
+
+
+def _npm_advisory_ids(entry: dict) -> tuple[str, ...]:
+    """Every GHSA id behind one npm-audit entry, for allowance matching (#16222).
+
+    npm keys `vulnerabilities` by PACKAGE, so a finding's identifier is `braces`
+    and the advisory id lives one level down in `via[].url`. Without this, an
+    allowance recorded by advisory id could never match an npm finding, and one
+    root advisory appears as N package findings that nothing can excuse
+    together: GHSA-vfj7-8cjw-p6xm surfaces as `braces`, `micromatch`,
+    `fast-glob`, `globby`, `stylelint` and `@vue/eslint-config-typescript`.
+
+    Transitive entries carry `via` as a list of package-name STRINGS rather than
+    advisory objects, so the id is resolved from the whole document by the
+    caller's union below -- here we take what this entry itself names.
+    """
+    ids = set()
+    for via in entry.get("via") or ():
+        if isinstance(via, dict):
+            url = str(via.get("url") or "")
+            marker = url.rstrip("/").rsplit("/", 1)[-1]
+            if marker.startswith("GHSA-"):
+                ids.add(marker)
+            source = via.get("source")
+            if source is not None:
+                ids.add(f"npm:{source}")
+    return tuple(sorted(ids))
 
 
 def parse_flake8(payload: str) -> list[Finding]:
@@ -296,6 +410,36 @@ def emit(text: str) -> None:
         handle.write(text + "\n")
 
 
+def recorded_npm_allowances(today: "date | None" = None) -> "tuple[set[str], list[str]]":
+    """The unexpired advisory ids from the ONE recorded source (#17890, #17889).
+
+    `npm_audit_exceptions.ADVISORY_EXCEPTIONS` is the owner-decision record, and
+    `npm_audit_gate.py` has always honoured it. This gate parses a report that
+    workflow never produced, so the same advisory was judged by one gate and
+    invisible to the other: the braces exception (GHSA-vfj7-8cjw-p6xm, owner
+    decision 2026-10-03) was live in `frontend-test.yml` and absent here, which
+    failed `security.yml` on ten open PRs at once.
+
+    The alternative — repeating the ids as `--allow-id` in the workflow — would
+    put the same judgement in two places, which is the defect, not the fix.
+
+    Returns (live ids, expired ids). Expiry is honoured here: an elapsed
+    exception is NOT allowed, so the record cannot outlive its decision.
+    """
+    try:
+        from npm_audit_exceptions import ADVISORY_EXCEPTIONS  # noqa: PLC0415
+    except ImportError:  # pragma: no cover - the gate must not vanish if the record moves
+        return set(), []
+    today = today or date.today()
+    live, expired = set(), []
+    for advisory_id, exception in ADVISORY_EXCEPTIONS.items():
+        if date.fromisoformat(exception.expires) >= today:
+            live.add(advisory_id)
+        else:
+            expired.append(advisory_id)
+    return live, sorted(expired)
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--format", required=True, choices=sorted(PARSERS), help="report format to parse")
@@ -324,6 +468,20 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     allowed_ids = set(args.allow_id)
 
+    # Honour the recorded exceptions; `npm_audit_gate.py` still POLICES them.
+    # Staleness is deliberately not re-checked here -- two enforcement points
+    # for one record means two places to fix when an advisory clears.
+    recorded: set[str] = set()
+    if args.format == "npm-audit":
+        recorded, expired = recorded_npm_allowances()
+        allowed_ids |= recorded
+        for advisory_id in expired:
+            print(  # noqa: print
+                f"::warning::security scan gate: recorded exception {advisory_id} EXPIRED — "
+                f"it is no longer honoured here; see npm_audit_exceptions.py",
+                file=sys.stderr,
+            )
+
     try:
         findings = read_report(args.report, args.format)
     except ReportError as exc:
@@ -332,7 +490,7 @@ def main(argv: list[str] | None = None) -> int:
 
     emit(render(args.title, findings, args.fail_on, allowed_ids))
 
-    stale = stale_allowances(findings, allowed_ids)
+    stale = stale_allowances(findings, allowed_ids - recorded)
     if stale:
         print(  # noqa: print
             f"::error::security scan gate: {args.title} — allowance(s) {stale} name findings the "
