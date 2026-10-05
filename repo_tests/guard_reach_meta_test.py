@@ -429,13 +429,19 @@ def test_dropping_glob_from_the_enumerator_breaks_the_sweep() -> None:
     module cannot tell decoration from coverage by reading itself. So remove the
     term and require the sweep to notice.
 
-    Measured 2026-09-10: 101 guards reached with `.glob(`, 80 without -- and 80
-    is below `MIN_GUARDS_EXAMINED`, so a regression that dropped the term would
-    fail loudly rather than quietly reading 21 fewer guards.
+    Measured 2026-09-10: 101 files MATCHED `_ENUMERATOR` with `.glob(`, 80
+    MATCHED it without -- and 80 is below `MIN_GUARDS_EXAMINED`, so a regression
+    that dropped the term would fail loudly rather than quietly matching 21
+    fewer files.
+
+    Matched, never "guards examined" (#17870 AC4). What this module counts is
+    files whose source matches a regex; whether each one then examines anything
+    is a different question, and the two were conflated here in exactly the way
+    `_guard_reach_census` now forbids.
 
     This is the check that the previous floor of 60 could not perform: at 60,
-    dropping `.glob(` left 80 examined, comfortably above the floor, and the
-    sweep reported the same clean result over a fifth fewer guards.
+    dropping `.glob(` left 80 MATCHED, comfortably above the floor, and the
+    sweep reported the same clean result over a fifth fewer files.
     """
     without_glob = re.compile(_ENUMERATOR.pattern.replace(r"|\.glob\(", ""))
     assert without_glob.pattern != _ENUMERATOR.pattern, "the mutation did not change the pattern"
