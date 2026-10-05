@@ -129,6 +129,7 @@ from __future__ import annotations
 
 import ast
 import logging
+import pathlib
 import sys
 from pathlib import Path
 from typing import Any
@@ -138,7 +139,13 @@ from typing import Any
 # only puts ``tools/lint/`` on the path, so the repository root is added here.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from tools.lint._scan_helpers import (  # noqa: E402
+# #13842: sibling-directory insert, so this resolves whether the checker
+# runs as a script (`python3 tools/lint/<name>.py`, which CI does) or is
+# imported as a module. A `tools.lint.` path works only in the second
+# case and fails the first with ModuleNotFoundError.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from _scan_helpers import (  # noqa: E402
     EXCLUDED_DIR_NAMES,
     PY_FLOOR,
     enforce_reach,
