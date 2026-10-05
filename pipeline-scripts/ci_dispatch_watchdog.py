@@ -1202,24 +1202,23 @@ def report_superseded_stuck_runs(
 ) -> List[Dict[str, Any]]:
     """Run the #13439 supersession selection and print its verdict.
 
-    This is :func:`superseded_stuck_runs`'s production call site. The selection
-    existed with no caller at all until now, which meant the one fault it can
-    name — a queued predecessor holding a concurrency group that
-    ``cancel-in-progress`` will never reap — was invisible to the probe whose
-    whole job is "work is queued and nothing is moving".
+    :func:`superseded_stuck_runs`'s production call site. It had no caller at
+    all until now, so the one fault it can name — a queued predecessor holding
+    a concurrency group ``cancel-in-progress`` will never reap — was invisible
+    to the probe whose whole job is "work is queued and nothing is moving".
 
-    It reports and does not cancel. ``ci_run_supersession.__doc__`` holds the
-    three reasons; the first is that the only workflow invoking this check is
-    granted ``actions: read``, so a ``force-cancel`` POST from here could not
-    succeed even if it were the right call.
+    Reports, never cancels: ``ci_run_supersession.__doc__`` holds the three
+    reasons, the first being that this check's only workflow has ``actions:
+    read``, so a force-cancel POST could not succeed anyway.
     """
     population = collect_supersession_population(api, queued)
+    # Budget bounds CANCELLING, not printing: capping selection hid 21/21 (#18036).
     superseded = superseded_stuck_runs(
         population,
         now,
         api.repository,
         config.get("grace_minutes", DEFAULT_GRACE_MINUTES),
-        config.get("max_superseded_reported", DEFAULT_SUPERSEDED_REPORTED),
+        len(population),
     )
     for line in superseded_report_lines(
         superseded,
@@ -1228,6 +1227,7 @@ def report_superseded_stuck_runs(
         now,
         config.get("grace_minutes", DEFAULT_GRACE_MINUTES),
         lambda run: _run_url(api.repository, run),
+        reported_cap=config.get("max_superseded_reported", DEFAULT_SUPERSEDED_REPORTED),
     ):
         _emit(line)
     return superseded

@@ -262,10 +262,30 @@ def test_every_bus_producer_reaches_that_write_path() -> None:
     """One call site covers the bus only if the producers really funnel through it."""
     tree = _parse(AUDIT_BUS_PATH)
 
-    assert "record" in _called_names(_function(tree, "emit")) or "record" in _called_names(_function(tree, "emit"))
+    # Both halves of this assertion used to read `emit`, so the second was dead
+    # (CodeRabbit). Chasing that turned up the larger problem: `audit.py`
+    # defines `emit` TWICE and the pin was reading the shadowed one.
+    shadowed_emit = _function(tree, "emit")
+    effective_emit = _effective_function(tree, "emit")
+    assert shadowed_emit is not effective_emit, (
+        "audit.py no longer defines `emit` twice — simplify this test rather "
+        "than leaving an override check that no longer describes the module"
+    )
+
+    # The first definition writes directly; the override delegates to
+    # `emit_compliance`, which reaches `_emit_real` below. Both are asserted
+    # because either one changing would break the bus for a different caller.
+    assert "record" in _called_names(shadowed_emit)
+    assert "emit_compliance" in _called_names(
+        effective_emit
+    ), "the `emit` callers actually get must still funnel into the bus"
+
     assert "record" in _called_names(_function(tree, "emit_knowledge"))
     for shim in ("emit_security", "emit_compliance"):
         assert "_emit_real" in _called_names(_function(tree, shim)), shim
+
+    # `audit_record` is a producer too, and nothing asserted its path.
+    assert "emit_security" in _called_names(_function(tree, "audit_record"))
 
 
 def test_the_ingest_entry_point_constructs_the_engine() -> None:
@@ -277,7 +297,26 @@ def test_the_ingest_entry_point_constructs_the_engine() -> None:
 
 
 def _function(tree: ast.AST, name: str):
+    """The FIRST definition of *name*. See `_effective_function` before using it."""
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
             return node
     raise AssertionError(f"{name} is not defined")
+
+
+def _effective_function(tree: ast.AST, name: str):
+    """The definition that WINS at import time: the last one in the module.
+
+    `audit.py` defines `emit` twice -- once at module scope and again as an
+    intentional override (`# noqa: F811`). A pin that reads the first one is
+    asserting about a function no caller can reach: correct about the AST node
+    it inspected, and about the wrong question.
+    """
+    found = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name
+    ]
+    if not found:
+        raise AssertionError(f"{name} is not defined")
+    return found[-1]

@@ -121,6 +121,25 @@ def test_a_name_that_appears_only_in_prose_is_not_a_call() -> None:
     assert VALIDATOR not in _called_names(ast.parse(PROSE_ONLY_FIXTURE))
 
 
+def _route_handler(tree: ast.AST, path: str):
+    """The function decorated `@router.<verb>("<path>", ...)`.
+
+    Asserting against the module as a whole cannot distinguish "the endpoint
+    runs this" from "something in this file runs this", and only the first is
+    what a wiring pin claims.
+    """
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for dec in node.decorator_list:
+            if not isinstance(dec, ast.Call) or not dec.args:
+                continue
+            first = dec.args[0]
+            if isinstance(first, ast.Constant) and first.value == path:
+                return node
+    raise AssertionError(f"no route handler decorated with {path!r}")
+
+
 def test_the_validator_is_called_from_the_onboarding_doctor() -> None:
     """The regression: #13780's defect was zero call sites anywhere."""
     assert VALIDATOR in _called_names(_parse(DOCTOR_PATH))
@@ -133,8 +152,13 @@ def test_that_call_site_is_reachable_from_a_registered_route() -> None:
     registered in ``initialization/router_registry``. So the chain is
     request -> run_doctor -> _validate_dependencies -> the validator.
     """
+    # Bound to the ROUTE HANDLER, not the module (CodeRabbit). `_called_names`
+    # over the whole tree passes if any function calls `run_doctor` -- so the
+    # route could stop calling it, some helper keep calling it, and this pin
+    # would still be green while the endpoint returned nothing.
     api_tree = _parse(ONBOARDING_API_PATH)
-    assert "run_doctor" in _called_names(api_tree)
+    handler = _route_handler(api_tree, "/doctor")
+    assert "run_doctor" in _called_names(handler), "the registered GET /doctor handler no longer awaits run_doctor"
 
     doctor_tree = _parse(DOCTOR_PATH)
     run_doctor = next(
@@ -260,3 +284,19 @@ async def test_a_validator_that_raises_is_reported_not_swallowed(monkeypatch: py
     assert section["ran"] is False
     assert section["failure"] == "RuntimeError"
     assert section["errors"] == []
+
+
+def test_a_call_outside_the_route_handler_does_not_satisfy_the_pin() -> None:
+    """Contrast control: the whole point of binding to the handler."""
+    fixture = ast.parse(
+        '@router.get("/doctor")\n'
+        "async def doctor_report():\n"
+        "    return {}\n"
+        "\n"
+        "async def some_helper():\n"
+        "    return await run_doctor()\n"
+    )
+    assert "run_doctor" in _called_names(fixture), "the module DOES call it somewhere"
+    assert "run_doctor" not in _called_names(
+        _route_handler(fixture, "/doctor")
+    ), "a call outside the handler must not satisfy a pin about the handler"

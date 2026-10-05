@@ -109,7 +109,14 @@ async def _validate_dependencies() -> dict[str, Any]:
       what #13780's last acceptance criterion asks for — no new health surface when one
       can host it. It is registered, authenticated, and invoked on demand by a human.
     * It already pays for a Redis ping and an Ollama ``/api/tags`` GET, so the two round
-      trips #13738 refused to put in front of every boot cost nothing new here.
+      trips #13738 refused to put in front of every boot are already paid on this path.
+      They are **not free**: the validator runs its OWN Redis ping and its own Ollama
+      GET (``startup_validator.py:334-338``, 5s timeout), so a ``/doctor`` call makes
+      each round trip twice, sequentially. An earlier revision of this docstring
+      claimed it "cost nothing new", which was wrong. The duplication is accepted
+      because ``/doctor`` is an operator-invoked diagnostic and reading the validator's
+      own view is the point of calling it — see the note at the ``dependencies`` key
+      for the condition under which that should be revisited.
     * It is **not** the ``/api/system/health`` aggregator. That one is unauthenticated
       and polled by the frontend before login, so a 5-second Ollama timeout registered
       there would land on a hot public path — the precise cost #13780 rules out.

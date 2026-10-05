@@ -138,9 +138,36 @@ def test_the_reporter_is_called_from_the_cli_entry_point(watchdog_tree: ast.Modu
     assert REPORTER in _called_names(_function(watchdog_tree, ENTRY))
 
 
+# `main` that names the entry point without ever invoking it. The real `main`
+# does `return check_runner_starvation(api, config)`, so the strict assertion
+# below is reachable -- this fixture proves the assertion can FAIL.
+REFERENCE_ONLY_FIXTURE = """
+def main():
+    handler = check_runner_starvation
+    print(check_runner_starvation.__name__)
+    return 0
+"""
+
+
 def test_the_cli_dispatches_to_that_entry_point(watchdog_tree: ast.Module) -> None:
-    """Closes the chain: argv -> main -> check_runner_starvation -> selector."""
-    assert ENTRY in _referenced_names(_function(watchdog_tree, "main"))
+    """Closes the chain: argv -> main -> check_runner_starvation -> selector.
+
+    CALLED, not merely referenced (CodeRabbit). `_referenced_names` matches any
+    bare name load, so a `main` that only assigned or printed the entry point
+    satisfied it while the CLI never ran the check -- a wiring pin that passes
+    when the wiring is gone.
+    """
+    assert ENTRY in _called_names(_function(watchdog_tree, "main"))
+
+
+def test_a_main_that_only_mentions_the_entry_point_fails_the_pin() -> None:
+    """Contrast control for the assertion above, per the detector-pair rule."""
+    fixture_main = _function(ast.parse(REFERENCE_ONLY_FIXTURE), "main")
+    assert ENTRY in _referenced_names(fixture_main), "fixture should still MENTION it"
+    assert ENTRY not in _called_names(fixture_main), (
+        "a reference-only main must not satisfy the call assertion — otherwise "
+        "the pin cannot tell a wired CLI from an unwired one"
+    )
 
 
 # ---------------------------------------------------------------------------
