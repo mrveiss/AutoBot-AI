@@ -89,7 +89,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/api_endpoint_scanner.py": 1444,
     "autobot-backend/api/codebase_analytics/chromadb_storage.py": 1461,  # #17758: policy centralised in source_scope.py
     "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1326,
-    "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 757,
+    "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 756,
     "autobot-backend/api/codebase_analytics/endpoints/duplicates.py": 661,  # #17758: triplicated cached body collapsed
     "autobot-backend/api/codebase_analytics/endpoints/environment.py": 694,
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 827,
@@ -460,8 +460,8 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/models/database.py": 1140,
     "autobot-slm-backend/models/schemas.py": 2180,
     "autobot-slm-backend/monitoring/business_intelligence_dashboard.py": 1159,
-    "autobot-slm-backend/monitoring/performance_benchmark.py": 1136,
-    "autobot-slm-backend/monitoring/performance_monitor.py": 785,
+    "autobot-slm-backend/monitoring/performance_benchmark.py": 1073,
+    "autobot-slm-backend/monitoring/performance_monitor.py": 729,
     "autobot-slm-backend/monitoring/performance_optimizer.py": 773,
     "autobot-slm-backend/services/backup.py": 816,
     "autobot-slm-backend/services/blue_green.py": 1287,

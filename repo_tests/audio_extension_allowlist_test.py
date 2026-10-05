@@ -18,8 +18,26 @@ allowlist drift independently, and the drift is silent in the dangerous
 direction: a format added to the route guard alone is admitted by a validator
 that was never taught to accept it.
 
-These tests hold the consolidation in place. The last one is the important one —
-it fails when a *fourth* literal appears, which is how the first three got here.
+#13615 then found two more copies that had already **drifted**, and those are
+now derived too: ``api/knowledge.py`` and
+``knowledge/connectors/audio_connector.py`` take named supersets from
+``SecurityConstants`` instead of writing their own set. Neither reconciliation
+changed what either path accepts — the deltas are pinned below, element for
+element — because widening the upload boundary is an owner decision and not
+something a de-duplication should smuggle in.
+
+**Correcting a claim this file used to make.** The connector was described
+here, and on #13615, as *omitting* ``.mp4``/``.webm``. That was true of the
+name ``_AUDIO_EXTS`` and false of the connector: both of its gates tested
+``_AUDIO_EXTS | _VIDEO_EXTS``, so it accepted a strict **superset** of the
+canonical seven. The set that was read was not the set that ran.
+
+These tests hold the consolidation in place. The sweep is the important one —
+it fails when a *fourth* literal appears, which is how the first three got
+here, and now also when a **near**-copy appears, which is how these two got
+here. A near-copy is the dangerous shape: an exact duplicate is harmless until
+one side moves, whereas a set that differs by one container is already a
+disagreement about what the system accepts.
 """
 
 from __future__ import annotations
@@ -66,6 +84,37 @@ def _literal_string_sets(source: str) -> list[set[str]] | None:
             if len(values) == len(node.elts):
                 found.append(values)
     return found
+
+
+def _is_near_copy(values: set[str], canonical: set[str]) -> bool:
+    """True when *values* is recognisably the audio allowlist, edited.
+
+    Thresholds are measured against this tree rather than chosen. Every set of
+    string literals sharing three or more members with the canonical seven was
+    enumerated (five of them); the overlap/extras distribution is:
+
+    ====================================  =======  ======
+    site                                  overlap  extras
+    ====================================  =======  ======
+    ssot_constants.py (the canonical one)       7       0
+    api/knowledge.py                            7       1
+    audio_connector.py (_AUDIO_EXTS)            5       0
+    utils/file_categorization.py                5      26
+    ====================================  =======  ======
+
+    ``file_categorization.py``'s set is a broad binary-file classifier that
+    happens to include media types; #13615 names it out of scope explicitly.
+    26 extras against a limit of 2 is a wide margin, not a close call, which is
+    why the rule can afford to be this simple.
+
+    Requiring every member to look like an extension keeps the rule from
+    reaching sets of unrelated short strings that happen to overlap.
+    """
+    if not values or values == canonical:
+        return False
+    if not all(v.startswith(".") and 2 <= len(v) <= 6 for v in values):
+        return False
+    return len(values & canonical) >= 5 and len(values - canonical) <= 2
 
 
 def _tracked_python_files(root: Path = REPO_ROOT) -> list[Path]:
@@ -153,7 +202,13 @@ REACH = declare(
 
 
 def test_canonical_set_holds_the_expected_formats():
-    """Guards the contents, so consolidation cannot quietly change behaviour."""
+    """Guards the contents, so consolidation cannot quietly change behaviour.
+
+    Written out element for element rather than recomputed from the constant,
+    so this disagrees with it if either moves. The last three are the formats
+    the KB route and the connector already admitted before #13615 collapsed
+    the three sets into one; no format was lost in the collapse.
+    """
     assert SecurityConstants.ALLOWED_AUDIO_EXTENSIONS == {
         ".wav",
         ".mp3",
@@ -162,6 +217,9 @@ def test_canonical_set_holds_the_expected_formats():
         ".ogg",
         ".flac",
         ".webm",
+        ".mkv",
+        ".avi",
+        ".mov",
     }
 
 
@@ -196,14 +254,21 @@ def test_no_fourth_literal_copy_exists():
     added by someone reasonably writing the set they needed; nothing told them a
     canonical one existed. This does.
 
-    Scoped to sets **equal** to the canonical one. Two nearby sets deliberately
-    differ — ``api/knowledge.py`` accepts ``.mkv`` and
-    ``knowledge/connectors/audio_connector.py`` omits ``.mp4``/``.webm`` — and
-    reconciling those changes what the upload boundary admits, which is a
-    decision rather than a refactor. Tracked separately; not failed here.
+    Two kinds of offender, because #13615 showed the second is the one that
+    bites. An **exact** copy is a set equal to the canonical one: harmless
+    today, a disagreement the moment either side is edited. A **near** copy is
+    a set that is mostly the canonical one and not quite — which is what
+    ``api/knowledge.py`` and the audio connector had become, differing from the
+    boundary by one and three containers respectively with nothing recording
+    that the difference was meant.
+
+    Both now derive from ``SecurityConstants``, so the sweep covers them rather
+    than exempting them. ``_is_near_copy``'s thresholds are measured against
+    this tree, not guessed — see its docstring.
     """
     canonical = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
     offenders = []
+    near = []
     read = []
     unparsed = []
     for path in REACH.examined(REPO_ROOT):
@@ -220,7 +285,10 @@ def test_no_fourth_literal_copy_exists():
             continue
         read.append(rel)
         if any(literal == canonical for literal in literals):
-            offenders.append(str(rel))
+            offenders.append(f"{rel} (exact copy)")
+        for literal in literals:
+            if _is_near_copy(literal, canonical):
+                near.append(f"{rel} -- extra {sorted(literal - canonical)}, missing {sorted(canonical - literal)}")
 
     # Candidates are not coverage: the loop above skips anything it cannot read,
     # so without this the floor measured how many files were LISTED rather than
@@ -237,3 +305,149 @@ def test_no_fourth_literal_copy_exists():
         "audio-extension allowlist written as a literal instead of imported from "
         f"SecurityConstants.ALLOWED_AUDIO_EXTENSIONS (#13512): {offenders}"
     )
+
+    assert not near, (
+        "a set that is nearly the audio-extension allowlist, written as a literal "
+        "(#13615). This is a drifted copy: say what the difference is by deriving "
+        "a named superset/subset in SecurityConstants, so the delta is readable "
+        "and moves with the boundary.\n" + "\n".join(near)
+    )
+
+
+# ---------------------------------------------------------------------------
+# #13615 — the two copies that had already drifted, now on the one set
+# ---------------------------------------------------------------------------
+
+
+def test_every_gate_shares_the_one_canonical_object():
+    """Identity, not equality, on all five gates.
+
+    Equality would pass for a re-written literal that happens to agree today,
+    which is the state #13615 found: copies that matched once and no longer
+    did. `is` can only hold if the call site took the object.
+    """
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / "autobot-backend"))
+    from api.knowledge import _AUDIO_ALLOWED_EXTS
+    from knowledge.connectors.audio_connector import _MEDIA_EXTS
+    from media.audio.ffmpeg_service import ALLOWED_EXTENSIONS as _FFMPEG_EXTS
+    from transcriber.routes.recordings import _ALLOWED_EXTENSIONS as _ROUTE_EXTS
+    from transcriber.upload_security import ALLOWED_EXTENSIONS as _UPLOAD_EXTS
+
+    canonical = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
+    gates = (
+        ("api.knowledge", _AUDIO_ALLOWED_EXTS),
+        ("audio_connector", _MEDIA_EXTS),
+        ("ffmpeg_service", _FFMPEG_EXTS),
+        ("routes.recordings", _ROUTE_EXTS),
+        ("upload_security", _UPLOAD_EXTS),
+    )
+    # Collected rather than asserted inside the loop: a loop whose only body is
+    # the assertion becomes an empty `for` when guard_reach_meta strips the
+    # assertion to check this guard still fails without it, and an
+    # IndentationError is not the failure that test is looking for. Reporting
+    # every mismatching gate instead of the first is the better verdict anyway.
+    mismatched = [name for name, gate in gates if gate is not canonical]
+    assert not mismatched, f"these gates do not share the canonical object: {mismatched}"
+
+
+def test_there_is_exactly_one_named_allowlist():
+    """The derived supersets are gone, not renamed.
+
+    `KB_AUDIO_INGEST_EXTENSIONS` and `MEDIA_CONNECTOR_EXTENSIONS` expressed the
+    drift as a requirement. Nothing stated a reason for either delta, and the
+    pair was incoherent -- the KB endpoint rejected `.avi` while the connector
+    it feeds accepted it. Three sets differing for no reason are three copies
+    with extra steps (owner, 2026-10-05).
+    """
+    extra = [n for n in ("KB_AUDIO_INGEST_EXTENSIONS", "MEDIA_CONNECTOR_EXTENSIONS") if hasattr(SecurityConstants, n)]
+    assert not extra, f"a per-call-site allowlist came back: {extra}. One set, or state the capability reason."
+
+
+def test_the_transcriber_widening_is_deliberate_and_visible():
+    """The collapse ADMITS three containers the transcriber used to refuse.
+
+    Recorded as a test rather than a comment because it is the one behavioural
+    consequence of #13615: `upload_security` gates on extension alone, with no
+    magic-byte check, so this set is the only thing standing between a user
+    string and a file on disk. If these three are ever meant to be refused
+    there, this test is where that decision gets made -- visibly.
+    """
+    widened = {".mkv", ".avi", ".mov"}
+    assert widened < SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
+    # Containers already demuxed by ffmpeg and already identified by magic
+    # bytes in media/video/pipeline.py, and no more complex than .mp4/.webm,
+    # which every one of these gates has always admitted.
+    assert {".mp4", ".webm"} < SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
+
+
+def test_the_near_copy_detector_finds_the_shapes_it_is_for():
+    """Positive controls, one per shape — the sweep is clean, so it proves nothing alone.
+
+    A control witnesses only the form it is written in, so there is one for
+    each direction a copy can drift: wider, narrower, and both at once.
+    """
+    canonical = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
+
+    # The drifted shapes #13615 found were `canonical | {.mkv}` and
+    # `canonical | {.mkv,.avi,.mov}`. Those three are now MEMBERS of the one
+    # set, so re-using them here would compare the set with itself and the
+    # controls would silently stop witnessing anything. Formats outside the
+    # allowlist stand in for the same four directions of drift.
+    assert _is_near_copy(canonical | {".wma"}, canonical), "one extra: the wider shape"
+    assert _is_near_copy(canonical - {".mp4", ".webm"}, canonical), "two missing: the narrower shape"
+    assert _is_near_copy((canonical - {".webm"}) | {".wma"}, canonical), "drifted both ways"
+    assert _is_near_copy(canonical | {".wma", ".aac"}, canonical), "two extras is still a copy"
+
+
+def test_the_near_copy_detector_leaves_the_legitimate_sets_alone():
+    """Negative controls, including the real set that is closest to tripping it.
+
+    ``utils/file_categorization.py``'s binary-extension set shares five members
+    with the allowlist and is explicitly out of scope on #13615. If the rule
+    ever flags it, the rule is wrong — not that file.
+    """
+    canonical = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
+
+    assert not _is_near_copy(canonical, canonical), "the canonical set is not a copy of itself"
+    assert not _is_near_copy(set(), canonical)
+    file_categorization_shape = {".mp3", ".mp4", ".ogg", ".wav", ".webm"} | {f".x{i}" for i in range(26)}
+    assert not _is_near_copy(file_categorization_shape, canonical), "26 extras is a different concern"
+    assert not _is_near_copy({".py", ".ts", ".vue"}, canonical)
+    assert not _is_near_copy({"wav", "mp3", "mp4", "m4a", "ogg"}, canonical), "no leading dot: not extensions"
+
+
+def test_the_detector_reads_set_literals_and_not_the_text_around_them():
+    """The trap: a guard that greps is satisfied by the prose describing the bug.
+
+    Every string this guard looks for appears in the fixture below — in a
+    docstring, a ``#`` comment and a string constant — and the fixture contains
+    no set literal at all. ``_literal_string_sets`` must return an empty list,
+    not a match. The companion assertion checks that an honest literal in the
+    same file *is* still found, so an empty result cannot be mistaken for a
+    detector that stopped working.
+    """
+    prose_only = '''
+"""Historically this module declared {".wav", ".mp3", ".mp4"} inline."""
+# allowed: ".wav", ".mp3", ".mp4", ".m4a", ".ogg", ".flac", ".webm"
+NOTE = '{".wav", ".mp3", ".mp4", ".m4a", ".ogg", ".flac", ".webm"}'
+ALLOWED = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
+'''
+    assert prose_only.count(".webm") == 2, "fixture lost its strings; the pass below would be empty"
+    assert prose_only.count(".mp4") == 3
+    assert _literal_string_sets(prose_only) == []
+
+    with_literal = prose_only + '\nOTHER = {".wav", ".mp3", ".mp4", ".m4a", ".ogg", ".flac", ".webm"}\n'
+    found = _literal_string_sets(with_literal)
+    # Compared against what the FIXTURE wrote, not against the live constant.
+    # This test is about the detector; `test_canonical_set_holds_the_expected_formats`
+    # owns the contents. Coupling the two made editing the allowlist fail here,
+    # which reads as "the detector broke" when nothing about it changed.
+    assert found == [{".wav", ".mp3", ".mp4", ".m4a", ".ogg", ".flac", ".webm"}], f"detector went blind: {found}"
+
+
+def test_unparseable_source_is_distinguished_from_clean_source():
+    """``None`` means "not read"; ``[]`` means "read, nothing found"."""
+    assert _literal_string_sets("def f(:\n") is None
+    assert _literal_string_sets("x = 1\n") == []
