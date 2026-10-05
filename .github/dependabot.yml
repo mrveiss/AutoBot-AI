@@ -10,9 +10,36 @@
 # still blocked via the per-ecosystem `ignore:` lists below — including
 # python/ubuntu Docker semver-MINOR (3.12→3.14, 22.04→22.10 are minor in
 # tag-semver but breaking for us: py3.14 is the project-wide version (#9825); 22.04 is the LTS).
+#
+# BATCHING ACROSS ENTRIES (#17760). The per-entry `groups:` below already
+# collapse a directory's updates into one PR, but there are 23 entries, so a
+# Monday produced up to 23 PRs -- 12 arrived inside 11 minutes on 2026-10-05
+# and held 19 of 31 CI runs while a PR was trying to land. `groups:` cannot
+# batch ACROSS entries; `multi-ecosystem-groups` can, and collapses them into
+# three.
+#
+# Staggered across three days as well, because the two levers are different:
+# grouping reduces how many PRs exist, staggering reduces how many arrive at
+# once -- and it is arrival-at-once that collides with a lander. 20 of the 23
+# entries were on monday with no `time:` at all.
+multi-ecosystem-groups:
+  python:
+    schedule:
+      interval: "weekly"
+      day: "monday"
+  javascript:
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+  infrastructure:
+    schedule:
+      interval: "weekly"
+      day: "friday"
+
 version: 2
 updates:
   - package-ecosystem: "pip"
+    multi-ecosystem-group: "python"
     directory: "/autobot-backend"
     target-branch: "main"
     schedule:
@@ -69,6 +96,7 @@ updates:
         versions: [">=16.0.0"]
 
   - package-ecosystem: "pip"
+    multi-ecosystem-group: "python"
     directory: "/autobot_shared"
     target-branch: "main"
     schedule:
@@ -96,6 +124,7 @@ updates:
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "pip"
+    multi-ecosystem-group: "python"
     directory: "/autobot-slm-backend"
     target-branch: "main"
     schedule:
@@ -120,11 +149,12 @@ updates:
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
+    multi-ecosystem-group: "javascript"
     directory: "/autobot-frontend"
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "wednesday"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -172,11 +202,12 @@ updates:
         versions: [">=2.0.0"]
 
   - package-ecosystem: "npm"
+    multi-ecosystem-group: "javascript"
     directory: "/autobot-slm-frontend"
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "wednesday"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -187,11 +218,12 @@ updates:
           - "*"
 
   - package-ecosystem: "github-actions"
+    multi-ecosystem-group: "infrastructure"
     directory: "/"
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "friday"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -208,11 +240,12 @@ updates:
   # past 3.14 until autobot_shared/pyproject.toml's `requires-python` is
   # bumped first. Same logic for node-major and ubuntu-major.
   - package-ecosystem: "docker"
+    multi-ecosystem-group: "infrastructure"
     directory: "/docker/backend"
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "friday"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -229,11 +262,12 @@ updates:
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   - package-ecosystem: "docker"
+    multi-ecosystem-group: "infrastructure"
     directory: "/docker/slm"
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "friday"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -250,11 +284,12 @@ updates:
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   - package-ecosystem: "docker"
+    multi-ecosystem-group: "infrastructure"
     directory: "/docker/frontend"
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "friday"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -274,11 +309,12 @@ updates:
 
   # Self-review during #7157 implementation surfaced 2 missed Dockerfiles:
   - package-ecosystem: "docker"
+    multi-ecosystem-group: "infrastructure"
     directory: "/autobot-backend/services/autoresearch"
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "friday"
     open-pull-requests-limit: 2
     labels:
       - "dependencies"
@@ -295,11 +331,12 @@ updates:
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   - package-ecosystem: "docker"
+    multi-ecosystem-group: "infrastructure"
     directory: "/autobot-infrastructure/shared/mcp/tools/context7"
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "friday"
     open-pull-requests-limit: 2
     labels:
       - "dependencies"
@@ -317,11 +354,12 @@ updates:
   # but the package.json runtime deps need their own ecosystem.
   # (#7170 self-review found this — surfaced after #7163 + #7170 merged)
   - package-ecosystem: "npm"
+    multi-ecosystem-group: "javascript"
     directory: "/autobot-infrastructure/shared/mcp/tools/context7"
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "wednesday"
     open-pull-requests-limit: 2
     labels:
       - "dependencies"
@@ -336,6 +374,7 @@ updates:
   # 8+ uncovered dirs. Workers below all deploy via autobot-infrastructure
   # (per autobot-infrastructure/README.md): browser→.25, npu→.22, ai-stack→.24.
   - package-ecosystem: "pip"
+    multi-ecosystem-group: "python"
     directory: "/autobot-browser-worker"
     target-branch: "main"
     schedule:
@@ -351,11 +390,12 @@ updates:
           - "*"
 
   - package-ecosystem: "npm"
+    multi-ecosystem-group: "javascript"
     directory: "/autobot-browser-worker"
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "wednesday"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -366,6 +406,7 @@ updates:
           - "*"
 
   - package-ecosystem: "pip"
+    multi-ecosystem-group: "python"
     directory: "/autobot-npu-worker"
     target-branch: "main"
     schedule:
@@ -386,6 +427,7 @@ updates:
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "pip"
+    multi-ecosystem-group: "python"
     directory: "/autobot-tts-worker"
     target-branch: "main"
     schedule:
@@ -408,6 +450,7 @@ updates:
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "pip"
+    multi-ecosystem-group: "python"
     directory: "/autobot-infrastructure/shared/docker/ai-stack"
     target-branch: "main"
     schedule:
@@ -444,6 +487,7 @@ updates:
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "pip"
+    multi-ecosystem-group: "python"
     directory: "/autobot-infrastructure/autobot-npu-worker/docker"
     target-branch: "main"
     schedule:
@@ -494,11 +538,12 @@ updates:
   # week's candidate set.
 
   - package-ecosystem: "pip"
+    multi-ecosystem-group: "python"
     directory: "/autobot-backend/code_analysis"
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "tuesday"
+      day: "monday"
     open-pull-requests-limit: 2
     labels:
       - "dependencies"
@@ -517,11 +562,12 @@ updates:
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "pip"
+    multi-ecosystem-group: "python"
     directory: "/autobot-infrastructure/shared/scripts"
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "wednesday"
+      day: "monday"
     open-pull-requests-limit: 2
     labels:
       - "dependencies"
@@ -532,11 +578,12 @@ updates:
           - "*"
 
   - package-ecosystem: "pip"
+    multi-ecosystem-group: "python"
     directory: "/autobot-npu-worker/resources/windows-npu-worker"
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "thursday"
+      day: "monday"
     open-pull-requests-limit: 2
     labels:
       - "dependencies"
@@ -565,6 +612,7 @@ updates:
   # requirements-dev.txt) AND root pyproject.toml — used by ci.yml + security.yml.
   # Risk of stale CI tooling without this entry.
   - package-ecosystem: "pip"
+    multi-ecosystem-group: "python"
     directory: "/"
     target-branch: "main"
     schedule:
@@ -643,6 +691,7 @@ updates:
   # #11829: knowledge-base-mcp is a uv project (uv.lock); without a "uv"
   # ecosystem entry dependabot cannot rebase/raise grouped lock updates for it.
   - package-ecosystem: "uv"
+    multi-ecosystem-group: "python"
     directory: "/autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp"
     target-branch: "main"
     schedule:
