@@ -12,6 +12,9 @@
 
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useAutobotApi, type NPUWorker } from '@/composables/useAutobotApi'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('NPUWorkersSettings')
 
 const api = useAutobotApi()
 
@@ -83,18 +86,26 @@ async function fetchWorkers(): Promise<void> {
   }
 }
 
+// Saving before the config loaded would overwrite the server's settings with
+// the form's defaults (#17971 review), so Save waits for a successful fetch.
+const loadBalancingConfigLoaded = ref(false)
+
 async function fetchLoadBalancingConfig(): Promise<void> {
   try {
     const response = await api.getNPULoadBalancingConfig()
     if (response) {
       Object.assign(loadBalancingConfig, response)
     }
+    loadBalancingConfigLoaded.value = true
   } catch (e) {
     // Config endpoint may not be available
+    loadBalancingConfigLoaded.value = false
+    logger.debug('NPU load-balancing config unavailable:', e)
   }
 }
 
 async function saveLoadBalancingConfig(): Promise<void> {
+  if (!loadBalancingConfigLoaded.value) return
   saving.value = true
   error.value = null
 
@@ -372,7 +383,7 @@ onUnmounted(() => {
       <div class="mt-4 flex justify-end">
         <button
           @click="saveLoadBalancingConfig"
-          :disabled="saving"
+          :disabled="saving || !loadBalancingConfigLoaded"
           class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
         >
           <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

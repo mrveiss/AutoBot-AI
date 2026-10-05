@@ -8,6 +8,9 @@ import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
 import { slmApiClient } from '@/utils/ApiClient'
 import type { SLMNode, NodeRole, RoleInfo, RoleListResponse } from '@/types/slm'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('DeploymentWizard')
 
 /**
  * The subset of `RoleInfo` this wizard renders.
@@ -124,6 +127,7 @@ async function fetchRoles(): Promise<void> {
     }))
   } catch (e) {
     // Use default roles from node-roles constants if API fails
+    logger.warn('Role list unavailable from the API; using the built-in role metadata:', e)
     const { NODE_ROLE_METADATA } = await import('@/constants/node-roles')
     roles.value = Object.values(NODE_ROLE_METADATA).map((meta) => ({
       name: meta.name,

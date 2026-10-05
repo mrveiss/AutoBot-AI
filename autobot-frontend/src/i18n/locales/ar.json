@@ -7832,7 +7832,7 @@
     "correlationChain": "Correlation Chain"
   },
   "nav": {
-    "mainNavigation": "Main navigation",
+    "mainNavigation": "التنقل الرئيسي",
     "chat": "Chat",
     "knowledge": "Knowledge",
     "automation": "Automation",
@@ -7853,9 +7853,9 @@
     "agentActivity": "نشاط الوكيل",
     "switchLanguage": "Switch language",
     "openMainMenu": "Open main menu",
-    "skipToContent": "Skip to content",
+    "skipToContent": "انتقل إلى المحتوى الرئيسي",
     "services": "Services",
-    "skipToNavigation": "Skip to navigation",
+    "skipToNavigation": "انتقل إلى التنقل",
     "profile": "Profile",
     "systemStatus": "System Status",
     "operations": "العمليات",
@@ -7927,7 +7927,17 @@
     "adminPricing": "تسعير النماذج",
     "adminMcpServers": "خوادم MCP",
     "adminPermissionScopes": "نطاقات الصلاحيات",
-    "llcRoles": "الأدوار"
+    "llcRoles": "الأدوار",
+    "keywords": {
+      "knowledge": "مستندات ملفات مكتبة نسخ ملاحظات",
+      "companyOs": "شركة مؤسسة أعمال منظمة",
+      "automation": "سير عمل خط معالجة جدولة مهام",
+      "analytics": "زوار مقاييس إحصائيات رسوم تقارير",
+      "preferences": "إعدادات خيارات لغة سمة",
+      "budgetPolicies": "تكلفة إنفاق حدود مال",
+      "systemHealth": "حالة توفر تشخيص مراقبة",
+      "vault": "بيانات اعتماد مفاتيح كلمات مرور رموز خزنة"
+    }
   },
   "llcCompanyStatus": {
     "showArchived": "عرض المؤرشفة",
@@ -8006,7 +8016,20 @@
     "newCode": "New Code Agent",
     "newCodeDesc": "Start a code analysis session",
     "newAnalysis": "New Analysis",
-    "newAnalysisDesc": "Start an analysis session"
+    "newAnalysisDesc": "Start an analysis session",
+    "openPage": "فتح {page}",
+    "types": {
+      "task": "مهمة",
+      "research": "بحث",
+      "code": "كود",
+      "analysis": "تحليل",
+      "navigate": "صفحة"
+    },
+    "hints": {
+      "navigate": "تنقل",
+      "select": "اختيار",
+      "close": "إغلاق"
+    }
   },
   "slm": {
     "novnc": {

@@ -21,6 +21,10 @@ on:
       # audit never sees the file kinds it exists to read.
       - '**/*.md'
       - '**/*.json'
+      # #17885: keep in step with .github/filters/code-quality-paths.yml, as the
+      # Markdown/JSON pair above does. The frontend size audit runs in this job.
+      - '**/*.ts'
+      - '**/*.vue'
       - '**/requirements*.txt'
       - 'requirements-ci/**'
       - 'repo_tests/**'
@@ -721,6 +725,21 @@ jobs:
         # is where shell lives and excluding it would leave the gate checking
         # 4 of the 10 oversized files.
         python3 scripts/check_shell_file_size.py --audit-ceilings
+
+    - name: Audit the frontend-file-size ceilings for drift (#17885)
+      run: |
+        # Same reasoning as the two audits above. `.ts`/`.vue` had NO length
+        # measurement of any kind before #17885 -- not per file, not per
+        # function -- so 184 of 1779 in-scope tracked files sat over the limit
+        # an equivalent .py file would have been refused at, with nothing in
+        # the tree asking. This walks every in-scope tracked *.ts/*.vue file.
+        #
+        # Scope note: the two src/types/generated/ trees are excluded by a
+        # recorded prefix (OpenAPI-derived clients, 178894 and 26584 lines).
+        # The gate measures .ts and .vue only -- frontend .js is NOT measured,
+        # and repo_tests/frontend_file_size_ratchet_test.py records that gap
+        # with its own sweep rather than leaving it to be inferred.
+        python3 scripts/check_frontend_file_size.py --audit-ceilings
 
     - name: Audit requirements-ci for silent drift from production (#14551)
       run: |

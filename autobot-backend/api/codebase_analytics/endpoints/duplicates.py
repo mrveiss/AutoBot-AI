@@ -35,7 +35,7 @@ from utils.io_executor import get_analytics_executor
 
 from ..duplicate_detector import DuplicateCodeDetector, detect_duplicates_async
 from ..storage import get_code_collection
-from .shared import resolve_project_root
+from .shared import UnresolvedSourceError, resolve_scan_root
 
 logger = get_logger(__name__)
 
@@ -63,11 +63,6 @@ _REDIS_PREFIX = "dup_task:"
 # Cache for duplicate analysis (in-memory, refreshed on demand)
 # Keyed by source_id (or "" for unscoped) to prevent cross-project leakage (#3685)
 _duplicate_cache: dict[str, dict] = {}
-
-
-def _get_project_root() -> str:
-    """Get project root path — delegates to shared resolver (#10730)."""
-    return resolve_project_root()
 
 
 async def _run_semantic_analysis(project_root: str, min_similarity: float):
@@ -182,6 +177,15 @@ async def _run_standard_analysis(project_root: str, min_similarity: float):
     finally:
         if not released:
             _duplicate_scan_lock.release()
+
+
+def _unresolved_source_response() -> JSONResponse:
+    """The refusal, once. Detail is logged, never returned: CWE-209."""
+    logger.warning("duplicate scan refused: source_id did not resolve")
+    return JSONResponse(
+        status_code=404,
+        content={"status": "error", "message": "source_id does not resolve to a code source; nothing scanned"},
+    )
 
 
 def _convert_analysis_to_result(analysis, project_root: str) -> dict:
@@ -446,23 +450,21 @@ async def get_duplicate_code(
     Returns:
         JSON with duplicates, statistics, and analysis metadata
     """
-    # Check cache first - Issue #620, #3685: Scoped by source_id
+    # Was a FOURTH private copy of the block `shared.resolve_source_root` was
+    # extracted for (#2760, which missed this file); the copy then missed
+    # #17758's fix and swallowed every failure into logger.debug, scanning
+    # AutoBot's own tree under the caller's key. `strict` follows what the
+    # CALLER supplied: naming nothing is not the same as naming a ghost.
+    try:
+        project_root = str(await resolve_scan_root(source_id, strict=bool(source_id)))
+    except UnresolvedSourceError:
+        return _unresolved_source_response()
+
+    # Cache read AFTER resolution: keyed by source_id, so reading it first
+    # serves a stale result for a source that no longer resolves (CodeRabbit).
     cached = _check_duplicate_cache(refresh, source_id=source_id)
     if cached:
         return cached
-
-    # Issue #3685: Resolve clone_path from source registry so live analysis
-    # runs against the correct project, not always the AutoBot repo.
-    project_root = _get_project_root()
-    if source_id:
-        try:
-            from api.codebase_analytics.source_storage import get_source
-
-            source = await get_source(source_id)
-            if source and source.clone_path:
-                project_root = source.clone_path
-        except Exception:
-            logger.debug("Could not resolve clone_path for %s, using default", source_id)
 
     try:
         # Run analysis (semantic or standard) - Issue #620: Use helper
@@ -589,16 +591,13 @@ async def detect_config_duplicates_endpoint(
     Returns:
         JSONResponse with duplicate detection results
     """
-    project_root = Path(resolve_project_root())
-    if source_id:
-        try:
-            from api.codebase_analytics.source_storage import get_source
-
-            source = await get_source(source_id)
-            if source and source.clone_path:
-                project_root = Path(source.clone_path)
-        except Exception:
-            logger.debug("Could not resolve clone_path for %s, using default", source_id)
+    # #17982: the second copy of the same block. Same reasoning as the scan
+    # above -- a named source that does not resolve is an error, not a cue to
+    # substitute AutoBot's own tree.
+    try:
+        project_root = await resolve_scan_root(source_id, strict=bool(source_id))
+    except UnresolvedSourceError:
+        return _unresolved_source_response()
 
     # Issue #620: Use helpers for detection
     result = None

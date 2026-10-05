@@ -45,6 +45,8 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines
+
 _REPO_ROOT = repo_root()
 _ANSIBLE_ROOT = _REPO_ROOT / "autobot-slm-backend" / "ansible"
 
@@ -291,9 +293,11 @@ def _is_referenced(name: str, definition_file: Path) -> bool:
     pattern = re.compile(rf"\b{re.escape(name)}\b")
     definition = re.compile(rf"^\s*{re.escape(name)}\s*:")
     for path in _ansible_sources():
-        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-            if line.lstrip().startswith("#"):
-                continue
+        # #17941: shared stripper, so a trailing `# ...` naming the symbol is
+        # not read as a real YAML reference either. Quote-aware, so a `#`
+        # inside a quoted scalar stays data.
+        for entry in code_lines(path.read_text(encoding="utf-8", errors="replace"), name="x.yml", strip_trailing=True):
+            line = entry.text
             if path == definition_file and definition.match(line):
                 continue
             if pattern.search(line):

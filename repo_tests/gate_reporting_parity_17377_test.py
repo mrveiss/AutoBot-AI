@@ -26,6 +26,11 @@ from repo_tests._paths import repo_root
 _GATES = {
     "python": "scripts/check_python_file_size.py",
     "shell": "scripts/check_shell_file_size.py",
+    # #17885. Added to _GATES rather than tested separately: every parametrised
+    # test below is coverage the new gate gets for free, and the wording-parity
+    # test became all-pairs so a third gate cannot drift against either of the
+    # other two.
+    "frontend": "scripts/check_frontend_file_size.py",
 }
 
 
@@ -221,7 +226,10 @@ def _wording(message: str, gate) -> str:
     """
     floor = next(v for k, v in vars(gate).items() if k.startswith("MIN_TRACKED"))
     out = message.replace(gate.SELF_REL, "<SELF>").replace(gate.RATCHET_REL, "<BASELINE>")
-    out = re.sub(r"[\w./-]+\.(?:py|sh)\b", "<REL>", out)
+    # `ts|vue` joined `py|sh` with the frontend gate (#17885): an un-normalised
+    # path in one gate's message is a spurious difference, and the comparison
+    # would then fail for a reason that has nothing to do with wording.
+    out = re.sub(r"[\w./-]+\.(?:py|sh|ts|vue)\b", "<REL>", out)
     return re.sub(r"\b\d+\b", "<N>", out.replace(str(floor), "<FLOOR>"))
 
 
@@ -244,7 +252,7 @@ _BRANCHES = {
 
 
 @pytest.mark.parametrize("branch", sorted(_BRANCHES), ids=sorted(_BRANCHES))
-def test_the_two_gates_word_every_branch_identically(branch: str) -> None:
+def test_every_gate_words_every_branch_identically(branch: str) -> None:
     """#17377's identical-behaviour criterion, branch by branch rather than in prose.
 
     Three divergences survived the first round of this PR and were found by review, not
@@ -253,13 +261,16 @@ def test_the_two_gates_word_every_branch_identically(branch: str) -> None:
     where only the shell gate told the developer which knob to check. Pinning one sentence
     (the "Split it" one) left the other branches drifting while the PR claimed alignment.
     """
-    python, shell = _load(_GATES["python"]), _load(_GATES["shell"])
     build = _BRANCHES[branch]
-    py_text, sh_text = build(python), build(shell)
-    assert py_text and sh_text, f"{branch}: a gate produced no message, so nothing was compared"
-    assert _wording(py_text, python) == _wording(
-        sh_text, shell
-    ), f"the gates word the {branch} branch differently:\n  python: {py_text}\n  shell:  {sh_text}"
+    # ALL gates, not the two that existed when this was written (#17885). Pinned
+    # pairwise against the first gate: with three, "python == shell" leaves the
+    # third free to word every branch differently and still pass.
+    texts = {name: build(_load(rel)) for name, rel in sorted(_GATES.items())}
+    assert all(texts.values()), f"{branch}: a gate produced no message, so nothing was compared: {texts}"
+    abstracted = {name: _wording(text, _load(_GATES[name])) for name, text in texts.items()}
+    assert len(set(abstracted.values())) == 1, "the gates word the {} branch differently:\n{}".format(
+        branch, "\n".join(f"  {name}: {text}" for name, text in texts.items())
+    )
 
 
 def test_the_baseline_a_gate_names_is_the_one_holding_the_entries(gate) -> None:

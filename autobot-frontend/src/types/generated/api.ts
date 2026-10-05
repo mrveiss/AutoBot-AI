@@ -31796,6 +31796,7 @@ export interface paths {
          * @description Create workflow from natural language chat request.
          *
          *     Issue #390: Now presents plan for approval instead of auto-starting.
+         *     #13809: that is now the default; auto-start must be asked for explicitly.
          */
         post: operations["create_workflow_from_chat_api_workflow_automation_create_from_chat_post"];
         delete?: never;

@@ -229,7 +229,10 @@ REACH = declare(
     discover=_discover,
     floor=2600,
     growth=200,
-    what="production modules under the backend and shared trees",
+    # Scope as data (#17844): "the backend and shared trees" named neither, and this guard is
+    # one of the seven whose unqualified claim #17844 measured.
+    what="production modules",
+    roots=_TREES,
 )
 
 

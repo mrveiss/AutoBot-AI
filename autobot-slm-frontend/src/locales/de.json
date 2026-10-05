@@ -410,7 +410,9 @@
       "user": "Benutzer",
       "languageLabel": "Sprache"
     },
-    "skipLink": {},
+    "skipLink": {
+      "mainContent": "Zum Hauptinhalt springen"
+    },
     "toastContainer": {
       "dismissNotification": "Dismiss notification",
       "notifications": "Benachrichtigungen"
@@ -2199,7 +2201,8 @@
         "update": "Aktualisieren",
         "username": "Benutzername",
         "varLogAutobotForwardedLog": "/var/log/autobot-forwarded.log",
-        "warning": "Warnung"
+        "warning": "Warnung",
+        "statusUnknown": "Unbekannt"
       },
       "nPUWorkersSettings": {
         "actions": "Aktionen",
@@ -2695,7 +2698,15 @@
       "testConnection": "Verbindung testen",
       "uRLToAccessGrafana": "URL to access Grafana",
       "uRLToAccessPrometheus": "URL to access Prometheus",
-      "useAnsibleToDeploy": "Use Ansible to deploy or migrate the monitoring stack to a different node."
+      "useAnsibleToDeploy": "Use Ansible to deploy or migrate the monitoring stack to a different node.",
+      "settingSaved": "Setting saved successfully",
+      "prometheusConnected": "Prometheus connection successful",
+      "prometheusFailed": "Prometheus connection failed",
+      "prometheusUnreachable": "Cannot reach the Prometheus server",
+      "grafanaConnected": "Grafana connection successful",
+      "grafanaFailed": "Grafana connection failed",
+      "grafanaUnreachable": "Cannot reach the Grafana server",
+      "deployViaAnsible": "Monitoring role deployment will be triggered via Ansible"
     },
     "notificationsSettings": {
       "adminExampleCom": "admin{'@'}example.com",
