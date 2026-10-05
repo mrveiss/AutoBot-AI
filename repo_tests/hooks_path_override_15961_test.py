@@ -62,7 +62,8 @@ from pathlib import Path
 import pytest
 
 from autobot_shared.paths import scrubbed_git_env
-from tools.lint._scan_helpers import EmptyEnumeration, logical_lines, tracked_paths
+from tools.lint._comment_syntax import code_lines
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 from ._paths import repo_root
 from ._reach import declare
@@ -383,9 +384,8 @@ def _offending_lines(text: str) -> list[tuple[int, str]]:
     that never joins them inspects two lines that each look innocent.
     """
     out = []
-    for number, line in logical_lines(text):
-        if line.lstrip().startswith("#"):
-            continue
+    # code_lines folds continuations AND drops comments in one call (#17941).
+    for number, line in code_lines(text, join_continuations=True):
         if OVERRIDE_RE.search(line):
             out.append((number, line.strip()))
             continue
