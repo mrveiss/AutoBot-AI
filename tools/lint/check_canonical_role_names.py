@@ -34,6 +34,12 @@ import sys
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
+# CI and pre-commit run this as a SCRIPT, where the repo root is not on
+# sys.path; a `tools.lint.` path fails there with ModuleNotFoundError (#13916).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _comment_syntax import code_lines  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Deprecated short-form role names and their canonical replacements (#7053).
@@ -136,11 +142,7 @@ def find_violations(path: Path) -> List[Tuple[int, str, str, str]]:
         return []
 
     violations: List[Tuple[int, str, str, str]] = []
-    for lineno, line in enumerate(text.splitlines(), start=1):
-        # Skip comment lines (Ansible YAML comment = leading #).
-        stripped = line.lstrip()
-        if stripped.startswith("#"):
-            continue
+    for lineno, line in code_lines(text):
         for match in _ROLE_PAT.finditer(line):
             deprecated = match.group(1)
             canonical = DEPRECATED_SHORT_FORMS[deprecated]

@@ -336,13 +336,13 @@ class WorkflowQueue:
             )
             base_score += urgency_bonus
 
-        # Complexity adjustment (Issue #376 - use named constants)
+        # Complexity adjustment (Issue #376 - use named constants).
+        # One entry per TaskComplexity member, and there are exactly two. This
+        # named five until #13806, three of them Enum aliases of COMPLEX, so it
+        # kept two at runtime and source order silently retuned the scheduler.
         complexity_multiplier = {
             TaskComplexity.SIMPLE: WorkflowConfig.COMPLEXITY_SIMPLE,
-            TaskComplexity.RESEARCH: WorkflowConfig.COMPLEXITY_RESEARCH,
-            TaskComplexity.INSTALL: WorkflowConfig.COMPLEXITY_INSTALL,
             TaskComplexity.COMPLEX: WorkflowConfig.COMPLEXITY_COMPLEX,
-            TaskComplexity.SECURITY_SCAN: WorkflowConfig.COMPLEXITY_SECURITY_SCAN,
         }
 
         complexity_factor = complexity_multiplier.get(workflow.complexity, 1.0)

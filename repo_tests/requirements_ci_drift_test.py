@@ -13,6 +13,7 @@ proves nothing about the copy that actually blocks a merge.
 from __future__ import annotations
 
 import importlib.util
+import sys
 
 from repo_tests._paths import repo_root
 
@@ -261,6 +262,19 @@ def test_code_quality_runs_the_audit():
     assert _CHECKER.is_file(), f"{_CHECKER} is gone but the workflow still calls it"
 
 
+#: Stdlib asked of the INTERPRETER, not listed by hand. The literal set this
+#: replaces enforced "these five names", not "stdlib" -- the same defect
+#: `ci_system_package_provisioning_test` already fixed and documented, where a
+#: hand-written list failed on `os` and `subprocess`, both stdlib and neither
+#: listed. These three were its unfixed siblings.
+#:
+#: `_scan_helpers` is allowed because it is the shared lint helper these
+#: checkers import, and it is itself kept dependency-free by
+#: `ci_system_package_provisioning_test.test_the_scan_helper_the_checker_leans
+#: _on_is_itself_dependency_free`. One guard for that property, not four.
+_ALLOWED_IMPORT_ROOTS = set(sys.stdlib_module_names) | {"_scan_helpers"}
+
+
 def test_the_checker_needs_no_third_party_import():
     """It must run in a job that installs linters, not the application's dependencies."""
     source = _CHECKER.read_text(encoding="utf-8")
@@ -269,7 +283,7 @@ def test_the_checker_needs_no_third_party_import():
         for line in source.splitlines()
         if line.startswith(("import ", "from "))
         and not line.startswith("from __future__")
-        and line.split()[1].split(".")[0] not in {"argparse", "logging", "pathlib", "re", "sys"}
+        and line.split()[1].split(".")[0] not in _ALLOWED_IMPORT_ROOTS
     ]
     assert third_party == [], f"the checker imports non-stdlib modules: {third_party}"
 
