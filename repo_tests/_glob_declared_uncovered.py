@@ -210,27 +210,14 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         },
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
     ),
-    "autobot-frontend/src/*.js": (
-        {"repo_tests/vnc_password_not_in_frontend_source_16299_test.py"},
-        "sweeps the whole frontend source tree for a leaked VNC password env-var reference "
-        "(#16299); `autobot-frontend/` is outside the python filter's trees",
-    ),
-    "autobot-frontend/src/*.ts": (
-        {"repo_tests/vnc_password_not_in_frontend_source_16299_test.py"},
-        "sweeps the whole frontend source tree for a leaked VNC password env-var reference "
-        "(#16299); `autobot-frontend/` is outside the python filter's trees",
-    ),
-    "autobot-frontend/src/*.vue": (
-        {"repo_tests/vnc_password_not_in_frontend_source_16299_test.py"},
-        "sweeps the whole frontend source tree for a leaked VNC password env-var reference "
-        "(#16299); `autobot-frontend/` is outside the python filter's trees",
-    ),
-    "autobot-frontend/src/i18n/locales/*.json": (
-        {"repo_tests/locale_html_entity_leak_test.py"},
-        "scans every main-frontend locale file for an HTML entity leaking through "
-        "{{ $t(...) }} (#17152); `autobot-frontend/src/i18n/` is outside the python filter's "
-        "trees",
-    ),
+    # `autobot-frontend/src/*.{js,ts,vue}` and `autobot-frontend/src/i18n/locales/*.json`
+    # DRAINED (#17885), the same way #17174 drained the SLM locales below: the
+    # frontend file-size ratchet needs `autobot-frontend/src/**` in
+    # .github/filters/python-paths.yml for its 184 literal reads, and that
+    # pattern reaches these four too. So the VNC-password sweep (#16299) and the
+    # locale HTML-entity sweep (#17152) now RUN on a frontend-only change
+    # instead of being skipped -- debt repaid as a side effect, not a new
+    # exemption.
     # `autobot-slm-frontend/src/locales/*.json` DRAINED (#17174): that PR widened
     # .github/filters/python-paths.yml to cover `autobot-slm-frontend/src/locales/**`
     # (for an unrelated secrets-baseline fix in the same tree), so the
