@@ -32,7 +32,8 @@ from __future__ import annotations
 
 import re
 
-from tools.lint._scan_helpers import logical_lines, tracked_paths
+from tools.lint._comment_syntax import code_lines
+from tools.lint._scan_helpers import tracked_paths
 
 from ._paths import repo_root
 
@@ -52,16 +53,16 @@ WORKFLOW = ".github/workflows/auto-merge-base-into-parked-branches.yml"
 def offending_lines(text: str) -> list[tuple[int, str]]:
     """`git merge` invocations carrying a pull-only flag, ignoring comments.
 
-    Continuations are folded by `tools.lint._scan_helpers.logical_lines`
+    Continuations are folded by `code_lines(join_continuations=True)`
     (#16128 review) rather than a copy kept here: a matcher reading physical
     lines misses the shape a reintroduction most plausibly takes, since a long
     git invocation is written across a `\\`-continuation and a physical-line
     split leaves the flag on a line with no `git merge` on it.
     """
     out = []
-    for number, line in logical_lines(text):
-        if line.lstrip().startswith("#"):
-            continue
+    # code_lines folds continuations AND drops comments -- one call where this
+    # was logical_lines plus a private comment test (#17941).
+    for number, line in code_lines(text, join_continuations=True):
         for match in MERGE_CALL.finditer(line):
             args = match.group(1)
             if any(re.search(rf"{re.escape(flag)}\b", args) for flag in PULL_ONLY):

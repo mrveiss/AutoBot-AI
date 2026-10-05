@@ -12,13 +12,29 @@ from typing import Optional
 
 
 class TaskComplexity(Enum):
+    """How much machinery a request needs. Exactly two classes exist (#13806).
+
+    ``RESEARCH``, ``INSTALL`` and ``SECURITY_SCAN`` used to be declared here
+    with the value ``"complex"``. Equal values make Enum members *aliases* of
+    one object, so those three names never were distinct members --
+    ``TaskComplexity.RESEARCH is TaskComplexity.COMPLEX`` was ``True`` -- and
+    every mapping keyed on them collapsed silently, last write winning.
+    ``workflow_scheduler._calculate_priority_score`` was the live casualty: a
+    five-key multiplier dict kept two entries, so the per-complexity tuning
+    added by #376 never applied.
+
+    Collapsing rather than giving them distinct values is the recorded owner
+    decision on #13806 (2026-09-06): nothing in the tree ever distinguished
+    the three, and the thing they were standing in for -- *what kind of
+    workflow is this* -- is carried by ``TemplateCategory`` on
+    ``WorkflowTemplate``, a separate enum whose members do not collide.
+
+    Adding a third member with a duplicate value re-lays the same trap and is
+    guarded by ``tests/orchestration/test_task_complexity_aliases.py``.
+    """
+
     SIMPLE = "simple"  # Regular conversation with Knowledge Base integration
     COMPLEX = "complex"  # Requires tools, research, or system actions
-
-    # Legacy values for backward compatibility (map to COMPLEX)
-    RESEARCH = "complex"
-    INSTALL = "complex"
-    SECURITY_SCAN = "complex"
 
 
 class ClassificationAvailability(Enum):
