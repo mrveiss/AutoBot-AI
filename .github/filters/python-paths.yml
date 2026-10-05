@@ -37,6 +37,20 @@ python:
   # to frontend-test.yml's push paths, so its verdict depends on the content --
   # a real dependency, covered here rather than recorded as a bypass.
   - '.github/filters/frontend-paths.yml'
+  # #17885: repo_tests/frontend_file_size_ratchet_baseline.py names 184
+  # frontend files BY CONCRETE LITERAL and the ratchet reads each one to
+  # compare it with its ceiling. Without these two trees a change confined to a
+  # measured .ts/.vue takes the required-context shim's green while the guard
+  # that measures it never runs -- the bypass python_filter_covers_its_guards
+  # exists to catch, and it caught this one.
+  #
+  # The hook (`frontend-file-size` in .pre-commit-config.yaml) is the
+  # first-line gate and runs on every PR via enforce-precommit.yml, so a file
+  # growing past its ceiling is caught either way. What these entries protect
+  # is the rest of the guard: anchor agreement, the reach floor and the ceiling
+  # TOTAL (#17970), which a hook run against the diff cannot check.
+  - 'autobot-frontend/src/**'
+  - 'autobot-slm-frontend/src/**'
   # Read by repo_tests/npm_audit_covers_its_workspaces_test.py, which asserts the
   # audit's workspace set against the tracked tree (#16131). Without this, a change
   # confined to security.yml takes the required-context shim's green while the guard
