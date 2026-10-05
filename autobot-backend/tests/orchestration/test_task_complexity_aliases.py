@@ -155,7 +155,10 @@ exactly the shape that satisfies a text-matching guard while changing nothing.
 """
 # TaskComplexity.RESEARCH: retired alias, see #13806
 NOTE = "TaskComplexity.RESEARCH and TaskComplexity.COMPLEX are the same member"
-multiplier = {TaskComplexity.SIMPLE: 0.8, TaskComplexity.COMPLEX: 1.2}
+multiplier = {
+    TaskComplexity.SIMPLE: 0.8,
+    TaskComplexity.COMPLEX: 1.2,
+}
 '''
 
 

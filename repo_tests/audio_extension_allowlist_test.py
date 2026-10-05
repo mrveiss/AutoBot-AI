@@ -336,14 +336,20 @@ def test_every_gate_shares_the_one_canonical_object():
     from transcriber.upload_security import ALLOWED_EXTENSIONS as _UPLOAD_EXTS
 
     canonical = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
-    for name, gate in (
+    gates = (
         ("api.knowledge", _AUDIO_ALLOWED_EXTS),
         ("audio_connector", _MEDIA_EXTS),
         ("ffmpeg_service", _FFMPEG_EXTS),
         ("routes.recordings", _ROUTE_EXTS),
         ("upload_security", _UPLOAD_EXTS),
-    ):
-        assert gate is canonical, f"{name} does not share the canonical object"
+    )
+    # Collected rather than asserted inside the loop: a loop whose only body is
+    # the assertion becomes an empty `for` when guard_reach_meta strips the
+    # assertion to check this guard still fails without it, and an
+    # IndentationError is not the failure that test is looking for. Reporting
+    # every mismatching gate instead of the first is the better verdict anyway.
+    mismatched = [name for name, gate in gates if gate is not canonical]
+    assert not mismatched, f"these gates do not share the canonical object: {mismatched}"
 
 
 def test_there_is_exactly_one_named_allowlist():
