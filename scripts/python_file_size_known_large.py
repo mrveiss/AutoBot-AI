@@ -84,7 +84,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/api_endpoint_scanner.py": 1444,
     "autobot-backend/api/codebase_analytics/chromadb_storage.py": 1461,  # #17758: policy centralised in source_scope.py
     "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1326,
-    "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 757,
+    "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 756,
     "autobot-backend/api/codebase_analytics/endpoints/duplicates.py": 661,  # #17758: triplicated cached body collapsed
     "autobot-backend/api/codebase_analytics/endpoints/environment.py": 694,
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 827,

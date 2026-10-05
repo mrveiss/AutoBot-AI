@@ -277,45 +277,44 @@ def _resolve_callee_id(
     import_context: ImportContext | None = None,
     dotted_name: str | None = None,
 ) -> tuple[str | None, bool]:
+    """Resolve a callee name to its full function ID.
+
+    Module-local, class-local and import-context resolution are delegated to
+    the canonical resolver in ``autobot_shared/code_graph/`` (#13470), the same
+    one ``services/knowledge/code_indexer.py`` uses, so this module keeps no
+    copy. ``functions`` (id -> info) is passed straight through as its
+    ``known_ids``: dict membership checks by key, so that is not a behaviour
+    change. ``dotted_name`` carries the receiver, which the AST path did not
+    previously supply (#13492).
+
+    ``dotted_name`` is the full call text, e.g. ``requests.get``. Returns
+    ``(resolved_id, is_external)``, where ``is_external=True`` is a KNOWN
+    non-resolution and is distinct from an unresolved ``(None, False)``.
     """
-    Resolve a callee name to its full function ID.
+    # Order is the point (#13492). Cases in call_graph_resolution_test.py.
+    dotted = dotted_name or callee_name
+    base = dotted.split(".")[0] if dotted and "." in dotted else None
 
-    Issue #665: Extracted from _create_function_visitor to reduce function length.
-    Issue #713: Enhanced with import context for cross-module resolution.
-    Issue #13470: Delegates the module-local/class-local/import-context
-    resolution to the canonical resolver in autobot_shared/code_graph/ —
-    the same one services/knowledge/code_indexer.py (#13469) uses — so this
-    module no longer keeps its own copy. ``functions`` (id -> info) is passed
-    straight through as the resolver's ``known_ids`` container; dict
-    membership checks by key, so this is not a behaviour change.
+    # 1. explicit import wins (alias included)
+    if base and import_context and import_context.is_external(base):
+        return None, True
 
-    Issue #13492: the dotted-name check below was unreachable from the AST path
-    and is now wired in via ``dotted_name`` -- see ``call_graph_resolution_test``.
+    # 2. normal local resolution
+    resolved_id, is_external = _shared_resolve_callee(
+        callee_name, module_path, current_class, functions, import_context
+    )
+    if resolved_id or is_external:
+        return resolved_id, is_external
 
-    Args:
-        callee_name: Name of the called function
-        module_path: Current module path
-        current_class: Current class context (or None)
-        functions: Dictionary of registered functions
-        import_context: Import context for the current file (Issue #713)
+    # 3. receiver names a LOCAL class -- resolve_callee never uses the receiver
+    if base and (receiver_local := f"{module_path}.{base}.{callee_name}") in functions:
+        return receiver_local, False
 
-    Returns:
-        Tuple of (resolved_id, is_external):
-        - resolved_id: Function ID if found, None otherwise
-        - is_external: True if call is to external library (not unresolved)
-    """
-    # Dotted calls classify BEFORE the bare-name match, first token resolved via
-    # the import context (#13492). Cases in call_graph_resolution_test.py.
-    if (dotted := dotted_name or callee_name) and "." in dotted:
-        base = dotted.split(".")[0]
-        if (
-            (import_context and import_context.is_external(base))
-            or base in STDLIB_MODULES
-            or base in COMMON_THIRD_PARTY
-        ):
-            return None, True
+    # 4. raw-name fallback last
+    if base and (base in STDLIB_MODULES or base in COMMON_THIRD_PARTY):
+        return None, True
 
-    return _shared_resolve_callee(callee_name, module_path, current_class, functions, import_context)
+    return None, False
 
 
 def _build_function_info(

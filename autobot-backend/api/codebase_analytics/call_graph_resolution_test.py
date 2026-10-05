@@ -522,3 +522,33 @@ def test_a_genuine_bare_local_call_still_resolves_locally():
     functions = {"m.get": {"name": "get"}}
 
     assert _resolve_callee_id("get", "m", None, functions, ctx, dotted_name=None) == ("m.get", False)
+
+
+def test_a_local_class_named_like_stdlib_resolves_locally():
+    """`class json` with a `loads` method, and no `import json` (CodeRabbit, #13492).
+
+    Classifying dotted calls early -- the fix for the two cases above -- made
+    `json` match STDLIB_MODULES and return external before anything looked for
+    a local definition. `resolve_callee` could not have caught it either: it
+    builds `module.<current_class>.<name>` and never uses the RECEIVER, so
+    `m.json.loads` is a candidate it cannot construct.
+    """
+    ctx = ImportContext()
+    functions = {"m.json.loads": {"name": "loads"}}
+
+    assert _resolve_callee_id("loads", "m", None, functions, ctx, dotted_name="json.loads") == ("m.json.loads", False)
+
+
+def test_an_explicit_import_outranks_a_local_class_of_the_same_name():
+    """The discriminator for the test above, and the reason tier 1 exists.
+
+    With `import json` present, `json.loads(x)` is the stdlib call however the
+    module names its own classes. If this passed only because the local lookup
+    never ran, the test above would be meaningless -- the two fail in opposite
+    directions, so both are needed.
+    """
+    ctx = ImportContext()
+    ctx.add_import("json")
+    functions = {"m.json.loads": {"name": "loads"}}
+
+    assert _resolve_callee_id("loads", "m", None, functions, ctx, dotted_name="json.loads") == (None, True)
