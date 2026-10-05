@@ -30,6 +30,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint._comment_syntax import code_lines
 
 _REPO_ROOT = repo_root()
 _HOOK = _REPO_ROOT / "autobot-infrastructure/shared/scripts/hooks/post-merge-doc-sync"
@@ -213,8 +214,15 @@ def test_post_commit_hook_no_longer_chains_to_doc_sync():
     move is fine; an actual chain -- `source`/exec of a `*-doc-sync` path
     -- is the regression this guards)."""
     text = _POST_COMMIT.read_text(encoding="utf-8")
+    # #17941: whole-line comments were skipped but a TRAILING one was not, so
+    # `exec thing  # the old doc-sync path` read as an invocation. The docstring
+    # above says a comment noting the move is fine; that has to hold for a
+    # trailing comment too. Quote-aware, so a `#` inside a quoted argument
+    # stays data.
     invocation_lines = [
-        line for line in text.splitlines() if "doc-sync" in line.lower() and not line.lstrip().startswith("#")
+        entry.text
+        for entry in code_lines(text, name="post-commit", strip_trailing=True)
+        if "doc-sync" in entry.text.lower()
     ]
     assert not invocation_lines, f"post-commit still invokes doc-sync: {invocation_lines}"
 

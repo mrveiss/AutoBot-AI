@@ -674,6 +674,9 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSlmApi } from '@/composables/useSlmApi'
 import type { NodeRole, RoleInfo } from '@/types/slm'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('AddNodeModal')
 
 // Types
 interface NodeRoleOption {
@@ -760,6 +763,7 @@ async function fetchRoles() {
     }))
   } catch (e) {
     // Fallback to node-roles constants if API fails
+    logger.warn('Role list unavailable from the API; using the built-in role metadata:', e)
     const { NODE_ROLE_METADATA } = await import('@/constants/node-roles')
     availableRoles.value = Object.values(NODE_ROLE_METADATA).map((meta) => ({
       id: meta.name,

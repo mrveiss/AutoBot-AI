@@ -122,15 +122,15 @@
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents",
     "agentActivity": "ایجنٹ کی سرگرمی",
-    "mainNavigation": "Main navigation",
+    "mainNavigation": "مرکزی نیویگیشن",
     "plugins": "Plugins",
     "switchLanguage": "Switch language",
     "automation": "Automation",
     "secrets": "Secrets",
-    "skipToContent": "Skip to content",
+    "skipToContent": "مرکزی مواد پر جائیں",
     "systemStatus": "System Status",
     "services": "Services",
-    "skipToNavigation": "Skip to navigation",
+    "skipToNavigation": "نیویگیشن پر جائیں",
     "openMainMenu": "Open main menu",
     "operations": "آپریشنز",
     "remoteDesktop": "Remote Desktop",
@@ -201,7 +201,17 @@
     "adminPricing": "ماڈل قیمت",
     "adminMcpServers": "MCP سرورز",
     "adminPermissionScopes": "اجازت کے دائرے",
-    "llcRoles": "کردار"
+    "llcRoles": "کردار",
+    "keywords": {
+      "knowledge": "دستاویزات فائلیں لائبریری ٹرانسکرپشن نوٹس",
+      "companyOs": "کمپنی کاروبار تنظیم",
+      "automation": "ورک فلو پائپ لائن شیڈول کام",
+      "analytics": "وزیٹرز میٹرکس اعداد و شمار چارٹس رپورٹس",
+      "preferences": "ترتیبات اختیارات زبان تھیم",
+      "budgetPolicies": "لاگت اخراجات حدود رقم",
+      "systemHealth": "حالت دستیابی تشخیص نگرانی",
+      "vault": "اسناد کلیدیں پاس ورڈز ٹوکن والٹ"
+    }
   },
   "llcCompanyStatus": {
     "showArchived": "محفوظ شدہ دکھائیں",
@@ -8006,7 +8016,20 @@
     "newCode": "New Code Agent",
     "newCodeDesc": "Start a code analysis session",
     "newAnalysis": "New Analysis",
-    "newAnalysisDesc": "Start an analysis session"
+    "newAnalysisDesc": "Start an analysis session",
+    "openPage": "{page} کھولیں",
+    "types": {
+      "task": "کام",
+      "research": "تحقیق",
+      "code": "کوڈ",
+      "analysis": "تجزیہ",
+      "navigate": "صفحہ"
+    },
+    "hints": {
+      "navigate": "نیویگیٹ",
+      "select": "منتخب کریں",
+      "close": "بند کریں"
+    }
   },
   "slm": {
     "novnc": {

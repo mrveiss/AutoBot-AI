@@ -76,7 +76,9 @@ REACH = declare(
     floor=2590,
     growth=200,
     skips=0,
-    what="production python files under autobot-backend/ and autobot_shared/",
+    # Scope as data (#17844); `declare` renders the longhand from `roots`.
+    what="production python files",
+    roots=SCAN_ROOTS,
 )
 
 

@@ -30,6 +30,7 @@ from __future__ import annotations
 import ast
 import re
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from functools import lru_cache
 from pathlib import Path
 
@@ -42,6 +43,7 @@ from repo_tests.no_secret_in_response_model_baseline_17865 import (
     _WAIVED,
 )
 from repo_tests.no_secret_in_response_model_fixtures_17865 import DETECTOR_FIXTURES
+from repo_tests.no_secret_passthrough_detect_17899 import is_passthrough
 
 _ROOT = repo_root()
 #: `autobot_shared` is in here because leaving it out made the guard blind in the
@@ -132,7 +134,11 @@ def _python_files(root: Path | None = None) -> list[str]:
 REACH = declare(
     "response-model-secret-scan",
     discover=_python_files,
-    floor=4950,
+    # Re-pinned MID-window 2026-10-04 (#17356): `_reach.verify_floor` now refuses a floor in
+    # the bottom tenth of `growth`, because that is zero tolerance dressed as an allowance.
+    # Re-measured by the mechanism itself, not carried across (#15928); the arithmetic is in
+    # the commit message, which cannot drift from the tree it describes.
+    floor=4998,
     growth=150,
     skips=0,
     what="backend Python modules scanned for response_model= reaching a stored credential",
@@ -209,6 +215,14 @@ class Index:
     bases: dict[str, list[str]]
     nested: dict[str, list[str]]
     routes: tuple[Route, ...]
+    #: Class name -> the files defining it. Needed because `own`/`bases`/`nested`
+    #: merge same-named classes across trees, so by themselves they cannot say
+    #: WHERE a model came from (#17899; the merge itself is #17935).
+    defined_in: dict[str, list[str]] = dataclass_field(default_factory=dict)
+    #: `(file, class)` for every model that declares no fields and allows extras.
+    #: Per SITE, not per name: the merge above would otherwise let a same-named
+    #: declared-field class hide a pass-through (#17899).
+    passthrough: frozenset[tuple[str, str]] = frozenset()
 
 
 def _build_index(root: Path) -> Index:
@@ -225,6 +239,8 @@ def _build_index(root: Path) -> Index:
     parsed: list[str] = []
     failures: list[tuple[str, str]] = []
     consts: dict[str, ast.expr] = {}
+    defined_in: dict[str, list[str]] = {}
+    passthrough: set[tuple[str, str]] = set()
 
     for rel in _python_files(root):
         try:
@@ -246,6 +262,11 @@ def _build_index(root: Path) -> Index:
                         if _is_secret_field(stmt.target.id):
                             secrets.append(stmt.target.id)
                         refs += _annotation_names(stmt.annotation)
+                defined_in.setdefault(node.name, [])
+                if rel not in defined_in[node.name]:
+                    defined_in[node.name].append(rel)
+                if is_passthrough(node):
+                    passthrough.add((rel, node.name))
                 own.setdefault(node.name, [])
                 own[node.name] = sorted(set(own[node.name] + secrets))
                 bases[node.name] = sorted(set(bases.get(node.name, []) + [b for b in _model_names_of_bases(node)]))
@@ -259,7 +280,7 @@ def _build_index(root: Path) -> Index:
                 excluded = frozenset(excluded_field_names(kws.get("response_model_exclude"), consts))
                 for name in _model_names(kws["response_model"]):
                     routes.append(Route(rel, node.lineno, method, path, name, excluded))
-    return Index(tuple(parsed), tuple(failures), own, bases, nested, tuple(routes))
+    return Index(tuple(parsed), tuple(failures), own, bases, nested, tuple(routes), defined_in, frozenset(passthrough))
 
 
 def _model_names_of_bases(node: ast.ClassDef) -> list[str]:

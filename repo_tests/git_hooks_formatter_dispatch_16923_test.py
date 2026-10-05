@@ -261,3 +261,44 @@ def test_the_bot_commit_workflow_never_installs_local_hooks() -> None:
         "this workflow now installs local hooks -- if a commit is ever reinstated it would no "
         "longer be hook-less by construction, and the #16923 exemption claim would be stale"
     )
+
+
+# ---------------------------------------------------------------------------
+# #13842 F4: format.sh must find the CI-parity interpreter
+# ---------------------------------------------------------------------------
+
+
+def test_format_sh_searches_the_parity_venv_before_falling_back() -> None:
+    """The parity venv is 3.14 and deliberately NOT on PATH.
+
+    `scripts/setup-ci-parity-env.sh` builds CI's exact interpreter at
+    `$HOME/.venv-python-suite` and says so; it is intentionally kept off PATH
+    so it cannot shadow the system python. The consequence F4 recorded is that
+    `format.sh`'s `command -v` search could not see it, skipped a perfectly
+    good 3.14 on the box, and fell through to whatever older interpreter had
+    black -- which emits different output and makes a clean local run fail
+    CI's format check.
+
+    Asserted on the executable lines, not the whole file, so the comment
+    explaining the search cannot satisfy this (#17941).
+    """
+    from tools.lint._comment_syntax import code_text
+
+    script = (repo_root() / "scripts" / "format.sh").read_text(encoding="utf-8")
+    code = code_text(script, name="format.sh")
+
+    assert "venv-python-suite" in code, (
+        "format.sh no longer looks for the CI-parity venv, so a box whose PATH python is "
+        "older than 3.14 formats with the wrong interpreter even when 3.14 is installed (F4)"
+    )
+    assert "CI_PARITY_VENV" in code, (
+        "the parity venv location is hardcoded; setup-ci-parity-env.sh honours CI_PARITY_VENV "
+        "and format.sh must agree or the two disagree about where the interpreter is"
+    )
+
+    parity_at = code.index("venv-python-suite")
+    fallback_at = code.index("python3.13")
+    assert parity_at < fallback_at, (
+        "format.sh checks the fallback chain before the parity venv, so an older interpreter "
+        "with black installed still wins -- which is the drift F4 describes"
+    )

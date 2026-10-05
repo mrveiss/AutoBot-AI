@@ -19,6 +19,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
+      "@autobot/ui": ["../libs/autobot-ui/index.ts"],
       "@shared/*": ["../autobot_shared/*"],
       "vue": ["./node_modules/vue/dist/vue.d.ts"],
       "@autobot/terminal": ["./src/types/autobot-terminal.d.ts"]

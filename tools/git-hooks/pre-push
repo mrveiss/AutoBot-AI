@@ -564,7 +564,14 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         [ -z "$group" ] && continue
         group_exit=0
         group_output=$(
-          timeout "$TEST_TIMEOUT" python3 -m pytest -xvs $group 2>&1
+          # -m "not reach_floor" (#17810): repo_tests/reach_declarations_test.py walks the
+          # REAL tree once per declared reach floor, and was 156.75s of a 214s budget on its
+          # own -- a cost that grows with every new declare() and is paid by pushes that did
+          # not add one. The empty-tree proof, which is what makes a floor provable, carries
+          # no marker and still runs here; the floor-versus-population half is a ratchet and
+          # runs in CI. `reach_declarations_test` asserts BOTH ends of that split, so the
+          # marker cannot quietly become a way of running the check nowhere.
+          timeout "$TEST_TIMEOUT" python3 -m pytest -xvs -m "not reach_floor" $group 2>&1
         ) || group_exit=$?
         if [ "$group_exit" = "124" ]; then
           pytest_timed_out=1
