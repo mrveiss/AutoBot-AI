@@ -173,15 +173,53 @@ def parse_npm_audit(payload: str) -> list[Finding]:
         )
     vulnerabilities = document.get("vulnerabilities") or {}
     advisory_ids = _npm_advisory_closure(vulnerabilities)
-    return [
-        Finding(
-            severity=_normalise(entry.get("severity", "")),
-            identifier=str(name),
-            location=str(entry.get("range", "?")),
-            aliases=advisory_ids[str(name)],
+    findings: list[Finding] = []
+    for name, entry in vulnerabilities.items():
+        severity = _normalise(entry.get("severity", ""))
+        location = str(entry.get("range", "?"))
+        direct = _npm_direct_advisories(entry)
+        if direct:
+            # ONE FINDING PER ADVISORY. A package can carry several: npm puts
+            # each in its own `via` object. Emitting one finding per PACKAGE
+            # with the union of their ids let a single recorded allowance
+            # excuse the package while a second, UNRECORDED high-severity
+            # advisory on it went unjudged -- `not_allowed` accepts a finding
+            # when ANY alias matches, so the blocking gate would have returned
+            # success with a real finding unaddressed (CodeRabbit, review of
+            # this PR). Split, so each advisory is judged on its own record.
+            for ids in direct:
+                findings.append(Finding(severity=severity, identifier=str(name), location=location, aliases=ids))
+            continue
+        # Purely transitive: no advisory of its own, so it exists only because
+        # of its roots and inherits their ids. Safe because an unexcused root
+        # still appears as its own finding and still fails.
+        findings.append(
+            Finding(severity=severity, identifier=str(name), location=location, aliases=advisory_ids[str(name)])
         )
-        for name, entry in vulnerabilities.items()
-    ]
+    return findings
+
+
+def _npm_direct_advisories(entry: dict) -> "list[tuple[str, ...]]":
+    """Ids for each advisory this entry names DIRECTLY, one tuple per advisory.
+
+    Grouped per advisory rather than unioned, so two advisories on one package
+    stay independently judgeable. A `via` entry that is a package-name string
+    is a transitive link, not an advisory, and is excluded here.
+    """
+    grouped = []
+    for via in entry.get("via") or ():
+        if not isinstance(via, dict):
+            continue
+        ids = set()
+        url = str(via.get("url") or "")
+        marker = url.rstrip("/").rsplit("/", 1)[-1]
+        if marker.startswith("GHSA-"):
+            ids.add(marker)
+        source = via.get("source")
+        if source is not None:
+            ids.add(f"npm:{source}")
+        grouped.append(tuple(sorted(ids)))
+    return grouped
 
 
 def _npm_advisory_closure(vulnerabilities: dict) -> "dict[str, tuple[str, ...]]":
