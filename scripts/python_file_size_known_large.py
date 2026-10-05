@@ -85,7 +85,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/chromadb_storage.py": 1461,  # #17758: policy centralised in source_scope.py
     "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1326,
     "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 756,
-    "autobot-backend/api/codebase_analytics/endpoints/duplicates.py": 661,  # #17758: triplicated cached body collapsed
+    "autobot-backend/api/codebase_analytics/endpoints/duplicates.py": 660,  # #17758: triplicated cached body collapsed
     "autobot-backend/api/codebase_analytics/endpoints/environment.py": 694,
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 827,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2267,
@@ -501,11 +501,11 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/ssot_constants.py": 896,
     "autobot_shared/user_management/team_service.py": 725,
     "pipeline-scripts/check-pre-commit-hook-pr_test.py": 747,
-    "pipeline-scripts/ci_dispatch_watchdog.py": 1424,
+    "pipeline-scripts/ci_dispatch_watchdog.py": 1370,  # #13439: supersession split to ci_run_supersession.py
     "pipeline-scripts/detect-hardcoded-values_test.py": 653,
     "repo_tests/ci_dispatch_watchdog_test.py": 1273,
     "repo_tests/enum_union_guard_test.py": 801,
     "repo_tests/sync_deletions_ansible_wiring_16310_test.py": 674,  # #16310
-    "repo_tests/sys_modules_leak_guard.py": 1164,
+    "repo_tests/sys_modules_leak_guard.py": 1151,
     "scripts/audit_api_wiring.py": 895,  # #16816: reporting moved to dead_surface.py
 }

@@ -58,9 +58,17 @@ import argparse
 import logging
 import os
 import pathlib
+import sys
+
+# Run as `python3 tools/lint/<name>.py`, where the repo root is not on
+# sys.path; a `tools.lint.` path fails there (#13916).
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
 import re
 import subprocess  # nosec B404  # fixed argv, no shell
 import sys
+
+from _comment_syntax import code_text  # noqa: E402
 
 # tools/lint/ is not a package; make the sibling helper importable however this
 # module is loaded. `autobot_shared` is NOT importable when this runs as a bare
@@ -183,7 +191,7 @@ def _strip_comment_lines(text: str) -> str:
     that. Without this, words from the comment's sentence get tokenized
     alongside the real package names.
     """
-    return "\n".join(line for line in text.splitlines() if not line.strip().startswith("#"))
+    return code_text(text)
 
 
 def ci_installed_packages(root: pathlib.Path | None = None) -> set[str]:

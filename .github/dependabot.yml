@@ -10,6 +10,30 @@
 # still blocked via the per-ecosystem `ignore:` lists below — including
 # python/ubuntu Docker semver-MINOR (3.12→3.14, 22.04→22.10 are minor in
 # tag-semver but breaking for us: py3.14 is the project-wide version (#9825); 22.04 is the LTS).
+#
+# ARRIVAL SPREAD (#17760). 20 of these 23 entries sat on `monday` with no
+# `time:`, so one weekly run delivered them as a single burst -- twelve PRs
+# arrived inside eleven minutes on 2026-10-05 and held 19 of the 31 CI runs
+# in flight while an unrelated PR was trying to land. The per-entry `groups:`
+# below already collapse each directory's updates into one PR; what they
+# cannot do is batch ACROSS entries, so 23 entries still means up to 23 PRs.
+#
+# Two separate levers: grouping reduces how many PRs EXIST, spreading reduces
+# how many arrive AT ONCE -- and arrival-at-once is what starves the shared
+# cross-PR CI queue (`python-suite-shard-N`, FIFO by push time, #16320).
+# Only the second is applied here. Peak day goes 20 -> 6.
+#
+#     mon  pip + uv    tue  pip    wed  npm    thu  pip    fri  docker + actions
+#
+# `multi-ecosystem-groups` is the better fix -- it batches all 23 into 3 PRs
+# -- and it is deliberately NOT used yet. GitHub's example shows a grouped
+# entry carrying `patterns:` and carrying NEITHER `schedule:` NOR
+# `target-branch:`, but the reference does not say whether `ignore:`,
+# `groups:`, `labels:` or `open-pull-requests-limit` remain permitted on one.
+# The `ignore:` lists below hold the pins that block known-breaking majors,
+# and a dependabot.yml error surfaces only AFTER merge to the default branch
+# -- so a wrong guess silently stops dependency updates, security ones
+# included. Needs validation against a real run before adopting; see #17760.
 version: 2
 updates:
   - package-ecosystem: "pip"
@@ -73,7 +97,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "tuesday"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -100,7 +124,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "thursday"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -124,7 +148,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "wednesday"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -176,7 +200,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "wednesday"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -191,7 +215,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "friday"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -212,7 +236,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "friday"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -233,7 +257,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "friday"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -254,7 +278,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "friday"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -278,7 +302,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "friday"
     open-pull-requests-limit: 2
     labels:
       - "dependencies"
@@ -299,7 +323,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "friday"
     open-pull-requests-limit: 2
     labels:
       - "dependencies"
@@ -321,7 +345,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "wednesday"
     open-pull-requests-limit: 2
     labels:
       - "dependencies"
@@ -355,7 +379,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "wednesday"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -370,7 +394,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "tuesday"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -390,7 +414,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "thursday"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -448,7 +472,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "tuesday"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -498,7 +522,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "tuesday"
+      day: "thursday"
     open-pull-requests-limit: 2
     labels:
       - "dependencies"
@@ -521,7 +545,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "wednesday"
+      day: "monday"
     open-pull-requests-limit: 2
     labels:
       - "dependencies"
@@ -536,7 +560,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "thursday"
+      day: "tuesday"
     open-pull-requests-limit: 2
     labels:
       - "dependencies"
@@ -569,7 +593,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "thursday"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
