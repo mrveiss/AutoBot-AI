@@ -349,7 +349,17 @@ def test_the_commit_path_reports_an_unreadable_staged_file(hook, tmp_path, monke
 #:
 #: Re-pin DOWN when files shrink. Raising it is the thing being prevented, so a
 #: raise needs a recorded reason in the pull request, not a quiet edit.
-MAX_CEILING_TOTAL = 184571
+#:
+#: WHAT THIS NUMBER CANNOT SEE (#17989). It is a SUM, so it only reports the
+#: NET. A ceiling raised here and an unrelated file shrinking there cancel, and
+#: a total that moved DOWN reads as a clean shrink while individual ceilings
+#: rose. That happened on this very re-pin: 184571 -> 184531 is -40 net, and
+#: underneath it seven ceilings ROSE (+45) while two FELL (-85). Both tests
+#: below pass on the net and see none of the seven. The argument that produced
+#: this constant -- a comparison cannot police what moves with it -- applies to
+#: the sum one step further out, so the per-entry direction check still has no
+#: fixed reference. Do not read a falling total as "no ceiling was raised".
+MAX_CEILING_TOTAL = 184531
 
 
 def test_the_ceiling_total_only_shrinks(hook):
