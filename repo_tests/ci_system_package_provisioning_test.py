@@ -316,8 +316,11 @@ def test_setup_python_suite_installs_ffmpeg_directly():
     assert "ffmpeg" in action, "setup-python-suite/action.yml no longer installs ffmpeg (#14550)"
 
 
-#: Repo-local, stdlib-only, and the sanctioned home for git enumeration (#15955).
-_SCAN_HELPERS = "_scan_helpers"
+#: Repo-local, stdlib-only sibling helpers the checker may import: the
+#: sanctioned home for git enumeration (#15955) and for comment syntax
+#: (#17941). Imported as siblings because CI runs the checker as
+#: `python3 tools/lint/<name>.py`, where `tools.lint.` is not importable.
+_SIBLING_HELPERS = ("_scan_helpers", "_comment_syntax")
 
 
 def test_the_checker_needs_no_third_party_import():
@@ -326,7 +329,7 @@ def test_the_checker_needs_no_third_party_import():
     # Stdlib asked of the interpreter, not listed by hand: the previous literal
     # set of five names failed on `os` and `subprocess` -- both stdlib, neither
     # in the list -- so it was enforcing "these five modules", not "stdlib".
-    allowed = set(sys.stdlib_module_names) | {_SCAN_HELPERS}
+    allowed = set(sys.stdlib_module_names) | set(_SIBLING_HELPERS)
     third_party = [
         line
         for line in source.splitlines()
@@ -337,14 +340,18 @@ def test_the_checker_needs_no_third_party_import():
     assert third_party == [], f"the checker imports non-stdlib modules: {third_party}"
 
 
-def test_the_scan_helper_the_checker_leans_on_is_itself_dependency_free():
-    """The one non-stdlib import above must not become a door to the application's deps.
+@pytest.mark.parametrize("helper_name", _SIBLING_HELPERS)
+def test_the_sibling_helpers_the_checker_leans_on_are_dependency_free(helper_name):
+    """The non-stdlib imports above must not become a door to the app's deps.
 
-    Exempting `_scan_helpers` is only safe while `_scan_helpers` is safe. Without
-    this, the exemption launders whatever that module grows to import.
+    Exempting a helper is only safe while that helper is safe. Without this,
+    the exemption launders whatever the module grows to import -- and the
+    exemption list is where a second helper gets added without anyone asking
+    the question again, so this is parametrized over the list rather than
+    written once per name.
     """
-    helper = REPO_ROOT / "tools" / "lint" / "_scan_helpers.py"
-    allowed = set(sys.stdlib_module_names) | {"autobot_shared"}
+    helper = REPO_ROOT / "tools" / "lint" / f"{helper_name}.py"
+    allowed = set(sys.stdlib_module_names) | {"autobot_shared"} | set(_SIBLING_HELPERS)
     offenders = [
         line
         for line in helper.read_text(encoding="utf-8").splitlines()
@@ -352,7 +359,7 @@ def test_the_scan_helper_the_checker_leans_on_is_itself_dependency_free():
         and not line.startswith("from __future__")
         and line.split()[1].split(".")[0] not in allowed
     ]
-    assert offenders == [], f"_scan_helpers reaches beyond stdlib and autobot_shared: {offenders}"
+    assert offenders == [], f"{helper_name} reaches beyond stdlib and autobot_shared: {offenders}"
 
 
 def test_a_real_checkout_is_enumerated_by_git_not_by_the_walk():
