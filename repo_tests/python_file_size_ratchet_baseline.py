@@ -295,7 +295,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/orchestration/graph_runner_test.py": 624,
     "autobot-backend/orchestration/workflow_executor.py": 1245,
     "autobot-backend/orchestration/workflow_runner.py": 696,
-    "autobot-backend/orchestrator.py": 1114,
+    "autobot-backend/orchestrator.py": 1108,
     "autobot-backend/performance_benchmarks_test.py": 661,
     "autobot-backend/phase_progression_manager.py": 850,  # #17089: dedup threshold
     "autobot-backend/planner/planner.py": 877,

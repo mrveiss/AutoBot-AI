@@ -595,7 +595,7 @@ class Orchestrator(_DeprecatedRequestMixin):
         """Classify request complexity.
 
         Retained for callers in orchestration/workflow_planner.py,
-        services/workflow_automation/, services/advanced_workflow/, and tests.
+        services/advanced_workflow/, and tests (chat moved off it, #13809).
         Callers that need to know whether the value was *judged* or merely
         defaulted should use :meth:`classify_request_complexity_verdict`.
         """
@@ -662,7 +662,7 @@ class Orchestrator(_DeprecatedRequestMixin):
         """Plan WorkflowStep objects based on complexity.
 
         Retained for callers in orchestration/workflow_planner.py,
-        services/workflow_automation/, services/advanced_workflow/, and tests.
+        services/advanced_workflow/, and tests (chat moved off it, #13809).
         """
         if not WORKFLOW_TYPES_AVAILABLE:
             return []
@@ -725,19 +725,14 @@ class Orchestrator(_DeprecatedRequestMixin):
 
     # ------------------------------------------ workflow planning (canonical path)
 
-    def _build_planning_prompt(
-        self,
-        goal: str,
-        *,
-        learned_prompt_template: str | None = None,
-        similar_trajectories: List[Any] | None = None,
-    ) -> str:
-        """Render the planning prompt.
+    def _build_planning_prompt(self, goal: str, planning_ctx: Dict[str, Any]) -> str:
+        """Render the planning prompt from what ``_fetch_planning_context`` gathered.
 
         #10580: passes ``learned_prompt_template`` from a high-confidence
         LearnedStrategy so the planner benefits from proven approaches.
         #10581: passes ``similar_trajectories`` as few-shot priors so the planner
         can reuse proven decompositions from past high-reward executions.
+        #13809: passes ``shell_commands`` for a plan whose steps run in a terminal.
         """
         capabilities_json = json.dumps(
             {agent: [cap.value for cap in caps] for agent, caps in self.agent_capabilities.items()},
@@ -746,8 +741,9 @@ class Orchestrator(_DeprecatedRequestMixin):
         return build_planning_prompt(
             goal,
             capabilities_json,
-            learned_prompt_template=learned_prompt_template,
-            similar_trajectories=similar_trajectories,
+            learned_prompt_template=planning_ctx.get("learned_prompt_template"),
+            similar_trajectories=planning_ctx.get("similar_trajectories"),
+            shell_commands=planning_ctx.get("shell_commands", False),
         )
 
     def _parse_planning_response(self, response: Any, goal: str) -> Dict[str, Any]:
@@ -828,11 +824,7 @@ class Orchestrator(_DeprecatedRequestMixin):
         """Generate one candidate plan from the LLM."""
         from agents.llm_failsafe_agent import get_robust_llm_response
 
-        prompt = self._build_planning_prompt(
-            goal,
-            learned_prompt_template=planning_ctx.get("learned_prompt_template"),
-            similar_trajectories=planning_ctx.get("similar_trajectories"),
-        )
+        prompt = self._build_planning_prompt(goal, planning_ctx)
         response = await get_robust_llm_response(prompt, context)
         plan_data = self._parse_planning_response(response, goal)
         return await self._strategy_planner.build_workflow_plan(goal, plan_data)
@@ -916,6 +908,8 @@ class Orchestrator(_DeprecatedRequestMixin):
         logger.info("Creating workflow plan for: %s", goal)
         try:
             planning_ctx = await self._fetch_planning_context(goal, context)
+            # #13809: a caller whose steps run in a terminal asks for commands.
+            planning_ctx["shell_commands"] = bool((context or {}).get("shell_commands"))
 
             if PLAN_BEST_OF_N_ENABLED:
                 plan = await self._select_best_plan(goal, context, planning_ctx, PLAN_BEST_OF_N_COUNT)
