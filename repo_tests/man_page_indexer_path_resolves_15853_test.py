@@ -57,6 +57,7 @@ from typing import List, Optional, Tuple
 
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_text
 from tools.lint._scan_helpers import tracked_paths
 
 REPO_ROOT = repo_root()
@@ -186,8 +187,8 @@ def _module_source() -> str:
     the check looks for. Same reason the #15724 publish-contract guard strips
     comments before matching.
     """
-    text = _MODULE.read_text(encoding="utf-8")
-    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    # #17941: one shared stripper rather than this file's own copy.
+    return code_text(_MODULE.read_text(encoding="utf-8"), name="x.py")
 
 
 def _indexer_path_expression() -> str:
@@ -271,9 +272,9 @@ def test_the_caller_delegates_rather_than_carrying_its_own_path():
     a grandfathered file may not grow (#14236). A second copy of the path here
     would be both the drift this guard exists to catch and a ceiling breach.
     """
-    caller = "\n".join(
-        line for line in _CALLER.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")
-    )
+    # #17941: the file's second private copy, caught by the ratchet when the
+    # first was migrated and this one kept the entry listed.
+    caller = code_text(_CALLER.read_text(encoding="utf-8"), name="x.py")
 
     assert "from tasks.man_page_indexing import run_indexing_subprocess" in caller
     assert "index_all_man_pages.py" not in caller, "knowledge_tasks names the indexer script again; it should delegate"

@@ -13,6 +13,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useAutobotApi, type LogForwardingDestination } from '@/composables/useAutobotApi'
 import config from '@/config/ssot-config'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('LogForwardingSettings')
 
 const api = useAutobotApi()
 
@@ -73,14 +76,21 @@ const destinationTypes = [
 
 // Methods
 // API returns data directly, not wrapped in response (Issue #729)
+// A failed status fetch must not read as "stopped": the defaults in `status`
+// would then offer Start for a service that may be running (#17971 review).
+const statusLoaded = ref(false)
+
 async function fetchStatus(): Promise<void> {
   try {
     const statusData = await api.getLogForwardingStatus()
     if (statusData) {
       Object.assign(status, statusData)
     }
+    statusLoaded.value = true
   } catch (e) {
     // Status endpoint may not be available
+    statusLoaded.value = false
+    logger.debug('Log forwarding status unavailable:', e)
   }
 }
 
@@ -98,6 +108,7 @@ async function fetchDestinations(): Promise<void> {
 }
 
 async function toggleService(): Promise<void> {
+  if (!statusLoaded.value) return
   toggling.value = true
   error.value = null
 
@@ -303,7 +314,7 @@ onMounted(async () => {
           <div
             :class="[
               'w-4 h-4 rounded-full',
-              status.running ? 'bg-green-500 animate-pulse' : 'bg-red-500',
+              !statusLoaded ? 'bg-gray-400' : status.running ? 'bg-green-500 animate-pulse' : 'bg-red-500',
             ]"
           ></div>
           <div>
@@ -311,7 +322,7 @@ onMounted(async () => {
               {{ $t('settings.admin.logForwardingSettings.logForwardingService') }}
             </h2>
             <p class="text-sm text-gray-500">
-              {{ status.running ? $t('settings.admin.logForwardingSettings.serviceRunning') : $t('settings.admin.logForwardingSettings.serviceStopped') }}
+              {{ !statusLoaded ? $t('settings.admin.logForwardingSettings.statusUnknown') : status.running ? $t('settings.admin.logForwardingSettings.serviceRunning') : $t('settings.admin.logForwardingSettings.serviceStopped') }}
             </p>
           </div>
         </div>
@@ -319,7 +330,7 @@ onMounted(async () => {
         <div class="flex items-center gap-3">
           <button
             @click="toggleService"
-            :disabled="toggling"
+            :disabled="toggling || !statusLoaded"
             :class="[
               'px-4 py-2 rounded-lg flex items-center gap-2 font-medium',
               status.running

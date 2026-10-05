@@ -212,6 +212,11 @@ REACH = declare(
     growth=250,
     skips=0,
     what="production python files",
+    # The scope as DATA (#17844). This declaration was the named instance: `what=` said
+    # "production python files" unqualified while the docstring at :26 said the truth, and a
+    # reach report reads the machine-readable string. Seven guards claimed that same phrase over
+    # floors spanning 2555..3247 -- the spread is legitimate scoping and was invisible.
+    roots=SCAN_ROOTS,
 )
 
 

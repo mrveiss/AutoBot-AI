@@ -13,6 +13,21 @@ against an empty directory and requires the failure.
 Doing it here, once, is the difference between one maintained mutation and 35
 hand-written ones that rot. It also makes adoption countable: a guard that has
 not declared is invisible to this file, which is what `MIN_DECLARATIONS` is for.
+
+WHAT A NEW `declare()` COSTS, WHERE THE AUTHOR WILL SEE IT (#17810)
+-------------------------------------------------------------------
+This file walked the REAL tree twice per declaration and reached 73% of the 214s pre-push
+budget, billed to pushes that had added no declaration. The live-tree half now carries the
+`reach_floor` marker, which `tools/git-hooks/pre-push` deselects and CI does not -- both ends
+asserted below, since a marker nothing selects is a check that runs nowhere. A declaration
+still costs three cases against an EMPTY repository at pre-push, and a full tree walk in CI.
+
+Measured on `baec13de40`, one machine, one interpreter, declaration count beside each figure
+so the scaling is readable rather than inferred -- re-measure rather than trusting it:
+
+    before, whole file            57 declarations   295 tests   62.07s
+    after,  whole file (CI)       58 declarations   357 tests   30.87s
+    after,  -m "not reach_floor"  58 declarations   183 tests   10.11s
 """
 
 from __future__ import annotations
@@ -27,6 +42,7 @@ from pathlib import Path
 
 import pytest
 from repo_tests._reach import REGISTRY, Reach, ReachFloorError, declare
+from repo_tests._reach_policy import ALLOWANCE_VERDICTS, UNSCOPED
 
 from autobot_shared.paths import scrubbed_git_env
 
@@ -116,8 +132,19 @@ def _import_every_guard() -> None:
 _import_every_guard()
 
 
+#: Declarations this suite's own cases create to prove a rule can fire. Excluded from every
+#: sweep over the registry: they are fixtures, and counting them would make the frozen sets
+#: below depend on which test ran first.
+_SELF_CHECK = "self-check::"
+
+
+def _live() -> dict[str, Reach]:
+    """The registry without this suite's own fixtures."""
+    return {name: r for name, r in REGISTRY.items() if not name.startswith(_SELF_CHECK)}
+
+
 def _declarations() -> list[Reach]:
-    return sorted(REGISTRY.values(), key=lambda r: r.name)
+    return sorted(_live().values(), key=lambda r: r.name)
 
 
 def test_declarations_outside_this_package_are_swept() -> None:
@@ -229,23 +256,33 @@ def test_discovery_honours_the_root_it_is_given(reach: Reach, empty_repo: Path) 
     never fail — while passing the empty-tree test above for the wrong reason,
     since it never looked at the empty tree at all.
 
-    Comparing the two results is enough to catch it: the live tree yields at
-    least `floor` items and the floor is non-zero, so a discovery that honours
-    its argument cannot return the same thing for both. Run against a real
-    empty repository rather than a bare directory, so a git-backed sweep
-    produces an empty result to compare instead of an exception that ends the
-    test early and proves nothing about the comparison.
-    """
-    from_empty = reach.discover(empty_repo)
-    from_repo = reach.discover(_REPO_TESTS.parent)
+    Asserted as **"the empty tree yields nothing"**, not as "the two results differ" (#17810).
+    The two forms catch the same defect -- a discovery closing over the repository returns its
+    full sweep here -- and only one of them pays for a walk of the real tree. This file was
+    73% of the pre-push budget and this test was half of that cost, because it called
+    `discover` directly and so bypassed the memo every other test here shares.
 
-    assert list(from_empty) != list(from_repo), (
-        f"{reach.name} returned identical results for an empty directory and the "
-        f"repository, so its discovery ignores the root it is given. A floor it "
-        f"clears unconditionally measures nothing."
+    What the comparison bought and this does not: proof that the LIVE result is non-empty, so
+    the inequality is not satisfied by both sides being empty. That half is
+    `test_each_declared_floor_is_cleared_by_the_live_tree`, which asserts a non-zero floor
+    against the real tree and now runs in CI under the `reach_floor` marker. Stated rather than
+    dropped: on a pre-push run this case alone cannot tell "honours its root" from "discovers
+    nothing anywhere".
+
+    Run against a real empty repository rather than a bare directory, so a git-backed sweep
+    produces an empty result instead of an exception that ends the test early.
+    """
+    from_empty = list(reach.discover(empty_repo))
+
+    assert not from_empty, (
+        f"{reach.name} returned {len(from_empty)} item(s) from an EMPTY repository "
+        f"(e.g. {from_empty[:3]}), so its discovery does not honour the root it is given -- "
+        f"it closes over the repository, or reads the host. A floor it clears unconditionally "
+        f"measures nothing."
     )
 
 
+@pytest.mark.reach_floor
 @pytest.mark.parametrize("reach", _declarations(), ids=lambda r: r.name)
 def test_each_declared_floor_is_cleared_by_the_live_tree(reach: Reach) -> None:
     """The other direction: a floor set above the tree fails every honest run."""
@@ -288,7 +325,11 @@ def test_a_floor_that_cannot_fail_is_rejected_by_this_suite() -> None:
     silently. This constructs a declaration that discovers nothing and asserts
     the machinery still objects.
     """
-    never_finds_anything = declare("self-check::always-empty", discover=lambda root: [], floor=1, what="items")
+    # Annotated because `Reach` is generic now (#16987) and an empty literal gives mypy no
+    # element type to infer -- the one call shape the generic cannot resolve on its own.
+    never_finds_anything: Reach[object] = declare(
+        "self-check::always-empty", discover=lambda root: [], floor=1, what="items"
+    )
 
     with pytest.raises(AssertionError, match="Fix the sweep"):
         never_finds_anything.examined(_REPO_TESTS)
@@ -310,6 +351,7 @@ def test_no_guard_failed_to_import() -> None:
     )
 
 
+@pytest.mark.reach_floor
 @pytest.mark.parametrize("reach", _declarations(), ids=lambda r: r.name)
 def test_every_declared_floor_is_pinned_to_its_population(reach: Reach) -> None:
     """A floor far below its population catches only total collapse (#15928).
@@ -391,4 +433,168 @@ def test_every_declaration_is_reached_by_this_sweep() -> None:
         + "\n\n`pkgutil.iter_modules` reaches top-level repo_tests modules only. Either move "
         "the declaration to a top-level module, or widen the import walk -- do not leave it "
         "registered somewhere nothing enumerates."
+    )
+
+
+@pytest.mark.reach_floor
+@pytest.mark.parametrize("reach", _declarations(), ids=lambda r: r.name)
+def test_every_declared_scope_matches_its_sweep(reach: Reach) -> None:
+    """The third coverage state, which nothing used to catch (#17844).
+
+    A guard can be floorless (`guard_reach_meta_test` catches it) or floored below its reach
+    (the floor assertion catches it). It can also be floored **correctly, over the wrong
+    population** -- and `what=` was free text nobody verified, sitting in the same call as the
+    number the framework does verify.
+
+    `roots=` moves the scope into data; this discharges it for every declaration, the same way
+    `test_every_declared_floor_is_pinned_to_its_population` discharges `verify_floor`. A
+    declaration with no `roots=` is not checked here and is recorded by the test below instead.
+    """
+    reach.verify_scope(_REPO_ROOT)
+
+
+def test_the_unscoped_declarations_are_recorded_and_shrinking() -> None:
+    """`what=` with no scope is a claim nothing can check, so the set of them only shrinks.
+
+    Compared as a SET in both directions, not by a count: a `<=` ceiling never forces itself
+    down, so a declaration gaining `roots=` would have freed a slot for a new bare one with the
+    pin still green. RATCHET_BASELINES.md rule 4, applied to the list this change introduces.
+    """
+    unscoped = {name for name, reach in _live().items() if reach.roots is None}
+    added = sorted(unscoped - UNSCOPED)
+    assert not added, (
+        "declaration(s) with no `roots=` and no entry in repo_tests/_reach_policy.UNSCOPED:\n  "
+        + "\n  ".join(added)
+        + "\n\nGive it `roots=(...)`. If its discovery does not return paths a prefix can "
+        "describe, add it to UNSCOPED and say so -- the list only shrinks, so that is a "
+        "recorded decision a reviewer sees, not a default."
+    )
+    scoped_since = sorted(UNSCOPED - unscoped)
+    assert not scoped_since, (
+        "UNSCOPED entries whose declaration now carries `roots=` -- remove them, the list only "
+        "shrinks and a stale entry quietly permits the next declaration to lose its scope:\n  "
+        + "\n  ".join(scoped_since)
+    )
+
+
+def test_every_allowance_carrying_declaration_records_why_it_is_absolute() -> None:
+    """A new `growth=` cannot be added without writing down why it is not a fraction (#17914).
+
+    The pattern that produced seventeen re-pins of one guard survives review because no
+    individual number in it is wrong. What was missing is the decision: `growth=400` records an
+    allowance and records nothing about whether a reference exists that would make the
+    allowance unnecessary.
+
+    This does NOT demand conversion. "52 declarations carry an allowance" is not "52 pending
+    conversions": most of these populations have no co-moving reference, and a fraction against
+    a reference that drifts fires falsely. The verdict table says which, and which are still
+    outstanding.
+    """
+    carrying = {name for name, r in _live().items() if r.min_fraction is None and r.growth}
+    missing = sorted(carrying - set(ALLOWANCE_VERDICTS))
+    assert not missing, (
+        "declaration(s) carrying a `growth` allowance with no recorded verdict in "
+        "repo_tests/_reach_policy.ALLOWANCE_VERDICTS:\n  "
+        + "\n  ".join(missing)
+        + "\n\nRecord ABSOLUTE with the reason a reference cannot co-move with this population, "
+        "or CONVERTIBLE and lower MAX_CONVERTIBLE when you convert it."
+    )
+    stale = sorted(set(ALLOWANCE_VERDICTS) - carrying)
+    assert not stale, (
+        "ALLOWANCE_VERDICTS entries whose declaration no longer carries an allowance -- remove "
+        "them, the table only shrinks:\n  " + "\n  ".join(stale)
+    )
+
+
+def test_a_relative_declaration_whose_population_is_not_the_tree_names_its_own_reference() -> None:
+    """#17914 AC3, asserted rather than left to review.
+
+    `tracked_file_count` is the whole tracked tree. A guard bounding a suffix-matched subset and
+    borrowing that denominator gets a floor that rises at the TREE's rate while the thing it
+    bounds grows at its own -- which is the same mistake in the opposite direction from the
+    absolute floor it replaced. The first version of #17142 made exactly this error.
+
+    Expressed as "a relative declaration whose sweep is materially smaller than the tracked
+    tree must name a reference", because that is the checkable half: a guard scanning every
+    tracked file legitimately borrows the default.
+    """
+    from repo_tests._reach import tracked_file_count  # noqa: PLC0415
+
+    total = tracked_file_count(_REPO_ROOT)
+    assert total > 0, "the tracked-file reference measured nothing; the check below would be vacuous"
+    borrowing = sorted(
+        name
+        for name, reach in _live().items()
+        if reach.min_fraction is not None
+        and reach.reference is None
+        and len(reach.population(_REPO_ROOT)) < total * 0.95
+    )
+    assert not borrowing, (
+        "relative declaration(s) bounding a proper subset of the tracked tree while borrowing "
+        "the tracked-file count as their denominator:\n  "
+        + "\n  ".join(borrowing)
+        + "\n\nName a `reference=` enumerating the same population, as "
+        "`hooks_path_override_15961_test._suffix_matched_count` does."
+    )
+    # Known positive (RATCHET_BASELINES rule 6). The sweep above is clean today, and a clean
+    # result from a predicate nothing exercises is this file's own subject: invert the
+    # `reference is None` term and it stays green. So drive it with a declaration IN breach.
+    planted = Reach(
+        name="self-check::borrows-the-tree",
+        discover=lambda _root: ["a/x.py"],
+        floor=0,
+        what="a subset borrowing the tracked-file count",
+        min_fraction=0.5,
+    )
+    assert (
+        planted.reference is None and len(planted.population(_REPO_ROOT)) < total * 0.95
+    ), "the planted breach is not in breach, so the sweep above cannot be shown to fire"
+
+
+#: Where the live-tree half of this file is paid, and where it is not (#17810).
+_PREPUSH_HOOK = _REPO_ROOT / "tools" / "git-hooks" / "pre-push"
+_CI_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "ci.yml"
+_FLOOR_MARKER = "reach_floor"
+
+
+def test_the_live_tree_checks_are_deselected_at_pre_push_and_selected_in_ci() -> None:
+    """The split is only real while BOTH halves hold, so both are asserted here (#17810).
+
+    This file was 156.75s of a 214s pre-push budget, and the cost scaled with the number of
+    declared floors: every `declare()` made every future push slower, and the author paid
+    nothing at the moment of declaring. The empty-tree proof is the half that must run near the
+    author -- it is what makes a floor provable at all -- and the floor-versus-population check
+    is a ratchet, which is what CI is for.
+
+    A marker that the hook deselects and nothing in CI selects is strictly worse than the cost
+    it saves: the check would stop running anywhere and the suite would get faster, which is
+    exactly how a guard dies quietly. So this asserts the hook skips the marker AND that CI's
+    `-m` expression does not exclude it.
+    """
+    # The INVOCATION line, not the file. The first version of this assertion searched the whole
+    # hook for the flag, and the hook's own explanatory comment quotes it -- so deleting the flag
+    # from the command left the check green. A guard satisfied by the prose beside the thing it
+    # guards is the exact shape this suite exists to catch, found by mutating it.
+    # The trailing comment is STRIPPED, not used to drop the line. Skipping any line
+    # containing `#` would have dropped a real invocation that happened to carry a trailing
+    # comment -- the same prose-versus-code confusion one step along, reported by review.
+    invocations = [
+        head
+        for head in (line.split("#", 1)[0] for line in _PREPUSH_HOOK.read_text(encoding="utf-8").splitlines())
+        if "-m pytest" in head
+    ]
+    assert invocations, "no uncommented `python -m pytest` invocation found in tools/git-hooks/pre-push"
+    unmarked = [line.strip() for line in invocations if f'-m "not {_FLOOR_MARKER}"' not in line]
+    assert not unmarked, (
+        f"tools/git-hooks/pre-push runs pytest without deselecting `{_FLOOR_MARKER}`, so every "
+        f"push pays one full tree walk per declared floor again:\n  " + "\n  ".join(unmarked)
+    )
+
+    workflow = _CI_WORKFLOW.read_text(encoding="utf-8")
+    selectors = [line for line in workflow.splitlines() if line.strip().startswith("-m ")]
+    assert selectors, "no `-m` marker expression found in ci.yml; this check can no longer see what CI selects"
+    excluding = [line.strip() for line in selectors if f"not {_FLOOR_MARKER}" in line]
+    assert not excluding, (
+        f"ci.yml deselects `{_FLOOR_MARKER}`, so the floor-versus-population check now runs "
+        f"NOWHERE -- pre-push skips it by design:\n  " + "\n  ".join(excluding)
     )

@@ -33,6 +33,7 @@ from datetime import datetime, timezone
 from typing import List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import SecurityConstants
 from autobot_shared.time_utils import now_utc
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
@@ -49,9 +50,12 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Supported local extensions
 # ---------------------------------------------------------------------------
-_AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".ogg", ".flac"}
-_VIDEO_EXTS = {".mp4", ".mkv", ".webm", ".avi", ".mov"}
-_MEDIA_EXTS = _AUDIO_EXTS | _VIDEO_EXTS
+# Derived from the canonical upload allowlist (#13615). This was two literals,
+# ``_AUDIO_EXTS`` and ``_VIDEO_EXTS``, neither of which anything gated on on
+# its own -- both call sites below use the union, so the audio-only name read
+# as an allowlist it never was. The union's delta from canonical (.mkv, .avi,
+# .mov) and the reason for it are recorded on the constant.
+_MEDIA_EXTS = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS  # one set, no connector-local delta (#13615)
 
 # YouTube URL patterns
 _YT_PATTERN = re.compile(r"(https?://)?(www\.)?(youtube\.com/watch\?v=|youtu\.be/)[\w\-]+")

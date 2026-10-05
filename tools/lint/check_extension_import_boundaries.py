@@ -34,6 +34,13 @@ import ast
 import sys
 from pathlib import Path
 
+# CI runs this as `python3 tools/lint/<name>.py`, where the repo root is not on
+# sys.path, and pre-commit imports it as a module. A `tools.lint.` path works
+# only in the second case and fails the first with ModuleNotFoundError.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _comment_syntax import code_lines  # noqa: E402
+
 # Packages/modules that are allowed at the extension/skill/plugin layer.
 # autobot_shared is the approved public surface.
 _ALLOWED_TOP_LEVEL = {
@@ -78,9 +85,7 @@ def _core_packages() -> frozenset[str]:
     if not backend.is_dir():
         return frozenset()
     return frozenset(
-        entry.name
-        for entry in backend.iterdir()
-        if entry.is_dir() and not entry.name.startswith((".", "__"))
+        entry.name for entry in backend.iterdir() if entry.is_dir() and not entry.name.startswith((".", "__"))
     )
 
 
@@ -101,9 +106,9 @@ def _load_grandfathered() -> set[tuple[str, str]]:
     if not _GRANDFATHER_FILE.is_file():
         return set()
     entries = set()
-    for line in _GRANDFATHER_FILE.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
+    for _lineno, raw in code_lines(_GRANDFATHER_FILE.read_text(encoding="utf-8")):
+        line = raw.strip()
+        if not line:
             continue
         parts = line.split()
         if len(parts) == 2:
@@ -237,9 +242,7 @@ def _check_file(path: Path, source: str) -> list[str]:
             continue
 
         for module in modules:
-            violations.extend(
-                _module_violations(module, path, lineno, raw_line, layer, is_init, core_packages)
-            )
+            violations.extend(_module_violations(module, path, lineno, raw_line, layer, is_init, core_packages))
 
     return violations
 

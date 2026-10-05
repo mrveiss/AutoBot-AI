@@ -59,6 +59,8 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import strip_trailing_comment
+
 _SCANNED_SUFFIXES = (".yml", ".yaml", ".sh", ".py")
 _DPKG_LIST = re.compile(r"\bdpkg\s+-l\b")
 #: A dpkg *listing query*, not any mention of dpkg. `fuser /var/lib/dpkg/lock`
@@ -203,11 +205,14 @@ def _code_lines_using_dpkg_list(root: pathlib.Path | None = None) -> List[Tuple[
             )
             continue
         for number, line in enumerate(text.splitlines(), start=1):
-            match = _DPKG_LIST.search(line)
+            # #17941: was `line.find("#") < match.start()`, which is positional
+            # and not quote-aware -- `echo "a # b" && dpkg -l` has a `#` before
+            # the match that is data, so the real invocation was skipped. The
+            # shared stripper tracks quote state, so the comment is removed for
+            # the reason it is a comment.
+            code = strip_trailing_comment(line, ("#",), escapes=True)
+            match = _DPKG_LIST.search(code)
             if not match:
-                continue
-            comment = line.find("#")
-            if comment != -1 and comment < match.start():
                 continue
             # Prose naming the command rather than running it. A YAML `msg:`
             # block is not a comment, so the position check above does not see
@@ -276,7 +281,11 @@ DPKG_LIST_CALL_SITES = declare(
 DPKG_REGISTRATIONS = declare(
     "dpkg-ansible-registrations",
     discover=_dpkg_registrations,
-    floor=4,
+    # Re-pinned MID-window 2026-10-04 (#17356): `_reach.verify_floor` now refuses a floor in
+    # the bottom tenth of `growth`, because that is zero tolerance dressed as an allowance.
+    # Re-measured by the mechanism itself, not carried across (#15928); the arithmetic is in
+    # the commit message, which cannot drift from the tree it describes.
+    floor=5,
     growth=3,
     what="ansible tasks registering the result of a dpkg query (#17387)",
 )

@@ -34,6 +34,18 @@ EXTENSION_TO_FORMAT = {
     ".ogg": "ogg",
     ".flac": "flac",
     ".webm": "webm",
+    # #13615: the allowlist collapsed to one set, so these three are now
+    # admitted everywhere and need a pinned demuxer like the rest -- an
+    # unmapped extension leaves `input_format` None and lets ffmpeg probe,
+    # which is the format-confusion the pinning exists to prevent.
+    #
+    # Names verified against `ffmpeg -h demuxer=<name>`, not guessed:
+    #   matroska -> "matroska,webm"              (shared with .webm)
+    #   avi      -> "avi"
+    #   mov      -> "mov,mp4,m4a,3gp,3g2,mj2"    (shared with .mp4/.m4a)
+    ".mkv": "matroska",
+    ".avi": "avi",
+    ".mov": "mov",
 }
 
 

@@ -50,8 +50,6 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         ".mcp/autobot-mcp-server.js",
         ".pre-commit-config.yaml",
         "autobot-frontend/scripts/check-ts-delta.sh",
-        "autobot-frontend/src/components/terminal/SSHTerminal.vue",
-        "autobot-frontend/src/types/generated/api.ts",
         # #17329: hardcoded_values_scope_agreement_test.py passes these three as
         # PARAMETERS to hv_path_in_scan_dirs, a pure string predicate -- it never
         # opens them, and its verdict cannot change when their content does.
@@ -59,11 +57,7 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         # component edit, which is the trade the CLAUDE.md entry below refuses.
         "autobot-frontend/vitest.config.ts",
         "autobot-slm-frontend/openapi.json",
-        "autobot-slm-frontend/src/App.vue",
-        "autobot-slm-frontend/src/composables/useAutobotApi.ts",
         "autobot-slm-frontend/vitest.config.ts",
-        "autobot-slm-frontend/src/types/generated/api.ts",
-        "autobot-slm-frontend/src/views/tools/admin/TerminalTool.vue",
         # #17129: doc_index_worktree_contamination_16934_test.py's "CLAUDE.md" is a
         # literal it writes inside a synthetic tmp_path repo fixture, never a read of
         # the real root-level file -- covering the real path in the filter would run
@@ -144,7 +138,10 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: (bare name, no slash; #17632). The same change covers the last two in the
 #: filter, so the count is 45 both before and after. Dropping either filter line
 #: makes it 46 and fails the equality.
-MAX_UNCOVERED_READS = 45
+# 45 -> 39: #17885 added 'autobot-frontend/src/**' and
+# 'autobot-slm-frontend/src/**' to the filter for the frontend ratchet's 184
+# literal reads, which covered six entries recorded here as uncovered.
+MAX_UNCOVERED_READS = 39
 
 #: A deliberate raise of ``MAX_UNCOVERED_READS`` is recorded here, as
 #: ``(value, "#issue")``. #17650's criterion is that raising is **justified**, not

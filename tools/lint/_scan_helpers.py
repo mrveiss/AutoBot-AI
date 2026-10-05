@@ -177,7 +177,7 @@ def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) 
     # one that fails because the result comes back plausible and full-length.
     # `EmptyEnumeration` cannot catch it: the list is non-empty, just wrong.
     positive_prefixes = sorted({posixpath.dirname(p) for p in patterns}) or [""]
-    excludes = []
+    excludes: list[str] = []
     for entry in exclude:
         if "/" in entry:
             rooted = [entry]  # already rooted; re-prefixing would move it
@@ -375,6 +375,26 @@ def resolve_base(explicit: str | None = None) -> str | None:
     if os.environ.get("PRE_COMMIT") == "1":
         return os.environ.get("PRE_COMMIT_FROM_REF") or None
     return None
+
+
+def configure_logging(target: logging.Logger) -> None:
+    """Attach a stderr handler to *target* so findings reach the developer.
+
+    Run as a bare script, a module logger has no handler, and logging's
+    last-resort path drops anything below WARNING -- so a checker that found
+    something printed nothing and exited 1, which reads as a crash.
+
+    Thirteen `tools/lint` checkers each carried a byte-identical private copy
+    of this. Measured by comparing ASTs with docstrings excluded: 13
+    definitions, 1 distinct body. The logger is a parameter rather than a
+    module global because each caller logs under its own `__name__`, which is
+    what makes the message say which checker spoke.
+    """
+    if not target.handlers:
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        target.addHandler(handler)
+    target.setLevel(logging.INFO)
 
 
 def logical_lines(text: str) -> List[Tuple[int, str]]:
