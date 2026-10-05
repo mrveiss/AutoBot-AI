@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import ast
 import logging
+import pathlib
 import sys
 from pathlib import Path
 from typing import List, Tuple
@@ -47,7 +48,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _scan_helpers import PY_FLOOR, enforce_reach, scan_python_files  # noqa: E402
 
-# Plain stdlib logging, deliberately (#1082). This runs as a bare script inside a
+# #13842: sibling-directory insert, so this resolves whether the checker
+# runs as a script (`python3 tools/lint/<name>.py`, which CI does) or is
+# imported as a module. A `tools.lint.` path works only in the second
+# case and fails the first with ModuleNotFoundError.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from _scan_helpers import configure_logging  # noqa: E402
+
 # lint job, and `autobot_shared.logging_manager` would drag config loading into
 # that path. Same trade as `tools/lint/check_no_shell_placeholder_paths.py`.
 logger = logging.getLogger(__name__)
@@ -58,19 +66,6 @@ LIVE_INSTALL_ROOT = "/" + "opt/autobot"
 
 #: The canonical replacement every finding is told to use.
 RESOLVER = "autobot_shared.paths.project_root()"
-
-
-def _configure_logging() -> None:
-    """Attach a stderr handler so findings actually reach the developer.
-
-    Run as a bare script the module logger has no handler, and logging's
-    last-resort path drops anything below WARNING.
-    """
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stderr)
-        handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
 
 
 def _is_sys_path_mutation(func: ast.AST) -> bool:
@@ -118,7 +113,7 @@ def live_install_default_sites(path: Path) -> List[Tuple[int, str]]:
 
 
 def main(argv: List[str]) -> int:
-    _configure_logging()
+    configure_logging(logger)
     repo_root = Path(__file__).resolve().parents[2]
     files, full_repo = scan_python_files(argv[1:], repo_root)
     # Vacuity floor (#14896): full-repo mode only -- pre-commit legitimately
