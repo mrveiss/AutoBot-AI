@@ -28,6 +28,8 @@ from __future__ import annotations
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines
+
 _ROOT = repo_root()
 _WORKFLOW = _ROOT / ".github" / "workflows" / "code-quality.yml"
 _SCRIPT = _ROOT / "pipeline-scripts" / "check_codeql_alert_ceiling.sh"
@@ -66,7 +68,7 @@ def _gate_is_soft_failed(workflow_text: str) -> bool:
 
 
 def _ceiling_values(text: str) -> list[str]:
-    return [ln.strip() for ln in text.splitlines() if ln.strip() and not ln.startswith("#")]
+    return [cl.text.strip() for cl in code_lines(text) if cl.text.strip()]
 
 
 _WF_OK = """permissions:
@@ -115,9 +117,7 @@ def test_the_ceiling_file_holds_exactly_one_number():
     """A ceiling that stops parsing makes the checker fail closed — but it should
     not get that far, and the failure would be reported as a tooling error rather
     than as a backlog that grew."""
-    values = [
-        ln.strip() for ln in _CEILING.read_text(encoding="utf-8").splitlines() if ln.strip() and not ln.startswith("#")
-    ]
+    values = _ceiling_values(_CEILING.read_text(encoding="utf-8"))
 
     assert len(values) == 1, f"expected one bare number in {_CEILING.name}, found {values}"
     assert values[0].isdigit(), f"ceiling {values[0]!r} is not a number"

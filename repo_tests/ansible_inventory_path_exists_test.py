@@ -52,6 +52,8 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import code_lines
+
 _REPO_ROOT = repo_root()
 
 #: Directories excluded from the sweep: not part of this checkout's own tree,
@@ -83,9 +85,11 @@ def _unquote(token: str) -> str:
 def _ansible_inventory_refs(text: str) -> list[str]:
     """Literal `-i <path>` arguments on live (non-comment, non-echoed) lines."""
     refs: list[str] = []
-    for line in text.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or stripped.startswith("echo"):
+    for _number, raw in code_lines(text):
+        stripped = raw.strip()
+        # `echo` stays local: an echoed command is not a comment, it is a line
+        # this guard deliberately does not treat as live (#17941).
+        if not stripped or stripped.startswith("echo"):
             continue
         match = _ANSIBLE_DASH_I_RE.search(stripped)
         if not match:
