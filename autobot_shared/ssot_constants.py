@@ -411,21 +411,21 @@ class SecurityConstants:
     # Web ports permitted for outbound/domain network validation (#10384).
     ALLOWED_WEB_PORTS: List[int] = [80, 443, 8080, 8443]
 
-    # Audio/container extensions accepted for transcriber upload, route
-    # admission, and ffmpeg processing (#13512).
+    # Container extensions accepted wherever a file is offered for audio
+    # processing: upload, route guard, ffmpeg, KB ingest, connector.
     #
-    # This existed as three byte-identical literals: the upload security
-    # boundary (``transcriber/upload_security.py``), the route guard
-    # (``transcriber/routes/recordings.py``) and the processing guard
-    # (``media/audio/ffmpeg_service.py``). The last carried the comment
-    # "must match upload_security.py" — an invariant nothing enforced.
+    # ONE SET, DEFINED BY A CAPABILITY, NOT BY HISTORY. Membership rule: a
+    # container ffmpeg can demux audio from, and `media/video/pipeline.py`
+    # identifies by magic bytes -- a rule that says whether a NEW format
+    # belongs, which "what these call sites happened to accept" never could.
+    # #13512 collapsed three byte-identical literals; #13615 then found two
+    # that had DRIFTED (+.mkv, and +.mkv/.avi/.mov) with no reason recorded for
+    # either, leaving the KB route rejecting .avi that the connector it feeds
+    # accepted. Collapsed to one (owner, 2026-10-05).
     #
-    # Three copies of a security-relevant allowlist drift independently: adding
-    # a format to the route guard alone admits a file the validator was never
-    # taught to accept, and dropping one from the security module alone leaves
-    # two paths still advertising it. One set removes that failure mode. A
-    # genuine difference between the three belongs here as a named subset,
-    # never as a fourth literal.
+    # Adding one here widens a security boundary -- `upload_security` gates on
+    # extension alone -- and needs an EXTENSION_TO_FORMAT entry, or the demuxer
+    # goes unpinned.
     ALLOWED_AUDIO_EXTENSIONS: Set[str] = {
         ".wav",
         ".mp3",
@@ -434,6 +434,9 @@ class SecurityConstants:
         ".ogg",
         ".flac",
         ".webm",
+        ".mkv",
+        ".avi",
+        ".mov",
     }
 
     USER_AGENT_POOL: List[str] = [
@@ -713,11 +716,8 @@ class WorkflowConfig:
     DEFAULT_ESTIMATED_DURATION_MIN = 30
     DEFAULT_TIMEOUT_MIN = 120
     MIN_DURATION_FACTOR = 0.5
-    COMPLEXITY_SIMPLE = 0.8
-    COMPLEXITY_RESEARCH = 1.0
-    COMPLEXITY_INSTALL = 1.1
-    COMPLEXITY_COMPLEX = 1.2
-    COMPLEXITY_SECURITY_SCAN = 1.3
+    COMPLEXITY_SIMPLE = 0.8  # one per TaskComplexity member (#376); there are two
+    COMPLEXITY_COMPLEX = 1.3  # declared 1.2, applied 1.3: the aliases collapsed (#13806)
 
 
 class ServiceDiscoveryConfig:

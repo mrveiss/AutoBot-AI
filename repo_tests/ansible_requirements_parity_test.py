@@ -93,6 +93,8 @@ yaml = pytest.importorskip("yaml")
 
 from repo_tests import ansible_manifest_resolution as resolution  # noqa: E402
 
+from tools.lint._comment_syntax import code_lines
+
 _REPO_ROOT = repo_root()
 _CONSTRAINTS = _REPO_ROOT / "constraints" / "shared.txt"
 # Named `..._pip_parity_...`, NOT `..._requirements_...`: this file RECORDS
@@ -330,8 +332,8 @@ def constrained_packages() -> set[str]:
 
 
 def baseline_keys() -> list[str]:
-    lines = _BASELINE.read_text(encoding="utf-8").splitlines()
-    return [line.strip() for line in lines if line.strip() and not line.startswith("#")]
+    text = _BASELINE.read_text(encoding="utf-8")
+    return [cl.text.strip() for cl in code_lines(text) if cl.text.strip()]
 
 
 def _contradicts(specifier: str, stated: set[str] | None) -> bool:

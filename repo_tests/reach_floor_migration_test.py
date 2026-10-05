@@ -82,6 +82,11 @@ _SHRINK_GUARD_CEILING = 100
 _EXCLUDED_META_FLOORS = frozenset(
     {
         "repo_tests/guard_reach_meta_test.py",
+        # Where `MIN_GUARDS_EXAMINED` now lives: `guard_reach_meta_test.py` reached the
+        # 600-line ceiling and its census constants moved out (#17818/#17870). The #16147
+        # ruling attaches to the floor, not to the file holding it, so relocating it must not
+        # reopen the decision -- hence the entry rather than a migration.
+        "repo_tests/_guard_reach_census.py",
         "repo_tests/sys_modules_module_scope_restoration_test.py",
         "repo_tests/reach_floor_migration_test.py",
     }

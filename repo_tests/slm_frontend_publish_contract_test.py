@@ -22,6 +22,7 @@ from repo_tests.slm_frontend_publish_contract import (
     REPO_ROOT,
 )
 
+from tools.lint._comment_syntax import code_text
 from tools.lint._scan_helpers import tracked_paths
 
 #: What makes a file a *publisher* is that it flips the served pointer, not that
@@ -77,7 +78,7 @@ def strip_comments(text: str) -> str:
     comment passes. Found by mutation: weakening the real task left every test
     green.
     """
-    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    return code_text(text, name="x.yml")
 
 
 def _sources() -> Dict[str, str]:

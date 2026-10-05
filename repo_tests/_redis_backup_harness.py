@@ -31,6 +31,8 @@ import jinja2
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines
+
 TEMPLATE = repo_root() / "autobot-slm-backend" / "ansible" / "roles" / "redis" / "templates" / "redis-backup.sh.j2"
 
 #: The role variables this template substitutes. Kept explicit rather than loaded from
@@ -84,9 +86,9 @@ def render(*, persistence: bool = True, trim_blocks: bool = True) -> str:
 def _command_lines(rendered: str) -> list[str]:
     """Non-blank, non-comment lines, stripped -- what the shell will actually execute."""
     out = []
-    for raw in rendered.splitlines():
-        line = raw.strip()
-        if line and not line.startswith("#"):
+    for _lineno, text in code_lines(rendered):
+        line = text.strip()
+        if line:
             out.append(line)
     return out
 

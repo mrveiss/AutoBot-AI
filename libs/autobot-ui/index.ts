@@ -30,6 +30,8 @@ export { default as BaseCard } from './src/components/BaseCard.vue'
 
 export { default as EmptyState } from './src/components/EmptyState.vue'
 
+export { default as SkipLink } from './src/components/SkipLink.vue'
+
 export { default as BaseModal } from './src/components/BaseModal.vue'
 export type { ModalSize } from './src/components/BaseModal.vue'
 

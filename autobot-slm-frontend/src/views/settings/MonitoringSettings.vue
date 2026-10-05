@@ -10,8 +10,13 @@
  */
 
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getGrafanaUrl, getPrometheusUrl } from '@/config/ssot-config'
 import { listSettings, upsertSetting } from '@/utils/slmSettingsApi'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('MonitoringSettings')
+const { t } = useI18n()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -60,7 +65,7 @@ async function saveSetting(key: string, value: string): Promise<void> {
       throw new Error('Failed to save setting')
     }
 
-    success.value = 'Setting saved successfully'
+    success.value = t('settings.monitoringSettings.settingSaved')
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to save setting'
@@ -70,7 +75,7 @@ async function saveSetting(key: string, value: string): Promise<void> {
 }
 
 async function deployMonitoringRole(): Promise<void> {
-  alert('Monitoring role deployment will be triggered via Ansible')
+  alert(t('settings.monitoringSettings.deployViaAnsible'))
 }
 
 async function testPrometheusConnection(): Promise<void> {
@@ -81,13 +86,14 @@ async function testPrometheusConnection(): Promise<void> {
     // eslint-disable-next-line no-restricted-syntax
     const response = await fetch(`${getPrometheusUrl()}/-/healthy`)
     if (response.ok) {
-      success.value = 'Prometheus connection successful'
+      success.value = t('settings.monitoringSettings.prometheusConnected')
       setTimeout(() => { success.value = null }, 3000)
     } else {
-      error.value = 'Prometheus connection failed'
+      error.value = t('settings.monitoringSettings.prometheusFailed')
     }
   } catch (e) {
-    error.value = 'Cannot reach Prometheus server'
+    logger.warn('Prometheus connection test failed:', e)
+    error.value = t('settings.monitoringSettings.prometheusUnreachable')
   }
 }
 
@@ -98,13 +104,14 @@ async function testGrafanaConnection(): Promise<void> {
     // eslint-disable-next-line no-restricted-syntax
     const response = await fetch(`${getGrafanaUrl()}/api/health`)
     if (response.ok) {
-      success.value = 'Grafana connection successful'
+      success.value = t('settings.monitoringSettings.grafanaConnected')
       setTimeout(() => { success.value = null }, 3000)
     } else {
-      error.value = 'Grafana connection failed'
+      error.value = t('settings.monitoringSettings.grafanaFailed')
     }
   } catch (e) {
-    error.value = 'Cannot reach Grafana server'
+    logger.warn('Grafana connection test failed:', e)
+    error.value = t('settings.monitoringSettings.grafanaUnreachable')
   }
 }
 
