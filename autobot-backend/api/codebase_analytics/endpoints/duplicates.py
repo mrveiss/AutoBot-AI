@@ -179,6 +179,15 @@ async def _run_standard_analysis(project_root: str, min_similarity: float):
             _duplicate_scan_lock.release()
 
 
+def _unresolved_source_response() -> JSONResponse:
+    """The refusal, once. Detail is logged, never returned: CWE-209."""
+    logger.warning("duplicate scan refused: source_id did not resolve")
+    return JSONResponse(
+        status_code=404,
+        content={"status": "error", "message": "source_id does not resolve to a code source; nothing scanned"},
+    )
+
+
 def _convert_analysis_to_result(analysis, project_root: str) -> dict:
     """
     Convert analysis result to frontend-compatible format.
@@ -441,28 +450,21 @@ async def get_duplicate_code(
     Returns:
         JSON with duplicates, statistics, and analysis metadata
     """
-    # Check cache first - Issue #620, #3685: Scoped by source_id
+    # Was a FOURTH private copy of the block `shared.resolve_source_root` was
+    # extracted for (#2760, which missed this file); the copy then missed
+    # #17758's fix and swallowed every failure into logger.debug, scanning
+    # AutoBot's own tree under the caller's key. `strict` follows what the
+    # CALLER supplied: naming nothing is not the same as naming a ghost.
+    try:
+        project_root = str(await resolve_scan_root(source_id, strict=bool(source_id)))
+    except UnresolvedSourceError:
+        return _unresolved_source_response()
+
+    # Cache read AFTER resolution: keyed by source_id, so reading it first
+    # serves a stale result for a source that no longer resolves (CodeRabbit).
     cached = _check_duplicate_cache(refresh, source_id=source_id)
     if cached:
         return cached
-
-    # #17982: this was a FOURTH private copy of the source-resolution block
-    # `shared.resolve_source_root` was extracted for (#2760, which converted
-    # report.py and stats.py and missed this one). The copy then missed the fix
-    # the canonical path received in #17758, and still swallowed every failure
-    # into `logger.debug` and carried on against AutoBot's own tree -- so an
-    # absent source, an empty clone_path and a raising lookup all produced a
-    # COMPLETED scan of the wrong repository, cached under the caller's key.
-    #
-    # `strict=True` because a scan has no user watching: a named source that
-    # does not resolve is an error, not a cue to substitute.
-    try:
-        project_root = str(await resolve_scan_root(source_id, strict=True))
-    except UnresolvedSourceError as exc:
-        return JSONResponse(
-            status_code=404,
-            content={"status": "error", "message": f"{exc}; nothing scanned"},
-        )
 
     try:
         # Run analysis (semantic or standard) - Issue #620: Use helper
@@ -593,12 +595,9 @@ async def detect_config_duplicates_endpoint(
     # above -- a named source that does not resolve is an error, not a cue to
     # substitute AutoBot's own tree.
     try:
-        project_root = await resolve_scan_root(source_id, strict=True)
-    except UnresolvedSourceError as exc:
-        return JSONResponse(
-            status_code=404,
-            content={"status": "error", "message": f"{exc}; nothing scanned"},
-        )
+        project_root = await resolve_scan_root(source_id, strict=bool(source_id))
+    except UnresolvedSourceError:
+        return _unresolved_source_response()
 
     # Issue #620: Use helpers for detection
     result = None

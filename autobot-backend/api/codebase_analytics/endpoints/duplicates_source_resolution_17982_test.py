@@ -56,7 +56,30 @@ async def test_naming_no_source_still_falls_back():
     different questions, and only the second is a mistake. Without this, the
     fix above could be a blanket raise and both tests would still pass.
     """
-    assert await resolve_scan_root(None, strict=True) is not None
+    assert await resolve_scan_root(None, strict=bool(None)) is not None
+
+
+@pytest.mark.asyncio
+async def test_an_unresolvable_DEFAULT_source_still_falls_back(monkeypatch):
+    """The case the test above could not see (CodeRabbit).
+
+    `resolve_scan_root` assigns the DEFAULT id before the strict check, so with
+    `strict=True` a default that exists and does not resolve raises -- 404 for
+    a caller who named nothing. The test above passed only because the default
+    resolved in the environment it ran in, which is the kind of pass that
+    proves the environment rather than the code.
+
+    The call sites now pass `strict=bool(source_id)`, so strictness follows
+    what the CALLER supplied, not what the default lookup found.
+    """
+    import api.codebase_analytics.source_storage as storage
+
+    async def _default_id():
+        return "a-default-that-does-not-resolve"
+
+    monkeypatch.setattr(storage, "get_default_source_id", _default_id, raising=False)
+    with patch("api.codebase_analytics.source_storage.get_source", return_value=None):
+        assert await resolve_scan_root(None, strict=bool(None)) is not None
 
 
 def test_duplicates_has_no_private_source_resolution_left():
