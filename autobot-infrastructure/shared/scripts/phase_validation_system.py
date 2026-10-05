@@ -23,6 +23,7 @@ import psutil
 import requests
 
 # Import centralized Redis client
+from phase_feature_checks import declares_compose_services, defines_callable
 from phase_score import LIVE_STACK_GROUPS, PhaseScore, overall, project_report
 
 from autobot_shared.network_constants import ServiceURLs
@@ -845,8 +846,8 @@ class PhaseValidator:
             # dict was written, with no validator -- so both reported
             # "implemented" with nothing looked at. (The third name declared
             # there, "scalability", was removed instead; see PHASE_CRITERIA.)
-            "containerization": lambda: (root / "docker-compose.yml").exists(),
-            "deployment_automation": lambda: (root / _SHARED_SCRIPTS / "zero_downtime_deploy.py").exists(),
+            "containerization": lambda: declares_compose_services(root / "docker-compose.yml"),
+            "deployment_automation": lambda: defines_callable(root / _SHARED_SCRIPTS / "zero_downtime_deploy.py"),
         }
 
     async def _validate_single_feature(self, feature_type: str, feature: str) -> bool:
