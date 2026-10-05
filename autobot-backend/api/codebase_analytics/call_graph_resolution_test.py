@@ -17,9 +17,9 @@ import ast
 from api.codebase_analytics.endpoints.call_graph import (
     FunctionCallVisitor,
     _extract_callee_name,
-    extract_dotted_callee,
     _extract_import_context,
     _resolve_callee_id,
+    extract_dotted_callee,
 )
 from api.codebase_analytics.endpoints.shared import (
     COMMON_THIRD_PARTY,
