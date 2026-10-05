@@ -45,7 +45,14 @@ import pathlib
 import re
 import sys
 
-# Plain stdlib logging, deliberately (#1082, matching check_requirements_ci_drift.py
+# #13842: sibling-directory insert, so this resolves whether the checker
+# runs as a script (`python3 tools/lint/<name>.py`, which CI does) or is
+# imported as a module. A `tools.lint.` path works only in the second
+# case and fails the first with ModuleNotFoundError.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from _scan_helpers import configure_logging  # noqa: E402
+
 # and check_python_file_size.py): this runs inside `code-quality`, which installs
 # linters only — never the application's own dependencies — so
 # `autobot_shared.logging_manager` is not importable here.
@@ -149,14 +156,6 @@ def audit_parity(base: pathlib.Path | None = None) -> tuple[int, list[str]]:
     ]
 
 
-def configure_logging() -> None:
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stderr)
-        handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-
-
 def run_audit() -> int:
     compared, problems = audit_parity()
     if problems:
@@ -168,7 +167,7 @@ def run_audit() -> int:
 
 
 def main(argv: list[str]) -> int:
-    configure_logging()
+    configure_logging(logger)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--audit",

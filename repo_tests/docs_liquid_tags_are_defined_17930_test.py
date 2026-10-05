@@ -237,6 +237,7 @@ def _liquid_rendered_docs(root: Path) -> list[Path]:
 DOCS_SCANNED = declare(
     "jekyll-processed-docs",
     discover=_liquid_rendered_docs,
+    roots=(DOCS,),
     floor=125,
     growth=50,
     skips=0,

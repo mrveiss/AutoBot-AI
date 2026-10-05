@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""#14405, #15914 — no tracked Python file may reference a name it never binds.
+r"""#14405, #15914 — no tracked Python file may reference a name it never binds.
 
 An undefined name is a live ``NameError`` waiting on the code path that reaches
 it, not a style preference. Twelve operator scripts in this tree carried 103 of
@@ -86,8 +86,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import yaml
-
-from _scan_helpers import tracked_paths  # noqa: E402
+from _scan_helpers import configure_logging, tracked_paths  # noqa: E402
 
 # Plain stdlib logging, deliberately (#1082). This runs as a bare script inside a
 # lint job, and `autobot_shared.logging_manager` would drag config loading into
@@ -266,9 +265,7 @@ def audit(base: pathlib.Path | None = None) -> tuple[int, list[str]]:
     if findings:
         problems.append(
             "undefined names (a NameError waiting on the code path that reaches "
-            "them):\n"
-            + "\n".join(findings)
-            + f"\n\nImport or define each name — or delete the reference if, as in "
+            "them):\n" + "\n".join(findings) + f"\n\nImport or define each name — or delete the reference if, as in "
             "#15914, the assignment has been dead since its import was dropped. "
             f"{SELF_REL} carries no exemption list on purpose (#14405): "
             "grandfathering an undefined name would make the defect this guard "
@@ -299,21 +296,8 @@ def check_files(paths: list[str], base: pathlib.Path | None = None) -> tuple[int
     return len(selected), problems
 
 
-def configure_logging() -> None:
-    """Attach a stderr handler so findings actually reach the developer.
-
-    Run as a bare script the module logger has no handler, and logging's
-    last-resort path drops anything below WARNING.
-    """
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stderr)
-        handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-
-
 def main(argv: list[str]) -> int:
-    configure_logging()
+    configure_logging(logger)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--audit",

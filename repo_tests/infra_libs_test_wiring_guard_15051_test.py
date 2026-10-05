@@ -40,6 +40,7 @@ import pytest
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint._comment_syntax import code_lines
 
 REPO_ROOT = repo_root()
 WATCHED_ROOTS = ("autobot-infrastructure/shared/tests", "libs")
@@ -91,11 +92,7 @@ def _workflow_roots() -> set[str]:
 def _testpaths_roots() -> set[str]:
     parser = configparser.ConfigParser(inline_comment_prefixes=("#",))
     parser.read(REPO_ROOT / "pytest.ini", encoding="utf-8")
-    return {
-        line.strip()
-        for line in parser.get("pytest", "testpaths").splitlines()
-        if line.strip() and not line.strip().startswith("#")
-    }
+    return {cl.text.strip() for cl in code_lines(parser.get("pytest", "testpaths")) if cl.text.strip()}
 
 
 def _tracked_modules_under(root: str) -> list[str]:

@@ -61,6 +61,14 @@ backend:
   # outside every other entry -- so a PR editing only one of them skipped the
   # audit entirely, in exactly the case the gate exists to catch.
   - '**/*.sh'
+  # #17885: generic, mirroring '**/*.sh' above for the same reason. The frontend
+  # size ratchet's --audit-ceilings step lives in `code-quality`, which only runs
+  # when this filter says so. Without these two entries a .ts/.vue-only PR -- the
+  # exact shape that grows a frontend file past the limit -- skips the one audit
+  # that measures it, and a skipped required job reads as satisfied to branch
+  # protection.
+  - '**/*.ts'
+  - '**/*.vue'
   - '**/requirements*.txt'
   - 'requirements-ci/**'
   - 'repo_tests/**'

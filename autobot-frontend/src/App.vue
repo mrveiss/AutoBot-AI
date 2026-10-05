@@ -1,10 +1,11 @@
 <template>
   <div id="app" class="h-screen bg-autobot-bg-primary flex flex-col overflow-hidden">
-    <!-- Skip Navigation Links -->
-    <div v-if="showAuthChrome" class="skip-links">
-      <a href="#main-content" class="skip-link sr-only-focusable">{{ $t('nav.skipToContent') }}</a>
-      <a href="#navigation" class="skip-link sr-only-focusable">{{ $t('nav.skipToNavigation') }}</a>
-    </div>
+    <!-- Skip links: the shared kit's SkipLink, which moves focus (#17565) -->
+    <template v-if="showAuthChrome">
+      <SkipLink :label="$t('nav.skipToContent')" />
+      <!-- #navigation is display:none below lg, so its skip link is too -->
+      <span class="hidden lg:inline"><SkipLink target="#navigation" :label="$t('nav.skipToNavigation')" /></span>
+    </template>
 
     <!-- Header - Issue #901: Professional solid color (no gradients) -->
     <!-- Hide navigation bar on login page -->
@@ -577,6 +578,7 @@ import { useNavOverflow } from '@/composables/useNavOverflow'
 import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import NavOverflowMenu from '@/components/layout/NavOverflowMenu.vue'
 import CommandPalette from '@/components/CommandPalette.vue'
+import { SkipLink } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { cacheBuster } from '@/utils/CacheBuster.js';
 import { healthMonitor } from '@/utils/HealthMonitor.js';
@@ -613,6 +615,7 @@ export default {
     ErrorBoundary,
     NavOverflowMenu,
     CommandPalette,
+    SkipLink,
     TelemetryConsentModal,
     DarkModeToggle: defineAsyncComponent(() => import('@/components/ui/DarkModeToggle.vue')),
     LanguageSwitcher: defineAsyncComponent(() => import('@/components/layout/LanguageSwitcher.vue')),
@@ -1112,33 +1115,6 @@ export default {
 </script>
 
 <style scoped>
-/* Skip Navigation Links */
-.skip-links {
-  position: relative;
-  z-index: var(--z-toast);
-}
-
-.skip-link {
-  position: absolute;
-  top: -40px;
-  left: 0;
-  background: var(--text-primary);
-  color: var(--bg-primary);
-  padding: var(--spacing-2) var(--spacing-4);
-  text-decoration: none;
-  border-radius: 0 0 var(--radius-default) 0;
-  font-size: var(--text-sm);
-  font-weight: 500;
-  transition: top var(--duration-200) var(--ease-in-out);
-  z-index: var(--z-maximum);
-}
-
-.skip-link:focus {
-  top: 0;
-  outline: 2px solid var(--bg-primary);
-  outline-offset: 2px;
-}
-
 /* Navigation link focus indicators */
 nav a:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.8);

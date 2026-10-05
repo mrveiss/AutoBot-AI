@@ -242,7 +242,9 @@ def measurement() -> Measurement:
 #: Floor on files reached, so a scanner that has stopped walking the tree
 #: fails loudly instead of passing on an empty sweep (the #15018 lesson).
 #: Measured on main: comfortably above 1000 tracked, non-test .py files.
-MIN_FILES_SCANNED = 3000
+#: Re-pinned MID-window 2026-10-04 (#17356): `_reach.verify_floor` now refuses a floor in the
+#: bottom tenth of `growth`. Re-measured by the mechanism, not carried across (#15928).
+MIN_FILES_SCANNED = 3182
 
 #: See `audio_extension_allowlist_test` for the derivation of `growth`.
 #:

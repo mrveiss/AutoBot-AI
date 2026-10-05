@@ -38,6 +38,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import code_text
+
 _APP = Path("autobot-slm-frontend")
 _LOCALES = _APP / "src" / "locales"
 _I18N = _APP / "src" / "i18n" / "index.ts"
@@ -121,8 +123,15 @@ _LINE_COMMENT = re.compile(r"(?:^|(?<=\s))//.*$")
 
 
 def _strip_comments(source: str) -> str:
-    """*source* with its comments removed and its code intact."""
-    return "\n".join(_LINE_COMMENT.sub("", line) for line in _BLOCK_COMMENT.sub(" ", source).splitlines())
+    """*source* with its comments removed and its code intact.
+
+    Delegates to the shared stripper (#17941) -- one of seven private copies.
+    The anchoring heuristic this used to need for `/*` is gone: the shared
+    scanner tracks string literals, so `import.meta.glob('../locales/*.json')`
+    is data for the reason it is data rather than because the pattern was
+    anchored. The two controls below still pin both directions.
+    """
+    return code_text(source, name="x.ts", strip_trailing=True)
 
 
 def _bundle(locale: str) -> dict:

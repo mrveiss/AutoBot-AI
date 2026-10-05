@@ -17,6 +17,7 @@ Related Issues: #185 (Split), #212 (Analytics split)
 import asyncio
 import json
 import re
+import sys
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -320,8 +321,12 @@ class AnalyticsController:
     async def _run_code_analysis_suite(self, request: CodeAnalysisRequest, results: Dict):
         """Run the code analysis suite"""
         try:
+            # #13842: `sys.executable`, never bare "python3" -- this spawns
+            # repo code, whose floor is 3.14, and a bare name takes whatever
+            # PATH offers. A SyntaxError in a subprocess reads as "analysis
+            # broken", not "wrong interpreter".
             cmd = [
-                "python3",
+                sys.executable,
                 str(self.code_analysis_path / "scripts" / "analyze_project.py"),
                 "--target",
                 request.target_path,
@@ -356,8 +361,9 @@ class AnalyticsController:
     async def _run_code_indexing(self, request: CodeAnalysisRequest, results: Dict):
         """Run code indexing using code-index-mcp"""
         try:
+            # #13842: same reasoning as `_run_code_analysis_suite` above.
             cmd = [
-                "python3",
+                sys.executable,
                 str(self.code_index_path / "run.py"),
                 "--index-path",
                 request.target_path,
