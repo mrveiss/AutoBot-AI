@@ -35,7 +35,7 @@ from utils.io_executor import get_analytics_executor
 
 from ..duplicate_detector import DuplicateCodeDetector, detect_duplicates_async
 from ..storage import get_code_collection
-from .shared import resolve_project_root
+from .shared import UnresolvedSourceError, resolve_scan_root
 
 logger = get_logger(__name__)
 
@@ -63,11 +63,6 @@ _REDIS_PREFIX = "dup_task:"
 # Cache for duplicate analysis (in-memory, refreshed on demand)
 # Keyed by source_id (or "" for unscoped) to prevent cross-project leakage (#3685)
 _duplicate_cache: dict[str, dict] = {}
-
-
-def _get_project_root() -> str:
-    """Get project root path — delegates to shared resolver (#10730)."""
-    return resolve_project_root()
 
 
 async def _run_semantic_analysis(project_root: str, min_similarity: float):
@@ -451,18 +446,23 @@ async def get_duplicate_code(
     if cached:
         return cached
 
-    # Issue #3685: Resolve clone_path from source registry so live analysis
-    # runs against the correct project, not always the AutoBot repo.
-    project_root = _get_project_root()
-    if source_id:
-        try:
-            from api.codebase_analytics.source_storage import get_source
-
-            source = await get_source(source_id)
-            if source and source.clone_path:
-                project_root = source.clone_path
-        except Exception:
-            logger.debug("Could not resolve clone_path for %s, using default", source_id)
+    # #17982: this was a FOURTH private copy of the source-resolution block
+    # `shared.resolve_source_root` was extracted for (#2760, which converted
+    # report.py and stats.py and missed this one). The copy then missed the fix
+    # the canonical path received in #17758, and still swallowed every failure
+    # into `logger.debug` and carried on against AutoBot's own tree -- so an
+    # absent source, an empty clone_path and a raising lookup all produced a
+    # COMPLETED scan of the wrong repository, cached under the caller's key.
+    #
+    # `strict=True` because a scan has no user watching: a named source that
+    # does not resolve is an error, not a cue to substitute.
+    try:
+        project_root = str(await resolve_scan_root(source_id, strict=True))
+    except UnresolvedSourceError as exc:
+        return JSONResponse(
+            status_code=404,
+            content={"status": "error", "message": f"{exc}; nothing scanned"},
+        )
 
     try:
         # Run analysis (semantic or standard) - Issue #620: Use helper
@@ -589,16 +589,16 @@ async def detect_config_duplicates_endpoint(
     Returns:
         JSONResponse with duplicate detection results
     """
-    project_root = Path(resolve_project_root())
-    if source_id:
-        try:
-            from api.codebase_analytics.source_storage import get_source
-
-            source = await get_source(source_id)
-            if source and source.clone_path:
-                project_root = Path(source.clone_path)
-        except Exception:
-            logger.debug("Could not resolve clone_path for %s, using default", source_id)
+    # #17982: the second copy of the same block. Same reasoning as the scan
+    # above -- a named source that does not resolve is an error, not a cue to
+    # substitute AutoBot's own tree.
+    try:
+        project_root = await resolve_scan_root(source_id, strict=True)
+    except UnresolvedSourceError as exc:
+        return JSONResponse(
+            status_code=404,
+            content={"status": "error", "message": f"{exc}; nothing scanned"},
+        )
 
     # Issue #620: Use helpers for detection
     result = None
