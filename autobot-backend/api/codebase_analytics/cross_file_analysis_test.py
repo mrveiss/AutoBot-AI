@@ -125,7 +125,7 @@ async def test_cross_file_analysis_finds_duplicate_enum(tmp_path):
 @pytest.mark.asyncio
 async def test_problem_dict_shape_matches_chromadb_persistence(tmp_path):
     """The dict shape produced by the bridge must include exactly the keys
-    chromadb_storage._prepare_problem_document expects to read."""
+    problem_storage._prepare_problem_document expects to read."""
     xfa = _load_cross_file_module()
 
     _write(
@@ -153,7 +153,7 @@ async def test_problem_dict_shape_matches_chromadb_persistence(tmp_path):
 
     assert persisted, "fixture must produce at least one finding"
     p = persisted[0]
-    # Required keys read by chromadb_storage._prepare_problem_document:
+    # Required keys read by problem_storage._prepare_problem_document:
     for key in ("type", "severity", "file_path", "line", "description", "suggestion"):
         assert key in p, f"problem dict missing required key {key!r}: {p}"
     # The type prefix matches the existing analyzers.py::_run_anti_pattern_analysis

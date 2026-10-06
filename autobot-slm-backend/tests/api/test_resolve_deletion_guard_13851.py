@@ -37,6 +37,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _code_sync_import import import_code_sync  # noqa: E402
 
 code_sync = import_code_sync()
+# See #18052: the consumer of these names moved to api/_rsync_paths.
+_rsync_paths = sys.modules["api._rsync_paths"]
 
 _rsync_local_cmd = code_sync._rsync_local_cmd
 _parse_rsync_deletions = code_sync._parse_rsync_deletions
@@ -100,9 +102,15 @@ _REAL_DC = _load_real_drift_checker()
 
 @pytest.fixture
 def real_deployment_map(monkeypatch):
-    """Point code_sync's exclude builder at the REAL component ownership map."""
-    monkeypatch.setattr(code_sync, "owned_subtrees", _REAL_DC.owned_subtrees)
-    monkeypatch.setattr(code_sync, "deploy_only_entries", _REAL_DC.deploy_only_entries)
+    """Point the exclude builder at the REAL component ownership map.
+
+    Patched on `_rsync_paths`, not `code_sync`: `_rsync_exclude_args` moved
+    there (#18052 extraction) and resolves these from its OWN module globals,
+    so patching the old home would silently do nothing and the fixture would
+    hand the test a mocked ownership map while claiming to be real.
+    """
+    monkeypatch.setattr(_rsync_paths, "owned_subtrees", _REAL_DC.owned_subtrees)
+    monkeypatch.setattr(_rsync_paths, "deploy_only_entries", _REAL_DC.deploy_only_entries)
 
 
 def real_rsync():
