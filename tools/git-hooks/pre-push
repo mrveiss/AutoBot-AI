@@ -80,6 +80,48 @@ could_not_run() {
 }
 fail()  { printf "${RED}[pre-push FAIL]${CLR} %s\n" "$*" >&2; }
 
+# ---------------------------------------------------------------------------
+# #18058: run pytest on an interpreter that meets the platform's 3.11 floor.
+#
+# Bare `python3` is whatever the machine happens to ship.  Where that is below
+# 3.11, every selected group dies at COLLECT time on a 3.11-only name
+# (enum.StrEnum, asyncio.Task.cancelling) and the push is blocked by the
+# interpreter rather than by anything in the changeset.  Classifying that
+# after the fact only names the problem; choosing a conforming interpreter
+# removes it.
+#
+# Preference order, all derived from the session -- no absolute paths:
+#   1. the repo's own venv, which is what the tree was set up against
+#   2. python3, when it already meets the floor
+#   3. the newest explicitly-versioned python3.N on PATH that meets it
+# Falls back to python3 so the floor classifier above still reports honestly
+# when nothing conforming exists.
+# ---------------------------------------------------------------------------
+pick_python() {
+    # A candidate qualifies only if it meets the floor AND can actually
+    # IMPORT pytest -- find_spec only proves the package is locatable, so a
+    # stale venv with a broken install would be chosen over a working python3.
+    # Version alone is not enough: a bare /usr/bin/python3.14 with no pytest
+    # fails with "No module named pytest", which is the same push-blocking
+    # non-failure in different words.
+    local candidate main_root
+    # In a worktree $PWD is the worktree, which has no venv; the venv lives in
+    # the main checkout, whose path is the parent of the common git dir.
+    main_root="$(dirname "$(git rev-parse --git-common-dir 2>/dev/null || echo .)")"
+    for candidate in "$REPO_ROOT/venv/bin/python" "$REPO_ROOT/.venv/bin/python" \
+                     "$main_root/venv/bin/python" "$main_root/.venv/bin/python" \
+                     python3 python3.14 python3.13 python3.12 python3.11; do
+        command -v "$candidate" >/dev/null 2>&1 || [ -x "$candidate" ] || continue
+        if "$candidate" -c 'import sys; sys.exit(1) if sys.version_info < (3, 11) else __import__("pytest")' 2>/dev/null; then
+            printf '%s' "$candidate"
+            return 0
+        fi
+    done
+    printf '%s' python3
+}
+PYTEST_PYTHON="$(pick_python)"
+
+
 # A dependency root is usable only if it can be TRAVERSED. A directory that is
 # present but carries no execute bit answers `-d` yes and denies everything
 # inside it (#17573: autobot-slm-frontend/node_modules is mode 644, so every
@@ -515,7 +557,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   # (#16019). A failed selection blocks the push: an empty list would read as
   # "nothing to verify".
   sel_err=$(mktemp)
-  selection=$(printf '%s\n' "$changed" | (cd "$REPO_ROOT" && python3 -m tools.lint.prepush_selection) 2>"$sel_err")
+  selection=$(printf '%s\n' "$changed" | (cd "$REPO_ROOT" && "$PYTEST_PYTHON" -m tools.lint.prepush_selection) 2>"$sel_err")
   selection_exit=$?
   if [ "$selection_exit" != "0" ]; then
     fail "pytest selection failed (#16715) -- this push is NOT verified:"
@@ -571,19 +613,29 @@ while read -r local_ref local_sha remote_ref remote_sha; do
           # no marker and still runs here; the floor-versus-population half is a ratchet and
           # runs in CI. `reach_declarations_test` asserts BOTH ends of that split, so the
           # marker cannot quietly become a way of running the check nowhere.
-          timeout "$TEST_TIMEOUT" python3 -m pytest -xvs -m "not reach_floor" $group 2>&1
+          timeout "$TEST_TIMEOUT" "$PYTEST_PYTHON" -m pytest -xvs -m "not reach_floor" $group 2>&1
         ) || group_exit=$?
         if [ "$group_exit" = "124" ]; then
           pytest_timed_out=1
         elif [ "$group_exit" != "0" ]; then
-          # The interpreter floor is not a test failure. llc/scheduler/base.py
-          # refuses to import below Python 3.11 (asyncio.Task.cancelling), and
-          # any conftest that reaches it takes the whole group down at COLLECT
-          # time -- before a single assertion runs. Matching the requirement
-          # string that module exports, not "ImportError": a real broken import
-          # in the changeset must still block.
+          # The interpreter floor is not a test failure. Below Python 3.11 a
+          # conftest that reaches one of these takes the whole group down at
+          # COLLECT time -- before a single assertion runs:
+          #   - llc/scheduler/base.py refuses to import (asyncio.Task.cancelling)
+          #   - enum.StrEnum does not exist (3.11+), which any module importing
+          #     it propagates to every co-located test (#18058)
+          # Each is matched as its own specific string, never as a bare
+          # "ImportError": a real broken import in the changeset must still
+          # block. A new floor symptom is one more branch here, not a looser
+          # pattern.
+          floor_symptom=""
           if printf '%s' "$group_output" | grep -q 'requires asyncio.Task.cancelling()'; then
-            pytest_unrunnable="the interpreter floor: $(python3 -V 2>&1) is below the 3.11+ that llc/scheduler/base.py requires (platform floor and CI are 3.14)"
+            floor_symptom="llc/scheduler/base.py requires asyncio.Task.cancelling()"
+          elif printf '%s' "$group_output" | grep -q "cannot import name 'StrEnum' from 'enum'"; then
+            floor_symptom="enum.StrEnum is 3.11+"
+          fi
+          if [ -n "$floor_symptom" ]; then
+            pytest_unrunnable="the interpreter floor: $("$PYTEST_PYTHON" -V 2>&1) is below the 3.11+ the platform requires ($floor_symptom; CI is 3.14)"
           else
             pytest_failed=1
             fail "pytest failures (#5142):"

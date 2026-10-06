@@ -10,7 +10,6 @@ Provides endpoints for code version tracking and sync operations.
 
 import asyncio
 import functools
-import getpass
 import hashlib
 import logging
 import os
@@ -33,6 +32,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from api._pricing_post_sync import _load_env_file, run_pricing_refresh_post_sync
+from api._rsync_paths import (  # noqa: F401 -- re-exported: callers and tests reach these via api.code_sync
+    _ensure_dist_writable,
+    _parse_rsync_deletions,
+    _prune_old_snapshots,
+    _restore_component_snapshot,
+    _rsync_exclude_args,
+    _with_blocked_paths,
+)
 
 # _CONSTRAINTS_SOURCE_SUBDIR / _REPO_ROOT_REQUIREMENT_FILES: re-exported only —
 # code_sync.py's own code no longer reads them, but external test modules
@@ -95,17 +102,13 @@ from services.database import get_db
 from services.deploy_activity import read_deploy_activity
 from services.deploy_artifacts import (
     HOST_STATE_EXCLUDES,
-    rsync_artifact_excludes,
-    rsync_host_state_args,
 )
 from services.deployed_dir_resolver import get_live_dir, get_release_component_dir
 from services.drift_checker import (
     ALLOWED_COMPONENTS,
     VISIBILITY_COMPONENTS,
     build_drift_report,
-    deploy_only_entries,
     get_default_source_dir,
-    owned_subtrees,
 )
 from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
@@ -270,25 +273,6 @@ async def _fail_resolve_job(
                 job_row.post_steps = "\n".join(post_steps)
             job_row.completed_at = datetime.now(timezone.utc)
             await db.commit()
-
-
-# Cap on paths inlined into an async job's refusal message — the full list is
-# in the log and in the sync endpoint's blocked_deletions (#13851).
-_BLOCKED_DELETION_PREVIEW: int = 20
-
-
-def _with_blocked_paths(message: str, blocked: List[str]) -> str:
-    """Append the would-be-deleted paths to a refusal message (#13851).
-
-    The async job row carries only a message, so the paths at stake must travel
-    inside it or the operator polling job status is told a resolve refused
-    without being told what it was protecting.
-    """
-    if not blocked:
-        return message
-    shown = blocked[:_BLOCKED_DELETION_PREVIEW]
-    suffix = f" (+{len(blocked) - len(shown)} more)" if len(blocked) > len(shown) else ""
-    return f"{message} Paths: {', '.join(shown)}{suffix}"
 
 
 async def _mark_resolve_job_running(job_id: str, db_service) -> None:
@@ -1357,64 +1341,6 @@ _SLM_COMPONENTS: List[Tuple[str, List[str]]] = [
 _PROTECTED_EXCLUDES: List[str] = list(HOST_STATE_EXCLUDES)
 
 
-def _rsync_exclude_args(excludes: List[str], component: str | None = None) -> List[str]:
-    """Build --exclude args from caller excludes, canonical build/deploy
-    artifacts, protected runtime paths, and other components' subtrees.
-
-    Canonical artifact excludes (#11459) are injected here — the single rsync
-    chokepoint — so every sync ignores exactly what the drift checker skips
-    (shared source: services/deploy_artifacts.py). This keeps rsync and drift in
-    lockstep: previously ``*.egg-info`` etc. were drift-skipped (#11440) but
-    still deleted-and-resynced, churning the deployed tree. Protected paths
-    (#9970) must survive every delete-style sync.
-
-    #13851: when *component* is given, subtrees owned by ANOTHER component and
-    the component's deploy-only entries are excluded too, anchored at the
-    transfer root so a same-named directory deeper in the tree is unaffected.
-    Defence in depth: the backend's delete-style resolve would have removed 34
-    files under ``autobot-backend/plugins`` — perfectly in sync with their
-    real source (the ``plugins`` component), invisible to a walk that only
-    knows about ``code_source/autobot-backend``.
-
-    Subtrees get a trailing slash (they are directories); deploy-only entries do
-    not, because the set holds files (``config/npu_workers.yaml``), symlinks
-    (``autobot_shared``) and rendered artifacts (``npu-worker.py``) alike, and
-    an anchored pattern without a trailing slash matches all three.
-    """
-    foreign: List[str] = []
-    if component is not None:
-        foreign = [f"/{sub}/" for sub in sorted(owned_subtrees(component))]
-        foreign += [f"/{path}" for path in sorted(deploy_only_entries(component))]
-    merged = list(dict.fromkeys([*excludes, *rsync_artifact_excludes(), *foreign]))
-    # Host-state args go FIRST: they carry `--include` entries, and rsync applies
-    # the first matching rule (#14231). Dedup spans the whole list, not just
-    # `merged` -- a caller passing `.env` would otherwise emit it twice.
-    return list(dict.fromkeys([*rsync_host_state_args(), *(f"--exclude={exc}" for exc in merged)]))
-
-
-# #13851: rsync itemize marker for a delete. `--dry-run --delete --itemize-changes`
-# prints one `*deleting   <path>` line per path that WOULD be removed.
-_RSYNC_DELETE_MARKER: str = "*deleting"
-
-
-def _parse_rsync_deletions(output: str) -> List[str]:
-    """Extract the paths a `--dry-run --delete` rsync reported it would remove.
-
-    rsync prints ``*deleting`` followed by column padding and the path. Only the
-    leading padding is stripped: a trailing space is a legal filename character
-    and removing it would misreport the path. Note that a removed directory is
-    itemized once per level, so the list can be longer than the file count —
-    which is the safe direction for a guard.
-    """
-    deletions: List[str] = []
-    for line in output.splitlines():
-        if line.startswith(_RSYNC_DELETE_MARKER):
-            path = line[len(_RSYNC_DELETE_MARKER) :].lstrip(" ")
-            if path:
-                deletions.append(path)
-    return deletions
-
-
 async def _preview_rsync_deletions(cmd: List[str]) -> Tuple[bool, List[str], str]:
     """Run *cmd* as a dry run and return the paths it would delete (#13851).
 
@@ -2313,41 +2239,6 @@ async def _npm_install_if_needed(frontend_dir: str, component: str, steps: List[
     return True
 
 
-async def _ensure_dist_writable(frontend_dir: str, steps: List[str]) -> None:
-    """Chown dist/ to the running service user so vite's emptyOutDir can rimraf it (#11364).
-
-    Root-owned files (from a prior Ansible build) cause EACCES; chown normalises
-    ownership without destroying the live bundle.  Service user = getpass.getuser()
-    (never hardcoded). Failure is non-fatal — step recorded, build still attempted.
-    """
-    dist_dir = Path(frontend_dir) / "dist"
-    if not dist_dir.exists():
-        steps.append("dist: no dist/ directory — ownership check skipped")
-        return
-    service_user = getpass.getuser()
-    owner_spec = f"{service_user}:{service_user}"
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "sudo",
-            "chown",
-            "-R",
-            owner_spec,
-            str(dist_dir),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        _, _ = await asyncio.wait_for(proc.communicate(), timeout=30.0)
-        if proc.returncode == 0:
-            logger.info("dist: chown -R %s %s ok", owner_spec, dist_dir)
-            steps.append("dist: normalized ownership")
-        else:
-            logger.warning("dist: chown -R %s %s rc=%d", owner_spec, dist_dir, proc.returncode)
-            steps.append(f"dist: chown failed (rc={proc.returncode}) — attempting build anyway")
-    except Exception as exc:
-        logger.warning("dist: chown error for %s: %s", dist_dir, exc)
-        steps.append(f"dist: chown error: {exc} — attempting build anyway")
-
-
 async def _build_npm_frontend_for_component(component: str, steps: List[str]) -> bool:
     """Install deps (if needed) then run the npm build script for a frontend component (#9982, #11351).
 
@@ -2449,21 +2340,6 @@ _SNAPSHOT_BASE_DIR: str = os.environ.get("AUTOBOT_SNAPSHOT_DIR", "/opt/autobot/s
 _SNAPSHOT_KEEP: int = env_int("AUTOBOT_SNAPSHOT_KEEP", 3)
 
 
-def _prune_old_snapshots(snap_base: Path, component: str, max_keep: int) -> None:
-    """Remove oldest snapshot dirs for *component* beyond *max_keep* (#11404)."""
-    prefix = f"{component}_"
-    dirs = sorted(
-        (d for d in snap_base.iterdir() if d.is_dir() and d.name.startswith(prefix)),
-        key=lambda d: d.stat().st_mtime,
-    )
-    for old in dirs[:-max_keep] if max_keep > 0 else dirs:
-        try:
-            shutil.rmtree(old, ignore_errors=True)
-            logger.info("snapshot prune: removed %s", old)
-        except OSError as exc:
-            logger.warning("snapshot prune: failed to remove %s: %s", old, exc)
-
-
 async def _snapshot_component(component: str) -> Optional[str]:
     """Rsync the deployed dir to a timestamped backup before mutation (#11404).
 
@@ -2509,47 +2385,6 @@ async def _snapshot_component(component: str) -> Optional[str]:
     except Exception as exc:
         logger.warning("snapshot: error for %s: %s", component, exc)
         return None
-
-
-async def _restore_component_snapshot(component: str, snapshot: str, steps: List[str]) -> bool:
-    """Rsync *snapshot* back over the deployed dir for *component* (#11404).
-
-    Split out of _rollback_component (#15323) so the caller can restart
-    UNCONDITIONALLY afterwards — this only reports whether the revert itself
-    landed, it never decides whether to restart.
-
-    Returns True on a clean rsync (rc=0); False on a failed/timed-out/errored
-    restore, each case logged and recorded in *steps*.
-    """
-    deployed_dir = get_release_component_dir(component)
-    steps.append(f"rollback: restoring {component} from {snapshot}")
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "rsync",
-            "-a",
-            "--delete",
-            f"{snapshot}/",
-            f"{deployed_dir}/",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120.0)
-        out = stdout.decode(errors="replace") if stdout else ""
-        if proc.returncode == 0:
-            steps.append(f"rollback: restored from {snapshot}")
-            logger.info("rollback: %s restored from %s", component, snapshot)
-            return True
-        steps.append(f"rollback: rsync restore failed (rc={proc.returncode}): {out[:200]}")
-        logger.error("rollback: rsync restore failed for %s: %s", component, out[-300:])
-        return False
-    except asyncio.TimeoutError:
-        steps.append("rollback: rsync restore timed out after 120s")
-        logger.error("rollback: rsync restore timed out for %s", component)
-        return False
-    except Exception as exc:
-        steps.append(f"rollback: rsync restore error: {exc}")
-        logger.error("rollback: rsync restore error for %s: %s", component, exc)
-        return False
 
 
 async def _rollback_component(
