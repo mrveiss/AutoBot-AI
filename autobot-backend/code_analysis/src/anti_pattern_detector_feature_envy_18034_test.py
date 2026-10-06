@@ -18,14 +18,29 @@ These cases are the real ones from the owner's report, by file and symbol.
 from __future__ import annotations
 
 import ast
+import importlib.util
 import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent))
+# Loaded under a UNIQUE module name rather than `sys.path.insert` + a bare
+# `import anti_pattern_detector`. That bare name is also used by
+# `code_intelligence/anti_pattern_detector_test.py`, so claiming it here left
+# the key in `sys.modules` for the rest of the session and the leak guard
+# attributed it to that other file — a failure in a test this one never
+# touches. The spec-based load registers `_feature_envy_subject_18034` instead,
+# which nothing else imports.
+_SPEC = importlib.util.spec_from_file_location(
+    "_feature_envy_subject_18034", Path(__file__).parent / "anti_pattern_detector.py"
+)
+assert _SPEC and _SPEC.loader, "the detector module must be loadable from this directory"
+_detector_module = importlib.util.module_from_spec(_SPEC)
+sys.modules[_SPEC.name] = _detector_module
+_SPEC.loader.exec_module(_detector_module)
 
-from anti_pattern_detector import AntiPatternDetector, ClassInfo  # noqa: E402
+AntiPatternDetector = _detector_module.AntiPatternDetector
+ClassInfo = _detector_module.ClassInfo
 
 
 def _detector_with(classes: dict[str, ClassInfo]) -> AntiPatternDetector:
@@ -219,12 +234,10 @@ def test_destructuring_binds_every_element() -> None:
 
 def _bound_names_for(statement: str) -> set:
     """Parse one assignment and return what the detector thinks it binds."""
-    import anti_pattern_detector as mod
-
     assign = ast.parse(statement).body[0]
     names: set = set()
     for target in assign.targets:
-        names |= mod._bound_names(target)
+        names |= _detector_module._bound_names(target)
     return names
 
 
