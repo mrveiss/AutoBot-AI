@@ -23,14 +23,14 @@ aiosqlite>=0.22.1  # matches autobot-backend/requirements.txt's pin
 prometheus-client>=0.26.0
 
 # Web framework
-fastapi>=0.141.1                # SECURITY UPDATE - requires starlette >=1.6.0
+fastapi>=0.142.2                # SECURITY UPDATE - requires starlette >=1.7.0
 # Held at 1.6.0. #17706 proposed >=1.7.0, which cannot be taken alone: the CI plane
 # pins `starlette==1.6.0` (requirements-ci/framework.txt) and the dependency-patching
 # role floors it at 1.6.0, so a bump here alone fails the parity guard and leaves CI
 # installing a release this file forbids. 1.6.0 already carries the Range-header DoS
 # fix that floor records. Moving the three together is a coordinated migration with
 # fastapi compatibility to check, not a grouped dependency bump (#17833).
-starlette>=1.6.0              # explicit pin — avoids python_multipart __all__ ImportError on older starlette (#8275)
+starlette>=1.7.0              # explicit pin — avoids python_multipart __all__ ImportError on older starlette (#8275)
 uvicorn[standard]>=0.54.0
 
 # Database - PostgreSQL (Issue #786)
@@ -69,7 +69,7 @@ pydantic-settings>=2.15.0
 typing_extensions>=4.16.0  # For Python 3.8 compatibility
 
 # Authentication
-PyJWT[crypto]>=2.15.0
+PyJWT[crypto]>=2.15.1
 bcrypt>=5.0.0  # Direct bcrypt API — passlib removed (#2669)
 python-multipart>=0.0.32          # SECURITY UPDATE - arbitrary file write fix
 
@@ -112,6 +112,6 @@ pysaml2>=7.5.5  # SAML 2.0 Service Provider
 pyotp>=2.10.0  # TOTP generation and verification
 
 # Security: explicit pins to override vulnerable transitive versions
-cryptography>=50.0.1  # CVE fix — pulled in by PyJWT[crypto] and pysaml2
+cryptography>=50.0.2  # CVE fix — pulled in by PyJWT[crypto] and pysaml2
 # Note: pyopenssl version resolved by pysaml2's dependencies (constraints conflict with >=26.0.0)
-# cryptography>=50.0.1 provides primary security coverage
+# cryptography>=50.0.2 provides primary security coverage
