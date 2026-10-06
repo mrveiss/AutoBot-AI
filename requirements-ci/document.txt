@@ -39,7 +39,7 @@ weasyprint>=69.0
 # #14551: production dep (autobot-backend/requirements.txt, #10932 content-reach
 # readable-article extraction, lazy). tests/content_reach/sources/test_web_page.py
 # gates on pytest.importorskip("trafilatura") — silently skipping without this.
-trafilatura>=2.2.0
+trafilatura>=2.3.0
 # #14551: production dep (autobot-backend/requirements.txt, code-graph AST
 # parsing). services/knowledge/code_indexer_test.py, impact_analysis_test.py,
 # code_indexer_extensions_test.py, code_indexer_shape_test.py and

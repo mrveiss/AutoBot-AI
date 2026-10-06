@@ -11,7 +11,7 @@ cryptography==50.0.1
 # CI pins what production runs; an unbounded service constraint takes whatever
 # published last, and the drift audit (#17448) fails the pair rather than letting
 # the two resolve to different releases.
-PyJWT[crypto]>=2.15.0
+PyJWT[crypto]>=2.15.1
 # #14551: same shape as PyJWT[crypto] above — autobot_shared/auth/jwt_core.py:61
 # does an unconditional `import bcrypt` (both backends' auth systems import this
 # module), and it is declared in autobot_shared/pyproject.toml but NOT installed
