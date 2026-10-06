@@ -9,7 +9,7 @@ asyncssh>=2.24.0
 # protobuf — cap and floor, re-derived 2026-08-26 (#15070).
 #
 # CAP <8.0.0. Both direct requirers admit the whole 7.x line: the pinned
-# opentelemetry-proto==1.44.0 declares `protobuf<8.0,>=5.0`, and the transitive
+# opentelemetry-proto==1.45.0 declares `protobuf<8.0,>=5.0`, and the transitive
 # googleapis-common-protos 1.75.1 declares `protobuf<8.0.0,>=6.33.5`. 8.0 is
 # therefore the real incompatibility boundary — nothing here needs <7.0.
 #
@@ -48,17 +48,17 @@ odfpy>=1.4.1              # OpenDocument formats (.odt, .ods, .odp, .odg)
 
 # OpenTelemetry - Distributed Tracing (Issue #57, #697)
 # Provides request tracing across AutoBot's distributed, role-based infrastructure
-opentelemetry-api==1.44.0
-opentelemetry-sdk==1.44.0
-opentelemetry-exporter-otlp==1.44.0
-opentelemetry-exporter-otlp-proto-grpc==1.44.0
-opentelemetry-exporter-otlp-proto-http==1.44.0
-opentelemetry-proto==1.44.0
-opentelemetry-instrumentation-fastapi>=0.65b0
-opentelemetry-propagator-b3==1.44.0
+opentelemetry-api==1.45.0
+opentelemetry-sdk==1.45.0
+opentelemetry-exporter-otlp==1.45.0
+opentelemetry-exporter-otlp-proto-grpc==1.45.0
+opentelemetry-exporter-otlp-proto-http==1.45.0
+opentelemetry-proto==1.45.0
+opentelemetry-instrumentation-fastapi>=0.66b0
+opentelemetry-propagator-b3==1.45.0
 # Issue #697: Additional instrumentation for comprehensive tracing
-opentelemetry-instrumentation-redis>=0.65b0
-opentelemetry-instrumentation-aiohttp-client>=0.65b0
+opentelemetry-instrumentation-redis>=0.66b0
+opentelemetry-instrumentation-aiohttp-client>=0.66b0
 
 # FAISS - Vector Similarity Search (Issue #387, #856)
 # Provides efficient vector similarity search operations. This is the
