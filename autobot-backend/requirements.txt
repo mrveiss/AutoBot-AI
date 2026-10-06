@@ -43,7 +43,7 @@ psutil>=7.2.2  # Issue #927: CPU monitoring for wake word optimization
 # `update-types: semver-major`, and 2.0 -> 2.1 is a MINOR. The durable fix is a
 # `versions: [">=2.1"]` ignore, tracked on #17451 -- until that lands, expect
 # this line to be raised again by the next grouped bump and restore it here.
-sqlalchemy>=2.1.3,<2.2
+sqlalchemy>=2.0.54,<2.1
 # greenlet is declared explicitly, not left to SQLAlchemy (#17432). SQLAlchemy
 # ships it as an `[asyncio]` extra AND, in some releases, under a
 # `platform_machine == "x86_64" or ...` marker -- so whether it arrives depends
