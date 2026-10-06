@@ -46,7 +46,7 @@ uvicorn[standard]>=0.54.0
 # into a recorded one. Migrating to 2.1.x is its own work and is NOT a
 # base-unblocking change; the tracking issue is on the cap for whoever lifts it.
 # Do not raise this bound without running the SLM suite against 2.1.x first.
-sqlalchemy>=2.1.3,<2.2
+sqlalchemy>=2.0.54,<2.1
 # Dependabot raised this to `>=2.1.0,<2.2` in #17706 and left the paragraph above
 # saying not to. Restored. The cap is not stale: #17445 is OPEN and records the
 # 27 failures 2.1.0 causes in this service. Lifting it needs the SLM suite run
