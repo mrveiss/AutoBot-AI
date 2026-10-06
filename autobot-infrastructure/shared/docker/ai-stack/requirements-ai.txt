@@ -109,7 +109,7 @@ python-json-logger>=4.2.0
 # `update-types: semver-major`, and 2.0 -> 2.1 is a MINOR. The durable fix is a
 # `versions: [">=2.1"]` ignore, tracked on #17451 -- until that lands, expect a
 # fourth attempt and restore this line again.
-sqlalchemy>=2.1.3,<2.2
+sqlalchemy>=2.0.54,<2.1
 aiosqlite>=0.22.1
 
 # Redis client (for communication with host Redis)
