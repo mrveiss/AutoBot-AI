@@ -106,6 +106,38 @@ async def test_one_failing_chunk_does_not_discard_the_others(monkeypatch):
     assert collection.upsert.await_count == 4, "the run continues past a failing chunk"
 
 
+@pytest.mark.asyncio
+async def test_a_missing_source_id_fails_the_run_rather_than_storing_nothing(monkeypatch):
+    """Fail closed, deliberately -- a behaviour change worth pinning.
+
+    Document preparation now runs outside the per-chunk ``except``, so
+    ``require_source_id``'s ValueError propagates instead of being logged as a
+    storage failure.  The old path reported "completed, 0 problems stored" for
+    a run that wrote nothing scoped, which is the unscoped-namespace defect
+    #17758 exists to prevent.  If this ever starts passing silently again, the
+    swallow is back.
+    """
+    monkeypatch.setattr(problem_storage, "CHROMADB_BATCH_SIZE", 10)
+    collection = AsyncMock()
+
+    with pytest.raises(ValueError, match="source_id"):
+        await _store_problems_batch_to_chromadb(collection, _problems(5), 0, source_id=None)
+
+    collection.upsert.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_an_upsert_failure_is_still_only_a_chunk(monkeypatch):
+    """The fail-closed change must not have made write errors fatal too."""
+    monkeypatch.setattr(problem_storage, "CHROMADB_BATCH_SIZE", 10)
+    collection = AsyncMock()
+    collection.upsert = AsyncMock(side_effect=RuntimeError("write error"))
+
+    await _store_problems_batch_to_chromadb(collection, _problems(25), 0, source_id="src")
+
+    assert collection.upsert.await_count == 3, "every chunk is still attempted"
+
+
 # ---------------------------------------------------------------------------
 # Watchdog liveness
 # ---------------------------------------------------------------------------

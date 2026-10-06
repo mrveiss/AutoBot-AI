@@ -419,7 +419,7 @@ async def do_indexing_with_progress(task_id: str, root_path: str, source_id: str
                 run_cross_file_analysis,
             )
 
-            await run_cross_file_analysis(root_path, source_id=source_id)
+            await run_cross_file_analysis(root_path, source_id=source_id, progress_callback=update_progress)
         except Exception as exc:
             logger.warning("[Task %s] Cross-file analysis skipped: %s", task_id, exc)
 

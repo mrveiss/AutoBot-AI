@@ -9,8 +9,8 @@ large file that may not grow, and the chunking fix needed room; problem
 storage is also a coherent unit on its own -- one document shape, one write
 path, three call sites.
 
-``chromadb_storage`` re-exports these names, so existing imports keep working
-and there is exactly one implementation.
+``chromadb_storage`` deliberately does NOT re-export these names: an alias
+would be a second name for one implementation.  Callers import them from here.
 """
 
 from api.codebase_analytics.source_scope import require_source_id
@@ -120,6 +120,15 @@ async def _store_problems_batch_to_chromadb(
 
     A single chunk that still exceeds the watchdog window is killed by design:
     that is the hang detector working.  ``CHROMADB_BATCH_SIZE`` is the knob.
+
+    **Fail-closed on a bad source_id, deliberately.**  Document preparation now
+    runs outside the per-chunk ``except``, so the ``ValueError`` that
+    ``require_source_id`` raises for a missing or malformed id propagates and
+    fails the task.  It used to be swallowed and logged as a storage failure,
+    which reported "completed, 0 problems stored" for a run that wrote nothing
+    scoped -- the unscoped-namespace defect #17758 exists to prevent.  The other
+    writers in ``chromadb_storage`` already call ``require_source_id`` unguarded;
+    this matches them.  An upsert failure is still per-chunk and non-fatal.
     """
     if not collection or not problems:
         return

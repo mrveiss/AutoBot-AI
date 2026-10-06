@@ -92,14 +92,18 @@ async def _wait_with_watchdog(
             # progress counters made every legitimately-silent step fatal --
             # the bulk problem upsert ran past the window and the worker was
             # killed before anything was persisted.
-            progress = task_data.get("progress", {})
-            phases = task_data.get("phases", {})
+            # `or {}`, not a default: a legacy or partial state dict can carry
+            # the key with an explicit null, and `.get(k, {})` returns that null.
+            # An AttributeError here escapes the watchdog and leaves the child
+            # running unwatched -- the supervisor catches only TimeoutError.
+            progress = task_data.get("progress") or {}
+            phases = task_data.get("phases") or {}
             progress_hash = (
                 progress.get("current"),
                 progress.get("total"),
                 progress.get("operation"),
                 phases.get("current_phase"),
-                len(phases.get("phases_completed", [])),
+                len(phases.get("phases_completed") or []),
             )
             now = asyncio.get_running_loop().time()
 

@@ -254,7 +254,7 @@ def make_problem_dict(
 ) -> Dict:
     """Canonical factory for the problem-dict schema (#6759).
 
-    Single source of truth for the keys read by ``_prepare_problem_document``
+    Single source of truth for the keys read by ``problem_storage._prepare_problem_document``
     and written by cross-file analysis converters.  If the schema gains a new
     field, add it here and update the reader below.
     """
