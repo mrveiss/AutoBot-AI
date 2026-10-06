@@ -1,6 +1,6 @@
 {
   "_boundary": "Names bound by a MODULE-LEVEL class/def in >=2 tracked .py files under ['autobot-backend', 'autobot-slm-backend', 'autobot_shared'], excluding ['.venv', '__pycache__', 'alembic', 'migrations', 'node_modules', 'venv'] dirs, test files, underscore-prefixed names and ['downgrade', 'main', 'migrate', 'upgrade']. Methods, differently-named forks and non-Python are NOT seen -- this count is a FLOOR on canonical debt. See tools/lint/check_symbol_forks.py.",
-  "_contract": "This list may only shrink. A new name here fails CI (#17312).",
+  "_contract": "Shrink-only and BIDIRECTIONAL: a new name here fails CI, and an entry that is no longer a fork cluster fails just as loudly. Delete it when the duplication goes, or it tolerates whatever takes that name next (#17312).",
   "clusters": [
     "APIErrorResponse",
     "APIRegistry",

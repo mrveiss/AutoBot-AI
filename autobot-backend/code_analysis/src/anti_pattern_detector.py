@@ -284,6 +284,28 @@ class AntiPatternInstance:
         }
 
 
+def _bound_names(target: ast.AST) -> Set[str]:
+    """Names a single assignment target BINDS — not names it merely reads.
+
+    `ast.walk` over a target is wrong here: in `items[Target] = value` the
+    subscript index is a *read* of Target, and treating it as a binding
+    suppressed genuine `Target.attr` findings elsewhere in the method
+    (CodeRabbit). Only a bare `Name`, and the elements of tuple/list
+    destructuring, actually bind. A subscript or attribute target binds nothing
+    new — `obj.attr = v` and `d[k] = v` rebind neither `obj` nor `k`.
+    """
+    if isinstance(target, ast.Name):
+        return {target.id}
+    if isinstance(target, (ast.Tuple, ast.List)):
+        names: Set[str] = set()
+        for element in target.elts:
+            names |= _bound_names(element)
+        return names
+    if isinstance(target, ast.Starred):
+        return _bound_names(target.value)
+    return set()
+
+
 def _read_and_parse(path: Path) -> ast.AST:
     """Read a source file and parse it, for one `asyncio.to_thread` hop (#7444)."""
     return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -934,23 +956,27 @@ class AntiPatternDetector:
         could be moved to. `manifest`, `params`, `cb` and `env_entry` were all
         reported as "classes" before this (#18034).
         """
-        bound = {a.arg for a in method.args.args} | {a.arg for a in method.args.kwonlyargs}
-        if method.args.vararg:
-            bound.add(method.args.vararg.arg)
-        if method.args.kwarg:
-            bound.add(method.args.kwarg.arg)
+        args = method.args
+        # posonlyargs too: `def m(self, Target, /)` binds Target, and omitting
+        # it let three `Target.attr` reads become a false finding (CodeRabbit).
+        bound = {a.arg for a in (*args.posonlyargs, *args.args, *args.kwonlyargs)}
+        if args.vararg:
+            bound.add(args.vararg.arg)
+        if args.kwarg:
+            bound.add(args.kwarg.arg)
         for child in ast.walk(method):
-            targets = []
+            targets: list = []
             if isinstance(child, ast.Assign):
-                targets = child.targets
+                targets = list(child.targets)
+            elif isinstance(child, ast.AnnAssign):
+                # `Target: object = value` binds Target as surely as `Target = value`.
+                targets = [child.target]
             elif isinstance(child, (ast.For, ast.AsyncFor)):
                 targets = [child.target]
             elif isinstance(child, (ast.With, ast.AsyncWith)):
                 targets = [i.optional_vars for i in child.items if i.optional_vars]
             for target in targets:
-                for node in ast.walk(target):
-                    if isinstance(node, ast.Name):
-                        bound.add(node.id)
+                bound |= _bound_names(target)
         return bound
 
     def _analyze_feature_envy(self, method: ast.FunctionDef, cls_info: ClassInfo) -> Tuple[str, int, int] | None:
@@ -973,10 +999,14 @@ class AntiPatternDetector:
         # `cls` is the method's own class, not a foreign one. Named explicitly
         # rather than read off the decorator so a plain method using `cls` is
         # treated the same way.
-        own_names = {"self", "cls"}
+        # The class's OWN name counts as itself, not as a foreign class. A
+        # `@staticmethod` reading `CurrentClass.a/.b/.c` has no `self` or `cls`
+        # to compare against, so without this it was reported as envying the
+        # very class it belongs to (CodeRabbit).
+        own_names = {"self", "cls", cls_info.name}
         # Imported module names (`np`, `os`) need no separate exclusion: a module
         # is not in `known_classes`, so the resolution check below drops it.
-        skip = own_names | self._locally_bound(method)
+        skip = self._locally_bound(method)
         known_classes = self._known_class_names()
 
         for child in ast.walk(method):

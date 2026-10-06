@@ -66,6 +66,12 @@ EXCLUDED_PARTS = frozenset({"__pycache__", "node_modules", "venv", ".venv", "mig
 # (and their directories are excluded too, so this is belt and braces).
 EXCLUDED_NAMES = frozenset({"main", "upgrade", "downgrade", "migrate"})
 
+#: Floor on files PARSED, not on findings. "0 new clusters" is meaningless if
+#: the walk collapsed, and a findings-based floor cannot tell a clean tree from
+#: a broken enumeration. The tracked population is ~5,275; 3,000 fires on
+#: collapse and never on ordinary churn.
+MIN_FILES_SWEPT = 3000
+
 BASELINE = _REPO_ROOT / "repo_tests" / "symbol_fork_baseline.json"
 
 
@@ -274,7 +280,12 @@ def write_baseline(names: set[str]) -> None:
                     "Methods, differently-named forks and non-Python are NOT seen -- "
                     "this count is a FLOOR on canonical debt. See tools/lint/check_symbol_forks.py."
                 ),
-                "_contract": "This list may only shrink. A new name here fails CI (#17312).",
+                "_contract": (
+                    "Shrink-only and BIDIRECTIONAL: a new name here fails CI, and an entry "
+                    "that is no longer a fork cluster fails just as loudly. Delete it when "
+                    "the duplication goes, or it tolerates whatever takes that name next "
+                    "(#17312)."
+                ),
                 "clusters": sorted(names),
             },
             indent=2,
@@ -302,8 +313,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     paths = tracked_python_files()
-    if not paths:
-        print("check_symbol_forks: git ls-files returned NO python files — refusing to report 0", file=sys.stderr)
+    if len(paths) < MIN_FILES_SWEPT:
+        print(
+            f"check_symbol_forks: swept only {len(paths)} python file(s), expected at least "
+            f"{MIN_FILES_SWEPT} — the enumeration collapsed, so this run has no verdict to give. "
+            "A floor on REACH, not on findings (#17312).",
+            file=sys.stderr,
+        )
         return 2
     clusters = find_clusters(paths)
 
@@ -323,7 +339,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{len(stale)} stale of {len(baseline)}.")
         return 0
 
+    # Shrink-only AND bidirectional: a NEW cluster fails, and a STALE entry
+    # fails just as loudly. A baseline still listing a name nobody defines twice
+    # any more is dead policy, and it silently tolerates whatever appears under
+    # that name next. `--audit-baseline` reports staleness; this ENFORCES it.
     new = sorted(set(clusters) - baseline)
+    stale = sorted(baseline - set(clusters))
+
     if new:
         by_name = count_importers(paths, set(new))
         print(f"{len(new)} NEW fork cluster(s) — one name, several module-level definitions (#17312):\n")
@@ -331,8 +353,18 @@ def main(argv: list[str] | None = None) -> int:
             print(format_cluster(clusters[name], importers_by_path(clusters[name], by_name.get(name, {}))))
             print()
         print("Give the new concept its own name, or extend the existing definition instead of adding one.")
+    if stale:
+        print(
+            f"{len(stale)} baseline entry(ies) are no longer fork clusters: {stale[:10]}\n"
+            "Delete them. The list may only shrink, and it has to shrink HERE when the "
+            "duplication is gone — otherwise the entry tolerates whatever takes that name next."
+        )
+    if new or stale:
         return 1
-    print(f"symbol forks: {len(clusters)} clusters, none new against a baseline of {len(baseline)}.")
+    print(
+        f"symbol forks: {len(clusters)} clusters over {len(paths)} files, "
+        f"none new and none stale against a baseline of {len(baseline)}."
+    )
     return 0
 
 

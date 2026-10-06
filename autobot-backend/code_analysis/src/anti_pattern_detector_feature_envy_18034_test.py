@@ -152,3 +152,94 @@ def test_locally_bound_collects_params_assignments_and_loop_targets() -> None:
     bound = AntiPatternDetector._locally_bound(method)
     assert {"param", "args", "kwargs", "assigned", "item", "handle"} <= bound
     assert "things" not in bound, "a name only READ must not be treated as locally bound"
+
+
+# ---------------------------------------------------------------------------
+# Binding forms the first version of `_locally_bound` missed (CodeRabbit)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "source,id_",
+    [
+        pytest.param(
+            "class Holder:\n"
+            "    def use(self, Widget, /):\n"
+            "        return (Widget.a, Widget.b, Widget.c, Widget.d)\n",
+            "positional-only parameter",
+        ),
+        pytest.param(
+            "class Holder:\n"
+            "    def use(self):\n"
+            "        Widget: object = make()\n"
+            "        return (Widget.a, Widget.b, Widget.c, Widget.d)\n",
+            "annotated assignment",
+        ),
+    ],
+)
+def test_a_locally_bound_name_is_never_an_envied_class(source: str, id_: str) -> None:
+    """Both forms bind `Widget`, so it is a variable and not a class to move to.
+
+    `posonlyargs` and `ast.AnnAssign` were both absent from the first version,
+    so a method binding a name this way and reading it three times produced a
+    false finding naming a real class it never touched.
+    """
+    info, method = _class_info("Holder", source)
+    widget, _ = _class_info("Widget", "class Widget:\n    def x(self):\n        pass\n")
+    detector = _detector_with({"m.Holder": info, "m.Widget": widget})
+    assert detector._analyze_feature_envy(method, info) is None, f"{id_} should bind the name"
+
+
+def test_a_subscript_index_is_a_read_not_a_binding() -> None:
+    """The false-NEGATIVE direction, which matters as much as the other.
+
+    `items[Widget] = value` only READS `Widget`. The first version walked the
+    whole target with `ast.walk`, saw the Name, and marked it bound — which
+    suppressed genuine findings elsewhere in the same method.
+    """
+    source = (
+        "class Holder:\n"
+        "    def use(self, items):\n"
+        "        items[Widget] = 1\n"
+        "        return (Widget.a, Widget.b, Widget.c, Widget.d)\n"
+    )
+    info, method = _class_info("Holder", source)
+    widget, _ = _class_info("Widget", "class Widget:\n    def x(self):\n        pass\n")
+    detector = _detector_with({"m.Holder": info, "m.Widget": widget})
+    result = detector._analyze_feature_envy(method, info)
+    assert result is not None, "a subscript index must not suppress a real finding"
+    assert result[0] == "Widget"
+
+
+def test_destructuring_binds_every_element() -> None:
+    """Tuple and starred targets bind; the helper must recurse into them."""
+    bound = _bound_names_for("(Widget, *rest), last = pair, tail")
+    assert {"Widget", "rest", "last"} <= bound
+
+
+def _bound_names_for(statement: str) -> set:
+    """Parse one assignment and return what the detector thinks it binds."""
+    import anti_pattern_detector as mod
+
+    assign = ast.parse(statement).body[0]
+    names: set = set()
+    for target in assign.targets:
+        names |= mod._bound_names(target)
+    return names
+
+
+def test_a_static_method_does_not_envy_its_own_class() -> None:
+    """No `self` or `cls` to compare against, so the class name must count as own.
+
+    Without this a `@staticmethod` reading `CurrentClass.a/.b/.c` was reported
+    as envying the very class it is defined in (CodeRabbit).
+    """
+    source = (
+        "class CurrentClass:\n"
+        "    @staticmethod\n"
+        "    def use():\n"
+        "        return (CurrentClass.a, CurrentClass.b, CurrentClass.c, CurrentClass.d)\n"
+    )
+    info, method = _class_info("CurrentClass", source)
+    detector = _detector_with({"m.CurrentClass": info})
+    assert detector._analyze_feature_envy(method, info) is None

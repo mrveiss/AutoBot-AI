@@ -38,12 +38,48 @@ from _scan_helpers import scrubbed_git_env  # noqa: E402
 BASELINE = json.loads((_REPO_ROOT / "repo_tests" / "symbol_fork_baseline.json").read_text(encoding="utf-8"))
 
 
+def test_the_sweep_has_a_reach_floor_not_a_findings_floor() -> None:
+    """A guard's vacuity floor binds to REACH, never to the number of findings.
+
+    "0 new clusters" is meaningless if the enumeration collapsed, and a
+    findings-based floor cannot tell a clean tree from a broken walk. The floor
+    is on files PARSED (CodeRabbit).
+    """
+    swept = detector.tracked_python_files()
+    assert detector.MIN_FILES_SWEPT >= 1000, "a floor this low would not detect a collapse"
+    assert len(swept) >= detector.MIN_FILES_SWEPT, (
+        f"the sweep reaches {len(swept)} files, under its own declared floor of "
+        f"{detector.MIN_FILES_SWEPT} — either the walk broke or the floor is wrong"
+    )
+
+
+def test_a_collapsed_sweep_refuses_to_give_a_verdict(monkeypatch, capsys) -> None:
+    """Contrast control for the floor: it must actually fire, not just exist."""
+    monkeypatch.setattr(detector, "tracked_python_files", lambda: [Path("only.py")])
+    assert detector.main([]) == 2, "a collapsed sweep must not return pass or fail"
+    assert "enumeration collapsed" in capsys.readouterr().err
+
+
+def test_a_stale_baseline_entry_fails_the_default_check(monkeypatch, capsys) -> None:
+    """Shrink-only AND bidirectional: a stale entry fails as loudly as a new one.
+
+    `--audit-baseline` only REPORTED staleness. The default path accepted it, so
+    a baseline could keep an entry for duplication that was already gone — dead
+    policy that silently tolerates whatever takes that name next (CodeRabbit).
+    """
+    real = detector.load_baseline()
+    monkeypatch.setattr(detector, "load_baseline", lambda: real | {"ANameNobodyDefinesTwice"})
+    assert detector.main([]) == 1, "a stale baseline entry must fail the default check"
+    assert "no longer fork clusters" in capsys.readouterr().out
+
+
 def test_the_baseline_states_its_boundary() -> None:
     """Rule 1: the number must carry its predicate where the reader meets it."""
     boundary = BASELINE["_boundary"]
     for required in ("MODULE-LEVEL", "test files", "FLOOR", "check_symbol_forks.py"):
         assert required in boundary, f"baseline boundary no longer states {required!r}"
-    assert "may only shrink" in BASELINE["_contract"]
+    assert "BIDIRECTIONAL" in BASELINE["_contract"], "the contract must state both directions"
+    assert "fails just as loudly" in BASELINE["_contract"]
 
 
 def test_the_boundary_constants_match_what_the_baseline_describes() -> None:
