@@ -62,7 +62,7 @@ python_security_updates:
   # in the manifest together, or the parity guard fails the PR.
   # -------------------------------------------------------------------------
   # Critical
-  langchain-core: "1.6.5,<2.0.0"   # Serialization injection + template injection + SSRF
+  langchain-core: "1.6.6,<2.0.0"   # Serialization injection + template injection + SSRF
   nltk: "3.10.3"                   # Zip slip vulnerability
   # High
   starlette: "1.7.0"               # O(n^2) DoS via Range header
