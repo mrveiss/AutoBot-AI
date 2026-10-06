@@ -210,7 +210,7 @@
 - name: "TTS Worker | Install FastAPI and server dependencies"
   ansible.builtin.pip:
     name:
-      - fastapi>=0.141.1
+      - fastapi>=0.142.2
       - uvicorn[standard]>=0.54.0
       - python-multipart>=0.0.32
       - aiofiles>=25.1.0
