@@ -36,8 +36,18 @@ _SPEC = importlib.util.spec_from_file_location(
 )
 assert _SPEC and _SPEC.loader, "the detector module must be loadable from this directory"
 _detector_module = importlib.util.module_from_spec(_SPEC)
+# Registered only for the duration of exec_module -- dataclass and annotation
+# machinery resolves `sys.modules[__name__]` while the module body runs -- then
+# removed. Leaving it would be a module-scope sys.modules write with no
+# restoration, which `sys_modules_module_scope_restoration_test` rejects, and
+# rightly: the first version of this import claimed the BARE name and broke a
+# different test. The module object stays alive through the reference below, so
+# nothing here needs the registry afterwards.
 sys.modules[_SPEC.name] = _detector_module
-_SPEC.loader.exec_module(_detector_module)
+try:
+    _SPEC.loader.exec_module(_detector_module)
+finally:
+    sys.modules.pop(_SPEC.name, None)
 
 AntiPatternDetector = _detector_module.AntiPatternDetector
 ClassInfo = _detector_module.ClassInfo
