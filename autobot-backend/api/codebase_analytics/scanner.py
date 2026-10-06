@@ -403,6 +403,10 @@ async def do_indexing_with_progress(task_id: str, root_path: str, source_id: str
         )
 
         update_phase("finalize", "running")
+        # #18055: the supervisor reads task state from Redis, so a phase
+        # change it cannot see is not a liveness signal.  update_phase only
+        # mutates in-process state; persist it here.
+        await _save_task_to_redis_bound(task_id)
 
         await _verify_chromadb_storage(task_id, analysis_results)
 
@@ -415,7 +419,7 @@ async def do_indexing_with_progress(task_id: str, root_path: str, source_id: str
                 run_cross_file_analysis,
             )
 
-            await run_cross_file_analysis(root_path, source_id=source_id)
+            await run_cross_file_analysis(root_path, source_id=source_id, progress_callback=update_progress)
         except Exception as exc:
             logger.warning("[Task %s] Cross-file analysis skipped: %s", task_id, exc)
 
