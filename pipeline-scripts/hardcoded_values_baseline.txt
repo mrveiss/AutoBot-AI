@@ -1294,8 +1294,7 @@
 1|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/{component}/
 1|other|autobot-slm-backend/api/code_sync.py|'/opt/autobot/{component}
 1|other|autobot-slm-backend/api/code_sync.py|100
-6|other|autobot-slm-backend/api/code_sync.py|120
-1|other|autobot-slm-backend/api/code_sync.py|30
+5|other|autobot-slm-backend/api/code_sync.py|120
 1|other|autobot-slm-backend/api/code_sync.py|300
 2|other|autobot-slm-backend/api/code_sync.py|60
 1|ssot|autobot-slm-backend/api/code_sync.py|:8001
