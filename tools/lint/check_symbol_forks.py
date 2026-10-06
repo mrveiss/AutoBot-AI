@@ -66,11 +66,12 @@ EXCLUDED_PARTS = frozenset({"__pycache__", "node_modules", "venv", ".venv", "mig
 # (and their directories are excluded too, so this is belt and braces).
 EXCLUDED_NAMES = frozenset({"main", "upgrade", "downgrade", "migrate"})
 
-#: Floor on files PARSED, not on findings. "0 new clusters" is meaningless if
-#: the walk collapsed, and a findings-based floor cannot tell a clean tree from
-#: a broken enumeration. The tracked population is ~5,275; 3,000 fires on
-#: collapse and never on ordinary churn.
-MIN_FILES_SWEPT = 3000
+#: Floor on files successfully PARSED — not on files listed, and never on
+#: findings. "0 new clusters" is meaningless if the sweep collapsed, and a
+#: findings-based floor cannot tell a clean tree from a broken enumeration.
+#: git lists ~5,279 python files; ~2,826 survive `in_population` and are
+#: parsed. 2,000 sits under that and well over any plausible collapse.
+MIN_FILES_PARSED = 2000
 
 BASELINE = _REPO_ROOT / "repo_tests" / "symbol_fork_baseline.json"
 
@@ -151,12 +152,15 @@ def is_route_handler(node: ast.AST) -> bool:
     return False
 
 
-def definitions_in(path: Path) -> list[tuple[str, Definition]]:
+def definitions_in(path: Path) -> "list[tuple[str, Definition]] | None":
     """Module-level class/def bindings. Nested and conditional defs are out of scope."""
     try:
         tree = ast.parse((_REPO_ROOT / path).read_text(encoding="utf-8"))
     except (SyntaxError, OSError):
-        return []
+        # None, not [] — "could not read this file" is a different fact from
+        # "read it and it defines nothing", and the reach floor below counts
+        # successful PARSES, so the two must not be conflated.
+        return None
     found = []
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -173,19 +177,30 @@ def definitions_in(path: Path) -> list[tuple[str, Definition]]:
     return found
 
 
-def find_clusters(paths: list[Path]) -> dict[str, Cluster]:
-    """Group module-level definitions by name; keep those bound in >=2 files."""
+def find_clusters(paths: list[Path]) -> "tuple[dict[str, Cluster], int]":
+    """Group module-level definitions by name; keep those bound in >=2 files.
+
+    Returns the clusters AND the number of files successfully PARSED, which is
+    what the vacuity floor binds to. `len(paths)` counts what git listed, so a
+    broken `in_population` or a tree of unparsable files would clear a floor on
+    it while the sweep saw almost nothing (CodeRabbit).
+    """
     by_name: dict[str, list[Definition]] = defaultdict(list)
+    parsed = 0
     for path in paths:
         if not in_population(path):
             continue
-        for name, definition in definitions_in(path):
+        found = definitions_in(path)
+        if found is None:
+            continue
+        parsed += 1
+        for name, definition in found:
             by_name[name].append(definition)
     clusters = {}
     for name, defs in by_name.items():
         if len({d.path for d in defs}) > 1:
             clusters[name] = Cluster(name, sorted(defs, key=lambda d: (d.path, d.lineno)))
-    return clusters
+    return clusters, parsed
 
 
 def canonical_candidate(cluster: Cluster, import_counts: dict[str, int]) -> Definition:
@@ -313,15 +328,19 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     paths = tracked_python_files()
-    if len(paths) < MIN_FILES_SWEPT:
+    clusters, parsed = find_clusters(paths)
+    # Floor on files successfully PARSED, not on files git listed and not on
+    # findings. `len(paths)` would clear this floor even if `in_population`
+    # filtered everything out or every parse failed, which is the exact
+    # collapse it exists to catch (CodeRabbit).
+    if parsed < MIN_FILES_PARSED:
         print(
-            f"check_symbol_forks: swept only {len(paths)} python file(s), expected at least "
-            f"{MIN_FILES_SWEPT} — the enumeration collapsed, so this run has no verdict to give. "
-            "A floor on REACH, not on findings (#17312).",
+            f"check_symbol_forks: parsed only {parsed} of {len(paths)} listed python file(s), "
+            f"expected at least {MIN_FILES_PARSED} — the sweep collapsed, so this run has no "
+            "verdict to give. A floor on REACH, not on findings (#17312).",
             file=sys.stderr,
         )
         return 2
-    clusters = find_clusters(paths)
 
     if args.report:
         _report(clusters, paths, args.limit)
@@ -362,8 +381,8 @@ def main(argv: list[str] | None = None) -> int:
     if new or stale:
         return 1
     print(
-        f"symbol forks: {len(clusters)} clusters over {len(paths)} files, "
-        f"none new and none stale against a baseline of {len(baseline)}."
+        f"symbol forks: {len(clusters)} clusters over {parsed} parsed files "
+        f"({len(paths)} listed), none new and none stale against a baseline of {len(baseline)}."
     )
     return 0
 
