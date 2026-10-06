@@ -151,6 +151,18 @@ from ci_dispatch_labels import (  # noqa: E402
     self_hosted_starved,
     starved_verdict,
 )
+
+# #13439: concurrency-group supersession, and the run-timestamp and fork-safety
+# helpers it needs, live in their own leaf so the selection can gain a caller
+# without this file gaining lines it has no ceiling for.
+from ci_run_supersession import (  # noqa: E402
+    DEFAULT_SUPERSEDED_REPORTED,
+    age_minutes,
+    collect_supersession_population,
+    run_is_same_repo,
+    superseded_report_lines,
+    superseded_stuck_runs,
+)
 from header_safe_secret import require_header_safe  # noqa: E402  # #15204
 from release_sync_pull import release_sync_pulls  # noqa: E402
 
@@ -178,13 +190,6 @@ MAX_STATUS_DESCRIPTION = 140
 
 # Run states that mean "created but no job has started yet".
 UNSTARTED_RUN_STATUSES = frozenset({"queued", "waiting", "pending", "requested"})
-
-# Deliberately narrower than UNSTARTED_RUN_STATUSES (#13439). A run holding a
-# concurrency group while a newer one waits is ``queued`` or ``pending``.
-# ``waiting`` and ``requested`` are approval gates — a human or a policy has yet
-# to release them — and force-cancelling those would destroy work nobody has
-# decided about rather than clearing a stuck queue.
-STUCK_QUEUE_STATUSES = frozenset({"queued", "pending"})
 
 # Transport failure — no HTTP status was ever received.
 NO_RESPONSE_STATUS = 0
@@ -346,30 +351,6 @@ def _env_non_negative_int(name: str, default: int) -> int:
     return value
 
 
-def parse_ts(value: Optional[str]) -> Optional[datetime]:
-    """Parse a GitHub ISO-8601 timestamp into an aware UTC datetime."""
-    if not value:
-        return None
-    text = value.strip()
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
-    try:
-        parsed = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
-
-
-def age_minutes(value: Optional[str], now: datetime) -> Optional[float]:
-    """Minutes elapsed between the timestamp *value* and *now*."""
-    parsed = parse_ts(value)
-    if parsed is None:
-        return None
-    return (now - parsed).total_seconds() / 60.0
-
-
 def is_parked(run: Dict[str, Any]) -> bool:
     """True when the run was created but requires manual approval to start."""
     return run.get("conclusion") == "action_required"
@@ -378,12 +359,6 @@ def is_parked(run: Dict[str, Any]) -> bool:
 def is_unstarted(run: Dict[str, Any]) -> bool:
     """True when the run exists but has not allocated a job yet."""
     return run.get("status") in UNSTARTED_RUN_STATUSES
-
-
-def run_is_same_repo(run: Dict[str, Any], repository: str) -> bool:
-    """True when the run's head branch lives in *repository* rather than a fork."""
-    head_repository = run.get("head_repository") or {}
-    return str(head_repository.get("full_name") or "") == repository
 
 
 def is_approvable(run: Dict[str, Any], repository: str) -> Tuple[bool, str]:
@@ -436,77 +411,6 @@ def starved_runs(runs: Sequence[Dict[str, Any]], now: datetime, stall_minutes: i
         if waited is not None and waited >= stall_minutes:
             starved.append(run)
     return starved
-
-
-def concurrency_group_key(run: Dict[str, Any]) -> Tuple[Any, Any, Any]:
-    """The identity a concurrency group actually has (#13439).
-
-    Grouped by ``(workflow_id, head_branch, event)``, **not** by workflow and
-    branch alone. The group expression is ``${{ github.workflow }}-${{ github.ref }}``
-    and ``github.ref`` differs between a ``push`` run (``refs/heads/...``) and a
-    ``pull_request`` run (``refs/pull/N/merge``) on the same branch. Grouping
-    across that boundary would treat a PR run as superseding a push run and
-    cancel work that is not superseded at all.
-    """
-    return (run.get("workflow_id"), run.get("head_branch"), run.get("event"))
-
-
-def _run_ordering_key(run: Dict[str, Any]) -> Tuple[Any, Any]:
-    """Newest-last ordering: ``run_number`` first, ``created_at`` as tiebreak."""
-    return (run.get("run_number") or 0, run.get("created_at") or "")
-
-
-def superseded_stuck_runs(
-    runs: Sequence[Dict[str, Any]],
-    now: datetime,
-    repository: str,
-    grace_minutes: int,
-    budget: int,
-) -> List[Dict[str, Any]]:
-    """Runs safe to force-cancel because a newer run holds their group (#13439).
-
-    ``concurrency.cancel-in-progress: true`` reaps an *in-progress* predecessor
-    and never a *queued* one. While the singleton self-hosted runner is offline a
-    predecessor never reaches in-progress, so it keeps holding the group and its
-    successors sit ``pending`` with an empty ``jobs`` array until a human runs
-    ``force-cancel``. This selects exactly the runs where that is provably safe.
-
-    A run qualifies only when **all** hold:
-
-    * it is **not the newest** in its group — the newest is never touched, under
-      any condition, because it is the run everything else is waiting for;
-    * its status is in :data:`STUCK_QUEUE_STATUSES` — ``in_progress`` means real
-      work is happening, and ``waiting``/``requested`` are approval gates;
-    * it is older than *grace_minutes* — a legitimate brief queue must not be
-      mistaken for a stuck one;
-    * its head repository is *repository* — the same fork restriction the
-      approval sweep uses, and for the same reason: never act on a run built
-      from contributor-supplied code.
-
-    The result is truncated to *budget* oldest-first, so one sweep cannot cancel
-    the world if the grouping logic is ever wrong.
-    """
-    groups: Dict[Tuple[Any, Any, Any], List[Dict[str, Any]]] = {}
-    for run in runs:
-        if not run_is_same_repo(run, repository):
-            continue
-        groups.setdefault(concurrency_group_key(run), []).append(run)
-
-    stuck: List[Dict[str, Any]] = []
-    for members in groups.values():
-        if len(members) < 2:
-            continue  # nothing supersedes it
-        ordered = sorted(members, key=_run_ordering_key)
-        for run in ordered[:-1]:  # every member except the newest
-            if run.get("status") not in STUCK_QUEUE_STATUSES:
-                continue
-            waited = age_minutes(run.get("created_at"), now)
-            if waited is None or waited < grace_minutes:
-                continue
-            stuck.append(run)
-
-    stuck.sort(key=lambda r: r.get("created_at") or "")
-    return stuck[:budget]
 
 
 def _strip_comment(value: str) -> str:
@@ -1290,6 +1194,45 @@ def check_probe(api: GitHubApi) -> int:
     return 0
 
 
+def report_superseded_stuck_runs(
+    api: GitHubApi,
+    queued: Sequence[Dict[str, Any]],
+    now: datetime,
+    config: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """Run the #13439 supersession selection and print its verdict.
+
+    :func:`superseded_stuck_runs`'s production call site. It had no caller at
+    all until now, so the one fault it can name — a queued predecessor holding
+    a concurrency group ``cancel-in-progress`` will never reap — was invisible
+    to the probe whose whole job is "work is queued and nothing is moving".
+
+    Reports, never cancels: ``ci_run_supersession.__doc__`` holds the three
+    reasons, the first being that this check's only workflow has ``actions:
+    read``, so a force-cancel POST could not succeed anyway.
+    """
+    population = collect_supersession_population(api, queued)
+    # Budget bounds CANCELLING, not printing: capping selection hid 21/21 (#18036).
+    superseded = superseded_stuck_runs(
+        population,
+        now,
+        api.repository,
+        config.get("grace_minutes", DEFAULT_GRACE_MINUTES),
+        len(population),
+    )
+    for line in superseded_report_lines(
+        superseded,
+        len(population),
+        api.repository,
+        now,
+        config.get("grace_minutes", DEFAULT_GRACE_MINUTES),
+        lambda run: _run_url(api.repository, run),
+        reported_cap=config.get("max_superseded_reported", DEFAULT_SUPERSEDED_REPORTED),
+    ):
+        _emit(line)
+    return superseded
+
+
 def check_runner_starvation(api: GitHubApi, config: Dict[str, Any]) -> int:
     """
     Report a self-hosted pool that is not serving the work it has been given.
@@ -1324,9 +1267,11 @@ def check_runner_starvation(api: GitHubApi, config: Dict[str, Any]) -> int:
     starved = self_hosted_starved(candidates, reader.read(candidates), self_hosted_paths)
     pool = inspect_self_hosted_pool(api, config["max_job_lookups"], config["job_overdue_minutes"], now)
     report_overdue_jobs(pool.overdue, config["job_overdue_minutes"])
+    superseded = report_superseded_stuck_runs(api, queued, now, config)
+    faulted = bool(pool.overdue) or bool(superseded)
 
     if not starved:
-        if pool.overdue:
+        if faulted:
             return 1
         _emit(
             f"No self-hosted run has been queued longer than {config['stall_minutes']}m — " "runner pool is keeping up."
@@ -1335,7 +1280,7 @@ def check_runner_starvation(api: GitHubApi, config: Dict[str, Any]) -> int:
 
     if pool.serving is None:
         _emit(f"::warning::{len(starved)} run(s) queued over {config['stall_minutes']}m; runner liveness UNKNOWN")
-        return 1 if pool.overdue else 0
+        return 1 if faulted else 0
     if pool.serving:
         # `pool.serving` excludes wedged jobs, so this really is healthy work in
         # flight rather than the hung job that used to masquerade as liveness.
@@ -1343,7 +1288,7 @@ def check_runner_starvation(api: GitHubApi, config: Dict[str, Any]) -> int:
             f"{len(starved)} run(s) queued over {config['stall_minutes']}m, but a self-hosted job is executing — "
             "contention, not an outage."
         )
-        return 1 if pool.overdue else 0
+        return 1 if faulted else 0
 
     reason = "while a self-hosted job is wedged" if pool.overdue else "while no self-hosted job is executing"
     _emit(f"::error::{len(starved)} self-hosted workflow run(s) queued over " f"{config['stall_minutes']}m {reason}")
@@ -1379,6 +1324,7 @@ def load_config() -> Dict[str, Any]:
         "max_job_lookups": _env_int("WATCHDOG_MAX_JOB_LOOKUPS", DEFAULT_MAX_JOB_LOOKUPS),
         "max_queued_job_lookups": _env_int("WATCHDOG_MAX_QUEUED_JOB_LOOKUPS", DEFAULT_QUEUED_JOB_LOOKUPS),
         "job_overdue_minutes": _env_int("WATCHDOG_JOB_OVERDUE_MINUTES", DEFAULT_JOB_OVERDUE_MINUTES),
+        "max_superseded_reported": _env_int("WATCHDOG_MAX_SUPERSEDED_REPORTED", DEFAULT_SUPERSEDED_REPORTED),
         "only_pr": _env_non_negative_int("WATCHDOG_ONLY_PR", DEFAULT_ONLY_PR),
     }
 
