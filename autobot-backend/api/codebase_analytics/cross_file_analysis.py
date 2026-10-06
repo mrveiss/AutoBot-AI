@@ -55,6 +55,7 @@ def _antipattern_to_problem(ap: Any, file_category: str = "code") -> Dict[str, A
 async def _persist_to_chromadb(
     problems: List[Dict[str, Any]],
     source_id: str | None,
+    progress_callback=None,
 ) -> int:
     """Append cross-file findings to the existing problems collection.
 
@@ -64,7 +65,7 @@ async def _persist_to_chromadb(
     if not problems:
         return 0
     try:
-        from api.codebase_analytics.chromadb_storage import (
+        from api.codebase_analytics.problem_storage import (
             _store_problems_batch_to_chromadb,
         )
         from api.codebase_analytics.storage import get_code_collection_async
@@ -80,8 +81,20 @@ async def _persist_to_chromadb(
         import time as _time
 
         start_idx = int(_time.time() * 1000) & 0x7FFFFFFF
-        await _store_problems_batch_to_chromadb(collection, problems, start_idx, source_id=source_id)
-        return len(problems)
+        # #18055: forward the callback so this write ticks the watchdog too.
+        # It runs in the finalize phase, which has no other progress signal --
+        # an unreported write here is the same silent window that killed every
+        # run before the per-file path was chunked.
+        # The count comes from the writer, not from len(problems): a chunk
+        # that fails is skipped, so reporting the offered count would log
+        # more persisted than exists.
+        return await _store_problems_batch_to_chromadb(
+            collection,
+            problems,
+            start_idx,
+            source_id=source_id,
+            progress_callback=progress_callback,
+        )
     except Exception as exc:
         logger.warning("[#6747] Failed to persist cross-file findings: %s", exc)
         return 0
@@ -91,6 +104,7 @@ async def run_cross_file_analysis(
     root_path: str,
     source_id: str | None = None,
     exclude_patterns: List[str] | None = None,
+    progress_callback=None,
 ) -> int:
     """Run the four cross-file rules over ``root_path`` and persist findings.
 
@@ -131,7 +145,7 @@ async def run_cross_file_analysis(
         return 0
 
     problems = [_antipattern_to_problem(ap) for ap in findings]
-    persisted = await _persist_to_chromadb(problems, source_id=source_id)
+    persisted = await _persist_to_chromadb(problems, source_id=source_id, progress_callback=progress_callback)
     logger.info(
         "[#6747] Cross-file analysis: %d findings, %d persisted to ChromaDB",
         len(findings),

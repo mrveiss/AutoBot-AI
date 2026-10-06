@@ -1,6 +1,6 @@
 # Core web framework — tightly coupled versions
 # fastapi pins starlette range; keep these in sync
-fastapi==0.141.1
+fastapi==0.142.2
 starlette==1.6.0
 python-multipart==0.0.32
 uvicorn==0.54.0
