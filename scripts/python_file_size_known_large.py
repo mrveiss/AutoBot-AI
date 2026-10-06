@@ -82,7 +82,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/code_search.py": 924,
     "autobot-backend/api/codebase_analytics/analyzers.py": 1684,
     "autobot-backend/api/codebase_analytics/api_endpoint_scanner.py": 1444,
-    "autobot-backend/api/codebase_analytics/chromadb_storage.py": 1461,  # #17758: policy centralised in source_scope.py
+    "autobot-backend/api/codebase_analytics/chromadb_storage.py": 1389,  # #18055: split to problem_storage.py
     "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1326,
     "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 756,
     "autobot-backend/api/codebase_analytics/endpoints/duplicates.py": 660,  # #17758: triplicated cached body collapsed
@@ -435,7 +435,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
     "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 630,
     "autobot-slm-backend/api/code_source.py": 719,
-    "autobot-slm-backend/api/code_sync.py": 6025,  # #16640: moved to api/_colocated_role_procedures.py
+    "autobot-slm-backend/api/code_sync.py": 5860,  # #18052: six path/rsync helpers moved to api/_rsync_paths.py
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 724,
     "autobot-slm-backend/api/monitoring.py": 1087,
@@ -474,7 +474,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/services/service_orchestrator.py": 955,
     "autobot-slm-backend/services/sync_orchestrator.py": 649,
     "autobot-slm-backend/slm/agent/agent.py": 630,
-    "autobot-slm-backend/tests/api/test_code_sync_deploy_bugs.py": 2012,  # #16713: containment tests moved out
+    "autobot-slm-backend/tests/api/test_code_sync_deploy_bugs.py": 1990,  # #18052: resolver test moved out
     "autobot-slm-backend/tests/api/test_drift_resolve.py": 606,
     "autobot-slm-backend/tests/api/test_fleet_node_update_11511.py": 1051,
     "autobot-slm-backend/tests/api/test_prometheus_scrape_is_unauthenticated_14339.py": 973,
