@@ -12,6 +12,10 @@ Public API:
     run_doctor() -> dict  — full async doctor report
     _hardware_scan() -> dict  — sync hardware metrics (testable without mocks)
     _recommend_tier(ram_gb, cpu_cores) -> str  — pure tier recommender
+
+Also the production call site of ``startup_validator.validate_startup_dependencies``
+(#13780) — see :func:`_validate_dependencies` for why it lives here and not in
+the lifespan.
 """
 
 from __future__ import annotations
@@ -89,6 +93,61 @@ async def _probe_redis() -> tuple[bool, str]:
         return (False, str(exc))
 
 
+async def _validate_dependencies() -> dict[str, Any]:
+    """Run the startup dependency validator on demand, off the boot path (#13780).
+
+    ``validate_startup_dependencies`` was complete and uncalled: :mod:`startup_validator`
+    defined it, its own docstring showed it being awaited in app startup, and nothing
+    in the tree awaited it. #13738 had already decided it must NOT go in the lifespan —
+    steps 4 and 5 are live round trips, and making Ollama a boot dependency turns a
+    degraded-capability condition into a refusal to start.
+
+    This endpoint is where it belongs, and the choice is a measurement rather than a
+    preference:
+
+    * ``GET /api/onboarding/doctor`` is an **existing** deep-check endpoint, which is
+      what #13780's last acceptance criterion asks for — no new health surface when one
+      can host it. It is registered, authenticated, and invoked on demand by a human.
+    * It already pays for a Redis ping and an Ollama ``/api/tags`` GET, so the two round
+      trips #13738 refused to put in front of every boot are already paid on this path.
+      They are **not free**: the validator runs its OWN Redis ping and its own Ollama
+      GET (``startup_validator.py:334-338``, 5s timeout), so a ``/doctor`` call makes
+      each round trip twice, sequentially. An earlier revision of this docstring
+      claimed it "cost nothing new", which was wrong. The duplication is accepted
+      because ``/doctor`` is an operator-invoked diagnostic and reading the validator's
+      own view is the point of calling it — see the note at the ``dependencies`` key
+      for the condition under which that should be revisited.
+    * It is **not** the ``/api/system/health`` aggregator. That one is unauthenticated
+      and polled by the frontend before login, so a 5-second Ollama timeout registered
+      there would land on a hot public path — the precise cost #13780 rules out.
+    * ``cli/doctor.py`` reads as the better name and is not the better home: nothing
+      outside its own tests invokes it, so wiring a dormant function into a dormant CLI
+      would leave the chain exactly as unreached as it started.
+
+    The result is reported in full — ``errors``, ``warnings`` and ``details`` — rather
+    than reduced to ``success``, because an operator asking "is this host wired
+    correctly?" needs the failing name, not a boolean. A validator that raises is
+    reported as a failed run with its exception type rather than taking the whole
+    onboarding report down with it; every message the validator produces is already
+    sanitised to a type name or a fixed string at its source.
+    """
+    try:
+        from startup_validator import validate_startup_dependencies
+
+        result = await validate_startup_dependencies()
+    except Exception as exc:  # noqa: BLE001 — reported below, never discarded
+        logger.error("Startup dependency validation could not run: %s", type(exc).__name__, exc_info=True)
+        return {"ran": False, "failure": type(exc).__name__, "errors": [], "warnings": [], "details": {}}
+
+    return {
+        "ran": True,
+        "success": result.success,
+        "errors": list(result.errors),
+        "warnings": list(result.warnings),
+        "details": dict(result.details),
+    }
+
+
 async def run_doctor() -> dict[str, Any]:
     """
     Run the full onboarding doctor scan.
@@ -97,6 +156,7 @@ async def run_doctor() -> dict[str, Any]:
         hardware  — psutil metrics
         services  — reachability of Ollama, Redis, ChromaDB
         recommendation  — suggested LLM tier + preset
+        dependencies  — startup dependency validation (#13780)
     """
     hardware = _hardware_scan()
 
@@ -145,4 +205,19 @@ async def run_doctor() -> dict[str, Any]:
         "hardware": hardware,
         "services": services,
         "recommendation": recommendation,
+        # #13780: the startup validator's one production call site.
+        #
+        # Being last in this literal delays nothing: the dict is one response,
+        # so the caller waits for this await regardless of where it sits. An
+        # earlier revision of this comment claimed the opposite.
+        #
+        # It is not free, either. `validate_startup_dependencies` runs its OWN
+        # Redis ping and its own Ollama `GET /api/tags` (startup_validator.py,
+        # 5s timeout), and this handler has already probed both above -- so a
+        # /doctor call pays each twice, sequentially. That is accepted here
+        # because /doctor is an operator-invoked diagnostic, not a hot path,
+        # and the duplicate probe is the honest reading of the validator's own
+        # view rather than a cached one. Collapse the two only if /doctor ever
+        # becomes something polled.
+        "dependencies": await _validate_dependencies(),
     }
