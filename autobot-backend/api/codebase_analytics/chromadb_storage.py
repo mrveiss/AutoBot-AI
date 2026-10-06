@@ -254,7 +254,7 @@ def make_problem_dict(
 ) -> Dict:
     """Canonical factory for the problem-dict schema (#6759).
 
-    Single source of truth for the keys read by ``_prepare_problem_document``
+    Single source of truth for the keys read by ``problem_storage._prepare_problem_document``
     and written by cross-file analysis converters.  If the schema gains a new
     field, add it here and update the reader below.
     """
@@ -269,82 +269,10 @@ def make_problem_dict(
     }
 
 
-def _prepare_problem_document(problem: Dict, problem_idx: int, source_id: str | None = None) -> tuple:
-    """
-    Prepare a problem document for ChromaDB storage.
-
-    Issue #398: Extracted from _store_problems_batch_to_chromadb.
-    Issue #1710: source_id for per-project scoping.
-    Returns tuple of (id, document, metadata).
-    """
-    file_category = problem.get("file_category", FILE_CATEGORY_CODE)
-    problem_doc = f"""
-Problem: {problem.get('type', 'unknown')}
-Severity: {problem.get('severity', 'medium')}
-File: {problem.get('file_path', '')}
-Category: {file_category}
-Line: {problem.get('line', 0)}
-Description: {problem.get('description', '')}
-Suggestion: {problem.get('suggestion', '')}
-    """.strip()
-
-    metadata = {
-        "type": "problem",
-        "problem_type": problem.get("type", "unknown"),
-        "severity": problem.get("severity", "medium"),
-        "file_path": problem.get("file_path", ""),
-        "file_category": file_category,
-        "line_number": str(problem.get("line", 0)),
-        "description": problem.get("description", ""),
-        "suggestion": problem.get("suggestion", ""),
-    }
-    metadata["source_id"] = require_source_id(source_id, "codebase document id")
-    prefix = f"{source_id}_"
-    doc_id = f"{prefix}problem_{problem_idx}_{problem.get('type', 'unknown')}"
-    return doc_id, problem_doc, metadata
-
-
-async def _store_problems_batch_to_chromadb(
-    collection,
-    problems: list,
-    start_idx: int,
-    source_id: str | None = None,
-) -> None:
-    """Store multiple problems to ChromaDB in batch (#398, #1710: source_id)."""
-    if not collection or not problems:
-        return
-
-    try:
-        ids, documents, metadatas = [], [], []
-        for i, problem in enumerate(problems):
-            doc_id, problem_doc, metadata = _prepare_problem_document(problem, start_idx + i, source_id=source_id)
-            ids.append(doc_id)
-            documents.append(problem_doc)
-            metadatas.append(metadata)
-
-        await collection.upsert(ids=ids, documents=documents, metadatas=metadatas)
-        logger.debug("Batch stored %s problems to ChromaDB", len(problems))
-    except Exception as e:
-        # Issue #1712: Retry once on stale collection (mirrors #1249 pattern).
-        err_msg = str(e).lower()
-        if "does not exist" in err_msg or "not found" in err_msg:
-            logger.warning("Problems collection stale, recreating (#1712): %s", e)
-            fresh = await get_code_collection_async()
-            if fresh is not None:
-                try:
-                    await fresh.upsert(
-                        ids=ids,
-                        documents=documents,
-                        metadatas=metadatas,
-                    )
-                    logger.info("Retry stored %d problems after stale collection", len(problems))
-                    return
-                except Exception as retry_err:
-                    logger.error("Retry also failed for problems batch: %s", retry_err)
-            else:
-                logger.error("Cannot retry — collection unavailable (#1712)")
-        else:
-            logger.error("Failed to batch store problems to ChromaDB (#1712): %s", e)
+# #18055: problem storage moved to problem_storage.py.  This module is a
+# grandfathered large file that may not grow, and problem storage is a
+# coherent unit of its own.  It is NOT re-exported here -- an alias would be
+# a second name for one implementation; callers import it from its own home.
 
 
 async def _clear_redis_codebase_cache(task_id: str, source_id: str | None = None) -> None:
