@@ -20,5 +20,5 @@ playwright-stealth
 # Range-header DoS). Declared here so the floors have an anchor in the
 # component's own manifest rather than agreeing with the backend's by
 # coincidence, which is the blindness #15629 removed from the parity guard.
-fastapi>=0.141.1
+fastapi>=0.142.2
 uvicorn>=0.54.0
