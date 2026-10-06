@@ -210,7 +210,7 @@ async def _restore_component_snapshot(component: str, snapshot: str, steps: List
         logger.error("rollback: rsync restore failed for %s: %s", component, out[-300:])
         return False
     except asyncio.TimeoutError:
-        steps.append("rollback: rsync restore timed out after 120s")
+        steps.append(f"rollback: rsync restore timed out after {_SNAPSHOT_RESTORE_TIMEOUT_S:g}s")
         logger.error("rollback: rsync restore timed out for %s", component)
         return False
     except Exception as exc:
