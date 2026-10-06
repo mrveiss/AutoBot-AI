@@ -65,11 +65,11 @@ python_security_updates:
   langchain-core: "1.6.5,<2.0.0"   # Serialization injection + template injection + SSRF
   nltk: "3.10.3"                   # Zip slip vulnerability
   # High
-  starlette: "1.6.0"               # O(n^2) DoS via Range header
+  starlette: "1.7.0"               # O(n^2) DoS via Range header
   fastapi: "0.141.1"               # Requires starlette >=0.52.1
   aiohttp: "3.14.3"                # Zip bomb + DoS + payload + chunked
   python-multipart: "0.0.32"       # Arbitrary file write
-  cryptography: "50.0.1"           # Subgroup attack on SECT curves
+  cryptography: "50.0.2"           # Subgroup attack on SECT curves
   pillow: "12.3.0"                 # OOB write loading PSD images
   protobuf: "7.36.2,<8.0.0"        # JSON recursion depth bypass
   # Medium (pypdf - 10 CVEs)
