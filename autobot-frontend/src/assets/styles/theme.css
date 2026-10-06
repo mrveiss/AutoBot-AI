@@ -14,7 +14,10 @@
    * ============================================ */
 
   /* Primary Colors - Defined in design-tokens.css (electric blue by default)
-   * Accent color variants below override via [data-accent-color] attribute */
+   * Accent variants live in assets/css/themes/accents.css, keyed on
+   * [data-accent] (#18066 -- this file used to define a rival set keyed on
+   * [data-accent-color], so the accent applied or not depending on which
+   * composable the view called). */
 
   /* Secondary Colors */
   --color-secondary: #64748b;
@@ -213,87 +216,6 @@
   --font-size-xl: 1.3125rem;   /* 21px */
   --font-size-2xl: 1.625rem;   /* 26px */
   --font-size-3xl: 2rem;       /* 32px */
-}
-
-/* ============================================
- * ACCENT COLOR VARIANTS
- * Activated via [data-accent-color] attribute
- * Default: Electric Blue (from design-tokens.css)
- * ============================================ */
-
-/* Teal */
-[data-accent-color="teal"] {
-  --color-primary: #0d9488;
-  --color-primary-hover: #0f766e;
-  --color-primary-light: #5eead4;
-  --color-primary-dark: #115e59;
-}
-
-[data-accent-color="teal"][data-theme="dark"] {
-  --color-primary: #2dd4bf;
-  --color-primary-hover: #5eead4;
-  --color-primary-light: #99f6e4;
-  --color-primary-dark: #14b8a6;
-}
-
-/* Emerald */
-[data-accent-color="emerald"] {
-  --color-primary: #10b981;
-  --color-primary-hover: #059669;
-  --color-primary-light: #6ee7b7;
-  --color-primary-dark: #047857;
-}
-
-[data-accent-color="emerald"][data-theme="dark"] {
-  --color-primary: #34d399;
-  --color-primary-hover: #6ee7b7;
-  --color-primary-light: #a7f3d0;
-  --color-primary-dark: #10b981;
-}
-
-/* Blue */
-[data-accent-color="blue"] {
-  --color-primary: #3b82f6;
-  --color-primary-hover: #2563eb;
-  --color-primary-light: #93c5fd;
-  --color-primary-dark: #1d4ed8;
-}
-
-[data-accent-color="blue"][data-theme="dark"] {
-  --color-primary: #60a5fa;
-  --color-primary-hover: #93c5fd;
-  --color-primary-light: #bfdbfe;
-  --color-primary-dark: #3b82f6;
-}
-
-/* Purple */
-[data-accent-color="purple"] {
-  --color-primary: #8b5cf6;
-  --color-primary-hover: #7c3aed;
-  --color-primary-light: #c4b5fd;
-  --color-primary-dark: #6d28d9;
-}
-
-[data-accent-color="purple"][data-theme="dark"] {
-  --color-primary: #a78bfa;
-  --color-primary-hover: #c4b5fd;
-  --color-primary-light: #ddd6fe;
-  --color-primary-dark: #8b5cf6;
-}
-
-/* Orange */
-[data-accent-color="orange"] {
-  --color-primary: #f97316;
-  --color-primary-hover: #ea580c;
-  --color-primary-light: #fdba74;
-  --color-primary-dark: #c2410c;
-}
-
-[data-accent-color="orange"][data-theme="dark"] {
-  --color-primary: #fb923c;
-  --color-primary-hover: #fdba74;
-  --color-primary-light: #fed7aa;
-  --color-primary-dark: #f97316;
 }
 
 /* ============================================

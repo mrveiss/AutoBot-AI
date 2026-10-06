@@ -129,7 +129,9 @@ Issue #3286: Comprehensive Theming System
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { usePreferences, type FontSize, type AccentColor, type LayoutDensity } from '@/composables/usePreferences'
+import { usePreferences, type FontSize, type LayoutDensity } from '@/composables/usePreferences'
+// #18066: the accent type is owned by useTheme; usePreferences re-exports it.
+import type { AccentColor } from '@/composables/useTheme'
 import { createLogger } from '@/utils/debugUtils'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 import EmberThemeToggle from '@/components/theme/EmberThemeToggle.vue'
@@ -160,12 +162,19 @@ const fontSizeOptions = computed(() => [
 ])
 
 // Accent color options (CSS variables for preview colors)
+// #18066: the eight accents `accents.css` actually defines. This panel used to
+// offer five under a rival attribute, so it and ThemePresetPicker disagreed about
+// both the colour set and where to write it. `emerald` is retired -- it is the
+// same `#10b981` this set calls `green`.
 const accentColorOptions = computed(() => [
-  { value: 'teal' as AccentColor, label: t('ui.preferences.teal') },
-  { value: 'emerald' as AccentColor, label: t('ui.preferences.emerald') },
   { value: 'blue' as AccentColor, label: t('ui.preferences.blue') },
+  { value: 'green' as AccentColor, label: t('ui.preferences.green') },
   { value: 'purple' as AccentColor, label: t('ui.preferences.purple') },
-  { value: 'orange' as AccentColor, label: t('ui.preferences.orange') }
+  { value: 'orange' as AccentColor, label: t('ui.preferences.orange') },
+  { value: 'pink' as AccentColor, label: t('ui.preferences.pink') },
+  { value: 'teal' as AccentColor, label: t('ui.preferences.teal') },
+  { value: 'indigo' as AccentColor, label: t('ui.preferences.indigo') },
+  { value: 'red' as AccentColor, label: t('ui.preferences.red') }
 ])
 
 // Layout density options

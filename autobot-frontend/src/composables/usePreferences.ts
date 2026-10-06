@@ -37,7 +37,11 @@ interface PersonalityActiveResponse {
 
 // Preference types
 export type FontSize = 'small' | 'medium' | 'large'
-export type AccentColor = 'teal' | 'emerald' | 'blue' | 'purple' | 'orange'
+// #18066: one accent type, owned by useTheme. This module's own 5-value copy
+// set a second attribute (`data-accent-color`) that a second stylesheet read,
+// so the accent applied or not depending on which composable a view called.
+// Re-exported rather than redeclared -- a second declaration is the fork.
+export type AccentColor = ThemeAccentColor
 export type LayoutDensity = 'compact' | 'comfortable' | 'spacious'
 export type VoiceDisplayMode = 'modal' | 'sidepanel'
 export type ContextOverflowMode = 'auto' | 'warn' | 'disabled'
@@ -142,12 +146,20 @@ function applyFontSize(size: FontSize): void {
   logger.debug(`Font size applied: ${size}`)
 }
 
+/** #18066: `emerald` was this module's name for the same colour `accents.css`
+ * calls `green` (both `#10b981`). A stored `emerald` maps forward so nobody's
+ * saved preference is silently dropped. */
+function normaliseAccent(color: string): ThemeAccentColor {
+  return (color === 'emerald' ? 'green' : color) as ThemeAccentColor
+}
+
 /**
  * Apply accent color preference to document root
  */
 function applyAccentColor(color: AccentColor): void {
-  const root = document.documentElement
-  root.setAttribute('data-accent-color', color)
+  // #18066: delegate to the canonical owner instead of setting a rival
+  // attribute. `data-accent-color` is retired; `accents.css` reads `data-accent`.
+  useTheme().setAccentColor(normaliseAccent(color))
   logger.debug(`Accent color applied: ${color}`)
 }
 
