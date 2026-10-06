@@ -101,9 +101,12 @@ async def test_one_failing_chunk_does_not_discard_the_others(monkeypatch):
 
     collection.upsert = AsyncMock(side_effect=flaky)
 
-    await _store_problems_batch_to_chromadb(collection, _problems(35), 0, source_id="src")
+    stored = await _store_problems_batch_to_chromadb(collection, _problems(35), 0, source_id="src")
 
     assert collection.upsert.await_count == 4, "the run continues past a failing chunk"
+    # The count must exclude the failed chunk. Reporting len(problems) here
+    # would log more persisted than exists -- the caller logs this number.
+    assert stored == 25, f"35 problems with one failed chunk of 10 is 25 stored, got {stored}"
 
 
 @pytest.mark.asyncio

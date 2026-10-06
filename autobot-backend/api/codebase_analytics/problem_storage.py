@@ -106,7 +106,7 @@ async def _store_problems_batch_to_chromadb(
     start_idx: int,
     source_id: str | None = None,
     progress_callback=None,
-) -> None:
+) -> int:
     """Store problems to ChromaDB in bounded chunks (#398, #1710, #18055).
 
     Issue #18055: this used to build one list of every problem in the tree and
@@ -131,7 +131,7 @@ async def _store_problems_batch_to_chromadb(
     this matches them.  An upsert failure is still per-chunk and non-fatal.
     """
     if not collection or not problems:
-        return
+        return 0
 
     total = len(problems)
     stored = 0
@@ -155,3 +155,4 @@ async def _store_problems_batch_to_chromadb(
         total,
         CHROMADB_BATCH_SIZE,
     )
+    return stored

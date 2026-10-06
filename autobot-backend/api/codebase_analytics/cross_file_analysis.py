@@ -85,14 +85,16 @@ async def _persist_to_chromadb(
         # It runs in the finalize phase, which has no other progress signal --
         # an unreported write here is the same silent window that killed every
         # run before the per-file path was chunked.
-        await _store_problems_batch_to_chromadb(
+        # The count comes from the writer, not from len(problems): a chunk
+        # that fails is skipped, so reporting the offered count would log
+        # more persisted than exists.
+        return await _store_problems_batch_to_chromadb(
             collection,
             problems,
             start_idx,
             source_id=source_id,
             progress_callback=progress_callback,
         )
-        return len(problems)
     except Exception as exc:
         logger.warning("[#6747] Failed to persist cross-file findings: %s", exc)
         return 0

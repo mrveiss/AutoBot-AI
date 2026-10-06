@@ -98,7 +98,9 @@ fail()  { printf "${RED}[pre-push FAIL]${CLR} %s\n" "$*" >&2; }
 # when nothing conforming exists.
 # ---------------------------------------------------------------------------
 pick_python() {
-    # A candidate qualifies only if it meets the floor AND can import pytest.
+    # A candidate qualifies only if it meets the floor AND can actually
+    # IMPORT pytest -- find_spec only proves the package is locatable, so a
+    # stale venv with a broken install would be chosen over a working python3.
     # Version alone is not enough: a bare /usr/bin/python3.14 with no pytest
     # fails with "No module named pytest", which is the same push-blocking
     # non-failure in different words.
@@ -110,7 +112,7 @@ pick_python() {
                      "$main_root/venv/bin/python" "$main_root/.venv/bin/python" \
                      python3 python3.14 python3.13 python3.12 python3.11; do
         command -v "$candidate" >/dev/null 2>&1 || [ -x "$candidate" ] || continue
-        if "$candidate" -c 'import sys, importlib.util as u; sys.exit(0 if sys.version_info >= (3, 11) and u.find_spec("pytest") else 1)' 2>/dev/null; then
+        if "$candidate" -c 'import sys; sys.exit(1) if sys.version_info < (3, 11) else __import__("pytest")' 2>/dev/null; then
             printf '%s' "$candidate"
             return 0
         fi
