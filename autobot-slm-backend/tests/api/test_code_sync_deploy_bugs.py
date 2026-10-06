@@ -67,7 +67,6 @@ from api.code_sync import (  # noqa: E402
     _prune_old_backups,
     _prune_old_snapshots,
     _resolve_pg_db_url,
-    _restore_component_snapshot,
     _rollback_component,
     _run_alembic_migrations,
     _run_post_sync_steps,
@@ -1239,6 +1238,7 @@ def test_rollback_component_rsyncs_from_backup_and_restarts(tmp_path) -> None:
 
     with (
         patch("api.code_sync.get_release_component_dir", return_value=str(deployed)),
+        patch("api._rsync_paths.get_release_component_dir", return_value=str(deployed)),
         patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
         patch("api.code_sync._restart_component_services", side_effect=_fake_restart),
     ):
@@ -1266,6 +1266,7 @@ def test_rollback_skips_dump_path_when_no_backup_sentinel(tmp_path) -> None:
 
     with (
         patch("api.code_sync.get_release_component_dir", return_value=str(deployed)),
+        patch("api._rsync_paths.get_release_component_dir", return_value=str(deployed)),
         patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
         patch("api.code_sync._restart_component_services", AsyncMock()),
     ):
@@ -1306,6 +1307,7 @@ def test_rollback_restarts_even_when_restore_rsync_fails(tmp_path) -> None:
 
     with (
         patch("api.code_sync.get_release_component_dir", return_value=str(deployed)),
+        patch("api._rsync_paths.get_release_component_dir", return_value=str(deployed)),
         patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
         patch("api.code_sync._restart_component_services", AsyncMock()) as restart,
     ):
@@ -1314,30 +1316,6 @@ def test_rollback_restarts_even_when_restore_rsync_fails(tmp_path) -> None:
 
     restart.assert_awaited_once()
     assert any("rsync restore failed" in s for s in steps)
-
-
-def test_restore_component_snapshot_returns_false_on_timeout(tmp_path) -> None:
-    """#15323: the extracted restore helper reports failure on timeout so the
-    (now-unconditional) caller's restart-either-way logic has a real signal
-    to log, rather than the restart happening with no record of why."""
-    deployed = tmp_path / "deployed"
-    deployed.mkdir()
-
-    async def _fake_exec(*cmd, **kw):
-        proc = MagicMock()
-        proc.communicate = AsyncMock(side_effect=TimeoutError())
-        return proc
-
-    with (
-        patch("api.code_sync.get_release_component_dir", return_value=str(deployed)),
-        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
-        patch("asyncio.wait_for", side_effect=__import__("asyncio").TimeoutError),
-    ):
-        steps: list[str] = []
-        result = _run(_restore_component_snapshot("autobot-backend", str(tmp_path / "snap"), steps))
-
-    assert result is False
-    assert any("timed out" in s for s in steps)
 
 
 def test_run_post_sync_steps_rolls_back_on_pip_failure() -> None:

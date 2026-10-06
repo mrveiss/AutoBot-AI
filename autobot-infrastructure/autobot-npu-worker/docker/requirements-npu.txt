@@ -2,7 +2,7 @@
 # Optimized for Intel NPU acceleration
 
 # Core Framework
-fastapi>=0.141.1
+fastapi>=0.142.2
 uvicorn[standard]>=0.54.0
 pydantic>=2.13.5
 
@@ -24,7 +24,7 @@ tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a f
                           # that excludes 0.23.0.
 transformers>=5.18.0  # 5.17.x declares huggingface-hub<2.0, so with the hub floor below a 5.17
                       # floor is one pip can never install; 5.18.0 is the first to admit hub<3.0.
-huggingface-hub>=2.0.0
+huggingface-hub>=2.1.1
 
 # Tensor Operations (NPU optimized)
 -c ../../../constraints/shared.txt  # single source of truth for shared versions (#10524)
@@ -35,7 +35,7 @@ httpx>=0.28.1
 requests>=2.34.2
 
 # Utilities
-python-dotenv>=1.2.3
+python-dotenv>=1.2.4
 structlog>=26.1.0
 tenacity>=9.1.4
 async-timeout>=5.0.1
