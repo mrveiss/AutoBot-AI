@@ -64,7 +64,7 @@ async def _persist_to_chromadb(
     if not problems:
         return 0
     try:
-        from api.codebase_analytics.chromadb_storage import (
+        from api.codebase_analytics.problem_storage import (
             _store_problems_batch_to_chromadb,
         )
         from api.codebase_analytics.storage import get_code_collection_async

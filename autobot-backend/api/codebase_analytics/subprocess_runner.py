@@ -88,11 +88,18 @@ async def _wait_with_watchdog(
             if status in ("completed", "failed", "cancelled"):
                 return await proc.wait()
 
+            # #18055: a phase transition is liveness too.  Hashing only the
+            # progress counters made every legitimately-silent step fatal --
+            # the bulk problem upsert ran past the window and the worker was
+            # killed before anything was persisted.
             progress = task_data.get("progress", {})
+            phases = task_data.get("phases", {})
             progress_hash = (
                 progress.get("current"),
                 progress.get("total"),
                 progress.get("operation"),
+                phases.get("current_phase"),
+                len(phases.get("phases_completed", [])),
             )
             now = asyncio.get_running_loop().time()
 
