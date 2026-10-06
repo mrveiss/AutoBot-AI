@@ -32,11 +32,41 @@ from repo_tests._analytics_metadata_detect import (
 from repo_tests._paths import repo_root
 
 _ANALYTICS = repo_root() / "autobot-backend" / "api" / "codebase_analytics"
-_WRITER = _ANALYTICS / "chromadb_storage.py"
+#: The writer is no longer one file: #18055 split problem storage out of
+#: chromadb_storage, which may not grow. Listed explicitly rather than
+#: globbed -- but see `test_every_document_preparer_is_in_the_writer_set`,
+#: which fails when a `_prepare_*_document` exists in the package outside
+#: this set. Without that, the split silently shrank the contract: the
+#: problem keys stopped being checked while every assertion kept passing.
+_WRITERS = (
+    _ANALYTICS / "chromadb_storage.py",
+    _ANALYTICS / "problem_storage.py",
+)
 
 
 def _writer_source() -> str:
-    return _WRITER.read_text(encoding="utf-8")
+    return "\n".join(p.read_text(encoding="utf-8") for p in _WRITERS)
+
+
+def test_every_document_preparer_is_in_the_writer_set():
+    """A preparer outside the writer set shrinks this contract invisibly.
+
+    The reader population is DISCOVERED (by obtaining the collection); the
+    writer population was a hand-written list of one. An asymmetry like that
+    does not fail when it goes stale -- it just checks less. This is the
+    assertion that makes the writer list fail instead of narrowing.
+    """
+    declared = {path.name for path in _WRITERS}
+    missing = []
+    for path in sorted(_ANALYTICS.rglob("*.py")):
+        if "test" in path.name or path.name in declared:
+            continue
+        if preparers(path.read_text(encoding="utf-8", errors="replace")):
+            missing.append(str(path.relative_to(_ANALYTICS)))
+    assert not missing, (
+        "these modules define _prepare_*_document but are not in _WRITERS, so the keys\n"
+        "they emit are not checked against what the endpoints filter on (#18055):\n  " + "\n  ".join(missing)
+    )
 
 
 def _emitted_keys() -> set[str]:
