@@ -89,7 +89,7 @@ Issue #3286: Comprehensive Theming System
             :aria-pressed="accentColor === color.value"
             type="button"
           >
-            <span class="color-preview" :aria-hidden="true"></span>
+            <span class="color-preview" :data-accent="color.value" :aria-hidden="true"></span>
             <span class="color-label">{{ color.label }}</span>
           </button>
         </div>
@@ -165,7 +165,7 @@ const fontSizeOptions = computed(() => [
 // #18066: the eight accents `accents.css` actually defines. This panel used to
 // offer five under a rival attribute, so it and ThemePresetPicker disagreed about
 // both the colour set and where to write it. `emerald` is retired -- it is the
-// same `#10b981` this set calls `green`.
+// same colour this set calls `green` (identical value in accents.css).
 const accentColorOptions = computed(() => [
   { value: 'blue' as AccentColor, label: t('ui.preferences.blue') },
   { value: 'green' as AccentColor, label: t('ui.preferences.green') },
@@ -428,31 +428,17 @@ function handleReset() {
 }
 
 /* Color preview using data attributes and CSS */
+/* #18066: the swatch carries [data-accent], so accents.css resolves
+   --color-primary to that accent's colour. Previously five rules: three
+   hardcoded hex (flagged by stylelint), one pointed at --color-success,
+   and the teal swatch read --color-primary unscoped -- rendering whatever
+   accent happened to be active rather than teal. */
 .color-preview {
+  background: var(--color-primary);
   width: 32px;
   height: 32px;
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
-}
-
-.color-btn[data-color="teal"] .color-preview {
-  background: var(--color-primary);
-}
-
-.color-btn[data-color="emerald"] .color-preview {
-  background: var(--color-success);
-}
-
-.color-btn[data-color="blue"] .color-preview {
-  background: #3b82f6;
-}
-
-.color-btn[data-color="purple"] .color-preview {
-  background: #8b5cf6;
-}
-
-.color-btn[data-color="orange"] .color-preview {
-  background: #f97316;
 }
 
 /* Active color preview gets border */

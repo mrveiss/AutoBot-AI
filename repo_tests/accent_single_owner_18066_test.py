@@ -27,6 +27,8 @@ import re
 
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines, strip_block_comments
+
 _FRONTEND = repo_root() / "autobot-frontend" / "src"
 _SRC_GLOBS = ("**/*.ts", "**/*.vue", "**/*.css")
 
@@ -52,15 +54,18 @@ def _sources():
 def test_the_retired_accent_attribute_is_not_written_or_styled():
     """`data-accent-color` may survive only in prose explaining why it is gone."""
     offenders = []
-    for path, text in _sources():
-        for lineno, line in enumerate(text.splitlines(), 1):
-            if _RETIRED_ATTR not in line:
+    for path, _text in _sources():
+        # #17941: one comment stripper. Testing a line against `//`, `/*`, `#`
+        # by hand is a second implementation of comment syntax -- which is the
+        # defect this whole PR is about, committed in the guard against it.
+        # `strip_block_comments` first: `code_lines` alone does not treat the
+        # ` * ...` continuation lines of a `/* */` run as comment, and the
+        # decision notes left in theme.css are written exactly that way. It
+        # preserves newlines, so line numbers still point at the real file.
+        for entry in code_lines(strip_block_comments(_text), name=path):
+            if _RETIRED_ATTR not in entry.text:
                 continue
-            stripped = line.strip()
-            # A comment recording the decision is fine; a selector or a write is not.
-            if stripped.startswith(("*", "//", "/*", "#")):
-                continue
-            offenders.append(f"{path.relative_to(_FRONTEND)}:{lineno}: {stripped[:90]}")
+            offenders.append(f"{path.relative_to(_FRONTEND)}:{entry.lineno}: {entry.text.strip()[:90]}")
     assert not offenders, (
         "`data-accent-color` is retired (#18066) -- `accents.css` keys on `data-accent`.\n"
         "A second attribute for one concept is the fork this guard exists to stop:\n  " + "\n  ".join(offenders)
