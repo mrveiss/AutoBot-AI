@@ -51,6 +51,9 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_constants import TTL_30_DAYS
+
+# #18070: one ValidationResult -- this module used to declare a second one.
+from code_intelligence.code_generation.types import ValidationResult, ValidationStatus
 from llm_shared.types import LLMType
 
 # LLM Service for real code generation
@@ -241,16 +244,6 @@ class CodeVersion:
 
 
 @dataclass
-class ValidationResult:
-    """Result of code validation"""
-
-    is_valid: bool
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
-    ast_info: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
 class RefactoringResult:
     """Result of a refactoring operation"""
 
@@ -320,8 +313,13 @@ class CodeValidator:
     @staticmethod
     def validate_python(code: str) -> ValidationResult:
         """Validate Python code using AST parsing (Issue #315: depth 6→3)"""
-        errors = []
-        warnings = []
+        errors: List[str] = []
+        warnings: List[str] = []
+        # #18071: both `except` branches below read `ast_info`, which used to be
+        # assigned only AFTER `ast.parse` succeeded -- so every syntactically
+        # invalid input (the only input this function exists to reject) raised
+        # UnboundLocalError and discarded the SyntaxError it had just formatted.
+        ast_info: Dict[str, Any] = {}
 
         try:
             tree = ast.parse(code)
@@ -340,14 +338,14 @@ class CodeValidator:
                 "total_lines": len(code.split("\n")),
             }
 
-            return ValidationResult(is_valid=True, errors=errors, warnings=warnings, ast_info=ast_info)
+            return ValidationResult(ValidationStatus.VALID, True, errors, warnings, ast_info=ast_info)
 
         except SyntaxError as e:
             errors.append(f"Syntax error at line {e.lineno}: {e.msg}")
-            return ValidationResult(is_valid=False, errors=errors, warnings=warnings, ast_info=ast_info)
+            return ValidationResult(ValidationStatus.SYNTAX_ERROR, False, errors, warnings, ast_info=ast_info)
         except Exception as e:
             errors.append(f"Validation error: {str(e)}")
-            return ValidationResult(is_valid=False, errors=errors, warnings=warnings, ast_info=ast_info)
+            return ValidationResult(ValidationStatus.UNKNOWN, False, errors, warnings, ast_info=ast_info)
 
     @staticmethod
     def validate_typescript(code: str) -> ValidationResult:
@@ -391,12 +389,8 @@ class CodeValidator:
             "total_lines": len(lines),
         }
 
-        return ValidationResult(
-            is_valid=len(errors) == 0,
-            errors=errors,
-            warnings=warnings,
-            ast_info=ast_info,
-        )
+        status = ValidationStatus.VALID if not errors else ValidationStatus.SYNTAX_ERROR
+        return ValidationResult(status, not errors, errors, warnings, ast_info=ast_info)
 
     @classmethod
     def validate(cls, code: str, language: CodeLanguage) -> ValidationResult:
@@ -416,9 +410,9 @@ class CodeValidator:
             )
             if script_match:
                 return cls.validate_typescript(script_match.group(1))
-            return ValidationResult(is_valid=True)
+            return ValidationResult(status=ValidationStatus.VALID, is_valid=True)
         else:
-            return ValidationResult(is_valid=True)
+            return ValidationResult(status=ValidationStatus.VALID, is_valid=True)
 
 
 # =============================================================================
