@@ -238,7 +238,7 @@ async def test_browser_backend_ssrf_block_no_manager_call(monkeypatch, stub_brow
     import content_reach._url_guard as guard_mod
     from content_reach.backends.browser import BrowserBackend
     from content_reach.base import BackendError, ContentRequest
-    from source_attribution import SourceType
+    from source_attribution import SourceKind
 
     async def _fake_public(url: str) -> bool:
         return False
@@ -254,7 +254,7 @@ async def test_browser_backend_ssrf_block_no_manager_call(monkeypatch, stub_brow
 
     stub_browser_manager(_StubManager())
 
-    backend = BrowserBackend(source_type=SourceType.WEB_PAGE)
+    backend = BrowserBackend(source_type=SourceKind.WEB_PAGE)
     request = ContentRequest(url="http://192.168.1.1/internal")
 
     with pytest.raises(BackendError):
@@ -380,7 +380,7 @@ async def test_browser_search_ssrf_block_ddg_url(monkeypatch, stub_browser_manag
     import content_reach._url_guard as guard_mod
     from content_reach.backends.browser import BrowserSearchBackend
     from content_reach.base import BackendError, ContentRequest
-    from source_attribution import SourceType
+    from source_attribution import SourceKind
 
     async def _fake_public(url: str) -> bool:
         return False
@@ -396,7 +396,7 @@ async def test_browser_search_ssrf_block_ddg_url(monkeypatch, stub_browser_manag
 
     stub_browser_manager(_StubManager())
 
-    backend = BrowserSearchBackend(source_type=SourceType.WEB_SEARCH)
+    backend = BrowserSearchBackend(source_type=SourceKind.WEB_SEARCH)
     request = ContentRequest(query="test query")
 
     with pytest.raises(BackendError):

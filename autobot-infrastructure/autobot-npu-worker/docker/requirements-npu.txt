@@ -24,7 +24,13 @@ tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a f
                           # that excludes 0.23.0.
 transformers>=5.18.0  # 5.17.x declares huggingface-hub<2.0, so with the hub floor below a 5.17
                       # floor is one pip can never install; 5.18.0 is the first to admit hub<3.0.
-huggingface-hub>=2.1.1
+# Held below 2.0 (#17847, re-asserted after #18045). MEASURED on PyPI: the latest
+# `sentence-transformers` (6.1.0) and `tokenizers` (0.23.2) BOTH declare
+# `huggingface-hub<2.0`, so a >=2.x floor is unsatisfiable in any manifest holding
+# either -- pip fails on the whole file and nothing installs. #18045 raised all three
+# declarations to >=2.1.1 together, which satisfied "all three move together" but not
+# the resolver. Raise this only when both of those allow 2.x.
+huggingface-hub>=1.32.0,<2.0
 
 # Tensor Operations (NPU optimized)
 -c ../../../constraints/shared.txt  # single source of truth for shared versions (#10524)

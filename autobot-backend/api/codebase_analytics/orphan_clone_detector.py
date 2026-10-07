@@ -114,7 +114,7 @@ async def _delete(candidate_id: str):
     return DeleteResult(deleted=True)
 
 
-def register() -> None:
+def register_clone_detector() -> None:
     """Register this detector. Called once at app startup, idempotent."""
     from services.orphan_storage import OrphanDetector, register_detector
 

@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from advanced_rag_optimizer import RAGMetrics, SearchResult
+from advanced_rag_optimizer import RAGMetrics, RankedResult
 from services.knowledge_base_adapter import KnowledgeBaseAdapter
 from services.rag_config import (
     RAGConfig,
@@ -281,7 +281,7 @@ class TestRAGService:
 
         # Mock reranking to return in different order
         reranked_search_results = [
-            SearchResult(
+            RankedResult(
                 content="result 2",
                 metadata={},
                 semantic_score=0.8,
@@ -291,7 +291,7 @@ class TestRAGService:
                 source_path="test",
                 rerank_score=0.95,
             ),
-            SearchResult(
+            RankedResult(
                 content="result 1",
                 metadata={},
                 semantic_score=0.5,
@@ -351,7 +351,7 @@ class TestCrossEncoderReranking:
 
         # Create test results
         results = [
-            SearchResult(
+            RankedResult(
                 content="test content with query terms",
                 metadata={},
                 semantic_score=0.5,
@@ -391,7 +391,7 @@ class TestCrossEncoderReranking:
 
         # Create test results
         results = [
-            SearchResult(
+            RankedResult(
                 content="result 1",
                 metadata={},
                 semantic_score=0.5,
@@ -400,7 +400,7 @@ class TestCrossEncoderReranking:
                 relevance_rank=1,
                 source_path="test",
             ),
-            SearchResult(
+            RankedResult(
                 content="result 2",
                 metadata={},
                 semantic_score=0.7,

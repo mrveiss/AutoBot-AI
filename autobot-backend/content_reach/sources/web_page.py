@@ -23,7 +23,7 @@ from content_reach._url_guard import ensure_public_url, ensure_robots_allowed
 from content_reach.backends.browser import BrowserBackend
 from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
 from content_reach.chain import ContentSourceChain
-from source_attribution import SourceReliability, SourceType
+from source_attribution import SourceKind, SourceReliability
 
 logger = get_logger(__name__)
 
@@ -57,7 +57,7 @@ class TrafilaturaBackend(ContentBackend):
     """
 
     name = "trafilatura"
-    source_type = SourceType.WEB_PAGE
+    source_type = SourceKind.WEB_PAGE
 
     def __init__(self, client: httpx.AsyncClient | None = None) -> None:
         self._client = client
@@ -121,7 +121,7 @@ class JinaReaderBackend(ContentBackend):
     """
 
     name = "jina_reader"
-    source_type = SourceType.WEB_PAGE
+    source_type = SourceKind.WEB_PAGE
 
     def __init__(self, client: httpx.AsyncClient | None = None) -> None:
         self._client = client
@@ -173,10 +173,10 @@ def build_web_page_chain() -> ContentSourceChain:
     """Build the web-page fallback chain: trafilatura → jina_reader → browser."""
     return ContentSourceChain(
         source="web_page",
-        source_type=SourceType.WEB_PAGE,
+        source_type=SourceKind.WEB_PAGE,
         backends=[
             TrafilaturaBackend(),
             JinaReaderBackend(),
-            BrowserBackend(SourceType.WEB_PAGE),
+            BrowserBackend(SourceKind.WEB_PAGE),
         ],
     )

@@ -15,7 +15,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from circuit_breaker import CircuitBreakerOpenError, get_circuit_breaker_manager
 from content_reach.base import ContentRequest, ContentResult
 from content_reach.chain import ContentSourceChain
-from source_attribution import SourceType, track_source
+from source_attribution import SourceKind, track_source
 
 logger = get_logger(__name__)
 
@@ -100,7 +100,7 @@ class ContentSourceRegistry:
         """Run the source's chain primary->fallback and return the first success."""
         chain = self.get_chain(source)
         if chain is None:
-            return ContentResult.failure(SourceType.WEB_SEARCH, f"unknown source: {source}")
+            return ContentResult.failure(SourceKind.WEB_SEARCH, f"unknown source: {source}")
 
         chain = chain.reordered()
         request.source = source

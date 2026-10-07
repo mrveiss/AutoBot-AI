@@ -8,9 +8,9 @@ Callers state the capabilities they need; the registry picks a backend that
 declares them and is currently reachable, and validates every URL with the
 DNS-resolving public-address guard before any backend sees it.
 
-    from autobot_shared.browser import Capability, NavigateRequest, get_browser
+    from autobot_shared.browser import BrowserCapability, NavigateRequest, get_browser
 
-    browser = await get_browser(requires={Capability.NAVIGATE, Capability.EXTRACT_TEXT})
+    browser = await get_browser(requires={BrowserCapability.NAVIGATE, BrowserCapability.EXTRACT_TEXT})
     page = await browser.navigate(NavigateRequest(url=url))
 
 Ask for the content shape you need — `EXTRACT_HTML` for markup,
@@ -24,7 +24,7 @@ module.
 
 Re-exports are lazy (PEP 562), matching ``autobot_shared/user_management``:
 importing the package must not drag SQLAlchemy, aiohttp or Playwright into a
-caller that only wanted the ``Capability`` enum. Eager imports here were what
+caller that only wanted the ``BrowserCapability`` enum. Eager imports here were what
 pulled ``email_validator`` into the migration gate in #13129.
 """
 
@@ -33,7 +33,7 @@ _LAZY_IMPORTS = {
     "BrowserBackend": (".base", "BrowserBackend"),
     "BrowserError": (".base", "BrowserError"),
     "BrowserResult": (".base", "BrowserResult"),
-    "Capability": (".base", "Capability"),
+    "BrowserCapability": (".base", "BrowserCapability"),
     "ContentFormat": (".base", "ContentFormat"),
     "FORMAT_CAPABILITY": (".base", "FORMAT_CAPABILITY"),
     "ExtractRequest": (".base", "ExtractRequest"),

@@ -198,7 +198,7 @@ def _token_set(text: str) -> set:
     """Return the lower-cased token set of *text* for Jaccard similarity.
 
     Issue #10600: MMR redundancy measure for result objects that carry text but
-    no embedding vector (e.g. optimizer SearchResult).  Splitting on whitespace
+    no embedding vector (e.g. optimizer RankedResult).  Splitting on whitespace
     is deterministic and dependency-free.
     """
     return set(text.lower().split())
@@ -225,7 +225,7 @@ def apply_mmr_reorder_by_content(
 ) -> list:
     """MMR-reorder arbitrary result objects using token-Jaccard redundancy.
 
-    Issue #10600: the advanced RAG optimizer works with SearchResult objects
+    Issue #10600: the advanced RAG optimizer works with RankedResult objects
     that expose ``content`` and a relevance score but no embedding vector, so
     ``apply_mmr_reorder`` (embedding-based) degrades to identity for them.  This
     variant measures redundancy from the result text instead, letting the

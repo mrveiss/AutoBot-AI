@@ -26,10 +26,10 @@ from knowledge.search_components.reranking import RerankWeights
 
 
 def _make_search_result(hybrid_score: float = 0.5, content: str = "test content"):
-    """Create a minimal SearchResult for testing."""
-    from advanced_rag_optimizer import SearchResult
+    """Create a minimal RankedResult for testing."""
+    from advanced_rag_optimizer import RankedResult
 
-    return SearchResult(
+    return RankedResult(
         content=content,
         metadata={},
         semantic_score=0.5,

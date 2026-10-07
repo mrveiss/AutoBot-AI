@@ -211,9 +211,9 @@ class ReplicationStatus(str, enum.Enum):
     STOPPED = "stopped"
 
 
-# ServiceStatus moved to top-level service_status.py (#16019) -- this file is
+# SystemdState moved to top-level service_status.py (#16019) -- this file is
 # AT its ceiling, and models/ would drag in autobot_shared. See that docstring.
-from service_status import ServiceStatus  # noqa: E402,F401
+from service_status import SystemdState  # noqa: E402,F401
 
 
 class ServiceCategory(str, enum.Enum):
@@ -402,7 +402,7 @@ class Service(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     node_id = Column(String(64), nullable=False, index=True)
     service_name = Column(String(128), nullable=False)
-    status = Column(String(20), default=ServiceStatus.UNKNOWN.value)
+    status = Column(String(20), default=SystemdState.UNKNOWN.value)
     category = Column(String(20), default=ServiceCategory.SYSTEM.value, index=True)
     enabled = Column(Boolean, default=False)  # starts on boot
     description = Column(String(512), nullable=True)

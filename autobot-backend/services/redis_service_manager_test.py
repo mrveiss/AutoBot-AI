@@ -48,7 +48,7 @@ class ServiceOperationResult:
         self.timestamp = datetime.now()
 
 
-class ServiceStatus:
+class ManagedServiceStatus:
     def __init__(
         self,
         status: str,

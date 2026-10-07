@@ -27,19 +27,19 @@ from pathlib import Path
 import pytest
 
 from code_intelligence.llm_pattern_analyzer import (
-    AnalysisResult,
     BatchingAnalyzer,
     BatchingOpportunity,
     CacheOpportunity,
     CacheOpportunityDetector,
     CacheOpportunityType,
+    CodePatternRecommendation,
     CodePatternScanner,
     CostCalculator,
     CostEstimate,
     LLMPatternAnalyzer,
     OptimizationCategory,
     OptimizationPriority,
-    OptimizationRecommendation,
+    PatternAnalysisResult,
     PromptAnalyzer,
     PromptIssueType,
     PromptTemplate,
@@ -291,11 +291,11 @@ class TestCostEstimate:
 
 
 class TestOptimizationRecommendation:
-    """Tests for OptimizationRecommendation dataclass."""
+    """Tests for CodePatternRecommendation dataclass."""
 
     def test_recommendation_creation(self):
-        """Test creating an OptimizationRecommendation."""
-        rec = OptimizationRecommendation(
+        """Test creating an CodePatternRecommendation."""
+        rec = CodePatternRecommendation(
             recommendation_id="rec_001",
             category=OptimizationCategory.CACHING,
             priority=OptimizationPriority.HIGH,
@@ -313,11 +313,11 @@ class TestOptimizationRecommendation:
 
 
 class TestAnalysisResult:
-    """Tests for AnalysisResult dataclass."""
+    """Tests for PatternAnalysisResult dataclass."""
 
     def test_analysis_result_creation(self):
-        """Test creating an AnalysisResult."""
-        result = AnalysisResult(
+        """Test creating an PatternAnalysisResult."""
+        result = PatternAnalysisResult(
             analysis_id="analysis_001",
             analysis_timestamp=datetime.now(),
             files_analyzed=10,

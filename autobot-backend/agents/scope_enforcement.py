@@ -51,11 +51,11 @@ from typing import AsyncIterator, Sequence
 from autobot_shared.coordination.run_progress import ClaimedRun, bound, current_run, record_progress
 from autobot_shared.coordination.work_claims import (
     CLAIM_TTL_S,
-    Claim,
     ClaimConflict,
     ClaimMode,
     ClaimUnavailable,
     Scope,
+    WorkClaim,
     conflict_payload,
 )
 from autobot_shared.env_utils import env_int_clamped
@@ -118,7 +118,7 @@ class ScopesHeld:
     held -- see the partial-acquisition rule in the module docstring.
     """
 
-    claims: tuple[Claim, ...]
+    claims: tuple[WorkClaim, ...]
     conflict: ClaimConflict | None = None
 
     @property
@@ -192,11 +192,11 @@ async def _release_all(scopes: Sequence[str], *, agent_id: str, task_id: str) ->
     An ordinary exception from one release is logged and never raised; the TTL
     expires that claim. Cancellation still propagates.
     """
-    from autobot_shared.coordination.work_claims import release
+    from autobot_shared.coordination.work_claims import release_scope
 
     for scope in scopes:
         try:
-            await release(scope, agent_id=agent_id, task_id=task_id)
+            await release_scope(scope, agent_id=agent_id, task_id=task_id)
         except Exception as exc:  # noqa: BLE001 -- see the module docstring
             logger.warning("releasing scope %s failed; its TTL will expire it: %s", scope, exc)
 
@@ -209,7 +209,7 @@ async def _acquire_all(scopes: Sequence[str], *, agent_id: str, task_id: str, in
     """
     from autobot_shared.coordination.work_claims import try_acquire
 
-    taken: list[Claim] = []
+    taken: list[WorkClaim] = []
     try:
         for scope in scopes:
             outcome = await try_acquire(

@@ -281,7 +281,7 @@ def __getattr__(name: str):
 
 
 # Convenience functions - use _get_cached_config_manager for re-entry safety (#1862)
-def get_config(key: str, default=None):
+def get_config_value(key: str, default=None):
     """Get configuration value"""
     return _get_cached_config_manager().get(key, default)
 
@@ -369,7 +369,7 @@ __all__ = [
     "Config",
     "legacy_config",
     # Convenience functions
-    "get_config",
+    "get_config_value",
     "get_config_section",
     "get_llm_config",
     "get_redis_config",

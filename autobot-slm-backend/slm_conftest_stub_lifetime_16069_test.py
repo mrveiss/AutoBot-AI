@@ -32,7 +32,7 @@ from types import ModuleType
 
 import pytest
 
-from _slm_stub_lifetime import PLUGIN_NAME, StubLifetime, register
+from _slm_stub_lifetime import PLUGIN_NAME, StubLifetime, register_stub_lifetime
 
 
 class _Node:
@@ -162,8 +162,8 @@ class TestRegistration:
                 self.pluginmanager = _PM()
 
         config = _Config()
-        register(config, tree, {})
-        register(config, tree, {})
+        register_stub_lifetime(config, tree, {})
+        register_stub_lifetime(config, tree, {})
 
         assert [n for _, n in config.pluginmanager.registered] == [PLUGIN_NAME]
 

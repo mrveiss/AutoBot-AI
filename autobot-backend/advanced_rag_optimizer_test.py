@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from advanced_rag_optimizer import AdvancedRAGOptimizer, SearchResult
+from advanced_rag_optimizer import AdvancedRAGOptimizer, RankedResult
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 
@@ -47,7 +47,7 @@ class TestSemanticSearch:
 
         # Verify results are properly formatted
         assert len(results) == 2
-        assert isinstance(results[0], SearchResult)
+        assert isinstance(results[0], RankedResult)
         assert results[0].content == "test content"
         assert results[0].source_path == "test.md"
 
@@ -187,8 +187,8 @@ if __name__ == "__main__":
 # ---------------------------------------------------------------------------
 
 
-def _sr(hybrid: float, rerank: float | None = None) -> SearchResult:
-    return SearchResult(
+def _sr(hybrid: float, rerank: float | None = None) -> RankedResult:
+    return RankedResult(
         content="c",
         metadata={},
         semantic_score=0.0,
@@ -224,9 +224,9 @@ def test_relevance_floor_keeps_exact_boundary():
     assert len(kept) == 1
 
 
-def _mapelites_sr(hybrid: float, *, category: str | None = None, source_path: str) -> SearchResult:
+def _mapelites_sr(hybrid: float, *, category: str | None = None, source_path: str) -> RankedResult:
     metadata = {"category": category} if category is not None else {}
-    return SearchResult(
+    return RankedResult(
         content="c",
         metadata=metadata,
         semantic_score=0.0,

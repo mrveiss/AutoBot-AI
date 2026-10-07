@@ -25,7 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.auth import get_current_user
-from user_management.database import get_slm_session
+from user_management.database import get_slm_db
 from user_management.models.api_key import API_KEY_SCOPES
 from user_management.models.user import User
 from user_management.schemas.api_key import (
@@ -45,12 +45,6 @@ from user_management.services.base_service import TenantContext
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api-keys", tags=["api-keys"])
-
-
-async def get_slm_db():
-    """Dependency for SLM database session."""
-    async with get_slm_session() as session:
-        yield session
 
 
 @router.post("", response_model=APIKeyCreateResponse, status_code=status.HTTP_201_CREATED)

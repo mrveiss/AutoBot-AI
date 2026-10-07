@@ -139,7 +139,7 @@ class AnalysisIssue:
 
 
 @dataclass
-class AnalysisResult:
+class MultiLangResult:
     """Result of analyzing a file or codebase."""
 
     files_analyzed: int = 0
@@ -331,9 +331,9 @@ class MultiLanguageAnalyzer:
         language = detect_language(file_path)
         return self._analyzer_by_language.get(language, [])
 
-    def analyze_file(self, file_path: Path) -> AnalysisResult:
+    def analyze_file(self, file_path: Path) -> MultiLangResult:
         """Analyze a single file with all applicable analyzers."""
-        result = AnalysisResult()
+        result = MultiLangResult()
 
         if not file_path.exists():
             result.errors.append(f"File not found: {file_path}")
@@ -397,7 +397,7 @@ class MultiLanguageAnalyzer:
 
         return files_to_analyze
 
-    def _aggregate_file_results(self, result: "AnalysisResult", file_result: "AnalysisResult") -> None:
+    def _aggregate_file_results(self, result: "MultiLangResult", file_result: "MultiLangResult") -> None:
         """Aggregate file analysis results into overall result (Issue #665: extracted helper)."""
         result.files_analyzed += file_result.files_analyzed
         result.errors.extend(file_result.errors)
@@ -409,7 +409,7 @@ class MultiLanguageAnalyzer:
         directory: Path,
         recursive: bool = True,
         exclude_patterns: List[str] | None = None,
-    ) -> AnalysisResult:
+    ) -> MultiLangResult:
         """Analyze all files in a directory.
 
         Args:
@@ -418,13 +418,13 @@ class MultiLanguageAnalyzer:
             exclude_patterns: Glob patterns to exclude (e.g., ["**/node_modules/**"])
 
         Returns:
-            AnalysisResult with all issues found
+            MultiLangResult with all issues found
         """
         import time
 
         start_time = time.time()
 
-        result = AnalysisResult()
+        result = MultiLangResult()
         files_to_analyze = self._collect_files_to_analyze(directory, recursive, exclude_patterns)
 
         logger.info("Analyzing %d files in %s", len(files_to_analyze), directory)

@@ -36,7 +36,7 @@ from models.database import (
     NodeEvent,
     NodeStatus,
     Service,
-    ServiceStatus,
+    SystemdState,
 )
 from service_status import bucket_service_counts
 from services.auth import get_current_user, require_permission
@@ -570,7 +570,7 @@ def _assess_fleet_health(nodes: List[Node], online: List[Node], degraded: List[N
 
 def _assess_services_health(service_stats: Dict[str, int]) -> tuple:
     """Assess services component health. Related to Issue #729."""
-    failed = service_stats.get(ServiceStatus.FAILED.value, 0)
+    failed = service_stats.get(SystemdState.FAILED.value, 0)
     total = sum(service_stats.values())
     issues = []
     if total == 0:

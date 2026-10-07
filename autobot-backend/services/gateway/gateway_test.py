@@ -21,7 +21,7 @@ import pytest
 from services.gateway.channel_adapters.base import BaseChannelAdapter
 from services.gateway.config import GatewayConfig
 from services.gateway.gateway import Gateway
-from services.gateway.types import ChannelMessage, ChannelType, GatewaySession, MessageType
+from services.gateway.types import ChannelMessage, ChannelType, GatewayMessageType, GatewaySession
 
 
 class _FakeChannelAdapter(BaseChannelAdapter):
@@ -38,7 +38,7 @@ class _FakeChannelAdapter(BaseChannelAdapter):
             message_id=raw_data.get("message_id", "generated"),
             session_id=session.session_id,
             channel=self.channel_type,
-            message_type=MessageType.USER_TEXT,
+            message_type=GatewayMessageType.USER_TEXT,
             content=raw_data.get("content", ""),
             metadata=raw_data.get("metadata", {}),
         )
@@ -168,7 +168,7 @@ class TestChannelAdapterIngestGovernance:
         call must increment the same counter ``receive_message`` reads
         (#14028) -- drives the real seam, not a source-text check."""
         from services.gateway.ingest_governor import INGEST_MAX_CHAIN_DEPTH
-        from services.gateway.types import ChannelMessage, MessageType
+        from services.gateway.types import ChannelMessage, GatewayMessageType
 
         gateway, session = await _build_gateway_with_session()
 
@@ -176,7 +176,7 @@ class TestChannelAdapterIngestGovernance:
             reply = ChannelMessage(
                 session_id=session.session_id,
                 channel=session.channel,
-                message_type=MessageType.AGENT_TEXT,
+                message_type=GatewayMessageType.AGENT_TEXT,
                 content=f"agent reply {i}",
             )
             sent = await gateway.send_message(reply)
@@ -207,7 +207,7 @@ class TestEgressGovernanceIsWiredAtTheSharedSeam:
     @pytest.mark.asyncio
     async def test_the_egress_stage_actually_runs_on_an_agent_send(self, fake_redis, monkeypatch):
         from services.gateway import egress_governor as governor_module
-        from services.gateway.types import ChannelMessage, MessageType
+        from services.gateway.types import ChannelMessage, GatewayMessageType
 
         calls = []
         real_evaluate = governor_module.egress_governor.evaluate
@@ -223,7 +223,7 @@ class TestEgressGovernanceIsWiredAtTheSharedSeam:
             message_id="egress-1",
             session_id=session.session_id,
             channel=session.channel,
-            message_type=MessageType.AGENT_TEXT,
+            message_type=GatewayMessageType.AGENT_TEXT,
             content="a reply to a real person",
         )
         assert await gateway.send_message(reply) is True
@@ -235,7 +235,7 @@ class TestEgressGovernanceIsWiredAtTheSharedSeam:
         """The property that matters: blocked at the seam, not merely reported."""
         from services.gateway import egress_governor as governor_module
         from services.gateway.egress_governor import EgressVerdict
-        from services.gateway.types import ChannelMessage, MessageType
+        from services.gateway.types import ChannelMessage, GatewayMessageType
 
         gateway, session = await _build_gateway_with_session()
         adapter = gateway._channel_adapters[ChannelType.WEBSOCKET]
@@ -255,7 +255,7 @@ class TestEgressGovernanceIsWiredAtTheSharedSeam:
         reply = ChannelMessage(
             session_id=session.session_id,
             channel=session.channel,
-            message_type=MessageType.AGENT_TEXT,
+            message_type=GatewayMessageType.AGENT_TEXT,
             content="must not be sent",
         )
         assert await gateway.send_message(reply) is False
@@ -263,7 +263,7 @@ class TestEgressGovernanceIsWiredAtTheSharedSeam:
 
     @pytest.mark.asyncio
     async def test_an_approved_send_reaches_the_adapter_unchanged(self, fake_redis, monkeypatch):
-        from services.gateway.types import ChannelMessage, MessageType
+        from services.gateway.types import ChannelMessage, GatewayMessageType
 
         gateway, session = await _build_gateway_with_session()
         adapter = gateway._channel_adapters[ChannelType.WEBSOCKET]
@@ -278,7 +278,7 @@ class TestEgressGovernanceIsWiredAtTheSharedSeam:
         reply = ChannelMessage(
             session_id=session.session_id,
             channel=session.channel,
-            message_type=MessageType.AGENT_TEXT,
+            message_type=GatewayMessageType.AGENT_TEXT,
             content="allowed content",
         )
         assert await gateway.send_message(reply) is True
@@ -293,7 +293,7 @@ class TestEgressGovernanceIsWiredAtTheSharedSeam:
         """
         from services.gateway import egress_governor as governor_module
         from services.gateway.egress_governor import EgressVerdict
-        from services.gateway.types import ChannelMessage, MessageType
+        from services.gateway.types import ChannelMessage, GatewayMessageType
 
         class _BrandNewAdapter(_FakeChannelAdapter):
             def __init__(self) -> None:
@@ -317,7 +317,7 @@ class TestEgressGovernanceIsWiredAtTheSharedSeam:
         reply = ChannelMessage(
             session_id=session.session_id,
             channel=session.channel,
-            message_type=MessageType.AGENT_TEXT,
+            message_type=GatewayMessageType.AGENT_TEXT,
             content="new adapter, same gate",
         )
         assert await gateway.send_message(reply) is False
@@ -327,7 +327,7 @@ class TestEgressGovernanceIsWiredAtTheSharedSeam:
     async def test_session_control_traffic_is_not_governed(self, fake_redis, monkeypatch):
         """Heartbeats and lifecycle events are not messages to a person."""
         from services.gateway import egress_governor as governor_module
-        from services.gateway.types import ChannelMessage, MessageType
+        from services.gateway.types import ChannelMessage, GatewayMessageType
 
         calls = []
 
@@ -343,7 +343,7 @@ class TestEgressGovernanceIsWiredAtTheSharedSeam:
         control = ChannelMessage(
             session_id=session.session_id,
             channel=session.channel,
-            message_type=MessageType.SESSION_START,
+            message_type=GatewayMessageType.SESSION_START,
             content="",
         )
         await gateway.send_message(control)

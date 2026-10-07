@@ -35,7 +35,7 @@ class UploadResult:
 
 
 @dataclass
-class SearchResult:
+class QueryResult:
     """Result of a search query."""
 
     query: str
@@ -86,7 +86,7 @@ def upload_docs_batch(files: list, project_root: str, max_workers: int = 5) -> l
     return results
 
 
-def search_single_query(query: str) -> SearchResult:
+def search_single_query(query: str) -> QueryResult:
     """Execute a single search query."""
     try:
         resp = requests.get(
@@ -96,11 +96,11 @@ def search_single_query(query: str) -> SearchResult:
         if resp.status_code == 200:
             results = resp.json()
             facts = results.get("facts", [])
-            return SearchResult(query=query, count=len(facts))
+            return QueryResult(query=query, count=len(facts))
         else:
-            return SearchResult(query=query, count=0, error="fact search not available")
+            return QueryResult(query=query, count=0, error="fact search not available")
     except Exception as e:
-        return SearchResult(query=query, count=0, error=str(e))
+        return QueryResult(query=query, count=0, error=str(e))
 
 
 def search_queries_batch(queries: list, max_workers: int = 4) -> list:
