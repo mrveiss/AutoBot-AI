@@ -16,8 +16,10 @@ count at one.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 _ROOTS = ("autobot-backend", "autobot_shared")
 
@@ -29,8 +31,9 @@ _HAND_BUILT = re.compile(r"""["']autobot_data\.db["']""")
 _SSOT_READ = re.compile(r"config\.data_db|misc\.data_db|AUTOBOT_DATA_DB")
 
 
-def _production_sources():
-    root = repo_root()
+def _discover(root: Path) -> list[Path]:
+    """Production Python under ROOTS -- the population this guard must reach."""
+    found: list[Path] = []
     for sub in _ROOTS:
         base = root / sub
         if not base.is_dir():
@@ -39,7 +42,26 @@ def _production_sources():
             parts = set(path.parts)
             if "tests" in parts or "node_modules" in parts or path.name.endswith("_test.py"):
                 continue
-            yield path, path.read_text(encoding="utf-8", errors="replace")
+            found.append(path)
+    return found
+
+
+#: 2,776 production files today. Floor 2,000 leaves room for a large refactor
+#: without the guard going quiet: the failure this binds is a sweep that
+#: enumerates nothing and reports the same green as a clean tree -- a `0` from a
+#: broken glob is indistinguishable from "no module rebuilds the path" without it.
+PRODUCTION_PY = declare(
+    "data-db-path-production-python",
+    discover=_discover,
+    floor=2000,
+    growth=400,
+    what="production Python files scanned for a hand-built autobot_data.db path (#18060)",
+)
+
+
+def _production_sources():
+    for path in PRODUCTION_PY.discover(repo_root()):
+        yield path, path.read_text(encoding="utf-8", errors="replace")
 
 
 def test_no_module_builds_the_data_db_path_without_reading_the_ssot_key():
