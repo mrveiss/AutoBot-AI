@@ -68,6 +68,41 @@ _RUNNING = RUNNING
 #: suffixed string is not a member of :data:`VERDICTS` by equality.
 NOT_OPEN = "NOT-OPEN"
 
+#: Verdict reserved for a PR that is still a draft. This is the SIXTH blind
+#: spot (the module docstring said to assume one), and it is the first that was
+#: found by the verdict being believed: this gate reported `CONTEXTS-GREEN` on
+#: #17962 -- 29 success, 23 skipped, 0 failures -- and the merge API answered
+#: `405 Pull Request is still a draft`.
+#:
+#: The reason it reads green is that draft is how this repository PARKS a run:
+#: `ci.yml` and `code-quality.yml` gate their heavy jobs on
+#: `github.event.pull_request.draft == false`, so on a draft the required
+#: contexts publish `skipped` -- and `skipped` is in
+#: :data:`~scripts.lib.check_run_status.ACCEPTABLE` because a path-filtered
+#: shim declining to run is genuinely not a blocker. Same conclusion string,
+#: opposite meaning: one says "this job had nothing to do here", the other says
+#: "this job has not been allowed to start yet". Nothing in a check-run
+#: conclusion distinguishes them, which is why draft is read from the PR and
+#: not inferred from the contexts.
+DRAFT = "DRAFT"
+
+#: Verdict for "branch protection named no required contexts at all". The
+#: SEVENTH blind spot, and the one that proves the point made at :func:`_fetch`:
+#: `verdict([], {})` returned `CONTEXTS-GREEN` and exit 0, because zero
+#: contexts trivially satisfies "none is failing". A gate whose requirement
+#: list failed to load therefore cleared every PR, and the output said GREEN
+#: with no row to contradict it.
+#:
+#: It is reachable without anything breaking: this tool reads CLASSIC branch
+#: protection, and a repository that moves its required checks into a RULESET
+#: keeps a valid protection object with an empty `contexts`. Measured on this
+#: repository on 2026-10-07: classic protection carries all 11, and the two
+#: active rulesets declare no `required_status_checks` -- so the list is read
+#: from the right place TODAY. That is a fact about configuration, not about
+#: this code, and it is exactly the kind of fact that changes without the code
+#: changing. Hence a verdict rather than a comment.
+NO_REQUIREMENTS = "NO-REQUIREMENTS"
+
 #: THE verdict vocabulary -- every string this tool can print as a verdict
 #: (#16044 AC3/AC4).
 #:
@@ -91,6 +126,8 @@ VERDICTS = frozenset(
         "PENDING",
         "BLOCKED",
         NOT_OPEN,
+        DRAFT,
+        NO_REQUIREMENTS,
     }
 )
 
@@ -142,8 +179,14 @@ def _split_required(
     return never, running, not_green, green
 
 
-def _required_result(never: list, running: list, not_green: list) -> str:
+def _required_result(never: list, running: list, not_green: list, required_count: int) -> str:
     """The verdict from the required contexts alone, before unrequired checks weigh in."""
+    # BEFORE the green branch, because it is the green branch that it defeats.
+    # With no requirements, all three lists are empty and "nothing is failing"
+    # is true of nothing -- the one arrangement where the happy path is reached
+    # by the requirement list having failed to load.
+    if required_count == 0:
+        return declared(NO_REQUIREMENTS)
     if not never and not running and not not_green:
         return declared("CONTEXTS-GREEN")
     if not_green or never:
@@ -214,7 +257,7 @@ def verdict(required: Iterable[str], observed: dict[str, str]) -> dict:
     # unrequired -- the failure mode this whole tool exists to catch, in the tool.
     required = list(required)
     never, running, not_green, green = _split_required(required, observed)
-    result = _required_result(never, running, not_green)
+    result = _required_result(never, running, not_green, len(required))
     failing_unrequired, running_unrequired = _unrequired(observed, set(required))
     result = _qualify(result, failing_unrequired, running_unrequired)
     return {
@@ -271,10 +314,25 @@ def _fetch(pr: int, repo: str, base: str) -> dict:
     # **a check that enumerates conditions is blind to the conditions it does not
     # enumerate, and every blind spot reads as success.** The corollary is what
     # this comment is for: assume there is a fifth.
-    head_json = _gh("pr", "view", str(pr), "--repo", repo, "--json", "headRefOid,state")
+    #
+    # The fifth was a draft PR (see :data:`DRAFT`), and it is read on the next
+    # line from the same call rather than in a second one. Worth stating because
+    # the prediction above was correct and still did not prevent it: knowing a
+    # blind spot exists does not locate it. What located this one was a verdict
+    # being ACTED on -- the gate said green and the merge API said draft. So the
+    # cheapest detector for the sixth is not more enumeration here, it is keeping
+    # every clearing verdict falsifiable by something downstream that can say no.
+    head_json = _gh("pr", "view", str(pr), "--repo", repo, "--json", "headRefOid,state,isDraft")
     head_data = json.loads(head_json)
     head = head_data["headRefOid"]
     pr_state = head_data.get("state", "OPEN")
+    # Defaulting to True would fail closed, which is the safer direction for a
+    # merge gate -- but it would also report DRAFT for every PR the moment the
+    # field is renamed, and a gate that blocks everything gets switched off
+    # rather than fixed. False keeps the old behaviour on a missing field and
+    # the absence is visible: `is_draft` is reported, so a reader sees the
+    # claim being made. The field is part of `gh pr view`'s documented schema.
+    is_draft = bool(head_data.get("isDraft", False))
     # BOTH kinds, kept as SEPARATE sources. Some required contexts are legacy
     # commit statuses, and counting those as unreported is the mirror of the bug
     # this tool exists for -- but merging them into one list lets a green check
@@ -294,6 +352,7 @@ def _fetch(pr: int, repo: str, base: str) -> dict:
         "observed": latest_per_name(runs, statuses),
         "head": head,
         "pr_state": pr_state,
+        "is_draft": is_draft,
     }
 
 
@@ -342,6 +401,16 @@ def _report(pr: int, result: dict) -> None:
     if result.get("pr_state", "OPEN") != "OPEN":
         _emit("  its required contexts read green because they completed before it landed")
         return
+    if base_verdict(result["verdict"]) == NO_REQUIREMENTS:
+        _emit("  branch protection named NO required contexts, so there was nothing")
+        _emit("  to check. This is not a pass. Either protection is misconfigured, or")
+        _emit("  the requirements moved to a ruleset, which this tool does not read.")
+        return
+    if result.get("is_draft", False):
+        _emit("  it is a DRAFT: the heavy jobs are gated on `draft == false`, so the")
+        _emit("  required contexts below read `skipped` because they have not been")
+        _emit("  allowed to run -- not because they had nothing to do. Mark it ready")
+        _emit("  for review, let the suite run, and read the verdict again.")
     for context in result["never_reported"]:
         _emit(f"  never-reported  {context}")
     for entry in result["running"]:
@@ -387,8 +456,15 @@ def main(argv: list[str] | None = None) -> int:
     # A closed or merged PR is not a mergeable one, whatever its contexts say.
     # Overriding AFTER `verdict()` rather than short-circuiting before the fetch
     # keeps the context detail in `--json` for anyone auditing why it looked green.
+    result["is_draft"] = fetched.get("is_draft", False)
     if result["pr_state"] != "OPEN":
         result["verdict"] = declared(NOT_OPEN, result["pr_state"])
+    # AFTER the state override and never before it: a closed draft is both, and
+    # `NOT-OPEN (CLOSED)` is the more final answer -- telling someone to undraft
+    # a PR that is closed sends them to the wrong fix. `elif` rather than a
+    # combined condition so the precedence is visible instead of implied.
+    elif result["is_draft"]:
+        result["verdict"] = declared(DRAFT)
     # Carried into the output rather than dropped: branch protection can require a
     # context only when a PARTICULAR app publishes it, and matching on name alone
     # cannot check that. Saying so is the difference between a verdict with a

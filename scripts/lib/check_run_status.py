@@ -46,6 +46,16 @@ from typing import Iterable
 #: A conclusion that does not block. `skipped` and `neutral` are here because
 #: several contexts are published by path-filtered shims that legitimately
 #: decline to run.
+#:
+#: `skipped` has a SECOND cause that is not acceptable, and it cannot be told
+#: apart here: this repository parks CI by leaving a PR in draft, and `ci.yml` /
+#: `code-quality.yml` gate their heavy jobs on `draft == false`, so on a draft
+#: every required context publishes `skipped` too. "Nothing to do here" and
+#: "not allowed to start yet" arrive as the same string, so the distinction is
+#: not available at this layer -- a conclusion carries no reason. It is drawn
+#: one level up, from the PR itself, by `pr_required_gate.DRAFT`. Do not try to
+#: fix it by dropping `skipped` from this set: that would block every
+#: legitimately path-filtered PR, which is the bug this set exists to avoid.
 ACCEPTABLE = frozenset({"success", "skipped", "neutral"})
 
 #: Not a verdict -- still running. Kept apart from failing because **a PR that

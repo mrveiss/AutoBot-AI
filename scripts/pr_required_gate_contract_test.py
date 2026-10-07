@@ -22,6 +22,7 @@ line count.
 from __future__ import annotations
 
 import ast
+import json
 import pathlib
 import sys
 
@@ -217,6 +218,122 @@ def test_a_not_open_verdict_keeps_its_detail_and_still_reads_as_declared(monkeyp
     line = next(entry for entry in emitted if "NOT-OPEN" in entry)
     assert "NOT-OPEN (MERGED)" in line
     assert gate_module.base_verdict("NOT-OPEN (MERGED)") in gate_module.VERDICTS
+
+
+def test_an_empty_requirement_list_is_not_a_pass(monkeypatch):
+    """`verdict([], {})` returned CONTEXTS-GREEN: the happy path reached by a failed load.
+
+    The control is the second half. A gate that returned NO-REQUIREMENTS for
+    everything would also satisfy the first assertion, and it is the failure
+    mode that gets a gate disabled rather than repaired.
+    """
+    assert gate_module.base_verdict(gate_module.verdict([], {})["verdict"]) == gate_module.NO_REQUIREMENTS
+    assert gate_module.NO_REQUIREMENTS not in gate_module.CLEARING_VERDICTS
+
+    # CONTROL: one requirement, reported green -> still clears.
+    cleared = gate_module.verdict(["smoke-test"], {"smoke-test": "success"})
+    assert gate_module.base_verdict(cleared["verdict"]) == "CONTEXTS-GREEN"
+
+
+def test_an_empty_requirement_list_exits_non_zero_end_to_end(monkeypatch):
+    """Through `main`, because the exit code is what a caller branches on."""
+    monkeypatch.setattr(
+        gate_module,
+        "_fetch",
+        lambda pr, repo, base: {
+            "required": [],
+            "app_pinned": [],
+            "observed": {"smoke-test": "success"},
+            "head": "0" * 40,
+            "pr_state": "OPEN",
+            "is_draft": False,
+        },
+    )
+    emitted: list[str] = []
+    monkeypatch.setattr(gate_module, "_emit", emitted.append)
+    assert gate_module.main(["123"]) == 1, "a PR with no required contexts cleared the gate"
+    assert any(gate_module.NO_REQUIREMENTS in line for line in emitted), emitted
+    assert any("not a pass" in line for line in emitted), "the reason was not reported"
+
+
+def _draft_fetch(*, pr_state: str = "OPEN", is_draft: bool = True):
+    """A fetch whose CONTEXTS are unanimously green, so only the PR state can block.
+
+    Every required context reports `skipped`, which is what a draft actually
+    produces here: the heavy jobs are gated on `draft == false`, so they never
+    start and publish a skip. If the verdict came from the contexts alone this
+    would be `CONTEXTS-GREEN`, which is the defect.
+    """
+    return lambda pr, repo, base: {
+        "required": ["python-suite", "code-quality"],
+        "app_pinned": [],
+        "observed": {"python-suite": "skipped", "code-quality": "skipped"},
+        "head": "0" * 40,
+        "pr_state": pr_state,
+        "is_draft": is_draft,
+    }
+
+
+def test_a_draft_pr_does_not_clear_however_green_its_contexts_read(monkeypatch):
+    """The sixth blind spot (#17962): the gate said green, the merge API said draft.
+
+    The control is the `is_draft=False` half. Without it this test passes on a
+    gate that blocks EVERY PR, which is the other way to get the draft case
+    wrong and the way that gets a gate switched off rather than fixed.
+    """
+    emitted: list[str] = []
+    monkeypatch.setattr(gate_module, "_emit", emitted.append)
+
+    monkeypatch.setattr(gate_module, "_fetch", _draft_fetch())
+    assert gate_module.main(["17962"]) == 1, "a draft PR cleared the gate"
+    assert any("DRAFT" in line for line in emitted), f"no DRAFT verdict in {emitted}"
+    assert gate_module.DRAFT not in gate_module.CLEARING_VERDICTS
+
+    # CONTROL: identical contexts, not a draft -> the same inputs must clear.
+    emitted.clear()
+    monkeypatch.setattr(gate_module, "_fetch", _draft_fetch(is_draft=False))
+    assert gate_module.main(["17962"]) == 0, "skipped contexts must still clear a ready PR"
+    assert any("CONTEXTS-GREEN" in line for line in emitted), f"no green verdict in {emitted}"
+
+
+def test_a_closed_draft_reports_not_open_rather_than_draft(monkeypatch):
+    """Precedence, not coincidence: telling someone to undraft a closed PR is the wrong fix."""
+    emitted: list[str] = []
+    monkeypatch.setattr(gate_module, "_emit", emitted.append)
+    monkeypatch.setattr(gate_module, "_fetch", _draft_fetch(pr_state="CLOSED", is_draft=True))
+    assert gate_module.main(["17962"]) == 1
+    line = next(entry for entry in emitted if "#17962" in entry)
+    assert "NOT-OPEN (CLOSED)" in line, line
+    assert "DRAFT" not in line, f"NOT-OPEN must win over DRAFT: {line}"
+
+
+def test_the_fetch_actually_requests_the_draft_field(monkeypatch):
+    """A verdict that reads `is_draft` is useless if nothing ever populates it.
+
+    `_fetch` is the only place the field enters the program, and it enters as a
+    name inside a comma-separated `--json` argument -- so a rename there fails
+    silently into the `False` default rather than raising. This asserts the
+    request, which is the half the other tests monkeypatch away.
+    """
+    calls: list[tuple[str, ...]] = []
+
+    def _fake_gh(*args: str) -> str:
+        calls.append(args)
+        if "api" in args:
+            return json.dumps({"required_status_checks": {"contexts": ["smoke-test"]}})
+        if "pr" in args:
+            return json.dumps({"headRefOid": "0" * 40, "state": "OPEN", "isDraft": True})
+        return "[]"
+
+    monkeypatch.setattr(gate_module, "_gh", _fake_gh)
+    monkeypatch.setattr(gate_module, "check_runs_for", lambda repo, head: [])
+    monkeypatch.setattr(gate_module, "_all_pages", lambda endpoint: [])
+    fetched = gate_module._fetch(17962, "mrveiss/AutoBot-AI", "main")
+
+    pr_view = next(args for args in calls if "pr" in args and "view" in args)
+    json_fields = pr_view[pr_view.index("--json") + 1].split(",")
+    assert "isDraft" in json_fields, f"_fetch never asks for isDraft: {json_fields}"
+    assert fetched["is_draft"] is True
 
 
 # ---------------------------------------------------------------------------
