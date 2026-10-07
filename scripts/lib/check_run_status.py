@@ -46,6 +46,16 @@ from typing import Iterable
 #: A conclusion that does not block. `skipped` and `neutral` are here because
 #: several contexts are published by path-filtered shims that legitimately
 #: decline to run.
+#:
+#: `skipped` has a SECOND cause that is not acceptable, and it cannot be told
+#: apart here: this repository parks CI by leaving a PR in draft, and `ci.yml` /
+#: `code-quality.yml` gate their heavy jobs on `draft == false`, so on a draft
+#: every required context publishes `skipped` too. "Nothing to do here" and
+#: "not allowed to start yet" arrive as the same string, so the distinction is
+#: not available at this layer -- a conclusion carries no reason. It is drawn
+#: one level up, from the PR itself, by `pr_required_gate.DRAFT`. Do not try to
+#: fix it by dropping `skipped` from this set: that would block every
+#: legitimately path-filtered PR, which is the bug this set exists to avoid.
 ACCEPTABLE = frozenset({"success", "skipped", "neutral"})
 
 #: Not a verdict -- still running. Kept apart from failing because **a PR that
@@ -174,10 +184,83 @@ def all_pages(endpoint: str, key: str | None = None) -> list[dict]:
     return [item for page in pages for item in page.get(key, [])]
 
 
+#: One request's worth of check runs. 100 is the endpoint's own maximum, so a
+#: smaller number only adds round trips.
+CHECK_RUNS_PER_PAGE = 100
+
+#: A walk past this many pages is a loop, not a listing. Bounded rather than
+#: trusted: a verdict read off an unbounded walk is not one we can defend.
+MAX_CHECK_RUN_PAGES = 100
+
+
+def check_runs_endpoint(repository: str, sha: str, *, page: int | None = None) -> str:
+    """The ONE place ``/commits/{sha}/check-runs`` is spelled (#16120).
+
+    The acceptance criterion this serves is *"no direct check-runs query remains
+    outside the helper, verified by a grep"* -- which a caller that imports the
+    grouping rules and then builds the URL itself still fails. Two callers did
+    exactly that, so the string moved here rather than the advice.
+    """
+    endpoint = f"/repos/{repository}/commits/{sha}/check-runs?per_page={CHECK_RUNS_PER_PAGE}"
+    return endpoint if page is None else f"{endpoint}&page={page}"
+
+
 def check_runs_for(repository: str, sha: str) -> list[dict]:
     """Every check run on ``sha``, across all pages. Raw, ungrouped."""
-    endpoint = f"/repos/{repository}/commits/{sha}/check-runs?per_page=100"
-    return all_pages(endpoint, key="check_runs")
+    return all_pages(check_runs_endpoint(repository, sha), key="check_runs")
+
+
+def walk_check_runs(
+    repository: str,
+    sha: str,
+    fetch_page,
+    *,
+    max_pages: int = MAX_CHECK_RUN_PAGES,
+) -> tuple[list[dict], str]:
+    """:func:`check_runs_for` for a caller that is not using the ``gh`` CLI.
+
+    ``fetch_page(path)`` returns ``(status, body)``. A tool holding a
+    token-authenticated HTTP client -- an Actions job, where ``gh`` is not the
+    transport and the API root is configurable -- cannot call
+    :func:`check_runs_for`, and the one that could not **re-derived the whole
+    walk**: its own path string, its own page loop, its own ceiling. That second
+    copy is what #16120 is about, so the walk is shared and only the transport
+    is the caller's.
+
+    Returns ``(runs, error)``. ``error`` is non-empty when the listing could not
+    be completed, and the runs collected so far are returned alongside it rather
+    than discarded: a short read is **reported**, never handed back as if it
+    were the whole population. ``total_count`` is the endpoint's own statement
+    of that population, so it is also the check on whether the walk reached it.
+    """
+    collected: list[dict] = []
+    expected = None
+    page = 1
+    while True:
+        status, body = fetch_page(check_runs_endpoint(repository, sha, page=page))
+        if status != 200 or not isinstance(body, dict):
+            return [], f"cannot list check runs for {sha} (HTTP {status})"
+        if expected is None:
+            expected = body.get("total_count")
+        runs = body.get("check_runs")
+        batch = list(runs) if isinstance(runs, list) else []
+        collected.extend(batch)
+        if len(batch) < CHECK_RUNS_PER_PAGE:
+            break
+        page += 1
+        if page > max_pages:
+            return collected, (
+                f"check-run listing for {sha} exceeded {max_pages} pages -- "
+                "refusing to walk further rather than loop, since a verdict from "
+                "an unbounded read is not one we can defend"
+            )
+    if isinstance(expected, int) and len(collected) < expected:
+        return collected, (
+            f"check-run listing for {sha} reached {len(collected)} of {expected} "
+            "runs -- the walk stopped short, so any 'no red checks' verdict from "
+            "this list is unearned"
+        )
+    return collected, ""
 
 
 def check_run_status(repository: str, sha: str) -> dict[str, str]:
