@@ -331,6 +331,7 @@
     "registered_backends",
     "reload_config",
     "require_admin",
+    "require_any_permission",
     "require_permission",
     "reset_version_instance",
     "resolve_project_root",
