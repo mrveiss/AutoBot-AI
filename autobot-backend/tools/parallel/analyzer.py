@@ -12,7 +12,7 @@ Based on Cursor's dependency detection patterns.
 from typing import Callable
 
 from autobot_shared.logging_manager import get_logger
-from tools.parallel.types import DependencyType, ToolCall
+from tools.parallel.types import DependencyType, ParallelToolCall
 
 logger = get_logger(__name__)
 
@@ -85,7 +85,7 @@ class DependencyAnalyzer:
 
     def analyze_dependencies(
         self,
-        tool_calls: list[ToolCall],
+        tool_calls: list[ParallelToolCall],
     ) -> dict[str, list[str]]:
         """
         Analyze dependencies between tool calls.
@@ -110,8 +110,8 @@ class DependencyAnalyzer:
 
     def _check_dependency(
         self,
-        call_a: ToolCall,
-        call_b: ToolCall,
+        call_a: ParallelToolCall,
+        call_b: ParallelToolCall,
     ) -> DependencyType:
         """Check if call_b depends on call_a"""
 
@@ -144,7 +144,7 @@ class DependencyAnalyzer:
 
         return DependencyType.NONE
 
-    def _extract_resource(self, call: ToolCall) -> str | None:
+    def _extract_resource(self, call: ParallelToolCall) -> str | None:
         """Extract resource identifier from tool call"""
         # Check custom extractors first
         if call.tool_name in self._custom_extractors:
@@ -177,8 +177,8 @@ class DependencyAnalyzer:
 
     def _might_depend_on_state(
         self,
-        state_call: ToolCall,
-        dependent_call: ToolCall,
+        state_call: ParallelToolCall,
+        dependent_call: ParallelToolCall,
     ) -> bool:
         """Check if dependent_call might need state from state_call"""
 
@@ -215,8 +215,8 @@ class DependencyAnalyzer:
 
     def _has_data_dependency(
         self,
-        call_a: ToolCall,
-        call_b: ToolCall,
+        call_a: ParallelToolCall,
+        call_b: ParallelToolCall,
     ) -> bool:
         """
         Check if call_b uses output from call_a as input.
@@ -233,8 +233,8 @@ class DependencyAnalyzer:
 
     def get_parallel_groups(
         self,
-        tool_calls: list[ToolCall],
-    ) -> list[list[ToolCall]]:
+        tool_calls: list[ParallelToolCall],
+    ) -> list[list[ParallelToolCall]]:
         """
         Group tool calls for parallel execution.
 
@@ -245,7 +245,7 @@ class DependencyAnalyzer:
         # First analyze dependencies
         self.analyze_dependencies(tool_calls)
 
-        groups: list[list[ToolCall]] = []
+        groups: list[list[ParallelToolCall]] = []
         remaining = set(tc.call_id for tc in tool_calls)
         completed: set[str] = set()
         call_map = {tc.call_id: tc for tc in tool_calls}
@@ -277,6 +277,6 @@ class DependencyAnalyzer:
 
         return groups
 
-    def can_parallelize(self, call_a: ToolCall, call_b: ToolCall) -> bool:
+    def can_parallelize(self, call_a: ParallelToolCall, call_b: ParallelToolCall) -> bool:
         """Quick check if two calls can run in parallel"""
         return self._check_dependency(call_a, call_b) == DependencyType.NONE

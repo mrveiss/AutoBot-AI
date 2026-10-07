@@ -24,14 +24,14 @@ from __future__ import annotations
 from urllib.parse import quote_plus
 
 from autobot_shared.browser import (
-    Capability,
+    BrowserCapability,
     NavigateRequest,
     get_browser,
 )
 from autobot_shared.logging_manager import get_logger
 from content_reach._url_guard import ensure_public_url, ensure_robots_allowed
 from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
-from source_attribution import SourceReliability, SourceType
+from source_attribution import SourceKind, SourceReliability
 
 logger = get_logger(__name__)
 
@@ -49,11 +49,11 @@ class BrowserBackend(ContentBackend):
     #: ContentResult carries `structured` alongside `text`, and only the
     #: research stack produces it — so this both states the requirement and
     #: pins the routing (#13236).
-    _REQUIRES = frozenset({Capability.NAVIGATE, Capability.EXTRACT_STRUCTURED})
+    _REQUIRES = frozenset({BrowserCapability.NAVIGATE, BrowserCapability.EXTRACT_STRUCTURED})
 
     def __init__(
         self,
-        source_type: SourceType,
+        source_type: SourceKind,
         name: str = "browser",
     ) -> None:
         self.source_type = source_type
@@ -158,7 +158,7 @@ class BrowserSearchBackend(BrowserBackend):
     extracts content. robots.txt is intentionally skipped for search-results pages.
     """
 
-    def __init__(self, source_type: SourceType) -> None:
+    def __init__(self, source_type: SourceKind) -> None:
         super().__init__(source_type=source_type, name="browser_search")
 
     async def fetch(self, request: ContentRequest) -> ContentResult:

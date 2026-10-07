@@ -46,7 +46,7 @@ from a2a.security import SecurityCardSigner
 from a2a.task_executor import execute_a2a_task
 from a2a.task_manager import get_task_manager
 from a2a.tracing import extract_caller_id, new_trace_id
-from a2a.trust_score import Capability, TrustAccessDenied, get_trust_manager
+from a2a.trust_score import TrustAccessDenied, TrustCapability, get_trust_manager
 from a2a.types import Task
 from api import a2a_trust
 from api.schemas_agent import (
@@ -238,7 +238,7 @@ async def submit_task(
     # so keying on it would let a caller choose the pair whose trust it borrows.
     peer_key = peer_trust_key(credential_subject(current_user), x_a2a_agent_id)
     try:
-        get_trust_manager().require_capability(peer_key, Capability.SUBMIT_TASKS)
+        get_trust_manager().require_capability(peer_key, TrustCapability.SUBMIT_TASKS)
     except TrustAccessDenied as exc:
         raise HTTPException(
             status_code=403,
@@ -508,7 +508,7 @@ async def task_stats() -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Capability verification (Issue #968)
+# TrustCapability verification (Issue #968)
 # ---------------------------------------------------------------------------
 
 

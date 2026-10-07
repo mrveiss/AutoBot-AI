@@ -15,14 +15,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from advanced_rag_optimizer import RAGMetrics, SearchResult
+from advanced_rag_optimizer import RAGMetrics, RankedResult
 from api.knowledge_rag import advanced_search
 from api.schemas_knowledge import AdvancedSearchRequest
 from knowledge.ownership import KnowledgeOwnership
 
 
-def _result(fact_id: str, owner_id: str, visibility: str = "private") -> SearchResult:
-    return SearchResult(
+def _result(fact_id: str, owner_id: str, visibility: str = "private") -> RankedResult:
+    return RankedResult(
         content=fact_id,
         metadata={"id": fact_id, "owner_id": owner_id, "visibility": visibility},
         semantic_score=0.9,

@@ -42,7 +42,7 @@ def _declared_statuses() -> set[str]:
     """
     tree = ast.parse((_SLM / "service_status.py").read_text(encoding="utf-8"))
     for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef) and node.name == "ServiceStatus":
+        if isinstance(node, ast.ClassDef) and node.name == "SystemdState":
             return {
                 stmt.value.value
                 for stmt in node.body

@@ -28,7 +28,7 @@ from typing import List
 from uuid import uuid4
 
 
-class SourceType(str, Enum):
+class GroundingSourceType(str, Enum):
     """Types of information sources for facts."""
 
     DOCUMENT = "document"  # From KB documents

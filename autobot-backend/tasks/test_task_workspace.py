@@ -37,7 +37,7 @@ def _load_tw():
 
 _tw = _load_tw()
 allocate = _tw.allocate
-release = _tw.release
+release = _tw.release_workspace
 release_for_task = _tw.release_for_task
 cleanup_stale = _tw.cleanup_stale
 

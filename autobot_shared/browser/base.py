@@ -59,7 +59,7 @@ class ContentFormat(str, Enum):
     STRUCTURED = "structured"
 
 
-class Capability(str, Enum):
+class BrowserCapability(str, Enum):
     """What a backend can do. Callers request these; backends declare them.
 
     ``(str, Enum)`` rather than ``StrEnum``: it is the shape
@@ -131,10 +131,10 @@ class UnsafeUrlError(BrowserError):
 
 
 #: Which capability a backend must declare to serve each content format.
-FORMAT_CAPABILITY: dict[ContentFormat, Capability] = {
-    ContentFormat.TEXT: Capability.EXTRACT_TEXT,
-    ContentFormat.HTML: Capability.EXTRACT_HTML,
-    ContentFormat.STRUCTURED: Capability.EXTRACT_STRUCTURED,
+FORMAT_CAPABILITY: dict[ContentFormat, BrowserCapability] = {
+    ContentFormat.TEXT: BrowserCapability.EXTRACT_TEXT,
+    ContentFormat.HTML: BrowserCapability.EXTRACT_HTML,
+    ContentFormat.STRUCTURED: BrowserCapability.EXTRACT_STRUCTURED,
 }
 
 
@@ -239,7 +239,7 @@ class BrowserBackend(Protocol):
     """
 
     name: str
-    capabilities: frozenset[Capability]
+    capabilities: frozenset[BrowserCapability]
 
     async def probe(self) -> bool:
         """True if this backend is currently usable."""

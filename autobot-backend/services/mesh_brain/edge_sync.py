@@ -11,7 +11,7 @@ from autobot_shared.logging_manager import get_logger
 logger = get_logger(__name__)
 
 
-class MeshDB(Protocol):
+class EdgeFeed(Protocol):
     """Protocol for mesh database operations."""
 
     async def fetch_edges(self, min_weight: float) -> list[dict]: ...
@@ -20,7 +20,7 @@ class MeshDB(Protocol):
 class MeshEdgeSync:
     """Syncs high-weight edges from PostgreSQL to Redis sorted sets."""
 
-    def __init__(self, db: MeshDB, redis, min_weight: float = 0.5) -> None:
+    def __init__(self, db: EdgeFeed, redis, min_weight: float = 0.5) -> None:
         self.db = db
         self.redis = redis
         self.min_weight = min_weight

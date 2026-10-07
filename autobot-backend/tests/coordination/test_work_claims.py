@@ -30,15 +30,15 @@ from autobot_shared.coordination.work_claims import (
     FLAT_KINDS,
     RESERVED_KINDS,
     VALID_KINDS,
-    Claim,
     ClaimConflict,
     ClaimConflictError,
     ClaimMode,
     HolderError,
     Scope,
     ScopeError,
+    WorkClaim,
     list_claims,
-    release,
+    release_scope,
     renew,
     try_acquire,
     work_claim,
@@ -227,9 +227,9 @@ async def _acquire(scope, agent, task="t", mode=ClaimMode.EXCLUSIVE, **kw):
     ],
 )
 async def test_mode_conflict_matrix(redis, first, second, compatible):
-    assert isinstance(await _acquire("path:a/b", "agent-1", "t1", first), Claim)
+    assert isinstance(await _acquire("path:a/b", "agent-1", "t1", first), WorkClaim)
     outcome = await _acquire("path:a/b", "agent-2", "t2", second)
-    assert isinstance(outcome, Claim) is compatible
+    assert isinstance(outcome, WorkClaim) is compatible
 
 
 @pytest.mark.asyncio
@@ -241,14 +241,14 @@ async def test_two_shared_holders_coexist_independently(redis):
     record entirely — same return type, first holder silently erased. The
     coexistence claim is about what is stored, so it has to be read back.
     """
-    assert isinstance(await _acquire("path:a/b", "agent-1", "t1", ClaimMode.SHARED), Claim)
-    assert isinstance(await _acquire("path:a/b", "agent-2", "t2", ClaimMode.SHARED), Claim)
+    assert isinstance(await _acquire("path:a/b", "agent-1", "t1", ClaimMode.SHARED), WorkClaim)
+    assert isinstance(await _acquire("path:a/b", "agent-2", "t2", ClaimMode.SHARED), WorkClaim)
 
     holders = {(c.agent_id, c.task_id) for c in await list_claims("path")}
     assert holders == {("agent-1", "t1"), ("agent-2", "t2")}
 
     # Each holder owns its own record: one release leaves the other intact.
-    assert await release("path:a/b", agent_id="agent-1", task_id="t1") is True
+    assert await release_scope("path:a/b", agent_id="agent-1", task_id="t1") is True
     remaining = await list_claims("path")
     assert [(c.agent_id, c.task_id) for c in remaining] == [("agent-2", "t2")]
 
@@ -265,7 +265,7 @@ async def test_renew_advances_the_advertised_expiry_not_only_the_ttl(redis):
     claim that is still held — the opposite of what the refusal is for.
     """
     first = await _acquire("path:a/b", "agent-1", "t1", ttl_s=60)
-    assert isinstance(first, Claim)
+    assert isinstance(first, WorkClaim)
     assert await renew("path:a/b", agent_id="agent-1", task_id="t1", ttl_s=3600) is True
 
     [held] = await list_claims("path")
@@ -289,7 +289,7 @@ async def test_a_nested_work_claim_does_not_release_the_outer_scope(redis):
             pass
         # Inner block has exited; the outer block still holds the scope.
         assert isinstance(await _acquire("path:a/b", "agent-2", "t2"), ClaimConflict)
-    assert isinstance(await _acquire("path:a/b", "agent-2", "t2"), Claim)
+    assert isinstance(await _acquire("path:a/b", "agent-2", "t2"), WorkClaim)
 
 
 @pytest.mark.asyncio
@@ -321,7 +321,7 @@ async def test_a_parent_scope_conflicts_with_a_held_child(redis):
 @pytest.mark.asyncio
 async def test_a_sibling_scope_does_not_conflict(redis):
     await _acquire("path:a/b", "agent-1", "t1")
-    assert isinstance(await _acquire("path:a/c", "agent-2", "t2"), Claim)
+    assert isinstance(await _acquire("path:a/c", "agent-2", "t2"), WorkClaim)
 
 
 # ---------------------------------------------------------------------------
@@ -333,14 +333,14 @@ async def test_a_sibling_scope_does_not_conflict(redis):
 async def test_same_holder_reacquiring_renews_rather_than_conflicting(redis):
     first = await _acquire("path:a/b", "agent-1", "t1")
     second = await _acquire("path:a/b", "agent-1", "t1")
-    assert isinstance(second, Claim)
+    assert isinstance(second, WorkClaim)
     assert second.expires_at >= first.expires_at
 
 
 @pytest.mark.asyncio
 async def test_same_holder_may_claim_a_child_of_its_own_scope(redis):
     await _acquire("path:a/b", "agent-1", "t1")
-    assert isinstance(await _acquire("path:a/b/c.py", "agent-1", "t1"), Claim)
+    assert isinstance(await _acquire("path:a/b/c.py", "agent-1", "t1"), WorkClaim)
 
 
 @pytest.mark.asyncio
@@ -359,7 +359,7 @@ async def test_a_second_task_of_the_same_agent_is_not_the_same_holder(redis):
 async def test_concurrent_overlapping_acquires_yield_exactly_one_winner(redis):
     scopes = ["path:a", "path:a/b", "path:a/b/c", "path:a/b/c/d"]
     results = await asyncio.gather(*(_acquire(s, f"agent-{i}", f"t{i}") for i, s in enumerate(scopes)))
-    assert sum(isinstance(r, Claim) for r in results) == 1
+    assert sum(isinstance(r, WorkClaim) for r in results) == 1
 
 
 @pytest.mark.asyncio
@@ -368,16 +368,16 @@ async def test_an_expired_claim_neither_lists_nor_blocks(redis):
     assert len(await list_claims("path")) == 1
     await redis.delete("work_claims:c:path:a/b|agent-1|t1")  # what Redis TTL expiry leaves behind
     assert await list_claims("path") == []
-    assert isinstance(await _acquire("path:a/b", "agent-2", "t2"), Claim)
+    assert isinstance(await _acquire("path:a/b", "agent-2", "t2"), WorkClaim)
 
 
 @pytest.mark.asyncio
 async def test_release_is_owner_checked(redis):
     await _acquire("path:a/b", "agent-1", "t1")
-    assert await release("path:a/b", agent_id="agent-2", task_id="t2") is False
+    assert await release_scope("path:a/b", agent_id="agent-2", task_id="t2") is False
     assert isinstance(await _acquire("path:a/b", "agent-3", "t3"), ClaimConflict)
-    assert await release("path:a/b", agent_id="agent-1", task_id="t1") is True
-    assert isinstance(await _acquire("path:a/b", "agent-3", "t3"), Claim)
+    assert await release_scope("path:a/b", agent_id="agent-1", task_id="t1") is True
+    assert isinstance(await _acquire("path:a/b", "agent-3", "t3"), WorkClaim)
 
 
 @pytest.mark.asyncio
@@ -385,7 +385,7 @@ async def test_renew_is_owner_checked_and_false_once_gone(redis):
     await _acquire("path:a/b", "agent-1", "t1")
     assert await renew("path:a/b", agent_id="agent-2", task_id="t2") is False
     assert await renew("path:a/b", agent_id="agent-1", task_id="t1") is True
-    await release("path:a/b", agent_id="agent-1", task_id="t1")
+    await release_scope("path:a/b", agent_id="agent-1", task_id="t1")
     assert await renew("path:a/b", agent_id="agent-1", task_id="t1") is False
 
 
@@ -407,7 +407,7 @@ async def test_work_claim_releases_on_a_raising_block(redis):
     with pytest.raises(ValueError):
         async with work_claim("path:a/b", agent_id="agent-1", task_id="t1", intent="x"):
             raise ValueError("boom")
-    assert isinstance(await _acquire("path:a/b", "agent-2", "t2"), Claim)
+    assert isinstance(await _acquire("path:a/b", "agent-2", "t2"), WorkClaim)
 
 
 @pytest.mark.asyncio
@@ -464,12 +464,12 @@ async def test_python_and_lua_overlap_rules_agree_over_a_bounded_space(redis):
         for right in scopes:
             python_says = Scope.parse(left).overlaps(Scope.parse(right))
             held = await _acquire(left, "agent-1", "t1")
-            assert isinstance(held, Claim)
+            assert isinstance(held, WorkClaim)
             outcome = await _acquire(right, "agent-2", "t2")
             lua_says = isinstance(outcome, ClaimConflict)
-            if isinstance(outcome, Claim):
-                await release(right, agent_id="agent-2", task_id="t2")
-            await release(left, agent_id="agent-1", task_id="t1")
+            if isinstance(outcome, WorkClaim):
+                await release_scope(right, agent_id="agent-2", task_id="t2")
+            await release_scope(left, agent_id="agent-1", task_id="t1")
             if python_says != lua_says:
                 disagreements.append((left, right, python_says, lua_says))
     assert not disagreements, f"overlap rules disagree on {len(disagreements)} pairs: {disagreements[:5]}"
@@ -490,6 +490,6 @@ async def test_empty_holder_identity_is_refused(redis, agent, task):
 @pytest.mark.asyncio
 async def test_release_and_renew_also_refuse_an_empty_holder(redis):
     """Otherwise the ownership check could be satisfied by a blank identity."""
-    for call in (release, renew):
+    for call in (release_scope, renew):
         with pytest.raises(HolderError):
             await call("path:a/b", agent_id="", task_id="")

@@ -380,10 +380,10 @@ async def toggle_check(
 @router.get("/config", response_model=HookConfig)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_config",
+    operation="get_hook_config",
     error_code_prefix="ANALYTICS_PRECOMMIT",
 )
-async def get_config(
+async def get_hook_config(
     admin_check: bool = Depends(check_admin_permission),
 ) -> HookConfig:
     """

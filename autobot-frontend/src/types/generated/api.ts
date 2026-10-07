@@ -23476,12 +23476,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Config
+         * Get Hook Config
          * @description Get current hook configuration.
          *
          *     Issue #744: Requires admin authentication.
          */
-        get: operations["get_config_api_precommit_config_get"];
+        get: operations["get_hook_config_api_precommit_config_get"];
         put?: never;
         /**
          * Update Config
@@ -25557,7 +25557,7 @@ export interface paths {
          *
          *     Issue #744: Requires admin authentication.
          */
-        get: operations["get_config_api_continuous_learning_config_get"];
+        get: operations["get_learning_config_api_continuous_learning_config_get"];
         /**
          * Update learning config
          * @description Update learning configuration.
@@ -41746,10 +41746,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Config
+         * Get Heartbeat Config
          * @description Return heartbeat config and runtime state for an agent (#1407).
          */
-        get: operations["get_config_api_heartbeat__agent_id__config_get"];
+        get: operations["get_heartbeat_config_api_heartbeat__agent_id__config_get"];
         /**
          * Update Config
          * @description Update heartbeat config for an agent and sync the scheduler (#1407, GH#6476).
@@ -135191,7 +135191,7 @@ export interface operations {
             };
         };
     };
-    get_config_api_precommit_config_get: {
+    get_hook_config_api_precommit_config_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -137887,7 +137887,7 @@ export interface operations {
             };
         };
     };
-    get_config_api_continuous_learning_config_get: {
+    get_learning_config_api_continuous_learning_config_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -159376,7 +159376,7 @@ export interface operations {
             };
         };
     };
-    get_config_api_heartbeat__agent_id__config_get: {
+    get_heartbeat_config_api_heartbeat__agent_id__config_get: {
         parameters: {
             query?: never;
             header?: never;

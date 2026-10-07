@@ -20,7 +20,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 logger = get_logger(__name__)
 
 
-class SourceType(Enum):
+class SourceKind(Enum):
     """Types of information sources"""
 
     KNOWLEDGE_BASE = "knowledge_base"
@@ -55,7 +55,7 @@ class SourceReliability(Enum):
 class Source:
     """Represents a single information source"""
 
-    type: SourceType
+    type: SourceKind
     reliability: SourceReliability
     content: str
     timestamp: datetime
@@ -74,21 +74,21 @@ class Source:
     def format_citation(self) -> str:
         """Format source as a citation string"""
         source_icon = {
-            SourceType.KNOWLEDGE_BASE: "📚",
-            SourceType.WEB_SEARCH: "🌐",
-            SourceType.SYSTEM_STATE: "💻",
-            SourceType.TOOL_OUTPUT: "🔧",
-            SourceType.LLM_TRAINING: "🤖",
-            SourceType.USER_INPUT: "👤",
-            SourceType.CONFIGURATION: "⚙️",
-            SourceType.DOCUMENTATION: "📖",
-            SourceType.API_RESPONSE: "🔌",
-            SourceType.FILE_CONTENT: "📄",
-            SourceType.YOUTUBE: "📺",
-            SourceType.REDDIT: "👽",
-            SourceType.WEB_PAGE: "🌐",
-            SourceType.SOCIAL: "💬",
-            SourceType.FORUM: "💬",
+            SourceKind.KNOWLEDGE_BASE: "📚",
+            SourceKind.WEB_SEARCH: "🌐",
+            SourceKind.SYSTEM_STATE: "💻",
+            SourceKind.TOOL_OUTPUT: "🔧",
+            SourceKind.LLM_TRAINING: "🤖",
+            SourceKind.USER_INPUT: "👤",
+            SourceKind.CONFIGURATION: "⚙️",
+            SourceKind.DOCUMENTATION: "📖",
+            SourceKind.API_RESPONSE: "🔌",
+            SourceKind.FILE_CONTENT: "📄",
+            SourceKind.YOUTUBE: "📺",
+            SourceKind.REDDIT: "👽",
+            SourceKind.WEB_PAGE: "🌐",
+            SourceKind.SOCIAL: "💬",
+            SourceKind.FORUM: "💬",
         }
 
         icon = source_icon.get(self.type, "📋")
@@ -132,7 +132,7 @@ class SourceAttributionManager:
 
     def add_source(
         self,
-        source_type: SourceType | str,
+        source_type: SourceKind | str,
         content: str,
         reliability: SourceReliability | str = SourceReliability.UNKNOWN,
         metadata: Dict[str, Any] | None = None,
@@ -140,7 +140,7 @@ class SourceAttributionManager:
         """Add a new source to the current response"""
         # Handle string inputs
         if isinstance(source_type, str):
-            source_type = SourceType(source_type)
+            source_type = SourceKind(source_type)
         if isinstance(reliability, str):
             reliability = SourceReliability(reliability)
 
@@ -190,7 +190,7 @@ class SourceAttributionManager:
             **(metadata or {}),
         }
 
-        return self.add_source(SourceType.KNOWLEDGE_BASE, content, SourceReliability.HIGH, kb_metadata)
+        return self.add_source(SourceKind.KNOWLEDGE_BASE, content, SourceReliability.HIGH, kb_metadata)
 
     def add_web_source(
         self,
@@ -212,7 +212,7 @@ class SourceAttributionManager:
             "domain_reliability": domain_reliability,
         }
 
-        return self.add_source(SourceType.WEB_SEARCH, content, reliability, web_metadata)
+        return self.add_source(SourceKind.WEB_SEARCH, content, reliability, web_metadata)
 
     def add_system_source(self, content: str, command: str | None = None, output_type: str = "command") -> Source:
         """Add a system/tool output source"""
@@ -221,7 +221,7 @@ class SourceAttributionManager:
             system_metadata["command"] = command
 
         return self.add_source(
-            (SourceType.SYSTEM_STATE if output_type == "state" else SourceType.TOOL_OUTPUT),
+            (SourceKind.SYSTEM_STATE if output_type == "state" else SourceKind.TOOL_OUTPUT),
             content,
             SourceReliability.VERIFIED,
             system_metadata,
@@ -235,7 +235,7 @@ class SourceAttributionManager:
         lines = ["📋 **Sources:**"]
 
         # Group by type
-        by_type: Dict[SourceType, List[Source]] = {}
+        by_type: Dict[SourceKind, List[Source]] = {}
         for source in self.current_response_sources:
             if source.type not in by_type:
                 by_type[source.type] = []
@@ -268,7 +268,7 @@ class SourceAttributionManager:
 get_source_manager = lazy_singleton(SourceAttributionManager)
 
 
-def track_source(source_type: SourceType | str, content: str, **kwargs) -> Source:
+def track_source(source_type: SourceKind | str, content: str, **kwargs) -> Source:
     """Convenience function to track a source"""
     return get_source_manager().add_source(source_type, content, **kwargs)
 

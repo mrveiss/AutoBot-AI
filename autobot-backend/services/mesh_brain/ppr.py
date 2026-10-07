@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 # =============================================================================
 
 
-class MeshDB(Protocol):
+class NeighborStore(Protocol):
     """Protocol for mesh database neighbor lookups used by PPR."""
 
     async def get_neighbors(self, node_id: str, min_weight: float) -> list[dict]:
@@ -62,10 +62,10 @@ class PersonalizedPageRank:
     EdgeLearner) propagate more relevance.
     """
 
-    def __init__(self, db: MeshDB) -> None:
+    def __init__(self, db: NeighborStore) -> None:
         """
         Args:
-            db: MeshDB instance for subgraph loading (get_neighbors).
+            db: NeighborStore instance for subgraph loading (get_neighbors).
         """
         self.db = db
 
