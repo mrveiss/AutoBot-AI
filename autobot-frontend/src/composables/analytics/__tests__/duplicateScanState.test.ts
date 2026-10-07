@@ -38,6 +38,11 @@ describe('readDuplicatePayload (#17983)', () => {
     [{ status: 'success', duplicates: [{ file1: 'a', file2: 'b', similarity: 90, lines: 4 }] }, 'done', 1],
     [{ status: 'partial', duplicates: [{ file1: 'a', file2: 'b', similarity: 90, lines: 4 }] }, 'done', 1],
     [ERROR_200, 'failed', 0],
+    // #17983, measured against the live backend: a TIMEOUT carrying nothing.
+    // `partial` + [] used to read as 'done' -> "no duplicates found", which is
+    // the defect this module exists to stop, surviving in the one branch that
+    // was not separated. With rows it IS a real (incomplete) result.
+    [{ status: 'partial', duplicates: [], total_count: 0, storage_type: 'timeout' }, 'failed', 0],
     [{ status: 'no_data' }, 'not_scanned', 0],
     [{ duplicates: [] }, 'not_scanned', 0],
     [null, 'not_scanned', 0],
