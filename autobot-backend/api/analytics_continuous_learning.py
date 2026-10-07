@@ -1127,10 +1127,10 @@ async def update_config(
 @router.get("/config", summary="Get learning config", response_model=LearningConfig)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_config",
+    operation="get_learning_config",
     error_code_prefix="ANALYTICS_CONTINUOUS_LEARNING",
 )
-async def get_config(
+async def get_learning_config(
     admin_check: bool = Depends(check_admin_permission),
 ) -> LearningConfig:
     """
