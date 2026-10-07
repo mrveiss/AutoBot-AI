@@ -34,9 +34,9 @@ from protocols.agent_channels import (
 from protocols.agent_communication import (
     AgentCommunicationManager,
     AgentIdentity,
-    AgentMessageType,
     MessageHeader,
     MessagePayload,
+    MessageType,
     StandardMessage,
 )
 
@@ -58,7 +58,7 @@ def _server_now(redis) -> float:
     return int(seconds) + int(micros) / 1_000_000
 
 
-def _to(recipient: str, message_type: AgentMessageType = AgentMessageType.REQUEST, **content) -> StandardMessage:
+def _to(recipient: str, message_type: MessageType = MessageType.REQUEST, **content) -> StandardMessage:
     return StandardMessage(
         header=MessageHeader(message_type=message_type, recipient=recipient), payload=MessagePayload(content=content)
     )
@@ -76,8 +76,8 @@ class _Mesh:
             protocol = await self.manager.register_agent(
                 identity, [{"type": self.kind, "id": f"{agent_id}_{self.kind}"}]
             )
-            protocol.register_message_handler(AgentMessageType.REQUEST, self._on_request(agent_id))
-            protocol.register_message_handler(AgentMessageType.BROADCAST, self._on_broadcast(agent_id))
+            protocol.register_message_handler(MessageType.REQUEST, self._on_request(agent_id))
+            protocol.register_message_handler(MessageType.BROADCAST, self._on_broadcast(agent_id))
         return self
 
     async def __aexit__(self, *_exc) -> None:
@@ -93,7 +93,7 @@ class _Mesh:
             if agent_id == "agent_b":
                 reply = await self.protocol("agent_b").send_request(_to("agent_c"), timeout=5)
                 content["onward"] = reply.payload.content if reply else None
-            return _to("", AgentMessageType.RESPONSE, **content)
+            return _to("", MessageType.RESPONSE, **content)
 
         return handle
 
@@ -129,7 +129,7 @@ async def test_a_request_reaches_its_recipient_and_a_forwarded_request_gets_its_
 @pytest.mark.parametrize("kind", KINDS)
 async def test_a_broadcast_reaches_every_other_agent_and_never_the_sender(kind, redis_server):
     async with _Mesh(kind) as mesh:
-        sent = await mesh.protocol("agent_a").broadcast(_to("", AgentMessageType.BROADCAST, note="hello"))
+        sent = await mesh.protocol("agent_a").broadcast(_to("", MessageType.BROADCAST, note="hello"))
 
         assert sent == 2
         assert await mesh.settle(2, "broadcast") == ["agent_b", "agent_c"]
@@ -145,7 +145,7 @@ async def test_a_message_to_an_agent_nobody_listens_for_is_refused(kind, redis_s
         await mesh.manager.unregister_agent("agent_c")
 
         assert await mesh.protocol("agent_a").send_message(_to("agent_c")) is False
-        assert await mesh.protocol("agent_a").broadcast(_to("", AgentMessageType.BROADCAST)) == 1
+        assert await mesh.protocol("agent_a").broadcast(_to("", MessageType.BROADCAST)) == 1
 
 
 @pytest.mark.asyncio
@@ -192,7 +192,7 @@ async def test_a_flood_never_runs_more_handlers_than_the_bound_and_a_reply_is_ne
         done.append(message.header.message_id)
 
     async def answer(message):
-        return _to("", AgentMessageType.RESPONSE, ok=True)
+        return _to("", MessageType.RESPONSE, ok=True)
 
     protocols = {}
     for agent_id, handler in (("agent_a", None), ("agent_b", slow), ("agent_c", answer)):
@@ -200,7 +200,7 @@ async def test_a_flood_never_runs_more_handlers_than_the_bound_and_a_reply_is_ne
             AgentIdentity(agent_id=agent_id, agent_type="t"), [{"type": "direct"}]
         )
         if handler:
-            protocols[agent_id].register_message_handler(AgentMessageType.REQUEST, handler)
+            protocols[agent_id].register_message_handler(MessageType.REQUEST, handler)
     try:
         for _ in range(6):
             assert await protocols["agent_a"].send_message(_to("agent_b"))
@@ -354,7 +354,7 @@ async def test_a_dropped_request_is_answered_with_an_error_at_once(redis_server,
 
     a = await manager.register_agent(AgentIdentity(agent_id="agent_a", agent_type="t"), [{"type": "direct"}])
     b = await manager.register_agent(AgentIdentity(agent_id="agent_b", agent_type="t"), [{"type": "direct"}])
-    b.register_message_handler(AgentMessageType.REQUEST, slow)
+    b.register_message_handler(MessageType.REQUEST, slow)
     try:
         for _ in range(2):  # one handling, one queued
             assert await a.send_message(_to("agent_b"))
@@ -407,7 +407,7 @@ async def test_a_peer_request_is_held_to_the_work_claims_like_any_other(redis_se
     manager, writer = AgentCommunicationManager(), _Writer("writer")
     a = await manager.register_agent(AgentIdentity(agent_id="agent_a", agent_type="t"), [{"type": "direct"}])
     w = await manager.register_agent(AgentIdentity(agent_id="agent_w", agent_type="t"), [{"type": "direct"}])
-    w.register_message_handler(AgentMessageType.REQUEST, writer._handle_communication_request)
+    w.register_message_handler(MessageType.REQUEST, writer._handle_communication_request)
     try:
         reply = await a.send_request(_to("agent_w", action="write", payload={}), timeout=5)
 

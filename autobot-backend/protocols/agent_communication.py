@@ -33,12 +33,12 @@ from constants.threshold_constants import RetryConfig, TimingConstants  # noqa: 
 from protocols.message_origin import stamp  # noqa: E402
 
 
-def _parse_message_type(msg_type: Any) -> "AgentMessageType":
+def _parse_message_type(msg_type: Any) -> "MessageType":
     """Parse message type from various formats (Issue #315 - extracted)."""
-    if isinstance(msg_type, str) and msg_type.startswith("AgentMessageType."):
+    if isinstance(msg_type, str) and msg_type.startswith("MessageType."):
         msg_type = msg_type.split(".")[-1].lower()
     if isinstance(msg_type, str):
-        return AgentMessageType(msg_type)
+        return MessageType(msg_type)
     return msg_type
 
 
@@ -73,7 +73,7 @@ logger = get_logger(__name__)
 MAX_INFLIGHT_HANDLERS = env_int("AUTOBOT_AGENT_COMM_MAX_INFLIGHT_HANDLERS", 32)
 
 
-class AgentMessageType(Enum):
+class MessageType(Enum):
     """Standard message types for agent communication"""
 
     REQUEST = "request"
@@ -135,7 +135,7 @@ class MessageHeader:
     """Standardized message header"""
 
     message_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    message_type: AgentMessageType = AgentMessageType.REQUEST
+    message_type: MessageType = MessageType.REQUEST
     priority: MessagePriority = MessagePriority.NORMAL
     sender: AgentIdentity | None = None
     recipient: str | None = None  # Agent ID
@@ -205,7 +205,7 @@ class AgentCommunicationProtocol:
         """Initialize protocol handler with agent identity and empty registries."""
         self.agent_identity = agent_identity
         self.channels: Dict[str, CommunicationChannel] = {}
-        self.message_handlers: Dict[AgentMessageType, List[Callable]] = {}
+        self.message_handlers: Dict[MessageType, List[Callable]] = {}
         self.pending_requests: Dict[str, asyncio.Future] = {}
         self.is_active = False
         self.heartbeat_task = None
@@ -269,7 +269,7 @@ class AgentCommunicationProtocol:
 
     def register_message_handler(
         self,
-        message_type: AgentMessageType,
+        message_type: MessageType,
         handler: Callable[[StandardMessage], Awaitable[StandardMessage | None]],
     ):
         """Register a handler for specific message types"""
@@ -313,7 +313,7 @@ class AgentCommunicationProtocol:
         # Set up response correlation
         correlation_id = str(uuid.uuid4())
         request.header.correlation_id = correlation_id
-        request.header.message_type = AgentMessageType.REQUEST
+        request.header.message_type = MessageType.REQUEST
         request.header.reply_to = self.agent_identity.agent_id
 
         # Create future for response
@@ -353,7 +353,7 @@ class AgentCommunicationProtocol:
     ) -> bool:
         """Send a response to a request"""
 
-        response.header.message_type = AgentMessageType.RESPONSE
+        response.header.message_type = MessageType.RESPONSE
         response.header.correlation_id = original_request.header.correlation_id
         response.header.recipient = original_request.header.reply_to
 
@@ -362,7 +362,7 @@ class AgentCommunicationProtocol:
     async def broadcast(self, message: StandardMessage) -> int:
         """Broadcast a message to all channels"""
 
-        message.header.message_type = AgentMessageType.BROADCAST
+        message.header.message_type = MessageType.BROADCAST
         recipients = set()
         for channel in self.channels.values():
             recipients |= await channel.recipients()
@@ -412,7 +412,7 @@ class AgentCommunicationProtocol:
                 len(self._backlog),
             )
         self._dropped += 1
-        if message.header.message_type == AgentMessageType.REQUEST:
+        if message.header.message_type == MessageType.REQUEST:
             await self.send_response(self._error_reply(message, "Agent overloaded", "Overloaded"), message, channel_id)
 
     def _start(self, message: StandardMessage, channel_id: str) -> None:
@@ -474,7 +474,7 @@ class AgentCommunicationProtocol:
 
     def _resolve_reply(self, message: StandardMessage) -> bool:
         """Hand a reply to the request waiting for it. True if *message* was that reply."""
-        if message.header.message_type != AgentMessageType.RESPONSE:
+        if message.header.message_type != MessageType.RESPONSE:
             return False
         future = self.pending_requests.get(message.header.correlation_id)
         if future is None:
@@ -485,7 +485,7 @@ class AgentCommunicationProtocol:
 
     async def _run_handlers(self, message: StandardMessage, channel_id: str) -> None:
         """Run every handler registered for the message's type; answer a request with each result or error."""
-        is_request = message.header.message_type == AgentMessageType.REQUEST
+        is_request = message.header.message_type == MessageType.REQUEST
         for handler in self.message_handlers.get(message.header.message_type, []):
             try:
                 response = await handler(message)
@@ -501,7 +501,7 @@ class AgentCommunicationProtocol:
     def _error_reply(message: StandardMessage, error: str, error_type: str) -> StandardMessage:
         """An error answer to *message*, correlated so its requester stops waiting."""
         return StandardMessage(
-            header=MessageHeader(message_type=AgentMessageType.ERROR, correlation_id=message.header.correlation_id),
+            header=MessageHeader(message_type=MessageType.ERROR, correlation_id=message.header.correlation_id),
             payload=MessagePayload(content={"error": error, "error_type": error_type}),
         )
 
@@ -620,15 +620,15 @@ async def send_agent_request(
         return None
 
     request = StandardMessage(
-        header=MessageHeader(message_type=AgentMessageType.REQUEST, recipient=recipient_id),
+        header=MessageHeader(message_type=MessageType.REQUEST, recipient=recipient_id),
         payload=MessagePayload(content=request_data),
     )
 
     response = await sender_protocol.send_request(request, timeout=timeout)
 
-    if response and response.header.message_type != AgentMessageType.ERROR:
+    if response and response.header.message_type != MessageType.ERROR:
         return response.payload.content
-    elif response and response.header.message_type == AgentMessageType.ERROR:
+    elif response and response.header.message_type == MessageType.ERROR:
         logger.error("Agent request error: %s", response.payload.content)
         return None
     else:
@@ -647,7 +647,7 @@ async def broadcast_to_all_agents(sender_id: str, message_data: Any) -> int:
         return 0
 
     broadcast_msg = StandardMessage(
-        header=MessageHeader(message_type=AgentMessageType.BROADCAST),
+        header=MessageHeader(message_type=MessageType.BROADCAST),
         payload=MessagePayload(content=message_data),
     )
 
@@ -678,11 +678,11 @@ if __name__ == "__main__":
             logger.info(f"Agent 2 received request: {message.payload.content}")
 
             return StandardMessage(
-                header=MessageHeader(message_type=AgentMessageType.RESPONSE),
+                header=MessageHeader(message_type=MessageType.RESPONSE),
                 payload=MessagePayload(content={"response": "Hello from Agent 2!"}),
             )
 
-        protocol2.register_message_handler(AgentMessageType.REQUEST, handle_request)
+        protocol2.register_message_handler(MessageType.REQUEST, handle_request)
 
         # Test direct communication
         logger.info("Testing direct agent communication...")
