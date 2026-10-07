@@ -39,7 +39,7 @@ class ValidationSeverity(Enum):
 
 
 @dataclass
-class ValidationResult:
+class SystemTestResult:
     """Individual validation test result"""
 
     component: str
@@ -64,7 +64,7 @@ class SystemValidationReport:
     warnings: int
     overall_health_score: float
     system_ready: bool
-    validation_results: List[ValidationResult]
+    validation_results: List[SystemTestResult]
     recommendations: List[str]
     performance_metrics: Dict[str, Any]
 
@@ -75,7 +75,7 @@ class SystemValidator:
     def __init__(self):
         """Initialize system validator with validation thresholds."""
         self.logger = get_logger(__name__)
-        self.results: List[ValidationResult] = []
+        self.results: List[SystemTestResult] = []
 
         # Validation configuration
         self.timeout_seconds = config.get("validation.timeout_seconds", 30)
@@ -106,7 +106,7 @@ class SystemValidator:
         duration_ms: float = 0.0,
     ):
         """Add a validation result"""
-        result = ValidationResult(
+        result = SystemTestResult(
             component=component,
             test_name=test_name,
             severity=severity,
@@ -128,7 +128,7 @@ class SystemValidator:
             return ValidationSeverity.SUCCESS
         return ValidationSeverity.WARNING
 
-    def _get_component_results(self, component: str) -> List[ValidationResult]:
+    def _get_component_results(self, component: str) -> List[SystemTestResult]:
         """Get results for a specific component (Issue #333 - extracted helper)."""
         return [r for r in self.results if r.component == component]
 
@@ -281,7 +281,7 @@ class SystemValidator:
                 "Cache operations failed",
             )
 
-    async def validate_knowledge_base_caching(self) -> List[ValidationResult]:
+    async def validate_knowledge_base_caching(self) -> List[SystemTestResult]:
         """Validate knowledge base caching system"""
         component = "Knowledge Base Cache"
 
@@ -956,7 +956,7 @@ class SystemValidator:
                     {"query": query[:50] + "...", "keywords": keywords},
                 )
 
-    async def validate_hybrid_search(self) -> List[ValidationResult]:
+    async def validate_hybrid_search(self) -> List[SystemTestResult]:
         """Validate hybrid search functionality"""
         component = "Hybrid Search"
 
@@ -1038,7 +1038,7 @@ class SystemValidator:
         # Test 5: Metrics summary
         await self._validate_health_summary(component, collector)
 
-    async def validate_monitoring_system(self) -> List[ValidationResult]:
+    async def validate_monitoring_system(self) -> List[SystemTestResult]:
         """Validate monitoring and metrics system."""
         component = "Monitoring System"
 
@@ -1101,7 +1101,7 @@ class SystemValidator:
 
         return self._validate_model_discovery_result(component, models, discovery_time)
 
-    async def validate_model_optimization(self) -> List[ValidationResult]:
+    async def validate_model_optimization(self) -> List[SystemTestResult]:
         """Validate model optimization system"""
         component = "Model Optimization"
 
@@ -1178,7 +1178,7 @@ class SystemValidator:
             ),
         ]
 
-    async def validate_api_endpoints(self) -> List[ValidationResult]:
+    async def validate_api_endpoints(self) -> List[SystemTestResult]:
         """
         Validate all optimization API endpoints.
 
@@ -1203,7 +1203,7 @@ class SystemValidator:
 
         return self._get_component_results(component)
 
-    async def validate_system_resources(self) -> List[ValidationResult]:
+    async def validate_system_resources(self) -> List[SystemTestResult]:
         """Validate system resource availability and performance"""
         component = "System Resources"
 

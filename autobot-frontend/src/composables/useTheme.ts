@@ -29,6 +29,11 @@ export type Theme = 'dark' | 'light' | 'system'
 /** Available accent color options */
 export type AccentColor = 'blue' | 'green' | 'purple' | 'orange' | 'pink' | 'teal' | 'indigo' | 'red'
 
+/** The accents accents.css defines, at runtime. #18066: this list existed twice
+ * in this module (`validAccents` and `availableAccents`), so a ninth accent had
+ * to be added in two places or picker and validator would disagree. */
+export const ACCENT_COLORS: readonly AccentColor[] = ['blue', 'green', 'purple', 'orange', 'pink', 'teal', 'indigo', 'red'] as const
+
 /** Theme preset options - named combinations of theme + accent + optional density */
 export type ThemePreset =
   | 'auto' // System preference
@@ -238,8 +243,7 @@ function loadTheme(): Theme {
 function loadAccentColor(): AccentColor {
   try {
     const stored = localStorage.getItem(ACCENT_STORAGE_KEY) as AccentColor | null
-    const validAccents: AccentColor[] = ['blue', 'green', 'purple', 'orange', 'pink', 'teal', 'indigo', 'red']
-    if (stored && validAccents.includes(stored)) {
+    if (stored && ACCENT_COLORS.includes(stored)) {
       return stored
     }
   } catch {
@@ -437,16 +441,7 @@ export function useTheme() {
   /**
    * Available accent color options for UI dropdowns
    */
-  const availableAccents: AccentColor[] = [
-    'blue',
-    'green',
-    'purple',
-    'orange',
-    'pink',
-    'teal',
-    'indigo',
-    'red',
-  ]
+  const availableAccents: readonly AccentColor[] = ACCENT_COLORS
 
   /**
    * Available theme presets for UI dropdowns

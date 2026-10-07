@@ -243,3 +243,41 @@ class TestGetRedisAwaitsCoroutine:
 
         assert first is second is fake_client
         mock_get.assert_awaited_once()  # cached — acquired only once
+
+
+class TestValidatePythonRejectsInvalidCode:
+    """`validate_python` must REPORT a syntax error, not raise one (#18071).
+
+    `ast_info` was read in both `except` branches but assigned only after
+    `ast.parse` succeeded, so every syntactically invalid input raised
+    `UnboundLocalError` and discarded the `SyntaxError` it had just formatted.
+
+    This is reachable with caller-controlled input: `POST /validate` passes
+    `request.code` straight to `CodeValidator.validate`, which dispatches here.
+    The pre-existing invalid-code coverage exercises the separate
+    `code_intelligence` validator, so it could not catch this one.
+    """
+
+    def test_invalid_python_returns_a_result_instead_of_raising(self):
+        from api.analytics_code_generation import CodeValidator
+        from code_intelligence.code_generation.types import ValidationStatus
+
+        result = CodeValidator.validate_python("def (")
+
+        assert result.is_valid is False
+        assert result.status is ValidationStatus.SYNTAX_ERROR
+        assert any("Syntax error" in e for e in result.errors)
+        # The field whose absence caused the crash is present and empty.
+        assert result.ast_info == {}
+
+    def test_valid_python_still_reports_what_it_parsed(self):
+        """The contrast case: the happy path must keep its ast_info summary."""
+        from api.analytics_code_generation import CodeValidator
+        from code_intelligence.code_generation.types import ValidationStatus
+
+        result = CodeValidator.validate_python("def f():\n    return 1\n")
+
+        assert result.is_valid is True
+        assert result.status is ValidationStatus.VALID
+        assert result.ast_info.get("total_lines") == 3
+        assert any(f.get("name") == "f" for f in result.ast_info.get("functions", []))
