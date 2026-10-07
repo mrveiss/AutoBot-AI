@@ -71,7 +71,7 @@ class ResearchRequest(BaseModel):
     include_installation: bool = False
 
 
-class ResearchResult(BaseModel):
+class WebSearchHit(BaseModel):
     title: str
     url: str
     content: str
@@ -82,7 +82,7 @@ class ResearchResult(BaseModel):
 class ResearchResponse(BaseModel):
     success: bool
     query: str
-    results: List[ResearchResult]
+    results: List[WebSearchHit]
     summary: str
     execution_time: float
     sources_count: int
@@ -1032,14 +1032,14 @@ class WebResearcher:
                 sources_count=0,
             )
 
-    def _convert_to_research_results(self, search_results: Dict[str, Any]) -> List[ResearchResult]:
-        """Convert raw search results to ResearchResult models."""
+    def _convert_to_research_results(self, search_results: Dict[str, Any]) -> List[WebSearchHit]:
+        """Convert raw search results to WebSearchHit models."""
         results = []
         if search_results.get("status") != "success":
             return results
         for item in search_results.get("results", []):
             results.append(
-                ResearchResult(
+                WebSearchHit(
                     title=item.get("title", ""),
                     url=item.get("url", ""),
                     content=item.get("snippet", item.get("content", "")),
@@ -1144,8 +1144,8 @@ class WebResearcher:
     # Summary generation
     # -------------------------------------------------------------------
 
-    def _generate_research_summary(self, results: List[ResearchResult], query: str) -> str:
-        """Generate summary from ResearchResult list."""
+    def _generate_research_summary(self, results: List[WebSearchHit], query: str) -> str:
+        """Generate summary from WebSearchHit list."""
         if not results:
             return f"No relevant results found for '{query}'"
         high_q = [r for r in results if r.relevance_score > 0.8]
