@@ -361,8 +361,13 @@ get_container = lazy_singleton(AsyncServiceContainer)
 
 
 # Convenience functions for common services
-async def get_config() -> ConfigManager:
-    """Get config manager"""
+async def get_config_manager_from_container() -> ConfigManager:
+    """Resolve the ConfigManager through the DI container.
+
+    The parallel provider to `dependencies.provide_config_manager`, which
+    reaches the same object via the application-wide singleton. Which of the
+    two this codebase targets is an open decision (#18085).
+    """
     return await get_container().get_service("config")
 
 

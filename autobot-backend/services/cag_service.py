@@ -47,7 +47,7 @@ class _CandidateDoc:
 
 
 def _unique_source_paths(results: list) -> List[_CandidateDoc]:
-    """Map ranked SearchResult list → deduplicated CandidateDoc list (rank-ordered)."""
+    """Map ranked RankedResult list → deduplicated CandidateDoc list (rank-ordered)."""
     seen: dict[str, _CandidateDoc] = {}
     for result in results:
         sp = result.source_path or ""

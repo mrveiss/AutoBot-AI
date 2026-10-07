@@ -149,7 +149,7 @@ async def test_get_context_auto_collection_cag():
 # Phase 2 (KAG) — Issue #9018
 # ---------------------------------------------------------------------------
 
-from advanced_rag_optimizer import SearchResult  # noqa: E402
+from advanced_rag_optimizer import RankedResult  # noqa: E402
 
 
 def test_select_kag_enabled_returns_kag():
@@ -184,7 +184,7 @@ def _make_kag_services(enable_kag: bool = True, graph_results_added: int = 2):
     cag = MagicMock()
 
     results = [
-        SearchResult(
+        RankedResult(
             content="entity observation A",
             metadata={"source": "graph_expansion"},
             semantic_score=0.0,
@@ -194,7 +194,7 @@ def _make_kag_services(enable_kag: bool = True, graph_results_added: int = 2):
             source_path="graph:EntityA",
             chunk_index=0,
         ),
-        SearchResult(
+        RankedResult(
             content="entity observation B",
             metadata={"source": "graph_expansion"},
             semantic_score=0.0,

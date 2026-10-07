@@ -53,7 +53,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Set, Tuple
 
-from advanced_rag_optimizer import RAGMetrics, SearchResult
+from advanced_rag_optimizer import RAGMetrics, RankedResult
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import error_boundary
 from autobot_shared.logging_manager import get_llm_logger
@@ -199,7 +199,7 @@ class GraphRAGService:
         metrics: GraphRAGMetrics,
         start_time: float,
         timeout: float | None,
-    ) -> Tuple[List[SearchResult], GraphRAGMetrics]:
+    ) -> Tuple[List[RankedResult], GraphRAGMetrics]:
         """Handle errors during graph-aware search. Issue #620."""
         if isinstance(error, asyncio.TimeoutError):
             logger.warning("Graph-RAG search timed out after %ss", timeout)
@@ -220,7 +220,7 @@ class GraphRAGService:
         max_results: int = 5,
         enable_reranking: bool = True,
         timeout: float | None = None,
-    ) -> Tuple[List[SearchResult], GraphRAGMetrics]:
+    ) -> Tuple[List[RankedResult], GraphRAGMetrics]:
         """
         Perform graph-aware RAG search with relationship-based expansion.
 
@@ -260,7 +260,7 @@ class GraphRAGService:
         except (asyncio.TimeoutError, Exception) as e:
             return self._handle_search_error(e, metrics, start_time, timeout)
 
-    async def _extract_entities_from_results(self, results: List[SearchResult]) -> List[EntityMatch]:
+    async def _extract_entities_from_results(self, results: List[RankedResult]) -> List[EntityMatch]:
         """
         Extract entity references from search results.
 
@@ -291,7 +291,7 @@ class GraphRAGService:
         entity_matches: List[EntityMatch],
         max_depth: int,
         max_results: int,
-    ) -> List[SearchResult]:
+    ) -> List[RankedResult]:
         """
         Expand context using graph relationships.
 
@@ -305,7 +305,7 @@ class GraphRAGService:
             max_results: Maximum results to return
 
         Returns:
-            List of SearchResult objects from graph expansion
+            List of RankedResult objects from graph expansion
         """
         start_points = self._get_graph_starting_points(start_entity, entity_matches)
 
@@ -357,9 +357,9 @@ class GraphRAGService:
         start_points: List[Tuple[str, float]],
         all_related_results: List[Any],
         max_depth: int,
-    ) -> List[SearchResult]:
+    ) -> List[RankedResult]:
         """
-        Process graph traversal results into SearchResult objects.
+        Process graph traversal results into RankedResult objects.
 
         Args:
             start_points: List of (entity_name, base_score) tuples.
@@ -367,7 +367,7 @@ class GraphRAGService:
             max_depth: Maximum traversal depth for scoring.
 
         Returns:
-            List of SearchResult objects from expanded entities.
+            List of RankedResult objects from expanded entities.
 
         Issue #620.
         """
@@ -393,7 +393,7 @@ class GraphRAGService:
 
         return expanded_results
 
-    def _build_content_hash_map(self, results: List[SearchResult]) -> Dict[int, SearchResult]:
+    def _build_content_hash_map(self, results: List[RankedResult]) -> Dict[int, RankedResult]:
         """
         Build hash map of results, keeping highest-scored duplicates.
 
@@ -403,7 +403,7 @@ class GraphRAGService:
         Returns:
             Dictionary mapping content hash to best result. Issue #620.
         """
-        content_hashes: Dict[int, SearchResult] = {}
+        content_hashes: Dict[int, RankedResult] = {}
         for result in results:
             content_hash = hash(result.content[:500])
             if content_hash in content_hashes:
@@ -413,7 +413,7 @@ class GraphRAGService:
                 content_hashes[content_hash] = result
         return content_hashes
 
-    def _assign_relevance_ranks(self, results: List[SearchResult], max_results: int) -> List[SearchResult]:
+    def _assign_relevance_ranks(self, results: List[RankedResult], max_results: int) -> List[RankedResult]:
         """
         Sort results and assign relevance ranks.
 
@@ -429,7 +429,7 @@ class GraphRAGService:
             result.relevance_rank = idx + 1
         return results[:max_results]
 
-    async def _deduplicate_and_rank(self, results: List[SearchResult], max_results: int) -> List[SearchResult]:
+    async def _deduplicate_and_rank(self, results: List[RankedResult], max_results: int) -> List[RankedResult]:
         """
         Deduplicate results and rank by hybrid score.
 
@@ -475,7 +475,7 @@ class GraphRAGService:
         enable_reranking: bool,
         timeout: float | None,
         metrics: GraphRAGMetrics,
-    ) -> List[SearchResult]:
+    ) -> List[RankedResult]:
         """
         Perform initial RAG search and update metrics.
 
@@ -501,12 +501,12 @@ class GraphRAGService:
     async def _extract_and_expand_graph(
         self,
         query: str,
-        rag_results: List[SearchResult],
+        rag_results: List[RankedResult],
         start_entity: str | None,
         max_depth: int,
         max_results: int,
         metrics: GraphRAGMetrics,
-    ) -> List[SearchResult]:
+    ) -> List[RankedResult]:
         """
         Extract entities and expand via graph traversal.
 
@@ -541,7 +541,7 @@ class GraphRAGService:
         logger.info("No graph expansion (no start entity or matches)")
         return rag_results
 
-    def _collect_entity_refs_from_result(self, result: SearchResult) -> List[str]:
+    def _collect_entity_refs_from_result(self, result: RankedResult) -> List[str]:
         """
         Collect entity references from a single search result.
 
@@ -629,9 +629,9 @@ class GraphRAGService:
         direction: str,
         base_score: float,
         max_depth: int,
-    ) -> SearchResult | None:
+    ) -> RankedResult | None:
         """
-        Create SearchResult from a related graph entity.
+        Create RankedResult from a related graph entity.
 
         Issue #281: Extracted from _expand_via_graph.
         """
@@ -649,7 +649,7 @@ class GraphRAGService:
         _origin = relation.get("metadata", {}).get("origin", "inferred")
         _provenance: str = _origin if _origin in ("extracted", "inferred", "ambiguous") else "inferred"
 
-        return SearchResult(
+        return RankedResult(
             content=content,
             metadata={
                 "entity_id": related_entity.get("id"),

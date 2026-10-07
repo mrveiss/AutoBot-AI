@@ -25,7 +25,7 @@ from config import settings
 from models.schemas import TokenResponse
 from services.auth import auth_service
 from services.database import get_db
-from user_management.database import get_slm_session
+from user_management.database import get_slm_db
 from user_management.models.sso import SSOProviderType
 from user_management.schemas.sso import (
     ActiveProviderResponse,
@@ -85,12 +85,6 @@ def _get_allowed_callback_hosts() -> frozenset[str]:
 
 
 _ALLOWED_CALLBACK_HOSTS = _get_allowed_callback_hosts()
-
-
-async def get_slm_db():
-    """Dependency for SLM database session."""
-    async with get_slm_session() as session:
-        yield session
 
 
 async def get_audit_db():

@@ -13,7 +13,7 @@ query enhancement (Issue #249 Phase 3).
 
 import pytest
 
-from advanced_rag_optimizer import RAGMetrics, SearchResult
+from advanced_rag_optimizer import RAGMetrics, RankedResult
 from services.chat_knowledge_service import (
     ChatKnowledgeService,
     ConversationContextEnhancer,
@@ -195,7 +195,7 @@ def test_filter_uses_rerank_score_when_available(mock_rag_service) -> None:
     service = ChatKnowledgeService(mock_rag_service)
 
     # Create result with rerank_score that differs from hybrid_score
-    result = SearchResult(
+    result = RankedResult(
         content="Test content",
         metadata={},
         semantic_score=0.5,
@@ -218,7 +218,7 @@ def test_filter_falls_back_to_hybrid_score(mock_rag_service) -> None:
     service = ChatKnowledgeService(mock_rag_service)
 
     # Create result without rerank_score
-    result = SearchResult(
+    result = RankedResult(
         content="Test content",
         metadata={},
         semantic_score=0.8,

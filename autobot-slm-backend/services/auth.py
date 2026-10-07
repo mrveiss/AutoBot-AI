@@ -50,6 +50,7 @@ from services.api_key_audit import AUDIT_UNAVAILABLE_DETAIL, AuditUnavailable, a
 from services.api_key_authority import legacy_grace_deadline, permission_allowed, role_for_user
 from services.api_key_routes import mark_key_permission
 from services.token_denylist import is_jti_revoked
+from user_management.database import get_slm_db  # noqa: F401 -- re-exported for api.auth
 from user_management.models.user import User
 
 try:  # redis-py exceptions do NOT inherit builtin ConnectionError/OSError
@@ -375,14 +376,6 @@ async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
 # authenticated user WITHOUT service.management gets 403.  Reuses the shared
 # ROLE_PERMISSIONS table — no second permission system.
 require_service_management = require_permission(Permission.SERVICE_MANAGEMENT)
-
-
-async def get_slm_db():
-    """Local dependency for SLM database session."""
-    from user_management.database import get_slm_session
-
-    async with get_slm_session() as session:
-        yield session
 
 
 async def get_api_key_user(

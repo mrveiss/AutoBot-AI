@@ -24,7 +24,7 @@ Usage:
         # Data classes
         TokenUsage, PromptAnalysisResult, PromptTemplate, CacheOpportunity,
         UsagePattern, RetryPattern, BatchingOpportunity, CostEstimate,
-        OptimizationRecommendation, AnalysisResult,
+        OptimizationRecommendation, PatternAnalysisResult,
         # Classes
         TokenTracker, PromptAnalyzer, CodePatternScanner,
         CacheOpportunityDetector, BatchingAnalyzer, CostCalculator,
@@ -42,11 +42,11 @@ from code_intelligence.llm_pattern_analysis.calculators import (
 
 # Data models
 from code_intelligence.llm_pattern_analysis.data_models import (
-    AnalysisResult,
     BatchingOpportunity,
     CacheOpportunity,
     CostEstimate,
     OptimizationRecommendation,
+    PatternAnalysisResult,
     PromptAnalysisResult,
     PromptTemplate,
     RetryPattern,
@@ -111,7 +111,7 @@ __all__ = [
     "BatchingOpportunity",
     "CostEstimate",
     "OptimizationRecommendation",
-    "AnalysisResult",
+    "PatternAnalysisResult",
     # Classes
     "TokenTracker",
     "PromptAnalyzer",
