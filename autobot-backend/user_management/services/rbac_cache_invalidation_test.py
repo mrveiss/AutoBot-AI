@@ -108,7 +108,7 @@ class TestAssignRoleCacheInvalidation:
 
         with (
             patch(
-                "user_management.middleware.rbac_middleware.get_async_redis_client",
+                "autobot_shared.middleware.rbac_middleware.get_async_redis_client",
                 new=AsyncMock(return_value=redis),
             ),
             patch.object(user_service, "_audit_log", new_callable=AsyncMock),
@@ -130,7 +130,7 @@ class TestAssignRoleCacheInvalidation:
 
         with (
             patch(
-                "user_management.middleware.rbac_middleware.get_async_redis_client",
+                "autobot_shared.middleware.rbac_middleware.get_async_redis_client",
                 new=AsyncMock(return_value=redis),
             ),
             patch.object(user_service, "_audit_log", new_callable=AsyncMock),
@@ -155,7 +155,7 @@ class TestAssignRoleCacheInvalidation:
 
         with (
             patch(
-                "user_management.middleware.rbac_middleware.get_async_redis_client",
+                "autobot_shared.middleware.rbac_middleware.get_async_redis_client",
                 new=AsyncMock(return_value=redis),
             ),
             patch.object(user_service, "_audit_log", new_callable=AsyncMock),
@@ -182,7 +182,7 @@ class TestAssignRoleCacheInvalidation:
 
         with (
             patch(
-                "user_management.middleware.rbac_middleware.get_async_redis_client",
+                "autobot_shared.middleware.rbac_middleware.get_async_redis_client",
                 new=AsyncMock(return_value=redis),
             ),
             patch.object(user_service, "_audit_log", new_callable=AsyncMock),
@@ -213,7 +213,7 @@ class TestRevokeRoleCacheInvalidation:
 
         with (
             patch(
-                "user_management.middleware.rbac_middleware.get_async_redis_client",
+                "autobot_shared.middleware.rbac_middleware.get_async_redis_client",
                 new=AsyncMock(return_value=redis),
             ),
             patch.object(user_service, "_audit_log", new_callable=AsyncMock),
@@ -235,7 +235,7 @@ class TestRevokeRoleCacheInvalidation:
 
         with (
             patch(
-                "user_management.middleware.rbac_middleware.get_async_redis_client",
+                "autobot_shared.middleware.rbac_middleware.get_async_redis_client",
                 new=AsyncMock(return_value=redis),
             ),
             patch.object(user_service, "_audit_log", new_callable=AsyncMock),
@@ -259,7 +259,7 @@ class TestRevokeRoleCacheInvalidation:
 
         with (
             patch(
-                "user_management.middleware.rbac_middleware.get_async_redis_client",
+                "autobot_shared.middleware.rbac_middleware.get_async_redis_client",
                 new=AsyncMock(return_value=redis),
             ),
             patch.object(user_service, "_audit_log", new_callable=AsyncMock),
@@ -286,7 +286,7 @@ class TestRevokeRoleCacheInvalidation:
 
         with (
             patch(
-                "user_management.middleware.rbac_middleware.get_async_redis_client",
+                "autobot_shared.middleware.rbac_middleware.get_async_redis_client",
                 new=AsyncMock(return_value=redis),
             ),
             patch.object(user_service, "_audit_log", new_callable=AsyncMock),
@@ -322,7 +322,7 @@ class TestConcurrentRoleMutations:
 
         with (
             patch(
-                "user_management.middleware.rbac_middleware.get_async_redis_client",
+                "autobot_shared.middleware.rbac_middleware.get_async_redis_client",
                 new=AsyncMock(return_value=redis),
             ),
             patch.object(user_service, "_audit_log", new_callable=AsyncMock),
