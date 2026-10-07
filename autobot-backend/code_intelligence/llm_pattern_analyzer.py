@@ -36,8 +36,8 @@ from code_intelligence.llm_pattern_analysis.calculators import (
 from code_intelligence.llm_pattern_analysis.data_models import (
     BatchingOpportunity,
     CacheOpportunity,
+    CodePatternRecommendation,
     CostEstimate,
-    OptimizationRecommendation,
     PatternAnalysisResult,
     PromptAnalysisResult,
     PromptTemplate,
@@ -104,7 +104,7 @@ __all__ = [
     "RetryPattern",
     "BatchingOpportunity",
     "CostEstimate",
-    "OptimizationRecommendation",
+    "CodePatternRecommendation",
     "PatternAnalysisResult",
     # Classes
     "TokenTracker",
@@ -178,7 +178,7 @@ class LLMPatternAnalyzer:
         all_patterns: List[UsagePattern],
         cache_opportunities: List[CacheOpportunity],
         batching_opportunities: List[BatchingOpportunity],
-        recommendations: List[OptimizationRecommendation],
+        recommendations: List[CodePatternRecommendation],
         cost_estimates: List[CostEstimate],
     ) -> Dict[str, Any]:
         """Build analysis summary dict (Issue #665: extracted helper)."""
@@ -214,7 +214,7 @@ class LLMPatternAnalyzer:
         batching_opportunities: List[BatchingOpportunity],
         all_retry_patterns: List[RetryPattern],
         cost_estimates: List[CostEstimate],
-    ) -> List[OptimizationRecommendation]:
+    ) -> List[CodePatternRecommendation]:
         """Generate optimization recommendations from analysis data. Issue #620."""
         return RecommendationEngine.generate_recommendations(
             patterns=all_patterns,
@@ -234,7 +234,7 @@ class LLMPatternAnalyzer:
         cache_opportunities: List[CacheOpportunity],
         batching_opportunities: List[BatchingOpportunity],
         cost_estimates: List[CostEstimate],
-        recommendations: List[OptimizationRecommendation],
+        recommendations: List[CodePatternRecommendation],
     ) -> PatternAnalysisResult:
         """Build the final PatternAnalysisResult object from collected data. Issue #620."""
         total_savings = sum(r.estimated_savings_percent for r in recommendations) / max(len(recommendations), 1)
@@ -351,7 +351,7 @@ class LLMPatternAnalyzer:
             lines.append("")
         return lines
 
-    def _build_recommendations_section(self, recommendations: List[OptimizationRecommendation]) -> List[str]:
+    def _build_recommendations_section(self, recommendations: List[CodePatternRecommendation]) -> List[str]:
         """Build the top recommendations section of the summary report. Issue #620."""
         lines = ["TOP RECOMMENDATIONS", "-" * 40]
         for rec in recommendations[:5]:
