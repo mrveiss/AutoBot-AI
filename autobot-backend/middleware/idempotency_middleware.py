@@ -35,7 +35,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from autobot_shared.idempotency import Claim, ReplayedResponse, claim, complete, release, storage_key
+from autobot_shared.idempotency import KeyClaim, ReplayedResponse, claim, complete, release_key, storage_key
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -145,7 +145,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         )
 
     @staticmethod
-    async def _claim(redis, key: str, path: str) -> Claim | None:
+    async def _claim(redis, key: str, path: str) -> KeyClaim | None:
         """The claim, or ``None`` meaning "store failed, serve unprotected"."""
         try:
             return await claim(redis, key)
@@ -172,7 +172,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             else:
                 # Only a success is worth replaying: a 4xx is the caller's to fix,
                 # and replaying it would deny them the corrected retry.
-                await release(redis, key, token)
+                await release_key(redis, key, token)
         except Exception as exc:  # noqa: BLE001 - the response stands regardless
             # Releasing rather than only logging is the point (#15778 review):
             # a failure here leaves the claim held, so the caller's retry gets
@@ -183,7 +183,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             # not "these particular failures do".
             logger.warning("idempotency record failed after the handler succeeded: %s", exc)
             try:
-                await release(redis, key, token)
+                await release_key(redis, key, token)
             except Exception as release_exc:  # noqa: BLE001 - nothing left to try
                 logger.warning("idempotency claim could not be released either: %s", release_exc)
 
@@ -191,7 +191,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
     async def _release(redis, key: str, token: str) -> None:
         """Drop the claim, preserving whatever the caller was already getting."""
         try:
-            await release(redis, key, token)
+            await release_key(redis, key, token)
         except Exception as exc:  # noqa: BLE001 - the original outcome is what matters
             logger.warning("idempotency release failed; the claim will lapse on its TTL: %s", exc)
 

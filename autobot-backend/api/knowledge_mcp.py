@@ -27,7 +27,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.model_constants import ModelConstants
-from dependencies import get_config
+from dependencies import provide_config_manager
 from knowledge.ownership_index import drop_ownership_unless_admin, refuses_platform_wide
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.schemas.mcp import (
@@ -88,7 +88,7 @@ def _get_chat_ollama():
         return None
 
     try:
-        llm_config = get_config().get_llm_config()
+        llm_config = provide_config_manager().get_llm_config()
         model = ModelConstants.DEFAULT_OLLAMA_MODEL
         base_url = llm_config.get("ollama", {}).get("base_url", get_service_url("ollama"))
         return ChatOllama(model=model, base_url=base_url, temperature=0.7)

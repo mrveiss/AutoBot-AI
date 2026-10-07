@@ -37,8 +37,7 @@ from knowledge.search_filters import (
     extract_user_context_from_request,
     filter_search_results_by_permission,
 )
-from knowledge.vector_search_engine import SearchResult as _EngineResult
-from knowledge.vector_search_engine import get_vector_search_engine
+from knowledge.vector_search_engine import VectorSearchResult, get_vector_search_engine
 from knowledge_factory import get_or_create_knowledge_base
 from type_defs.common import Metadata
 
@@ -164,7 +163,7 @@ async def _execute_kb_search(
     """
     try:
         engine = await get_vector_search_engine()
-        engine_results: list[_EngineResult] = await engine.search(
+        engine_results: list[VectorSearchResult] = await engine.search(
             query=query,
             top_k=search_limit,
             hardware_backend="auto",

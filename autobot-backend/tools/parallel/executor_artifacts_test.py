@@ -13,7 +13,7 @@ from tools.parallel.executor import (
     ParallelToolExecutor,
     _ArtifactCapture,
 )
-from tools.parallel.types import ToolCall
+from tools.parallel.types import ParallelToolCall
 
 
 class TestArtifactCapture:
@@ -22,14 +22,14 @@ class TestArtifactCapture:
     def test_non_file_tool_returns_empty_capture(self):
         """Non-file tools return empty capture"""
         executor = ParallelToolExecutor(tool_dispatcher=AsyncMock(), config=MagicMock())
-        call = ToolCall(tool_name="read_file", arguments={})
+        call = ParallelToolCall(tool_name="read_file", arguments={})
         capture = executor._capture_pre_state(call)
         assert capture.filepath is None
 
     def test_file_modifying_tool_captures_file_path(self):
         """File-modifying tools capture filepath from file_path arg"""
         executor = ParallelToolExecutor(tool_dispatcher=AsyncMock(), config=MagicMock())
-        call = ToolCall(
+        call = ParallelToolCall(
             tool_name="edit_file",
             arguments={"file_path": "/tmp/test.py"},  # nosec B108  # test/controlled code uses tmpdir intentionally
         )
@@ -39,7 +39,7 @@ class TestArtifactCapture:
     def test_file_modifying_tool_captures_path_alias(self):
         """File-modifying tools also check 'path' argument key"""
         executor = ParallelToolExecutor(tool_dispatcher=AsyncMock(), config=MagicMock())
-        call = ToolCall(
+        call = ParallelToolCall(
             tool_name="create_file",
             arguments={"path": "/tmp/new.txt"},  # nosec B108  # test/controlled code uses tmpdir intentionally
         )
@@ -53,7 +53,7 @@ class TestBuildArtifacts:
     def test_file_change_artifact_created(self):
         """File change artifacts are created for file-modifying tools"""
         executor = ParallelToolExecutor(tool_dispatcher=AsyncMock(), config=MagicMock())
-        call = ToolCall(
+        call = ParallelToolCall(
             tool_name="edit_file",
             arguments={"file_path": "/tmp/test.py"},  # nosec B108  # test/controlled code uses tmpdir intentionally
         )
@@ -67,7 +67,7 @@ class TestBuildArtifacts:
     def test_code_diff_artifact_generated(self):
         """Code diff artifact generated when result has before/after content"""
         executor = ParallelToolExecutor(tool_dispatcher=AsyncMock(), config=MagicMock())
-        call = ToolCall(
+        call = ParallelToolCall(
             tool_name="edit_file",
             arguments={"file_path": "/tmp/test.py"},  # nosec B108  # test/controlled code uses tmpdir intentionally
         )
@@ -85,7 +85,7 @@ class TestBuildArtifacts:
     def test_test_output_artifact_extracted(self):
         """Test output artifacts extracted from test runner results"""
         executor = ParallelToolExecutor(tool_dispatcher=AsyncMock(), config=MagicMock())
-        call = ToolCall(tool_name="pytest", arguments={})
+        call = ParallelToolCall(tool_name="pytest", arguments={})
         capture = _ArtifactCapture()
         result = {"output": "PASSED: 10 tests", "stdout": "All tests passed"}
         artifacts = executor._build_artifacts(call, capture, result)
@@ -95,7 +95,7 @@ class TestBuildArtifacts:
     def test_read_only_tool_no_artifacts(self):
         """Read-only tools produce no artifacts"""
         executor = ParallelToolExecutor(tool_dispatcher=AsyncMock(), config=MagicMock())
-        call = ToolCall(tool_name="read_file", arguments={})
+        call = ParallelToolCall(tool_name="read_file", arguments={})
         capture = _ArtifactCapture()
         artifacts = executor._build_artifacts(call, capture, {"content": "file content"})
         assert len(artifacts) == 0
@@ -103,7 +103,7 @@ class TestBuildArtifacts:
     def test_diff_generation_failure_does_not_crash_artifact_capture(self):
         """If DiffGenerator.generate_diff raises, artifact capture continues and FILE_CHANGE is still produced"""
         executor = ParallelToolExecutor(tool_dispatcher=AsyncMock(), config=MagicMock())
-        call = ToolCall(
+        call = ParallelToolCall(
             tool_name="edit_file",
             arguments={"file_path": "/tmp/test.py"},  # nosec B108  # test/controlled code uses tmpdir intentionally
         )
@@ -137,7 +137,7 @@ class TestPublishObservationWithArtifacts:
         executor.event_stream = AsyncMock()
 
         action_event = MagicMock(event_id="action-123")
-        call = ToolCall(
+        call = ParallelToolCall(
             tool_name="edit_file",
             arguments={"file_path": "/tmp/test.py"},  # nosec B108  # test/controlled code uses tmpdir intentionally
         )

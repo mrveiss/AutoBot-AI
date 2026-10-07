@@ -205,7 +205,7 @@ async def _ensure_compose_nodes() -> None:
 
     from sqlalchemy import delete, select
 
-    from models.database import Node, NodeRole, NodeStatus, Service, ServiceCategory, ServiceStatus
+    from models.database import Node, NodeRole, NodeStatus, Service, ServiceCategory, SystemdState
 
     node_ids = [spec["id"] for spec in _COMPOSE_NODE_SPECS]
     async with db_service.session() as session:
@@ -241,7 +241,7 @@ async def _ensure_compose_nodes() -> None:
                     Service(
                         node_id=node_id,
                         service_name=(running[0] if running else node_id),
-                        status=ServiceStatus.UNKNOWN.value,
+                        status=SystemdState.UNKNOWN.value,
                         category=ServiceCategory.AUTOBOT.value,
                         port=spec["port"],
                         protocol=spec["protocol"],

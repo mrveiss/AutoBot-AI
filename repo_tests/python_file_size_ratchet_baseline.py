@@ -113,7 +113,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/knowledge_maintenance.py": 1979,
     "autobot-backend/api/knowledge_mcp.py": 1455,
     "autobot-backend/api/knowledge_population.py": 1445,
-    "autobot-backend/api/knowledge_search.py": 820,  # #16665: analytics endpoints moved out
+    "autobot-backend/api/knowledge_search.py": 819,  # #16665: analytics endpoints moved out
     "autobot-backend/api/knowledge_search_aggregator.py": 951,  # #16665: doc-search moved out
     "autobot-backend/api/knowledge_tags.py": 887,
     "autobot-backend/api/knowledge_vectorization.py": 1704,
@@ -241,7 +241,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/knowledge/ownership.py": 757,
     "autobot-backend/knowledge/pipeline/cognifiers/cognifiers_test.py": 806,
     "autobot-backend/knowledge/rag_benchmarks.py": 1607,
-    "autobot-backend/knowledge/search.py": 1102,
+    "autobot-backend/knowledge/search.py": 1050,
     "autobot-backend/knowledge/search_components/retrieval_learner.py": 734,
     "autobot-backend/knowledge/search_quality.py": 931,
     "autobot-backend/knowledge/search_quality_test.py": 667,
@@ -325,7 +325,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/services/ai_stack_client.py": 790,
     "autobot-backend/services/analytics_service.py": 838,
     "autobot-backend/services/audit_logger.py": 1022,
-    "autobot-backend/services/autoresearch/auto_research_agent.py": 1274,
+    "autobot-backend/services/autoresearch/auto_research_agent.py": 1262,
     "autobot-backend/services/autoresearch/auto_research_agent_test.py": 823,
     "autobot-backend/services/autoresearch/routes.py": 726,
     "autobot-backend/services/autoresearch/routes_test.py": 615,
@@ -350,7 +350,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/services/knowledge/doc_indexer.py": 1274,
     "autobot-backend/services/knowledge/service.py": 851,
     "autobot-backend/services/knowledge/test_autonomous_loop.py": 708,
-    "autobot-backend/services/knowledge/test_doc_indexer.py": 1468,
+    "autobot-backend/services/knowledge/test_doc_indexer.py": 1466,
     "autobot-backend/services/knowledge/test_kb_synthesizer.py": 802,
     "autobot-backend/services/llm_cost_tracker.py": 1166,  # #16230: MODEL_PRICING table removed
     "autobot-backend/services/llm_service.py": 1199,  # #16845: _track_usage delegated to llm_usage_recording
@@ -358,7 +358,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/services/nl_database_service.py": 775,
     "autobot-backend/services/notification_service.py": 634,
     "autobot-backend/services/npu_worker_manager.py": 1419,
-    "autobot-backend/services/rag_service.py": 1312,
+    "autobot-backend/services/rag_service.py": 1303,
     "autobot-backend/services/redis_service_manager.py": 623,
     "autobot-backend/services/redis_service_manager_test.py": 839,
     "autobot-backend/services/secrets_service.py": 688,

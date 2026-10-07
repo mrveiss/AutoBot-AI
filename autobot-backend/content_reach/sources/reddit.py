@@ -24,7 +24,7 @@ from content_reach._url_guard import ensure_public_url
 from content_reach.backends.browser import BrowserBackend
 from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
 from content_reach.chain import ContentSourceChain
-from source_attribution import SourceReliability, SourceType
+from source_attribution import SourceKind, SourceReliability
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class RedditJsonBackend(ContentBackend):
     """
 
     name = "reddit_json"
-    source_type = SourceType.REDDIT
+    source_type = SourceKind.REDDIT
 
     def __init__(self, client: httpx.AsyncClient | None = None) -> None:
         self._client = client
@@ -124,7 +124,7 @@ class RedditJsonBackend(ContentBackend):
 
         return ContentResult(
             success=True,
-            source_type=SourceType.REDDIT,
+            source_type=SourceKind.REDDIT,
             backend_used=self.name,
             text="\n".join(text_lines),
             structured={"posts": posts},
@@ -142,7 +142,7 @@ class HnAlgoliaBackend(ContentBackend):
     """
 
     name = "hn_algolia"
-    source_type = SourceType.FORUM  # #11079: Hacker News is a forum, not Reddit
+    source_type = SourceKind.FORUM  # #11079: Hacker News is a forum, not Reddit
 
     def __init__(self, client: httpx.AsyncClient | None = None) -> None:
         self._client = client
@@ -193,7 +193,7 @@ class HnAlgoliaBackend(ContentBackend):
 
         return ContentResult(
             success=True,
-            source_type=SourceType.FORUM,  # #11079: HN is a forum, not Reddit
+            source_type=SourceKind.FORUM,  # #11079: HN is a forum, not Reddit
             backend_used=self.name,
             text="\n".join(text_lines),
             structured={"hits": hits},
@@ -205,6 +205,6 @@ def build_reddit_chain() -> ContentSourceChain:
     """Build the reddit/HN fallback chain: reddit_json → hn_algolia → browser."""
     return ContentSourceChain(
         source="reddit",
-        source_type=SourceType.REDDIT,
-        backends=[RedditJsonBackend(), HnAlgoliaBackend(), BrowserBackend(SourceType.REDDIT)],
+        source_type=SourceKind.REDDIT,
+        backends=[RedditJsonBackend(), HnAlgoliaBackend(), BrowserBackend(SourceKind.REDDIT)],
     )

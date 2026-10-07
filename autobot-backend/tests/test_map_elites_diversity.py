@@ -15,7 +15,7 @@ Issue #4677: Verifies:
 
 import unittest
 
-from advanced_rag_optimizer import _MAP_ELITES_MIN_CATEGORIES, AdvancedRAGOptimizer, SearchResult
+from advanced_rag_optimizer import _MAP_ELITES_MIN_CATEGORIES, AdvancedRAGOptimizer, RankedResult
 from services.rag_config import RAGConfig
 
 
@@ -24,9 +24,9 @@ def _make_result(
     hybrid_score: float,
     category: str = "docs",
     source_path: str = "backend/file.py",
-) -> SearchResult:
-    """Create a minimal SearchResult for testing."""
-    return SearchResult(
+) -> RankedResult:
+    """Create a minimal RankedResult for testing."""
+    return RankedResult(
         content=content,
         metadata={"category": category},
         semantic_score=hybrid_score,

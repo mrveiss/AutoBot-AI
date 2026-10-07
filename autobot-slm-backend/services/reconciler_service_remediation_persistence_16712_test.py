@@ -36,21 +36,21 @@ if str(_SLM_ROOT) not in sys.path:
 
 
 def _load_real_reconciler():
-    """Load reconciler.py with a REAL ServiceStatus bound onto the stubbed
+    """Load reconciler.py with a REAL SystemdState bound onto the stubbed
     models.database (#16712).
 
     The package conftest stubs `sys.modules["models.database"]` to a
-    MagicMock for the whole test session, so `ServiceStatus.FAILED.value`
+    MagicMock for the whole test session, so `SystemdState.FAILED.value`
     inside reconciler.py would otherwise resolve to a MagicMock attribute --
     never equal to the plain string status this test passes, silently
-    making `status != ServiceStatus.FAILED.value` true unconditionally.
+    making `status != SystemdState.FAILED.value` true unconditionally.
     `service_status` itself is a standalone module the conftest never
     touches, so the real enum is one import away.
     """
     import service_status  # noqa: PLC0415
 
     sys.modules.setdefault("models.database", MagicMock())
-    sys.modules["models.database"].ServiceStatus = service_status.ServiceStatus
+    sys.modules["models.database"].SystemdState = service_status.SystemdState
 
     spec = importlib.util.spec_from_file_location(
         "reconciler_under_service_remediation_16712_test", _SLM_ROOT / "services" / "reconciler.py"

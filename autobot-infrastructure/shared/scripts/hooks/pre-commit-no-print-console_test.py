@@ -134,7 +134,7 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 #
 #     declared before            301
 #     minus the two data/ fixtures that left the domain    -2
-#     expected                   299
+#     expected                   298
 #     MEASURED                   300
 #
 # The extra one is not from this branch -- no file it touches violates, and the
@@ -144,7 +144,7 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 # is SKIPPED on any PR that touches no python path, and reports `success` when it
 # does (#16087) -- the same bypass that let a fixture path become a real file on
 # `bf6ee5583`. Pinned to the measured number, not to the arithmetic.
-_KNOWN_REPO_VIOLATIONS = 299  # #18070: the print() in causal_executor's docstring example is gone
+_KNOWN_REPO_VIOLATIONS = 298  # #12771: web_fetch/fetcher.py's docstring example now logs instead
 
 
 def _test_git_env() -> dict[str, str]:
@@ -190,34 +190,24 @@ class TestStringStrippingSemantics:
 
     def test_a_print_inside_a_string_is_not_a_violation(self, tmp_path: Path) -> None:
         repo = _init_repo(tmp_path)
-        (repo / "mention.py").write_text(
-            'msg = "call print( ) if you must"\n', encoding="utf-8"
-        )
+        (repo / "mention.py").write_text('msg = "call print( ) if you must"\n', encoding="utf-8")
         _git(repo, "add", "mention.py")
-        result = subprocess.run(
-            ["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env()
-        )
+        result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
         assert result.returncode == 0, result.stdout + result.stderr
 
     def test_a_noqa_comment_suppresses_a_real_call(self, tmp_path: Path) -> None:
         repo = _init_repo(tmp_path)
         (repo / "noqa.py").write_text('print("allowed")  # noqa\n', encoding="utf-8")
         _git(repo, "add", "noqa.py")
-        result = subprocess.run(
-            ["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env()
-        )
+        result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
         assert result.returncode == 0, result.stdout + result.stderr
 
     def test_a_real_call_beside_a_string_mention_still_fails(self, tmp_path: Path) -> None:
         """The shortcut must not skip a line that has both."""
         repo = _init_repo(tmp_path)
-        (repo / "both.py").write_text(
-            'msg = "mentions print( ) here"\nprint("real")\n', encoding="utf-8"
-        )
+        (repo / "both.py").write_text('msg = "mentions print( ) here"\nprint("real")\n', encoding="utf-8")
         _git(repo, "add", "both.py")
-        result = subprocess.run(
-            ["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env()
-        )
+        result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
         assert result.returncode != 0, result.stdout + result.stderr
 
 

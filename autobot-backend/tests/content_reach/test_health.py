@@ -8,13 +8,13 @@ from content_reach.base import ContentBackend
 from content_reach.chain import ContentSourceChain
 from content_reach.health import probe_content_reach
 from content_reach.registry import get_content_source_registry
-from source_attribution import SourceType
+from source_attribution import SourceKind
 
 
 class _B(ContentBackend):
     def __init__(self, name, live):
         self.name = name
-        self.source_type = SourceType.WEB_SEARCH
+        self.source_type = SourceKind.WEB_SEARCH
         self._live = live
 
     async def probe(self):
@@ -42,7 +42,7 @@ async def test_down_when_no_sources():
 @pytest.mark.asyncio
 async def test_ok_when_all_sources_have_live_backend():
     reg = get_content_source_registry()
-    reg.register_chain(ContentSourceChain("web_search", SourceType.WEB_SEARCH, [_B("a", True)]))
+    reg.register_chain(ContentSourceChain("web_search", SourceKind.WEB_SEARCH, [_B("a", True)]))
     ch = await probe_content_reach(None)
     assert ch.status == "ok"
     assert ch.data["live"] == {"web_search": ["a"]}
@@ -52,8 +52,8 @@ async def test_ok_when_all_sources_have_live_backend():
 @pytest.mark.asyncio
 async def test_degraded_when_some_source_dead():
     reg = get_content_source_registry()
-    reg.register_chain(ContentSourceChain("web_search", SourceType.WEB_SEARCH, [_B("a", True)]))
-    reg.register_chain(ContentSourceChain("youtube", SourceType.YOUTUBE, [_B("b", False)]))
+    reg.register_chain(ContentSourceChain("web_search", SourceKind.WEB_SEARCH, [_B("a", True)]))
+    reg.register_chain(ContentSourceChain("youtube", SourceKind.YOUTUBE, [_B("b", False)]))
     ch = await probe_content_reach(None)
     assert ch.status == "degraded"
 
@@ -61,7 +61,7 @@ async def test_degraded_when_some_source_dead():
 @pytest.mark.asyncio
 async def test_down_when_all_sources_dead():
     reg = get_content_source_registry()
-    reg.register_chain(ContentSourceChain("web_search", SourceType.WEB_SEARCH, [_B("a", False)]))
-    reg.register_chain(ContentSourceChain("youtube", SourceType.YOUTUBE, [_B("b", False)]))
+    reg.register_chain(ContentSourceChain("web_search", SourceKind.WEB_SEARCH, [_B("a", False)]))
+    reg.register_chain(ContentSourceChain("youtube", SourceKind.YOUTUBE, [_B("b", False)]))
     ch = await probe_content_reach(None)
     assert ch.status == "down"
