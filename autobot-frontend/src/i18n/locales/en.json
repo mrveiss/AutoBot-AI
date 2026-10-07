@@ -5854,7 +5854,11 @@
       "accentColorChanged": "Accent color changed to {color}",
       "layoutDensityChanged": "Layout density changed to {density}",
       "preferencesReset": "All preferences reset to defaults",
-      "theme": "Theme"
+      "theme": "Theme",
+      "green": "Green",
+      "pink": "Pink",
+      "indigo": "Indigo",
+      "red": "Red"
     },
     "progressBar": {
       "timeRemaining": "{time} remaining"
