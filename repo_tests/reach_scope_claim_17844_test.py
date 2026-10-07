@@ -29,6 +29,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import repo_tests.data_db_path_single_source_test as _data_db_guard  # noqa: F401 -- registers its scope
 import repo_tests.kb_read_visibility_guard_test as kb
 from repo_tests._paths import repo_root
 from repo_tests._reach import Reach, ReachScopeError, declare

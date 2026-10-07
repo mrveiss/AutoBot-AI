@@ -116,8 +116,10 @@ def _reads_the_ssot_key(text: str) -> bool:
     except SyntaxError:
         return False  # unparseable: cannot establish a read, so do not exempt
     for node in ast.walk(tree):
-        # config.data_db / settings.misc.data_db / anything.data_db
-        if isinstance(node, ast.Attribute) and node.attr == "data_db":
+        # config.data_db / settings.misc.data_db / anything.data_db.
+        # `ast.Load` specifically: `config.data_db = x` is a WRITE, and a module
+        # that assigns the key while still building its own path has not read it.
+        if isinstance(node, ast.Attribute) and node.attr == "data_db" and isinstance(node.ctx, ast.Load):
             return True
         # os.getenv("AUTOBOT_DATA_DB") / os.environ["AUTOBOT_DATA_DB"]
         if isinstance(node, ast.Constant) and node.value == "AUTOBOT_DATA_DB":
@@ -156,6 +158,8 @@ def test_the_matcher_discriminates():
     assert _reads_the_ssot_key("_LOCAL_DB_PATH = config.data_db")
     assert _reads_the_ssot_key('p = os.getenv("AUTOBOT_DATA_DB")')
     assert not _reads_the_ssot_key("base = config.base_dir")
+    # Assigning the key is not reading it.
+    assert not _reads_the_ssot_key("config.data_db = '/tmp/x.db'")
     # The exemption is not earned by naming the key in prose.
     assert not _reads_the_ssot_key("# TODO: switch to config.data_db one day")
     assert not _reads_the_ssot_key('"""Docstring mentioning AUTOBOT_DATA_DB."""')
