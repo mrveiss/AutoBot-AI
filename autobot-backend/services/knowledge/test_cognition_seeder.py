@@ -13,6 +13,7 @@ Tests cover:
 - Cold-start recovery: priority boost lifts seeded docs above unseeded ones
 """
 
+import asyncio
 import textwrap
 from typing import Any, Dict
 from unittest.mock import MagicMock
@@ -25,6 +26,7 @@ from services.knowledge.cognition_seeder import (
     _chunk_id,
     _load_manifest,
 )
+from tests.fixtures import write_text_async
 from utils.text_chunking import chunk_text
 
 
@@ -137,7 +139,9 @@ def test_chunk_id_unique_per_index() -> None:
 @pytest.mark.asyncio
 async def test_seed_from_directory_indexes_markdown(tmp_path) -> None:
     # Create a small .md file
-    (tmp_path / "guide.md").write_text("# Guide\n\nSome foundational knowledge.", encoding="utf-8")
+    await asyncio.to_thread(
+        (tmp_path / "guide.md").write_text, "# Guide\n\nSome foundational knowledge.", encoding="utf-8"
+    )
 
     seeder = _make_seeder()
     seeder._root_dir = tmp_path
@@ -156,7 +160,7 @@ async def test_seed_from_directory_skips_missing() -> None:
 
 @pytest.mark.asyncio
 async def test_seed_from_directory_skips_empty_file(tmp_path) -> None:
-    (tmp_path / "empty.md").write_text("", encoding="utf-8")
+    await asyncio.to_thread((tmp_path / "empty.md").write_text, "", encoding="utf-8")
     seeder = _make_seeder()
     seeder._root_dir = tmp_path
     count = await seeder.seed_from_directory(str(tmp_path))
@@ -173,10 +177,11 @@ async def test_seed_from_manifest_processes_sources(tmp_path) -> None:
     # Set up project structure
     docs_dir = tmp_path / "docs" / "developer"
     docs_dir.mkdir(parents=True)
-    (docs_dir / "guide.md").write_text("# Dev Guide\n\nImportant docs.", encoding="utf-8")
+    await asyncio.to_thread((docs_dir / "guide.md").write_text, "# Dev Guide\n\nImportant docs.", encoding="utf-8")
 
     manifest = tmp_path / "cognition_seed.yaml"
-    manifest.write_text(
+    await write_text_async(
+        manifest,
         textwrap.dedent("""\
             collections:
               - name: cognition_store
@@ -185,7 +190,6 @@ async def test_seed_from_manifest_processes_sources(tmp_path) -> None:
                     priority: high
                     refresh: on_change
             """),
-        encoding="utf-8",
     )
 
     seeder = _make_seeder()
@@ -262,15 +266,15 @@ async def test_get_seed_status_empty_when_no_seeded_docs() -> None:
 
 
 def _make_search_result(hybrid_score: float, seeded: bool = False, priority: str = "high"):
-    """Build a minimal SearchResult-like object for boost tests."""
-    from advanced_rag_optimizer import SearchResult
+    """Build a minimal RankedResult-like object for boost tests."""
+    from advanced_rag_optimizer import RankedResult
 
     metadata: Dict[str, Any] = {}
     if seeded:
         metadata["seeded"] = "true"
         metadata["seed_priority"] = priority
 
-    return SearchResult(
+    return RankedResult(
         content="test content",
         metadata=metadata,
         semantic_score=hybrid_score,

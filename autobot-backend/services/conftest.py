@@ -20,7 +20,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from advanced_rag_optimizer import SearchResult
+from advanced_rag_optimizer import RankedResult
 
 
 @pytest.fixture
@@ -42,7 +42,7 @@ def mock_rag_service():
 def sample_search_results():
     """Create sample search results for testing."""
     return [
-        SearchResult(
+        RankedResult(
             content="Redis is configured in config/redis.yaml",
             metadata={"id": "fact1", "source": "docs/redis.md"},
             semantic_score=0.95,
@@ -53,7 +53,7 @@ def sample_search_results():
             chunk_index=0,
             rerank_score=0.92,
         ),
-        SearchResult(
+        RankedResult(
             content="Use redis-cli to connect to Redis",
             metadata={"id": "fact2", "source": "docs/redis.md"},
             semantic_score=0.85,
@@ -64,7 +64,7 @@ def sample_search_results():
             chunk_index=1,
             rerank_score=0.82,
         ),
-        SearchResult(
+        RankedResult(
             content="Redis default port is 6379",
             metadata={"id": "fact3", "source": "docs/network.md"},
             semantic_score=0.65,

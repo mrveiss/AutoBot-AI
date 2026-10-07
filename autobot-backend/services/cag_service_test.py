@@ -23,17 +23,18 @@ import pytest
 
 pytest.importorskip("advanced_rag_optimizer")
 
-from advanced_rag_optimizer import RAGMetrics, SearchResult
+from advanced_rag_optimizer import RAGMetrics, RankedResult
 from services.cag_service import CAGService, _assemble_context, _unique_source_paths
 from services.rag_config import RAGConfig
+from tests.fixtures import write_text_async
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_result(source_path: str, content: str = "chunk", rank: int = 1) -> SearchResult:
-    return SearchResult(
+def _make_result(source_path: str, content: str = "chunk", rank: int = 1) -> RankedResult:
+    return RankedResult(
         content=content,
         metadata={"source": source_path},
         semantic_score=0.9,
@@ -44,7 +45,7 @@ def _make_result(source_path: str, content: str = "chunk", rank: int = 1) -> Sea
     )
 
 
-def _make_rag_service(results: List[SearchResult] | None = None, config: RAGConfig | None = None) -> MagicMock:
+def _make_rag_service(results: List[RankedResult] | None = None, config: RAGConfig | None = None) -> MagicMock:
     svc = MagicMock()
     svc.config = config or RAGConfig(enable_cag=True, cag_max_documents=10, cag_output_headroom_tokens=512)
     metrics = RAGMetrics(total_time=0.05, final_results_count=len(results or []))
@@ -104,7 +105,7 @@ def test_assemble_context_format():
 async def test_cag_assembles_docs_under_budget(tmp_path: Path):
     """When docs fit in budget, CAGService returns 'cag' strategy with full content."""
     doc_file = tmp_path / "doc.md"
-    doc_file.write_text("This is the full document content.", encoding="utf-8")
+    await write_text_async(doc_file, "This is the full document content.")
 
     rag = _make_rag_service(results=[_make_result(str(doc_file))])
     cag = CAGService(rag)
@@ -120,7 +121,7 @@ async def test_cag_assembles_docs_under_budget(tmp_path: Path):
 async def test_cag_falls_back_when_budget_zero(tmp_path: Path):
     """When budget is 0 (headroom >= adaptive), CAG falls back to RAG."""
     doc_file = tmp_path / "doc.md"
-    doc_file.write_text("content" * 100, encoding="utf-8")
+    await write_text_async(doc_file, "content" * 100)
 
     # headroom equals the adaptive length → budget = 0
     config = RAGConfig(enable_cag=True, cag_output_headroom_tokens=8192, cag_max_documents=10)
@@ -176,7 +177,7 @@ async def test_cag_respects_max_documents(tmp_path: Path):
     files = []
     for i in range(5):
         f = tmp_path / f"doc{i}.md"
-        f.write_text(f"content of document {i}", encoding="utf-8")
+        await write_text_async(f, f"content of document {i}")
         files.append(f)
 
     config = RAGConfig(enable_cag=True, cag_max_documents=2, cag_output_headroom_tokens=256)

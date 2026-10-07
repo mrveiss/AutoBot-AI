@@ -25,7 +25,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from tests.fixtures import make_async_redis
+from tests.fixtures import make_async_redis, write_text_async
 
 
 def _bind_real_rag_service() -> None:
@@ -506,10 +506,10 @@ class TestRetrievedVsRankedIdsSeparation:
         return svc
 
     def _make_result(self, chunk_id: str, hybrid_score: float, rerank_score: float):
-        """Construct a SearchResult with controlled scores."""
-        from advanced_rag_optimizer import SearchResult
+        """Construct a RankedResult with controlled scores."""
+        from advanced_rag_optimizer import RankedResult
 
-        return SearchResult(
+        return RankedResult(
             content="content",
             metadata={"chunk_id": chunk_id},
             semantic_score=hybrid_score,
@@ -799,9 +799,9 @@ class TestFilterStaleChunks:
         return svc
 
     def _make_chunk(self, source_path: str):
-        from advanced_rag_optimizer import SearchResult
+        from advanced_rag_optimizer import RankedResult
 
-        return SearchResult(
+        return RankedResult(
             content="text",
             metadata={"relative_path": source_path},
             semantic_score=0.9,
@@ -816,7 +816,7 @@ class TestFilterStaleChunks:
     async def test_valid_chunk_passes_through(self, tmp_path):
         """Chunk whose source_path IS in the hash cache is kept."""
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text('{"docs/guide.md": "abc123"}', encoding="utf-8")
+        await write_text_async(cache_file, '{"docs/guide.md": "abc123"}')
 
         svc = self._make_service()
         chunk = self._make_chunk("docs/guide.md")
@@ -830,7 +830,7 @@ class TestFilterStaleChunks:
     async def test_stale_chunk_is_filtered(self, tmp_path):
         """Chunk whose source_path is ABSENT from the hash cache is dropped."""
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text('{"docs/present.md": "abc123"}', encoding="utf-8")
+        await write_text_async(cache_file, '{"docs/present.md": "abc123"}')
 
         svc = self._make_service()
         stale = self._make_chunk("docs/removed.md")
@@ -845,7 +845,7 @@ class TestFilterStaleChunks:
     async def test_warning_logged_for_stale_chunks(self, tmp_path):
         """A warning is emitted when stale chunks are dropped."""
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text('{"docs/present.md": "abc123"}', encoding="utf-8")
+        await write_text_async(cache_file, '{"docs/present.md": "abc123"}')
 
         svc = self._make_service()
         stale = self._make_chunk("docs/gone.md")
@@ -873,7 +873,7 @@ class TestFilterStaleChunks:
     async def test_empty_cache_skips_filter(self, tmp_path):
         """An empty hash cache (indexer hasn't run) passes all chunks through."""
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text("{}", encoding="utf-8")
+        await write_text_async(cache_file, "{}")
 
         svc = self._make_service()
         chunk = self._make_chunk("docs/anything.md")
@@ -906,7 +906,7 @@ class TestFilterStaleChunks:
         import services.rag_service as rag_mod
 
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text('{"docs/guide.md": "abc"}', encoding="utf-8")
+        await write_text_async(cache_file, '{"docs/guide.md": "abc"}')
 
         svc = self._make_service()
         chunk = self._make_chunk("docs/guide.md")
@@ -935,7 +935,7 @@ class TestFilterStaleChunks:
         import services.rag_service as rag_mod
 
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text('{"docs/guide.md": "abc"}', encoding="utf-8")
+        await write_text_async(cache_file, '{"docs/guide.md": "abc"}')
 
         svc = self._make_service()
         chunk = self._make_chunk("docs/guide.md")
@@ -965,7 +965,7 @@ class TestFilterStaleChunks:
         import services.rag_service as rag_mod
 
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text('{"docs/guide.md": "abc"}', encoding="utf-8")
+        await write_text_async(cache_file, '{"docs/guide.md": "abc"}')
 
         svc = self._make_service()
         chunk = self._make_chunk("docs/guide.md")
@@ -1034,7 +1034,7 @@ class TestFallbackBasicSearchFiltersStaleChunks:
     async def test_stale_chunks_removed_in_fallback_results(self, tmp_path):
         """Stale chunks are absent from the returned results on the fallback path."""
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text('{"docs/present.md": "abc"}', encoding="utf-8")
+        await write_text_async(cache_file, '{"docs/present.md": "abc"}')
 
         svc = self._make_service()
         mock_kb_adapter = AsyncMock()
@@ -1057,7 +1057,7 @@ class TestFallbackBasicSearchFiltersStaleChunks:
     async def test_valid_chunks_preserved_in_fallback_results(self, tmp_path):
         """Non-stale chunks are kept in the returned results on the fallback path."""
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text('{"docs/guide.md": "hash1", "docs/ref.md": "hash2"}', encoding="utf-8")
+        await write_text_async(cache_file, '{"docs/guide.md": "hash1", "docs/ref.md": "hash2"}')
 
         svc = self._make_service()
         mock_kb_adapter = AsyncMock()
@@ -1080,7 +1080,7 @@ class TestFallbackBasicSearchFiltersStaleChunks:
         """metrics.final_results_count matches the count after stale filtering."""
         cache_file = tmp_path / ".doc_index_hashes.json"
         # Only one of two source paths is present in the cache
-        cache_file.write_text('{"docs/kept.md": "hash"}', encoding="utf-8")
+        await write_text_async(cache_file, '{"docs/kept.md": "hash"}')
 
         svc = self._make_service()
         mock_kb_adapter = AsyncMock()

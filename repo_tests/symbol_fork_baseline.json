@@ -189,7 +189,6 @@
     "SearchMetrics",
     "SearchRequest",
     "SearchResponse",
-    "SearchResult",
     "SecurityAnalyzer",
     "SecurityEvent",
     "SecurityFixAgent",

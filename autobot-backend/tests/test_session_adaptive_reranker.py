@@ -120,9 +120,9 @@ class TestRAGServiceSessionAdaptation(unittest.IsolatedAsyncioTestCase):
     """RAGService session adaptive reranking integration."""
 
     def _make_search_result(self, hybrid_score: float = 0.8, semantic_score: float = 0.8, keyword_score: float = 0.2):
-        from advanced_rag_optimizer import SearchResult
+        from advanced_rag_optimizer import RankedResult
 
-        return SearchResult(
+        return RankedResult(
             content="test content",
             metadata={"chunk_id": "c1"},
             semantic_score=semantic_score,

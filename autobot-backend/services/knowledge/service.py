@@ -12,7 +12,7 @@ Contains the main ChatKnowledgeService class that coordinates knowledge retrieva
 import time
 from typing import Any, Dict, List, Tuple
 
-from advanced_rag_optimizer import SearchResult
+from advanced_rag_optimizer import RankedResult
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.ssot_config import config
 from security.content_firewall import inspect_rag_context
@@ -329,7 +329,7 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
             logger.debug("Returning empty knowledge context due to error")
             return "", []
 
-    def _filter_by_score(self, results: List[SearchResult], threshold: float) -> List[SearchResult]:
+    def _filter_by_score(self, results: List[RankedResult], threshold: float) -> List[RankedResult]:
         """
         Filter search results by relevance score.
 
@@ -345,9 +345,9 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
         """
         filtered = []
         for result in results:
-            # Issue #788: Defensive check for non-SearchResult items
+            # Issue #788: Defensive check for non-RankedResult items
             if not hasattr(result, "rerank_score"):
-                logger.warning("Skipping non-SearchResult item: %s", type(result))
+                logger.warning("Skipping non-RankedResult item: %s", type(result))
                 continue
             # Prefer rerank_score if available (cross-encoder is more accurate)
             score = result.rerank_score if result.rerank_score is not None else result.hybrid_score
@@ -364,7 +364,7 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
 
         return filtered
 
-    def format_knowledge_context(self, facts: List[SearchResult]) -> str:
+    def format_knowledge_context(self, facts: List[RankedResult]) -> str:
         """
         Format knowledge facts into context string for LLM prompt.
 
@@ -383,7 +383,7 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
         # format_citations() that the frontend displays.
         return build_grounded_context([fact.content for fact in facts])
 
-    def format_citations(self, facts: List[SearchResult]) -> List[Dict]:
+    def format_citations(self, facts: List[RankedResult]) -> List[Dict]:
         """
         Format facts into citation objects for frontend display.
 
