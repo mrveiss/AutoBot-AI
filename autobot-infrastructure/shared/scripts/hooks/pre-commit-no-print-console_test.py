@@ -190,34 +190,24 @@ class TestStringStrippingSemantics:
 
     def test_a_print_inside_a_string_is_not_a_violation(self, tmp_path: Path) -> None:
         repo = _init_repo(tmp_path)
-        (repo / "mention.py").write_text(
-            'msg = "call print( ) if you must"\n', encoding="utf-8"
-        )
+        (repo / "mention.py").write_text('msg = "call print( ) if you must"\n', encoding="utf-8")
         _git(repo, "add", "mention.py")
-        result = subprocess.run(
-            ["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env()
-        )
+        result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
         assert result.returncode == 0, result.stdout + result.stderr
 
     def test_a_noqa_comment_suppresses_a_real_call(self, tmp_path: Path) -> None:
         repo = _init_repo(tmp_path)
         (repo / "noqa.py").write_text('print("allowed")  # noqa\n', encoding="utf-8")
         _git(repo, "add", "noqa.py")
-        result = subprocess.run(
-            ["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env()
-        )
+        result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
         assert result.returncode == 0, result.stdout + result.stderr
 
     def test_a_real_call_beside_a_string_mention_still_fails(self, tmp_path: Path) -> None:
         """The shortcut must not skip a line that has both."""
         repo = _init_repo(tmp_path)
-        (repo / "both.py").write_text(
-            'msg = "mentions print( ) here"\nprint("real")\n', encoding="utf-8"
-        )
+        (repo / "both.py").write_text('msg = "mentions print( ) here"\nprint("real")\n', encoding="utf-8")
         _git(repo, "add", "both.py")
-        result = subprocess.run(
-            ["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env()
-        )
+        result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
         assert result.returncode != 0, result.stdout + result.stderr
 
 
