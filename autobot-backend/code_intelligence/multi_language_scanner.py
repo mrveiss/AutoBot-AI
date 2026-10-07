@@ -21,8 +21,8 @@ from typing import Any, Dict, List, Set
 from autobot_shared.logging_manager import get_logger
 from code_intelligence.base_analyzer import (
     AnalysisIssue,
-    AnalysisResult,
     Language,
+    MultiLangResult,
     MultiLanguageAnalyzer,
 )
 from code_intelligence.shell_analyzer import ShellAnalyzer
@@ -68,14 +68,14 @@ class CodebaseScanner:
         self.multi_lang_analyzer = create_multi_language_scanner()
         self._scan_history: List[Dict[str, Any]] = []
 
-    def scan_file(self, file_path: Path) -> AnalysisResult:
+    def scan_file(self, file_path: Path) -> MultiLangResult:
         """Scan a single file.
 
         Args:
             file_path: Path to the file to scan
 
         Returns:
-            AnalysisResult with all detected issues
+            MultiLangResult with all detected issues
         """
         start_time = time.time()
         result = self.multi_lang_analyzer.analyze_file(file_path)
@@ -94,10 +94,10 @@ class CodebaseScanner:
 
         return result
 
-    def _filter_issues_by_language(self, result: AnalysisResult, languages: Set[Language]) -> AnalysisResult:
+    def _filter_issues_by_language(self, result: MultiLangResult, languages: Set[Language]) -> MultiLangResult:
         """Filter analysis result to only include specified languages. Issue #620."""
         filtered_issues = [issue for issue in result.issues if issue.language in languages]
-        new_result = AnalysisResult(
+        new_result = MultiLangResult(
             files_analyzed=result.files_analyzed,
             errors=result.errors,
             analysis_time_ms=result.analysis_time_ms,
@@ -106,7 +106,7 @@ class CodebaseScanner:
             new_result.add_issue(issue)
         return new_result
 
-    def _log_directory_scan(self, directory: Path, result: AnalysisResult) -> None:
+    def _log_directory_scan(self, directory: Path, result: MultiLangResult) -> None:
         """Log directory scan to history and emit log message. Issue #620."""
         self._scan_history.append(
             {
@@ -131,7 +131,7 @@ class CodebaseScanner:
         recursive: bool = True,
         exclude_patterns: List[str] | None = None,
         languages: Set[Language] | None = None,
-    ) -> AnalysisResult:
+    ) -> MultiLangResult:
         """Scan all supported files in a directory.
 
         Args:
@@ -141,7 +141,7 @@ class CodebaseScanner:
             languages: Optional set of languages to scan (None = all)
 
         Returns:
-            AnalysisResult with all detected issues
+            MultiLangResult with all detected issues
         """
         start_time = time.time()
 
@@ -161,7 +161,7 @@ class CodebaseScanner:
         self,
         root_path: Path | None = None,
         exclude_patterns: List[str] | None = None,
-    ) -> AnalysisResult:
+    ) -> MultiLangResult:
         """Scan the entire AutoBot codebase.
 
         Args:
@@ -169,7 +169,7 @@ class CodebaseScanner:
             exclude_patterns: Additional patterns to exclude
 
         Returns:
-            AnalysisResult with all detected issues
+            MultiLangResult with all detected issues
         """
         if root_path is None:
             root_path = Path.cwd()
@@ -204,13 +204,13 @@ class CodebaseScanner:
 
     def get_high_severity_issues(
         self,
-        result: AnalysisResult,
+        result: MultiLangResult,
         min_confidence: float = 0.8,
     ) -> List[AnalysisIssue]:
         """Get high and critical severity issues with high confidence.
 
         Args:
-            result: AnalysisResult to filter
+            result: MultiLangResult to filter
             min_confidence: Minimum confidence threshold
 
         Returns:
@@ -226,11 +226,11 @@ class CodebaseScanner:
             and not issue.potential_false_positive
         ]
 
-    def get_security_issues(self, result: AnalysisResult) -> List[AnalysisIssue]:
+    def get_security_issues(self, result: MultiLangResult) -> List[AnalysisIssue]:
         """Get all security-related issues.
 
         Args:
-            result: AnalysisResult to filter
+            result: MultiLangResult to filter
 
         Returns:
             List of security issues
@@ -239,11 +239,11 @@ class CodebaseScanner:
 
         return [issue for issue in result.issues if issue.category == IssueCategory.SECURITY]
 
-    def get_performance_issues(self, result: AnalysisResult) -> List[AnalysisIssue]:
+    def get_performance_issues(self, result: MultiLangResult) -> List[AnalysisIssue]:
         """Get all performance-related issues.
 
         Args:
-            result: AnalysisResult to filter
+            result: MultiLangResult to filter
 
         Returns:
             List of performance issues
@@ -252,11 +252,11 @@ class CodebaseScanner:
 
         return [issue for issue in result.issues if issue.category == IssueCategory.PERFORMANCE]
 
-    def generate_report(self, result: AnalysisResult) -> Dict[str, Any]:
+    def generate_report(self, result: MultiLangResult) -> Dict[str, Any]:
         """Generate a comprehensive scan report.
 
         Args:
-            result: AnalysisResult to report on
+            result: MultiLangResult to report on
 
         Returns:
             Dictionary with report data
@@ -310,20 +310,20 @@ class CodebaseScanner:
 
 
 # Convenience functions for quick scanning
-def scan_file(file_path: str) -> AnalysisResult:
+def scan_file(file_path: str) -> MultiLangResult:
     """Quick scan a single file.
 
     Args:
         file_path: Path to the file
 
     Returns:
-        AnalysisResult with detected issues
+        MultiLangResult with detected issues
     """
     scanner = CodebaseScanner()
     return scanner.scan_file(Path(file_path))
 
 
-def scan_directory(directory: str, recursive: bool = True) -> AnalysisResult:
+def scan_directory(directory: str, recursive: bool = True) -> MultiLangResult:
     """Quick scan a directory.
 
     Args:
@@ -331,20 +331,20 @@ def scan_directory(directory: str, recursive: bool = True) -> AnalysisResult:
         recursive: Whether to scan subdirectories
 
     Returns:
-        AnalysisResult with detected issues
+        MultiLangResult with detected issues
     """
     scanner = CodebaseScanner()
     return scanner.scan_directory(Path(directory), recursive=recursive)
 
 
-def scan_codebase(root_path: str | None = None) -> AnalysisResult:
+def scan_codebase(root_path: str | None = None) -> MultiLangResult:
     """Quick scan the entire codebase.
 
     Args:
         root_path: Optional root path
 
     Returns:
-        AnalysisResult with all detected issues
+        MultiLangResult with all detected issues
     """
     scanner = CodebaseScanner()
     path = Path(root_path) if root_path else None

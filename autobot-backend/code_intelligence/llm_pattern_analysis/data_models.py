@@ -9,7 +9,7 @@ Contains data classes for LLM pattern analysis results:
 - TokenUsage, PromptAnalysisResult, PromptTemplate
 - CacheOpportunity, UsagePattern, RetryPattern
 - BatchingOpportunity, CostEstimate, OptimizationRecommendation
-- AnalysisResult
+- PatternAnalysisResult
 
 Extracted from llm_pattern_analyzer.py as part of Issue #381 refactoring.
 """
@@ -359,7 +359,7 @@ class OptimizationRecommendation:
 
 
 @dataclass
-class AnalysisResult:
+class PatternAnalysisResult:
     """Complete result of LLM pattern analysis."""
 
     analysis_id: str
