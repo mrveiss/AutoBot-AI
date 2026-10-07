@@ -22,6 +22,15 @@ vi.mock('@/utils/debugUtils', () => ({
 
 const ERROR_200 = { status: 'error', message: 'source does not resolve to a code source; nothing scanned' }
 const respond = (body: unknown) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) })
+// A non-2xx. `useFetchEndpoint` throws on `!response.ok` (useFetchEndpoint.ts:249),
+// so this lands in the fetcher's catch and reaches `onError` -- NOT `onSuccess`,
+// which is why a 200 {"status":"error"} and a 404 are two different paths.
+const reject = (status: number) => ({
+  ok: false,
+  status,
+  json: async () => ({ detail: 'source does not resolve' }),
+  text: async () => '{"detail":"source does not resolve"}',
+})
 
 describe('readDuplicatePayload (#17983)', () => {
   it.each([
@@ -79,5 +88,65 @@ describe('duplicates fetchers given a 200 {"status":"error"} (#17983)', () => {
     const f = fetchers()
     await f.loadCachedDuplicates()
     expect(f.duplicateScanState.value).toBe('done')
+  })
+})
+
+describe('duplicates fetchers given an HTTP error (#17983)', () => {
+  // The OTHER failure path. The endpoint answers 404 for a source it cannot
+  // resolve (api/codebase_analytics/endpoints/duplicates.py), which throws
+  // rather than returning a body -- so `onSuccess` never runs and, before
+  // `onError` was wired, the state simply kept whatever it already held.
+  const notify = vi.fn()
+  const fetchers = () =>
+    useAnalyticsDataFetchers({
+      rootPath: ref('/repo'),
+      sourceIdQuery: computed(() => ''),
+      withSourceId: (url: string) => url,
+      t: (key: string) => key,
+      showToast: vi.fn(),
+      notify,
+    } as unknown as Parameters<typeof useAnalyticsDataFetchers>[0])
+
+  beforeEach(() => {
+    fetchWithAuth.mockReset()
+    notify.mockReset()
+  })
+
+  it('cached endpoint on 404: failed, not "not_scanned"', async () => {
+    fetchWithAuth.mockResolvedValue(reject(404))
+    const f = fetchers()
+    await f.loadCachedDuplicates()
+    expect(f.duplicateScanState.value).toBe('failed')
+    expect(f.duplicateAnalysis.value).toEqual([])
+  })
+
+  it('live endpoint on 500: failed, and never "0 duplicates found"', async () => {
+    fetchWithAuth.mockResolvedValue(reject(500))
+    const f = fetchers()
+    await f.getDuplicatesData()
+    expect(f.duplicateScanState.value).toBe('failed')
+    const keys = notify.mock.calls.map((c) => JSON.stringify(c))
+    expect(keys.some((k) => k.includes('analytics.codebase.notify.duplicatesFound'))).toBe(false)
+  })
+
+  it('a 404 after a SUCCESSFUL scan clears the stale list instead of keeping it', async () => {
+    // The worst shape of the bug: state stays `done` and the PREVIOUS source's
+    // rows stay on screen under a scan that just failed. `not_scanned` at least
+    // says "no scan has run"; a stale `done` asserts a result that is not this
+    // source's. This is the assertion that fails if only the state is set and
+    // the list is left alone.
+    const hit = { file1: 'a.py', file2: 'b.py', similarity: 90, lines: 4 }
+    fetchWithAuth.mockResolvedValue(respond({ status: 'success', duplicates: [hit] }))
+    const f = fetchers()
+    await f.loadCachedDuplicates()
+    // CONTROL: the first scan really did populate, so the clear below is a
+    // change of state and not a no-op on an already-empty list.
+    expect(f.duplicateScanState.value).toBe('done')
+    expect(f.duplicateAnalysis.value).toHaveLength(1)
+
+    fetchWithAuth.mockResolvedValue(reject(404))
+    await f.loadCachedDuplicates()
+    expect(f.duplicateScanState.value).toBe('failed')
+    expect(f.duplicateAnalysis.value).toEqual([])
   })
 })

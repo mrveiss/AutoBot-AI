@@ -117,6 +117,15 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     duplicateAnalysis.value = reading.duplicates
     duplicateScanState.value = reading.state
   }
+  // #17983: the OTHER way a scan fails. `applyDuplicates` runs only on a 2xx,
+  // so a 404 (duplicates.py, unresolvable source) throws instead and used to
+  // leave the state untouched -- a stale `'done'` holding the PREVIOUS source's
+  // rows. The list is cleared too: `'failed'` with rows is a state no panel
+  // renders, and they would survive behind the failure notice.
+  const failDuplicates = () => {
+    duplicateAnalysis.value = []
+    duplicateScanState.value = 'failed'
+  }
   const declarationAnalysis = ref<Declaration[]>([])
   const hardcodeAnalysis = ref<HardcodedValue[]>([])
   const unifiedReport = ref<UnifiedReportData | null>(null)
@@ -252,7 +261,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
 
   const duplicatesSilent = useFetchEndpoint<unknown, unknown>(
     { path: '/api/analytics/codebase/duplicates', scopeToSource: true, label: 'Duplicates endpoint',
-      pickData: (raw) => raw, onSuccess: applyDuplicates },
+      pickData: (raw) => raw, onSuccess: applyDuplicates, onError: failDuplicates },
     { withSourceId },
   )
 
@@ -291,7 +300,8 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
 
   const cachedDuplicatesEndpoint = useFetchEndpoint<unknown, unknown>(
     { path: '/api/analytics/codebase/duplicates/cached', scopeToSource: true,
-      label: 'Cached duplicates endpoint', pickData: (raw) => raw, onSuccess: applyDuplicates },
+      label: 'Cached duplicates endpoint', pickData: (raw) => raw,
+      onSuccess: applyDuplicates, onError: failDuplicates },
     { withSourceId },
   )
 

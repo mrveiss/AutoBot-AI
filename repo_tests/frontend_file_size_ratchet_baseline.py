@@ -128,7 +128,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-frontend/src/composables/__tests__/useModal.test.ts": 761,
     "autobot-frontend/src/composables/__tests__/usePagination.test.ts": 808,
     "autobot-frontend/src/composables/__tests__/useTimeout.test.ts": 1211,
-    "autobot-frontend/src/composables/analytics/useAnalyticsDataFetchers.ts": 707,
+    "autobot-frontend/src/composables/analytics/useAnalyticsDataFetchers.ts": 704,
     "autobot-frontend/src/composables/useKeyboard.ts": 650,
     "autobot-frontend/src/composables/useKnowledgeVectorization.ts": 679,
     "autobot-frontend/src/composables/usePatternAnalysis.ts": 900,
