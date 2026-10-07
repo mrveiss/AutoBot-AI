@@ -52,8 +52,8 @@ ErrorContext = Dict[str, str | int | float | bool | List[str]]
 
 # Document/Content types
 DocumentContent = Dict[str, str | int | float | List[str] | Metadata]
-SearchResult = Dict[str, str | float | int | Metadata]
-SearchResults = List[SearchResult]
+SearchResultDict = Dict[str, str | float | int | Metadata]
+SearchResultDicts = List[SearchResultDict]
 
 # Optional wrapper types for common patterns
 OptionalStr = str | None

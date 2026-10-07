@@ -74,10 +74,10 @@ def _get_scheduler() -> HeartbeatScheduler:
 @router.get("/{agent_id}/config", response_model=HeartbeatConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_config",
+    operation="get_heartbeat_config",
     error_code_prefix="HEARTBEAT",
 )
-async def get_config(
+async def get_heartbeat_config(
     agent_id: str,
     session: AsyncSession = Depends(get_db_session),
     _user=Depends(get_current_user),

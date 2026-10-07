@@ -16,14 +16,14 @@ from fastapi import Depends
 from config.manager import ConfigManager, get_config_manager
 
 
-def get_config() -> ConfigManager:
+def provide_config_manager() -> ConfigManager:
     """
     Dependency injection provider for configuration.
 
     Returns the application-wide singleton ConfigManager so that route
-    handlers can receive it via ``Depends(get_config)`` instead of
+    handlers can receive it via ``Depends(provide_config_manager)`` instead of
     importing ``global_config_manager`` directly.  Tests can override
-    this dependency with ``app.dependency_overrides[get_config]``.
+    this dependency with ``app.dependency_overrides[provide_config_manager]``.
 
     Returns:
         ConfigManager: The global configuration manager singleton
@@ -31,7 +31,7 @@ def get_config() -> ConfigManager:
     return get_config_manager()
 
 
-def get_diagnostics(config: ConfigManager = Depends(get_config)):
+def get_diagnostics(config: ConfigManager = Depends(provide_config_manager)):
     """
     Dependency injection provider for diagnostics.
 
@@ -46,7 +46,7 @@ def get_diagnostics(config: ConfigManager = Depends(get_config)):
     return Diagnostics(config_manager=config)
 
 
-def get_knowledge_base(config: ConfigManager = Depends(get_config)):
+def get_knowledge_base(config: ConfigManager = Depends(provide_config_manager)):
     """
     Dependency injection provider for knowledge base.
 
@@ -60,11 +60,11 @@ def get_knowledge_base(config: ConfigManager = Depends(get_config)):
 
     # #13162: the resolved config was previously accepted and then discarded —
     # every request-scoped KnowledgeBase silently read the global singleton,
-    # so a dependency_overrides[get_config] in tests had no effect here.
+    # so a dependency_overrides[provide_config_manager] in tests had no effect here.
     return KnowledgeBase(config_manager=config)
 
 
-def get_llm_interface(config: ConfigManager = Depends(get_config)):
+def get_llm_interface(config: ConfigManager = Depends(provide_config_manager)):
     """
     Dependency injection provider for the LLM service.
 
@@ -85,7 +85,7 @@ def get_llm_interface(config: ConfigManager = Depends(get_config)):
 
 
 def get_orchestrator(
-    config: ConfigManager = Depends(get_config),
+    config: ConfigManager = Depends(provide_config_manager),
 ):
     """
     Lazy loading dependency injection provider for orchestrator.
@@ -106,7 +106,7 @@ def get_orchestrator(
     return Orchestrator(config_manager=config)
 
 
-def get_security_layer(config: ConfigManager = Depends(get_config)):
+def get_security_layer(config: ConfigManager = Depends(provide_config_manager)):
     """
     Dependency injection provider for security layer.
 
@@ -157,7 +157,7 @@ class DependencyCache:
 dependency_cache = DependencyCache()
 
 
-def get_cached_knowledge_base(config: ConfigManager = Depends(get_config)):
+def get_cached_knowledge_base(config: ConfigManager = Depends(provide_config_manager)):
     """
     Cached version of knowledge base dependency.
 
@@ -176,7 +176,7 @@ def get_cached_knowledge_base(config: ConfigManager = Depends(get_config)):
     return dependency_cache.get_or_create("knowledge_base", lambda: KnowledgeBase(config_manager=config))
 
 
-def get_cached_orchestrator(config: ConfigManager = Depends(get_config)):
+def get_cached_orchestrator(config: ConfigManager = Depends(provide_config_manager)):
     """
     Cached version of orchestrator dependency with lazy loading.
 
@@ -218,7 +218,7 @@ async def get_async_redis_client(database: str = "main"):
 
 
 # Type aliases for cleaner dependency annotations
-ConfigDep = Depends(get_config)
+ConfigDep = Depends(provide_config_manager)
 DiagnosticsDep = Depends(get_diagnostics)
 KnowledgeBaseDep = Depends(get_knowledge_base)
 LLMInterfaceDep = Depends(get_llm_interface)

@@ -23,7 +23,7 @@ import pytest
 import pytest_asyncio
 from starlette.websockets import WebSocketState
 
-from autobot_shared.coordination.work_claims import Claim, ClaimConflict, ClaimMode, ScopeError, try_acquire
+from autobot_shared.coordination.work_claims import ClaimConflict, ClaimMode, ScopeError, WorkClaim, try_acquire
 from services import claim_projection
 from services.claim_projection import ACQUIRED, CONFLICT, RELEASED, claim_table, publish_conflict
 
@@ -198,7 +198,7 @@ async def test_acquire_and_publish_projects_both_outcomes(redis, published):
     first = await claim_projection.acquire_and_publish(scope, agent_id="agent-1", task_id="t1", intent="fix parse")
     second = await claim_projection.acquire_and_publish(scope, agent_id="agent-2", task_id="t2", intent="rename")
 
-    assert isinstance(first, Claim) and isinstance(second, ClaimConflict)
+    assert isinstance(first, WorkClaim) and isinstance(second, ClaimConflict)
     assert [c[1] for c in published] == [ACQUIRED, CONFLICT]
 
 
@@ -213,7 +213,7 @@ async def test_a_broken_projection_never_breaks_the_claim(redis, monkeypatch):
 
     outcome = await claim_projection.acquire_and_publish("path:a/b.py", agent_id="agent-1", task_id="t1", intent="x")
 
-    assert isinstance(outcome, Claim), "the claim is the coordination fact; the event is only a view"
+    assert isinstance(outcome, WorkClaim), "the claim is the coordination fact; the event is only a view"
     assert [c["scope"] for c in await claim_table()] == ["path:a/b.py"]
 
 

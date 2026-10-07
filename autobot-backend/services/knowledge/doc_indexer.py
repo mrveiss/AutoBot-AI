@@ -1190,13 +1190,13 @@ class DocIndexerService:
         Issue #4953: expose doc search so RAGService can merge results with
         the main KB, giving the agent access to AutoBot's own documentation.
 
-        Returns SearchResult objects (from advanced_rag_optimizer).
+        Returns RankedResult objects (from advanced_rag_optimizer).
         Returns an empty list if not initialised, collection is empty, or on
         any error — callers always receive a safe (possibly empty) list.
         """
         import asyncio
 
-        from advanced_rag_optimizer import SearchResult
+        from advanced_rag_optimizer import RankedResult
 
         if not self._initialized or self._collection is None or self._embed_model is None:
             return []
@@ -1227,7 +1227,7 @@ class DocIndexerService:
             # ChromaDB cosine distance → similarity score
             score = max(0.0, 1.0 - dist)
             results.append(
-                SearchResult(
+                RankedResult(
                     content=doc or "",
                     metadata={**meta, "source": "autobot_docs"},
                     semantic_score=score,

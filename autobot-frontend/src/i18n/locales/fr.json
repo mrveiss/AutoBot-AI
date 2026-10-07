@@ -5832,10 +5832,10 @@
       "accentColor": "Accent Color",
       "accentColorOptions": "Accent color options",
       "setAccentColor": "Set accent color to {color}",
-      "teal": "Teal",
-      "emerald": "Emerald",
-      "blue": "Blue",
-      "purple": "Purple",
+      "teal": "Sarcelle",
+      "emerald": "Émeraude",
+      "blue": "Bleu",
+      "purple": "Violet",
       "orange": "Orange",
       "layoutDensity": "Layout Density",
       "layoutDensityOptions": "Layout density options",
@@ -5847,7 +5847,11 @@
       "accentColorChanged": "Accent color changed to {color}",
       "layoutDensityChanged": "Layout density changed to {density}",
       "preferencesReset": "All preferences reset to defaults",
-      "theme": "Theme"
+      "theme": "Theme",
+      "green": "Vert",
+      "pink": "Rose",
+      "indigo": "Indigo",
+      "red": "Rouge"
     },
     "progressBar": {
       "timeRemaining": "{time} remaining"

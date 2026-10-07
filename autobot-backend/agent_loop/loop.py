@@ -35,10 +35,10 @@ from agent_loop.types import (
     AgentMessage,
     HumanQuestion,
     IterationResult,
+    LoopMessageType,
     LoopOutcome,
     LoopPhase,
     LoopState,
-    MessageType,
     SteeringEntry,
     TaskContext,
     ThinkCategory,
@@ -1026,7 +1026,7 @@ class AgentLoop:
             metadata: Optional metadata
         """
         message = AgentMessage(
-            message_type=MessageType.NOTIFY,
+            message_type=LoopMessageType.NOTIFY,
             content=content,
             metadata=metadata or {},
             task_id=self._current_context.task_id if self._current_context else None,
@@ -1057,7 +1057,7 @@ class AgentLoop:
             User's response
         """
         message = AgentMessage(
-            message_type=MessageType.ASK,
+            message_type=LoopMessageType.ASK,
             content=content,
             options=options,
             metadata=metadata or {},

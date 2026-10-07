@@ -18,7 +18,11 @@ Verifies:
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from services.session_adaptive_reranker import SessionAdaptiveReranker, get_session_adaptive_reranker
+from services.session_adaptive_reranker import (
+    SessionAdaptiveReranker,
+    get_session_adaptive_reranker,
+    session_adapted_weights,
+)
 
 _DEFAULT_SEM = 0.75
 _DEFAULT_KW = 0.25
@@ -120,9 +124,9 @@ class TestRAGServiceSessionAdaptation(unittest.IsolatedAsyncioTestCase):
     """RAGService session adaptive reranking integration."""
 
     def _make_search_result(self, hybrid_score: float = 0.8, semantic_score: float = 0.8, keyword_score: float = 0.2):
-        from advanced_rag_optimizer import SearchResult
+        from advanced_rag_optimizer import RankedResult
 
-        return SearchResult(
+        return RankedResult(
             content="test content",
             metadata={"chunk_id": "c1"},
             semantic_score=semantic_score,
@@ -219,6 +223,80 @@ class TestRAGServiceSessionAdaptation(unittest.IsolatedAsyncioTestCase):
 
         # After call, optimizer weights should be restored to defaults.
         self.assertAlmostEqual(mock_optimizer.hybrid_weight_semantic, config.hybrid_weight_semantic)
+
+
+class TestSessionAdaptedWeights(unittest.TestCase):
+    """`session_adapted_weights` must always hand the optimizer back as it found it.
+
+    The optimizer is shared, so a session that fails to restore leaks its weights
+    into whoever runs next. The inline code this replaced restored only after the
+    search returned, so the exception path leaked -- hence the first test.
+    """
+
+    @staticmethod
+    def _optimizer(sem: float = _DEFAULT_SEM, kw: float = _DEFAULT_KW) -> MagicMock:
+        opt = MagicMock()
+        opt.hybrid_weight_semantic = sem
+        opt.hybrid_weight_keyword = kw
+        return opt
+
+    @staticmethod
+    def _reranker(sem: float = 0.9, kw: float = 0.1) -> MagicMock:
+        rr = MagicMock()
+        rr.get_weights = MagicMock(return_value=(sem, kw))
+        return rr
+
+    def test_weights_restored_when_the_body_raises(self) -> None:
+        """The leak this context manager exists to close."""
+        opt, rr = self._optimizer(), self._reranker()
+
+        with self.assertRaises(RuntimeError):
+            with session_adapted_weights(opt, rr, "sess-raise", enabled=True):
+                self.assertAlmostEqual(opt.hybrid_weight_semantic, 0.9)  # adapted inside
+                raise RuntimeError("search blew up")
+
+        self.assertAlmostEqual(opt.hybrid_weight_semantic, _DEFAULT_SEM)
+        self.assertAlmostEqual(opt.hybrid_weight_keyword, _DEFAULT_KW)
+
+    def test_weights_restored_on_the_success_path(self) -> None:
+        opt, rr = self._optimizer(), self._reranker()
+        with session_adapted_weights(opt, rr, "sess-ok", enabled=True):
+            self.assertAlmostEqual(opt.hybrid_weight_semantic, 0.9)
+        self.assertAlmostEqual(opt.hybrid_weight_semantic, _DEFAULT_SEM)
+        self.assertAlmostEqual(opt.hybrid_weight_keyword, _DEFAULT_KW)
+
+    def test_weights_restored_when_the_body_returns_early(self) -> None:
+        opt, rr = self._optimizer(), self._reranker()
+
+        def _run() -> str:
+            with session_adapted_weights(opt, rr, "sess-return", enabled=True):
+                return "early"
+
+        self.assertEqual(_run(), "early")
+        self.assertAlmostEqual(opt.hybrid_weight_semantic, _DEFAULT_SEM)
+
+    def test_disabled_leaves_the_optimizer_untouched(self) -> None:
+        opt, rr = self._optimizer(), self._reranker()
+        with session_adapted_weights(opt, rr, "sess-off", enabled=False):
+            self.assertAlmostEqual(opt.hybrid_weight_semantic, _DEFAULT_SEM)
+        rr.get_weights.assert_not_called()
+
+    def test_no_session_id_leaves_the_optimizer_untouched(self) -> None:
+        opt, rr = self._optimizer(), self._reranker()
+        with session_adapted_weights(opt, rr, None, enabled=True):
+            self.assertAlmostEqual(opt.hybrid_weight_semantic, _DEFAULT_SEM)
+        rr.get_weights.assert_not_called()
+
+    def test_no_optimizer_never_consults_the_reranker(self) -> None:
+        """Pins the short-circuit: no optimizer means the reranker is not reached.
+
+        `RAGService.advanced_search` relies on this -- its tests build the service
+        with `__new__` and set only the attributes their path needs.
+        """
+        rr = self._reranker()
+        with session_adapted_weights(None, rr, "sess-no-opt", enabled=True):
+            pass
+        rr.get_weights.assert_not_called()
 
 
 if __name__ == "__main__":

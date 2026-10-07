@@ -2960,7 +2960,7 @@ class TaintLevel(str, Enum):
     SANITIZED = "sanitized"
 
 
-class SourceType(str, Enum):
+class AnalyticsSourceType(str, Enum):
     """Types of data sources."""
 
     USER_INPUT = "user_input"

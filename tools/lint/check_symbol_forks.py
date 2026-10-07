@@ -3,7 +3,7 @@
 """Find one concept defined under one name in several modules (#17312, #12771).
 
 The duplication guard measures **clones** -- jscpd pairs of >=8 identical lines.
-The expensive problem is **forks**: four modules that each define `SearchResult`
+The expensive problem is **forks**: four modules that each define `ConfidenceLevel`
 and have since drifted. Identical copies cannot disagree; drifted ones hand a
 caller different behaviour depending on which import it reached, and they score
 ZERO against a clone metric. #17312 measured exactly that: four redaction

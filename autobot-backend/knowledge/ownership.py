@@ -43,7 +43,7 @@ class AccessLevel(str, Enum):
 VisibilityLevel = ScopeLevel
 
 
-class SourceType(str, Enum):
+class FactSourceType(str, Enum):
     """Source type for fact creation."""
 
     CHAT = "chat"  # Created from chat conversation
@@ -89,7 +89,7 @@ class KnowledgeOwnership:
         await asyncio.to_thread(self.redis_client.sadd, f"user:kb:facts:{owner_id}", fact_id)
 
         # Add to chat_knowledge category if source is chat
-        if source_type == SourceType.CHAT:
+        if source_type == FactSourceType.CHAT:
             await asyncio.to_thread(self.redis_client.sadd, "kb:category:chat_knowledge", fact_id)
 
         # Add to organization index
@@ -115,7 +115,7 @@ class KnowledgeOwnership:
         fact_id: str,
         owner_id: str,
         visibility: str = VisibilityLevel.PRIVATE,
-        source_type: str = SourceType.MANUAL,
+        source_type: str = FactSourceType.MANUAL,
         shared_with: List[str] | None = None,
         organization_id: str | None = None,
         group_ids: List[str] | None = None,
@@ -728,7 +728,7 @@ class KnowledgeOwnership:
             await asyncio.to_thread(self.redis_client.srem, f"user:kb:facts:{owner_id}", fact_id)
 
         # Remove from chat_knowledge category
-        if source_type == SourceType.CHAT:
+        if source_type == FactSourceType.CHAT:
             await asyncio.to_thread(self.redis_client.srem, "kb:category:chat_knowledge", fact_id)
 
         # Remove from organization index

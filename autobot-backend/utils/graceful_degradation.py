@@ -60,7 +60,7 @@ class FallbackResponse:
 
 
 @dataclass
-class ServiceStatus:
+class DegradedState:
     """Current service status and health metrics"""
 
     health: ServiceHealth
@@ -363,7 +363,7 @@ class GracefulDegradationManager:
         self._lock = asyncio.Lock()
 
         # Service monitoring
-        self.service_status = ServiceStatus(health=ServiceHealth.HEALTHY, degradation_level=DegradationLevel.NORMAL)
+        self.service_status = DegradedState(health=ServiceHealth.HEALTHY, degradation_level=DegradationLevel.NORMAL)
 
         # Failure tracking
         self.failure_history: List[float] = []
@@ -576,11 +576,11 @@ class GracefulDegradationManager:
         # Log health status (outside lock)
         logger.debug("Health check: %s (uptime: %.1f%%)", health, uptime)
 
-    async def get_service_status(self) -> ServiceStatus:
+    async def get_service_status(self) -> DegradedState:
         """Get current service status (thread-safe, returns snapshot)"""
         async with self._lock:
             # Return a copy to prevent external modification
-            return ServiceStatus(
+            return DegradedState(
                 health=self.service_status.health,
                 degradation_level=self.service_status.degradation_level,
                 last_success=self.service_status.last_success,
@@ -624,7 +624,7 @@ class GracefulDegradationManager:
     async def reset_service_status(self):
         """Reset service status to healthy (for recovery, thread-safe)"""
         async with self._lock:
-            self.service_status = ServiceStatus(health=ServiceHealth.HEALTHY, degradation_level=DegradationLevel.NORMAL)
+            self.service_status = DegradedState(health=ServiceHealth.HEALTHY, degradation_level=DegradationLevel.NORMAL)
             self.failure_history.clear()
         logger.info("Service status reset to healthy")
 

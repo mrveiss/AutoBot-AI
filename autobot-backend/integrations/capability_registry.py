@@ -3,7 +3,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Capability Registry for messaging and voice integrations (#11524).
+IntegrationCapability Registry for messaging and voice integrations (#11524).
 
 Maps capability names to registered implementations. Consumers resolve by
 capability, never by concrete class — eliminating vendor-branching.
@@ -41,7 +41,7 @@ from autobot_shared.credential_gated_registry import (
 logger = logging.getLogger(__name__)
 
 
-class Capability(str, Enum):
+class IntegrationCapability(str, Enum):
     """Well-known capability names (#11664).
 
     ``str`` mixin keeps members interchangeable with the plain strings they
@@ -56,9 +56,9 @@ class Capability(str, Enum):
 
 
 # Backward-compatible module constants — use these instead of bare strings.
-MESSAGING = Capability.MESSAGING
-TTS = Capability.TTS
-STT = Capability.STT
+MESSAGING = IntegrationCapability.MESSAGING
+TTS = IntegrationCapability.TTS
+STT = IntegrationCapability.STT
 
 
 class CapabilityRegistry(CredentialGatedRegistry[list[Any]]):
@@ -71,7 +71,7 @@ class CapabilityRegistry(CredentialGatedRegistry[list[Any]]):
         """Register *impl* under *capability*.
 
         Args:
-            capability: Capability name constant (e.g. ``MESSAGING``).
+            capability: IntegrationCapability name constant (e.g. ``MESSAGING``).
             impl:       Any object satisfying the corresponding Protocol.
         """
         bucket = self._providers.setdefault(capability, [])
@@ -89,7 +89,7 @@ class CapabilityRegistry(CredentialGatedRegistry[list[Any]]):
         Returns an empty list (never raises) when capability is absent.
 
         Args:
-            capability: Capability name to look up.
+            capability: IntegrationCapability name to look up.
         """
         return list(self._get_entry(capability) or [])
 

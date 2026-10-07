@@ -45,6 +45,7 @@ from typing import Any, Dict, List
 
 import httpx
 
+from agent_loop.search.base import SearchResult
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.ttl_constants import TTL_7_DAYS, TTL_24_HOURS
@@ -85,19 +86,6 @@ class SessionStatus(str, Enum):
     COMPLETED = "completed"
     CANCELLED = "cancelled"
     FAILED = "failed"
-
-
-@dataclass
-class SearchResult:
-    """A single result returned by the web-search step."""
-
-    title: str
-    url: str
-    summary: str
-    source: str  # "arxiv" | "github"
-
-    def to_dict(self) -> Dict[str, Any]:
-        return dataclasses.asdict(self)
 
 
 @dataclass
@@ -485,7 +473,7 @@ def _parse_arxiv_atom(xml_text: str) -> List[SearchResult]:
             SearchResult(
                 title=title_match.group(1).strip(),
                 url=id_match.group(1).strip(),
-                summary=(summary_match.group(1).strip() if summary_match else ""),
+                snippet=(summary_match.group(1).strip() if summary_match else ""),
                 source="arxiv",
             )
         )
@@ -533,7 +521,7 @@ def _parse_github_results(data: Dict[str, Any]) -> List[SearchResult]:
             SearchResult(
                 title=item.get("full_name", ""),
                 url=item.get("html_url", ""),
-                summary=item.get("description") or "",
+                snippet=item.get("description") or "",
                 source="github",
             )
         )
@@ -1225,7 +1213,7 @@ def _extract_themes(search_results: List[SearchResult]) -> List[str]:
         Deduplicated list of theme names found in titles/summaries.
     """
     found: List[str] = []
-    combined_text = " ".join(f"{r.title} {r.summary}" for r in search_results).lower()
+    combined_text = " ".join(f"{r.title} {r.snippet}" for r in search_results).lower()
     for theme, keywords in _THEME_KEYWORDS.items():
         if any(kw in combined_text for kw in keywords):
             found.append(theme)

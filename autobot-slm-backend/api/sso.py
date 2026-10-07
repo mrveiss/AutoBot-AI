@@ -22,7 +22,7 @@ from models.database import AuditLog
 from services.auth import require_permission
 from services.database import get_db
 from services.step_up_auth import require_step_up
-from user_management.database import get_slm_session
+from user_management.database import get_slm_db
 from user_management.schemas.sso import (
     SSOProviderCreate,
     SSOProviderHealthResponse,
@@ -46,12 +46,6 @@ SSO_HEALTH_WINDOW_DAYS = env_int("SSO_HEALTH_WINDOW_DAYS", 7)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sso-providers", tags=["sso-providers"])
-
-
-async def get_slm_db():
-    """Dependency for SLM database session."""
-    async with get_slm_session() as session:
-        yield session
 
 
 async def get_audit_db():
