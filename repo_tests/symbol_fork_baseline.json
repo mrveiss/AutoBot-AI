@@ -162,7 +162,6 @@
     "RerankRequest",
     "ResearchRequest",
     "ResearchResponse",
-    "ResearchResult",
     "RestoreRequest",
     "RetryConfig",
     "RetryStrategy",

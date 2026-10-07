@@ -15,7 +15,7 @@ conflicts with confidence scoring, age decay, and human review escalation.
 Models:
 - KBFact: Knowledge base fact with confidence and timestamp
 - Claim: Agent assertion with source and confidence
-- ResearchResult: Extended research finding with validation
+- ResearchedFact: Extended research finding with validation
 - ResolvedClaim: Final resolved truth with source and reasoning
 - Conflict: Conflict record for analysis and escalation
 - ReviewTicket: Human review request with metadata
@@ -160,7 +160,7 @@ class Claim:
 
 
 @dataclass
-class ResearchResult:
+class ResearchedFact:
     """Result from web research validation.
 
     Attributes:
@@ -208,7 +208,7 @@ class ResolvedClaim:
     source: str
     confidence: float
     kb_fact: KBFact | None = None
-    research_result: ResearchResult | None = None
+    research_result: ResearchedFact | None = None
     agent_claim: Claim | None = None
     update_kb: bool = False
     requires_human_review: bool = False
@@ -243,7 +243,7 @@ class Conflict:
     agent_says: Claim
     kb_confidence: float
     agent_confidence: float
-    research_says: ResearchResult | None = None
+    research_says: ResearchedFact | None = None
     research_confidence: float = 0.0
     created_at: float = field(default_factory=time.time)
     conflict_id: str = field(default_factory=lambda: str(uuid4()))
