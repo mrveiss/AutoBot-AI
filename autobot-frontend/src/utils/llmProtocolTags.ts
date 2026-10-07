@@ -40,61 +40,118 @@
 /** The bracket-marker families. Keep in sync with the backend — see the parity test. */
 export const PROTOCOL_BRACKET_TAGS = ['THOUGHT', 'PLANNING', 'DEBUG', 'SOURCES'] as const
 
-/** Complete bracket markers, e.g. `[THOUGHT]`, `[/PLANNING]`. */
-const BRACKET_COMPLETE_RE = /\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi
-
 /**
- * A marker truncated mid-stream, e.g. `[/THO`. Built as two variants because
- * callers disagreed on anchoring and that difference is behavioural, not
- * cosmetic.
- */
-const BRACKET_PARTIAL_AT_END_RE =
-  /\[\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)\]?$/gi
-const BRACKET_PARTIAL_ANYWHERE_RE =
-  /\[\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)\]?/gi
-
-/**
- * Square/mixed brackets normalised to the angle spelling before anything else,
- * mirroring `chat_workflow/tool_call_grammar.normalize_tool_call_brackets`.
+ * Complete bracket markers, e.g. `[THOUGHT]`, `[/PLANNING]`.
  *
- * Anchored on the `TOOL_CALL` token and, for the open tag, on the closing QUOTE
- * of `params=` — never the first `]`, which would cut `params='{"a":[1,2]}'` in
- * half. `[` is markdown first: `[the docs](url)`, `[a list][1]` and `[1,2,3]`
- * must survive untouched, which the tests pin.
+ * The closing `]` is REQUIRED and a letter may not follow the family name. The
+ * version this replaced made `]` optional, so `[THOUGHT` matched inside
+ * `[THOUGHTFUL]` and `stripBracketTags('See [THOUGHTFUL]')` returned
+ * `'See FUL]'` -- it mangled an ordinary word. That regex predates this module
+ * (it was copied identically into all four former call sites), so the bug was
+ * four-way; consolidating is what made it fixable once.
+ */
+const BRACKET_COMPLETE_RE = /\[\/?(?:THOUGHT|PLANNING|DEBUG|SOURCES)(?![A-Za-z])\]/gi
+
+/**
+ * A marker truncated mid-stream, e.g. `[/THO`. Two variants because callers
+ * disagreed on anchoring and that difference is behavioural.
+ *
+ * `(?![A-Za-z])` is what keeps `[THOUGHTFUL]` intact: after the family prefix
+ * a letter means this is a longer word, not a marker.
+ */
+const BRACKET_PARTIAL_BODY =
+  '\\[\\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)(?![A-Za-z])\\]?'
+const BRACKET_PARTIAL_AT_END_RE = new RegExp(BRACKET_PARTIAL_BODY + '$', 'gi')
+const BRACKET_PARTIAL_ANYWHERE_RE = new RegExp(BRACKET_PARTIAL_BODY, 'gi')
+
+/**
+ * A tool call must carry its SIGNATURE before a `[` is read as a tag opening.
+ * `See [TOOL_CALL](docs) for details` is a markdown link, and converting its
+ * bracket produced `<TOOL_CALL](docs)`, which the stray-tag pass then ate along
+ * with the rest of the sentence. Requiring `params=` before the first `]`/`>`
+ * means a link label, however it is spelled, is never a call.
+ */
+const SQUARE_OPEN_WITH_SIGNATURE_RE = /\[(?=\s*tool_?\s*call\b[^\]>]*\bparams\s*=)/gi
+const SQUARE_CLOSE_RE = /\[\s*\/\s*tool_?\s*call\b\s*[\]>]?/gi
+const SQUARE_OPEN_TERM_RE = /(<\s*tool_?\s*call\b[^\]>]*?params=(["'])(?:[\s\S]+?)\2\s*)\]/gi
+
+/**
+ * A square tag that LOOKS like a tool call but cannot be parsed -- no `params`,
+ * so it was never normalised. Bounded by a REQUIRED `]`, so it can only ever
+ * consume the tag itself. `[TOOL_CALL name="run"] b` used to become `a ` once
+ * the half-converted form met an unbounded sweep.
+ *
+ * An `=` is also required, i.e. at least one attribute. Without it this matched
+ * the LABEL of `[TOOL_CALL](docs)` and left `(docs)` dangling in the sentence.
+ * A real call always carries `name=`; a bare `[TOOL_CALL]` is far likelier to
+ * be prose or a link label, and leaving a visible token is the lesser harm
+ * against deleting someone's text.
+ */
+const SQUARE_UNPARSEABLE_RE = /\[\/?\s*tool_?\s*call\b[^\]\n]*=[^\]\n]*\]/gi
+
+/** A complete angle tag. The `>` is REQUIRED -- see `ANGLE_UNTERMINATED_RE`. */
+const ANGLE_TAG_RE = /<\/?\s*tool_?\s*call\b[^>\n]*>/gi
+
+/**
+ * An angle tag whose `>` never arrived, which streaming produces. Bounded to the
+ * REST OF THE LINE, never `[^>]*>?` across the whole input: with the terminator
+ * optional, that pattern matched to end-of-string and deleted every remaining
+ * sentence. Two inputs lost their tail to it before this was split out.
+ */
+const ANGLE_UNTERMINATED_RE = /<\/?\s*tool_?\s*call\b[^>\n]*$/gim
+
+/** An opening tag with no matching close: in DISPLAY its contents must go too. */
+const ANGLE_UNCLOSED_BLOCK_RE = /<\s*tool_?\s*call\b[^>\n]*>[\s\S]*$/gi
+const ANGLE_BLOCK_RE = /<\s*tool_?\s*call\b[^>\n]*>[\s\S]*?<\/\s*tool_?\s*call\b[^>\n]*>/gi
+
+/**
+ * Square/mixed brackets normalised to the angle spelling, mirroring
+ * `chat_workflow/tool_call_grammar.normalize_tool_call_brackets`.
+ *
+ * The open conversion requires the tool-call signature; the terminator is found
+ * by anchoring on the closing QUOTE of `params=`, never the first `]`, which
+ * would cut `params='{"a":[1,2]}'` in half.
  */
 export function normalizeToolCallBrackets(text: string): string {
   if (!text) return text
   return text
-    .replace(/\[\s*\/\s*tool_?\s*call\b\s*[\]>]?/gi, '</TOOL_CALL>')
-    .replace(/\[(?=\s*tool_?\s*call\b)/gi, '<')
-    .replace(/(<\s*tool_?\s*call\b[^\]>]*?params=(["'])(?:[\s\S]+?)\2\s*)\]/gi, '$1>')
+    .replace(SQUARE_CLOSE_RE, '</TOOL_CALL>')
+    .replace(SQUARE_OPEN_WITH_SIGNATURE_RE, '<')
+    .replace(SQUARE_OPEN_TERM_RE, '$1>')
 }
 
 /**
  * Remove a tool call and the text inside it. For anything a user READS.
  *
- * Two passes, and the second is not redundant. The block pattern needs a
- * MATCHED PAIR, so a dangling close with no opening tag survives it — which is
- * the exact shape reported live (`[/TOOL_CALL>` alone in a reply) and the same
- * gap the backend had at `strip_unparsed_tool_tags`'s early return. The first
- * test written against this module failed on it, so the stray-tag sweep runs
- * after the block sweep rather than instead of it: pairs must lose their
- * contents, and whatever is left must lose its tags.
+ * Four passes, in this order, and none is redundant:
+ *   1. matched pairs, contents included;
+ *   2. an OPENING tag with no close -- its contents are the model's args and
+ *      must not render as prose. A streamed `<TOOL_CALL …>Searching for data`
+ *      showed `Searching for data` before this pass existed;
+ *   3. a square tag that never normalised because it had no `params`;
+ *   4. whatever single tags remain, each bounded so none can eat the line.
  */
 export function stripToolCallBlocks(text: string): string {
   if (!text) return text
   return normalizeToolCallBrackets(text)
-    .replace(/<\s*tool_?\s*call\b[^>]*>[\s\S]*?<\/\s*tool_?\s*call\b[^>]*>?/gi, '')
-    .replace(/<\/?\s*tool_?\s*call\b[^>]*>?/gi, '')
+    .replace(ANGLE_BLOCK_RE, '')
+    .replace(ANGLE_UNCLOSED_BLOCK_RE, '')
+    .replace(SQUARE_UNPARSEABLE_RE, '')
+    .replace(ANGLE_TAG_RE, '')
+    .replace(ANGLE_UNTERMINATED_RE, '')
 }
 
 /**
  * Remove only the tool-call TAGS, keeping the description between them.
- * For speech: that description is written for a human to hear.
+ * For speech: that description is written for a human to hear, so an unclosed
+ * tag keeps its text here -- the opposite of the display path, on purpose.
  */
 export function stripToolCallTags(text: string): string {
   if (!text) return text
-  return normalizeToolCallBrackets(text).replace(/<\/?\s*tool_?\s*call\b[^>]*>?/gi, '')
+  return normalizeToolCallBrackets(text)
+    .replace(SQUARE_UNPARSEABLE_RE, '')
+    .replace(ANGLE_TAG_RE, '')
+    .replace(ANGLE_UNTERMINATED_RE, '')
 }
 
 /** Remove the bracket markers. `partialAnywhere` keeps a caller's existing reach. */

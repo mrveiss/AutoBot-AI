@@ -60,12 +60,38 @@ def test_the_extractors_find_something_to_compare() -> None:
 
 def test_every_backend_marker_family_is_stripped_by_the_frontend() -> None:
     frontend, backend = _frontend_families(), _backend_families()
-    missing = sorted(backend - frontend)
+    missing = _missing_families(backend, frontend)
     assert missing == [], (
         f"the frontend does not strip {missing}; a marker this backend emits would "
         f"render as raw text. Add it to PROTOCOL_BRACKET_TAGS in {FRONTEND_MODULE.name} "
         "and to the regexes beside it."
     )
+
+
+#: The detector under test, lifted out so a FIXTURE can be fed to it rather than
+#: only the live repository. Without this the parity test could only ever say
+#: "the tree is currently consistent" -- it could not show that it NOTICES
+#: inconsistency, which is the property being claimed.
+def _missing_families(backend: set[str], frontend: set[str]) -> list[str]:
+    return sorted(backend - frontend)
+
+
+def test_the_detector_trips_on_a_missing_family_and_not_on_a_covered_one() -> None:
+    """CONTRAST PAIR, required of every detector by the repo's path instructions.
+
+    One fixture should trip it and one should not. Proving the current tree is
+    consistent is not the same as proving the check works: a detector that
+    returned `[]` unconditionally would pass every other test in this file.
+    """
+    covered = _missing_families({"THOUGHT", "PLANNING"}, {"THOUGHT", "PLANNING", "DEBUG"})
+    assert covered == [], f"a fully covered backend set tripped the detector: {covered}"
+
+    absent = _missing_families({"THOUGHT", "PLANNING"}, {"THOUGHT"})
+    assert absent == ["PLANNING"], f"the detector missed an absent family, got {absent}"
+
+    # And the degenerate input that would make the real test vacuous.
+    assert _missing_families(set(), set()) == []
+    assert _missing_families({"THOUGHT"}, set()) == ["THOUGHT"]
 
 
 def test_each_declared_backend_family_has_a_compiled_pattern() -> None:

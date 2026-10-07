@@ -112,3 +112,65 @@ describe('empty and absent input', () => {
     expect(stripProtocolTagsForSpeech(text)).toBe(text)
   })
 })
+
+describe('a bounded sweep never eats the rest of the message (#18095 review)', () => {
+  // Every one of these DELETED the remainder of its input before the patterns
+  // were bounded. `[^>]*>?` with an optional terminator matches to end-of-input,
+  // so an unterminated tag consumed every following sentence. Measured, not
+  // predicted: these are the exact strings that lost their tails.
+  it('keeps the sentence around a markdown link labelled TOOL_CALL', () => {
+    const out = stripToolCallBlocks('See [TOOL_CALL](docs) for details')
+    expect(out).toContain('for details')
+    expect(out).toBe('See [TOOL_CALL](docs) for details')
+  })
+
+  it('keeps the text after a square tag that has no params', () => {
+    // Recognised as tool-call-shaped but unparseable: the TAG goes, the prose stays.
+    const out = stripToolCallBlocks('a [TOOL_CALL name="run"] b')
+    expect(out).toContain('b')
+    expect(out).not.toMatch(/tool_?call/i)
+  })
+
+  it('keeps the text after an unterminated angle tag', () => {
+    const out = stripToolCallBlocks('before <TOOL_CALL name="run"\nafter')
+    expect(out).toContain('after')
+    expect(out).not.toMatch(/tool_?call/i)
+  })
+})
+
+describe('an unclosed tool call hides its arguments in DISPLAY (#18095 review)', () => {
+  const unclosed = `x <TOOL_CALL name="search" params='{}'>Searching for data`
+
+  it('display removes the opening tag AND its contents', () => {
+    const out = stripToolCallBlocks(unclosed)
+    expect(out).not.toContain('Searching for data')
+    expect(out).not.toMatch(/tool_?call/i)
+    expect(out).toContain('x')
+  })
+
+  it('speech still keeps the description — the paths differ on purpose', () => {
+    const spoken = stripToolCallTags(unclosed)
+    expect(spoken).toContain('Searching for data')
+    expect(spoken).not.toMatch(/tool_?call/i)
+  })
+})
+
+describe('a longer word starting with a marker name survives (#18095 review)', () => {
+  it.each([
+    ['See [THOUGHTFUL]', 'See [THOUGHTFUL]'],
+    ['two [PLANNINGS] here', 'two [PLANNINGS] here'],
+    ['a [DEBUGGER] tool', 'a [DEBUGGER] tool'],
+    ['the [SOURCEMAP] file', 'the [SOURCEMAP] file'],
+  ])('%s is untouched', (input, expected) => {
+    // `stripBracketTags('See [THOUGHTFUL]')` returned 'See FUL]' -- the optional
+    // `]` let `[THOUGHT` match inside a longer word. Four-way bug: the regex was
+    // copied identically into all four former call sites.
+    expect(stripBracketTags(input)).toBe(expected)
+    expect(stripBracketTags(input, true)).toBe(expected)
+  })
+
+  it('CONTROL: the real markers are still stripped', () => {
+    expect(stripBracketTags('[THOUGHT]x[/THOUGHT]')).toBe('x')
+    expect(stripBracketTags('truncated [/THO')).toBe('truncated ')
+  })
+})
