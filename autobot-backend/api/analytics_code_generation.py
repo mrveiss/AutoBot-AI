@@ -53,7 +53,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_constants import TTL_30_DAYS
 
 # #18070: one ValidationResult -- this module used to declare a second one.
-from code_intelligence.code_generation.types import ValidationResult, ValidationStatus
+from code_intelligence.code_generation import ValidationResult, ValidationStatus
 from llm_shared.types import LLMType
 
 # LLM Service for real code generation
