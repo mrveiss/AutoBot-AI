@@ -133,7 +133,7 @@ class TestRegistration:
         from services import approval_execution
 
         monkeypatch.setattr(approval_execution, "_REGISTRY", {})
-        orphan_storage_cleanup_action.register()
+        orphan_storage_cleanup_action.register_cleanup_action()
 
         assert approval_execution._REGISTRY[orphan_storage_cleanup_action.ACTION] is (
             orphan_storage_cleanup_action.execute_orphan_storage_delete
@@ -144,7 +144,7 @@ class TestRegistration:
         from services import approval_execution
 
         monkeypatch.setattr(approval_execution, "_REGISTRY", {})
-        orphan_storage_cleanup_action.register()
+        orphan_storage_cleanup_action.register_cleanup_action()
 
         called = {}
 
@@ -171,7 +171,7 @@ class TestRegistration:
         from services import approval_execution
 
         monkeypatch.setattr(approval_execution, "_REGISTRY", {})
-        orphan_storage_cleanup_action.register()
+        orphan_storage_cleanup_action.register_cleanup_action()
 
         audited = {}
 
