@@ -46,15 +46,32 @@ def _discover(root: Path) -> list[Path]:
     return found
 
 
-#: 2,776 production files today. Floor 2,000 leaves room for a large refactor
-#: without the guard going quiet: the failure this binds is a sweep that
-#: enumerates nothing and reports the same green as a clean tree -- a `0` from a
-#: broken glob is indistinguishable from "no module rebuilds the path" without it.
+def _all_python(root: Path) -> int:
+    """Every `.py` under ROOTS, tests included -- the reference population."""
+    total = 0
+    for sub in _ROOTS:
+        base = root / sub
+        if base.is_dir():
+            total += sum(1 for p in base.rglob("*.py") if "node_modules" not in p.parts)
+    return total
+
+
+#: Measured 2026-10-07: 2,776 production files of 4,754 total `.py` under ROOTS
+#: -- 58.4%. Expressed as a fraction of that reference rather than an absolute
+#: floor, because the reference exists and a fraction scales: an absolute number
+#: goes stale the moment the tree grows, and the first version of this
+#: declaration picked 2,000 "to leave room", which is 776 below the live
+#: population -- precisely the weak floor `verify_floor` refuses, since it would
+#: pass while most of the tree stopped being reached.
+#:
+#: 0.50 against a 0.584 reading: the band below is the share of production code
+#: that could become test code before the sweep is meaningfully narrower.
 PRODUCTION_PY = declare(
     "data-db-path-production-python",
     discover=_discover,
-    floor=2000,
-    growth=400,
+    reference=_all_python,
+    min_fraction=0.50,
+    roots=_ROOTS,
     what="production Python files scanned for a hand-built autobot_data.db path (#18060)",
 )
 
