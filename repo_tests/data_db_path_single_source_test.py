@@ -15,7 +15,7 @@ count at one.
 
 from __future__ import annotations
 
-import re
+import ast
 from pathlib import Path
 
 from repo_tests._paths import repo_root
@@ -23,12 +23,34 @@ from repo_tests._reach import declare
 
 _ROOTS = ("autobot-backend", "autobot_shared")
 
-#: `os.path.join(..., "autobot_data.db")` or `/ "autobot_data.db"` or an inline
-#: literal path ending in it -- any construction of the location from parts.
-_HAND_BUILT = re.compile(r"""["']autobot_data\.db["']""")
+#: The filename, for the cheap pre-filter only. The real decision is made by
+#: `_path_literals`, because a regex cannot tell a path from prose that happens
+#: to name the file -- `description="... use 'local' for autobot_data.db"` is
+#: documentation, not a construction, and matching it would make the guard cry
+#: wolf on a Pydantic field description.
+_FILENAME = "autobot_data.db"
 
-#: Reading the SSOT key is the sanctioned way, in any of its spellings.
-_SSOT_READ = re.compile(r"config\.data_db|misc\.data_db|AUTOBOT_DATA_DB")
+
+def _path_literals(text: str) -> list[str]:
+    """String constants that are a PATH ending in the filename, parsed as code.
+
+    A path literal has no whitespace: `"data/autobot_data.db"` is a path,
+    `"Use 'local' for autobot_data.db instead"` is a sentence. Asking the AST
+    for string constants and then testing their shape separates the two; a
+    regex over raw characters cannot, because both are quoted text.
+    """
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return []
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+            continue
+        value = node.value
+        if value.endswith(_FILENAME) and not any(c.isspace() for c in value):
+            found.append(f"line {node.lineno}: {value}")
+    return found
 
 
 def _discover(root: Path) -> list[Path]:
@@ -81,18 +103,41 @@ def _production_sources():
         yield path, path.read_text(encoding="utf-8", errors="replace")
 
 
+def _reads_the_ssot_key(text: str) -> bool:
+    """Whether *text* contains an EXECUTABLE read of the key, parsed as code.
+
+    A regex over raw text earns the exemption from a comment or a docstring:
+    `# TODO: switch to config.data_db` would have exempted a module that never
+    reads it. The exemption has to be a real attribute access or a real env
+    lookup, so the question is asked of the AST, not of the characters.
+    """
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return False  # unparseable: cannot establish a read, so do not exempt
+    for node in ast.walk(tree):
+        # config.data_db / settings.misc.data_db / anything.data_db
+        if isinstance(node, ast.Attribute) and node.attr == "data_db":
+            return True
+        # os.getenv("AUTOBOT_DATA_DB") / os.environ["AUTOBOT_DATA_DB"]
+        if isinstance(node, ast.Constant) and node.value == "AUTOBOT_DATA_DB":
+            return True
+    return False
+
+
 def test_no_module_builds_the_data_db_path_without_reading_the_ssot_key():
     """A literal `autobot_data.db` is fine in prose or as a fallback beside the key."""
     offenders = []
     for path, text in _production_sources():
-        if not _HAND_BUILT.search(text):
-            continue
-        if _SSOT_READ.search(text):
+        if _FILENAME not in text:
+            continue  # cheap pre-filter; the AST pass below decides
+        literals = _path_literals(text)
+        if not literals:
+            continue  # named only in prose or a docstring
+        if _reads_the_ssot_key(text):
             continue  # reads the key; a literal fallback beside it is allowed
         rel = path.relative_to(repo_root())
-        for lineno, line in enumerate(text.splitlines(), 1):
-            if _HAND_BUILT.search(line):
-                offenders.append(f"{rel}:{lineno}: {line.strip()[:90]}")
+        offenders.extend(f"{rel}:{lit}" for lit in literals)
     assert not offenders, (
         "these modules name autobot_data.db without reading `config.data_db` --\n"
         "the store's location is declared once, in SSOT config:\n  " + "\n  ".join(offenders)
@@ -101,8 +146,16 @@ def test_no_module_builds_the_data_db_path_without_reading_the_ssot_key():
 
 def test_the_matcher_discriminates():
     """Contrast pair -- otherwise a broken regex passes as happily as a clean tree."""
-    assert _HAND_BUILT.search('os.path.join(base, "data", "autobot_data.db")')
-    assert _HAND_BUILT.search("Path(d) / 'autobot_data.db'")
-    assert not _HAND_BUILT.search("# the local autobot_data store")
-    assert _SSOT_READ.search("_LOCAL_DB_PATH = config.data_db")
-    assert not _SSOT_READ.search("config.base_dir")
+    assert _path_literals('os.path.join(base, "data", "autobot_data.db")')
+    assert _path_literals("p = Path(d) / 'autobot_data.db'")
+    # A path prefix inside the quotes is the same construction.
+    assert _path_literals('p = Path("data/autobot_data.db")')
+    # Prose naming the file is documentation, not a construction.
+    assert not _path_literals("f = Field(description=\"Use 'local' for autobot_data.db\")")
+    assert not _path_literals("# the local autobot_data store")
+    assert _reads_the_ssot_key("_LOCAL_DB_PATH = config.data_db")
+    assert _reads_the_ssot_key('p = os.getenv("AUTOBOT_DATA_DB")')
+    assert not _reads_the_ssot_key("base = config.base_dir")
+    # The exemption is not earned by naming the key in prose.
+    assert not _reads_the_ssot_key("# TODO: switch to config.data_db one day")
+    assert not _reads_the_ssot_key('"""Docstring mentioning AUTOBOT_DATA_DB."""')
