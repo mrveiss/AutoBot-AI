@@ -21,8 +21,12 @@
  * Electric Blue - Technical Precision
  * ============================================ */
 
-[data-accent="blue"],
-:root {
+/* #18066: `:root` removed from this selector. design-tokens.css already
+   declares every token in this block with byte-identical values, and is
+   a superset (it also has -alpha-, -muted, -subtle). Two `:root` blocks
+   for one default is a second declaration that can drift; this file owns
+   the per-accent overrides, design-tokens.css owns the default. */
+[data-accent="blue"] {
   --color-primary: #3b82f6;
   --color-primary-hover: #2563eb;
   --color-primary-active: #1d4ed8;

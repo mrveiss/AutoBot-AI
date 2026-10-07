@@ -13,7 +13,13 @@ import { setLocale } from '@/i18n'
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
-import { useTheme, type Theme, type ThemePreset, type AccentColor as ThemeAccentColor } from '@/composables/useTheme'
+import {
+  useTheme,
+  ACCENT_COLORS,
+  type Theme,
+  type ThemePreset,
+  type AccentColor as ThemeAccentColor,
+} from '@/composables/useTheme'
 
 const logger = createLogger('usePreferences')
 
@@ -96,7 +102,7 @@ function loadPreferences(): void {
     if (stored) {
       const parsed = JSON.parse(stored) as UserPreferences
       fontSize.value = parsed.fontSize || DEFAULT_PREFERENCES.fontSize
-      accentColor.value = parsed.accentColor || DEFAULT_PREFERENCES.accentColor
+      accentColor.value = normaliseAccent(parsed.accentColor || DEFAULT_PREFERENCES.accentColor)
       layoutDensity.value = parsed.layoutDensity || DEFAULT_PREFERENCES.layoutDensity
       voiceDisplayMode.value = parsed.voiceDisplayMode || DEFAULT_PREFERENCES.voiceDisplayMode
       language.value = parsed.language || localStorage.getItem('autobot-language') || DEFAULT_PREFERENCES.language
@@ -150,7 +156,15 @@ function applyFontSize(size: FontSize): void {
  * calls `green` (both `#10b981`). A stored `emerald` maps forward so nobody's
  * saved preference is silently dropped. */
 function normaliseAccent(color: string): ThemeAccentColor {
-  return (color === 'emerald' ? 'green' : color) as ThemeAccentColor
+  // `emerald` was this module's name for the colour accents.css calls `green`.
+  const mapped = color === 'emerald' ? 'green' : color
+  // A stored value is untrusted input: localStorage survives renames and
+  // hand-editing. An unrecognised accent used to reach setAccentColor and set
+  // a data-accent with no matching rule, so no accent applied at all and
+  // nothing said why. Fall back to the default instead of writing a dead one.
+  return (ACCENT_COLORS as readonly string[]).includes(mapped)
+    ? (mapped as ThemeAccentColor)
+    : (DEFAULT_PREFERENCES.accentColor as ThemeAccentColor)
 }
 
 /**

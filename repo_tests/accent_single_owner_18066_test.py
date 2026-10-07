@@ -39,8 +39,18 @@ _RETIRED_ATTR = "data-accent-color"
 #: module re-exports or imports that one.
 _TYPE_DECL = re.compile(r"^\s*export type AccentColor\s*=\s*'", re.MULTILINE)
 
-#: Anything that writes an accent attribute onto an element.
-_SET_ATTR = re.compile(r"""setAttribute\(\s*['"]data-accent[a-z-]*['"]""")
+#: Anything that writes an accent attribute onto an element. Deliberately wider
+#: than `data-accent*`: a rival writer is just as much a fork when it is spelled
+#: `data-preference-accent` or `data-theme-accent`, and the first version of
+#: this guard only matched the prefix it happened to have seen.
+_SET_ATTR = re.compile(r"""setAttribute\(\s*['"]data-[a-z-]*accent[a-z-]*['"]""")
+
+#: A base design-token block. These belong in the canonical token file; a second
+#: `:root { --color-primary: ... }` elsewhere silently competes with it.
+_ROOT_TOKEN_BLOCK = re.compile(r"^:root\s*\{[^}]*--color-primary\s*:", re.MULTILINE)
+
+#: Where base tokens are allowed to live.
+_CANONICAL_TOKEN_FILES = {"design-tokens.css"}
 
 
 def _sources():
@@ -106,4 +116,29 @@ def test_the_matcher_would_catch_a_regression():
     assert not _TYPE_DECL.search("export type AccentColor = ThemeAccentColor")
     assert _SET_ATTR.search("root.setAttribute('data-accent-color', color)")
     assert _SET_ATTR.search('el.setAttribute("data-accent", accent)')
+    # A rival spelling is still a rival writer.
+    assert _SET_ATTR.search("root.setAttribute('data-preference-accent', c)")
     assert not _SET_ATTR.search("root.setAttribute('data-theme', mode)")
+    assert not _SET_ATTR.search("root.setAttribute('data-font-size', size)")
+    assert _ROOT_TOKEN_BLOCK.search(":root {\n  --color-primary: #ff00ff;\n}")
+    assert not _ROOT_TOKEN_BLOCK.search('[data-accent="teal"] {\n  --color-primary: #14b8a6;\n}')
+
+
+def test_base_tokens_live_only_in_the_canonical_file():
+    """A second `:root` defining --color-primary competes with the token source.
+
+    Accent *variants* are keyed on `[data-accent=...]` and may live in
+    accents.css; a bare `:root` block redefining the base token is a second
+    declaration of the default, which is the same fork one level down.
+    """
+    offenders = []
+    for path, text in _sources():
+        if path.name in _CANONICAL_TOKEN_FILES:
+            continue
+        if _ROOT_TOKEN_BLOCK.search(strip_block_comments(text)):
+            offenders.append(str(path.relative_to(_FRONTEND)))
+    assert not offenders, (
+        "base design tokens are declared once, in "
+        f"{sorted(_CANONICAL_TOKEN_FILES)} (#18066). A `:root` block redefining "
+        "--color-primary elsewhere competes with it:\n  " + "\n  ".join(offenders)
+    )
