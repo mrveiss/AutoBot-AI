@@ -24,21 +24,21 @@ from __future__ import annotations
 
 from typing import Dict, Iterable, List
 
-from a2a.trust_score import Capability
+from a2a.trust_score import TrustCapability
 from security.authority import Authority
 
 #: Agents whose work reads a knowledge or memory store, from reading each handler.
-REQUIRED_CAPABILITY: Dict[str, Capability] = {
+REQUIRED_CAPABILITY: Dict[str, TrustCapability] = {
     # The RAG route asks the KB librarian for documents first (agent_execution._execute_rag_agent).
-    "rag": Capability.QUERY_MEMORY,
+    "rag": TrustCapability.QUERY_MEMORY,
     # The KB librarian searches the knowledge base.
-    "knowledge_retrieval": Capability.QUERY_MEMORY,
+    "knowledge_retrieval": TrustCapability.QUERY_MEMORY,
     # librarian_assistant holds a KnowledgeBase, and can also add documents to it.
-    "research": Capability.QUERY_MEMORY,
+    "research": TrustCapability.QUERY_MEMORY,
     # Reads and writes per-session working memory and the agent diary.
-    "sentiment_analysis": Capability.QUERY_MEMORY,
+    "sentiment_analysis": TrustCapability.QUERY_MEMORY,
     # Distributed: searches the indexed codebase, a knowledge store.
-    "npu_code_search": Capability.QUERY_MEMORY,
+    "npu_code_search": TrustCapability.QUERY_MEMORY,
 }
 
 #: Agents that read no knowledge or memory store, with the reason, so "needs nothing"

@@ -13,7 +13,7 @@ from unittest.mock import patch
 import pytest
 
 from autobot_shared.network_constants import NetworkConstants
-from config import get_config, get_config_section, is_feature_enabled
+from config import get_config_section, get_config_value, is_feature_enabled
 from config.manager import ConfigManager as ConfigManager
 
 # NOTE (#11954): This file tested a much older, flat-schema ConfigManager
@@ -316,14 +316,14 @@ class TestConfigManager:
     def test_global_instance_functions(self):
         """Test global convenience functions.
 
-        get_config()/get_config_section() (config/__init__.py) delegate to
+        get_config_value()/get_config_section() (config/__init__.py) delegate to
         the process-wide singleton's flat .get() / .get_nested() (#11954).
         """
-        value = get_config("nonexistent.key", "default")
+        value = get_config_value("nonexistent.key", "default")
         assert value == "default"
 
         # A single (non-dotted) top-level key resolves via the flat .get()
-        redis_top_level = get_config("redis")
+        redis_top_level = get_config_value("redis")
         assert isinstance(redis_top_level, dict)
         assert redis_top_level["port"] == NetworkConstants.REDIS_PORT
 

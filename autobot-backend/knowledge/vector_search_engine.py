@@ -12,10 +12,10 @@ Hardware dispatch priority (when hardware_backend="auto"):
   GPU  (FAISS_GPU_AVAILABLE via gpu_vector_search)
   CPU  (ChromaDB / basic KB fallback — always available)
 
-Canonical result type: SearchResult dataclass (text, score, metadata, source).
+Canonical result type: VectorSearchResult dataclass (text, score, metadata, source).
 
 All callers should import from this module:
-    from knowledge.vector_search_engine import get_vector_search_engine, SearchResult
+    from knowledge.vector_search_engine import get_vector_search_engine, VectorSearchResult
 from autobot_shared.logging_manager import get_logger
 """
 
@@ -36,7 +36,7 @@ logger = get_logger(__name__)
 
 
 @dataclass
-class SearchResult:
+class VectorSearchResult:
     """Canonical search result returned by VectorSearchEngine.
 
     Fields
@@ -117,7 +117,7 @@ class _NPUBackend:
         query: str,
         top_k: int,
         filters: Dict[str, Any] | None,
-    ) -> List[SearchResult]:
+    ) -> List[VectorSearchResult]:
         engine = await self._get_engine()
         npu_results, _ = await engine.search(
             query=query,
@@ -126,7 +126,7 @@ class _NPUBackend:
             enable_npu_acceleration=True,
         )
         return [
-            SearchResult(
+            VectorSearchResult(
                 text=r.content,
                 score=r.score,
                 metadata=r.metadata,
@@ -175,7 +175,7 @@ class _GPUBackend:
         query: str,
         top_k: int,
         filters: Dict[str, Any] | None,
-    ) -> List[SearchResult]:
+    ) -> List[VectorSearchResult]:
         import numpy as np  # noqa: PLC0415
 
         hybrid = await self._get_hybrid()
@@ -188,7 +188,7 @@ class _GPUBackend:
             metadata_filter=filters,
         )
         return [
-            SearchResult(
+            VectorSearchResult(
                 text=r.content or "",
                 score=r.score,
                 metadata=r.metadata,
@@ -206,7 +206,7 @@ class _CPUBackend:
         query: str,
         top_k: int,
         filters: Dict[str, Any] | None,
-    ) -> List[SearchResult]:
+    ) -> List[VectorSearchResult]:
         from knowledge import get_knowledge_base  # noqa: PLC0415
 
         kb = await get_knowledge_base()
@@ -216,7 +216,7 @@ class _CPUBackend:
         # non-recursive leaf: validate, sanitize, query ChromaDB.
         raw = await kb.basic_vector_search(query=query, top_k=top_k, filters=filters)
         return [
-            SearchResult(
+            VectorSearchResult(
                 text=r.get("content", ""),
                 score=r.get("score", 0.0),
                 metadata=r.get("metadata", {}),
@@ -230,8 +230,8 @@ class _CPUBackend:
 # VectorSearchEngine
 # ---------------------------------------------------------------------------
 
-# Reranker callable type: (query: str, results: List[SearchResult]) -> Awaitable[List[SearchResult]]
-RerankerCallable = Callable[[str, List[SearchResult]], Any]
+# Reranker callable type: (query: str, results: List[VectorSearchResult]) -> Awaitable[List[VectorSearchResult]]
+RerankerCallable = Callable[[str, List[VectorSearchResult]], Any]
 
 
 class VectorSearchEngine:
@@ -284,8 +284,8 @@ class VectorSearchEngine:
         filters: Dict[str, Any] | None = None,
         hardware_backend: str = "auto",
         reranker: RerankerCallable | None = None,
-    ) -> List[SearchResult]:
-        """Execute vector search and return standardized SearchResult list.
+    ) -> List[VectorSearchResult]:
+        """Execute vector search and return standardized VectorSearchResult list.
 
         Parameters
         ----------
@@ -297,7 +297,7 @@ class VectorSearchEngine:
 
         Returns
         -------
-        List[SearchResult] sorted by score descending.
+        List[VectorSearchResult] sorted by score descending.
         """
         if not query.strip():
             return []

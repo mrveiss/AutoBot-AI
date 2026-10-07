@@ -247,7 +247,7 @@ async def test_search_passes_filters_to_query_chromadb():
 
     with (
         patch(
-            "knowledge.search.get_vector_search_engine",
+            "knowledge.search_components.basic_vector_search.get_vector_search_engine",
             new=AsyncMock(side_effect=RuntimeError("engine offline")),
         ),
         patch.object(
@@ -280,7 +280,7 @@ async def test_search_no_filters_omits_where():
 
     with (
         patch(
-            "knowledge.search.get_vector_search_engine",
+            "knowledge.search_components.basic_vector_search.get_vector_search_engine",
             new=AsyncMock(side_effect=RuntimeError("engine offline")),
         ),
         patch.object(searcher, "ensure_initialized"),

@@ -22,8 +22,8 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.plugin_sdk import (
-    Capability,
     CapabilityChecker,
+    PluginCapability,
     PluginLoader,
     PluginRegistry,
     TrustTier,
@@ -607,7 +607,7 @@ async def approve_plugin_capabilities(
 
     # Validate requested capabilities
     try:
-        capabilities = [Capability(cap) for cap in request.capabilities]
+        capabilities = [PluginCapability(cap) for cap in request.capabilities]
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -50,7 +50,7 @@ from autobot_shared.coordination.work_claims import (
     CLAIM_TTL_S,
     ClaimConflict,
     ClaimMode,
-    release,
+    release_scope,
     renew,
     try_acquire,
 )
@@ -182,7 +182,7 @@ async def run_dev_loop_action(
         with contextlib.suppress(BaseException):
             await renewal_task
         try:
-            await release(scope, agent_id=DEV_LOOP_AGENT_ID, task_id=task_id)
+            await release_scope(scope, agent_id=DEV_LOOP_AGENT_ID, task_id=task_id)
         except Exception:  # noqa: BLE001 -- see below; this must not mask the action's own error
             # `release` reaches Redis and can raise (ClaimUnavailable on an
             # outage). Raised from inside this `finally` it would REPLACE the

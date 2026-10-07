@@ -34,7 +34,7 @@ SYSTEM_KEYWORDS = {"system", "config", "install", "setup"}
 RESEARCH_KEYWORDS = {"research", "find", "search", "investigate"}
 
 
-class MessageType(Enum):
+class ChatMessageType(Enum):
     """Message classification types"""
 
     GENERAL_QUERY = "general_query"
@@ -83,7 +83,7 @@ class ChatWorkflowResult:
     """Complete workflow result"""
 
     response: str
-    message_type: MessageType
+    message_type: ChatMessageType
     knowledge_status: KnowledgeStatus
     kb_results: List[Dict[str, Any]] = field(default_factory=list)
     sources: List[Dict[str, Any]] = field(default_factory=list)
@@ -181,7 +181,7 @@ class AsyncChatWorkflow:
         )
         await self.add_workflow_message("planning", "📋 Planning my response approach...", step="planning")
 
-    async def _workflow_classify(self, user_message: str, workflow_steps: List[Dict[str, Any]]) -> MessageType:
+    async def _workflow_classify(self, user_message: str, workflow_steps: List[Dict[str, Any]]) -> ChatMessageType:
         """Classify message and log workflow step. Issue #281: Extracted helper."""
         await self.add_workflow_message("debug", "🔍 WORKFLOW: Classifying message type...", step="classification")
         message_type = await self._classify_message(user_message)
@@ -267,7 +267,7 @@ class AsyncChatWorkflow:
     def _build_success_result(
         self,
         llm_response: LLMResponse,
-        message_type: MessageType,
+        message_type: ChatMessageType,
         knowledge_status: KnowledgeStatus,
         kb_results: List[Dict[str, Any]],
         workflow_steps: List[Dict[str, Any]],
@@ -303,7 +303,7 @@ class AsyncChatWorkflow:
         processing_time = time.time() - self._start_time
         return ChatWorkflowResult(
             response=(f"I apologize, but I encountered an error while processing your message:" f"{str(error)}"),
-            message_type=MessageType.GENERAL_QUERY,
+            message_type=ChatMessageType.GENERAL_QUERY,
             knowledge_status=KnowledgeStatus.BYPASSED,
             processing_time=processing_time,
             workflow_steps=workflow_steps,
@@ -311,21 +311,21 @@ class AsyncChatWorkflow:
             conversation_id=chat_id,
         )
 
-    async def _classify_message(self, message: str) -> MessageType:
+    async def _classify_message(self, message: str) -> ChatMessageType:
         """Classify message type (simplified implementation)"""
         message_lower = message.lower()
 
         # Simple keyword-based classification
         if any(word in message_lower for word in TERMINAL_KEYWORDS):
-            return MessageType.TERMINAL_TASK
+            return ChatMessageType.TERMINAL_TASK
         elif any(word in message_lower for word in DESKTOP_KEYWORDS):
-            return MessageType.DESKTOP_TASK
+            return ChatMessageType.DESKTOP_TASK
         elif any(word in message_lower for word in SYSTEM_KEYWORDS):
-            return MessageType.SYSTEM_TASK
+            return ChatMessageType.SYSTEM_TASK
         elif any(word in message_lower for word in RESEARCH_KEYWORDS):
-            return MessageType.RESEARCH_NEEDED
+            return ChatMessageType.RESEARCH_NEEDED
         else:
-            return MessageType.GENERAL_QUERY
+            return ChatMessageType.GENERAL_QUERY
 
     @staticmethod
     async def _budget_kb_context(kb_results: List[Dict[str, Any]]) -> str:
@@ -407,10 +407,9 @@ async def process_chat_message(user_message: str, chat_id: str = "default") -> C
                 f"I apologize, but I'm experiencing a processing delay. Your message was:"
                 f"'{user_message}' (Emergency mode active)"
             ),
-            message_type=MessageType.GENERAL_QUERY,
+            message_type=ChatMessageType.GENERAL_QUERY,
             knowledge_status=KnowledgeStatus.BYPASSED,
             kb_results=[],
-            research_results=None,
             librarian_engaged=False,
             mcp_used=False,
             processing_time=25.0,
@@ -419,10 +418,9 @@ async def process_chat_message(user_message: str, chat_id: str = "default") -> C
         logger.error("Chat workflow error: %s", e)
         return ChatWorkflowResult(
             response=f"I encountered an error processing your message. Error: {str(e)}",
-            message_type=MessageType.GENERAL_QUERY,
+            message_type=ChatMessageType.GENERAL_QUERY,
             knowledge_status=KnowledgeStatus.BYPASSED,
             kb_results=[],
-            research_results=None,
             librarian_engaged=False,
             mcp_used=False,
             processing_time=0.1,

@@ -13,10 +13,10 @@ import pytest
 
 from config import ConfigManager
 from dependencies import (
-    get_config,
     get_diagnostics,
     get_knowledge_base,
     get_orchestrator,
+    provide_config_manager,
 )
 from diagnostics import Diagnostics
 from knowledge_base import KnowledgeBase
@@ -28,7 +28,7 @@ class TestDependencyInjection:
 
     def test_config_dependency_provider(self):
         """Test that config dependency provider returns the global config"""
-        config = get_config()
+        config = provide_config_manager()
         assert isinstance(config, ConfigManager)
         assert hasattr(config, "get")
         assert hasattr(config, "get_nested")
@@ -152,7 +152,7 @@ class TestDependencyInjection:
     def test_dependency_providers(self):
         """Test that FastAPI dependency providers work correctly"""
         # Test config provider (this works outside FastAPI context)
-        config = get_config()
+        config = provide_config_manager()
         assert isinstance(config, ConfigManager)
 
         # Note: Other dependency providers require FastAPI request context
@@ -165,7 +165,7 @@ class TestDependencyInjection:
         assert callable(get_orchestrator)
 
         # Test manual dependency creation (simulates FastAPI behavior)
-        config = get_config()
+        config = provide_config_manager()
 
         # Manually call with resolved dependencies (as FastAPI would do)
         from diagnostics import Diagnostics

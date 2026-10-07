@@ -24,7 +24,7 @@ from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field, field_validator
 
-from .capabilities import Capability, TrustTier
+from .capabilities import PluginCapability, TrustTier
 
 logger = logging.getLogger(__name__)
 
@@ -130,8 +130,8 @@ class PluginManifest(BaseModel):
         description="Environment variables this plugin needs at runtime",
     )
 
-    # Capability declarations (Issue #9049)
-    capabilities: List[Capability] = Field(
+    # PluginCapability declarations (Issue #9049)
+    capabilities: List[PluginCapability] = Field(
         default_factory=list,
         description="Required capabilities (e.g. kb:read, llm:call, network:outbound)",
     )

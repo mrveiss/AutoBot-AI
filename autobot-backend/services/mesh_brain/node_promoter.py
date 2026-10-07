@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 # =============================================================================
 
 
-class MeshDB(Protocol):
+class AnchorStore(Protocol):
     """Protocol for mesh database operations required by NodePromoter."""
 
     async def get_promotion_candidates(self, min_access: int, min_edges: int) -> list[dict]:
@@ -93,7 +93,7 @@ class NodePromoter:
 
     def __init__(
         self,
-        db: MeshDB,
+        db: AnchorStore,
         llm: Callable[[str], Coroutine],
         chroma_client: ChromaCollection,
         promote_access_threshold: int = 50,

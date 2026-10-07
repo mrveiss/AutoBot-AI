@@ -45,6 +45,7 @@ from knowledge.search_components import (
     get_analytics,
     get_reranker,
 )
+from knowledge.search_components.basic_vector_search import BasicVectorSearchMixin
 from knowledge.search_components.helpers import (
     build_search_result,
     decode_redis_hash,
@@ -54,8 +55,6 @@ from knowledge.search_components.helpers import (
 from knowledge.search_components.hybrid_search import HybridSearcher
 
 # Issue #3828: canonical vector search engine — SearchMixin.search() delegates here.
-from knowledge.vector_search_engine import SearchResult as _EngineSearchResult
-from knowledge.vector_search_engine import get_vector_search_engine
 from models.task_context import SearchContext
 
 if TYPE_CHECKING:
@@ -86,7 +85,7 @@ def map_kb_result_to_dict(raw: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-class SearchMixin:
+class SearchMixin(BasicVectorSearchMixin):
     """
     Search functionality mixin for knowledge base.
 
@@ -316,58 +315,7 @@ class SearchMixin:
                 board_id=board_id,
             )
 
-        # ---- Basic vector search path ----
-        self.ensure_initialized()
-        similarity_top_k = similarity_top_k or top_k
-
-        invalid_result = self._validate_search_inputs(query)
-        if invalid_result is not None:
-            return invalid_result
-
-        # Issue #5064: sanitize query before embedding to block prompt injection.
-        sanitized = self._sanitize_search_query(query)
-        if sanitized is None:
-            return []
-        query = sanitized
-
-        try:
-            engine = await get_vector_search_engine()
-            engine_results: List[_EngineSearchResult] = await engine.search(
-                query=query,
-                top_k=similarity_top_k,
-                filters=filters,
-                hardware_backend="auto",
-            )
-            # Convert canonical SearchResult -> legacy dict format expected by callers
-            results = [
-                {
-                    "content": r.text,
-                    "score": r.score,
-                    "metadata": r.metadata,
-                    "node_id": r.source,
-                    "doc_id": r.source,  # V1 compatibility
-                }
-                for r in engine_results
-            ]
-            # A1 (#12552): reinforce facts surfaced by a real query. Fire-and-forget;
-            # never blocks or alters the returned results.
-            try:
-                await self.record_fact_access([r.source for r in engine_results if r.source])
-            except Exception:
-                logger.debug("search: record_fact_access skipped", exc_info=True)
-            return results
-        except Exception as exc:
-            logger.warning(
-                "VectorSearchEngine delegation failed (%s), falling back to direct ChromaDB",
-                exc,
-            )
-
-        # Fallback: original direct ChromaDB path
-        try:
-            return await self._execute_vector_search(query, similarity_top_k, filters=filters)
-        except Exception as e:
-            logger.error("Knowledge base search failed: %s", e)
-            return []
+        return await self._search_basic(query, top_k, similarity_top_k, filters)
 
     async def _get_query_embedding(self, query: str) -> List[float]:
         """Get embedding for query, using cache when available.

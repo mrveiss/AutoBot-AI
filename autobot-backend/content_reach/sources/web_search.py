@@ -22,7 +22,7 @@ from content_reach._http import http_get
 from content_reach.backends.browser import BrowserSearchBackend
 from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
 from content_reach.chain import ContentSourceChain
-from source_attribution import SourceReliability, SourceType
+from source_attribution import SourceKind, SourceReliability
 
 logger = get_logger(__name__)
 
@@ -48,7 +48,7 @@ class DdgsBackend(ContentBackend):
     """
 
     name = "ddgs"
-    source_type = SourceType.WEB_SEARCH
+    source_type = SourceKind.WEB_SEARCH
 
     async def probe(self) -> bool:
         """Return True iff ddgs is importable."""
@@ -102,7 +102,7 @@ class JinaSearchBackend(ContentBackend):
     """
 
     name = "jina_search"
-    source_type = SourceType.WEB_SEARCH
+    source_type = SourceKind.WEB_SEARCH
 
     def __init__(self, client: httpx.AsyncClient | None = None) -> None:
         self._client = client
@@ -144,10 +144,10 @@ def build_web_search_chain() -> ContentSourceChain:
     """Build the web-search fallback chain: ddgs → jina_search → browser_search."""
     return ContentSourceChain(
         source="web_search",
-        source_type=SourceType.WEB_SEARCH,
+        source_type=SourceKind.WEB_SEARCH,
         backends=[
             DdgsBackend(),
             JinaSearchBackend(),
-            BrowserSearchBackend(SourceType.WEB_SEARCH),
+            BrowserSearchBackend(SourceKind.WEB_SEARCH),
         ],
     )

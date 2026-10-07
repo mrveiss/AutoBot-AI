@@ -12,7 +12,7 @@ import httpx
 import pytest
 
 from content_reach.base import BackendError, ContentRequest
-from source_attribution import SourceType
+from source_attribution import SourceKind
 
 # ---------------------------------------------------------------------------
 # TrafilaturaBackend — probe()
@@ -81,7 +81,7 @@ async def test_trafilatura_fetch_maps_extracted_text(monkeypatch):
 
     assert result.success is True
     assert result.backend_used == "trafilatura"
-    assert result.source_type is SourceType.WEB_PAGE
+    assert result.source_type is SourceKind.WEB_PAGE
     assert result.text == "Extracted article text"
     assert result.url == "https://example.com/article"
 
@@ -207,7 +207,7 @@ async def test_jina_reader_fetch_maps_text():
 
     assert result.success is True
     assert result.backend_used == "jina_reader"
-    assert result.source_type is SourceType.WEB_PAGE
+    assert result.source_type is SourceKind.WEB_PAGE
     assert result.text == "Article text from Jina"
 
 
@@ -301,5 +301,5 @@ def test_build_web_page_chain_order():
 
     chain = build_web_page_chain()
     assert chain.backend_names() == ["trafilatura", "jina_reader", "browser"]
-    assert chain.source_type is SourceType.WEB_PAGE
+    assert chain.source_type is SourceKind.WEB_PAGE
     assert chain.source == "web_page"
