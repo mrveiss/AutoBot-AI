@@ -159,6 +159,7 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
 #: and that is the point -- the scope is a decision, so it is written twice on purpose.
 _DECLARED_SCOPES = {
     "direct-secrets-service-callers": ("autobot-backend", "autobot_shared"),
+    "data-db-path-production-python": ("autobot-backend", "autobot_shared"),
     "jekyll-processed-docs": ("docs",),
     "kb-admin-read-bypass": ("autobot-backend/", "autobot_shared/"),
     "kb-read-visibility-production-sweep": (
