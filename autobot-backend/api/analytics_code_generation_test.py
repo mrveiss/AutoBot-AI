@@ -18,21 +18,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# #18070: conftest stubs the `code_intelligence` package (its `__init__` carries
-# annotations this interpreter floor cannot parse), so `ValidationResult` would
-# arrive here as a MagicMock -- and every assertion against a MagicMock passes,
-# whatever the real value is. Green and blind. Real-load the leaf module, which
-# is stdlib-only, exactly as conftest already does for `code_generation.diff`.
-_types_path = Path(__file__).resolve().parents[1] / "code_intelligence" / "code_generation" / "types.py"
-if _types_path.is_file():
-    import importlib.util as _ilu
-
-    _spec = _ilu.spec_from_file_location("code_intelligence.code_generation.types", _types_path)
-    if _spec and _spec.loader:
-        _types_mod = _ilu.module_from_spec(_spec)
-        sys.modules["code_intelligence.code_generation.types"] = _types_mod
-        _spec.loader.exec_module(_types_mod)
-
 
 def _make_shared_mock(return_path=None):
     """Build a fake api.codebase_analytics.endpoints.shared module."""
