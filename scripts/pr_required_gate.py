@@ -137,6 +137,27 @@ VERDICTS = frozenset(
 #: verdict gets counted as a passing one.
 CLEARING_VERDICTS = frozenset({"CONTEXTS-GREEN"})
 
+#: Exit status for "this tool could not reach a verdict at all" -- deliberately
+#: NOT 1. Every verdict in :data:`VERDICTS` that is not clearing exits 1, so an
+#: operational failure exiting 1 too is indistinguishable from `BLOCKED`, and
+#: the wrapper said "NOT clear to merge ... verdict above" when there was no
+#: verdict above. That is this tool's own thesis turned on itself: an error
+#: wearing the shape of a measurement.
+#:
+#: 2 rather than a new verdict on purpose. `pr-merge-gate.sh` already exits 2
+#: for "could not ask" (gh unqueryable, detached HEAD, no open PR), so the
+#: caller's vocabulary is already 0=green / 1=judged-and-not-green /
+#: 2=unknown. An operational failure is the ABSENCE of a verdict, so it must
+#: not enter :data:`VERDICTS` -- a reader who sees it listed there would
+#: reasonably ask which contexts produced it.
+EXIT_GATE_ERROR = 2
+
+#: What a failed `gh` or a malformed response actually raises. Named and narrow:
+#: a bare `except Exception` here would convert a genuine bug in the verdict
+#: logic into a tidy "could not reach a verdict", which is the same substitution
+#: of a plausible answer for a real one that the narrow list avoids.
+GATE_ERRORS = (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, OSError)
+
 
 def declared(verdict: str, detail: str = "") -> str:
     """Stamp a verdict, refusing one that is not in :data:`VERDICTS`.
@@ -449,7 +470,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="emit the full verdict as JSON")
     args = parser.parse_args(argv)
 
-    fetched = _fetch(args.pr, args.repo, args.base)
+    try:
+        fetched = _fetch(args.pr, args.repo, args.base)
+    except GATE_ERRORS as exc:
+        # NOT a verdict, and deliberately not phrased as one: no `declared()`
+        # call, nothing assigned to result["verdict"], and the word GREEN does
+        # not appear. The contract test's escape detector watches `return
+        # "<string>"` and `result["verdict"] = "<string>"`; this path uses
+        # neither, because what it reports is that no verdict exists.
+        _emit(f"#{args.pr} GATE-ERROR  could not reach a verdict: {type(exc).__name__}: {exc}")
+        _emit("  This is NOT 'not clear to merge' -- nothing was measured. Re-run,")
+        _emit("  or check `gh auth status` and that the PR and base branch exist.")
+        return EXIT_GATE_ERROR
     result = verdict(fetched["required"], fetched["observed"])
     result["head"] = fetched["head"]
     result["pr_state"] = fetched.get("pr_state", "OPEN")

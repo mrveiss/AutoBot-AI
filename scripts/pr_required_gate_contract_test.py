@@ -44,8 +44,6 @@ GATE_SOURCE = pathlib.Path(gate_module.__file__).read_text(encoding="utf-8")
 # invented. These tests make that diff mandatory.
 # ---------------------------------------------------------------------------
 
-GATE_SOURCE = pathlib.Path(gate_module.__file__).read_text(encoding="utf-8")
-
 #: The four syntactic shapes a verdict string can be produced in. Enumerated
 #: independently of how the extractor looks for them, and each one carries a
 #: control below -- a control witnesses only the shape it is written in, so one
@@ -254,6 +252,97 @@ def test_an_empty_requirement_list_exits_non_zero_end_to_end(monkeypatch):
     assert gate_module.main(["123"]) == 1, "a PR with no required contexts cleared the gate"
     assert any(gate_module.NO_REQUIREMENTS in line for line in emitted), emitted
     assert any("not a pass" in line for line in emitted), "the reason was not reported"
+
+
+def test_an_operational_failure_is_not_reported_as_a_verdict(monkeypatch):
+    """A raising `gh` exited 1, the same status as BLOCKED, and the wrapper said
+
+    "NOT clear to merge ... verdict above" with no verdict above it. The status
+    must differ from BOTH the clearing and the non-clearing verdict codes.
+    """
+    import subprocess
+
+    def _boom(pr, repo, base):
+        raise subprocess.CalledProcessError(1, ["gh", "api", "..."], stderr="gh: not found")
+
+    monkeypatch.setattr(gate_module, "_fetch", _boom)
+    emitted: list[str] = []
+    monkeypatch.setattr(gate_module, "_emit", emitted.append)
+
+    rc = gate_module.main(["17962"])
+    assert rc == gate_module.EXIT_GATE_ERROR, f"operational failure exited {rc}"
+    assert rc != 0, "an unreachable verdict must not read as clearance"
+    assert rc != 1, "an unreachable verdict must not read as BLOCKED"
+    assert any("GATE-ERROR" in line for line in emitted), emitted
+    # The word a reader scans for must NOT appear: this is the failure mode.
+    assert not any("GREEN" in line for line in emitted), emitted
+    # And it must not have smuggled itself into the verdict vocabulary.
+    assert "GATE-ERROR" not in gate_module.VERDICTS
+
+
+def test_each_gate_error_type_is_caught_and_a_real_bug_is_not(monkeypatch):
+    """The catch is narrow ON PURPOSE.
+
+    A bare `except Exception` would turn a genuine bug in the verdict logic
+    into a tidy "could not reach a verdict" -- substituting a plausible answer
+    for a real one, which is what this tool exists to stop. So every listed
+    error type is asserted to be caught, and an UNLISTED one is asserted to
+    propagate.
+    """
+    import json as _json
+    import subprocess
+
+    emitted: list[str] = []
+    monkeypatch.setattr(gate_module, "_emit", emitted.append)
+
+    for exc in (
+        subprocess.CalledProcessError(1, ["gh"]),
+        _json.JSONDecodeError("bad", "{", 0),
+        KeyError("headRefOid"),
+        OSError("network down"),
+    ):
+        monkeypatch.setattr(gate_module, "_fetch", lambda p, r, b, e=exc: (_ for _ in ()).throw(e))
+        assert gate_module.main(["1"]) == gate_module.EXIT_GATE_ERROR, f"not caught: {exc!r}"
+
+    # CONTROL: a bug in the logic must still crash loudly, not be laundered.
+    monkeypatch.setattr(gate_module, "_fetch", lambda p, r, b: (_ for _ in ()).throw(ZeroDivisionError("real bug")))
+    with pytest.raises(ZeroDivisionError):
+        gate_module.main(["1"])
+
+
+def test_the_premerge_lookup_is_scoped_by_repo_and_base():
+    """The PR lookup and the verdict must be about the same PR.
+
+    The lookup took neither `--repo` nor `--base` while the gate took both, so
+    with `--repo R` it searched the checkout, and with two open PRs sharing a
+    head branch it could return the one targeting a different base -- which the
+    gate then judged against the requested base's protection. `gh pr view`
+    never fetches the target branch, so nothing downstream caught it.
+
+    Anchored on the forwarding lines rather than on the flags appearing
+    anywhere in the file: both strings already occur in `GATE_ARGS` just below,
+    so a file-wide grep would pass on the unfixed script.
+    """
+    script = MERGE_GATE.read_text(encoding="utf-8")
+    lookup = script.split("LOOKUP_ARGS=(", 1)
+    assert len(lookup) == 2, "the lookup no longer builds an argument array — guard is stale"
+    body = lookup[1].split("if ! PR_NUMBER=", 1)[0]
+    assert 'LOOKUP_ARGS+=(--repo "$REPO")' in body, "the PR lookup does not forward --repo"
+    assert 'LOOKUP_ARGS+=(--base "$BASE")' in body, "the PR lookup does not forward --base"
+    assert 'gh pr list "${LOOKUP_ARGS[@]}"' in script, "the lookup does not use the scoped array"
+
+
+def test_the_premerge_wrapper_separates_unknown_from_refused():
+    """Three outcomes: green (0), judged-and-not-green (1), could-not-judge (2).
+
+    The wrapper's final branch was the `else` of a two-way test, so any
+    non-zero gate status printed "is NOT clear to merge ... verdict above".
+    """
+    script = MERGE_GATE.read_text(encoding="utf-8")
+    assert '[ "$GATE_RC" -ne 1 ]' in script, "the wrapper does not separate UNKNOWN from refused"
+    unknown = script.split('[ "$GATE_RC" -ne 1 ]', 1)[1].split("fi", 1)[0]
+    assert "exit 2" in unknown, "the UNKNOWN arm does not exit 2"
+    assert "not a refusal" in unknown, "the UNKNOWN arm does not say it is not a refusal"
 
 
 def _draft_fetch(*, pr_state: str = "OPEN", is_draft: bool = True):

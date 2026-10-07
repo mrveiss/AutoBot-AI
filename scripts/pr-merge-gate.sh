@@ -88,7 +88,23 @@ if [ -z "$PR_NUMBER" ]; then
   # A `gh` that FAILED and a branch with no PR are different answers and get
   # different exits. Collapsing them is the defect the gate downstream exists
   # for: "could not ask" must never render as "nothing to report".
-  if ! PR_NUMBER=$(gh pr list --head "$BRANCH" --state open --limit 1 --json number --jq '.[0].number' 2>/dev/null); then
+  # SCOPED THE SAME WAY THE VERDICT IS. The lookup used to take neither
+  # --repo nor --base while the gate took both, so the two could answer about
+  # different things:
+  #   --repo R   the lookup searched the CHECKOUT, then handed that number to
+  #              a gate pointed at R -- an unrelated PR judged against R's
+  #              protection, or no PR found in R at all.
+  #   --base B   with two open PRs sharing a head branch, the lookup could
+  #              return the one targeting a DIFFERENT base, and the gate reads
+  #              protection for B. `gh pr view` fetches headRefOid/state/
+  #              isDraft and never the target branch, so nothing downstream
+  #              catches it: a green clearance for the wrong PR.
+  # Both filters are forwarded, so a mismatch becomes "no OPEN pull request"
+  # (exit 2, unknown) instead of a confident answer about something else.
+  LOOKUP_ARGS=(--head "$BRANCH" --state open --limit 1 --json number --jq '.[0].number')
+  [ -n "$REPO" ] && LOOKUP_ARGS+=(--repo "$REPO")
+  [ -n "$BASE" ] && LOOKUP_ARGS+=(--base "$BASE")
+  if ! PR_NUMBER=$(gh pr list "${LOOKUP_ARGS[@]}" 2>/dev/null); then
     echo "gh could not be queried for '$BRANCH' — the verdict is UNKNOWN, which is not green" >&2
     exit 2
   fi
@@ -108,6 +124,18 @@ GATE_RC=$?
 if [ "$GATE_RC" -eq 0 ]; then
   echo "pr-merge-gate: PR #$PR_NUMBER — every required context on the current head is green"
   exit 0
+fi
+# THREE outcomes, not two. The gate exits 0 for green, 1 for a verdict that is
+# not clearing, and EXIT_GATE_ERROR (2) when it could not reach a verdict at
+# all -- a `gh` call that raised, a malformed response. This branch used to be
+# the `else` of a two-way test, so an operational failure printed "is NOT clear
+# to merge on its required contexts ... verdict above" with no verdict above
+# it. "Could not ask" rendering as "asked and the answer is no" is the exact
+# collapse the lookup guard above refuses, and it was happening here.
+if [ "$GATE_RC" -ne 1 ]; then
+  echo "pr-merge-gate: PR #$PR_NUMBER — the gate could not reach a verdict (gate exit $GATE_RC)." >&2
+  echo "pr-merge-gate: this is UNKNOWN, not a refusal. Nothing above is a verdict." >&2
+  exit 2
 fi
 echo "pr-merge-gate: PR #$PR_NUMBER is NOT clear to merge on its required contexts (gate exit $GATE_RC, verdict above)"
 exit 1
