@@ -126,7 +126,7 @@ async def test_a_release_failure_does_not_replace_the_runs_outcome(redis, monkey
     async def _failing_release(scope, **kwargs):
         raise RuntimeError("redis went away")
 
-    monkeypatch.setattr("autobot_shared.coordination.work_claims.release", _failing_release)
+    monkeypatch.setattr("autobot_shared.coordination.work_claims.release_scope", _failing_release)
 
     async with hold_scopes(["path:a/b.py"], agent_id="agent-1", task_id="t1", intent="write") as held:
         assert held.granted

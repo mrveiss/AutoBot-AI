@@ -201,7 +201,7 @@ async def complete(redis: Any, key: str, token: str, response: ReplayedResponse)
     return True
 
 
-async def release(redis: Any, key: str, token: str) -> bool:
+async def release_key(redis: Any, key: str, token: str) -> bool:
     """Drop a claim whose request failed, so the caller may retry it.
 
     A failed create is not a completed one: holding the key would make the retry

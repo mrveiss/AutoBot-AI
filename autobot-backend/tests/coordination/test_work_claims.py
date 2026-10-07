@@ -38,7 +38,7 @@ from autobot_shared.coordination.work_claims import (
     ScopeError,
     WorkClaim,
     list_claims,
-    release,
+    release_scope,
     renew,
     try_acquire,
     work_claim,
@@ -248,7 +248,7 @@ async def test_two_shared_holders_coexist_independently(redis):
     assert holders == {("agent-1", "t1"), ("agent-2", "t2")}
 
     # Each holder owns its own record: one release leaves the other intact.
-    assert await release("path:a/b", agent_id="agent-1", task_id="t1") is True
+    assert await release_scope("path:a/b", agent_id="agent-1", task_id="t1") is True
     remaining = await list_claims("path")
     assert [(c.agent_id, c.task_id) for c in remaining] == [("agent-2", "t2")]
 
@@ -374,9 +374,9 @@ async def test_an_expired_claim_neither_lists_nor_blocks(redis):
 @pytest.mark.asyncio
 async def test_release_is_owner_checked(redis):
     await _acquire("path:a/b", "agent-1", "t1")
-    assert await release("path:a/b", agent_id="agent-2", task_id="t2") is False
+    assert await release_scope("path:a/b", agent_id="agent-2", task_id="t2") is False
     assert isinstance(await _acquire("path:a/b", "agent-3", "t3"), ClaimConflict)
-    assert await release("path:a/b", agent_id="agent-1", task_id="t1") is True
+    assert await release_scope("path:a/b", agent_id="agent-1", task_id="t1") is True
     assert isinstance(await _acquire("path:a/b", "agent-3", "t3"), WorkClaim)
 
 
@@ -385,7 +385,7 @@ async def test_renew_is_owner_checked_and_false_once_gone(redis):
     await _acquire("path:a/b", "agent-1", "t1")
     assert await renew("path:a/b", agent_id="agent-2", task_id="t2") is False
     assert await renew("path:a/b", agent_id="agent-1", task_id="t1") is True
-    await release("path:a/b", agent_id="agent-1", task_id="t1")
+    await release_scope("path:a/b", agent_id="agent-1", task_id="t1")
     assert await renew("path:a/b", agent_id="agent-1", task_id="t1") is False
 
 
@@ -468,8 +468,8 @@ async def test_python_and_lua_overlap_rules_agree_over_a_bounded_space(redis):
             outcome = await _acquire(right, "agent-2", "t2")
             lua_says = isinstance(outcome, ClaimConflict)
             if isinstance(outcome, WorkClaim):
-                await release(right, agent_id="agent-2", task_id="t2")
-            await release(left, agent_id="agent-1", task_id="t1")
+                await release_scope(right, agent_id="agent-2", task_id="t2")
+            await release_scope(left, agent_id="agent-1", task_id="t1")
             if python_says != lua_says:
                 disagreements.append((left, right, python_says, lua_says))
     assert not disagreements, f"overlap rules disagree on {len(disagreements)} pairs: {disagreements[:5]}"
@@ -490,6 +490,6 @@ async def test_empty_holder_identity_is_refused(redis, agent, task):
 @pytest.mark.asyncio
 async def test_release_and_renew_also_refuse_an_empty_holder(redis):
     """Otherwise the ownership check could be satisfied by a blank identity."""
-    for call in (release, renew):
+    for call in (release_scope, renew):
         with pytest.raises(HolderError):
             await call("path:a/b", agent_id="", task_id="")

@@ -192,11 +192,11 @@ async def _release_all(scopes: Sequence[str], *, agent_id: str, task_id: str) ->
     An ordinary exception from one release is logged and never raised; the TTL
     expires that claim. Cancellation still propagates.
     """
-    from autobot_shared.coordination.work_claims import release
+    from autobot_shared.coordination.work_claims import release_scope
 
     for scope in scopes:
         try:
-            await release(scope, agent_id=agent_id, task_id=task_id)
+            await release_scope(scope, agent_id=agent_id, task_id=task_id)
         except Exception as exc:  # noqa: BLE001 -- see the module docstring
             logger.warning("releasing scope %s failed; its TTL will expire it: %s", scope, exc)
 

@@ -332,7 +332,6 @@
     "register",
     "register_backend",
     "registered_backends",
-    "release",
     "reload_config",
     "require_admin",
     "require_all_permissions",

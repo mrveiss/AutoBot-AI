@@ -22,7 +22,7 @@ from autobot_shared.coordination.branch_stewardship import (
     declare,
     interests,
     prune,
-    release,
+    release_stewardship,
     transfer,
 )
 from autobot_shared.coordination.work_claims import ClaimConflict, ClaimMode, ScopeError, WorkClaim
@@ -219,9 +219,9 @@ async def test_transferring_an_unknown_branch_raises(redis):
 async def test_release_ends_the_interest_and_is_idempotent(redis):
     """A merge and a close can both fire; neither should raise on the other."""
     await declare("path:a/b.py", branch="issue-1", steward="agent-1", intent="x")
-    assert await release("path:a/b.py", branch="issue-1") is True
+    assert await release_stewardship("path:a/b.py", branch="issue-1") is True
     assert await interests("path:a/b.py") == []
-    assert await release("path:a/b.py", branch="issue-1") is False
+    assert await release_stewardship("path:a/b.py", branch="issue-1") is False
 
 
 @pytest.mark.asyncio

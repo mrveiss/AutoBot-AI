@@ -485,7 +485,7 @@ async def try_acquire(
     return result
 
 
-async def release(scope: str | Scope, *, agent_id: str, task_id: str) -> bool:
+async def release_scope(scope: str | Scope, *, agent_id: str, task_id: str) -> bool:
     """Release this holder's claim on *scope*. True when one went.
 
     A holder can only ever address its own key, so releasing another agent's
@@ -589,4 +589,4 @@ async def work_claim(
         # would be free for another agent mid-write, which is the exact
         # collision this module exists to prevent.
         if verdict == "acquired":
-            await release(scope, agent_id=agent_id, task_id=tid)
+            await release_scope(scope, agent_id=agent_id, task_id=tid)

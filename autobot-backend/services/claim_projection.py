@@ -53,7 +53,7 @@ from autobot_shared.coordination.work_claims import (
     claim_payload,
     conflict_payload,
     list_claims,
-    release,
+    release_scope,
     try_acquire,
 )
 from autobot_shared.logging_manager import get_logger
@@ -129,7 +129,7 @@ async def acquire_and_publish(
 
 async def release_and_publish(scope: str | Scope, *, agent_id: str, task_id: str) -> bool:
     """Release *scope* and project it. Same failure rule as :func:`acquire_and_publish`."""
-    released = await release(scope, agent_id=agent_id, task_id=task_id)
+    released = await release_scope(scope, agent_id=agent_id, task_id=task_id)
     if released:
         try:
             await publish_released(str(Scope.parse(scope)), agent_id=agent_id, task_id=task_id)

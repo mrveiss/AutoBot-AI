@@ -244,7 +244,7 @@ async def transfer(
     return moved
 
 
-async def release(scope: str | Scope, *, branch: str) -> bool:
+async def release_stewardship(scope: str | Scope, *, branch: str) -> bool:
     """Drop *branch*'s interest in *scope*. Called when its PR merges or closes.
 
     True when a record went. Releasing something already gone is not an error --
