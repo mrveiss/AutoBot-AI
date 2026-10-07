@@ -28,7 +28,7 @@ class BasicVectorSearchMixin:
         top_k: int,
         similarity_top_k: int | None,
         filters: Dict[str, Any] | None,
-    ):
+    ) -> List[Dict[str, Any]]:
         """Run the basic vector search, falling back to direct ChromaDB on error."""
         self.ensure_initialized()
         similarity_top_k = similarity_top_k or top_k

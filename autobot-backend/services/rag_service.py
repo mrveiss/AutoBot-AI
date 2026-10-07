@@ -743,9 +743,13 @@ class RAGService:
         # Issue #4690: session-adapted weights apply to this search only; the
         # context manager restores them even if the search raises.
         adapting = bool(self.config.enable_session_adaptive_reranking and session_id)
+        # The guard this replaced was `enabled and session_id and self.optimizer`,
+        # so the reranker is reached only once the optimizer is known to exist --
+        # tests build this service with `__new__` and set only what they need.
+        adapting_optimizer = self.optimizer if adapting else None
         with session_adapted_weights(
-            self.optimizer if adapting else None,
-            self._session_reranker if adapting else None,
+            adapting_optimizer,
+            self._session_reranker if adapting_optimizer else None,
             session_id,
             enabled=adapting,
         ):

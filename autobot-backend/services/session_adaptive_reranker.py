@@ -273,10 +273,17 @@ def session_adapted_weights(
 ) -> Iterator[None]:
     """Apply this session's adapted hybrid weights for the duration of a search (#4690).
 
-    The optimizer is shared, so non-session callers must see the original
-    weights afterwards. Restoring in ``finally`` means a search that raises no
-    longer leaks this session's weights into the next caller — the inline
-    version it replaced restored only on the success path.
+    The optimizer is shared, so a caller that does not adapt must see the
+    original weights afterwards. Restoring in ``finally`` means a search that
+    raises no longer leaks this session's weights into the next caller — the
+    inline version it replaced restored only on the success path.
+
+    SCOPE: this restores correctly for *non-overlapping* uses only. Save and
+    restore straddle an ``await``, so two concurrent sessions can interleave
+    such that the second saves the first's adapted weights as its "previous"
+    and reinstates them on exit, stranding them on the shared optimizer. Making
+    that safe needs per-session weights or a lock rather than save/restore, and
+    is tracked in #18084 — do not read this as a concurrency guarantee.
 
     A no-op when the feature is off, no session is given, or there is no
     optimizer to adapt, so callers pass ``None`` rather than building one.
