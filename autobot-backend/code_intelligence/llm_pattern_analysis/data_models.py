@@ -8,7 +8,7 @@ LLM Pattern Analyzer Data Models Module
 Contains data classes for LLM pattern analysis results:
 - TokenUsage, PromptAnalysisResult, PromptTemplate
 - CacheOpportunity, UsagePattern, RetryPattern
-- BatchingOpportunity, CostEstimate, OptimizationRecommendation
+- BatchingOpportunity, CostEstimate, CodePatternRecommendation
 - PatternAnalysisResult
 
 Extracted from llm_pattern_analyzer.py as part of Issue #381 refactoring.
@@ -333,7 +333,7 @@ class CostEstimate:
 
 
 @dataclass
-class OptimizationRecommendation:
+class CodePatternRecommendation:
     """A specific optimization recommendation."""
 
     recommendation_id: str
@@ -371,11 +371,11 @@ class PatternAnalysisResult:
     batching_opportunities: List[BatchingOpportunity]
     retry_patterns: List[RetryPattern]
     cost_estimates: List[CostEstimate]
-    recommendations: List[OptimizationRecommendation]
+    recommendations: List[CodePatternRecommendation]
     total_estimated_savings_percent: float = 0.0
     summary: Dict[str, Any] = field(default_factory=dict)
 
-    def get_high_priority_recommendations(self) -> List[OptimizationRecommendation]:
+    def get_high_priority_recommendations(self) -> List[CodePatternRecommendation]:
         """Get only high-priority recommendations."""
         return [rec for rec in self.recommendations if rec.should_prioritize()]
 
