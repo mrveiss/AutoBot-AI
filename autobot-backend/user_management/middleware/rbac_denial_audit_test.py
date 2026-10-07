@@ -21,11 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from autobot_shared.middleware import rbac_middleware as _canonical
-
-# #18088: the implementation moved to autobot_shared; this module is now a
-# re-export shim, so a source-text assertion must read the canonical file.
-_SRC = Path(_canonical.__file__)
+_SRC = Path(__file__).resolve().parent / "rbac_middleware.py"
 
 
 def _source() -> str:
@@ -110,7 +106,7 @@ class TestFailureIsolation:
     @pytest.mark.asyncio
     async def test_db_failure_does_not_propagate(self):
         """A failing audit write must not convert a 403 into a 500."""
-        from autobot_shared.middleware import rbac_middleware as mod
+        from user_management.middleware import rbac_middleware as mod
 
         with patch.object(mod, "db_session_context", side_effect=RuntimeError("db down")):
             # Must return normally rather than raise.
@@ -119,7 +115,7 @@ class TestFailureIsolation:
     @pytest.mark.asyncio
     async def test_denial_is_logged_even_when_the_write_fails(self, caplog):
         """The warning is emitted first, so a DB outage cannot hide the denial."""
-        from autobot_shared.middleware import rbac_middleware as mod
+        from user_management.middleware import rbac_middleware as mod
 
         with patch.object(mod, "db_session_context", side_effect=RuntimeError("db down")):
             with caplog.at_level("WARNING"):
@@ -131,7 +127,7 @@ class TestFailureIsolation:
     @pytest.mark.asyncio
     async def test_entry_carries_the_forensic_fields(self):
         """user, permission, path, ip and user-agent — the point of the trail."""
-        from autobot_shared.middleware import rbac_middleware as mod
+        from user_management.middleware import rbac_middleware as mod
 
         session = MagicMock()
         ctx = MagicMock()
@@ -159,7 +155,7 @@ class TestFailureIsolation:
 
 def test_request_context_survives_a_clientless_request():
     """Starlette leaves request.client None behind some proxies — must not crash."""
-    from autobot_shared.middleware import rbac_middleware as mod
+    from user_management.middleware import rbac_middleware as mod
 
     request = MagicMock()
     request.url.path = "/api/users"
