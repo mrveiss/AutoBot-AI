@@ -23,9 +23,9 @@ from autobot_shared.status_enums import AgentStatus  # #7504 consolidation
 from constants.threshold_constants import TimingConstants
 from protocols.agent_communication import (
     AgentIdentity,
+    AgentMessageType,
     MessageHeader,
     MessagePayload,
-    MessageType,
     StandardMessage,
     get_communication_manager,
 )
@@ -408,7 +408,7 @@ class BaseAgent(ABC):
 
             # Register default message handlers
             self.communication_protocol.register_message_handler(
-                MessageType.REQUEST, self._handle_communication_request
+                AgentMessageType.REQUEST, self._handle_communication_request
             )
 
             logger.info("Agent %s communication initialized", self.agent_id)
@@ -445,7 +445,7 @@ class BaseAgent(ABC):
 
             # Convert AgentResponse back to communication message
             response_message = StandardMessage(
-                header=MessageHeader(message_type=MessageType.RESPONSE),
+                header=MessageHeader(message_type=AgentMessageType.RESPONSE),
                 payload=MessagePayload(
                     content={
                         "status": response.status,
@@ -462,7 +462,7 @@ class BaseAgent(ABC):
             logger.error("Error handling communication request: %s", e)
             # Return error response
             return StandardMessage(
-                header=MessageHeader(message_type=MessageType.ERROR),
+                header=MessageHeader(message_type=AgentMessageType.ERROR),
                 payload=MessagePayload(
                     content={
                         "error": "Communication request failed",

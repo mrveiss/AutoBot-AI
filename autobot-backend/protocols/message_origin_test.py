@@ -14,10 +14,10 @@ from agents.base_agent import AgentRequest, AgentResponse, LocalAgent
 from protocols.agent_communication import (
     AgentCommunicationProtocol,
     AgentIdentity,
+    AgentMessageType,
     CommunicationChannel,
     MessageHeader,
     MessagePayload,
-    MessageType,
     StandardMessage,
 )
 from protocols.message_origin import Origin, acting_for, current_origin, origin_of, stamp
@@ -202,7 +202,7 @@ class _Hop(LocalAgent):
 
 
 def _request_to(recipient: str) -> StandardMessage:
-    header = _header(message_type=MessageType.REQUEST, recipient=recipient)
+    header = _header(message_type=AgentMessageType.REQUEST, recipient=recipient)
     return StandardMessage(header=header, payload=MessagePayload(content={"action": "process", "payload": {}}))
 
 
@@ -211,7 +211,7 @@ def _wire(protocols: Dict[str, AgentCommunicationProtocol], agent_id: str, hop: 
     protocol.add_channel(f"{agent_id}_routed", _Routed(agent_id, protocols))
     if hop is not None:
         hop.communication_protocol = protocol
-        protocol.register_message_handler(MessageType.REQUEST, hop._handle_communication_request)
+        protocol.register_message_handler(AgentMessageType.REQUEST, hop._handle_communication_request)
     protocols[agent_id] = protocol
 
 
@@ -230,7 +230,7 @@ async def test_two_real_round_trips_carry_the_originator_to_the_last_hop():
 
     reply = await protocols["agent_a"].send_request(_request_to("relay_b"), timeout=5)
 
-    assert reply is not None and reply.header.message_type is MessageType.RESPONSE
+    assert reply is not None and reply.header.message_type is AgentMessageType.RESPONSE
     onward = reply.payload.content["result"]["onward_reply"]
     assert onward["status"] == "success" and onward["result"] == {"handled_by": "agent_c"}
     assert (relay_b.seen.originator, relay_b.seen.chain) == ("agent_a", ["agent_a"])

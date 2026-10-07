@@ -13,9 +13,9 @@ from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from protocols.agent_communication import (
     AgentIdentity,
+    AgentMessageType,
     MessageHeader,
     MessagePayload,
-    MessageType,
     StandardMessage,
     broadcast_to_all_agents,
     get_communication_manager,
@@ -51,11 +51,11 @@ if __name__ == "__main__":
             logger.info(f"Agent 2 received request: {message.payload.content}")
 
             return StandardMessage(
-                header=MessageHeader(message_type=MessageType.RESPONSE),
+                header=MessageHeader(message_type=AgentMessageType.RESPONSE),
                 payload=MessagePayload(content={"response": "Hello from Agent 2!"}),
             )
 
-        protocol2.register_message_handler(MessageType.REQUEST, handle_request)
+        protocol2.register_message_handler(AgentMessageType.REQUEST, handle_request)
 
         # Test direct communication
         logger.info("Testing direct agent communication...")
