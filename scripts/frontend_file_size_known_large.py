@@ -127,7 +127,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/composables/usePatternAnalysis.ts": 900,
     "autobot-frontend/src/composables/usePrometheusMetrics.ts": 643,
     "autobot-frontend/src/composables/useSystemStatus.ts": 622,
-    "autobot-frontend/src/composables/useTheme.ts": 610,
+    "autobot-frontend/src/composables/useTheme.ts": 605,
     "autobot-frontend/src/composables/useTimeout.ts": 749,
     "autobot-frontend/src/composables/useVoiceConversation.ts": 986,
     "autobot-frontend/src/composables/useVoiceOutput.ts": 1089,
