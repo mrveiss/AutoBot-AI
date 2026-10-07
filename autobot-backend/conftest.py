@@ -807,8 +807,7 @@ for _causal_mod in [
     "agent_loop",
     "agent_loop.loop",
     "agent_loop.think_tool",
-    "code_intelligence",
-]:
+]:  # #18070: `code_intelligence` dropped -- stubbed for a 3.10 limit 3.14 does not have
     if _causal_mod not in sys.modules:
         sys.modules[_causal_mod] = _make_pkg_stub(_causal_mod)
 
@@ -839,10 +838,10 @@ if "agent_loop.tool_output_spill" not in sys.modules:
 # needs the real ParallelToolExecutor/DiffGenerator behaviour.
 if "code_intelligence.code_generation" not in sys.modules:
     sys.modules["code_intelligence.code_generation"] = _make_pkg_stub("code_intelligence.code_generation")
-_real_load_and_bind(
-    "code_intelligence.code_generation.diff",
-    backend_root / "code_intelligence" / "code_generation" / "diff.py",
-)
+_cg = backend_root / "code_intelligence" / "code_generation"
+_real_load_and_bind("code_intelligence.code_generation.diff", _cg / "diff.py")
+# types.py too (#18070): api/analytics_code_generation.py imports the canonical ValidationResult
+_real_load_and_bind("code_intelligence.code_generation.types", _cg / "types.py")
 
 # code_intelligence.shared.scoring real-load (#12686) — api/analytics_code.py,
 # api/code_intelligence.py, api/analytics_reporting.py, and services/analytics_service.py
