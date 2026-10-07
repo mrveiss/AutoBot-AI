@@ -192,7 +192,7 @@ def test_the_boot_path_does_not_call_the_validator() -> None:
 
 @dataclass
 class _FakeResult:
-    """The shape ``startup_validator.ValidationResult`` presents."""
+    """The shape ``startup_validator.DependencyValidation`` presents."""
 
     success: bool
     errors: List[str] = field(default_factory=list)

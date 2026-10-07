@@ -144,7 +144,7 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 # is SKIPPED on any PR that touches no python path, and reports `success` when it
 # does (#16087) -- the same bypass that let a fixture path become a real file on
 # `bf6ee5583`. Pinned to the measured number, not to the arithmetic.
-_KNOWN_REPO_VIOLATIONS = 300
+_KNOWN_REPO_VIOLATIONS = 299  # #18070: the print() in causal_executor's docstring example is gone
 
 
 def _test_git_env() -> dict[str, str]:
