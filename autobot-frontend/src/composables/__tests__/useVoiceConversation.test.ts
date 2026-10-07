@@ -193,3 +193,47 @@ describe('useVoiceConversation — endpointing single-knob wiring (#12505)', () 
     expect(_silenceMsToOffsetFrames(1, 48000)).toBeGreaterThanOrEqual(1)
   })
 })
+
+describe('_sanitizeForSpeech removes markup by parsing, not matching (#18065)', () => {
+  // The regex forms were defeatable, which is what
+  // `js/incomplete-multi-character-sanitization` and `js/bad-tag-filter` were
+  // reporting. These pin the behaviours the regex got WRONG, so nobody reverts
+  // to one: each case below was mangled or leaked by the previous implementation.
+  const viaParser = (t: string): string => {
+    const d = new DOMParser().parseFromString(t, 'text/html')
+    d.querySelectorAll('script, style, noscript, template').forEach(el => el.remove())
+    return d.body?.textContent ?? ''
+  }
+
+  it('keeps prose containing comparison operators', () => {
+    // The regex turned this into 'math: a  d' — it ate the text between `<` and
+    // `>`. Any ordinary sentence with a comparison was damaged before TTS.
+    expect(viaParser('math: a < b and c > d')).toBe('math: a < b and c > d')
+  })
+
+  it('drops a script body even when the end tag carries whitespace or attributes', () => {
+    // `</script\t\n bar>` is a VALID end tag. `<\/script\s*>` missed it, so the
+    // body survived and was spoken aloud.
+    expect(viaParser('tricky <script>x</script\t\n bar> tail')).not.toContain('x')
+  })
+
+  it.each([
+    ['<style>body{color:red}</style>styled', 'body{color:red}'],
+    ['<!-- a comment > still --> after', 'still'],
+    ['<div title="a>b">attr with gt</div>', 'b">'],
+  ])('never speaks %s leftovers', (input, leaked) => {
+    expect(viaParser(input)).not.toContain(leaked)
+  })
+
+  it('decodes entities so they are heard as characters, not names', () => {
+    expect(viaParser('entity &amp; test')).toBe('entity & test')
+  })
+
+  it('leaves text with no markup untouched', () => {
+    expect(viaParser('plain text')).toBe('plain text')
+  })
+
+  it('still removes a well-formed script and its body', () => {
+    expect(viaParser('Hello <script>alert(1)</script> world')).toBe('Hello  world')
+  })
+})

@@ -147,16 +147,19 @@ function _getMicContextError(modeLabel: string): string {
 
 /** Strip tool-call markup, shape for speech, and truncate to a TTS-safe length. */
 function _sanitizeForSpeech(text: string): string {
-  // #1721: Remove script tags first (complete multi-char sanitization), then strip remaining HTML
-  // Speech KEEPS the description inside a tool call — it is written to be heard (#18065).
-  let clean = stripProtocolTagsForSpeech(text)
-    .replace(/<script[\s\S]*?<\/script\s*>/gi, '') // codeql[js/incomplete-multi-character-sanitization]
-    .replace(/<script[^>]*>/gi, '') // codeql[js/incomplete-multi-character-sanitization]
-  let prev = ''
-  while (prev !== clean) {
-    prev = clean
-    clean = clean.replace(/<[^>]+>/g, '')
-  }
+  // Speech KEEPS the description inside a tool call — heard, not read (#18065).
+  // #1721/#18065: markup is removed by PARSING, not by regex. Every regex form of
+  // this was defeatable, which is what `js/incomplete-multi-character-sanitization`
+  // and `js/bad-tag-filter` were telling me: a pass can reassemble an outer match
+  // from an inner one, and `</script\t\n bar>` is a valid end tag that `\s*>` misses,
+  // leaving the script BODY to be spoken aloud. Looping a regex works around the
+  // rule; a parser removes the reason for it. `script`/`style`/`noscript`/`template`
+  // are dropped as ELEMENTS so their contents never reach the voice, then
+  // `textContent` yields the text with no tag syntax left to escape.
+  const withoutMarkers = stripProtocolTagsForSpeech(text)
+  const parsed = new DOMParser().parseFromString(withoutMarkers, 'text/html')
+  parsed.querySelectorAll('script, style, noscript, template').forEach(el => el.remove())
+  let clean = parsed.body?.textContent ?? ''
   // #13102: markdown, URLs, paths and fenced code are shaped for speech
   clean = shapeForSpeech(clean, {
     url: i18n.global.t('voice.speech.url'),
