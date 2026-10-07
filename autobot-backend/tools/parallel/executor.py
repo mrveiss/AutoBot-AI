@@ -28,7 +28,7 @@ from events.types import (
 )
 from security.content_firewall import ContentSource, get_content_firewall
 from tools.parallel.analyzer import DependencyAnalyzer
-from tools.parallel.types import ExecutionMetrics, ToolCall
+from tools.parallel.types import ExecutionMetrics, ParallelToolCall
 
 logger = get_logger(__name__)
 
@@ -96,15 +96,15 @@ class ParallelExecutorConfig:
 class ExecutionGraph:
     """Dependency graph for parallel execution"""
 
-    calls: dict[str, ToolCall] = field(default_factory=dict)
+    calls: dict[str, ParallelToolCall] = field(default_factory=dict)
     dependencies: dict[str, list[str]] = field(default_factory=dict)
 
-    def add_call(self, call: ToolCall) -> None:
+    def add_call(self, call: ParallelToolCall) -> None:
         """Add a tool call to the graph"""
         self.calls[call.call_id] = call
         self.dependencies[call.call_id] = call.depends_on.copy()
 
-    def get_ready_calls(self) -> list[ToolCall]:
+    def get_ready_calls(self) -> list[ParallelToolCall]:
         """Get calls that are ready to execute (all dependencies satisfied).
 
         Issue #670: Uses TaskStatus enum for status comparisons.
@@ -134,11 +134,11 @@ class ExecutionGraph:
             self.calls[call_id].status = TaskStatus.FAILED.value
             self.calls[call_id].error = error
 
-    def get_failed_calls(self) -> list[ToolCall]:
+    def get_failed_calls(self) -> list[ParallelToolCall]:
         """Get all failed calls"""
         return [c for c in self.calls.values() if c.status == TaskStatus.FAILED.value]
 
-    def get_completed_calls(self) -> list[ToolCall]:
+    def get_completed_calls(self) -> list[ParallelToolCall]:
         """Get all completed calls"""
         return [c for c in self.calls.values() if c.status == TaskStatus.COMPLETED.value]
 
@@ -172,7 +172,7 @@ class ParallelToolExecutor:
 
     async def _execute_group(
         self,
-        group: list[ToolCall],
+        group: list[ParallelToolCall],
         group_idx: int,
         task_id: str | None,
         results: dict[str, Any],
@@ -215,7 +215,7 @@ class ParallelToolExecutor:
 
     async def _process_group_results(
         self,
-        group: list[ToolCall],
+        group: list[ParallelToolCall],
         group_results: list[Any],
         task_id: str | None,
         results: dict[str, Any],
@@ -236,7 +236,9 @@ class ParallelToolExecutor:
                 call.result = result
                 results[call.call_id] = result
 
-    def _log_execution_metrics(self, metrics: ExecutionMetrics, tool_calls: list[ToolCall], start_time: float) -> None:
+    def _log_execution_metrics(
+        self, metrics: ExecutionMetrics, tool_calls: list[ParallelToolCall], start_time: float
+    ) -> None:
         """Calculate and log execution metrics."""
         total_time = (time.monotonic() - start_time) * 1000
         metrics.parallel_time_ms = total_time
@@ -254,7 +256,7 @@ class ParallelToolExecutor:
 
     async def execute_batch(
         self,
-        tool_calls: list[ToolCall],
+        tool_calls: list[ParallelToolCall],
         task_id: str | None = None,
     ) -> dict[str, Any]:
         """
@@ -295,7 +297,7 @@ class ParallelToolExecutor:
 
     async def execute_single(
         self,
-        call: ToolCall,
+        call: ParallelToolCall,
         task_id: str | None = None,
     ) -> Any:
         """Execute a single tool call"""
@@ -303,7 +305,7 @@ class ParallelToolExecutor:
 
     async def _execute_with_semaphore(
         self,
-        call: ToolCall,
+        call: ParallelToolCall,
         task_id: str | None,
         semaphore: asyncio.Semaphore,
     ) -> Any:
@@ -311,7 +313,7 @@ class ParallelToolExecutor:
         async with semaphore:
             return await self._execute_single(call, task_id)
 
-    async def _publish_action_event(self, call: ToolCall, task_id: str | None) -> Any | None:
+    async def _publish_action_event(self, call: ParallelToolCall, task_id: str | None) -> Any | None:
         """Publish ACTION event to event stream. Issue #620."""
         if not self.event_stream:
             return None
@@ -328,7 +330,7 @@ class ParallelToolExecutor:
         await self.event_stream.publish(action_event)
         return action_event
 
-    async def _execute_tool_with_timeout(self, call: ToolCall) -> tuple[Any, bool, str | None]:
+    async def _execute_tool_with_timeout(self, call: ParallelToolCall) -> tuple[Any, bool, str | None]:
         """Execute tool dispatch with timeout handling. Issue #620."""
         try:
             result = await asyncio.wait_for(
@@ -344,7 +346,7 @@ class ParallelToolExecutor:
             logger.error("Tool %s failed: %s", call.tool_name, e)
             return None, False, "Tool execution failed"
 
-    def _capture_pre_state(self, call: ToolCall) -> _ArtifactCapture:
+    def _capture_pre_state(self, call: ParallelToolCall) -> _ArtifactCapture:
         """Extract file path from tool args for artifact capture. Issue #4094."""
         if call.tool_name not in _FILE_MODIFYING_TOOLS:
             return _ArtifactCapture()
@@ -354,7 +356,7 @@ class ParallelToolExecutor:
 
     def _build_artifacts(
         self,
-        call: ToolCall,
+        call: ParallelToolCall,
         capture: _ArtifactCapture,
         result: Any,
     ) -> list[TaskArtifact]:
@@ -421,7 +423,7 @@ class ParallelToolExecutor:
     async def _publish_observation_event(
         self,
         action_event: Any,
-        call: ToolCall,
+        call: ParallelToolCall,
         success: bool,
         result: Any,
         error: str | None,
@@ -447,7 +449,7 @@ class ParallelToolExecutor:
 
     async def _execute_single(
         self,
-        call: ToolCall,
+        call: ParallelToolCall,
         task_id: str | None,
     ) -> Any:
         """Execute a single tool call with event tracking."""
@@ -504,7 +506,7 @@ class ParallelToolExecutor:
 
     async def _retry_call(
         self,
-        call: ToolCall,
+        call: ParallelToolCall,
         task_id: str | None,
         retry_count: int = 0,
     ) -> Any | None:
@@ -545,18 +547,18 @@ class ParallelToolExecutor:
 
 def create_tool_calls(
     tool_specs: list[dict],
-) -> list[ToolCall]:
+) -> list[ParallelToolCall]:
     """
-    Create ToolCall objects from simple specifications.
+    Create ParallelToolCall objects from simple specifications.
 
     Args:
         tool_specs: List of {"tool_name": str, "arguments": dict} dicts
 
     Returns:
-        List of ToolCall objects
+        List of ParallelToolCall objects
     """
     return [
-        ToolCall(
+        ParallelToolCall(
             tool_name=spec["tool_name"],
             arguments=spec.get("arguments", {}),
         )

@@ -13,18 +13,18 @@ import ast
 import os
 from pathlib import Path
 
-from a2a.trust_score import Capability
+from a2a.trust_score import TrustCapability
 
 _BACKEND = Path(__file__).resolve().parents[1]
 _DEFINITION = _BACKEND / "a2a" / "trust_score.py"
 
 
 def _members_named(source: str) -> set:
-    """``Capability.<NAME>`` attribute references in *source*."""
+    """``TrustCapability.<NAME>`` attribute references in *source*."""
     return {
         node.attr
         for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "Capability"
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "TrustCapability"
     }
 
 
@@ -54,12 +54,12 @@ def test_every_capability_is_enforced_somewhere():
     for path in _production_modules():
         named |= _members_named(path.read_text(encoding="utf-8", errors="replace"))
 
-    unenforced = sorted(c.name for c in Capability if c.name not in named)
+    unenforced = sorted(c.name for c in TrustCapability if c.name not in named)
 
     assert not unenforced, f"capabilities no production code enforces -- enforce them or remove them: {unenforced}"
 
 
 def test_the_scan_sees_a_reference():
     """Negative control: the predicate must find the shape it guards, and nothing else."""
-    assert _members_named("require_capability(peer, Capability.SUBMIT_TASKS)") == {"SUBMIT_TASKS"}
+    assert _members_named("require_capability(peer, TrustCapability.SUBMIT_TASKS)") == {"SUBMIT_TASKS"}
     assert _members_named("x = Other.SUBMIT_TASKS") == set()

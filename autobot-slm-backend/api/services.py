@@ -22,7 +22,7 @@ from typing_extensions import Annotated
 from api.service_ports import SERVICE_PORT_MAP
 from api.websocket import ws_manager
 from autobot_shared.ssot_config import config
-from models.database import Node, Service, ServiceConflict, ServiceStatus
+from models.database import Node, Service, ServiceConflict, SystemdState
 from models.schemas import (
     FleetServicesResponse,
     FleetServiceStatus,
@@ -327,13 +327,13 @@ async def _upsert_service(
     sub_state = svc_data.get("sub", "unknown")
 
     if active_state == "active" and sub_state == "running":
-        status = ServiceStatus.RUNNING.value
+        status = SystemdState.RUNNING.value
     elif active_state == "inactive" or sub_state == "dead":
-        status = ServiceStatus.STOPPED.value
+        status = SystemdState.STOPPED.value
     elif active_state == "failed":
-        status = ServiceStatus.FAILED.value
+        status = SystemdState.FAILED.value
     else:
-        status = ServiceStatus.UNKNOWN.value
+        status = SystemdState.UNKNOWN.value
 
     # Check if service exists
     result = await db.execute(
@@ -395,7 +395,7 @@ async def start_service(
         )
         service = result.scalar_one_or_none()
         if service:
-            service.status = ServiceStatus.RUNNING.value
+            service.status = SystemdState.RUNNING.value
             service.active_state = "active"
             service.sub_state = "running"
             service.last_checked = datetime.now(timezone.utc)
@@ -454,7 +454,7 @@ async def stop_service(
         )
         service = result.scalar_one_or_none()
         if service:
-            service.status = ServiceStatus.STOPPED.value
+            service.status = SystemdState.STOPPED.value
             service.active_state = "inactive"
             service.sub_state = "dead"
             service.last_checked = datetime.now(timezone.utc)
@@ -525,7 +525,7 @@ async def _update_service_after_restart(db: AsyncSession, node_id: str, service_
     )
     service = result.scalar_one_or_none()
     if service:
-        service.status = ServiceStatus.RUNNING.value
+        service.status = SystemdState.RUNNING.value
         service.active_state = "active"
         service.sub_state = "running"
         service.last_checked = datetime.now(timezone.utc)
@@ -1057,7 +1057,7 @@ async def start_fleet_service(
         success, msg = await run_ansible_service_action(node, service_name, "start")
         if success:
             success_count += 1
-            svc.status = ServiceStatus.RUNNING.value
+            svc.status = SystemdState.RUNNING.value
             svc.active_state = "active"
             svc.sub_state = "running"
             svc.last_checked = datetime.now(timezone.utc)
@@ -1115,7 +1115,7 @@ async def stop_fleet_service(
         success, msg = await run_ansible_service_action(node, service_name, "stop")
         if success:
             success_count += 1
-            svc.status = ServiceStatus.STOPPED.value
+            svc.status = SystemdState.STOPPED.value
             svc.active_state = "inactive"
             svc.sub_state = "dead"
             svc.last_checked = datetime.now(timezone.utc)
@@ -1173,7 +1173,7 @@ async def restart_fleet_service(
         success, msg = await run_ansible_service_action(node, service_name, "restart")
         if success:
             success_count += 1
-            svc.status = ServiceStatus.RUNNING.value
+            svc.status = SystemdState.RUNNING.value
             svc.active_state = "active"
             svc.sub_state = "running"
             svc.last_checked = datetime.now(timezone.utc)

@@ -34,7 +34,7 @@ from api.knowledge_grounding_models import (
     Conflict,
     ConflictResolution,
     KBFact,
-    ResearchResult,
+    ResearchedFact,
     ResolvedClaim,
     ReviewTicket,
     ReviewTicketPriority,
@@ -66,6 +66,27 @@ _DECAY_FRESH = 1.0  # < 7 days: no decay
 _DECAY_RECENT = 0.8  # 7-30 days: 80% of base
 _DECAY_AGING = 0.6  # 30-90 days: 60% of base
 _DECAY_STALE = 0.4  # > 90 days: 40% of base (stale)
+
+
+def _review_verdict(winning_confidence: float, kb_confidence: float, agent_confidence: float) -> tuple[bool, str]:
+    """Whether a resolution needs a human, and the note explaining why (#12771).
+
+    Extracted from `ConflictResolver.resolve`, which was 69 body lines against
+    the 65 limit (#620) -- the limit fires on a function once its file is
+    touched, and the rename in this PR touched it.
+
+    Three independent reasons to escalate: a middling winning confidence, a low
+    one, and a small gap between the two sources even when the winner looks
+    confident. Returns ``("", False)``-shaped output rather than mutating a
+    caller's string so the reasons stay readable at the call site.
+    """
+    if _CONFIDENCE_THRESHOLD_LOW <= winning_confidence < _CONFIDENCE_THRESHOLD_MEDIUM:
+        return True, " [FLAGGED FOR REVIEW: medium confidence]"
+    if winning_confidence < _CONFIDENCE_THRESHOLD_LOW:
+        return True, " [ESCALATED FOR REVIEW: low confidence]"
+    if abs(kb_confidence - agent_confidence) < _CONFIDENCE_GAP_THRESHOLD:
+        return True, " [FLAGGED FOR REVIEW: small confidence gap]"
+    return False, ""
 
 
 class ConflictResolver(AsyncRedisClientMixin):
@@ -166,7 +187,7 @@ class ConflictResolver(AsyncRedisClientMixin):
         self,
         kb_fact: KBFact,
         agent_claim: Claim,
-        research_result: ResearchResult | None = None,
+        research_result: ResearchedFact | None = None,
     ) -> ResolvedClaim:
         """Resolve conflict between KB fact and agent claim.
 
@@ -227,22 +248,8 @@ class ConflictResolver(AsyncRedisClientMixin):
                 f"supersedes KB (age {kb_fact.age_days():.1f} days)"
             )
 
-        # Decide if we need human review
-        requires_human_review = False
-        confidence_gap = abs(kb_confidence - agent_confidence)
-
-        if _CONFIDENCE_THRESHOLD_LOW <= winning_confidence < _CONFIDENCE_THRESHOLD_MEDIUM:
-            # Medium confidence: flag for review
-            requires_human_review = True
-            reasoning += " [FLAGGED FOR REVIEW: medium confidence]"
-        elif winning_confidence < _CONFIDENCE_THRESHOLD_LOW:
-            # Low confidence: must escalate
-            requires_human_review = True
-            reasoning += " [ESCALATED FOR REVIEW: low confidence]"
-        elif confidence_gap < _CONFIDENCE_GAP_THRESHOLD:
-            # Small gap between sources: flag for review even if winning confidence is high
-            requires_human_review = True
-            reasoning += " [FLAGGED FOR REVIEW: small confidence gap]"
+        requires_human_review, review_note = _review_verdict(winning_confidence, kb_confidence, agent_confidence)
+        reasoning += review_note
 
         # Decide if KB should be updated
         update_kb = False
@@ -286,7 +293,7 @@ class ConflictResolver(AsyncRedisClientMixin):
 
         return resolved
 
-    async def update_kb_if_stale(self, kb_fact: KBFact, research_result: ResearchResult) -> bool:
+    async def update_kb_if_stale(self, kb_fact: KBFact, research_result: ResearchedFact) -> bool:
         """Update KB with research result if fact is stale.
 
         If KB fact is older than 30 days AND research found newer

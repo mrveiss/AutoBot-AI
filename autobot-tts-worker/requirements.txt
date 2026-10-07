@@ -5,7 +5,13 @@ torch>=2.14.0
 soundfile>=0.14.0
 -c ../constraints/shared.txt  # single source of truth for shared versions (#10524)
 numpy  # version from constraints/shared.txt
-huggingface_hub>=2.1.1
+# Held below 2.0 (#17847, re-asserted after #18045). MEASURED on PyPI: the latest
+# `sentence-transformers` (6.1.0) and `tokenizers` (0.23.2) BOTH declare
+# `huggingface-hub<2.0`, so a >=2.x floor is unsatisfiable in any manifest holding
+# either -- pip fails on the whole file and nothing installs. #18045 raised all three
+# declarations to >=2.1.1 together, which satisfied "all three move together" but not
+# the resolver. Raise this only when both of those allow 2.x.
+huggingface_hub>=1.32.0,<2.0
 aiofiles>=25.1.0
 python-multipart>=0.0.32          # SECURITY UPDATE - arbitrary file write fix
 

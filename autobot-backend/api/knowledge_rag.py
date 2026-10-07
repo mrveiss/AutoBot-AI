@@ -81,12 +81,12 @@ async def get_rag_service_dependency(request: Request) -> RAGService:
 
 def _convert_results_to_dicts(results: list) -> list:
     """
-    Convert SearchResult objects to dictionaries.
+    Convert RankedResult objects to dictionaries.
 
     Issue #620: Extracted from advanced_search.
 
     Args:
-        results: List of SearchResult objects
+        results: List of RankedResult objects
 
     Returns:
         List of result dictionaries

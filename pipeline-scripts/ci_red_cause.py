@@ -103,7 +103,12 @@ from ci_dispatch_watchdog import (  # noqa: E402
 # reported failures had a later run, and each cost a full investigation.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "lib"))
 
-from check_run_status import latest_runs  # noqa: E402
+from check_run_status import (  # noqa: E402
+    CHECK_RUNS_PER_PAGE,
+    MAX_CHECK_RUN_PAGES,
+    latest_runs,
+    walk_check_runs,
+)
 
 # Only the Actions app exposes a job with steps. A check run published by any
 # other app has no step list to reason about, so its cause is not knowable here.
@@ -165,13 +170,17 @@ DEFAULT_PROVISIONING_MARKERS = (
 
 DEFAULT_TIMEOUT_SECONDS = 30
 DEFAULT_API_ROOT = "https://api.github.com"
-MAX_CHECKS_PER_PAGE = 100
-
-#: Bound on the page walk. 100 pages is 10,000 runs -- far past any real commit,
-#: and a bound is what keeps a paginating loop from hanging if the endpoint ever
-#: returns a full page indefinitely. A hang is worse than a short read because it
-#: reports nothing at all.
-MAX_CHECK_PAGES = 100
+#: Aliases onto the shared vocabulary (#16120). The page size and the page
+#: ceiling belong with the walk they bound, and a second copy here is a number
+#: that drifts silently: nothing fails when the two disagree, the walk just
+#: stops somewhere other than where this file says it does.
+#:
+#: The ceiling is 100 pages -- 10,000 runs, far past any real commit. A bound is
+#: what keeps a paginating loop from hanging if the endpoint ever returns a full
+#: page indefinitely, and a hang is worse than a short read because it reports
+#: nothing at all.
+MAX_CHECKS_PER_PAGE = CHECK_RUNS_PER_PAGE
+MAX_CHECK_PAGES = MAX_CHECK_RUN_PAGES
 
 
 class RedCause(NamedTuple):
@@ -395,36 +404,20 @@ def list_check_runs(api: GitHubApi, sha: str) -> Tuple[List[Dict[str, Any]], str
     ``total_count`` is the endpoint's own statement of the population, so it is
     also the check on whether the walk reached all of it -- a short read is
     reported rather than returned as if complete.
+
+    THE WALK ITSELF IS SHARED (#16120). It used to live here, as a second
+    implementation of the rules in ``scripts/lib/check_run_status.py``: this
+    module imported that one for grouping and then built its own URL and its own
+    page loop anyway. Only the TRANSPORT is this module's -- ``GitHubApi``
+    carries the token and the configurable API root that the ``gh``-CLI route
+    cannot -- so that is the only part passed in.
     """
-    collected: List[Dict[str, Any]] = []
-    expected = None
-    page = 1
-    while True:
-        path = f"/repos/{api.repository}/commits/{sha}/check-runs" f"?per_page={MAX_CHECKS_PER_PAGE}&page={page}"
-        status, body = api.request("GET", path)
-        if status != 200 or not isinstance(body, dict):
-            return [], f"cannot list check runs for {sha} (HTTP {status})"
-        if expected is None:
-            expected = body.get("total_count")
-        runs = body.get("check_runs")
-        batch = list(runs) if isinstance(runs, list) else []
-        collected.extend(batch)
-        if len(batch) < MAX_CHECKS_PER_PAGE:
-            break
-        page += 1
-        if page > MAX_CHECK_PAGES:
-            return collected, (
-                f"check-run listing for {sha} exceeded {MAX_CHECK_PAGES} pages -- "
-                "refusing to walk further rather than loop, since a verdict from "
-                "an unbounded read is not one we can defend"
-            )
-    if isinstance(expected, int) and len(collected) < expected:
-        return collected, (
-            f"check-run listing for {sha} reached {len(collected)} of {expected} "
-            "runs -- the walk stopped short, so any 'no red checks' verdict from "
-            "this list is unearned"
-        )
-    return collected, ""
+    return walk_check_runs(
+        api.repository,
+        sha,
+        lambda path: api.request("GET", path),
+        max_pages=MAX_CHECK_PAGES,
+    )
 
 
 def head_sha_for_pr(api: GitHubApi, number: int) -> str:

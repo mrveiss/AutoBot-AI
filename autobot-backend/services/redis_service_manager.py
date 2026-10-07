@@ -62,7 +62,7 @@ class ServiceOperationResult:
 
 
 @dataclass
-class ServiceStatus:
+class ManagedServiceStatus:
     """Current service status"""
 
     status: str  # "running", "stopped", "failed", "unknown"
@@ -120,7 +120,7 @@ class RedisServiceManager:
         self.enable_audit_logging = enable_audit_logging
 
         # Status cache
-        self._status_cache: ServiceStatus | None = None
+        self._status_cache: ManagedServiceStatus | None = None
         self._status_cache_time: datetime | None = None
         self._cache_ttl_seconds = 10
 
@@ -474,7 +474,7 @@ class RedisServiceManager:
             )
             return self._operation_failure_result("restart", "Service restart failed", duration)
 
-    async def get_service_status(self, use_cache: bool = True) -> ServiceStatus:
+    async def get_service_status(self, use_cache: bool = True) -> ManagedServiceStatus:
         """
         Get current service status
 
@@ -482,7 +482,7 @@ class RedisServiceManager:
             use_cache: Use cached status if available and fresh
 
         Returns:
-            ServiceStatus with current status information
+            ManagedServiceStatus with current status information
         """
         # Check cache
         if (
@@ -495,7 +495,7 @@ class RedisServiceManager:
 
         try:
             status_str = await self._slm_get_service_status()
-            service_status = ServiceStatus(status=status_str, last_check=datetime.now(tz=timezone.utc))
+            service_status = ManagedServiceStatus(status=status_str, last_check=datetime.now(tz=timezone.utc))
 
             # Update cache
             self._status_cache = service_status
@@ -506,7 +506,7 @@ class RedisServiceManager:
         except Exception as e:
             logger.error("Failed to get service status: %s", e)
             await self._record_error()
-            return ServiceStatus(status="unknown", last_check=datetime.now(tz=timezone.utc))
+            return ManagedServiceStatus(status="unknown", last_check=datetime.now(tz=timezone.utc))
 
     async def _check_redis_connectivity(self) -> Tuple[bool, float]:
         """

@@ -295,7 +295,7 @@ class AgentLoopConfig:
 # =============================================================================
 
 
-class MessageType(Enum):
+class LoopMessageType(Enum):
     """
     Message semantics for agent-user communication (Manus pattern).
 
@@ -311,7 +311,7 @@ class MessageType(Enum):
 class AgentMessage:
     """A message from agent to user with semantic type."""
 
-    message_type: MessageType
+    message_type: LoopMessageType
     content: str
     options: list[str] | None = None  # For ASK messages
     metadata: dict = field(default_factory=dict)
@@ -321,7 +321,7 @@ class AgentMessage:
 
     def __post_init__(self):
         """Set requires_response based on message type."""
-        self.requires_response = self.message_type == MessageType.ASK
+        self.requires_response = self.message_type == LoopMessageType.ASK
 
     def to_dict(self) -> dict:
         """Convert to dictionary for events."""

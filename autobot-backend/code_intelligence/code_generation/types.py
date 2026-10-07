@@ -121,6 +121,11 @@ class ValidationResult:
     ast_node: ast.AST | None = None
     line_count: int = 0
     complexity_score: float = 0.0
+    #: Summary of what the parse found (functions, classes, imports, total_lines).
+    #: #18070: `api/analytics_code_generation.py` declared a second
+    #: `ValidationResult` for the sake of this one field. Carried here so there
+    #: is one type; `ast_node` holds the tree itself, this holds the summary.
+    ast_info: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

@@ -46,14 +46,14 @@ from __future__ import annotations
 from typing import Any
 
 from autobot_shared.coordination.work_claims import (
-    Claim,
     ClaimConflict,
     ClaimMode,
     Scope,
+    WorkClaim,
     claim_payload,
     conflict_payload,
     list_claims,
-    release,
+    release_scope,
     try_acquire,
 )
 from autobot_shared.logging_manager import get_logger
@@ -75,7 +75,7 @@ def _channel(agent_id: str) -> str:
     return f"agent:{agent_id}"
 
 
-async def publish_acquired(claim: Claim) -> None:
+async def publish_acquired(claim: WorkClaim) -> None:
     """Announce a newly held scope on its holder's channel."""
     await publish_event(_channel(claim.agent_id), ACQUIRED, claim_payload(claim), persist=PersistStrategy.MEMORY)
 
@@ -83,7 +83,7 @@ async def publish_acquired(claim: Claim) -> None:
 async def publish_released(scope: str, *, agent_id: str, task_id: str) -> None:
     """Announce that a scope is free again.
 
-    Takes the identifiers rather than a `Claim` because release happens *after*
+    Takes the identifiers rather than a `WorkClaim` because release happens *after*
     the record is gone -- there is no claim left to describe.
     """
     payload = {"scope": str(Scope.parse(scope)), "agent_id": agent_id, "task_id": task_id}
@@ -103,7 +103,7 @@ async def publish_conflict(conflict: ClaimConflict, *, agent_id: str, task_id: s
 
 async def acquire_and_publish(
     scope: str | Scope, *, agent_id: str, task_id: str, mode: ClaimMode = ClaimMode.EXCLUSIVE, intent: str
-) -> Claim | ClaimConflict:
+) -> WorkClaim | ClaimConflict:
     """Acquire *scope* and project the outcome. The entry point #15950 should use.
 
     The publish is deliberately not the caller's second step. Enforcement adds
@@ -118,7 +118,7 @@ async def acquire_and_publish(
     """
     outcome = await try_acquire(scope, agent_id=agent_id, task_id=task_id, mode=mode, intent=intent)
     try:
-        if isinstance(outcome, Claim):
+        if isinstance(outcome, WorkClaim):
             await publish_acquired(outcome)
         else:
             await publish_conflict(outcome, agent_id=agent_id, task_id=task_id)
@@ -129,7 +129,7 @@ async def acquire_and_publish(
 
 async def release_and_publish(scope: str | Scope, *, agent_id: str, task_id: str) -> bool:
     """Release *scope* and project it. Same failure rule as :func:`acquire_and_publish`."""
-    released = await release(scope, agent_id=agent_id, task_id=task_id)
+    released = await release_scope(scope, agent_id=agent_id, task_id=task_id)
     if released:
         try:
             await publish_released(str(Scope.parse(scope)), agent_id=agent_id, task_id=task_id)

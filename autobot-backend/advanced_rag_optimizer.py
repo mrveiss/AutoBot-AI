@@ -49,7 +49,7 @@ TROUBLESHOOTING_KEYWORDS = {"error", "problem", "issue", "trouble"}
 
 
 @dataclass
-class SearchResult:
+class RankedResult:
     """Enhanced search result with multiple relevance scores."""
 
     content: str
@@ -101,7 +101,7 @@ class RAGMetrics:
 class _MapElitesCell:
     """One occupied cell in the MAP-Elites coverage grid. Issue #4677."""
 
-    result: "SearchResult"
+    result: "RankedResult"
     score: float
 
 
@@ -156,7 +156,7 @@ class AdvancedRAGOptimizer:
         self._init_performance_tracking()
         logger.info("AdvancedRAGOptimizer initialized")
 
-    def _apply_seed_priority_boost(self, result: "SearchResult") -> float:
+    def _apply_seed_priority_boost(self, result: "RankedResult") -> float:
         """Return *result*'s hybrid score lifted by its seed priority (#4679, #12742).
 
         CognitionSeeder stamps every seeded document with ``seeded: "true"`` and
@@ -263,7 +263,7 @@ class AdvancedRAGOptimizer:
         return f"{query}|{max_results}|{enable_reranking}|{min_score}"
 
     @staticmethod
-    def _apply_relevance_floor(results: List[SearchResult], min_score: float) -> List[SearchResult]:
+    def _apply_relevance_floor(results: List[RankedResult], min_score: float) -> List[RankedResult]:
         """Drop results scoring below min_score (#10703).
 
         Uses rerank_score when present, else hybrid_score. min_score <= 0 returns
@@ -273,7 +273,7 @@ class AdvancedRAGOptimizer:
             return results
         return [r for r in results if (r.rerank_score if r.rerank_score is not None else r.hybrid_score) >= min_score]
 
-    def _get_cached_result(self, key: str) -> Tuple[List[SearchResult], RAGMetrics] | None:
+    def _get_cached_result(self, key: str) -> Tuple[List[RankedResult], RAGMetrics] | None:
         """Return cached result if present and within TTL, else None. Issue #1548."""
         entry = self.query_cache.get(key)
         if entry is None:
@@ -287,7 +287,7 @@ class AdvancedRAGOptimizer:
     def _set_cached_result(
         self,
         key: str,
-        result: Tuple[List[SearchResult], RAGMetrics],
+        result: Tuple[List[RankedResult], RAGMetrics],
     ) -> None:
         """Store result in cache with current timestamp. Evicts if over limit. Issue #1548."""
         self._evict_cache()
@@ -388,7 +388,7 @@ class AdvancedRAGOptimizer:
         logger.debug("Query expansion: %s variants generated", len(unique_expanded))
         return unique_expanded
 
-    async def _perform_semantic_search(self, query: str, limit: int = 20) -> List[SearchResult]:
+    async def _perform_semantic_search(self, query: str, limit: int = 20) -> List[RankedResult]:
         """Perform semantic similarity search using embeddings."""
         try:
             # Use knowledge base's search method for semantic search
@@ -407,7 +407,7 @@ class AdvancedRAGOptimizer:
                 # Issue #1526: Use real ChromaDB cosine similarity score
                 # instead of artificial rank-based score
                 real_score = fact.get("score", 0.0)
-                result = SearchResult(
+                result = RankedResult(
                     content=fact.get("content", ""),
                     metadata=metadata,
                     semantic_score=real_score,
@@ -437,10 +437,10 @@ class AdvancedRAGOptimizer:
             keyword_score *= 1.5
         return keyword_score
 
-    def _create_keyword_result(self, fact: Dict, keyword_score: float) -> SearchResult:
-        """Create SearchResult from fact with keyword score. Issue #620."""
+    def _create_keyword_result(self, fact: Dict, keyword_score: float) -> RankedResult:
+        """Create RankedResult from fact with keyword score. Issue #620."""
         metadata = fact.get("metadata", {})
-        return SearchResult(
+        return RankedResult(
             content=fact.get("content", ""),
             metadata=metadata,
             semantic_score=0.0,
@@ -471,7 +471,7 @@ class AdvancedRAGOptimizer:
         avg_length = (total_length / total_docs) if total_docs else 1.0
         return BM25Scorer(total_docs, avg_length, doc_frequencies)
 
-    def _keyword_search_bm25(self, query: str, all_facts: List[Dict]) -> List[SearchResult]:
+    def _keyword_search_bm25(self, query: str, all_facts: List[Dict]) -> List[RankedResult]:
         """BM25 Okapi keyword scoring over the in-memory fact corpus (#10600)."""
         query_terms = [t for t in query.lower().split() if t]
         if not query_terms:
@@ -489,7 +489,7 @@ class AdvancedRAGOptimizer:
         logger.debug("BM25 keyword search returned %s results", len(scored))
         return scored[:20]
 
-    def _keyword_search_substring(self, query: str, all_facts: List[Dict]) -> List[SearchResult]:
+    def _keyword_search_substring(self, query: str, all_facts: List[Dict]) -> List[RankedResult]:
         """Legacy substring TF keyword scoring (pre-#10600 default). Issue #620."""
         query_lower = query.lower()
         query_terms = set(query_lower.split())
@@ -507,7 +507,7 @@ class AdvancedRAGOptimizer:
         logger.debug("Keyword search returned %s results", len(keyword_results))
         return keyword_results[:20]
 
-    def _perform_keyword_search(self, query: str, all_facts: List[Dict]) -> List[SearchResult]:
+    def _perform_keyword_search(self, query: str, all_facts: List[Dict]) -> List[RankedResult]:
         """Keyword search — BM25 when enabled (#10600), else legacy substring TF."""
         try:
             if self._bm25_hybrid_enabled:
@@ -518,8 +518,8 @@ class AdvancedRAGOptimizer:
             return []
 
     def _combine_hybrid_results(
-        self, semantic_results: List[SearchResult], keyword_results: List[SearchResult]
-    ) -> List[SearchResult]:
+        self, semantic_results: List[RankedResult], keyword_results: List[RankedResult]
+    ) -> List[RankedResult]:
         """Combine semantic and keyword results with hybrid scoring."""
 
         # Create a mapping by content to combine scores
@@ -560,7 +560,7 @@ class AdvancedRAGOptimizer:
         logger.debug("Hybrid combination produced %s results", len(combined_results))
         return combined_results
 
-    def _diversify_results(self, results: List[SearchResult], max_results: int = 10) -> List[SearchResult]:
+    def _diversify_results(self, results: List[RankedResult], max_results: int = 10) -> List[RankedResult]:
         """Remove redundant results to improve diversity (#2200)."""
         if len(results) <= 1:
             return results
@@ -596,7 +596,7 @@ class AdvancedRAGOptimizer:
         logger.debug("Diversification: %s → %s results", len(results), len(diversified))
         return diversified
 
-    def _map_elites_select(self, results: List[SearchResult], max_results: int = 10) -> List[SearchResult]:
+    def _map_elites_select(self, results: List[RankedResult], max_results: int = 10) -> List[RankedResult]:
         """Select results using a MAP-Elites coverage grid. Issue #4677.
 
         Axes:
@@ -615,7 +615,7 @@ class AdvancedRAGOptimizer:
             return results
 
         # Compute grid keys for all results
-        def _cell_key(r: SearchResult) -> tuple:
+        def _cell_key(r: RankedResult) -> tuple:
             category = r.metadata.get("category") or r.metadata.get("chunk_category") or CategoryDefaults.UNKNOWN
             source_parts = r.source_path.replace("\\", "/").split("/")
             domain = source_parts[0] if source_parts else "unknown"
@@ -632,7 +632,7 @@ class AdvancedRAGOptimizer:
 
         # Build grid: cell_key → best result already selected
         grid: Dict[tuple, _MapElitesCell] = {}
-        selected: List[SearchResult] = []
+        selected: List[RankedResult] = []
 
         for candidate in results:
             if len(selected) >= max_results:
@@ -684,7 +684,7 @@ class AdvancedRAGOptimizer:
 
         self._cross_encoder = get_cross_encoder()
 
-    async def _apply_cross_encoder_scores(self, query: str, results: List[SearchResult]) -> None:
+    async def _apply_cross_encoder_scores(self, query: str, results: List[RankedResult]) -> None:
         """Apply cross-encoder scores to results (Issue #398: extracted).
 
         Issue #1526: Normalize cross-encoder logits with sigmoid before
@@ -708,7 +708,7 @@ class AdvancedRAGOptimizer:
 
         logger.debug("Cross-encoder reranking completed for %s results", len(results))
 
-    def _apply_fallback_reranking(self, query: str, results: List[SearchResult]) -> None:
+    def _apply_fallback_reranking(self, query: str, results: List[RankedResult]) -> None:
         """Apply term-based fallback reranking (Issue #398: extracted)."""
         logger.debug("Using fallback term-based reranking")
         query_lower = query.lower()
@@ -724,11 +724,11 @@ class AdvancedRAGOptimizer:
                 result.semantic_score * 0.7 + (term_matches / len(query_terms)) * 0.2 + exact_match_bonus * 0.1
             )
 
-    def _finalize_rerank_results(self, results: List[SearchResult]) -> List[SearchResult]:
+    def _finalize_rerank_results(self, results: List[RankedResult]) -> List[RankedResult]:
         """Sort, MMR-diversify (#10600), and rank results after reranking (#398)."""
         results.sort(key=lambda x: x.rerank_score or 0, reverse=True)
         # Issue #10600: MMR diversity pass on reranked results using content
-        # redundancy (SearchResult carries no embedding).  No-op when
+        # redundancy (RankedResult carries no embedding).  No-op when
         # mmr_lambda is 0.0, so the legacy pure-relevance ordering is preserved.
         if self._mmr_lambda > 0.0:
             results = apply_mmr_reorder_by_content(
@@ -742,7 +742,7 @@ class AdvancedRAGOptimizer:
         logger.debug("Reranking completed: top score = %.3f", results[0].rerank_score)
         return results
 
-    async def _rerank_with_cross_encoder(self, query: str, results: List[SearchResult]) -> List[SearchResult]:
+    async def _rerank_with_cross_encoder(self, query: str, results: List[RankedResult]) -> List[RankedResult]:
         """Rerank results using cross-encoder model (Issue #398: refactored)."""
         try:
             self._ensure_cross_encoder_loaded()
@@ -767,7 +767,7 @@ class AdvancedRAGOptimizer:
         enable_reranking: bool = True,
         diversity_strategy: str = "cosine",
         min_score: float = 0.0,
-    ) -> Tuple[List[SearchResult], RAGMetrics]:
+    ) -> Tuple[List[RankedResult], RAGMetrics]:
         """
         Perform advanced RAG search with all optimizations (Issue #665: refactored).
 
@@ -847,7 +847,7 @@ class AdvancedRAGOptimizer:
         query: str,
         metrics: RAGMetrics,
         context: "QueryContext" | None = None,
-    ) -> List[SearchResult]:
+    ) -> List[RankedResult]:
         """Perform hybrid retrieval (Issue #665: extracted helper).
 
         If *context* contains expanded queries (Issue #4685), supplemental
@@ -905,12 +905,12 @@ class AdvancedRAGOptimizer:
     async def _diversify_and_rerank(
         self,
         query: str,
-        results: List[SearchResult],
+        results: List[RankedResult],
         enable_reranking: bool,
         metrics: RAGMetrics,
         max_results: int = 10,
         diversity_strategy: str = "cosine",
-    ) -> List[SearchResult]:
+    ) -> List[RankedResult]:
         """Diversify and optionally rerank results (Issue #665: extracted helper).
 
         Issue #4677: ``diversity_strategy`` selects the diversification algorithm:
@@ -939,10 +939,10 @@ class AdvancedRAGOptimizer:
 
     def _optimize_result_count(
         self,
-        results: List[SearchResult],
+        results: List[RankedResult],
         max_results: int,
         context: Any,
-    ) -> List[SearchResult]:
+    ) -> List[RankedResult]:
         """Optimize result count based on context (Issue #665: extracted helper)."""
         optimized_results = results[:max_results]
 
@@ -977,7 +977,7 @@ class AdvancedRAGOptimizer:
 
     def _build_context_parts(
         self,
-        results: List[SearchResult],
+        results: List[RankedResult],
         max_context_length: int,
         query_context: QueryContext,
     ) -> List[str]:
@@ -1083,7 +1083,7 @@ class AdvancedRAGOptimizer:
         query: str,
         max_results: int = 5,
         enable_reranking: bool = True,
-    ) -> Tuple[List[SearchResult], RAGMetrics, list]:
+    ) -> Tuple[List[RankedResult], RAGMetrics, list]:
         """Run advanced_search with RLM-driven query refinement (#1382).
 
         Falls back to standard advanced_search if the rlm module is
@@ -1101,7 +1101,7 @@ class AdvancedRAGOptimizer:
 
         refiner = AdaptiveRAGRefiner()
 
-        async def _search_fn(q: str) -> List[SearchResult]:
+        async def _search_fn(q: str) -> List[RankedResult]:
             res, _ = await self.advanced_search(q, max_results, enable_reranking)
             return res
 
@@ -1138,7 +1138,7 @@ async def get_rag_optimizer() -> AdvancedRAGOptimizer:
 
 
 # Convenience functions for integration
-async def advanced_knowledge_search(query: str, max_results: int = 5) -> List[SearchResult]:
+async def advanced_knowledge_search(query: str, max_results: int = 5) -> List[RankedResult]:
     """Perform advanced knowledge search with all optimizations."""
     optimizer = await get_rag_optimizer()
     results, _ = await optimizer.advanced_search(query, max_results)

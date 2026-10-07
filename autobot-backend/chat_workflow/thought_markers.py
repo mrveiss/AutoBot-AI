@@ -57,6 +57,20 @@ THOUGHT_END_PATTERN = re.compile(r"\[/THOUGHT\]", re.IGNORECASE)
 PLANNING_TAG_PATTERN = re.compile(r"\[PLANNING\]", re.IGNORECASE)
 PLANNING_END_PATTERN = re.compile(r"\[/PLANNING\]", re.IGNORECASE)
 
+#: The bracket-marker families this backend can EMIT, named once so the set is a
+#: fact rather than four scattered literals (#18065).
+#:
+#: It exists because the frontend has to strip every one of them and had no way
+#: to know what they are: it carries its own hardcoded list
+#: (`autobot-frontend/src/utils/llmProtocolTags.ts`), and a family added here
+#: would have reached a reader as raw text until somebody noticed. The contract
+#: is a SUBSET one, checked by `repo_tests/protocol_tag_parity_18065_test.py`:
+#: every family here must appear there. The reverse is deliberately allowed --
+#: the frontend also strips `DEBUG` and `SOURCES`, which nothing in this backend
+#: declares or produces, and stripping a marker that never arrives is harmless
+#: whereas rendering one that does is the defect.
+BRACKET_MARKER_FAMILIES: FrozenSet[str] = frozenset({"THOUGHT", "PLANNING"})
+
 #: Closed markdown code regions, longest delimiter first so a fence is consumed
 #: whole rather than as three inline spans.
 _CLOSED_CODE_REGION_RE = re.compile(r"```.*?```|~~~.*?~~~|``[^`]*``|`[^`\n]*`", re.DOTALL)
