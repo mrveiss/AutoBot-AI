@@ -306,7 +306,6 @@
     "get_redis_url",
     "get_security_layer",
     "get_service_url",
-    "get_slm_db",
     "init_database",
     "initialize",
     "is_feature_enabled",
