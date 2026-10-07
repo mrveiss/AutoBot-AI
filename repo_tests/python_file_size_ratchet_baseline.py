@@ -59,7 +59,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/analytics_architecture.py": 1264,
     "autobot-backend/api/analytics_bug_prediction.py": 1438,
     "autobot-backend/api/analytics_cfg.py": 1331,
-    "autobot-backend/api/analytics_code_generation.py": 1012,
+    "autobot-backend/api/analytics_code_generation.py": 1006,
     "autobot-backend/api/analytics_code_review.py": 929,
     "autobot-backend/api/analytics_continuous_learning.py": 1170,
     "autobot-backend/api/analytics_conversation.py": 988,
@@ -201,7 +201,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/code_intelligence/vue_analyzer.py": 613,
     "autobot-backend/command_manual_manager.py": 908,
     "autobot-backend/computer_vision/screen_analyzer.py": 662,
-    "autobot-backend/conftest.py": 1505,  # #16483: _make_pkg_stub/_real_load_and_bind moved to testkit/module_stubs.py
+    "autobot-backend/conftest.py": 1504,  # #16483: _make_pkg_stub/_real_load_and_bind moved to testkit/module_stubs.py
     "autobot-backend/context_aware_decision/decision_engine.py": 815,
     "autobot-backend/context_aware_decision/tests/test_counterfactual_reasoner.py": 663,
     "autobot-backend/context_window_manager.py": 640,

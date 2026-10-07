@@ -25,7 +25,7 @@ _TEST_TIMEOUT: float = config.timeout.skill_test
 
 
 @dataclass
-class ValidationResult:
+class SkillPackageValidation:
     """Result of validating a skill package."""
 
     valid: bool
@@ -37,8 +37,8 @@ class ValidationResult:
 class SkillValidator:
     """Validates skill packages by checking syntax and optionally running the MCP server."""
 
-    async def validate(self, skill_md: str, skill_py: str | None = None) -> ValidationResult:
-        """Run all validation checks and return a ValidationResult.
+    async def validate(self, skill_md: str, skill_py: str | None = None) -> SkillPackageValidation:
+        """Run all validation checks and return a SkillPackageValidation.
 
         Checks manifest, Python syntax, and MCP server startup (if skill_py provided).
         """
@@ -52,7 +52,7 @@ class SkillValidator:
                 mcp_errors, tools_found = await self._check_mcp_server(skill_py)
                 errors.extend(mcp_errors)
 
-        return ValidationResult(
+        return SkillPackageValidation(
             valid=len(errors) == 0,
             errors=errors,
             tools_found=tools_found,
