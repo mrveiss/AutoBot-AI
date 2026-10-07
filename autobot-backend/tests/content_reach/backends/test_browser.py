@@ -10,7 +10,7 @@ import pytest
 
 from content_reach.backends.browser import BrowserBackend, BrowserSearchBackend
 from content_reach.base import BackendError, ContentRequest
-from source_attribution import SourceType
+from source_attribution import SourceKind
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -39,7 +39,7 @@ async def test_browser_probe_reflects_playwright_available_true(monkeypatch):
     import research_browser_manager as rbm
 
     monkeypatch.setattr(rbm, "PLAYWRIGHT_AVAILABLE", True)
-    backend = BrowserBackend(source_type=SourceType.WEB_PAGE)
+    backend = BrowserBackend(source_type=SourceKind.WEB_PAGE)
     assert await backend.probe() is True
 
 
@@ -48,7 +48,7 @@ async def test_browser_probe_reflects_playwright_available_false(monkeypatch):
     import research_browser_manager as rbm
 
     monkeypatch.setattr(rbm, "PLAYWRIGHT_AVAILABLE", False)
-    backend = BrowserBackend(source_type=SourceType.WEB_PAGE)
+    backend = BrowserBackend(source_type=SourceKind.WEB_PAGE)
     assert await backend.probe() is False
 
 
@@ -72,7 +72,7 @@ async def test_browser_fetch_maps_research_result(monkeypatch, stub_browser_mana
 
     stub_browser_manager(stub_manager)
 
-    backend = BrowserBackend(source_type=SourceType.WEB_PAGE)
+    backend = BrowserBackend(source_type=SourceKind.WEB_PAGE)
     request = ContentRequest(url="https://example.com", query="")
     result = await backend.fetch(request)
 
@@ -88,7 +88,7 @@ async def test_browser_fetch_raises_without_url(monkeypatch, stub_browser_manage
 
     stub_browser_manager(_StubManager({}))
 
-    backend = BrowserBackend(source_type=SourceType.WEB_PAGE)
+    backend = BrowserBackend(source_type=SourceKind.WEB_PAGE)
     request = ContentRequest(query="x")  # url defaults to ""
     with pytest.raises(BackendError, match="url"):
         await backend.fetch(request)
@@ -100,7 +100,7 @@ async def test_browser_fetch_raises_on_unsuccessful(monkeypatch, stub_browser_ma
 
     stub_browser_manager(stub_manager)
 
-    backend = BrowserBackend(source_type=SourceType.WEB_PAGE)
+    backend = BrowserBackend(source_type=SourceKind.WEB_PAGE)
     request = ContentRequest(url="https://example.com")
     with pytest.raises(BackendError, match="Failed to create browser session"):
         await backend.fetch(request)
@@ -117,7 +117,7 @@ async def test_browser_fetch_distinguishes_guard_rejection_from_generic_failure(
 
     stub_browser_manager(stub_manager)
 
-    backend = BrowserBackend(source_type=SourceType.WEB_PAGE)
+    backend = BrowserBackend(source_type=SourceKind.WEB_PAGE)
     request = ContentRequest(url="https://example.com")
     with pytest.raises(BackendError, match="blocked by SSRF guard at navigate time"):
         await backend.fetch(request)
@@ -140,7 +140,7 @@ async def test_browser_search_builds_ddg_url(monkeypatch, stub_browser_manager):
 
     stub_browser_manager(stub_manager)
 
-    backend = BrowserSearchBackend(source_type=SourceType.WEB_SEARCH)
+    backend = BrowserSearchBackend(source_type=SourceKind.WEB_SEARCH)
     request = ContentRequest(query="cats dogs")
     await backend.fetch(request)
 

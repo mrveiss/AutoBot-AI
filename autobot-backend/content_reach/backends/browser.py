@@ -31,7 +31,7 @@ from autobot_shared.browser import (
 from autobot_shared.logging_manager import get_logger
 from content_reach._url_guard import ensure_public_url, ensure_robots_allowed
 from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
-from source_attribution import SourceReliability, SourceType
+from source_attribution import SourceKind, SourceReliability
 
 logger = get_logger(__name__)
 
@@ -53,7 +53,7 @@ class BrowserBackend(ContentBackend):
 
     def __init__(
         self,
-        source_type: SourceType,
+        source_type: SourceKind,
         name: str = "browser",
     ) -> None:
         self.source_type = source_type
@@ -158,7 +158,7 @@ class BrowserSearchBackend(BrowserBackend):
     extracts content. robots.txt is intentionally skipped for search-results pages.
     """
 
-    def __init__(self, source_type: SourceType) -> None:
+    def __init__(self, source_type: SourceKind) -> None:
         super().__init__(source_type=source_type, name="browser_search")
 
     async def fetch(self, request: ContentRequest) -> ContentResult:

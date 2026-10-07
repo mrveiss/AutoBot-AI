@@ -12,7 +12,7 @@ import httpx
 import pytest
 
 from content_reach.base import BackendError, ContentRequest
-from source_attribution import SourceType
+from source_attribution import SourceKind
 
 
 async def _always_public(_url: str) -> bool:
@@ -155,7 +155,7 @@ async def test_ytdlp_fetch_maps_caption_text(monkeypatch):
 
     assert result.success is True
     assert result.backend_used == "yt_dlp"
-    assert result.source_type == SourceType.YOUTUBE
+    assert result.source_type == SourceKind.YOUTUBE
     assert "Hello world" in result.text
     assert result.structured["title"] == "Test Video"
     assert result.structured["duration"] == 120
@@ -283,7 +283,7 @@ def test_build_youtube_chain_order():
 
     chain = build_youtube_chain()
     assert chain.source == "youtube"
-    assert chain.source_type == SourceType.YOUTUBE
+    assert chain.source_type == SourceKind.YOUTUBE
     assert chain.backend_names() == ["yt_dlp"]
 
 

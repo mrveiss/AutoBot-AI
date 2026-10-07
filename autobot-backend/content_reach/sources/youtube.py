@@ -22,7 +22,7 @@ from content_reach._http import http_get
 from content_reach._url_guard import ensure_public_url
 from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
 from content_reach.chain import ContentSourceChain
-from source_attribution import SourceReliability, SourceType
+from source_attribution import SourceKind, SourceReliability
 
 logger = get_logger(__name__)
 
@@ -159,7 +159,7 @@ class YtDlpCaptionBackend(ContentBackend):
     """
 
     name = "yt_dlp"
-    source_type = SourceType.YOUTUBE
+    source_type = SourceKind.YOUTUBE
 
     def __init__(self, client: httpx.AsyncClient | None = None) -> None:
         self._client = client
@@ -247,6 +247,6 @@ def build_youtube_chain() -> ContentSourceChain:
     """Build the YouTube caption chain: yt_dlp."""
     return ContentSourceChain(
         source="youtube",
-        source_type=SourceType.YOUTUBE,
+        source_type=SourceKind.YOUTUBE,
         backends=[YtDlpCaptionBackend()],
     )
