@@ -115,7 +115,7 @@ class VectorSearchConfig:
 
 
 @dataclass
-class SearchResult:
+class GpuSearchResult:
     """Individual search result."""
 
     doc_id: str
@@ -413,9 +413,9 @@ class GPUVectorIndex:
 
         return query
 
-    def _convert_search_results(self, distances: np.ndarray, indices: np.ndarray) -> List["SearchResult"]:
+    def _convert_search_results(self, distances: np.ndarray, indices: np.ndarray) -> List["GpuSearchResult"]:
         """
-        Convert FAISS search output to SearchResult objects.
+        Convert FAISS search output to GpuSearchResult objects.
 
         Issue #620: Extracted from search to reduce function length.
 
@@ -424,7 +424,7 @@ class GPUVectorIndex:
             indices: Index array from FAISS
 
         Returns:
-            List of SearchResult objects
+            List of GpuSearchResult objects
         """
         results = []
         for dist, idx in zip(distances[0], indices[0]):
@@ -442,7 +442,7 @@ class GPUVectorIndex:
                 score = 1.0 / (1.0 + float(dist))  # Convert L2 distance to similarity
 
             results.append(
-                SearchResult(
+                GpuSearchResult(
                     doc_id=doc_id,
                     score=score,
                     distance=float(dist),
@@ -456,7 +456,7 @@ class GPUVectorIndex:
         query_embedding: np.ndarray,
         top_k: int = 10,
         normalize: bool = True,
-    ) -> Tuple[List[SearchResult], SearchMetrics]:
+    ) -> Tuple[List[GpuSearchResult], SearchMetrics]:
         """
         Search for similar vectors.
 
@@ -532,9 +532,9 @@ class GPUVectorIndex:
 
     def _convert_batch_search_results(
         self, distances: np.ndarray, indices: np.ndarray, num_queries: int
-    ) -> List[List["SearchResult"]]:
+    ) -> List[List["GpuSearchResult"]]:
         """
-        Convert FAISS batch search output to lists of SearchResult objects.
+        Convert FAISS batch search output to lists of GpuSearchResult objects.
 
         Args:
             distances: Distance array from FAISS of shape (n, k)
@@ -542,7 +542,7 @@ class GPUVectorIndex:
             num_queries: Number of queries processed
 
         Returns:
-            List of SearchResult lists, one per query. Issue #620.
+            List of GpuSearchResult lists, one per query. Issue #620.
         """
         all_results = []
         for q_idx in range(num_queries):
@@ -558,7 +558,7 @@ class GPUVectorIndex:
                 else:
                     score = 1.0 / (1.0 + float(dist))
 
-                results.append(SearchResult(doc_id=doc_id, score=score, distance=float(dist)))
+                results.append(GpuSearchResult(doc_id=doc_id, score=score, distance=float(dist)))
 
             all_results.append(results)
 
@@ -569,7 +569,7 @@ class GPUVectorIndex:
         query_embeddings: np.ndarray,
         top_k: int = 10,
         normalize: bool = True,
-    ) -> Tuple[List[List[SearchResult]], SearchMetrics]:
+    ) -> Tuple[List[List[GpuSearchResult]], SearchMetrics]:
         """
         Batch search for multiple query vectors.
 
@@ -937,7 +937,7 @@ class HybridVectorSearch(AsyncInitializable):
         collection_name: str = "default",
         metadata_filter: Dict[str, Any] | None = None,
         include_documents: bool = True,
-    ) -> Tuple[List[SearchResult], SearchMetrics]:
+    ) -> Tuple[List[GpuSearchResult], SearchMetrics]:
         """
         Hybrid search using FAISS for speed and ChromaDB for documents.
 
@@ -995,10 +995,10 @@ class HybridVectorSearch(AsyncInitializable):
 
     async def _enrich_from_chromadb(
         self,
-        results: List[SearchResult],
+        results: List[GpuSearchResult],
         collection_name: str,
         metadata_filter: Dict[str, Any] | None = None,
-    ) -> List[SearchResult]:
+    ) -> List[GpuSearchResult]:
         """Fetch document content and metadata from ChromaDB."""
         try:
             collection: BaseCollection = await asyncio.to_thread(self.chromadb.get_collection, collection_name)
@@ -1027,15 +1027,15 @@ class HybridVectorSearch(AsyncInitializable):
             logger.error("Failed to enrich from ChromaDB: %s", e)
             return results
 
-    def _convert_chromadb_results(self, chromadb_results: Dict[str, Any]) -> List[SearchResult]:
+    def _convert_chromadb_results(self, chromadb_results: Dict[str, Any]) -> List[GpuSearchResult]:
         """
-        Convert ChromaDB query results to SearchResult objects.
+        Convert ChromaDB query results to GpuSearchResult objects.
 
         Args:
             chromadb_results: Raw results from ChromaDB query
 
         Returns:
-            List of SearchResult objects. Issue #620.
+            List of GpuSearchResult objects. Issue #620.
         """
         results = []
         if not chromadb_results["ids"] or not chromadb_results["ids"][0]:
@@ -1046,7 +1046,7 @@ class HybridVectorSearch(AsyncInitializable):
             score = 1.0 / (1.0 + distance)
 
             results.append(
-                SearchResult(
+                GpuSearchResult(
                     doc_id=doc_id,
                     score=score,
                     distance=distance,
@@ -1079,7 +1079,7 @@ class HybridVectorSearch(AsyncInitializable):
         top_k: int,
         collection_name: str,
         metadata_filter: Dict[str, Any] | None = None,
-    ) -> Tuple[List[SearchResult], SearchMetrics]:
+    ) -> Tuple[List[GpuSearchResult], SearchMetrics]:
         """Fallback search using ChromaDB."""
         start_time = time.perf_counter()
 
@@ -1212,7 +1212,7 @@ __all__ = [
     "GPUVectorIndex",
     "HybridVectorSearch",
     "VectorSearchConfig",
-    "SearchResult",
+    "GpuSearchResult",
     "SearchMetrics",
     "IndexType",
     "SearchBackend",
@@ -1225,7 +1225,7 @@ __all__ = [
 # Issue #3828: VectorSearchEngine adapter
 #
 # VectorSearchEngine._GPUBackend calls get_hybrid_vector_search() directly and
-# converts HybridVectorSearch.SearchResult objects to the canonical form.
+# converts HybridVectorSearch.GpuSearchResult objects to the canonical form.
 # No changes to HybridVectorSearch internals are required; the bridge lives
 # entirely in knowledge/vector_search_engine.py.
 # ---------------------------------------------------------------------------

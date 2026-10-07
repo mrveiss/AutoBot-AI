@@ -102,7 +102,7 @@ response, a log line, an issue, a PR comment — is already redacted.
 [`autobot_shared/field_encryption.py`](../../autobot_shared/field_encryption.py) `encrypt_field`/`decrypt_field` for single columns ·
 [`credential_store.py`](../../autobot-backend/knowledge/connectors/credential_store.py) `ConnectorCredentialStore` (:195) for connector/OAuth creds, ownership via `_require_owner` (:643) ·
 [`auth_middleware.py`](../../autobot-backend/auth_middleware.py) `verify_internal_api_key` (:949) for service-to-service ·
-[`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:123) for SLM token revocation.
+[`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:124) for SLM token revocation.
 
 **Invariants**
 - No parallel crypto path. A diff introducing its own `Fernet(...)` or `AESGCM(...)` instead

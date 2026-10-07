@@ -23,6 +23,7 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { shapeForSpeech } from '@/utils/ttsSentences'
 import i18n from '@/i18n'
+import { stripProtocolTagsForSpeech } from '@/utils/llmProtocolTags'
 
 const logger = createLogger('useVoiceConversation')
 
@@ -147,9 +148,8 @@ function _getMicContextError(modeLabel: string): string {
 /** Strip tool-call markup, shape for speech, and truncate to a TTS-safe length. */
 function _sanitizeForSpeech(text: string): string {
   // #1721: Remove script tags first (complete multi-char sanitization), then strip remaining HTML
-  let clean = text
-    .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
-    .replace(/<TOOL_CALL[^>]*>|<\/TOOL_CALL>/gi, '')
+  // Speech KEEPS the description inside a tool call — it is written to be heard (#18065).
+  let clean = stripProtocolTagsForSpeech(text)
     .replace(/<script[\s\S]*?<\/script\s*>/gi, '') // codeql[js/incomplete-multi-character-sanitization]
     .replace(/<script[^>]*>/gi, '') // codeql[js/incomplete-multi-character-sanitization]
   let prev = ''

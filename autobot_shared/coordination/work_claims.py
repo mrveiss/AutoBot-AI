@@ -235,7 +235,7 @@ class Scope:
 
 
 @dataclass(frozen=True)
-class Claim:
+class WorkClaim:
     """A held scope: who holds it, why, and when it expires without a renew."""
 
     scope: str
@@ -261,7 +261,7 @@ class ClaimConflict:
     """
 
     requested: str
-    holder: Claim
+    holder: WorkClaim
 
     def __str__(self) -> str:
         return (
@@ -271,7 +271,7 @@ class ClaimConflict:
         )
 
 
-def claim_payload(claim: Claim) -> dict[str, Any]:
+def claim_payload(claim: WorkClaim) -> dict[str, Any]:
     """The wire shape of a held scope: one row of ``GET /api/coordination/claims``.
 
     Every field is already user-facing. Scope paths are repo-relative by
@@ -405,15 +405,15 @@ async def _redis() -> Any:
     return client
 
 
-def _decode(raw: bytes | str) -> Claim:
+def _decode(raw: bytes | str) -> WorkClaim:
     if isinstance(raw, bytes):
         raw = raw.decode()
-    return Claim(**json.loads(raw))
+    return WorkClaim(**json.loads(raw))
 
 
-def _build(scope: Scope, agent_id: str, task_id: str, mode: ClaimMode, intent: str, ttl_s: int) -> Claim:
+def _build(scope: Scope, agent_id: str, task_id: str, mode: ClaimMode, intent: str, ttl_s: int) -> WorkClaim:
     acquired = now_utc()
-    return Claim(
+    return WorkClaim(
         scope=str(scope),
         agent_id=agent_id,
         task_id=task_id,
@@ -432,7 +432,7 @@ async def _acquire(
     mode: ClaimMode,
     intent: str,
     ttl_s: int | None,
-) -> tuple[str, Claim | ClaimConflict]:
+) -> tuple[str, WorkClaim | ClaimConflict]:
     """Acquire, returning the verdict alongside the result.
 
     The verdict distinguishes a fresh ``acquired`` from a ``renewed`` -- a
@@ -471,8 +471,8 @@ async def try_acquire(
     mode: ClaimMode = ClaimMode.EXCLUSIVE,
     intent: str,
     ttl_s: int | None = None,
-) -> Claim | ClaimConflict:
-    """Claim *scope*, or return the conflict naming who holds it.
+) -> WorkClaim | ClaimConflict:
+    """WorkClaim *scope*, or return the conflict naming who holds it.
 
     Never raises on contention -- a refusal is an ordinary answer here, and the
     caller decides whether to wait, queue, ask, or pick different work (#15948).
@@ -485,7 +485,7 @@ async def try_acquire(
     return result
 
 
-async def release(scope: str | Scope, *, agent_id: str, task_id: str) -> bool:
+async def release_scope(scope: str | Scope, *, agent_id: str, task_id: str) -> bool:
     """Release this holder's claim on *scope*. True when one went.
 
     A holder can only ever address its own key, so releasing another agent's
@@ -531,7 +531,7 @@ async def renew(scope: str | Scope, *, agent_id: str, task_id: str, ttl_s: int |
     return result == 1
 
 
-async def list_claims(kind: str | None = None) -> list[Claim]:
+async def list_claims(kind: str | None = None) -> list[WorkClaim]:
     """Every live claim, expired entries pruned from the index as they are found.
 
     One ``MGET`` and at most one ``SREM`` per kind rather than a round trip per
@@ -540,7 +540,7 @@ async def list_claims(kind: str | None = None) -> list[Claim]:
     """
     client = await _redis()
     kinds = sorted(VALID_KINDS) if kind is None else [kind]
-    claims: list[Claim] = []
+    claims: list[WorkClaim] = []
     for k in kinds:
         _require_kind(k)
         index, prefix = _INDEX_KEY.format(kind=k), _CLAIM_PREFIX.format(kind=k)
@@ -564,7 +564,7 @@ async def work_claim(
     mode: ClaimMode = ClaimMode.EXCLUSIVE,
     intent: str,
     ttl_s: int | None = None,
-) -> AsyncIterator[Claim]:
+) -> AsyncIterator[WorkClaim]:
     """Hold *scope* for the block, releasing it however the block exits.
 
     ``task_id`` defaults to a fresh id so an ad-hoc caller still gets
@@ -589,4 +589,4 @@ async def work_claim(
         # would be free for another agent mid-write, which is the exact
         # collision this module exists to prevent.
         if verdict == "acquired":
-            await release(scope, agent_id=agent_id, task_id=tid)
+            await release_scope(scope, agent_id=agent_id, task_id=tid)

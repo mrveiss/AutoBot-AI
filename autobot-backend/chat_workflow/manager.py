@@ -27,10 +27,9 @@ from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from chat_workflow import limits
 from chat_workflow.tool_call_grammar import (
     TOOL_CALL_BARE_CLOSE_RE,
-    TOOL_CALL_CLOSE_RE,
     TOOL_CALL_COMPLETE_RE,
-    TOOL_CALL_OPEN_RE,
     TOOL_CALL_OPENING_RE,
+    normalize_tool_call_text,
     strip_unparsed_tool_tags,
 )
 from constants.api_constants import PATH_OLLAMA_GENERATE
@@ -74,8 +73,6 @@ _BLOCK_CONTENT_TYPES: FrozenSet[str] = frozenset({"thought", "planning"})
 # source of truth in tool_call_grammar.py, shared with
 # chat_workflow/tool_handler.py. Module-level aliases kept for
 # backwards-compatible imports (tests import these names directly).
-_TOOL_CALL_OPEN_RE = TOOL_CALL_OPEN_RE
-_TOOL_CALL_CLOSE_RE = TOOL_CALL_CLOSE_RE
 _TOOL_CALL_COMPLETE_RE = TOOL_CALL_COMPLETE_RE
 _TOOL_CALL_BARE_CLOSE_RE = TOOL_CALL_BARE_CLOSE_RE
 _TOOL_CALL_OPENING_RE = TOOL_CALL_OPENING_RE
@@ -412,11 +409,8 @@ class ChatWorkflowManager(
     MAX_CONTINUATION_ITERATIONS = limits.MAX_CONTINUATION_ITERATIONS  # #352, #17468: one shared value
 
     def _normalize_tool_call_text(self, text: str) -> str:
-        """Normalize TOOL_CALL spacing in LLM response text (Issue #332)."""
-        # Issue #380: Use pre-compiled patterns
-        text = _TOOL_CALL_OPEN_RE.sub("<TOOL_CALL", text)
-        text = _TOOL_CALL_CLOSE_RE.sub("</TOOL_CALL>", text)
-        return text
+        """Delegate to the grammar module's single normaliser (#332, #380, #18065)."""
+        return normalize_tool_call_text(text)
 
     def _filter_internal_prompts(self, text: str) -> str:
         """Filter out internal continuation prompts that LLM echoes back (Issue #716).

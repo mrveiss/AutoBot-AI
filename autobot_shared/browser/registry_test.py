@@ -20,8 +20,8 @@ import pytest
 from autobot_shared.browser.base import (
     FORMAT_CAPABILITY,
     ActionRequest,
+    BrowserCapability,
     BrowserResult,
-    Capability,
     ContentFormat,
     ExtractRequest,
     NavigateRequest,
@@ -98,11 +98,11 @@ def _deny():
 @pytest.mark.asyncio
 async def test_navigate_to_a_non_public_url_never_reaches_the_backend():
     """The whole reason this layer exists (#13204)."""
-    backend = FakeBackend("fake", {Capability.NAVIGATE})
+    backend = FakeBackend("fake", {BrowserCapability.NAVIGATE})
     register_backend(backend)
 
     with _deny():
-        browser = await get_browser(requires={Capability.NAVIGATE})
+        browser = await get_browser(requires={BrowserCapability.NAVIGATE})
         with pytest.raises(UnsafeUrlError):
             await browser.navigate(NavigateRequest(url="http://169.254.169.254/latest/meta-data/"))
 
@@ -112,11 +112,11 @@ async def test_navigate_to_a_non_public_url_never_reaches_the_backend():
 @pytest.mark.asyncio
 async def test_screenshot_url_is_guarded_too():
     """services/playwright_service's screenshot path validates nothing today."""
-    backend = FakeBackend("fake", {Capability.SCREENSHOT})
+    backend = FakeBackend("fake", {BrowserCapability.SCREENSHOT})
     register_backend(backend)
 
     with _deny():
-        browser = await get_browser(requires={Capability.SCREENSHOT})
+        browser = await get_browser(requires={BrowserCapability.SCREENSHOT})
         with pytest.raises(UnsafeUrlError):
             await browser.screenshot(ScreenshotRequest(url="http://localhost:6379/"))
 
@@ -131,11 +131,11 @@ async def test_extract_url_is_guarded_for_stateless_backends():
     reaches the network exactly like a navigate URL, so it cannot skip the
     check.
     """
-    backend = FakeBackend("fake", {Capability.EXTRACT_TEXT})
+    backend = FakeBackend("fake", {BrowserCapability.EXTRACT_TEXT})
     register_backend(backend)
 
     with _deny():
-        browser = await get_browser(requires={Capability.EXTRACT_TEXT})
+        browser = await get_browser(requires={BrowserCapability.EXTRACT_TEXT})
         with pytest.raises(UnsafeUrlError):
             await browser.extract(ExtractRequest(url="http://169.254.169.254/"))
 
@@ -145,11 +145,11 @@ async def test_extract_url_is_guarded_for_stateless_backends():
 @pytest.mark.asyncio
 async def test_extract_without_a_url_is_not_blocked():
     """Session-holding backends read their current page — nothing to validate."""
-    backend = FakeBackend("fake", {Capability.EXTRACT_TEXT})
+    backend = FakeBackend("fake", {BrowserCapability.EXTRACT_TEXT})
     register_backend(backend)
 
     with _deny():
-        browser = await get_browser(requires={Capability.EXTRACT_TEXT})
+        browser = await get_browser(requires={BrowserCapability.EXTRACT_TEXT})
         result = await browser.extract(ExtractRequest(session_id="s1"))
 
     assert result.success is True
@@ -158,23 +158,23 @@ async def test_extract_without_a_url_is_not_blocked():
 @pytest.mark.asyncio
 async def test_locality_narrows_dispatch():
     """#13236: a caller that must stay out-of-process cannot be routed in."""
-    in_proc = FakeBackend("in_proc", {Capability.EXTRACT_TEXT, Capability.IN_PROCESS})
-    out_proc = FakeBackend("out_proc", {Capability.EXTRACT_TEXT, Capability.OUT_OF_PROCESS})
+    in_proc = FakeBackend("in_proc", {BrowserCapability.EXTRACT_TEXT, BrowserCapability.IN_PROCESS})
+    out_proc = FakeBackend("out_proc", {BrowserCapability.EXTRACT_TEXT, BrowserCapability.OUT_OF_PROCESS})
     register_backend(in_proc)
     register_backend(out_proc)
 
-    chosen = await resolve_backend({Capability.EXTRACT_TEXT, Capability.OUT_OF_PROCESS})
+    chosen = await resolve_backend({BrowserCapability.EXTRACT_TEXT, BrowserCapability.OUT_OF_PROCESS})
 
     assert chosen.name == "out_proc", "locality must pin dispatch, not just rank it"
 
 
 @pytest.mark.asyncio
 async def test_empty_url_is_rejected():
-    backend = FakeBackend("fake", {Capability.NAVIGATE})
+    backend = FakeBackend("fake", {BrowserCapability.NAVIGATE})
     register_backend(backend)
 
     with _allow():
-        browser = await get_browser(requires={Capability.NAVIGATE})
+        browser = await get_browser(requires={BrowserCapability.NAVIGATE})
         with pytest.raises(UnsafeUrlError):
             await browser.navigate(NavigateRequest(url=""))
 
@@ -183,11 +183,11 @@ async def test_empty_url_is_rejected():
 
 @pytest.mark.asyncio
 async def test_public_url_passes_through():
-    backend = FakeBackend("fake", {Capability.NAVIGATE})
+    backend = FakeBackend("fake", {BrowserCapability.NAVIGATE})
     register_backend(backend)
 
     with _allow():
-        browser = await get_browser(requires={Capability.NAVIGATE})
+        browser = await get_browser(requires={BrowserCapability.NAVIGATE})
         result = await browser.navigate(NavigateRequest(url="https://example.com/"))
 
     assert result.success is True
@@ -198,11 +198,11 @@ async def test_public_url_passes_through():
 @pytest.mark.asyncio
 async def test_screenshot_without_a_url_is_not_blocked():
     """A capture of the *current* page carries no URL to validate."""
-    backend = FakeBackend("fake", {Capability.SCREENSHOT})
+    backend = FakeBackend("fake", {BrowserCapability.SCREENSHOT})
     register_backend(backend)
 
     with _deny():
-        browser = await get_browser(requires={Capability.SCREENSHOT})
+        browser = await get_browser(requires={BrowserCapability.SCREENSHOT})
         result = await browser.screenshot(ScreenshotRequest(url=None))
 
     assert result.success is True
@@ -213,64 +213,64 @@ async def test_screenshot_without_a_url_is_not_blocked():
 
 @pytest.mark.asyncio
 async def test_capabilities_select_the_backend_not_registration_order():
-    poor = FakeBackend("poor", {Capability.NAVIGATE})
-    rich = FakeBackend("rich", {Capability.NAVIGATE, Capability.INTERACT})
+    poor = FakeBackend("poor", {BrowserCapability.NAVIGATE})
+    rich = FakeBackend("rich", {BrowserCapability.NAVIGATE, BrowserCapability.INTERACT})
     register_backend(poor)
     register_backend(rich)
 
-    chosen = await resolve_backend({Capability.NAVIGATE, Capability.INTERACT})
+    chosen = await resolve_backend({BrowserCapability.NAVIGATE, BrowserCapability.INTERACT})
 
     assert chosen.name == "rich"
 
 
 @pytest.mark.asyncio
 async def test_first_capable_backend_wins_when_several_match():
-    first = FakeBackend("first", {Capability.NAVIGATE})
-    second = FakeBackend("second", {Capability.NAVIGATE})
+    first = FakeBackend("first", {BrowserCapability.NAVIGATE})
+    second = FakeBackend("second", {BrowserCapability.NAVIGATE})
     register_backend(first)
     register_backend(second)
 
-    assert (await resolve_backend({Capability.NAVIGATE})).name == "first"
+    assert (await resolve_backend({BrowserCapability.NAVIGATE})).name == "first"
 
 
 @pytest.mark.asyncio
 async def test_prepend_overrides_preference_order():
-    register_backend(FakeBackend("first", {Capability.NAVIGATE}))
-    register_backend(FakeBackend("preferred", {Capability.NAVIGATE}), prepend=True)
+    register_backend(FakeBackend("first", {BrowserCapability.NAVIGATE}))
+    register_backend(FakeBackend("preferred", {BrowserCapability.NAVIGATE}), prepend=True)
 
-    assert (await resolve_backend({Capability.NAVIGATE})).name == "preferred"
+    assert (await resolve_backend({BrowserCapability.NAVIGATE})).name == "preferred"
 
 
 @pytest.mark.asyncio
 async def test_unreachable_backend_is_skipped_for_a_reachable_one():
-    down = FakeBackend("down", {Capability.NAVIGATE}, reachable=False)
-    up = FakeBackend("up", {Capability.NAVIGATE})
+    down = FakeBackend("down", {BrowserCapability.NAVIGATE}, reachable=False)
+    up = FakeBackend("up", {BrowserCapability.NAVIGATE})
     register_backend(down)
     register_backend(up)
 
-    assert (await resolve_backend({Capability.NAVIGATE})).name == "up"
+    assert (await resolve_backend({BrowserCapability.NAVIGATE})).name == "up"
 
 
 @pytest.mark.asyncio
 async def test_a_backend_whose_probe_raises_is_skipped_not_fatal():
     """A broken probe must not take out the whole cascade."""
-    broken = FakeBackend("broken", {Capability.NAVIGATE}, probe_raises=True)
-    good = FakeBackend("good", {Capability.NAVIGATE})
+    broken = FakeBackend("broken", {BrowserCapability.NAVIGATE}, probe_raises=True)
+    good = FakeBackend("good", {BrowserCapability.NAVIGATE})
     register_backend(broken)
     register_backend(good)
 
-    assert (await resolve_backend({Capability.NAVIGATE})).name == "good"
+    assert (await resolve_backend({BrowserCapability.NAVIGATE})).name == "good"
 
 
 @pytest.mark.asyncio
 async def test_missing_capability_and_all_down_are_distinguishable():
     """'No browser does this' and 'the browser is down' need different responses."""
     with pytest.raises(NoCapableBackendError, match="no registered backend provides"):
-        await resolve_backend({Capability.MHTML})
+        await resolve_backend({BrowserCapability.MHTML})
 
-    register_backend(FakeBackend("down", {Capability.MHTML}, reachable=False))
+    register_backend(FakeBackend("down", {BrowserCapability.MHTML}, reachable=False))
     with pytest.raises(NoCapableBackendError, match="unreachable"):
-        await resolve_backend({Capability.MHTML})
+        await resolve_backend({BrowserCapability.MHTML})
 
 
 # ---------------------------------------------------------------- registry
@@ -278,21 +278,21 @@ async def test_missing_capability_and_all_down_are_distinguishable():
 
 def test_reregistering_a_name_replaces_rather_than_stacks():
     """A module imported twice must not register duplicates."""
-    register_backend(FakeBackend("dup", {Capability.NAVIGATE}))
-    register_backend(FakeBackend("dup", {Capability.NAVIGATE, Capability.MHTML}))
+    register_backend(FakeBackend("dup", {BrowserCapability.NAVIGATE}))
+    register_backend(FakeBackend("dup", {BrowserCapability.NAVIGATE, BrowserCapability.MHTML}))
 
     names = [b.name for b in registered_backends()]
     assert names == ["dup"]
-    assert Capability.MHTML in registered_backends()[0].capabilities
+    assert BrowserCapability.MHTML in registered_backends()[0].capabilities
 
 
 @pytest.mark.asyncio
 async def test_result_names_the_backend_that_served_it():
     """The indirection must stay debuggable."""
-    register_backend(FakeBackend("in_process", {Capability.NAVIGATE}))
+    register_backend(FakeBackend("in_process", {BrowserCapability.NAVIGATE}))
 
     with _allow():
-        browser = await get_browser(requires={Capability.NAVIGATE})
+        browser = await get_browser(requires={BrowserCapability.NAVIGATE})
         result = await browser.navigate(NavigateRequest(url="https://example.com/"))
 
     assert browser.backend_name == "in_process"
@@ -301,10 +301,10 @@ async def test_result_names_the_backend_that_served_it():
 
 @pytest.mark.asyncio
 async def test_non_url_operations_reach_the_backend():
-    backend = FakeBackend("fake", {Capability.EXTRACT_TEXT, Capability.INTERACT})
+    backend = FakeBackend("fake", {BrowserCapability.EXTRACT_TEXT, BrowserCapability.INTERACT})
     register_backend(backend)
 
-    browser = await get_browser(requires={Capability.EXTRACT_TEXT})
+    browser = await get_browser(requires={BrowserCapability.EXTRACT_TEXT})
     await browser.extract(ExtractRequest(session_id="s1"))
     await browser.act(ActionRequest(action="click", selector="#go"))
     await browser.release(SessionHandle(session_id="s1", backend="fake"))
@@ -339,12 +339,12 @@ async def test_html_request_cannot_resolve_to_a_text_only_backend():
     `EXTRACT`, so dispatch could hand `web_fetch` text where it needed HTML —
     silently, because that is a valid result shape.
     """
-    text_only = FakeBackend("worker", {Capability.EXTRACT_TEXT, Capability.OUT_OF_PROCESS})
-    html_capable = FakeBackend("container", {Capability.EXTRACT_HTML, Capability.OUT_OF_PROCESS})
+    text_only = FakeBackend("worker", {BrowserCapability.EXTRACT_TEXT, BrowserCapability.OUT_OF_PROCESS})
+    html_capable = FakeBackend("container", {BrowserCapability.EXTRACT_HTML, BrowserCapability.OUT_OF_PROCESS})
     register_backend(text_only)  # registered first — would win on a bare EXTRACT
     register_backend(html_capable)
 
-    chosen = await resolve_backend({Capability.EXTRACT_HTML, Capability.OUT_OF_PROCESS})
+    chosen = await resolve_backend({BrowserCapability.EXTRACT_HTML, BrowserCapability.OUT_OF_PROCESS})
 
     assert chosen.name == "container", "an HTML caller must not be routed to a text-only stack"
 
@@ -356,10 +356,10 @@ async def test_requesting_a_format_the_backend_cannot_produce_raises():
     They can disagree; the registry ties them together rather than returning
     the wrong shape.
     """
-    backend = FakeBackend("text_only", {Capability.EXTRACT_TEXT})
+    backend = FakeBackend("text_only", {BrowserCapability.EXTRACT_TEXT})
     register_backend(backend)
 
-    browser = await get_browser(requires={Capability.EXTRACT_TEXT})
+    browser = await get_browser(requires={BrowserCapability.EXTRACT_TEXT})
     with pytest.raises(UnsupportedFormatError, match="extract_html"):
         await browser.extract(ExtractRequest(format=ContentFormat.HTML))
 
@@ -368,10 +368,10 @@ async def test_requesting_a_format_the_backend_cannot_produce_raises():
 
 @pytest.mark.asyncio
 async def test_matching_format_passes_through():
-    backend = FakeBackend("html", {Capability.EXTRACT_HTML})
+    backend = FakeBackend("html", {BrowserCapability.EXTRACT_HTML})
     register_backend(backend)
 
-    browser = await get_browser(requires={Capability.EXTRACT_HTML})
+    browser = await get_browser(requires={BrowserCapability.EXTRACT_HTML})
     result = await browser.extract(ExtractRequest(format=ContentFormat.HTML))
 
     assert result.success is True
@@ -382,16 +382,16 @@ def test_every_content_format_maps_to_a_capability():
     """A format added without a capability would raise KeyError at dispatch."""
     for fmt in ContentFormat:
         assert fmt in FORMAT_CAPABILITY
-        assert isinstance(FORMAT_CAPABILITY[fmt], Capability)
+        assert isinstance(FORMAT_CAPABILITY[fmt], BrowserCapability)
 
 
 @pytest.mark.asyncio
 async def test_text_is_the_default_format():
     """Most callers want text; defaulting avoids a required argument."""
-    backend = FakeBackend("text", {Capability.EXTRACT_TEXT})
+    backend = FakeBackend("text", {BrowserCapability.EXTRACT_TEXT})
     register_backend(backend)
 
-    browser = await get_browser(requires={Capability.EXTRACT_TEXT})
+    browser = await get_browser(requires={BrowserCapability.EXTRACT_TEXT})
     result = await browser.extract(ExtractRequest())
 
     assert result.success is True

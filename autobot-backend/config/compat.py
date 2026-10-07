@@ -35,12 +35,12 @@ class Config:
 
 
 # Convenience functions for common operations
-def get_config(manager, key: str, default: Any = None) -> Any:
+def get_config_value_from(manager, key: str, default: Any = None) -> Any:
     """Get configuration value"""
     return manager.get(key, default)
 
 
-def get_config_section(manager, section: str) -> Dict[str, Any]:
+def get_config_section_from(manager, section: str) -> Dict[str, Any]:
     """Get configuration section"""
     return manager.get_nested(section, {})
 

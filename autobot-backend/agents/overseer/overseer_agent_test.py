@@ -98,25 +98,25 @@ class TestOverseerAgentInit:
 class TestOverseerAgentConfig:
     """Tests for config retrieval methods."""
 
-    @patch("agents.overseer.overseer_agent.get_config")
+    @patch("agents.overseer.overseer_agent.provide_config_manager")
     def test_get_ollama_endpoint(self, mock_get_config, agent):
         mock_get_config.return_value.get_ollama_url.return_value = "http://host:11434"
         endpoint = agent._get_ollama_endpoint()
         assert endpoint == "http://host:11434/api/generate"
 
-    @patch("agents.overseer.overseer_agent.get_config")
+    @patch("agents.overseer.overseer_agent.provide_config_manager")
     def test_get_ollama_endpoint_already_has_suffix(self, mock_get_config, agent):
         mock_get_config.return_value.get_ollama_url.return_value = "http://host:11434/api/generate"
         endpoint = agent._get_ollama_endpoint()
         assert endpoint == "http://host:11434/api/generate"
         assert not endpoint.endswith("/api/generate/api/generate")
 
-    @patch("agents.overseer.overseer_agent.get_config")
+    @patch("agents.overseer.overseer_agent.provide_config_manager")
     def test_get_model_from_config(self, mock_get_config, agent):
         mock_get_config.return_value.get_selected_model.return_value = "llama3:8b"
         assert agent._get_model() == "llama3:8b"
 
-    @patch("agents.overseer.overseer_agent.get_config")
+    @patch("agents.overseer.overseer_agent.provide_config_manager")
     def test_get_model_fallback(self, mock_get_config, agent):
         mock_get_config.return_value.get_selected_model.side_effect = Exception("no config")
         # The fallback is the SSOT default model — asserting the constant keeps this

@@ -8,13 +8,13 @@ from circuit_breaker import CircuitBreakerOpenError
 from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
 from content_reach.chain import ContentSourceChain
 from content_reach.registry import ContentSourceRegistry
-from source_attribution import SourceType
+from source_attribution import SourceKind
 
 
 class StubBackend(ContentBackend):
     def __init__(self, name, *, live=True, mode="ok"):
         self.name = name
-        self.source_type = SourceType.WEB_SEARCH
+        self.source_type = SourceKind.WEB_SEARCH
         self._live = live
         self._mode = mode  # ok | fail_exc | fail_result
         self.fetch_calls = 0
@@ -41,7 +41,7 @@ class StubBackend(ContentBackend):
 def _registry(*backends):
     reg = ContentSourceRegistry()
     reg.register_chain(
-        ContentSourceChain(source="web_search", source_type=SourceType.WEB_SEARCH, backends=list(backends))
+        ContentSourceChain(source="web_search", source_type=SourceKind.WEB_SEARCH, backends=list(backends))
     )
     return reg
 
@@ -86,7 +86,7 @@ async def test_circuit_open_advances_without_cache_evict():
 async def test_all_fail_returns_failure_result():
     res = await _registry(StubBackend("a", mode="fail_exc")).fetch("web_search", ContentRequest(query="q"))
     assert res.success is False
-    assert res.source_type is SourceType.WEB_SEARCH
+    assert res.source_type is SourceKind.WEB_SEARCH
     assert "all backends failed" in res.metadata["error"]
 
 
@@ -136,20 +136,20 @@ def test_list_sources():
 async def test_probe_all_concurrent_multi_source():
     """probe_all with two sources returns correct live maps for both."""
     from content_reach.chain import ContentSourceChain
-    from source_attribution import SourceType
+    from source_attribution import SourceKind
 
     reg = ContentSourceRegistry()
     reg.register_chain(
         ContentSourceChain(
             source="web_search",
-            source_type=SourceType.WEB_SEARCH,
+            source_type=SourceKind.WEB_SEARCH,
             backends=[StubBackend("a"), StubBackend("b", live=False)],
         )
     )
     reg.register_chain(
         ContentSourceChain(
             source="reddit",
-            source_type=SourceType.REDDIT,
+            source_type=SourceKind.REDDIT,
             backends=[StubBackend("c", live=False), StubBackend("d")],
         )
     )
@@ -176,12 +176,12 @@ async def test_probe_all_concurrent_probe_count():
 
     reg = ContentSourceRegistry()
     from content_reach.chain import ContentSourceChain
-    from source_attribution import SourceType
+    from source_attribution import SourceKind
 
     reg.register_chain(
         ContentSourceChain(
             source="web_search",
-            source_type=SourceType.WEB_SEARCH,
+            source_type=SourceKind.WEB_SEARCH,
             backends=[CountingBackend("x"), CountingBackend("y"), CountingBackend("z")],
         )
     )
@@ -244,13 +244,13 @@ def test_parse_probe_ttl_negative_falls_back(monkeypatch):
 async def test_probe_all_all_dead_source_present():
     """A source whose every backend is dead still appears in probe_all with an empty list."""
     from content_reach.chain import ContentSourceChain
-    from source_attribution import SourceType
+    from source_attribution import SourceKind
 
     reg = ContentSourceRegistry()
     reg.register_chain(
         ContentSourceChain(
             source="web_search",
-            source_type=SourceType.WEB_SEARCH,
+            source_type=SourceKind.WEB_SEARCH,
             backends=[StubBackend("a", live=False), StubBackend("b", live=False)],
         )
     )

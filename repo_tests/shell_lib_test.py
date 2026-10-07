@@ -40,6 +40,7 @@ SHELL_SUITES = [
     "scripts/lib/git-scope_test.sh",
     "scripts/lib/project_root_test.sh",
     "scripts/lib/session-handoffs_test.sh",
+    "scripts/pr-merge-gate_test.sh",
     "scripts/pr-preflight_test.sh",
 ]
 

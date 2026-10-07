@@ -97,7 +97,7 @@ _DEFAULT_TARGET_MODALITIES = ("text", "image", "audio", "multimodal")
 
 
 @dataclass
-class SearchResult:
+class NpuSearchResult:
     """Enhanced search result with NPU optimization metrics."""
 
     content: str
@@ -321,10 +321,10 @@ class NPUSemanticSearch:
             hardware_utilization={},
         )
 
-    def _convert_basic_results(self, basic_results: List[Dict], device_label: str) -> List[SearchResult]:
-        """Convert basic search results to SearchResult objects."""
+    def _convert_basic_results(self, basic_results: List[Dict], device_label: str) -> List[NpuSearchResult]:
+        """Convert basic search results to NpuSearchResult objects."""
         return [
-            SearchResult(
+            NpuSearchResult(
                 content=r["content"],
                 metadata=r["metadata"],
                 score=r["score"],
@@ -343,7 +343,7 @@ class NPUSemanticSearch:
         similarity_top_k: int,
         filters: Dict[str, Any] | None,
         embedding_device: str,
-    ) -> List[SearchResult]:
+    ) -> List[NpuSearchResult]:
         """Perform vector similarity search with fallback."""
         if self.knowledge_base.vector_store and self.knowledge_base.vector_index:
             return await self._vector_similarity_search(query_embedding, similarity_top_k, filters, embedding_device)
@@ -354,7 +354,7 @@ class NPUSemanticSearch:
 
     async def _create_search_metrics(
         self,
-        results: List[SearchResult],
+        results: List[NpuSearchResult],
         embedding_time: float,
         search_time: float,
         total_time: float,
@@ -377,7 +377,7 @@ class NPUSemanticSearch:
         similarity_top_k: int,
         filters: Dict[str, Any] | None,
         start_time: float,
-    ) -> Tuple[List[SearchResult], SearchMetrics]:
+    ) -> Tuple[List[NpuSearchResult], SearchMetrics]:
         """Handle search error with fallback."""
         logger.error("❌ Enhanced search failed: %s", error)
         basic_results = await self.knowledge_base.search(query, similarity_top_k, filters, "auto")
@@ -396,7 +396,7 @@ class NPUSemanticSearch:
 
     def _log_search_completion(
         self,
-        results: List[SearchResult],
+        results: List[NpuSearchResult],
         total_time: float,
         embedding_time: float,
         search_time: float,
@@ -426,7 +426,7 @@ class NPUSemanticSearch:
         force_device: HardwareDevice | None,
         start_time: float,
         cache_key: str,
-    ) -> Tuple[List[SearchResult], SearchMetrics]:
+    ) -> Tuple[List[NpuSearchResult], SearchMetrics]:
         """Execute the core search pipeline with embedding and vector search. Issue #620.
 
         Args:
@@ -464,7 +464,7 @@ class NPUSemanticSearch:
         filters: Dict[str, Any] | None = None,
         enable_npu_acceleration: bool = True,
         force_device: HardwareDevice | None = None,
-    ) -> Tuple[List[SearchResult], SearchMetrics]:
+    ) -> Tuple[List[NpuSearchResult], SearchMetrics]:
         """Perform NPU-enhanced semantic search. Issue #281, #620."""
         start_time = time.time()
 
@@ -597,8 +597,8 @@ class NPUSemanticSearch:
 
     def _convert_hybrid_results(
         self, hybrid_results: List[Any], hybrid_metrics: Any, device_used: str
-    ) -> List[SearchResult]:
-        """Convert hybrid search results to SearchResult format. Issue #620.
+    ) -> List[NpuSearchResult]:
+        """Convert hybrid search results to NpuSearchResult format. Issue #620.
 
         Args:
             hybrid_results: Results from hybrid vector search
@@ -606,11 +606,11 @@ class NPUSemanticSearch:
             device_used: Fallback device identifier
 
         Returns:
-            List of SearchResult objects
+            List of NpuSearchResult objects
         """
         results = []
         for hr in hybrid_results:
-            result = SearchResult(
+            result = NpuSearchResult(
                 content=hr.content or "",
                 metadata=hr.metadata,
                 score=hr.score,
@@ -628,7 +628,7 @@ class NPUSemanticSearch:
         )
         return results
 
-    async def _search_with_llamaindex_fallback(self, top_k: int, device_used: str) -> List[SearchResult]:
+    async def _search_with_llamaindex_fallback(self, top_k: int, device_used: str) -> List[NpuSearchResult]:
         """Search using LlamaIndex query engine as fallback. Issue #620.
 
         Args:
@@ -636,7 +636,7 @@ class NPUSemanticSearch:
             device_used: Device identifier for result metadata
 
         Returns:
-            List of SearchResult objects
+            List of NpuSearchResult objects
         """
         query_engine = self.knowledge_base.vector_index.as_query_engine(similarity_top_k=top_k, response_mode="no_text")
         response = await asyncio.to_thread(query_engine.query, "search query")
@@ -644,7 +644,7 @@ class NPUSemanticSearch:
         results = []
         if hasattr(response, "source_nodes"):
             for node in response.source_nodes:
-                result = SearchResult(
+                result = NpuSearchResult(
                     content=node.node.text,
                     metadata=node.node.metadata or {},
                     score=getattr(node, "score", 0.0),
@@ -662,7 +662,7 @@ class NPUSemanticSearch:
         top_k: int,
         filters: Dict[str, Any] | None,
         device_used: str,
-    ) -> List[SearchResult]:
+    ) -> List[NpuSearchResult]:
         """Perform vector similarity search using GPU-accelerated hybrid or knowledge base."""
         try:
             if self.hybrid_search is not None:
@@ -712,7 +712,7 @@ class NPUSemanticSearch:
         cache_string = json.dumps(cache_data, sort_keys=True)
         return hashlib.md5(cache_string.encode(), usedforsecurity=False).hexdigest()
 
-    def _get_cached_result(self, cache_key: str) -> Tuple[List[SearchResult], SearchMetrics] | None:
+    def _get_cached_result(self, cache_key: str) -> Tuple[List[NpuSearchResult], SearchMetrics] | None:
         """Get cached search result if available and not expired."""
         if cache_key in self.search_results_cache:
             cached_data, timestamp = self.search_results_cache[cache_key]
@@ -725,7 +725,7 @@ class NPUSemanticSearch:
 
         return None
 
-    def _cache_result(self, cache_key: str, result: Tuple[List[SearchResult], SearchMetrics]):
+    def _cache_result(self, cache_key: str, result: Tuple[List[NpuSearchResult], SearchMetrics]):
         """Cache search result with TTL."""
         # Implement simple LRU eviction
         if len(self.search_results_cache) >= self.cache_max_size:
@@ -740,7 +740,7 @@ class NPUSemanticSearch:
 
     def _create_error_search_result(
         self,
-    ) -> Tuple[List[SearchResult], SearchMetrics]:
+    ) -> Tuple[List[NpuSearchResult], SearchMetrics]:
         """Create empty result tuple for failed batch search query. Issue #620.
 
         Returns:
@@ -758,7 +758,7 @@ class NPUSemanticSearch:
             ),
         )
 
-    def _process_batch_results(self, results: List[Any]) -> List[Tuple[List[SearchResult], SearchMetrics]]:
+    def _process_batch_results(self, results: List[Any]) -> List[Tuple[List[NpuSearchResult], SearchMetrics]]:
         """Process batch search results, handling exceptions. Issue #620.
 
         Args:
@@ -783,7 +783,7 @@ class NPUSemanticSearch:
         similarity_top_k: int,
         filters: Dict[str, Any] | None,
         embedding_device: str,
-    ) -> Dict[int, Tuple[List[SearchResult], SearchMetrics]]:
+    ) -> Dict[int, Tuple[List[NpuSearchResult], SearchMetrics]]:
         """Issue #8153: run all cache-miss queries against ChromaDB in one call.
 
         Passes the full list of query embeddings to ``query_batch()`` so the
@@ -806,7 +806,7 @@ class NPUSemanticSearch:
             return {}
 
         query_time_ms = (time.time() - start) * 1000
-        out: Dict[int, Tuple[List[SearchResult], SearchMetrics]] = {}
+        out: Dict[int, Tuple[List[NpuSearchResult], SearchMetrics]] = {}
 
         ids_per_query = batch_result.get("ids") or []
         docs_per_query = batch_result.get("documents") or [None] * len(ids_per_query)
@@ -819,11 +819,11 @@ class NPUSemanticSearch:
             metas = metas_per_query[slice_idx] if slice_idx < len(metas_per_query) else None
             dists = dists_per_query[slice_idx] if slice_idx < len(dists_per_query) else None
 
-            results: List[SearchResult] = []
+            results: List[NpuSearchResult] = []
             for j, doc_id in enumerate(ids or []):
                 score = 1.0 - (dists[j] if dists and j < len(dists) else 0.0)
                 results.append(
-                    SearchResult(
+                    NpuSearchResult(
                         content=(docs[j] if docs and j < len(docs) else ""),
                         metadata=(metas[j] if metas and j < len(metas) else {}),
                         score=score,
@@ -852,7 +852,7 @@ class NPUSemanticSearch:
         similarity_top_k: int = 10,
         filters: Dict[str, Any] | None = None,
         enable_npu_acceleration: bool = True,
-    ) -> List[Tuple[List[SearchResult], SearchMetrics]]:
+    ) -> List[Tuple[List[NpuSearchResult], SearchMetrics]]:
         """Batch semantic search — uses a single ChromaDB call for all queries.
 
         Issue #8153: replaces N individual ``search`` dispatches with:
@@ -870,7 +870,7 @@ class NPUSemanticSearch:
         logger.info("🔍 Batch search: %s queries (top_k=%s)", len(queries), similarity_top_k)
 
         cache_keys = [self._generate_cache_key(q, similarity_top_k, filters) for q in queries]
-        output: List[Tuple[List[SearchResult], SearchMetrics] | None] = [None] * len(queries)
+        output: List[Tuple[List[NpuSearchResult], SearchMetrics] | None] = [None] * len(queries)
 
         miss_indices = [i for i, k in enumerate(cache_keys) if self._get_cached_result(k) is None]
 
@@ -1641,7 +1641,7 @@ async def get_npu_search_engine() -> NPUSemanticSearch:
 # Issue #3828: VectorSearchEngine adapter
 #
 # VectorSearchEngine._NPUBackend calls get_npu_search_engine() directly and
-# converts its SearchResult objects to the canonical form.  No changes to
+# converts its NpuSearchResult objects to the canonical form.  No changes to
 # NPUSemanticSearch internals are required; the bridge lives entirely in
 # knowledge/vector_search_engine.py.
 # ---------------------------------------------------------------------------

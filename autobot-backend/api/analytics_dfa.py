@@ -25,6 +25,7 @@ from typing import Dict, List, Set, Tuple
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_analytics import (
+    AnalyticsSourceType,
     DataFlowResponse,
     DFAAnalysisResponse,
     DFAAnalyzeFileRequest,
@@ -35,7 +36,6 @@ from api.schemas_analytics import (
     DfaSourcesResponse,
     DfaVulnerabilitiesResponse,
     SinkType,
-    SourceType,
     TaintLevel,
     TaintSummary,
     VariableDefResponse,
@@ -74,7 +74,7 @@ class VariableDefinition:
     scope: str  # Function or module scope
     value_node: ast.AST | None = None
     taint_level: TaintLevel = TaintLevel.UNTAINTED
-    source_type: SourceType | None = None
+    source_type: AnalyticsSourceType | None = None
 
 
 @dataclass
@@ -152,35 +152,35 @@ class DataFlowGraph:
 # =============================================================================
 
 # Functions that introduce tainted data
-TAINT_SOURCES: Dict[str, Tuple[SourceType, TaintLevel]] = {
+TAINT_SOURCES: Dict[str, Tuple[AnalyticsSourceType, TaintLevel]] = {
     # User input
-    "input": (SourceType.USER_INPUT, TaintLevel.TAINTED),
-    "raw_input": (SourceType.USER_INPUT, TaintLevel.TAINTED),
+    "input": (AnalyticsSourceType.USER_INPUT, TaintLevel.TAINTED),
+    "raw_input": (AnalyticsSourceType.USER_INPUT, TaintLevel.TAINTED),
     # Web frameworks
-    "request.args.get": (SourceType.USER_INPUT, TaintLevel.TAINTED),
-    "request.form.get": (SourceType.USER_INPUT, TaintLevel.TAINTED),
-    "request.json": (SourceType.USER_INPUT, TaintLevel.TAINTED),
-    "request.data": (SourceType.USER_INPUT, TaintLevel.TAINTED),
-    "request.files": (SourceType.USER_INPUT, TaintLevel.TAINTED),
-    "request.headers": (SourceType.USER_INPUT, TaintLevel.TAINTED),
-    "request.cookies": (SourceType.USER_INPUT, TaintLevel.TAINTED),
+    "request.args.get": (AnalyticsSourceType.USER_INPUT, TaintLevel.TAINTED),
+    "request.form.get": (AnalyticsSourceType.USER_INPUT, TaintLevel.TAINTED),
+    "request.json": (AnalyticsSourceType.USER_INPUT, TaintLevel.TAINTED),
+    "request.data": (AnalyticsSourceType.USER_INPUT, TaintLevel.TAINTED),
+    "request.files": (AnalyticsSourceType.USER_INPUT, TaintLevel.TAINTED),
+    "request.headers": (AnalyticsSourceType.USER_INPUT, TaintLevel.TAINTED),
+    "request.cookies": (AnalyticsSourceType.USER_INPUT, TaintLevel.TAINTED),
     # File operations
-    "open": (SourceType.FILE, TaintLevel.PARTIALLY_TAINTED),
-    "read": (SourceType.FILE, TaintLevel.PARTIALLY_TAINTED),
-    "readline": (SourceType.FILE, TaintLevel.PARTIALLY_TAINTED),
-    "readlines": (SourceType.FILE, TaintLevel.PARTIALLY_TAINTED),
+    "open": (AnalyticsSourceType.FILE, TaintLevel.PARTIALLY_TAINTED),
+    "read": (AnalyticsSourceType.FILE, TaintLevel.PARTIALLY_TAINTED),
+    "readline": (AnalyticsSourceType.FILE, TaintLevel.PARTIALLY_TAINTED),
+    "readlines": (AnalyticsSourceType.FILE, TaintLevel.PARTIALLY_TAINTED),
     # Database
-    "fetchone": (SourceType.DATABASE, TaintLevel.PARTIALLY_TAINTED),
-    "fetchall": (SourceType.DATABASE, TaintLevel.PARTIALLY_TAINTED),
-    "fetchmany": (SourceType.DATABASE, TaintLevel.PARTIALLY_TAINTED),
+    "fetchone": (AnalyticsSourceType.DATABASE, TaintLevel.PARTIALLY_TAINTED),
+    "fetchall": (AnalyticsSourceType.DATABASE, TaintLevel.PARTIALLY_TAINTED),
+    "fetchmany": (AnalyticsSourceType.DATABASE, TaintLevel.PARTIALLY_TAINTED),
     # Environment
-    "os.environ.get": (SourceType.ENVIRONMENT, TaintLevel.PARTIALLY_TAINTED),
-    "os.getenv": (SourceType.ENVIRONMENT, TaintLevel.PARTIALLY_TAINTED),
+    "os.environ.get": (AnalyticsSourceType.ENVIRONMENT, TaintLevel.PARTIALLY_TAINTED),
+    "os.getenv": (AnalyticsSourceType.ENVIRONMENT, TaintLevel.PARTIALLY_TAINTED),
     # Network
-    "socket.recv": (SourceType.NETWORK, TaintLevel.TAINTED),
-    "requests.get": (SourceType.EXTERNAL_API, TaintLevel.PARTIALLY_TAINTED),
-    "requests.post": (SourceType.EXTERNAL_API, TaintLevel.PARTIALLY_TAINTED),
-    "urllib.request.urlopen": (SourceType.EXTERNAL_API, TaintLevel.PARTIALLY_TAINTED),
+    "socket.recv": (AnalyticsSourceType.NETWORK, TaintLevel.TAINTED),
+    "requests.get": (AnalyticsSourceType.EXTERNAL_API, TaintLevel.PARTIALLY_TAINTED),
+    "requests.post": (AnalyticsSourceType.EXTERNAL_API, TaintLevel.PARTIALLY_TAINTED),
+    "urllib.request.urlopen": (AnalyticsSourceType.EXTERNAL_API, TaintLevel.PARTIALLY_TAINTED),
 }
 
 # Functions that are security-sensitive sinks
@@ -354,7 +354,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
         column: int,
         value_node: ast.AST | None = None,
         taint_level: TaintLevel = TaintLevel.UNTAINTED,
-        source_type: SourceType | None = None,
+        source_type: AnalyticsSourceType | None = None,
     ):
         """Add a variable definition."""
         definition = VariableDefinition(
@@ -454,7 +454,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
             return ".".join(reversed(parts))
         return ""
 
-    def _check_taint_source(self, node: ast.Call) -> Tuple[SourceType, TaintLevel] | None:
+    def _check_taint_source(self, node: ast.Call) -> Tuple[AnalyticsSourceType, TaintLevel] | None:
         """Check if a call is a taint source."""
         call_name = self._get_call_name(node)
 
@@ -651,7 +651,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
                 line=node.lineno,
                 column=node.col_offset,
                 taint_level=TaintLevel.PARTIALLY_TAINTED,  # Parameters may be tainted
-                source_type=SourceType.PARAMETER,
+                source_type=AnalyticsSourceType.PARAMETER,
             )
 
         self.generic_visit(node)
@@ -666,7 +666,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
                 line=node.lineno,
                 column=node.col_offset,
                 taint_level=TaintLevel.PARTIALLY_TAINTED,
-                source_type=SourceType.PARAMETER,
+                source_type=AnalyticsSourceType.PARAMETER,
             )
 
         self.generic_visit(node)
@@ -676,7 +676,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
         target: ast.AST,
         node: ast.Assign,
         value_taint: TaintLevel,
-        source_type: SourceType | None,
+        source_type: AnalyticsSourceType | None,
     ) -> None:
         """Process a single assignment target. (Issue #315 - extracted)"""
         if isinstance(target, ast.Name):

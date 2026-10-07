@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 
 from content_reach.base import ContentRequest
-from source_attribution import SourceType
+from source_attribution import SourceKind
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -37,12 +37,12 @@ def test_build_social_chain():
 
     chain = build_social_chain()
     assert chain.backend_names() == ["browser"]
-    assert chain.source_type is SourceType.SOCIAL
+    assert chain.source_type is SourceKind.SOCIAL
     assert chain.source == "social"
 
 
 # ---------------------------------------------------------------------------
-# fetch() — result carries SourceType.SOCIAL
+# fetch() — result carries SourceKind.SOCIAL
 # ---------------------------------------------------------------------------
 
 
@@ -78,4 +78,4 @@ async def test_social_fetch_carries_social_source_type(monkeypatch, stub_browser
     result = await backend.fetch(request)
 
     assert result.success is True
-    assert result.source_type is SourceType.SOCIAL
+    assert result.source_type is SourceKind.SOCIAL

@@ -152,8 +152,8 @@ def test_release_is_idempotent_and_keeps_the_first_reason():
     which is the distinction the two reasons exist to draw.
     """
     lease = _lease()
-    svc.release(lease, "handed back", now=NOW)
-    svc.release(lease, svc.RECLAIM_REASON, now=NOW + timedelta(hours=1))
+    svc.release_lease(lease, "handed back", now=NOW)
+    svc.release_lease(lease, svc.RECLAIM_REASON, now=NOW + timedelta(hours=1))
 
     assert lease.release_reason == "handed back"
     assert lease.released_at == NOW

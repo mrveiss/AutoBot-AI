@@ -354,7 +354,7 @@ def test_the_commit_path_reports_an_unreadable_staged_file(hook, tmp_path, monke
 #: this constant -- a comparison cannot police what moves with it -- applies to
 #: the sum one step further out, so the per-entry direction check still has no
 #: fixed reference. Do not read a falling total as "no ceiling was raised".
-MAX_CEILING_TOTAL = 184526  # #18066: useTheme.ts 610 -> 605
+MAX_CEILING_TOTAL = 184521  # #18065: ChatMessages.vue 2122 -> 2119, ChatController.ts 1158 -> 1156
 
 
 def test_the_ceiling_total_only_shrinks(hook):

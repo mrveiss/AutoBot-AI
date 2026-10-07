@@ -16,7 +16,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Set, Tuple
 
-from advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics, SearchResult
+from advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics, RankedResult
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_30_DAYS
@@ -32,7 +32,7 @@ from services.knowledge_base_adapter import KnowledgeBaseAdapter
 from services.neural_mesh_retriever import NeuralMeshRetriever
 from services.rag_config import RAGConfig, get_rag_config
 from services.semantic_query_cache import get_semantic_query_cache
-from services.session_adaptive_reranker import get_session_adaptive_reranker
+from services.session_adaptive_reranker import get_session_adaptive_reranker, session_adapted_weights
 from services.topic_retrieval_cache import CachedChunk, get_topic_retrieval_cache
 from type_defs.common import Metadata
 
@@ -103,7 +103,7 @@ class RAGService:
         self.config = config or get_rag_config()
         self.optimizer: AdvancedRAGOptimizer | None = None
         self._initialized = False
-        self._cache: Dict[str, Tuple[List[SearchResult], float]] = {}
+        self._cache: Dict[str, Tuple[List[RankedResult], float]] = {}
         self._cache_lock = asyncio.Lock()  # CRITICAL: Protect concurrent cache access
         # Neural Mesh RAG retriever (Issue #2059); injected at startup when Phase 3 is active.
         self._mesh_retriever: Any | None = None
@@ -207,7 +207,7 @@ class RAGService:
         fetch_limit: int,
         enable_reranking: bool,
         timeout_seconds: float,
-    ) -> Tuple[List[SearchResult], RAGMetrics]:
+    ) -> Tuple[List[RankedResult], RAGMetrics]:
         """Execute search with timeout protection (Issue #665: extracted helper).
 
         Issue #4696: when enable_rlm_refinement is True, delegates to
@@ -248,7 +248,7 @@ class RAGService:
         timeout_seconds: float,
         categories: List[str] | None,
         cache_key: str,
-    ) -> Tuple[List[SearchResult], RAGMetrics]:
+    ) -> Tuple[List[RankedResult], RAGMetrics]:
         """Helper for advanced_search. Ref: #1088.
 
         Executes timed search, applies category filter, caches result, and
@@ -291,7 +291,7 @@ class RAGService:
                 return await self._fallback_basic_search(query, max_results)
             raise
 
-    async def _check_topic_cache(self, query: str) -> Tuple[List[SearchResult], RAGMetrics] | None:
+    async def _check_topic_cache(self, query: str) -> Tuple[List[RankedResult], RAGMetrics] | None:
         """Check topic retrieval cache for related chunks. Issue #1376."""
         try:
             from knowledge.facts import _generate_embedding_with_npu_fallback
@@ -304,7 +304,7 @@ class RAGService:
             if chunks is None:
                 return None
             results = [
-                SearchResult(
+                RankedResult(
                     content=c.content,
                     metadata={**c.metadata, "source": "topic_cache"},
                     semantic_score=c.score,
@@ -323,7 +323,7 @@ class RAGService:
             logger.debug("Topic cache check failed: %s", exc)
             return None
 
-    async def _store_in_topic_cache(self, results: List[SearchResult]) -> None:
+    async def _store_in_topic_cache(self, results: List[RankedResult]) -> None:
         """Store search results in topic retrieval cache. Issue #1376."""
         if not results:
             return
@@ -349,15 +349,15 @@ class RAGService:
         except Exception as exc:
             logger.debug("Topic cache store failed: %s", exc)
 
-    async def _check_semantic_cache(self, query: str) -> Tuple[List[SearchResult], RAGMetrics] | None:
+    async def _check_semantic_cache(self, query: str) -> Tuple[List[RankedResult], RAGMetrics] | None:
         """Check semantic query cache for similar past queries. Issue #1372."""
         try:
             sem_cache = await get_semantic_query_cache()
             hit = await sem_cache.lookup(query)
             if hit is None:
                 return None
-            # Reconstruct a single SearchResult from cached response
-            sr = SearchResult(
+            # Reconstruct a single RankedResult from cached response
+            sr = RankedResult(
                 content=hit.response_text,
                 metadata={
                     "source": "semantic_cache",
@@ -382,7 +382,7 @@ class RAGService:
     async def _store_in_semantic_cache(
         self,
         query: str,
-        results: List[SearchResult],
+        results: List[RankedResult],
         model: str = "rag",
     ) -> None:
         """Store search results in semantic cache. Issue #1372."""
@@ -452,7 +452,7 @@ class RAGService:
     async def _record_retrieval_outcome(
         self,
         pattern_hash: str | None,
-        results: List[SearchResult],
+        results: List[RankedResult],
         user_id: str | None = None,
     ) -> None:
         """Record search outcome against the matched retrieval pattern. Issue #2095.
@@ -480,7 +480,7 @@ class RAGService:
     def _record_session_signal(
         self,
         session_id: str,
-        results: List[SearchResult],
+        results: List[RankedResult],
     ) -> None:
         """Feed retrieval success/miss signal into the session-adaptive reranker. Issue #4690.
 
@@ -598,7 +598,7 @@ class RAGService:
         max_results: int,
         enable_reranking: bool,
         categories: List[str] | None,
-    ) -> Tuple[List[SearchResult], RAGMetrics, str] | None:
+    ) -> Tuple[List[RankedResult], RAGMetrics, str] | None:
         """Check all cache tiers before falling through to ChromaDB. Ref: #1376.
 
         Returns (results, metrics, cache_key) on hit, None on miss.
@@ -637,16 +637,16 @@ class RAGService:
         self,
         query: str,
         max_results: int,
-    ) -> Tuple[List[SearchResult], RAGMetrics]:
+    ) -> Tuple[List[RankedResult], RAGMetrics]:
         """Delegate retrieval to NeuralMeshRetriever and emit feedback. Issue #2059.
 
         Called only when mesh_retriever_enabled=True and _mesh_retriever is set.
-        The mesh retriever returns SearchResult-compatible chunks directly; this
+        The mesh retriever returns RankedResult-compatible chunks directly; this
         helper handles feedback emission so the caller stays clean.
         """
         logger.info("Using NeuralMeshRetriever for query (mesh_retriever_enabled=True)")
         mesh_result = await self._mesh_retriever.retrieve(query, max_results)
-        results: List[SearchResult] = mesh_result.chunks
+        results: List[RankedResult] = mesh_result.chunks
         metrics = RAGMetrics()
         metrics.final_results_count = len(results)
 
@@ -666,7 +666,7 @@ class RAGService:
     async def _emit_ranked_feedback(
         self,
         query: str,
-        results: List[SearchResult],
+        results: List[RankedResult],
         user_id: str | None = None,
     ) -> None:
         """Classify query complexity and emit retrieval feedback to event + Redis stream.
@@ -706,7 +706,7 @@ class RAGService:
         categories: List[str] | None = None,
         user_id: str | None = None,
         session_id: str | None = None,
-    ) -> Tuple[List[SearchResult], RAGMetrics]:
+    ) -> Tuple[List[RankedResult], RAGMetrics]:
         """Perform advanced RAG search with reranking.
 
         Issue #556: categories. Issue #1372: semantic cache.
@@ -740,48 +740,39 @@ class RAGService:
             logger.warning("RAG init failed, using fallback")
             return await self._fallback_basic_search(query, max_results, categories)
 
-        # Issue #4690: Apply session-adapted weights before executing the search so
-        # the optimizer uses weights refined by earlier hits/misses in this session.
-        _prev_semantic: float | None = None
-        _prev_keyword: float | None = None
-        if self.config.enable_session_adaptive_reranking and session_id and self.optimizer:
-            _prev_semantic = self.optimizer.hybrid_weight_semantic
-            _prev_keyword = self.optimizer.hybrid_weight_keyword
-            adapted_sem, adapted_kw = self._session_reranker.get_weights(session_id)
-            self.optimizer.hybrid_weight_semantic = adapted_sem
-            self.optimizer.hybrid_weight_keyword = adapted_kw
-            logger.debug(
-                "Session adaptive reranking [%s]: sem=%.3f kw=%.3f",
-                session_id,
-                adapted_sem,
-                adapted_kw,
+        # Issue #4690: session-adapted weights apply to this search only; the
+        # context manager restores them even if the search raises.
+        adapting = bool(self.config.enable_session_adaptive_reranking and session_id)
+        # The guard this replaced was `enabled and session_id and self.optimizer`,
+        # so the reranker is reached only once the optimizer is known to exist --
+        # tests build this service with `__new__` and set only what they need.
+        adapting_optimizer = self.optimizer if adapting else None
+        with session_adapted_weights(
+            adapting_optimizer,
+            self._session_reranker if adapting_optimizer else None,
+            session_id,
+            enabled=adapting,
+        ):
+            # Issue #2095/#3240: consult retrieval learner with user_id for personalised hints.
+            classifier = get_query_classifier()
+            complexity = classifier.classify(query)
+            pattern_hash = await self._lookup_retrieval_pattern(
+                query=query,
+                complexity=complexity.value,
+                categories=categories,
+                user_id=user_id,
             )
 
-        # Issue #2095/#3240: consult retrieval learner with user_id for personalised hints.
-        classifier = get_query_classifier()
-        complexity = classifier.classify(query)
-        pattern_hash = await self._lookup_retrieval_pattern(
-            query=query,
-            complexity=complexity.value,
-            categories=categories,
-            user_id=user_id,
-        )
-
-        cache_key = self._build_cache_key(query, max_results, enable_reranking, categories)
-        timeout_seconds = timeout or self.config.timeout_seconds
-        results, metrics = await self._execute_and_cache_search(
-            query,
-            max_results,
-            enable_reranking,
-            timeout_seconds,
-            categories,
-            cache_key,
-        )
-
-        # Issue #4690: Restore original weights so other non-session callers are unaffected.
-        if _prev_semantic is not None and self.optimizer:
-            self.optimizer.hybrid_weight_semantic = _prev_semantic
-            self.optimizer.hybrid_weight_keyword = _prev_keyword  # type: ignore[assignment]
+            cache_key = self._build_cache_key(query, max_results, enable_reranking, categories)
+            timeout_seconds = timeout or self.config.timeout_seconds
+            results, metrics = await self._execute_and_cache_search(
+                query,
+                max_results,
+                enable_reranking,
+                timeout_seconds,
+                categories,
+                cache_key,
+            )
 
         # Issue #4953: merge autobot_docs results when category is requested or
         # no category filter is active (search-all).
@@ -962,10 +953,10 @@ class RAGService:
             return results
 
         try:
-            # Convert results to SearchResult objects
+            # Convert results to RankedResult objects
             search_results = []
             for i, result in enumerate(results):
-                sr = SearchResult(
+                sr = RankedResult(
                     content=result.get("content", result.get("text", "")),
                     metadata=result.get("metadata", {}),
                     semantic_score=result.get("score", 0.0),
@@ -996,8 +987,8 @@ class RAGService:
 
     async def _filter_stale_chunks(
         self,
-        results: List[SearchResult],
-    ) -> List[SearchResult]:
+        results: List[RankedResult],
+    ) -> List[RankedResult]:
         """Filter out chunks whose source_path is absent from the DocIndexer hash cache.
 
         Issue #4689: chunks for files removed/moved since the last index run must
@@ -1047,7 +1038,7 @@ class RAGService:
             # dropping all results on a fresh deployment.
             return results
 
-        valid: List[SearchResult] = []
+        valid: List[RankedResult] = []
         stale_paths: List[str] = []
         for chunk in results:
             if chunk.source_path in hash_cache:
@@ -1066,9 +1057,9 @@ class RAGService:
 
     def _filter_by_categories(
         self,
-        results: List[SearchResult],
+        results: List[RankedResult],
         categories: List[str],
-    ) -> List[SearchResult]:
+    ) -> List[RankedResult]:
         """
         Filter search results by category.
 
@@ -1132,7 +1123,7 @@ class RAGService:
         query: str,
         max_results: int,
         categories: List[str] | None = None,
-    ) -> Tuple[List[SearchResult], RAGMetrics]:
+    ) -> Tuple[List[RankedResult], RAGMetrics]:
         """
         Fallback to basic search when advanced RAG fails.
 
@@ -1158,10 +1149,10 @@ class RAGService:
             # Use knowledge base adapter for consistent interface
             basic_results = await self.kb_adapter.search(query=query, top_k=fetch_limit)
 
-            # Convert to SearchResult objects
+            # Convert to RankedResult objects
             search_results = []
             for i, result in enumerate(basic_results):
-                sr = SearchResult(
+                sr = RankedResult(
                     content=result.get("content", result.get("text", "")),
                     metadata=result.get("metadata", {}),
                     semantic_score=result.get("score", 0.0),
@@ -1189,7 +1180,7 @@ class RAGService:
             logger.error("Basic search fallback failed: %s", e)
             return [], metrics
 
-    async def _get_from_cache(self, cache_key: str) -> Tuple[List[SearchResult], RAGMetrics] | None:
+    async def _get_from_cache(self, cache_key: str) -> Tuple[List[RankedResult], RAGMetrics] | None:
         """Get results from cache if not expired."""
         # CRITICAL: Protect cache access with lock to prevent race conditions
         async with self._cache_lock:
@@ -1202,7 +1193,7 @@ class RAGService:
                     del self._cache[cache_key]
         return None
 
-    async def _add_to_cache(self, cache_key: str, results: Tuple[List[SearchResult], RAGMetrics]) -> None:
+    async def _add_to_cache(self, cache_key: str, results: Tuple[List[RankedResult], RAGMetrics]) -> None:
         """Add results to cache with timestamp.
 
         Args:
