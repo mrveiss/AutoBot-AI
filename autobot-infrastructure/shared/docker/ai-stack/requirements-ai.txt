@@ -23,11 +23,6 @@ tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a f
                           # ai-stack + npu-worker installs have failed to resolve ever since.
                           # scripts/tokenizers_transformers_range_test.py now fails on a floor
                           # that excludes 0.23.0.
-# Held below 2.0 (#17847). A grouped bump raised this one file to >=2.0.0 while
-# the other two declarations stayed at >=1.32.0 -- `autobot-tts-worker/
-# requirements.txt` (spelled `huggingface_hub`) and the npu-worker's
-# requirements-npu.txt -- so the ai-stack container would have resolved 2.x
-# while the other two resolved 1.x. All three move together or none do.
 #
 # The hold is not caution about majors in general: the only production call is
 # `huggingface_hub.login(token=..., add_to_git_credential=False)` in two
@@ -35,7 +30,13 @@ tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a f
 # for a MagicMock, which accepts any signature. So CI passes whatever 2.x does
 # to that function. Whether the signature is still valid in 2.x is UNKNOWN and
 # is what #17847 exists to settle -- not something this file can answer.
-huggingface-hub>=2.1.1
+# Held below 2.0 (#17847, re-asserted after #18045). MEASURED on PyPI: the latest
+# `sentence-transformers` (6.1.0) and `tokenizers` (0.23.2) BOTH declare
+# `huggingface-hub<2.0`, so a >=2.x floor is unsatisfiable in any manifest holding
+# either -- pip fails on the whole file and nothing installs. #18045 raised all three
+# declarations to >=2.1.1 together, which satisfied "all three move together" but not
+# the resolver. Raise this only when both of those allow 2.x.
+huggingface-hub>=1.32.0,<2.0
 tiktoken>=0.14.0
 
 # Tensor Operations
