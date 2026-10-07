@@ -37,12 +37,12 @@ from .anti_pattern_detector import AntiPatternDetector, AntiPatternResult
 
 # Multi-language analysis framework (Issue #386)
 from .base_analyzer import AnalysisIssue as MultiLangIssue
-from .base_analyzer import AnalysisResult as MultiLangResult
 from .base_analyzer import (
     BaseLanguageAnalyzer,
     IssueCategory,
     IssueSeverity,
     Language,
+    MultiLangResult,
     MultiLanguageAnalyzer,
     detect_language,
     extract_string_literals,
@@ -171,7 +171,6 @@ from .llm_code_generator import (
     refactor_code,
     validate_code,
 )
-from .llm_pattern_analyzer import AnalysisResult as PatternAnalysisResult
 from .llm_pattern_analyzer import (
     BatchingAnalyzer,
     BatchingOpportunity,
@@ -185,6 +184,7 @@ from .llm_pattern_analyzer import (
     OptimizationCategory,
     OptimizationPriority,
     OptimizationRecommendation,
+    PatternAnalysisResult,
     PromptAnalyzer,
     PromptIssueType,
 )

@@ -34,11 +34,11 @@ from code_intelligence.llm_pattern_analysis.calculators import (
     TokenTracker,
 )
 from code_intelligence.llm_pattern_analysis.data_models import (
-    AnalysisResult,
     BatchingOpportunity,
     CacheOpportunity,
     CostEstimate,
     OptimizationRecommendation,
+    PatternAnalysisResult,
     PromptAnalysisResult,
     PromptTemplate,
     RetryPattern,
@@ -105,7 +105,7 @@ __all__ = [
     "BatchingOpportunity",
     "CostEstimate",
     "OptimizationRecommendation",
-    "AnalysisResult",
+    "PatternAnalysisResult",
     # Classes
     "TokenTracker",
     "PromptAnalyzer",
@@ -149,7 +149,7 @@ class LLMPatternAnalyzer:
         """
         self.project_root = project_root or Path.cwd()
         self.token_tracker = TokenTracker()
-        self.analysis_history: List[AnalysisResult] = []
+        self.analysis_history: List[PatternAnalysisResult] = []
 
     def _scan_files_for_patterns(self, python_files: List[Path]) -> tuple[List[UsagePattern], List[RetryPattern]]:
         """Scan files and collect patterns (Issue #665: extracted helper)."""
@@ -235,10 +235,10 @@ class LLMPatternAnalyzer:
         batching_opportunities: List[BatchingOpportunity],
         cost_estimates: List[CostEstimate],
         recommendations: List[OptimizationRecommendation],
-    ) -> AnalysisResult:
-        """Build the final AnalysisResult object from collected data. Issue #620."""
+    ) -> PatternAnalysisResult:
+        """Build the final PatternAnalysisResult object from collected data. Issue #620."""
         total_savings = sum(r.estimated_savings_percent for r in recommendations) / max(len(recommendations), 1)
-        return AnalysisResult(
+        return PatternAnalysisResult(
             analysis_id=analysis_id,
             analysis_timestamp=datetime.now(tz=timezone.utc),
             files_analyzed=len(python_files),
@@ -264,7 +264,7 @@ class LLMPatternAnalyzer:
         self,
         directories: List[Path] | None = None,
         exclude_patterns: List[str] | None = None,
-    ) -> AnalysisResult:
+    ) -> PatternAnalysisResult:
         """Analyze the codebase for LLM patterns. Issue #620."""
         start_time = time.time()
         analysis_id = f"analysis_{int(start_time)}"
@@ -320,7 +320,7 @@ class LLMPatternAnalyzer:
 
         return files
 
-    def _build_report_header(self, result: AnalysisResult) -> List[str]:
+    def _build_report_header(self, result: PatternAnalysisResult) -> List[str]:
         """Build the header section of the summary report. Issue #620."""
         return [
             "=" * 60,
@@ -371,7 +371,7 @@ class LLMPatternAnalyzer:
             "=" * 60,
         ]
 
-    def get_summary_report(self, result: AnalysisResult) -> str:
+    def get_summary_report(self, result: PatternAnalysisResult) -> str:
         """Generate a human-readable summary report. Issue #620."""
         lines = self._build_report_header(result)
         lines.extend(self._build_cost_analysis_section(result.cost_estimates))
@@ -388,7 +388,7 @@ class LLMPatternAnalyzer:
 def analyze_llm_patterns(
     project_root: Path | None = None,
     directories: List[Path] | None = None,
-) -> AnalysisResult:
+) -> PatternAnalysisResult:
     """
     Convenience function to analyze LLM patterns.
 
