@@ -24,7 +24,7 @@ from __future__ import annotations
 from urllib.parse import quote_plus
 
 from autobot_shared.browser import (
-    Capability,
+    BrowserCapability,
     NavigateRequest,
     get_browser,
 )
@@ -49,7 +49,7 @@ class BrowserBackend(ContentBackend):
     #: ContentResult carries `structured` alongside `text`, and only the
     #: research stack produces it — so this both states the requirement and
     #: pins the routing (#13236).
-    _REQUIRES = frozenset({Capability.NAVIGATE, Capability.EXTRACT_STRUCTURED})
+    _REQUIRES = frozenset({BrowserCapability.NAVIGATE, BrowserCapability.EXTRACT_STRUCTURED})
 
     def __init__(
         self,

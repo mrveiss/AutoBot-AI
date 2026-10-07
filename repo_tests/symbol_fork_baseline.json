@@ -32,7 +32,6 @@
     "CacheConfig",
     "CacheEntry",
     "CacheOpportunity",
-    "Capability",
     "CaptchaSolver",
     "CaptchaType",
     "ChatMessage",

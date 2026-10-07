@@ -254,7 +254,7 @@ async def _fetch_playwright(url: str, timeout: float) -> str | None:
     try:
         import browser_backends
         from autobot_shared.browser import (
-            Capability,
+            BrowserCapability,
             ContentFormat,
             ExtractRequest,
             get_browser,
@@ -263,7 +263,7 @@ async def _fetch_playwright(url: str, timeout: float) -> str | None:
         browser_backends.register_all()  # idempotent
 
         browser = await get_browser(
-            requires={Capability.EXTRACT_HTML, Capability.OUT_OF_PROCESS},
+            requires={BrowserCapability.EXTRACT_HTML, BrowserCapability.OUT_OF_PROCESS},
         )
         result = await browser.extract(ExtractRequest(url=url, format=ContentFormat.HTML, timeout_seconds=timeout))
         return result.content if result.success else None
@@ -294,7 +294,7 @@ class WebFetcher:
 
         result = await WebFetcher.fetch("https://example.com")
         if result.success:
-            print(result.markdown)
+            logger.info("fetched markdown: %s", result.markdown)
     """
 
     def __init__(self, redis_client=None, robots_cache=None) -> None:
