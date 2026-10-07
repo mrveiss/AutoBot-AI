@@ -35,7 +35,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from autobot_shared.idempotency import Claim, ReplayedResponse, claim, complete, release, storage_key
+from autobot_shared.idempotency import KeyClaim, ReplayedResponse, claim, complete, release, storage_key
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -145,7 +145,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         )
 
     @staticmethod
-    async def _claim(redis, key: str, path: str) -> Claim | None:
+    async def _claim(redis, key: str, path: str) -> KeyClaim | None:
         """The claim, or ``None`` meaning "store failed, serve unprotected"."""
         try:
             return await claim(redis, key)

@@ -25,7 +25,7 @@ from autobot_shared.coordination.branch_stewardship import (
     release,
     transfer,
 )
-from autobot_shared.coordination.work_claims import Claim, ClaimConflict, ClaimMode, ScopeError
+from autobot_shared.coordination.work_claims import ClaimConflict, ClaimMode, ScopeError, WorkClaim
 
 try:
     import fakeredis
@@ -63,7 +63,7 @@ async def test_an_interest_does_not_block_the_claim(redis):
     """Blocking on an open PR would serialise the fleet behind review."""
     await declare("path:a/b.py", branch="issue-1", steward="agent-1", intent="refactor")
     outcome, found = await acquire_aware("path:a/b.py", agent_id="agent-2", task_id="t2", intent="rename")
-    assert isinstance(outcome, Claim), "an unlanded branch must not refuse a claim"
+    assert isinstance(outcome, WorkClaim), "an unlanded branch must not refuse a claim"
     assert [i.branch for i in found] == ["issue-1"]
     assert "refactor" in found[0].intent
 
@@ -112,7 +112,7 @@ async def test_two_non_overlapping_edits_to_one_file_still_find_each_other(redis
         intent="fix the footer checksum at the bottom of the file",
     )
 
-    assert isinstance(outcome, Claim), "non-overlapping edits to one file must not be serialised"
+    assert isinstance(outcome, WorkClaim), "non-overlapping edits to one file must not be serialised"
     assert [i.branch for i in found] == ["issue-1"]
     assert found[0].steward == "agent-1"
     assert "header parse" in found[0].intent, "a disclosure that omits the intent cannot be acted on"

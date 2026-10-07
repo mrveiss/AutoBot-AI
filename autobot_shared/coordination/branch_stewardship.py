@@ -47,11 +47,11 @@ from dataclasses import asdict, dataclass
 from typing import Any, Iterable
 
 from autobot_shared.coordination.work_claims import (
-    Claim,
     ClaimConflict,
     ClaimMode,
     ClaimUnavailable,
     Scope,
+    WorkClaim,
     try_acquire,
 )
 from autobot_shared.env_utils import env_int_clamped
@@ -194,7 +194,7 @@ async def acquire_aware(
     task_id: str,
     mode: ClaimMode = ClaimMode.EXCLUSIVE,
     intent: str,
-) -> tuple[Claim | ClaimConflict, list[Interest]]:
+) -> tuple[WorkClaim | ClaimConflict, list[Interest]]:
     """Acquire *scope*, and report what unlanded work already touches it.
 
     **The interest never refuses the claim.** Blocking on an open PR would
