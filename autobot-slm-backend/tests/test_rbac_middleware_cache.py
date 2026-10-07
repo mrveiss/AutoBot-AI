@@ -113,9 +113,12 @@ sys.modules["autobot_shared.ssot_constants"] = _ssot_constants_mod
 # (or a future import added to rbac_middleware.py) leaks these MagicMocks into
 # every test collected afterward (#13312).
 try:
+    # #18088: the implementation moved to autobot_shared; the SLM path is now a
+    # re-export shim, and loading the shim by path would import
+    # `autobot_shared.middleware` while `autobot_shared` is stubbed below.
     _SPEC = importlib.util.spec_from_file_location(
-        "user_management.middleware.rbac_middleware",
-        _SLM_ROOT / "user_management" / "middleware" / "rbac_middleware.py",
+        "autobot_shared.middleware.rbac_middleware",
+        _SHARED_ROOT / "middleware" / "rbac_middleware.py",
     )
     _rbac_mod: types.ModuleType = types.ModuleType(_SPEC.name)
     _SPEC.loader.exec_module(_rbac_mod)
@@ -527,6 +530,7 @@ class TestStructuralInvariants:
 
     def test_middleware_uses_get_async_redis_client(self):
         """rbac_middleware.py must import from autobot_shared.redis_client."""
-        src = (_SLM_ROOT / "user_management" / "middleware" / "rbac_middleware.py").read_text(encoding="utf-8")
+        # #18088: assert against the implementation, not the re-export shim
+        src = (_SHARED_ROOT / "middleware" / "rbac_middleware.py").read_text(encoding="utf-8")
         assert "get_async_redis_client" in src
         assert "autobot_shared.redis_client" in src

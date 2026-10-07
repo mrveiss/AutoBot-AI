@@ -165,8 +165,14 @@ class TestStructuralImports:
         )
 
     def test_slm_rbac_middleware_imports_shared(self):
-        """rbac_middleware.py must not redefine Permission locally."""
-        src = self._read(_AUTOBOT_SLM / "user_management" / "middleware" / "rbac_middleware.py")
+        """rbac_middleware.py must not redefine Permission locally.
+
+        #18088: both services' copies were replaced by re-export shims over
+        `autobot_shared/middleware/rbac_middleware.py`. Reading a shim here
+        would pass trivially -- it declares nothing at all -- so this asserts
+        against the implementation both services now share.
+        """
+        src = self._read(_REPO_ROOT / "autobot_shared" / "middleware" / "rbac_middleware.py")
         assert not self.LOCAL_PERMISSION_PATTERN.search(src), (
             "rbac_middleware.py defines a local Permission enum — "
             "it must import from autobot_shared.auth.permissions"
