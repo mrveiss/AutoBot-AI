@@ -175,6 +175,25 @@ runs:
         # Every bound this step uses, named once (#15515).
         readonly APT_ATTEMPTS=3           # tries per apt command
         readonly APT_TIMEOUT_S=300        # wall-clock bound per try, and per dpkg repair
+        # #18102: the DOWNLOAD phase gets its own, larger bound, and fewer tries.
+        #
+        # Why this is not the timeout-doubling #14550 rejected as guessing: that objection
+        # was about an undersized budget being one hypothesis among several, with lock
+        # contention the likelier. The exit code now rules the alternatives out. apt is
+        # configured to drop a connection idle for APT_HTTP_IDLE_S and to retry a failed
+        # fetch APT_FETCH_RETRIES times, so a stalled mirror ends an attempt with apt's own
+        # non-zero status at roughly 120s. What four occurrences on 2026-10-08 actually
+        # showed was exit 124 -- coreutils timeout killing it at the full 300s -- on every
+        # attempt. A connection that never stalled for 30s was receiving data; it was simply
+        # too slow to finish. So the bound is the constraint, for the download only.
+        #
+        # Fewer, longer tries is the right shape here precisely because `--download-only`
+        # resumes: attempt 2 continues from what attempt 1 fetched, so three restarts of a
+        # 300s budget buy less than two of 540s. The install phase keeps the 300s bound --
+        # a kill there interrupts dpkg, which is what the repair between attempts is for,
+        # and that risk does not improve with a longer wait.
+        readonly APT_DOWNLOAD_TIMEOUT_S=540   # wall-clock bound per download try
+        readonly APT_DOWNLOAD_ATTEMPTS=2      # tries per download command (it resumes)
         readonly APT_BACKOFF_S=15         # the sleep after try N is N times this
         readonly APT_FETCH_RETRIES=3      # apt's own retries of one failed download
         readonly APT_HTTP_IDLE_S=30       # drop a connection that sends nothing this long
@@ -183,25 +202,56 @@ runs:
 
         # apt_retry LABEL COMMAND...: up to APT_ATTEMPTS tries (#15515, above).
         # With APT_ADVISORY=1 an exhausted command warns and returns 0.
+        # APT_TRIES as a command prefix is scoped to the call: bash applies an assignment
+        # preceding a function to that invocation only, so the download calls get
+        # APT_DOWNLOAD_ATTEMPTS and the install calls below still get APT_ATTEMPTS.
+        # Verified, because POSIX mode would make it persist and silently drop the installs
+        # to two tries; this step runs `bash -e`, not `bash --posix`.
+        #
+        # Bytes already fetched, so a failure says whether it was progressing (#18102).
+        #
+        # #18102 review: `sudo` is load-bearing, not cosmetic. apt stages in-progress
+        # downloads in archives/partial/ at mode 0700, so an unprivileged `du` cannot read
+        # them and counts only completed files -- which, for a transfer killed mid-flight,
+        # is nothing. The instrument would then print `0 -> 0` and name a *stalled* mirror
+        # on the exact failure it exists to diagnose, reporting the opposite of the truth.
+        #
+        # It reports `unknown` rather than 0 when the measurement itself fails: a `0` from a
+        # failed command is not a measurement (docs/developer/MEASUREMENT_DISCIPLINE.md),
+        # and collapsing the two would reintroduce that same confusion by another route.
+        # The `|| echo 0` this replaces could not work anyway -- the exit status of
+        # `du | cut` is cut's, so a failed du still exited 0 with empty output.
+        apt_cached_bytes() {
+          local out n
+          out=$(sudo du -sb /var/cache/apt/archives 2>/dev/null) || { printf 'unknown'; return 0; }
+          n=${out%%[!0-9]*}
+          printf '%s' "${n:-unknown}"
+        }
+
         apt_retry() {
-          local label=$1 attempt rc=0 why=""
+          local label=$1 attempt rc=0 why="" tries="${APT_TRIES:-$APT_ATTEMPTS}" before after
           shift
-          for ((attempt = 1; attempt <= APT_ATTEMPTS; attempt++)); do
+          for ((attempt = 1; attempt <= tries; attempt++)); do
             rc=0
+            before=$(apt_cached_bytes)
             "$@" || rc=$?
             if [ "$rc" -eq 0 ]; then return 0; fi
+            after=$(apt_cached_bytes)
             why=""
             if [ "$rc" -eq "$TIMEOUT_KILLED" ]; then why=", timed out"; fi
-            echo "apt: ${label}: attempt ${attempt}/${APT_ATTEMPTS} failed (exit ${rc}${why})" >&2
-            if [ "$attempt" -eq "$APT_ATTEMPTS" ]; then break; fi
+            # #18102 AC1: a bound that is too small and a mirror that is stalled both end
+            # here with the same exit code. The delta tells them apart, so the next
+            # occurrence is diagnosable from its own log instead of being inferred.
+            echo "apt: ${label}: attempt ${attempt}/${tries} failed (exit ${rc}${why}); archive cache ${before} -> ${after} bytes" >&2
+            if [ "$attempt" -eq "$tries" ]; then break; fi
             timeout "$APT_TIMEOUT_S" sudo dpkg --configure -a || echo "apt: dpkg --configure -a exited $?; the next attempt reports why" >&2
             sleep $((attempt * APT_BACKOFF_S))
           done
           if [ "${APT_ADVISORY:-0}" = 1 ]; then
-            echo "::warning title=apt ${label} failed (continuing)::${label} failed ${APT_ATTEMPTS} times, last exit ${rc}${why}; the installs decide" >&2
+            echo "::warning title=apt ${label} failed (continuing)::${label} failed ${tries} times, last exit ${rc}${why}; the installs decide" >&2
             return 0
           fi
-          echo "::error title=CI toolchain provisioning failed (no tests ran)::${label} failed ${APT_ATTEMPTS} times, last exit ${rc}${why}" >&2
+          echo "::error title=CI toolchain provisioning failed (no tests ran)::${label} failed ${tries} times, last exit ${rc}${why}, archive cache at $(apt_cached_bytes) bytes" >&2
           return 1
         }
 
@@ -214,8 +264,45 @@ runs:
           | sudo tee /etc/apt/apt.conf.d/80-ci-provisioning >/dev/null
 
         APT_ADVISORY=1 apt_retry "update" timeout "$APT_TIMEOUT_S" sudo apt-get update -qq
-        apt_retry "download ffmpeg" timeout "$APT_TIMEOUT_S" sudo apt-get install -y --download-only --no-install-recommends ffmpeg
-        apt_retry "download tesseract-ocr" timeout "$APT_TIMEOUT_S" sudo apt-get install -y --download-only tesseract-ocr
+
+        # #18102: install from prefetched .debs when a caller supplied them, touching the
+        # network not at all.
+        #
+        # The twelve shards used to run this same ~100MB fetch each, so one CI run made the
+        # same download up to twelve times and a different shard drew the slow mirror every
+        # time -- four reds on 2026-10-08 were shards 4, 1, 2 and 6. ci.yml now fetches once
+        # in `provision-packages` and hands the archives to every shard as an artifact.
+        #
+        # Placed AFTER `apt-get update` deliberately (#18102 review): `--no-download`
+        # resolves the version to install from THIS runner's package indexes, and a
+        # GitHub-hosted image can ship indexes older than the provisioning runner's. If
+        # the shard's stale index selects a different version than the archive on disk,
+        # `--no-download` cannot satisfy it and the shard silently falls back to the
+        # network -- restoring the twelve downloads this change exists to remove. Both
+        # sides now resolve against freshly updated indexes. The update itself is
+        # advisory and small; the ~100MB of packages is what was being repeated.
+        #
+        # This branch is OPTIONAL on purpose. coverage.yml and test-durations.yml call this
+        # action without that job, so an absent directory must fall through to the fetch
+        # below rather than fail -- and an insufficient set must fall through too, since a
+        # stale artifact that cannot satisfy the install is not a reason to lose the suite.
+        readonly PREFETCHED_DEBS="${RUNNER_TEMP:-/tmp}/apt-debs"
+        if [ -n "$(find "$PREFETCHED_DEBS" -maxdepth 1 -name '*.deb' -print -quit 2>/dev/null)" ]; then
+          echo "provisioning from $(find "$PREFETCHED_DEBS" -maxdepth 1 -name '*.deb' | wc -l) prefetched .deb(s) — no network (#18102)"
+          sudo cp "$PREFETCHED_DEBS"/*.deb /var/cache/apt/archives/
+          # Installed exactly as they were downloaded: ffmpeg without recommends and
+          # tesseract-ocr with them, so the cached set matches what apt resolves here.
+          if sudo apt-get install -y --no-download --no-install-recommends ffmpeg \
+            && sudo apt-get install -y --no-download tesseract-ocr; then
+            echo "installed: $(ffmpeg -version | head -1); $(tesseract --version 2>&1 | head -1)"
+            exit 0
+          fi
+          echo "::warning title=prefetched .debs did not satisfy the install::falling back to a network fetch (#18102)" >&2
+        fi
+        APT_TRIES=$APT_DOWNLOAD_ATTEMPTS apt_retry "download ffmpeg" \
+          timeout "$APT_DOWNLOAD_TIMEOUT_S" sudo apt-get install -y --download-only --no-install-recommends ffmpeg
+        APT_TRIES=$APT_DOWNLOAD_ATTEMPTS apt_retry "download tesseract-ocr" \
+          timeout "$APT_DOWNLOAD_TIMEOUT_S" sudo apt-get install -y --download-only tesseract-ocr
         apt_retry "install ffmpeg" timeout "$APT_TIMEOUT_S" sudo apt-get install -y --no-install-recommends ffmpeg
         apt_retry "install tesseract-ocr" timeout "$APT_TIMEOUT_S" sudo apt-get install -y tesseract-ocr
         echo "installed: $(ffmpeg -version | head -1); $(tesseract --version 2>&1 | head -1)"
