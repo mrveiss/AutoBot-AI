@@ -74,10 +74,54 @@ if [ -n "$ALERT_REF" ]; then
   if [ -z "${GITHUB_SHA:-}" ]; then
     printf '[codeql-ceiling] GITHUB_SHA unset — the analysis commit is NOT verified\n'
   fi
-  [ "$analyses_count" -gt 0 ] \
-    || fail "no CodeQL analysis for ${ALERT_REF}${GITHUB_SHA:+ at commit ${GITHUB_SHA}} — refusing to report 0 open alerts for a ref that was never scanned (a stale or non-CodeQL analysis does not count)"
-  alerts_query="${alerts_query}&ref=${ALERT_REF}"
-  printf '[codeql-ceiling] counting alerts on %s\n' "$ALERT_REF"
+  # Analyses present for this ref AT ALL, whatever tool and whatever commit. This is
+  # the discriminator for a STALE or FOREIGN analysis (#17303): if anything has
+  # uploaded to this ref, scanning happens here, so a missing CodeQL analysis for the
+  # commit under test is a scan that did not complete -- never "CodeQL does not run
+  # here". Deciding that from check-runs instead broke exactly those two cases
+  # (#18105 review), because the stub-visible checks of the CURRENT commit say nothing
+  # about an analysis uploaded for an earlier one.
+  total_analyses=$(printf '%s' "$analyses_json" | jq -e 'if type != "array" then error("not an array") else length end' 2>/dev/null)
+  [[ "$total_analyses" =~ ^[0-9]+$ ]] || total_analyses=0
+
+  if [ "$analyses_count" -gt 0 ]; then
+    alerts_query="${alerts_query}&ref=${ALERT_REF}"
+    printf '[codeql-ceiling] counting alerts on %s\n' "$ALERT_REF"
+  elif [ "$total_analyses" -gt 0 ]; then
+    fail "no CodeQL analysis names ${GITHUB_SHA:-the ref under test} for ${ALERT_REF}, though ${total_analyses} analysis/analyses exist for that ref — a stale scan of an earlier commit, or another tool's SARIF, is not a scan of this commit (#17303)"
+  else
+    # #18105: zero analyses has two causes and they need opposite answers.
+    #
+    # codeql.yml's `pull_request` trigger carries a `paths` filter (the union of its
+    # three language filters), so a change touching nothing CodeQL scans -- a
+    # dependency bump, a docs edit -- produces no analysis at all. Failing closed there
+    # blocks a REQUIRED check on a PR that cannot have grown the backlog, and that is
+    # what this gate did to every dependency-only PR once it became ref-scoped: #18105
+    # read `no CodeQL analysis for refs/pull/18105/merge` and could never pass.
+    #
+    # The other cause -- CodeQL ran and produced nothing for the commit under test --
+    # is the fail-open this scoping exists to close, and must still fail.
+    #
+    # They are distinguishable by evidence rather than assumption: ask whether CodeQL
+    # reported a check for this commit at all.
+    # Three names, because one of them is not ours to keep. GitHub publishes a
+    # code-scanning status check literally named "CodeQL" (observed `neutral` on a
+    # commit CodeQL analysed), and codeql.yml publishes its own jobs "Detect changed
+    # languages" and "Analyze (<language>)" (#18113 review). Matching only the first
+    # would rest the whole discrimination on a platform-chosen name; matching only the
+    # workflow's would miss a run that reported the status check and nothing else. Any
+    # of the three means CodeQL ran here.
+    codeql_checks=$(gh api "repos/${REPO}/commits/${GITHUB_SHA:-${ALERT_REF}}/check-runs?per_page=100" \
+      --jq '[.check_runs[] | select(.name | test("codeql|^Analyze \\(|Detect changed languages"; "i"))] | length' 2>/dev/null) || codeql_checks=""
+    if [ -z "$codeql_checks" ] || ! [[ "$codeql_checks" =~ ^[0-9]+$ ]]; then
+      fail "could not determine whether CodeQL ran for ${ALERT_REF} (the check-runs API errored) — an undetermined answer is not a pass"
+    elif [ "$codeql_checks" -eq 0 ]; then
+      printf '[codeql-ceiling] CodeQL did not run for this ref — no CodeQL check was reported for %s\n' "${GITHUB_SHA:-$ALERT_REF}"
+      printf '[codeql-ceiling] this change touches nothing CodeQL scans, so the ceiling is enforced against the default branch instead\n'
+    else
+      fail "CodeQL reported ${codeql_checks} check(s) for ${ALERT_REF} but no analysis names ${GITHUB_SHA:-the ref under test} — the scan did not complete for this commit, so 0 open alerts would be a claim about a different commit"
+    fi
+  fi
 else
   printf '[codeql-ceiling] no ref available — counting the default branch\n'
 fi
