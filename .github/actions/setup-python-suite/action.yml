@@ -235,8 +235,23 @@ runs:
         # to two tries; this step runs `bash -e`, not `bash --posix`.
         #
         # Bytes already fetched, so a failure says whether it was progressing (#18102).
+        #
+        # #18102 review: `sudo` is load-bearing, not cosmetic. apt stages in-progress
+        # downloads in archives/partial/ at mode 0700, so an unprivileged `du` cannot read
+        # them and counts only completed files -- which, for a transfer killed mid-flight,
+        # is nothing. The instrument would then print `0 -> 0` and name a *stalled* mirror
+        # on the exact failure it exists to diagnose, reporting the opposite of the truth.
+        #
+        # It reports `unknown` rather than 0 when the measurement itself fails: a `0` from a
+        # failed command is not a measurement (docs/developer/MEASUREMENT_DISCIPLINE.md),
+        # and collapsing the two would reintroduce that same confusion by another route.
+        # The `|| echo 0` this replaces could not work anyway -- the exit status of
+        # `du | cut` is cut's, so a failed du still exited 0 with empty output.
         apt_cached_bytes() {
-          du -sb /var/cache/apt/archives 2>/dev/null | cut -f1 || echo 0
+          local out n
+          out=$(sudo du -sb /var/cache/apt/archives 2>/dev/null) || { printf 'unknown'; return 0; }
+          n=${out%%[!0-9]*}
+          printf '%s' "${n:-unknown}"
         }
 
         apt_retry() {
