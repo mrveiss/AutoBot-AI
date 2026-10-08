@@ -155,3 +155,45 @@ describe('duplicates fetchers given an HTTP error (#17983)', () => {
     expect(f.duplicateAnalysis.value).toEqual([])
   })
 })
+
+describe('the dupTask path clears stale rows too (#17983)', () => {
+  // The third failure path. `failDuplicates` was wired into the two endpoint
+  // fetchers and NOT into the background-task branch, which only set the state.
+  // `DuplicatesSection` checks `duplicates.length > 0` BEFORE `scanState`, so a
+  // populated list from an earlier scan shows those rows and hides the failure —
+  // the same defect, surviving in the one path that was missed.
+  const notify = vi.fn()
+  const fetchers = () =>
+    useAnalyticsDataFetchers({
+      rootPath: ref('/repo'),
+      sourceIdQuery: computed(() => ''),
+      withSourceId: (url: string) => url,
+      t: (key: string) => key,
+      showToast: vi.fn(),
+      notify,
+    } as unknown as Parameters<typeof useAnalyticsDataFetchers>[0])
+
+  beforeEach(() => {
+    fetchWithAuth.mockReset()
+    notify.mockReset()
+  })
+
+  it('a successful scan then a failed background task leaves no rows behind', async () => {
+    const hit = { file1: 'a.py', file2: 'b.py', similarity: 90, lines: 4 }
+    fetchWithAuth.mockResolvedValue(respond({ status: 'success', duplicates: [hit] }))
+    const f = fetchers()
+    await f.loadCachedDuplicates()
+    // CONTROL: the first scan really populated, so the clear below is a change.
+    expect(f.duplicateScanState.value).toBe('done')
+    expect(f.duplicateAnalysis.value).toHaveLength(1)
+
+    // `loadDuplicates`, NOT `getDuplicatesData`: the branch under test is in
+    // `loadDuplicates`, and the first version of this test called the other
+    // function — where `duplicatesSilent`'s onError clears the rows first, so it
+    // passed with the fix reverted and proved nothing. Mutation-checked.
+    fetchWithAuth.mockRejectedValue(new Error('task start failed'))
+    await f.loadDuplicates()
+    expect(f.duplicateScanState.value).toBe('failed')
+    expect(f.duplicateAnalysis.value).toEqual([])
+  })
+})

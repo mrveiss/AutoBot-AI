@@ -377,9 +377,9 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     try {
       const ok = await dupTask.start(undefined, sourceIdQuery.value)
       if (ok && dupTask.result.value) applyDuplicates(dupTask.result.value)
-      else duplicateScanState.value = 'failed'
+      else failDuplicates() // clears rows too: the panel checks length before scanState
     } catch (error: unknown) {
-      duplicateScanState.value = 'failed'
+      failDuplicates()
       logger.error('Failed to load duplicates:', error)
     } finally {
       loadingProgress.duplicates = false

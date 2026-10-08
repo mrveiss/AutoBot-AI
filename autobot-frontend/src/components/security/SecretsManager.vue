@@ -1220,7 +1220,7 @@ const getTypeIcon = (type?: string) => {
 };
 
 const getTypeLabel = (type?: string) => {
-  const meta = type ? CATEGORY_META[type as SecretType] : undefined;
+  const meta = type && Object.hasOwn(CATEGORY_META, type) ? CATEGORY_META[type as SecretType] : undefined; // hasOwn: 'toString' inherits a truthy fn
   return meta ? t(meta.singularKey) : type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || '';
 };
 
@@ -1532,11 +1532,10 @@ const { logSecretUsage } = useSessionActivityLogger();
 
 /** A server-supplied kind, checked against the canonical set rather than cast. */
 const asSecretType = (type?: string): SecretType =>
-  type && type in CATEGORY_META ? (type as SecretType) : 'other';
+  type && Object.hasOwn(CATEGORY_META, type) ? (type as SecretType) : 'other';
 
-const logViewedSecretUsage = (action: 'reveal' | 'copy') => {
-  const secret = viewingSecret.value;
-  if (secret) logSecretUsage(action, secret.id, secret.name, asSecretType(secret.type));
+const logViewedSecretUsage = (action: 'reveal' | 'copy', subject = viewingSecret.value) => {
+  if (subject) logSecretUsage(action, subject.id, subject.name, asSecretType(subject.type));
 };
 
 const toggleSecretValue = () => {
@@ -1545,10 +1544,11 @@ const toggleSecretValue = () => {
 };
 
 const copySecretValue = async () => {
-  if (viewingSecret.value?.value) {
+  const copied = viewingSecret.value;
+  if (copied?.value) {
     try {
-      await navigator.clipboard.writeText(viewingSecret.value.value);
-      logViewedSecretUsage('copy');
+      await navigator.clipboard.writeText(copied.value);
+      logViewedSecretUsage('copy', copied);
     } catch (error) {
       logger.error('Failed to copy to clipboard:', error);
     }
