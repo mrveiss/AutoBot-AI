@@ -2232,7 +2232,9 @@
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "Skanowanie duplikatów nie zostało wykonane, więc to nie jest wynik. Sprawdź wybrane źródło kodu i uruchom skanowanie ponownie.",
+      "notScanned": "Dla tego źródła kodu nie wykonano jeszcze skanowania duplikatów."
     },
     "hardcodes": {
       "title": "Wartości zakodowane",
@@ -6843,7 +6845,44 @@
       "timeHoursAgo": "{count}h ago",
       "timeInHours": "in {count}h",
       "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d"
+      "timeInDays": "in {count}d",
+      "categories": {
+        "api_key": "Klucze API",
+        "token": "Tokeny dostępu",
+        "oauth_refresh_token": "Tokeny odświeżania OAuth",
+        "connector_oauth_token": "Tokeny łączników",
+        "password": "Hasła",
+        "ssh_key": "Klucze SSH",
+        "infrastructure_host": "Hosty infrastruktury",
+        "database_url": "Bazy danych",
+        "certificate": "Certyfikaty",
+        "other": "Inne"
+      },
+      "kinds": {
+        "api_key": "Klucz API",
+        "token": "Token dostępu",
+        "oauth_refresh_token": "Token odświeżania OAuth",
+        "connector_oauth_token": "Token łącznika",
+        "password": "Hasło",
+        "ssh_key": "Klucz SSH",
+        "infrastructure_host": "Host infrastruktury",
+        "database_url": "Baza danych",
+        "certificate": "Certyfikat",
+        "other": "Inne"
+      },
+      "templates": {
+        "openaiDesc": "Dostęp do API GPT",
+        "anthropicDesc": "Dostęp do API Claude",
+        "awsDesc": "Usługi chmurowe Amazon",
+        "githubDesc": "Osobisty token GitHub",
+        "postgresDesc": "Połączenie z bazą danych",
+        "redisDesc": "Połączenie z Redis",
+        "sshLabel": "Klucz SSH",
+        "sshDesc": "Dostęp do serwera",
+        "slackDesc": "Token bota Slack",
+        "serverLabel": "Host serwera",
+        "serverDesc": "Dostęp do serwera SSH/VNC"
+      }
     },
     "threatDashboard": {
       "title": "Threat Intelligence",

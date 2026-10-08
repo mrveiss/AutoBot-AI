@@ -838,7 +838,7 @@
       "statusMissing": "Missing",
       "summaryDescription": "Review your API key configuration before saving.",
       "statusSkipped": "Skipped (optional)",
-      "stepKeys": "API Keys",
+      "stepKeys": "Claves API",
       "selectRolesDescription": "Select the roles deployed on your nodes to see which API keys are needed."
     },
     "connection": {
@@ -2232,7 +2232,9 @@
         "high": "Alta similitud",
         "medium": "Similitud media",
         "low": "Baja similitud"
-      }
+      },
+      "scanFailed": "El análisis de duplicados no se ejecutó, así que esto no es un resultado. Revise el origen de código seleccionado y vuelva a ejecutar el análisis.",
+      "notScanned": "Aún no se ha ejecutado ningún análisis de duplicados para este origen de código."
     },
     "hardcodes": {
       "title": "Valores codificados",
@@ -6843,7 +6845,44 @@
       "timeHoursAgo": "{count}h ago",
       "timeInHours": "in {count}h",
       "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d"
+      "timeInDays": "in {count}d",
+      "categories": {
+        "api_key": "Claves API",
+        "token": "Tokens de acceso",
+        "oauth_refresh_token": "Tokens de actualización OAuth",
+        "connector_oauth_token": "Tokens de conectores",
+        "password": "Contraseñas",
+        "ssh_key": "Claves SSH",
+        "infrastructure_host": "Hosts de infraestructura",
+        "database_url": "Bases de datos",
+        "certificate": "Certificados",
+        "other": "Otros"
+      },
+      "kinds": {
+        "api_key": "Clave de API",
+        "token": "Token de acceso",
+        "oauth_refresh_token": "Token de actualización OAuth",
+        "connector_oauth_token": "Token de conector",
+        "password": "Contraseña",
+        "ssh_key": "Clave SSH",
+        "infrastructure_host": "Host de infraestructura",
+        "database_url": "Base de datos",
+        "certificate": "Certificado",
+        "other": "Otro"
+      },
+      "templates": {
+        "openaiDesc": "Acceso a la API de GPT",
+        "anthropicDesc": "Acceso a la API de Claude",
+        "awsDesc": "Servicios en la nube de Amazon",
+        "githubDesc": "Token personal de GitHub",
+        "postgresDesc": "Conexión a base de datos",
+        "redisDesc": "Conexión a Redis",
+        "sshLabel": "Clave SSH",
+        "sshDesc": "Acceso al servidor",
+        "slackDesc": "Token del bot de Slack",
+        "serverLabel": "Host de servidor",
+        "serverDesc": "Acceso a servidor SSH/VNC"
+      }
     },
     "threatDashboard": {
       "title": "Threat Intelligence",

@@ -68,6 +68,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import parse_utc_iso
+from code_intelligence.anti_pattern_detection import AntiPatternSuiteAnalyzer
 from code_intelligence.anti_pattern_detector import (
     AntiPatternDetector,
     AntiPatternSeverity,
@@ -709,11 +710,9 @@ async def analyze_codebase(
     await _validate_path_is_directory(request.path)
 
     try:
+        # #12771: analyze_directory and exclude_dirs are the suite analyzer's, not the canonical detector's.
         report = await run_isolated(
-            AntiPatternDetector,
-            {"exclude_dirs": request.exclude_dirs},
-            "analyze_directory",
-            request.path,
+            AntiPatternSuiteAnalyzer, {"exclude_dirs": request.exclude_dirs}, "analyze_directory", request.path
         )
         report.anti_patterns = _filter_antipatterns_by_severity(
             report.anti_patterns,
@@ -899,7 +898,8 @@ async def get_codebase_health_score(
         raise_invalid_input("path", f"does not exist: {path}")
 
     try:
-        report = await run_isolated(AntiPatternDetector, {}, "analyze_directory", path)
+        # #12771: analyze_directory lives on the suite analyzer, not the canonical detector.
+        report = await run_isolated(AntiPatternSuiteAnalyzer, {}, "analyze_directory", path)
 
         # Calculate health score
         score = _calculate_health_score(report.anti_patterns)

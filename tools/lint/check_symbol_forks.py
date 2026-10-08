@@ -82,9 +82,32 @@ def is_test_file(path: Path) -> bool:
     return name.endswith("_test.py") or name.startswith("test_") or "tests" in path.parts
 
 
+#: A MANDATORY byte-identical mirror, not a fork (#16401). Ansible ships
+#: `autobot-slm-backend/slm/agent/` to the target host from
+#: `autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/`, and
+#: `ansible/tests/detect_agent_code_drift_test.py` fails if the two trees differ.
+#: So every symbol there is defined twice BY DESIGN and must stay that way —
+#: consolidating one would break the payload or the drift test.
+#:
+#: `duplication-guard.yml` already excludes this path for the same reason, with the
+#: same wording: "there is nothing here this guard can ask anyone to deduplicate."
+#: This detector did not, so 17 of the clusters it counted were that mirror. A
+#: ratchet whose population includes entries nobody may touch reports a floor it
+#: can never reach, and sends whoever works it toward a change that breaks a test.
+#: Excluded here so the count means ACTIONABLE forks.
+MIRRORED_PREFIX = "autobot-slm-backend/ansible/roles/slm_agent/files/"
+
+
+def is_mandatory_mirror(path: Path) -> bool:
+    """True for the ansible payload copy of `autobot-slm-backend/slm/agent/`."""
+    return path.as_posix().startswith(MIRRORED_PREFIX)
+
+
 def in_population(path: Path) -> bool:
     """The declared boundary, in one place so the test can pin it."""
     if EXCLUDED_PARTS & set(path.parts):
+        return False
+    if is_mandatory_mirror(path):
         return False
     return not is_test_file(path)
 
