@@ -187,11 +187,6 @@
               <h4>{{ item.data.name }}</h4>
               <div class="card-badges">
                 <span class="badge" :class="item.data.scope">{{ item.data.scope }}</span>
-                <!-- Issue #685: Visibility badge -->
-                <span v-if="getVisibility(item.data)" class="badge visibility" :class="`visibility-${getVisibility(item.data)}`">
-                  <Icon :name="getVisibilityIcon(item.data)" />
-                  {{ formatVisibility(item.data) }}
-                </span>
                 <span v-if="isExpired(item.data)" class="badge expired">
                   <Icon name="exclamation-triangle" /> {{ $t('security.secretsManager.expired') }}
                 </span>
@@ -333,8 +328,10 @@
             </div>
           </div>
 
-          <!-- Issue #685: Hierarchical Access Controls -->
-          <div class="form-row two-col">
+          <!-- #16450: the Visibility / Organization / Team / Shared-With controls
+               (#685) are hidden until the server enforces them (#10088) --
+               SecretCreateRequest has no such fields and dropped them silently. -->
+          <div class="form-row">
             <div class="form-group">
               <label for="secret-scope">{{ $t('security.secretsManager.scope') }} <span class="required">*</span></label>
               <!-- #16429: api/schemas_system.py's SecretCreateRequest.scope is
@@ -345,60 +342,6 @@
                 <option value="chat">{{ $t('security.secretsManager.scopeChat') }}</option>
               </select>
               <small class="input-hint">{{ t('security.secretsManager.scopeHint') }}</small>
-            </div>
-            <div class="form-group">
-              <label for="secret-visibility">{{ $t('security.secretsManager.visibility') }} <span class="required">*</span></label>
-              <select id="secret-visibility" v-model="secretForm.visibility" class="form-input">
-                <option value="private">{{ $t('security.secretsManager.visibilityPrivate') }}</option>
-                <option value="shared">{{ $t('security.secretsManager.visibilityShared') }}</option>
-                <option value="group">{{ $t('security.secretsManager.visibilityGroup') }}</option>
-                <option value="organization">{{ $t('security.secretsManager.visibilityOrganization') }}</option>
-                <option value="system">{{ $t('security.secretsManager.visibilitySystem') }}</option>
-              </select>
-              <small class="input-hint">{{ $t('security.secretsManager.visibilityHint') }}</small>
-            </div>
-          </div>
-
-          <!-- Conditional Organization/Team Fields -->
-          <div class="form-row two-col" v-if="secretForm.visibility === 'organization' || secretForm.visibility === 'group'">
-            <div class="form-group" v-if="secretForm.visibility === 'organization'">
-              <label for="secret-org-id">{{ t('security.secretsManager.organizationId') }}</label>
-              <input
-                id="secret-org-id"
-                type="text"
-                v-model="secretForm.org_id"
-                :placeholder="t('security.secretsManager.orgIdPlaceholder')"
-                class="form-input"
-              />
-              <small class="input-hint">{{ t('security.secretsManager.orgIdHint') }}</small>
-            </div>
-            <div class="form-group" v-if="secretForm.visibility === 'group'">
-              <label for="secret-team-ids">{{ t('security.secretsManager.teamIds') }}</label>
-              <input
-                id="secret-team-ids"
-                type="text"
-                v-model="teamIdsInput"
-                :placeholder="t('security.secretsManager.teamIdsPlaceholder')"
-                class="form-input"
-                @input="updateTeamIds"
-              />
-              <small class="input-hint">{{ t('security.secretsManager.teamIdsHint') }}</small>
-            </div>
-          </div>
-
-          <!-- Shared With Field (for visibility=shared) -->
-          <div class="form-row" v-if="secretForm.visibility === 'shared'">
-            <div class="form-group">
-              <label for="secret-shared-with">{{ t('security.secretsManager.shareWithUsers') }}</label>
-              <input
-                id="secret-shared-with"
-                type="text"
-                v-model="sharedWithInput"
-                :placeholder="t('security.secretsManager.sharedWithPlaceholder')"
-                class="form-input"
-                @input="updateSharedWith"
-              />
-              <small class="input-hint">{{ t('security.secretsManager.sharedWithHint') }}</small>
             </div>
           </div>
 
@@ -806,6 +749,7 @@
 
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
+import type { SecretType } from '@/types/secretKind'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -815,6 +759,7 @@ import { useUserStore } from '@/stores/useUserStore';
 import { createLogger } from '@/utils/debugUtils';
 import { formatDateTime } from '@/utils/formatHelpers';
 import { useDebounce } from '@/composables/useDebounce';
+import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger';
 import { useVirtualList } from '@/composables/useVirtualList';
 import { useSecretsInfraApi } from '@/composables/security/useSecretsInfraApi';
 import type { InfraHostsResponse } from '@/composables/security/useSecretsInfraApi';
@@ -858,12 +803,7 @@ interface Secret {
   updated_at?: string
   expires_at?: string | null
   metadata?: SecretMetadata
-  // Issue #685: hierarchical access fields
-  visibility?: string
   owner_id?: string
-  org_id?: string
-  team_ids?: string[]
-  shared_with?: string[]
   // Local display flags for legacy / infrastructure hosts
   _isLegacyHost?: boolean
   _isInfraHost?: boolean
@@ -883,29 +823,40 @@ interface WorkflowUsage {
   template_name: string
 }
 
-// Credential type categories with icons and colors (using design tokens)
+// Credential type categories with icons and colors (using design tokens).
+// #15008: one entry per canonical kind, keyed by the generated SecretType, so a
+// kind added to the backend enum fails type-check here until it has a category.
 interface CredentialCategory {
-  type: string
+  type: SecretType
   label: string
   icon: IconName
   color: string
 }
 
-const credentialCategories = computed<CredentialCategory[]>(() => [
-  { type: 'api_key', label: 'API Keys', icon: 'key', color: getCssVar('--color-primary', '#6366f1') },
-  // #9724: 'ticket-alt'/'certificate' are not SVG IconNames (rendered empty)
-  { type: 'token', label: 'Tokens', icon: 'tag', color: getCssVar('--chart-purple', '#8b5cf6') },
-  { type: 'password', label: 'Passwords', icon: 'lock', color: getCssVar('--chart-pink', '#ec4899') },
-  { type: 'ssh_key', label: 'SSH Keys', icon: 'terminal', color: getCssVar('--chart-teal', '#14b8a6') },
-  // #16426: admin-only category — GET /api/infrastructure/hosts (which backs
-  // it) now 403s for a non-admin.
-  ...(userStore.isAdmin
-    ? [{ type: 'infrastructure_host', label: 'Infrastructure Hosts', icon: 'server' as IconName, color: getCssVar('--chart-blue', '#3b82f6') }]
-    : []),
-  { type: 'database_url', label: 'Database', icon: 'database', color: getCssVar('--color-warning', '#f59e0b') },
-  { type: 'certificate', label: 'Certificates', icon: 'shield-check', color: getCssVar('--color-success', '#10b981') },
-  { type: 'other', label: 'Other', icon: 'ellipsis-h', color: getCssVar('--text-tertiary', '#6b7280') },
-]);
+// #9724: 'ticket-alt'/'certificate' are not SVG IconNames. #17560: `color` is a thunk so each hex stays lexically inside its getCssVar().
+const CATEGORY_META: Record<SecretType, { labelKey: string; singularKey: string; icon: IconName; color: () => string }> = {
+  api_key: { labelKey: 'security.secretsManager.categories.api_key', singularKey: 'security.secretsManager.kinds.api_key', icon: 'key', color: () => getCssVar('--color-primary', '#6366f1') },
+  token: { labelKey: 'security.secretsManager.categories.token', singularKey: 'security.secretsManager.kinds.token', icon: 'tag', color: () => getCssVar('--chart-purple', '#8b5cf6') },
+  oauth_refresh_token: { labelKey: 'security.secretsManager.categories.oauth_refresh_token', singularKey: 'security.secretsManager.kinds.oauth_refresh_token', icon: 'sync', color: () => getCssVar('--color-info', '#0ea5e9') },
+  connector_oauth_token: { labelKey: 'security.secretsManager.categories.connector_oauth_token', singularKey: 'security.secretsManager.kinds.connector_oauth_token', icon: 'plug', color: () => getCssVar('--chart-orange', '#f97316') },
+  password: { labelKey: 'security.secretsManager.categories.password', singularKey: 'security.secretsManager.kinds.password', icon: 'lock', color: () => getCssVar('--chart-pink', '#ec4899') },
+  ssh_key: { labelKey: 'security.secretsManager.categories.ssh_key', singularKey: 'security.secretsManager.kinds.ssh_key', icon: 'terminal', color: () => getCssVar('--chart-teal', '#14b8a6') },
+  infrastructure_host: { labelKey: 'security.secretsManager.categories.infrastructure_host', singularKey: 'security.secretsManager.kinds.infrastructure_host', icon: 'server', color: () => getCssVar('--chart-blue', '#3b82f6') },
+  database_url: { labelKey: 'security.secretsManager.categories.database_url', singularKey: 'security.secretsManager.kinds.database_url', icon: 'database', color: () => getCssVar('--color-warning', '#f59e0b') },
+  certificate: { labelKey: 'security.secretsManager.categories.certificate', singularKey: 'security.secretsManager.kinds.certificate', icon: 'shield-check', color: () => getCssVar('--color-success', '#10b981') },
+  other: { labelKey: 'security.secretsManager.categories.other', singularKey: 'security.secretsManager.kinds.other', icon: 'ellipsis-h', color: () => getCssVar('--text-tertiary', '#6b7280') },
+};
+
+const credentialCategories = computed<CredentialCategory[]>(() =>
+  (Object.keys(CATEGORY_META) as SecretType[])
+    // #16426: admin-only category -- GET /api/infrastructure/hosts (which backs
+    // it) now 403s for a non-admin.
+    .filter((type) => type !== 'infrastructure_host' || userStore.isAdmin)
+    .map((type) => {
+      const meta = CATEGORY_META[type];
+      return { type, label: t(meta.labelKey), icon: meta.icon, color: meta.color() };
+    })
+);
 
 // Quick-add templates for common services (using design tokens)
 interface CredentialTemplate {
@@ -928,21 +879,21 @@ interface CredentialTemplate {
 const credentialTemplates = computed<CredentialTemplate[]>(() => [
   // #16427: name is provider_key_vault.LLM_PROVIDER_KEY_NAMES' exact key —
   // mirror_provider_key_best_effort only captures a name it recognizes.
-  { id: 'openai', name: 'OPENAI_API_KEY', label: 'OpenAI', description: 'GPT API access', icon: 'brain', color: getCssVar('--color-success', '#10a37f'), type: 'api_key' },
-  { id: 'anthropic', name: 'ANTHROPIC_API_KEY', label: 'Anthropic', description: 'Claude API access', icon: 'robot', color: getCssVar('--color-warning-hover', '#d97706'), type: 'api_key' },
+  { id: 'openai', name: 'OPENAI_API_KEY', label: 'OpenAI', description: t('security.secretsManager.templates.openaiDesc'), icon: 'brain', color: getCssVar('--color-success', '#10a37f'), type: 'api_key' },
+  { id: 'anthropic', name: 'ANTHROPIC_API_KEY', label: 'Anthropic', description: t('security.secretsManager.templates.anthropicDesc'), icon: 'robot', color: getCssVar('--color-warning-hover', '#d97706'), type: 'api_key' },
   // No AWS_* member in any provider_key_vault registry -- free-form name.
-  { id: 'aws', name: 'AWS', label: 'AWS', description: 'Amazon Web Services', icon: 'cloud', color: getCssVar('--chart-orange', '#ff9900'), type: 'api_key' },
-  { id: 'github', name: 'GitHub', label: 'GitHub', description: 'GitHub personal token', icon: 'code-branch', color: getCssVar('--bg-tertiary', '#333'), type: 'token' },
-  { id: 'postgres', name: 'PostgreSQL', label: 'PostgreSQL', description: 'Database connection', icon: 'database', color: getCssVar('--color-info', '#336791'), type: 'database_url' },
-  { id: 'redis', name: 'Redis', label: 'Redis', description: 'Redis connection', icon: 'layer-group', color: getCssVar('--chart-red', '#dc382d'), type: 'database_url' },
-  { id: 'ssh', name: 'SSH Key', label: 'SSH Key', description: 'Server access', icon: 'terminal', color: getCssVar('--bg-primary', '#000'), type: 'ssh_key' },
+  { id: 'aws', name: 'AWS', label: 'AWS', description: t('security.secretsManager.templates.awsDesc'), icon: 'cloud', color: getCssVar('--chart-orange', '#ff9900'), type: 'api_key' },
+  { id: 'github', name: 'GitHub', label: 'GitHub', description: t('security.secretsManager.templates.githubDesc'), icon: 'code-branch', color: getCssVar('--bg-tertiary', '#333'), type: 'token' },
+  { id: 'postgres', name: 'PostgreSQL', label: 'PostgreSQL', description: t('security.secretsManager.templates.postgresDesc'), icon: 'database', color: getCssVar('--color-info', '#336791'), type: 'database_url' },
+  { id: 'redis', name: 'Redis', label: 'Redis', description: t('security.secretsManager.templates.redisDesc'), icon: 'layer-group', color: getCssVar('--chart-red', '#dc382d'), type: 'database_url' },
+  { id: 'ssh', name: 'SSH Key', label: t('security.secretsManager.templates.sshLabel'), description: t('security.secretsManager.templates.sshDesc'), icon: 'terminal', color: getCssVar('--bg-primary', '#000'), type: 'ssh_key' },
   // #16427: name is provider_key_vault.SERVICE_CREDENTIAL_KEY_NAMES' exact key.
-  { id: 'slack', name: 'SLACK_BOT_TOKEN', label: 'Slack', description: 'Slack bot token', icon: 'comments', color: getCssVar('--chart-purple', '#4a154b'), type: 'token' },
+  { id: 'slack', name: 'SLACK_BOT_TOKEN', label: 'Slack', description: t('security.secretsManager.templates.slackDesc'), icon: 'comments', color: getCssVar('--chart-purple', '#4a154b'), type: 'token' },
   // #16426: same admin-only gate as the category above — creating one would
   // 403 anyway (create_secret is already admin-gated), this just stops
   // offering the button.
   ...(userStore.isAdmin
-    ? [{ id: 'server', name: 'Server Host', label: 'Server Host', description: 'SSH/VNC server access', icon: 'server' as IconName, color: getCssVar('--chart-blue', '#3b82f6'), type: 'infrastructure_host' }]
+    ? [{ id: 'server', name: 'Server Host', label: t('security.secretsManager.templates.serverLabel'), description: t('security.secretsManager.templates.serverDesc'), icon: 'server' as IconName, color: getCssVar('--chart-blue', '#3b82f6'), type: 'infrastructure_host' }]
     : []),
 ]);
 
@@ -986,12 +937,7 @@ const secretForm = reactive({
   description: '',
   expires_at: '',
   tags: [] as string[],
-  // Issue #685: Hierarchical access fields
-  visibility: 'private',
   owner_id: '',
-  org_id: '',
-  team_ids: [] as string[],
-  shared_with: [] as string[],
   // Infrastructure host specific fields
   host: '',
   ssh_port: 22,
@@ -1006,8 +952,6 @@ const secretForm = reactive({
   purpose: ''
 });
 const tagsInput = ref('');
-const teamIdsInput = ref('');
-const sharedWithInput = ref('');
 const viewingSecret = ref<Secret | null>(null);
 const transferringSecret = ref<Secret | null>(null);
 const deletingSecret = ref<Secret | null>(null);
@@ -1276,8 +1220,8 @@ const getTypeIcon = (type?: string) => {
 };
 
 const getTypeLabel = (type?: string) => {
-  const cat = credentialCategories.value.find(c => c.type === type);
-  return cat?.label.replace(/s$/, '') || type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || '';
+  const meta = type && Object.hasOwn(CATEGORY_META, type) ? CATEGORY_META[type as SecretType] : undefined; // hasOwn: 'toString' inherits a truthy fn
+  return meta ? t(meta.singularKey) : type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || '';
 };
 
 const getValueLabel = (type: string) => {
@@ -1383,14 +1327,7 @@ const editSecret = (secret: Secret | null) => {
   secretForm.tags = [...(secret.tags || [])];
   tagsInput.value = secretForm.tags.join(', ');
 
-  // Issue #685: Populate hierarchical access fields
-  secretForm.visibility = secret.visibility || 'private';
   secretForm.owner_id = secret.owner_id || '';
-  secretForm.org_id = secret.org_id || '';
-  secretForm.team_ids = [...(secret.team_ids || [])];
-  secretForm.shared_with = [...(secret.shared_with || [])];
-  teamIdsInput.value = secretForm.team_ids.join(', ');
-  sharedWithInput.value = secretForm.shared_with.join(', ');
 
   // Populate infrastructure host specific fields from metadata
   if (secret.type === 'infrastructure_host' && secret.metadata) {
@@ -1470,41 +1407,8 @@ const confirmTransfer = async () => {
   }
 };
 
-// Issue #685: Validation helper for hierarchical access
-const validateAccessLevelCombination = (
-  visibility: string,
-  fields: { org_id?: string; team_ids?: string[]; shared_with?: string[] }
-): string | null => {
-  if (visibility === 'organization' && !fields.org_id) {
-    return 'Organization ID is required when visibility is set to "Organization"';
-  }
-
-  if (visibility === 'group' && (!fields.team_ids || fields.team_ids.length === 0)) {
-    return 'At least one Team ID is required when visibility is set to "Group"';
-  }
-
-  if (visibility === 'shared' && (!fields.shared_with || fields.shared_with.length === 0)) {
-    return 'At least one user must be specified when visibility is set to "Shared"';
-  }
-
-  return null;
-};
-
 const saveSecret = async () => {
   if (!isFormValid.value) return;
-
-  // Issue #685: Frontend validation for hierarchical access
-  const validationError = validateAccessLevelCombination(secretForm.visibility, {
-    org_id: secretForm.org_id,
-    team_ids: secretForm.team_ids,
-    shared_with: secretForm.shared_with
-  });
-
-  if (validationError) {
-    logger.error('Validation failed:', validationError);
-    // Could add a toast notification here
-    return;
-  }
 
   saving.value = true;
   try {
@@ -1519,12 +1423,7 @@ const saveSecret = async () => {
       description: secretForm.description,
       expires_at: secretForm.expires_at ? new Date(secretForm.expires_at).toISOString() : null,
       tags: secretForm.tags,
-      // Issue #685: Hierarchical access fields
-      visibility: secretForm.visibility,
-      owner_id: secretForm.owner_id || null,
-      org_id: secretForm.org_id || null,
-      team_ids: secretForm.team_ids.length > 0 ? secretForm.team_ids : [],
-      shared_with: secretForm.shared_with.length > 0 ? secretForm.shared_with : []
+      owner_id: secretForm.owner_id || null
     };
 
     // Handle infrastructure_host type - store host info in metadata, credential in value
@@ -1598,12 +1497,7 @@ const resetForm = () => {
     description: '',
     expires_at: '',
     tags: [],
-    // Issue #685: Hierarchical access fields
-    visibility: 'private',
     owner_id: '',
-    org_id: '',
-    team_ids: [],
-    shared_with: [],
     // Infrastructure host specific fields
     host: '',
     ssh_port: 22,
@@ -1618,8 +1512,6 @@ const resetForm = () => {
     purpose: ''
   });
   tagsInput.value = '';
-  teamIdsInput.value = '';
-  sharedWithInput.value = '';
   showValue.value = false;
 };
 
@@ -1630,33 +1522,33 @@ const updateTags = () => {
     .filter(tag => tag.length > 0);
 };
 
-const updateTeamIds = () => {
-  secretForm.team_ids = teamIdsInput.value
-    .split(',')
-    .map(id => id.trim())
-    .filter(id => id.length > 0);
-};
-
-const updateSharedWith = () => {
-  secretForm.shared_with = sharedWithInput.value
-    .split(',')
-    .map(id => id.trim())
-    .filter(id => id.length > 0);
-};
-
 const toggleValueVisibility = () => {
   showValue.value = !showValue.value;
 };
 
+// #17976: reveal/copy are logged to the chat session, as SecretVault did
+// before #16485 folded it in here.
+const { logSecretUsage } = useSessionActivityLogger();
+
+/** A server-supplied kind, checked against the canonical set rather than cast. */
+const asSecretType = (type?: string): SecretType =>
+  type && Object.hasOwn(CATEGORY_META, type) ? (type as SecretType) : 'other';
+
+const logViewedSecretUsage = (action: 'reveal' | 'copy', subject = viewingSecret.value) => {
+  if (subject) logSecretUsage(action, subject.id, subject.name, asSecretType(subject.type));
+};
+
 const toggleSecretValue = () => {
   showSecretValue.value = !showSecretValue.value;
+  if (showSecretValue.value) logViewedSecretUsage('reveal');
 };
 
 const copySecretValue = async () => {
-  if (viewingSecret.value?.value) {
+  const copied = viewingSecret.value;
+  if (copied?.value) {
     try {
-      await navigator.clipboard.writeText(viewingSecret.value.value);
-      // Could add toast notification here
+      await navigator.clipboard.writeText(copied.value);
+      logViewedSecretUsage('copy', copied);
     } catch (error) {
       logger.error('Failed to copy to clipboard:', error);
     }
@@ -1704,38 +1596,6 @@ const isExpiringSoon = (secret?: Secret | null) => {
   const now = new Date();
   const daysUntilExpiry = (expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
   return daysUntilExpiry <= 7;
-};
-
-// Issue #685: Visibility badge helpers
-const getVisibility = (secret?: Secret | null): string | null => {
-  return secret?.visibility || null;
-};
-
-const formatVisibility = (secret: Secret): string => {
-  const visibility = getVisibility(secret);
-  if (!visibility) return '';
-
-  const labels: Record<string, string> = {
-    'private': t('security.secretsManager.visibilityPrivate'),
-    'shared': t('security.secretsManager.visibilityShared'),
-    'group': t('security.secretsManager.visibilityGroup'),
-    'organization': t('security.secretsManager.visibilityOrganization'),
-    'system': t('security.secretsManager.visibilitySystem')
-  };
-  return labels[visibility] || visibility.charAt(0).toUpperCase() + visibility.slice(1);
-};
-
-// #9724: 'user-friends'/'building' are not SVG IconNames (rendered empty)
-const getVisibilityIcon = (secret: Secret): IconName => {
-  const visibility = getVisibility(secret);
-  const icons: Record<string, IconName> = {
-    'private': 'lock',
-    'shared': 'users',
-    'group': 'users',
-    'organization': 'briefcase',
-    'system': 'globe'
-  };
-  return icons[visibility || ''] || 'eye';
 };
 
 // Lifecycle
@@ -2162,38 +2022,6 @@ watch(selectedScope, () => {
   display: flex;
   align-items: center;
   gap: var(--spacing-1);
-}
-
-/* Issue #685: Visibility badge styles */
-.badge.visibility {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1);
-}
-
-.badge.visibility-private {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-}
-
-.badge.visibility-shared {
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
-}
-
-.badge.visibility-group {
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
-}
-
-.badge.visibility-organization {
-  background: var(--color-info-bg);
-  color: var(--color-info);
-}
-
-.badge.visibility-system {
-  background: var(--color-success-bg);
-  color: var(--color-success);
 }
 
 .card-description {

@@ -1604,7 +1604,9 @@
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "ڈپلیکیٹ اسکین نہیں چلا، اس لیے یہ نتیجہ نہیں ہے۔ منتخب کوڈ سورس چیک کریں اور اسکین دوبارہ چلائیں۔",
+      "notScanned": "اس کوڈ سورس کے لیے ابھی تک کوئی ڈپلیکیٹ اسکین نہیں چلا۔"
     },
     "hardcodes": {
       "title": "ہارڈ کوڈڈ ویلیوز",
@@ -5996,7 +5998,44 @@
       "deleteCredential": "Delete Credential",
       "username": "Username",
       "transferBtn": "Transfer",
-      "sshKeyHint": "Paste your entire private key including BEGIN/END markers"
+      "sshKeyHint": "Paste your entire private key including BEGIN/END markers",
+      "categories": {
+        "api_key": "API کلیدیں",
+        "token": "رسائی ٹوکن",
+        "oauth_refresh_token": "OAuth ریفریش ٹوکن",
+        "connector_oauth_token": "کنیکٹر ٹوکن",
+        "password": "پاس ورڈز",
+        "ssh_key": "SSH کلیدیں",
+        "infrastructure_host": "انفراسٹرکچر میزبان",
+        "database_url": "ڈیٹا بیسز",
+        "certificate": "سرٹیفکیٹس",
+        "other": "دیگر"
+      },
+      "kinds": {
+        "api_key": "API کلید",
+        "token": "رسائی ٹوکن",
+        "oauth_refresh_token": "OAuth ریفریش ٹوکن",
+        "connector_oauth_token": "کنیکٹر ٹوکن",
+        "password": "پاس ورڈ",
+        "ssh_key": "SSH کلید",
+        "infrastructure_host": "انفراسٹرکچر میزبان",
+        "database_url": "ڈیٹا بیس",
+        "certificate": "سرٹیفکیٹ",
+        "other": "دیگر"
+      },
+      "templates": {
+        "openaiDesc": "GPT API تک رسائی",
+        "anthropicDesc": "Claude API تک رسائی",
+        "awsDesc": "ایمیزون کلاؤڈ سروسز",
+        "githubDesc": "GitHub ذاتی ٹوکن",
+        "postgresDesc": "ڈیٹا بیس کنکشن",
+        "redisDesc": "Redis کنکشن",
+        "sshLabel": "SSH کلید",
+        "sshDesc": "سرور تک رسائی",
+        "slackDesc": "Slack بوٹ ٹوکن",
+        "serverLabel": "سرور میزبان",
+        "serverDesc": "SSH/VNC سرور تک رسائی"
+      }
     },
     "threatDashboard": {
       "checking": "Checking...",

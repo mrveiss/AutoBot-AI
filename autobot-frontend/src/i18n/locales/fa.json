@@ -1604,7 +1604,9 @@
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "اسکن موارد تکراری اجرا نشد، پس این یک نتیجه نیست. منبع کد انتخاب‌شده را بررسی کنید و اسکن را دوباره اجرا کنید.",
+      "notScanned": "هنوز هیچ اسکن موارد تکراری برای این منبع کد اجرا نشده است."
     },
     "hardcodes": {
       "title": "مقادیر کدنویسی‌شده",
@@ -5996,7 +5998,44 @@
       "deleteCredential": "Delete Credential",
       "username": "Username",
       "transferBtn": "Transfer",
-      "sshKeyHint": "Paste your entire private key including BEGIN/END markers"
+      "sshKeyHint": "Paste your entire private key including BEGIN/END markers",
+      "categories": {
+        "api_key": "کلیدهای API",
+        "token": "توکن‌های دسترسی",
+        "oauth_refresh_token": "توکن‌های تازه‌سازی OAuth",
+        "connector_oauth_token": "توکن‌های رابط",
+        "password": "گذرواژه‌ها",
+        "ssh_key": "کلیدهای SSH",
+        "infrastructure_host": "میزبان‌های زیرساخت",
+        "database_url": "پایگاه‌های داده",
+        "certificate": "گواهی‌ها",
+        "other": "سایر"
+      },
+      "kinds": {
+        "api_key": "کلید API",
+        "token": "توکن دسترسی",
+        "oauth_refresh_token": "توکن تازه‌سازی OAuth",
+        "connector_oauth_token": "توکن رابط",
+        "password": "گذرواژه",
+        "ssh_key": "کلید SSH",
+        "infrastructure_host": "میزبان زیرساخت",
+        "database_url": "پایگاه داده",
+        "certificate": "گواهی",
+        "other": "سایر"
+      },
+      "templates": {
+        "openaiDesc": "دسترسی به API ‏GPT",
+        "anthropicDesc": "دسترسی به API ‏Claude",
+        "awsDesc": "خدمات ابری آمازون",
+        "githubDesc": "توکن شخصی GitHub",
+        "postgresDesc": "اتصال پایگاه داده",
+        "redisDesc": "اتصال Redis",
+        "sshLabel": "کلید SSH",
+        "sshDesc": "دسترسی به سرور",
+        "slackDesc": "توکن ربات Slack",
+        "serverLabel": "میزبان سرور",
+        "serverDesc": "دسترسی به سرور SSH/VNC"
+      }
     },
     "threatDashboard": {
       "checking": "Checking...",
