@@ -833,18 +833,18 @@ interface CredentialCategory {
   color: string
 }
 
-// #9724: 'ticket-alt'/'certificate' are not SVG IconNames (rendered empty)
-const CATEGORY_META: Record<SecretType, { labelKey: string; singularKey: string; icon: IconName; colorVar: string; fallback: string }> = {
-  api_key: { labelKey: 'security.secretsManager.categories.api_key', singularKey: 'security.secretsManager.kinds.api_key', icon: 'key', colorVar: '--color-primary', fallback: '#6366f1' },
-  token: { labelKey: 'security.secretsManager.categories.token', singularKey: 'security.secretsManager.kinds.token', icon: 'tag', colorVar: '--chart-purple', fallback: '#8b5cf6' },
-  oauth_refresh_token: { labelKey: 'security.secretsManager.categories.oauth_refresh_token', singularKey: 'security.secretsManager.kinds.oauth_refresh_token', icon: 'sync', colorVar: '--color-info', fallback: '#0ea5e9' },
-  connector_oauth_token: { labelKey: 'security.secretsManager.categories.connector_oauth_token', singularKey: 'security.secretsManager.kinds.connector_oauth_token', icon: 'plug', colorVar: '--chart-orange', fallback: '#f97316' },
-  password: { labelKey: 'security.secretsManager.categories.password', singularKey: 'security.secretsManager.kinds.password', icon: 'lock', colorVar: '--chart-pink', fallback: '#ec4899' },
-  ssh_key: { labelKey: 'security.secretsManager.categories.ssh_key', singularKey: 'security.secretsManager.kinds.ssh_key', icon: 'terminal', colorVar: '--chart-teal', fallback: '#14b8a6' },
-  infrastructure_host: { labelKey: 'security.secretsManager.categories.infrastructure_host', singularKey: 'security.secretsManager.kinds.infrastructure_host', icon: 'server', colorVar: '--chart-blue', fallback: '#3b82f6' },
-  database_url: { labelKey: 'security.secretsManager.categories.database_url', singularKey: 'security.secretsManager.kinds.database_url', icon: 'database', colorVar: '--color-warning', fallback: '#f59e0b' },
-  certificate: { labelKey: 'security.secretsManager.categories.certificate', singularKey: 'security.secretsManager.kinds.certificate', icon: 'shield-check', colorVar: '--color-success', fallback: '#10b981' },
-  other: { labelKey: 'security.secretsManager.categories.other', singularKey: 'security.secretsManager.kinds.other', icon: 'ellipsis-h', colorVar: '--text-tertiary', fallback: '#6b7280' },
+// #9724: 'ticket-alt'/'certificate' are not SVG IconNames. #17560: `color` is a thunk so each hex stays lexically inside its getCssVar().
+const CATEGORY_META: Record<SecretType, { labelKey: string; singularKey: string; icon: IconName; color: () => string }> = {
+  api_key: { labelKey: 'security.secretsManager.categories.api_key', singularKey: 'security.secretsManager.kinds.api_key', icon: 'key', color: () => getCssVar('--color-primary', '#6366f1') },
+  token: { labelKey: 'security.secretsManager.categories.token', singularKey: 'security.secretsManager.kinds.token', icon: 'tag', color: () => getCssVar('--chart-purple', '#8b5cf6') },
+  oauth_refresh_token: { labelKey: 'security.secretsManager.categories.oauth_refresh_token', singularKey: 'security.secretsManager.kinds.oauth_refresh_token', icon: 'sync', color: () => getCssVar('--color-info', '#0ea5e9') },
+  connector_oauth_token: { labelKey: 'security.secretsManager.categories.connector_oauth_token', singularKey: 'security.secretsManager.kinds.connector_oauth_token', icon: 'plug', color: () => getCssVar('--chart-orange', '#f97316') },
+  password: { labelKey: 'security.secretsManager.categories.password', singularKey: 'security.secretsManager.kinds.password', icon: 'lock', color: () => getCssVar('--chart-pink', '#ec4899') },
+  ssh_key: { labelKey: 'security.secretsManager.categories.ssh_key', singularKey: 'security.secretsManager.kinds.ssh_key', icon: 'terminal', color: () => getCssVar('--chart-teal', '#14b8a6') },
+  infrastructure_host: { labelKey: 'security.secretsManager.categories.infrastructure_host', singularKey: 'security.secretsManager.kinds.infrastructure_host', icon: 'server', color: () => getCssVar('--chart-blue', '#3b82f6') },
+  database_url: { labelKey: 'security.secretsManager.categories.database_url', singularKey: 'security.secretsManager.kinds.database_url', icon: 'database', color: () => getCssVar('--color-warning', '#f59e0b') },
+  certificate: { labelKey: 'security.secretsManager.categories.certificate', singularKey: 'security.secretsManager.kinds.certificate', icon: 'shield-check', color: () => getCssVar('--color-success', '#10b981') },
+  other: { labelKey: 'security.secretsManager.categories.other', singularKey: 'security.secretsManager.kinds.other', icon: 'ellipsis-h', color: () => getCssVar('--text-tertiary', '#6b7280') },
 };
 
 const credentialCategories = computed<CredentialCategory[]>(() =>
@@ -854,7 +854,7 @@ const credentialCategories = computed<CredentialCategory[]>(() =>
     .filter((type) => type !== 'infrastructure_host' || userStore.isAdmin)
     .map((type) => {
       const meta = CATEGORY_META[type];
-      return { type, label: t(meta.labelKey), icon: meta.icon, color: getCssVar(meta.colorVar, meta.fallback) };
+      return { type, label: t(meta.labelKey), icon: meta.icon, color: meta.color() };
     })
 );
 
