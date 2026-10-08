@@ -156,3 +156,52 @@ def test_the_gate_is_not_soft_failed():
     would be adjacent to the invocation.
     """
     assert not _gate_is_soft_failed(_workflow_text()), "the alert-ceiling step is soft-failed; it cannot block anything"
+
+
+# ---------------------------------------------------------------------------
+# The gate must count the REF UNDER TEST, not the default branch (#18065).
+#
+# Without a `ref` the alerts API answers for the default branch, so this gate
+# counted main's backlog whatever the pull request contained — which made it
+# unable to validate the one thing it demands. A PR that removed an alert still
+# read main's count and still failed, so the only way to go green was to be
+# merged already. Three fixes were attempted against a check that could not see
+# any of them.
+# ---------------------------------------------------------------------------
+
+_SCRIPT_SRC = _SCRIPT.read_text(encoding="utf-8")
+
+
+def test_the_alert_query_is_scoped_to_the_ref_under_test():
+    """The `ref` must reach the alerts query, from GITHUB_REF or an override."""
+    assert (
+        'ALERT_REF="${ALERT_REF:-${GITHUB_REF:-}}"' in _SCRIPT_SRC
+    ), "the gate does not derive a ref from GITHUB_REF; it will count the default branch"
+    assert (
+        'alerts_query="${alerts_query}&ref=${ALERT_REF}"' in _SCRIPT_SRC
+    ), "the ref is derived but never appended to the alerts query"
+
+
+def test_an_unscanned_ref_fails_closed_rather_than_counting_zero():
+    """The whole point of this file: 'could not look' must not equal 'found nothing'.
+
+    An empty alert list comes back BOTH for a clean scan and for a ref that was
+    never scanned. Scoping to a ref therefore introduces a new way to read 0, and
+    it has to be refused — otherwise a PR whose analysis has not run yet reports
+    a clean backlog.
+    """
+    assert "code-scanning/analyses?ref=" in _SCRIPT_SRC, (
+        "nothing verifies that an analysis EXISTS for the ref, so 0 alerts on an " "unscanned ref would read as a pass"
+    )
+    assert "was never scanned" in _SCRIPT_SRC, "the unscanned-ref path does not announce itself as a refusal"
+    # The existence check must GUARD the query, not merely precede it in the file.
+    guard = _SCRIPT_SRC.index("analyses_count")
+    query = _SCRIPT_SRC.index('alerts_query="${alerts_query}&ref=')
+    assert guard < query, "the analysis-existence check runs after the ref is already trusted"
+
+
+def test_the_ref_scoping_still_counts_the_default_branch_when_no_ref_is_available():
+    """A cron or manual run has no GITHUB_REF; it must still check something."""
+    assert "no ref available — counting the default branch" in _SCRIPT_SRC, (
+        "with no ref the gate must say what it is counting instead of silently " "scoping to nothing"
+    )
