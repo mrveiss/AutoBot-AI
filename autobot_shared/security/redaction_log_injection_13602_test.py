@@ -43,8 +43,8 @@ class TestSanitizeLogValue:
         assert "\x1b" not in sanitize_log_value("\x1b[2J\x1b[31mwiped")
 
     def test_unicode_line_and_bidi_separators_are_neutralised(self):
-        out = sanitize_log_value("a b‮c")
-        assert " " not in out and "‮" not in out
+        out = sanitize_log_value("a\u2028b\u202ec")
+        assert "\u2028" not in out and "\u202e" not in out
 
     def test_an_oversized_value_cannot_pad_the_line(self):
         out = sanitize_log_value("A" * (LOG_VALUE_MAX_CHARS + 500))
@@ -81,16 +81,45 @@ def _warning_calls_in(tree: ast.AST, function_name: str) -> list[ast.Call]:
     ]
 
 
+_SANITISER = "sanitize_log_value"
+
+
+def _is_sanitiser_call(node: ast.AST) -> bool:
+    """True only for ``sanitize_log_value(...)``, plain or attribute-qualified."""
+    if not isinstance(node, ast.Call):
+        return False
+    if isinstance(node.func, ast.Name):
+        return node.func.id == _SANITISER
+    return isinstance(node.func, ast.Attribute) and node.func.attr == _SANITISER
+
+
 def _every_logged_argument_is_sanitised(source: str, function_name: str) -> bool:
-    """True when no bare ``Name``/``Attribute`` is interpolated into a log call."""
+    """True when every interpolated value goes through ``sanitize_log_value``.
+
+    #13602 review: this accepted *any* ``ast.Call`` as evidence of sanitising, so
+    ``logger.warning("...%s", str(path))`` satisfied it while the raw path still reached the
+    log store. It also never looked at the format string, so ``logger.warning(f"...{path}")``
+    passed by leaving no positional arguments to check — the guard was green on both of the
+    two shapes this defect actually takes.
+    """
     calls = _warning_calls_in(ast.parse(source), function_name)
     if not calls:
         return False
     for call in calls:
+        if not call.args:
+            return False
+        fmt = call.args[0]
+        if isinstance(fmt, ast.JoinedStr):
+            # An f-string interpolates before the logger is called, so an unsanitised piece
+            # is already in the message regardless of the remaining arguments.
+            if any(
+                isinstance(piece, ast.FormattedValue) and not _is_sanitiser_call(piece.value) for piece in fmt.values
+            ):
+                return False
+        elif not isinstance(fmt, ast.Constant):
+            return False
         for argument in call.args[1:]:
-            if isinstance(argument, ast.Call):
-                continue  # passed through a helper — sanitize_log_value(path)
-            if isinstance(argument, ast.Constant):
+            if _is_sanitiser_call(argument) or isinstance(argument, ast.Constant):
                 continue
             return False
     return True
@@ -108,6 +137,26 @@ def _validate_env_path_security(path, project_root):
         # sanitize_log_value(path) keeps CRLF out of the log store
         logger.warning("Path traversal attempt blocked: %s", path)
 '''
+
+
+#: The raw value wrapped in some *other* call. `str(path)` is an `ast.Call`, which the
+#: pre-review guard accepted as proof of sanitising.
+_STR_WRAPPED_FIXTURE = """
+def _validate_env_path_security(path, project_root):
+    try:
+        validate_path(path)
+    except ValueError:
+        logger.warning("Path traversal attempt blocked: %s", str(path))
+"""
+
+#: The raw value interpolated by an f-string, leaving no positional argument to inspect.
+_FSTRING_FIXTURE = """
+def _validate_env_path_security(path, project_root):
+    try:
+        validate_path(path)
+    except ValueError:
+        logger.warning(f"Path traversal attempt blocked: {path}")
+"""
 
 
 class TestTheCallSiteIsGuarded:

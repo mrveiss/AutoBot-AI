@@ -190,7 +190,15 @@ def sanitize_log_value(value: object, *, max_chars: int | None = None) -> str:
     text = value if isinstance(value, str) else repr(value)
     escaped = _UNSAFE_LOG_CHARS.sub(lambda m: _escape_char(m.group(0)), text)
     limit = LOG_VALUE_MAX_CHARS if max_chars is None else max_chars
-    if limit >= 0 and len(escaped) > limit:
+    if limit < 0:
+        # #13602 review: a negative bound skipped truncation entirely, so
+        # AUTOBOT_LOG_VALUE_MAX_CHARS=-1 (or an explicit negative argument) let a rejected
+        # request put its whole path in the log -- the opposite of what this function is
+        # for. A guard has no "unlimited" reading, so a negative bound is refused rather
+        # than honoured: fall back to the module default, and to 0 if that is misconfigured
+        # negative too, so the bound can never be switched off from configuration.
+        limit = LOG_VALUE_MAX_CHARS if LOG_VALUE_MAX_CHARS >= 0 else 0
+    if len(escaped) > limit:
         return f"{escaped[:limit]}...[truncated {len(escaped) - limit} chars]"
     return escaped
 

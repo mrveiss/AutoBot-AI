@@ -78,6 +78,7 @@ from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_backend_services  # noqa: E402,F401
 from autobot_shared import env_registry_llc  # noqa: E402,F401
 from autobot_shared import env_registry_logging  # noqa: E402,F401
+from autobot_shared import env_registry_security  # noqa: E402,F401
 from autobot_shared import env_registry_slm  # noqa: E402,F401
 from autobot_shared import env_registry_terminal  # noqa: E402,F401
 from autobot_shared import env_registry_testing  # noqa: E402,F401
@@ -988,20 +989,6 @@ register_env_var(
             "After this the reply can no longer be tied to a request and resolves nothing."
         ),
         component="approvals",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_LOG_VALUE_MAX_CHARS",
-        type=int,
-        default=256,
-        description=(
-            "Longest untrusted value sanitize_log_value() will interpolate into a log line "
-            "(#13602). Beyond it the value is truncated with an explicit marker, so the "
-            "subject of a rejected request cannot pad the log store out."
-        ),
-        component="security",
     )
 )
 

@@ -25,12 +25,14 @@ identical with the flag on and off.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Optional, Protocol
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_constants import TimingConstants
 from services.remote_approval import DeliveredApproval, RemoteApprovalStore, embed_token
 
 logger = get_logger(__name__)
@@ -168,8 +170,29 @@ async def deliver_approval(
         logger.warning("Not delivering approval %s: correlation could not be recorded", approval_id)
         return False
 
+    # #14068 review: the send is bounded. `WebSocketAdapter.send_message()` awaits
+    # `websocket.send_json()` with no application-level timeout, so a peer that accepts the
+    # connection and never drains left this await pending for ever. The caller mirrors
+    # *before* starting its in-app approval polling, so an unbounded send here does not
+    # merely lose the mirror -- it stops the in-app gate reaching its own timeout, and the
+    # fail-closed denial that gate exists to produce never happens. A timeout is treated as
+    # any other delivery failure: forget the correlation and return False, which is the
+    # ordinary "answer it in-app" path.
     try:
-        sent = await send(platform=target.platform, channel_id=target.channel_id, body=embed_token(body, approval_id))
+        sent = await asyncio.wait_for(
+            send(platform=target.platform, channel_id=target.channel_id, body=embed_token(body, approval_id)),
+            timeout=TimingConstants.SHORT_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        logger.error(
+            "Approval %s timed out after %ss being delivered to %s — forgetting the correlation so "
+            "the in-app gate decides",
+            approval_id,
+            TimingConstants.SHORT_TIMEOUT,
+            target.platform,
+        )
+        await delivery_store.forget(approval_id)
+        return False
     except Exception as exc:  # noqa: BLE001 - a channel failure must not kill the run
         logger.error("Failed to deliver approval %s to %s: %s", approval_id, target.platform, exc)
         await delivery_store.forget(approval_id)

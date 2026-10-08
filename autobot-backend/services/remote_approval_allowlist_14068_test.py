@@ -210,6 +210,30 @@ def _calls_named(source: str, name: str) -> bool:
     )
 
 
+def _awaits_named(node: ast.AST, name: str) -> bool:
+    """True when *node* contains ``await name(...)`` — the await, not just the call.
+
+    #14068 review: the caller used to accept a bare ``name(...)``. That regression builds a
+    coroutine and never sends the approval, and a Call-only check cannot see the difference,
+    so a test named "...is_awaited..." passed on exactly the bug it was written to catch.
+    """
+    return any(
+        isinstance(inner, ast.Await)
+        and isinstance(inner.value, ast.Call)
+        and isinstance(inner.value.func, ast.Name)
+        and inner.value.func.id == name
+        for inner in ast.walk(node)
+    )
+
+
+#: The mirror called but never awaited — a coroutine created and dropped.
+_UNAWAITED_FIXTURE = """
+async def _handle_pending_approval(self, session_id, approval_id):
+    await self._persist_approval_request(None, session_id, approval_id)
+    mirror_approval_request(session_id=session_id, approval_id=approval_id, body="x")
+"""
+
+
 _CONTRAST_FIXTURE = '''
 async def _handle_approval(self, session_id, approval_id):
     """Ask for approval.
@@ -231,19 +255,14 @@ class TestTheApprovalPathIsWired:
         assert not _calls_named(_CONTRAST_FIXTURE, _WIRED_CALL)
 
     def test_the_mirror_is_awaited_in_the_approval_flow_not_some_other_one(self):
-        """Named selector: the call sits in the function that persists the request."""
-        tree = ast.parse(_TOOL_HANDLER.read_text(encoding="utf-8"))
+        """Named selector: the call is **awaited** in the function that persists the request."""
+        source = _TOOL_HANDLER.read_text(encoding="utf-8")
         hosting = [
             node.name
-            for node in ast.walk(tree)
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-            and any(
-                isinstance(inner, ast.Call) and isinstance(inner.func, ast.Name) and inner.func.id == _WIRED_CALL
-                for inner in ast.walk(node)
-            )
+            for node in ast.walk(ast.parse(source))
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and _awaits_named(node, _WIRED_CALL)
         ]
-        assert hosting, f"no function calls {_WIRED_CALL}"
-        source = _TOOL_HANDLER.read_text(encoding="utf-8")
+        assert hosting, f"no function awaits {_WIRED_CALL}"
         for name in hosting:
             function = next(
                 node
@@ -253,7 +272,13 @@ class TestTheApprovalPathIsWired:
             assert any(
                 isinstance(inner, ast.Attribute) and inner.attr == "_persist_approval_request"
                 for inner in ast.walk(function)
-            ), f"{name} calls the mirror but is not the approval path"
+            ), f"{name} awaits the mirror but is not the approval path"
+
+    def test_an_unawaited_mirror_does_not_satisfy_the_guard(self):
+        """Control: the coroutine-dropped regression must fail, not pass quietly."""
+        tree = ast.parse(_UNAWAITED_FIXTURE)
+        assert _calls_named(_UNAWAITED_FIXTURE, _WIRED_CALL), "fixture must contain the call"
+        assert not _awaits_named(tree, _WIRED_CALL), "an unawaited call must not read as awaited"
 
 
 if __name__ == "__main__":  # pragma: no cover
