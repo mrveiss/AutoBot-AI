@@ -31429,6 +31429,9 @@ export interface paths {
          * @description Optimized endpoint for chat interface initialization.
          *     Returns all data needed to start the chat in one request.
          *     Supports both GET and POST methods.
+         *
+         *     ``request`` lets the helpers below reach live app state (#13558); it adds
+         *     no field to the request or response schema.
          */
         get: operations["batch_chat_initialization_api_batch_jobs_chat_init_get"];
         put?: never;
@@ -31437,6 +31440,9 @@ export interface paths {
          * @description Optimized endpoint for chat interface initialization.
          *     Returns all data needed to start the chat in one request.
          *     Supports both GET and POST methods.
+         *
+         *     ``request`` lets the helpers below reach live app state (#13558); it adds
+         *     no field to the request or response schema.
          */
         post: operations["batch_chat_initialization_api_batch_jobs_chat_init_post"];
         delete?: never;

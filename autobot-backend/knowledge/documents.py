@@ -309,6 +309,30 @@ class DocumentsMixin:
             logger.error("Failed to get librarian info: %s", e)
             return {"status": "error", "message": "Document operation failed"}
 
+    async def get_document_count(self) -> int:
+        """Return how many documents the knowledge base holds (#13569).
+
+        Delegates to ``get_stats()["total_documents"]`` instead of counting
+        independently. "Document count" already has one definition in this
+        codebase and a second one would be free to drift from it:
+        ``StatsMixin._populate_redis_stats`` sets ``total_documents``,
+        ``total_vectors`` and ``total_chunks`` from the same vector-store entry
+        count, because ``add_document`` routes through ``store_fact`` and writes
+        exactly one embedding per document -- so documents, chunks and
+        collection entries are one number on this class, not three.
+
+        The other counter here answers a different question: ``_count_facts``
+        scans Redis ``fact:*`` keys, which ``get_stats`` publishes separately as
+        ``total_facts``. Returning that from a method named for documents would
+        be correct about facts and wrong about the thing it is called.
+
+        Returns:
+            Document count; ``0`` when stats are unavailable (``get_stats``
+            already degrades to a zeroed payload rather than raising).
+        """
+        stats = await self.get_stats()
+        return stats.get("total_documents", 0)
+
     # Method references needed from other mixins
     async def store_fact(self, content: str, metadata: Dict[str, Any], fact_id: str):
         """Store fact - implemented in facts mixin"""
