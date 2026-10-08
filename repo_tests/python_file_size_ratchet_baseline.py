@@ -91,7 +91,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1326,
     "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 756,
     "autobot-backend/api/codebase_analytics/endpoints/duplicates.py": 660,  # #17758: triplicated cached body collapsed
-    "autobot-backend/api/codebase_analytics/endpoints/environment.py": 694,
+    "autobot-backend/api/codebase_analytics/endpoints/environment.py": 698,  # #13602: sanitised traversal log
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 827,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2267,
     "autobot-backend/api/codebase_analytics/endpoints/stats.py": 663,
@@ -138,7 +138,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/schemas_chat.py": 702,
     "autobot-backend/api/schemas_code.py": 3266,
     "autobot-backend/api/schemas_knowledge.py": 5156,
-    "autobot-backend/api/schemas_system.py": 4346,  # #16444 review: RequestValidationError import comment
+    "autobot-backend/api/schemas_system.py": 4362,  # #13051: SecretModel ownership fields
     "autobot-backend/api/schemas_workflows.py": 3011,
     "autobot-backend/api/secrets.py": 1216,  # #16444 review: except HTTPException, ValueError handlers
     "autobot-backend/api/security_assessment.py": 913,
@@ -162,7 +162,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/chat_workflow/graph.py": 1682,
     "autobot-backend/chat_workflow/llm_handler.py": 1343,
     "autobot-backend/chat_workflow/manager.py": 3976,  # #17513: markers extracted
-    "autobot-backend/chat_workflow/tool_handler.py": 3721,  # #11542: external MCP dispatch merged into MCPDispatcher
+    "autobot-backend/chat_workflow/tool_handler.py": 3731,  # #11542 dispatch merge + #14068 mirror
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
     "autobot-backend/circuit_breaker.py": 689,
@@ -490,7 +490,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
     "autobot-slm-backend/user_management/services/sso_service.py": 778,
     "autobot-slm-backend/user_management/services/user_service.py": 863,
-    "autobot_shared/env_registry.py": 1214,  # #13099: LLC vars split to env_registry_llc.py
+    "autobot_shared/env_registry.py": 1215,  # #13602: +1 sibling import, -14 registration
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
     "autobot_shared/network_constants.py": 616,
     "autobot_shared/npu/integration.py": 929,
