@@ -2232,7 +2232,9 @@
         "high": "Haute similarité",
         "medium": "Similarité moyenne",
         "low": "Faible similarité"
-      }
+      },
+      "scanFailed": "L'analyse des doublons n'a pas été exécutée : ceci n'est donc pas un résultat. Vérifiez la source de code sélectionnée et relancez l'analyse.",
+      "notScanned": "Aucune analyse des doublons n'a encore été exécutée pour cette source de code."
     },
     "hardcodes": {
       "title": "Valeurs codées en dur",
@@ -6843,7 +6845,44 @@
       "timeHoursAgo": "{count}h ago",
       "timeInHours": "in {count}h",
       "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d"
+      "timeInDays": "in {count}d",
+      "categories": {
+        "api_key": "Clés API",
+        "token": "Jetons d'accès",
+        "oauth_refresh_token": "Jetons d'actualisation OAuth",
+        "connector_oauth_token": "Jetons de connecteur",
+        "password": "Mots de passe",
+        "ssh_key": "Clés SSH",
+        "infrastructure_host": "Hôtes d'infrastructure",
+        "database_url": "Bases de données",
+        "certificate": "Certificats",
+        "other": "Autres"
+      },
+      "kinds": {
+        "api_key": "Clé API",
+        "token": "Jeton d'accès",
+        "oauth_refresh_token": "Jeton d'actualisation OAuth",
+        "connector_oauth_token": "Jeton de connecteur",
+        "password": "Mot de passe",
+        "ssh_key": "Clé SSH",
+        "infrastructure_host": "Hôte d'infrastructure",
+        "database_url": "Base de données",
+        "certificate": "Certificat",
+        "other": "Autre"
+      },
+      "templates": {
+        "openaiDesc": "Accès à l'API GPT",
+        "anthropicDesc": "Accès à l'API Claude",
+        "awsDesc": "Services cloud d'Amazon",
+        "githubDesc": "Jeton personnel GitHub",
+        "postgresDesc": "Connexion à la base de données",
+        "redisDesc": "Connexion Redis",
+        "sshLabel": "Clé SSH",
+        "sshDesc": "Accès au serveur",
+        "slackDesc": "Jeton du bot Slack",
+        "serverLabel": "Hôte serveur",
+        "serverDesc": "Accès serveur SSH/VNC"
+      }
     },
     "threatDashboard": {
       "title": "Threat Intelligence",

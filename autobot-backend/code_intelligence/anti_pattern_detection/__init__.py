@@ -14,7 +14,7 @@ Part of Issue #381 - God Class Refactoring
 
 Usage:
     from code_intelligence.anti_pattern_detection import (
-        AntiPatternDetector,
+        AntiPatternSuiteAnalyzer,
         AntiPatternType,
         AntiPatternSeverity,
         AntiPatternResult,
@@ -26,12 +26,12 @@ Usage:
     report = analyze_codebase("/path/to/code")
 
     # Custom analysis
-    detector = AntiPatternDetector()
-    report = detector.analyze_directory("/path/to/code")
+    analyzer = AntiPatternSuiteAnalyzer()
+    report = analyzer.analyze_directory("/path/to/code")
 """
 
 # Main analyzer
-from .analyzer import AntiPatternDetector, analyze_codebase, analyze_codebase_async
+from .analyzer import AntiPatternSuiteAnalyzer, analyze_codebase, analyze_codebase_async
 
 # Detectors
 from .detectors import (
@@ -117,7 +117,7 @@ __all__ = [
     "DispensableDetector",
     "NamingDetector",
     # Main analyzer
-    "AntiPatternDetector",
+    "AntiPatternSuiteAnalyzer",
     "analyze_codebase",
     "analyze_codebase_async",
     # Issue #554: Infrastructure

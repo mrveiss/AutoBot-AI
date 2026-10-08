@@ -2232,7 +2232,9 @@
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "The duplicate scan did not run, so this is not a result. Check the selected code source and run the scan again.",
+      "notScanned": "No duplicate scan has run for this code source yet."
     },
     "hardcodes": {
       "title": "Hardcoded Values",
@@ -6850,7 +6852,44 @@
       "timeHoursAgo": "{count}h ago",
       "timeInHours": "in {count}h",
       "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d"
+      "timeInDays": "in {count}d",
+      "categories": {
+        "api_key": "API Keys",
+        "token": "Tokens",
+        "oauth_refresh_token": "OAuth Refresh Tokens",
+        "connector_oauth_token": "Connector Tokens",
+        "password": "Passwords",
+        "ssh_key": "SSH Keys",
+        "infrastructure_host": "Infrastructure Hosts",
+        "database_url": "Databases",
+        "certificate": "Certificates",
+        "other": "Other"
+      },
+      "kinds": {
+        "api_key": "API Key",
+        "token": "Token",
+        "oauth_refresh_token": "OAuth Refresh Token",
+        "connector_oauth_token": "Connector Token",
+        "password": "Password",
+        "ssh_key": "SSH Key",
+        "infrastructure_host": "Infrastructure Host",
+        "database_url": "Database",
+        "certificate": "Certificate",
+        "other": "Other"
+      },
+      "templates": {
+        "openaiDesc": "GPT API access",
+        "anthropicDesc": "Claude API access",
+        "awsDesc": "Amazon Web Services",
+        "githubDesc": "GitHub personal token",
+        "postgresDesc": "Database connection",
+        "redisDesc": "Redis connection",
+        "sshLabel": "SSH Key",
+        "sshDesc": "Server access",
+        "slackDesc": "Slack bot token",
+        "serverLabel": "Server Host",
+        "serverDesc": "SSH/VNC server access"
+      }
     },
     "threatDashboard": {
       "title": "Threat Intelligence",

@@ -171,6 +171,7 @@
 </template>
 
 <script setup lang="ts">
+import { stripToolCallBlocks } from '@/utils/llmProtocolTags'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -356,8 +357,9 @@ const formattedContent = computed(() => {
     .replace(/\]0;[^\u0007\n]*\u0007?/g, '')
     .trim()
 
-  // Strip TOOL_CALL tags
-  content = content.replace(/<tool_call[^>]*>.*?<\/tool_call>/gs, '')
+  // Strip TOOL_CALL markup — ONE spelling, shared (#18065). Was lowercase-only
+  // and case-sensitive, so the UPPERCASE tag the prompts teach slipped through.
+  content = stripToolCallBlocks(content)
 
   // Process code blocks
   content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {

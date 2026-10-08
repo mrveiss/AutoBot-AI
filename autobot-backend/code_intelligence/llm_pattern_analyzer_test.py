@@ -32,13 +32,13 @@ from code_intelligence.llm_pattern_analyzer import (
     CacheOpportunity,
     CacheOpportunityDetector,
     CacheOpportunityType,
+    CodePatternRecommendation,
     CodePatternScanner,
     CostCalculator,
     CostEstimate,
     LLMPatternAnalyzer,
     OptimizationCategory,
     OptimizationPriority,
-    OptimizationRecommendation,
     PatternAnalysisResult,
     PromptAnalyzer,
     PromptIssueType,
@@ -291,11 +291,11 @@ class TestCostEstimate:
 
 
 class TestOptimizationRecommendation:
-    """Tests for OptimizationRecommendation dataclass."""
+    """Tests for CodePatternRecommendation dataclass."""
 
     def test_recommendation_creation(self):
-        """Test creating an OptimizationRecommendation."""
-        rec = OptimizationRecommendation(
+        """Test creating an CodePatternRecommendation."""
+        rec = CodePatternRecommendation(
             recommendation_id="rec_001",
             category=OptimizationCategory.CACHING,
             priority=OptimizationPriority.HIGH,
