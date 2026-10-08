@@ -52,15 +52,30 @@ if [ -n "$ALERT_REF" ]; then
   # "scanned, nothing found" and for "never scanned", and this script exists
   # because those must not share a green tick. So the analysis must be shown to
   # EXIST before a 0 from that ref is believed.
-  analyses_json=$(gh api "repos/${REPO}/code-scanning/analyses?ref=${ALERT_REF}&per_page=1" 2>/dev/null) \
+  analyses_json=$(gh api "repos/${REPO}/code-scanning/analyses?ref=${ALERT_REF}&per_page=100" 2>/dev/null) \
     || fail "could not read code-scanning analyses for ${ALERT_REF} (token scope, or the API errored)"
-  analyses_count=$(printf '%s' "$analyses_json" | jq -e '
-    if type == "array" then length else error("expected an array of analyses") end
+  # "An analysis exists for this ref" was NOT enough, and that was a fail-open in
+  # the first version of this scoping. A pull request ref keeps its analyses when
+  # a new commit lands, so a STALE scan of the previous commit satisfied it; and
+  # any other tool uploading SARIF to the same ref satisfied it too. Both let the
+  # gate count alerts that do not describe the commit under test.
+  #
+  # So the analysis must be CodeQL's AND must name the commit being tested.
+  # GITHUB_SHA on a `pull_request` run is the merge-ref commit the analysis is
+  # recorded against, which is what makes this comparable.
+  analyses_count=$(printf '%s' "$analyses_json" | jq -e --arg sha "${GITHUB_SHA:-}" '
+    if type != "array" then error("expected an array of analyses")
+    elif $sha == "" then [.[] | select(.tool.name == "CodeQL")] | length
+    else [.[] | select(.tool.name == "CodeQL" and .commit_sha == $sha)] | length
+    end
   ' 2>/dev/null)
   [[ "$analyses_count" =~ ^[0-9]+$ ]] \
     || fail "the analyses API did not return a list for ${ALERT_REF} (an error body, or an empty response)"
+  if [ -z "${GITHUB_SHA:-}" ]; then
+    printf '[codeql-ceiling] GITHUB_SHA unset — the analysis commit is NOT verified\n'
+  fi
   [ "$analyses_count" -gt 0 ] \
-    || fail "no CodeQL analysis exists for ${ALERT_REF} — refusing to report 0 open alerts for a ref that was never scanned"
+    || fail "no CodeQL analysis for ${ALERT_REF}${GITHUB_SHA:+ at commit ${GITHUB_SHA}} — refusing to report 0 open alerts for a ref that was never scanned (a stale or non-CodeQL analysis does not count)"
   alerts_query="${alerts_query}&ref=${ALERT_REF}"
   printf '[codeql-ceiling] counting alerts on %s\n' "$ALERT_REF"
 else

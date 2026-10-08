@@ -172,36 +172,115 @@ def test_the_gate_is_not_soft_failed():
 _SCRIPT_SRC = _SCRIPT.read_text(encoding="utf-8")
 
 
-def test_the_alert_query_is_scoped_to_the_ref_under_test():
-    """The `ref` must reach the alerts query, from GITHUB_REF or an override."""
-    assert (
-        'ALERT_REF="${ALERT_REF:-${GITHUB_REF:-}}"' in _SCRIPT_SRC
-    ), "the gate does not derive a ref from GITHUB_REF; it will count the default branch"
-    assert (
-        'alerts_query="${alerts_query}&ref=${ALERT_REF}"' in _SCRIPT_SRC
-    ), "the ref is derived but never appended to the alerts query"
+# ---------------------------------------------------------------------------
+# CONTRAST PAIR, driving the SCRIPT with stubbed API responses (#18065).
+#
+# The assertions above read source text, so they would pass on a script that
+# computed `analyses_count` and then ignored it. These run the real thing with a
+# fake `gh` on PATH and assert the exit status, which is what CI acts on.
+# ---------------------------------------------------------------------------
+
+import os
+import pathlib
+import stat
+import subprocess
 
 
-def test_an_unscanned_ref_fails_closed_rather_than_counting_zero():
-    """The whole point of this file: 'could not look' must not equal 'found nothing'.
+def _fake_gh(tmp_path, *, analyses: str, alerts: str, alerts_unscoped: str | None = None) -> pathlib.Path:
+    """A `gh` answering the two endpoints this gate calls, and nothing else.
 
-    An empty alert list comes back BOTH for a clean scan and for a ref that was
-    never scanned. Scoping to a ref therefore introduces a new way to read 0, and
-    it has to be refused — otherwise a PR whose analysis has not run yet reports
-    a clean backlog.
+    It DISTINGUISHES a ref-scoped alerts query from an unscoped one. That is the
+    whole point: with one canned answer the stub cannot tell whether `&ref=`
+    reached the URL, so dropping it would go unnoticed and only a source-text
+    assertion would have caught it. `alerts_unscoped` is what the default branch
+    would answer, so forgetting the ref makes the gate read the wrong backlog —
+    exactly the defect this scoping fixes.
     """
-    assert "code-scanning/analyses?ref=" in _SCRIPT_SRC, (
-        "nothing verifies that an analysis EXISTS for the ref, so 0 alerts on an " "unscanned ref would read as a pass"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    unscoped = alerts_unscoped if alerts_unscoped is not None else alerts
+    script = bin_dir / "gh"
+    script.write_text(
+        "#!/usr/bin/env bash\n"
+        'for a in "$@"; do\n'
+        '  case "$a" in\n'
+        f"    *code-scanning/analyses*) printf '%s' '{analyses}'; exit 0 ;;\n"
+        f"    *code-scanning/alerts*ref=*) printf '%s' '{alerts}'; exit 0 ;;\n"
+        f"    *code-scanning/alerts*)   printf '%s' '{unscoped}'; exit 0 ;;\n"
+        "  esac\n"
+        "done\n"
+        "echo '[]'\n",
+        encoding="utf-8",
     )
-    assert "was never scanned" in _SCRIPT_SRC, "the unscanned-ref path does not announce itself as a refusal"
-    # The existence check must GUARD the query, not merely precede it in the file.
-    guard = _SCRIPT_SRC.index("analyses_count")
-    query = _SCRIPT_SRC.index('alerts_query="${alerts_query}&ref=')
-    assert guard < query, "the analysis-existence check runs after the ref is already trusted"
+    script.chmod(script.stat().st_mode | stat.S_IEXEC)
+    return bin_dir
 
 
-def test_the_ref_scoping_still_counts_the_default_branch_when_no_ref_is_available():
-    """A cron or manual run has no GITHUB_REF; it must still check something."""
-    assert "no ref available — counting the default branch" in _SCRIPT_SRC, (
-        "with no ref the gate must say what it is counting instead of silently " "scoping to nothing"
+def _run_gate(
+    tmp_path, *, analyses: str, alerts: str, sha: str = "cafe1234", alerts_unscoped: str | None = None
+) -> int:
+    bin_dir = _fake_gh(tmp_path, analyses=analyses, alerts=alerts, alerts_unscoped=alerts_unscoped)
+    env = dict(os.environ)
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+    env["ALERT_REF"] = "refs/pull/1/merge"
+    env["GITHUB_SHA"] = sha
+    return subprocess.run(
+        ["bash", str(_SCRIPT)],
+        cwd=_SCRIPT.parents[1],
+        env=env,
+        capture_output=True,
+        text=True,
+    ).returncode
+
+
+_CODEQL_AT_SHA = '[{"tool":{"name":"CodeQL"},"commit_sha":"cafe1234"}]'
+_NO_ALERTS = "[]"
+
+
+def test_the_gate_passes_with_a_codeql_analysis_of_the_commit_and_no_alerts(tmp_path):
+    """SHOULD NOT trip: the scan is CodeQL's, names this commit, and found nothing."""
+    assert _run_gate(tmp_path, analyses=_CODEQL_AT_SHA, alerts=_NO_ALERTS) == 0
+
+
+def test_the_gate_stops_when_no_analysis_exists_for_the_ref(tmp_path):
+    """SHOULD trip: 0 alerts from an unscanned ref is 'could not look', not 'clean'."""
+    assert _run_gate(tmp_path, analyses="[]", alerts=_NO_ALERTS) == 1
+
+
+def test_the_gate_stops_on_a_stale_analysis_of_an_earlier_commit(tmp_path):
+    """SHOULD trip: a PR ref keeps its analyses when a new commit lands.
+
+    This is the fail-open the first version of the ref scoping had — 'an analysis
+    exists for this ref' was satisfied by a scan of the PREVIOUS commit.
+    """
+    stale = '[{"tool":{"name":"CodeQL"},"commit_sha":"0000dead"}]'
+    assert _run_gate(tmp_path, analyses=stale, alerts=_NO_ALERTS) == 1
+
+
+def test_the_gate_stops_on_another_tools_analysis(tmp_path):
+    """SHOULD trip: any tool can upload SARIF to the same ref."""
+    other = '[{"tool":{"name":"Semgrep"},"commit_sha":"cafe1234"}]'
+    assert _run_gate(tmp_path, analyses=other, alerts=_NO_ALERTS) == 1
+
+
+def test_the_gate_still_fails_when_the_scan_is_valid_but_alerts_exceed_the_ceiling(tmp_path):
+    """SHOULD trip: the ref scoping must not have disabled the actual ceiling."""
+    two = '[{"number":1},{"number":2}]'
+    assert _run_gate(tmp_path, analyses=_CODEQL_AT_SHA, alerts=two) == 1
+
+
+def test_the_gate_reads_the_REF_alerts_not_the_default_branch(tmp_path):
+    """The scoping itself, behaviourally.
+
+    The PR ref is clean; the default branch carries two. A gate that forgets
+    `&ref=` reads the two and fails, so passing here means the ref really reached
+    the query. This replaces a source-text assertion that `&ref=` appears in the
+    file — which proved the string was present, not that it was used.
+    """
+    rc = _run_gate(
+        tmp_path,
+        analyses=_CODEQL_AT_SHA,
+        alerts="[]",  # the ref under test: clean
+        alerts_unscoped='[{"number":1},{"number":2}]',  # the default branch: 2
     )
+    assert rc == 0, "the gate counted the default branch instead of the ref under test"
