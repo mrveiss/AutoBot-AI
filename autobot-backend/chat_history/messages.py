@@ -56,7 +56,11 @@ class MessagesMixin:
             text: The content of the message.
             message_type: The type of message.
             raw_data: Additional raw data (metadata). ``None`` is persisted as
-                ``{}`` (#13280) — the stored shape is always a mapping.
+                ``{}`` (#13280), so a message never stores ``metadata: null``.
+                Every other value survives verbatim, ``0``/``""``/``[]``/``False``
+                included — so the contract is "never null", **not** "always a
+                mapping". A reader needing a mapping must still check;
+                ``test_falsy_but_supplied_metadata_survives_verbatim`` pins it.
             tool_markers: Optional list of tool usage markers.
             author_id: Optional user ID for multi-user attribution (Issue #3282).
             sources: Optional RAG retrieval sources for citation display (Issue #4448).

@@ -73,22 +73,40 @@ class TaskExecutionRecord:
         the next occurrence names its own cause. It deliberately does **not**
         clamp to ``0``: a zero is a measurement, and writing one would hide the
         skew behind a plausible number.
+
+        A naive instant meeting an aware one is the same kind of unknowable, and
+        is checked *before* the subtraction: ``datetime - datetime`` across that
+        boundary raises ``TypeError``, which would abort the tracked operation
+        exactly as the ``ValueError`` above did — the fallback below could never
+        run. It returns ``None`` rather than assuming a zone for the naive side,
+        because picking UTC would invent the very measurement this refuses to
+        invent. Normalising at the write boundary is the real repair (#18103).
         """
         if not self.started_at:
+            return None
+        if (self.started_at.tzinfo is None) is not (completed_at.tzinfo is None):
+            self._log_unmeasurable(completed_at, "one instant is timezone-naive and the other aware")
             return None
         duration = (completed_at - self.started_at).total_seconds()
         if duration >= 0:
             return duration
-        logger.error(
-            "Task %s: started_at (%s) is AFTER completed_at (%s) by %.3fs — recording "
-            "duration_seconds=None rather than a clamped value. The tracked operation is "
-            "unaffected; this is skew in the bookkeeping clock or round-trip (#13344).",
-            self.task_id,
-            self.started_at.isoformat(),
-            completed_at.isoformat(),
-            -duration,
-        )
+        self._log_unmeasurable(completed_at, f"started_at is AFTER completed_at by {-duration:.3f}s")
         return None
+
+    def _log_unmeasurable(self, completed_at: datetime, reason: str) -> None:
+        """Record an unknowable duration, naming both instants (#13344).
+
+        Shared by both unmeasurable cases so their wording cannot drift apart.
+        """
+        logger.error(
+            "Task %s: duration unmeasurable — %s. started_at=%s completed_at=%s. Recording "
+            "duration_seconds=None rather than a clamped value; the tracked operation is "
+            "unaffected (#13344).",
+            self.task_id,
+            reason,
+            self.started_at.isoformat() if self.started_at else None,
+            completed_at.isoformat(),
+        )
 
     def to_db_tuple(self) -> Tuple:
         """Convert to tuple for SQLite insertion (Issue #372 - reduces feature envy).

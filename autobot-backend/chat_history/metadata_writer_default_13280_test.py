@@ -50,6 +50,16 @@ class _RecordingHistory(MessagesMixin):
         self.sessions[session_id] = messages
         return True
 
+    async def _announce_message(self, session_id: str, message: Dict[str, Any]) -> None:
+        """Record the announcement instead of publishing it.
+
+        The real one defers an import of ``api.session_events`` and awaits
+        ``publish_chat_message``. It swallows its own failures, so it cannot fail
+        this test — but it does make a *writer* test reach into the API layer, and
+        ``announced`` existed for this and was never populated.
+        """
+        self.announced.append({"session_id": session_id, "message": message})
+
     async def _save_history(self) -> None:
         return None
 

@@ -106,6 +106,46 @@ class TestElapsedSeconds:
 
         assert [r for r in caplog.records if r.levelno >= logging.ERROR] == []
 
+    def test_mixed_timezone_awareness_is_unknowable_not_a_crash(self, caplog) -> None:
+        """Review on #18097: the subtraction is what raises, so the guard must precede it.
+
+        ``datetime - datetime`` across the naive/aware boundary raises
+        ``TypeError``, and it sat *above* the negative-duration fallback — so the
+        fallback could never run and a bookkeeping mismatch would abort the
+        tracked operation. That is the exact failure #13344 exists to stop,
+        reachable through a different door. Before the fix this raised rather
+        than returning ``None``.
+        """
+        naive = datetime(2026, 1, 1, 12, 0, 0)
+        aware = datetime(2026, 1, 1, 12, 0, 5, tzinfo=timezone.utc)
+
+        with caplog.at_level(logging.ERROR, logger="memory.models"):
+            duration = _record("task-mixed", started_at=naive).elapsed_seconds(aware)
+
+        assert duration is None, "an unmeasurable duration is None, never a raise and never a 0"
+        [record] = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        message = record.getMessage()
+        assert "timezone-naive" in message, "the log must name why it could not measure"
+        assert "task-mixed" in message
+
+    def test_mixed_awareness_in_the_other_direction_is_also_unknowable(self) -> None:
+        """An aware ``started_at`` against a naive ``completed_at`` raises the same way."""
+        aware = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        naive = datetime(2026, 1, 1, 12, 0, 5)
+
+        assert _record("t", started_at=aware).elapsed_seconds(naive) is None
+
+    def test_a_consistently_naive_pair_still_measures(self) -> None:
+        """The guard is about the *mismatch*, not about naive values.
+
+        Pinned so a later broadening to "reject every naive instant" fails here:
+        two naive instants are mutually consistent and their delta is a real
+        measurement, so refusing it would discard a duration we actually know.
+        """
+        started = datetime(2026, 1, 1, 12, 0, 0)
+
+        assert _record("t", started_at=started).elapsed_seconds(started + timedelta(seconds=3)) == 3.0
+
 
 class TestCompleteTaskDoesNotAbort:
     """The blast radius: ``complete_task`` must not raise at its caller."""
