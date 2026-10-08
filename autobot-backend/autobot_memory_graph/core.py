@@ -15,12 +15,22 @@ import asyncio
 import inspect
 from typing import Any, Dict, List, Set
 
+from cachetools import LRUCache
+
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as _ssot_config
 
 logger = get_logger(__name__)
+
+#: Entries kept in the per-instance entity search cache. 1000 is the size the
+#: pre-#716 monolith used; it is restored alongside the attribute itself
+#: (#13811) rather than re-chosen, so this change does not also move a tuning
+#: decision nobody asked to revisit. Deliberately a plain constant rather than an
+#: env var: the repo backs TTLs with the environment, and registering a knob
+#: nobody has asked to turn would grow ``env_registry.py`` past its own ceiling.
+SEARCH_CACHE_MAXSIZE = 1000
 
 
 # ============================================================================
@@ -221,7 +231,11 @@ class AutoBotMemoryGraphCore:
     AutoBotMemoryGraph class which combines this core with all mixins.
     """
 
-    def __init__(self, chat_history_manager: Any | None = None) -> None:
+    def __init__(
+        self,
+        chat_history_manager: Any | None = None,
+        knowledge_base: Any | None = None,
+    ) -> None:
         """Initialize the memory graph core.
 
         Args:
@@ -229,9 +243,40 @@ class AutoBotMemoryGraphCore:
                 so memory graph mixins can read/write chat history. Restored in
                 #6613 — the kwarg was lost in a refactor but
                 ``chat_history/base.py`` still passes it.
+            knowledge_base: Optional KnowledgeBase used as an "embeddings
+                available" flag by the entity paths. Restored in #13811 — the
+                same loss as ``chat_history_manager`` above, one refactor later.
+
+        ``knowledge_base`` and ``search_cache`` were both dropped when #716 split
+        the ``autobot_memory_graph.py`` monolith into this package, while their
+        readers came across intact: ``entities.py`` still reads
+        ``self.knowledge_base`` three times and calls ``self.search_cache.clear()``
+        three times. Neither had a default here, so every read raised
+        ``AttributeError`` rather than taking the disabled branch it was written
+        for — ``create_entity`` wrote the entity to Redis and *then* raised, so
+        the row persisted while the caller got a 500 (#13811).
+
+        They are restored as **state with a default**, not resolved eagerly:
+
+        * The pre-#716 default was exactly ``self.knowledge_base = None``,
+          populated best-effort during ``initialize()`` and reset to ``None``
+          whenever that failed. ``None`` is therefore a supported, intended
+          state, not a degraded one — and all three readers only test it for
+          truthiness, never calling a method on it.
+        * Building a ``KnowledgeBase`` here instead would switch on
+          ``_generate_entity_embedding``, which stores a *str* into
+          ``embedding_cache``, declared ``Dict[str, List[float]]`` below. That
+          path has never run, and turning it on is a change to make once it
+          stores an embedding rather than a sentence — filed as #17967.
+
+        Injecting is what #13811 asks for, and it keeps the loud failure loud:
+        ``getattr(self, "knowledge_base", None)`` at the three call sites would
+        have silenced the crash while leaving the attribute permanently absent.
         """
         self.redis_client: Any | None = None
         self.chat_history_manager: Any | None = chat_history_manager
+        self.knowledge_base: Any | None = knowledge_base
+        self.search_cache: LRUCache = LRUCache(maxsize=SEARCH_CACHE_MAXSIZE)
         self.embedding_cache: Dict[str, List[float]] = {}
         self.embedding_model_name: str = config.embedding_model
         self.embedding_dimensions: int = config.embedding_dimensions
@@ -321,6 +366,11 @@ class AutoBotMemoryGraphCore:
 
         self._initialized = False
         self.embedding_cache.clear()
+        # Owned by this instance, so cleared here (#13811). ``knowledge_base``
+        # deliberately is NOT closed: the pre-#716 monolith constructed its own
+        # and closed it, whereas this one is injected, and closing a caller's
+        # object is not this class's to do.
+        self.search_cache.clear()
 
     async def _create_search_indexes(self) -> None:
         """

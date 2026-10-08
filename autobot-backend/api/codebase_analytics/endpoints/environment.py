@@ -65,12 +65,16 @@ def _validate_env_path_security(path: str, project_root: str) -> JSONResponse | 
         JSONResponse error if validation fails, None if valid
     """
     from autobot_shared.security.path_validator import validate_path
+    from autobot_shared.security.redaction import sanitize_log_value
 
     try:
         validate_path(path, allowed_roots=[project_root])
         return None
     except ValueError:
-        logger.warning("Path traversal attempt blocked: %s", path)
+        # #13602: `path` is request-supplied and reaches a log store other
+        # systems read. Interpolating it raw lets its author write their own
+        # records (CRLF), drive a terminal (ANSI) or pad the line out.
+        logger.warning("Path traversal attempt blocked: %s", sanitize_log_value(path))
         return JSONResponse(
             {
                 "status": "error",
