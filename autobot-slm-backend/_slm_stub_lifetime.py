@@ -81,7 +81,7 @@ class StubLifetime:
         self._apply(item)
 
 
-def register(config: Any, root: Path, stubs: Dict[str, Any]) -> None:
+def register_stub_lifetime(config: Any, root: Path, stubs: Dict[str, Any]) -> None:
     """Register the lifetime manager once, globally."""
     if not config.pluginmanager.hasplugin(PLUGIN_NAME):
         config.pluginmanager.register(StubLifetime(root, stubs), PLUGIN_NAME)

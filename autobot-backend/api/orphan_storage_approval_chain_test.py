@@ -95,7 +95,7 @@ def chain(monkeypatch):
     monkeypatch.setattr(approval_execution, "audit_log", _audit_log)
 
     # Exactly what importing the admin router does at app startup.
-    orphan_storage_cleanup_action.register()
+    orphan_storage_cleanup_action.register_cleanup_action()
     return {"deleted": deleted, "audited": audited}
 
 

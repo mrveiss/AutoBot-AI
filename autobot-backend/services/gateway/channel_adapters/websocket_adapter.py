@@ -17,7 +17,7 @@ from starlette.websockets import WebSocketState
 
 from autobot_shared.logging_manager import get_logger
 
-from ..types import ChannelMessage, ChannelType, GatewaySession, MessageType
+from ..types import ChannelMessage, ChannelType, GatewayMessageType, GatewaySession
 from .base import BaseChannelAdapter
 
 logger = get_logger(__name__)
@@ -185,7 +185,7 @@ class WebSocketAdapter(BaseChannelAdapter):
                 heartbeat_msg = ChannelMessage(
                     session_id=session.session_id,
                     channel=ChannelType.WEBSOCKET,
-                    message_type=MessageType.SESSION_HEARTBEAT,
+                    message_type=GatewayMessageType.SESSION_HEARTBEAT,
                     content={"status": "alive"},
                 )
                 return await self.send_message(heartbeat_msg, session, websocket)
@@ -205,19 +205,19 @@ class WebSocketAdapter(BaseChannelAdapter):
         Returns:
             WebSocket-compatible dictionary
         """
-        # Map MessageType to legacy WebSocket event types
+        # Map GatewayMessageType to legacy WebSocket event types
         event_type_map = {
-            MessageType.USER_TEXT: "user_message",
-            MessageType.AGENT_TEXT: "llm_response",
-            MessageType.AGENT_THOUGHT: "thought",
-            MessageType.AGENT_TOOL_CODE: "tool_code",
-            MessageType.AGENT_TOOL_OUTPUT: "tool_output",
-            MessageType.SYSTEM_STATUS: "progress",
-            MessageType.SYSTEM_ERROR: "error",
-            MessageType.SYSTEM_PROGRESS: "progress",
-            MessageType.SESSION_START: "session_start",
-            MessageType.SESSION_END: "session_end",
-            MessageType.SESSION_HEARTBEAT: "heartbeat",
+            GatewayMessageType.USER_TEXT: "user_message",
+            GatewayMessageType.AGENT_TEXT: "llm_response",
+            GatewayMessageType.AGENT_THOUGHT: "thought",
+            GatewayMessageType.AGENT_TOOL_CODE: "tool_code",
+            GatewayMessageType.AGENT_TOOL_OUTPUT: "tool_output",
+            GatewayMessageType.SYSTEM_STATUS: "progress",
+            GatewayMessageType.SYSTEM_ERROR: "error",
+            GatewayMessageType.SYSTEM_PROGRESS: "progress",
+            GatewayMessageType.SESSION_START: "session_start",
+            GatewayMessageType.SESSION_END: "session_end",
+            GatewayMessageType.SESSION_HEARTBEAT: "heartbeat",
         }
 
         event_type = event_type_map.get(message.message_type, "message")
@@ -248,17 +248,17 @@ class WebSocketAdapter(BaseChannelAdapter):
         Returns:
             ChannelMessage
         """
-        # Map legacy WebSocket event types to MessageType
+        # Map legacy WebSocket event types to GatewayMessageType
         type_map = {
-            "user_message": MessageType.USER_TEXT,
-            "message": MessageType.USER_TEXT,
-            "voice": MessageType.USER_VOICE,
-            "image": MessageType.USER_IMAGE,
-            "file": MessageType.USER_FILE,
+            "user_message": GatewayMessageType.USER_TEXT,
+            "message": GatewayMessageType.USER_TEXT,
+            "voice": GatewayMessageType.USER_VOICE,
+            "image": GatewayMessageType.USER_IMAGE,
+            "file": GatewayMessageType.USER_FILE,
         }
 
         ws_type = data.get("type", "message")
-        message_type = type_map.get(ws_type, MessageType.USER_TEXT)
+        message_type = type_map.get(ws_type, GatewayMessageType.USER_TEXT)
 
         # Extract content
         content = data.get("data") or data.get("content") or data.get("message", "")

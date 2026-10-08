@@ -64,7 +64,7 @@ from chat_workflow.session_work_item import SessionWorkItemService
 from constants.threshold_constants import TimingConstants
 
 # Import dependencies and utilities - Using available dependencies
-from dependencies import get_config, get_knowledge_base
+from dependencies import get_knowledge_base, provide_config_manager
 
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
 from exceptions import get_exceptions_lazy
@@ -1041,7 +1041,7 @@ async def send_message(
     current_user: dict = Depends(get_current_user),
     message: ChatMessage = None,
     request: Request = None,
-    config=Depends(get_config),
+    config=Depends(provide_config_manager),
     knowledge_base=Depends(get_knowledge_base),
 ):
     """
@@ -2436,7 +2436,7 @@ async def chat_ai_stack(
     message: ChatMessage = None,
     request: Request = None,
     preferences: ChatPreferences | None = None,
-    config=Depends(get_config),
+    config=Depends(provide_config_manager),
     knowledge_base=Depends(get_knowledge_base),
 ):
     """

@@ -35,8 +35,8 @@ from models.database import (
     NodeStatus,
     Service,
     ServiceCategory,
-    ServiceStatus,
     Setting,
+    SystemdState,
 )
 from services.db_transaction_errors import is_connection_level_db_error
 from services.node_capability import apply_capability_profile
@@ -1159,7 +1159,7 @@ class ReconcilerService:
             # Get failed services that are enabled (should be running)
             result = await db.execute(
                 select(Service).where(
-                    Service.status == ServiceStatus.FAILED.value,
+                    Service.status == SystemdState.FAILED.value,
                     Service.enabled.is_(True),
                     Service.category == ServiceCategory.AUTOBOT.value,
                 )
@@ -1263,7 +1263,7 @@ class ReconcilerService:
         Helper for _remediate_failed_service (Issue #665).
         """
         if success:
-            service.status = ServiceStatus.RUNNING.value
+            service.status = SystemdState.RUNNING.value
             logger.info("Successfully restarted service %s on %s", service.service_name, node.node_id)
             await self._broadcast_service_remediation(
                 node.node_id,
@@ -1853,7 +1853,7 @@ class ReconcilerService:
         if "n_restarts" in svc_data:
             existing_extra["n_restarts"] = svc_data["n_restarts"]
         existing_extra["n_restarts_increased_at"] = last_increase_iso
-        if status != ServiceStatus.FAILED.value:
+        if status != SystemdState.FAILED.value:
             existing_extra.pop("remediation", None)  # #16712: recovery resets it
         service.extra_data = existing_extra
         return is_churning
@@ -1925,8 +1925,8 @@ class ReconcilerService:
                 service = result.scalar_one_or_none()
 
                 status = svc_data.get("status", "unknown")
-                if status not in [s.value for s in ServiceStatus]:
-                    status = ServiceStatus.UNKNOWN.value
+                if status not in [s.value for s in SystemdState]:
+                    status = SystemdState.UNKNOWN.value
 
                 # Issue #1019: Capture error context for failed services
                 error_msg = svc_data.get("error_message", "")

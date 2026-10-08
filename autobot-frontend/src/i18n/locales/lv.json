@@ -2232,7 +2232,9 @@
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "Dublikātu skenēšana netika palaista, tāpēc šis nav rezultāts. Pārbaudiet izvēlēto koda avotu un palaidiet skenēšanu vēlreiz.",
+      "notScanned": "Šim koda avotam dublikātu skenēšana vēl nav palaista."
     },
     "hardcodes": {
       "title": "Kodētas vērtības",
@@ -5832,11 +5834,11 @@
       "accentColor": "Accent Color",
       "accentColorOptions": "Accent color options",
       "setAccentColor": "Set accent color to {color}",
-      "teal": "Teal",
-      "emerald": "Emerald",
-      "blue": "Blue",
-      "purple": "Purple",
-      "orange": "Orange",
+      "teal": "Tirkīzzils",
+      "emerald": "Smaragds",
+      "blue": "Zils",
+      "purple": "Violets",
+      "orange": "Oranžs",
       "layoutDensity": "Layout Density",
       "layoutDensityOptions": "Layout density options",
       "setLayoutDensity": "Set layout density to {density}",
@@ -5847,7 +5849,11 @@
       "accentColorChanged": "Accent color changed to {color}",
       "layoutDensityChanged": "Layout density changed to {density}",
       "preferencesReset": "All preferences reset to defaults",
-      "theme": "Theme"
+      "theme": "Theme",
+      "green": "Zaļš",
+      "pink": "Rozā",
+      "indigo": "Indigo",
+      "red": "Sarkans"
     },
     "progressBar": {
       "timeRemaining": "{time} remaining"
@@ -6839,7 +6845,44 @@
       "timeHoursAgo": "{count}h ago",
       "timeInHours": "in {count}h",
       "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d"
+      "timeInDays": "in {count}d",
+      "categories": {
+        "api_key": "API atslēgas",
+        "token": "Piekļuves žetoni",
+        "oauth_refresh_token": "OAuth atjaunošanas žetoni",
+        "connector_oauth_token": "Savienotāju žetoni",
+        "password": "Paroles",
+        "ssh_key": "SSH atslēgas",
+        "infrastructure_host": "Infrastruktūras resursdatori",
+        "database_url": "Datubāzes",
+        "certificate": "Sertifikāti",
+        "other": "Citi"
+      },
+      "kinds": {
+        "api_key": "API atslēga",
+        "token": "Piekļuves žetons",
+        "oauth_refresh_token": "OAuth atjaunošanas žetons",
+        "connector_oauth_token": "Savienotāja žetons",
+        "password": "Parole",
+        "ssh_key": "SSH atslēga",
+        "infrastructure_host": "Infrastruktūras resursdators",
+        "database_url": "Datubāze",
+        "certificate": "Sertifikāts",
+        "other": "Cits"
+      },
+      "templates": {
+        "openaiDesc": "Piekļuve GPT API",
+        "anthropicDesc": "Piekļuve Claude API",
+        "awsDesc": "Amazon mākoņpakalpojumi",
+        "githubDesc": "Personīgais GitHub žetons",
+        "postgresDesc": "Datubāzes savienojums",
+        "redisDesc": "Redis savienojums",
+        "sshLabel": "SSH atslēga",
+        "sshDesc": "Piekļuve serverim",
+        "slackDesc": "Slack robota žetons",
+        "serverLabel": "Servera resursdators",
+        "serverDesc": "SSH/VNC servera piekļuve"
+      }
     },
     "threatDashboard": {
       "title": "Threat Intelligence",

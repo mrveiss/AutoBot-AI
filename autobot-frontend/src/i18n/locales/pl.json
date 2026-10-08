@@ -2232,7 +2232,9 @@
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "Skanowanie duplikatów nie zostało wykonane, więc to nie jest wynik. Sprawdź wybrane źródło kodu i uruchom skanowanie ponownie.",
+      "notScanned": "Dla tego źródła kodu nie wykonano jeszcze skanowania duplikatów."
     },
     "hardcodes": {
       "title": "Wartości zakodowane",
@@ -5832,11 +5834,11 @@
       "accentColor": "Accent Color",
       "accentColorOptions": "Accent color options",
       "setAccentColor": "Set accent color to {color}",
-      "teal": "Teal",
-      "emerald": "Emerald",
-      "blue": "Blue",
-      "purple": "Purple",
-      "orange": "Orange",
+      "teal": "Morski",
+      "emerald": "Szmaragdowy",
+      "blue": "Niebieski",
+      "purple": "Fioletowy",
+      "orange": "Pomarańczowy",
       "layoutDensity": "Layout Density",
       "layoutDensityOptions": "Layout density options",
       "setLayoutDensity": "Set layout density to {density}",
@@ -5847,7 +5849,11 @@
       "accentColorChanged": "Accent color changed to {color}",
       "layoutDensityChanged": "Layout density changed to {density}",
       "preferencesReset": "All preferences reset to defaults",
-      "theme": "Theme"
+      "theme": "Theme",
+      "green": "Zielony",
+      "pink": "Różowy",
+      "indigo": "Indygo",
+      "red": "Czerwony"
     },
     "progressBar": {
       "timeRemaining": "{time} remaining"
@@ -6839,7 +6845,44 @@
       "timeHoursAgo": "{count}h ago",
       "timeInHours": "in {count}h",
       "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d"
+      "timeInDays": "in {count}d",
+      "categories": {
+        "api_key": "Klucze API",
+        "token": "Tokeny dostępu",
+        "oauth_refresh_token": "Tokeny odświeżania OAuth",
+        "connector_oauth_token": "Tokeny łączników",
+        "password": "Hasła",
+        "ssh_key": "Klucze SSH",
+        "infrastructure_host": "Hosty infrastruktury",
+        "database_url": "Bazy danych",
+        "certificate": "Certyfikaty",
+        "other": "Inne"
+      },
+      "kinds": {
+        "api_key": "Klucz API",
+        "token": "Token dostępu",
+        "oauth_refresh_token": "Token odświeżania OAuth",
+        "connector_oauth_token": "Token łącznika",
+        "password": "Hasło",
+        "ssh_key": "Klucz SSH",
+        "infrastructure_host": "Host infrastruktury",
+        "database_url": "Baza danych",
+        "certificate": "Certyfikat",
+        "other": "Inne"
+      },
+      "templates": {
+        "openaiDesc": "Dostęp do API GPT",
+        "anthropicDesc": "Dostęp do API Claude",
+        "awsDesc": "Usługi chmurowe Amazon",
+        "githubDesc": "Osobisty token GitHub",
+        "postgresDesc": "Połączenie z bazą danych",
+        "redisDesc": "Połączenie z Redis",
+        "sshLabel": "Klucz SSH",
+        "sshDesc": "Dostęp do serwera",
+        "slackDesc": "Token bota Slack",
+        "serverLabel": "Host serwera",
+        "serverDesc": "Dostęp do serwera SSH/VNC"
+      }
     },
     "threatDashboard": {
       "title": "Threat Intelligence",

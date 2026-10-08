@@ -39,7 +39,7 @@ DEGRADED_STATUS_FIELDS = {"degraded", "warning"}
 SERVICE_UNAVAILABLE_HTTP_CODES = {503, 502, 504}
 
 
-def _parse_health_response(data: dict, service: "ServiceEndpoint") -> "ServiceStatus" | None:
+def _parse_health_response(data: dict, service: "ServiceEndpoint") -> "DiscoveryHealth" | None:
     """Parse health response JSON for service status (Issue #315: extracted).
 
     Args:
@@ -47,7 +47,7 @@ def _parse_health_response(data: dict, service: "ServiceEndpoint") -> "ServiceSt
         service: Service endpoint to update with metadata
 
     Returns:
-        ServiceStatus.DEGRADED if degraded, None if healthy
+        DiscoveryHealth.DEGRADED if degraded, None if healthy
     """
     # Extract service metadata if available
     service.version = data.get("version")
@@ -56,12 +56,12 @@ def _parse_health_response(data: dict, service: "ServiceEndpoint") -> "ServiceSt
     # Check if response indicates degraded state
     status_field = data.get("status", "healthy").lower()
     if status_field in DEGRADED_STATUS_FIELDS:
-        return ServiceStatus.DEGRADED
+        return DiscoveryHealth.DEGRADED
 
     return None  # Healthy
 
 
-class ServiceStatus(Enum):
+class DiscoveryHealth(Enum):
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     UNHEALTHY = "unhealthy"
@@ -83,7 +83,7 @@ class ServiceEndpoint:
     retry_count: int = RetryConfig.DEFAULT_RETRIES
 
     # Health status tracking
-    status: ServiceStatus = ServiceStatus.UNKNOWN
+    status: DiscoveryHealth = DiscoveryHealth.UNKNOWN
     last_check: datetime | None = None
     last_healthy: datetime | None = None
     consecutive_failures: int = 0
@@ -107,7 +107,7 @@ class ServiceEndpoint:
     @property
     def is_available(self) -> bool:
         """Check if service is currently available"""
-        return self.status in [ServiceStatus.HEALTHY, ServiceStatus.DEGRADED]
+        return self.status in [DiscoveryHealth.HEALTHY, DiscoveryHealth.DEGRADED]
 
 
 class ServiceDiscovery:
@@ -319,7 +319,7 @@ class ServiceDiscovery:
                 logger.error("Error in health monitor loop: %s", e)
                 await asyncio.sleep(ServiceDiscoveryConfig.ERROR_RECOVERY_DELAY_S)
 
-    async def check_all_services(self) -> Dict[str, ServiceStatus]:
+    async def check_all_services(self) -> Dict[str, DiscoveryHealth]:
         """Check health of all registered services concurrently (thread-safe)"""
         tasks = []
 
@@ -344,9 +344,9 @@ class ServiceDiscovery:
                 # Update service status under lock
                 async with self._lock:
                     if service_name in self.services:
-                        self.services[service_name].status = ServiceStatus.UNHEALTHY
+                        self.services[service_name].status = DiscoveryHealth.UNHEALTHY
                         self.services[service_name].error_message = str(result)
-                results[service_name] = ServiceStatus.UNHEALTHY
+                results[service_name] = DiscoveryHealth.UNHEALTHY
             else:
                 results[service_name] = result
 
@@ -356,8 +356,8 @@ class ServiceDiscovery:
         self,
         consecutive_failures: int,
         last_check: datetime | None,
-        current_status: ServiceStatus,
-    ) -> ServiceStatus | None:
+        current_status: DiscoveryHealth,
+    ) -> DiscoveryHealth | None:
         """Check if health check should be skipped due to circuit breaker. Returns status to skip with, or None."""
         if consecutive_failures < self.circuit_breaker_threshold:
             return None
@@ -368,14 +368,14 @@ class ServiceDiscovery:
         return current_status if time_since_check < check_threshold else None
 
     async def _update_service_health_status(
-        self, service: ServiceEndpoint, status: ServiceStatus, response_time: float
+        self, service: ServiceEndpoint, status: DiscoveryHealth, response_time: float
     ) -> None:
         """Update service status after health check (under lock)."""
         async with self._lock:
             service.status = status
             service.last_check = datetime.now(tz=timezone.utc)
             service.response_time = response_time
-            if status == ServiceStatus.HEALTHY:
+            if status == DiscoveryHealth.HEALTHY:
                 service.consecutive_failures = 0
                 service.last_healthy = datetime.now(tz=timezone.utc)
                 service.error_message = None
@@ -385,18 +385,18 @@ class ServiceDiscovery:
     async def _update_service_error_status(self, service: ServiceEndpoint, error: str, response_time: float) -> None:
         """Update service status after health check error (under lock)."""
         async with self._lock:
-            service.status = ServiceStatus.UNHEALTHY
+            service.status = DiscoveryHealth.UNHEALTHY
             service.last_check = datetime.now(tz=timezone.utc)
             service.consecutive_failures += 1
             service.error_message = error
             service.response_time = response_time
 
-    async def check_service_health(self, service_name: str) -> ServiceStatus:
+    async def check_service_health(self, service_name: str) -> DiscoveryHealth:
         """Check health of a specific service with circuit breaker logic (thread-safe)."""
         async with self._lock:
             if service_name not in self.services:
                 logger.warning("Unknown service: %s", service_name)
-                return ServiceStatus.UNKNOWN
+                return DiscoveryHealth.UNKNOWN
             service = self.services[service_name]
             consecutive_failures = service.consecutive_failures
             last_check = service.last_check
@@ -417,9 +417,9 @@ class ServiceDiscovery:
         except Exception as e:
             await self._update_service_error_status(service, str(e), time.time() - start_time)
             logger.error("Health check error for %s: %s", service_name, e)
-            return ServiceStatus.UNHEALTHY
+            return DiscoveryHealth.UNHEALTHY
 
-    async def _check_http_service(self, service: ServiceEndpoint) -> ServiceStatus:
+    async def _check_http_service(self, service: ServiceEndpoint) -> DiscoveryHealth:
         """Check HTTP-based service health (Issue #315: refactored for reduced nesting)."""
         try:
             async with await self._http_client.get(
@@ -428,13 +428,13 @@ class ServiceDiscovery:
                 return await self._evaluate_http_response(response, service)
 
         except asyncio.TimeoutError:
-            return ServiceStatus.UNHEALTHY
+            return DiscoveryHealth.UNHEALTHY
         except aiohttp.ClientError:
-            return ServiceStatus.UNHEALTHY
+            return DiscoveryHealth.UNHEALTHY
 
     async def _evaluate_http_response(
         self, response: aiohttp.ClientResponse, service: ServiceEndpoint
-    ) -> ServiceStatus:
+    ) -> DiscoveryHealth:
         """Evaluate HTTP response and determine service status (Issue #315: extracted).
 
         Args:
@@ -442,12 +442,12 @@ class ServiceDiscovery:
             service: Service endpoint to update with metadata
 
         Returns:
-            ServiceStatus based on response
+            DiscoveryHealth based on response
         """
         if response.status != 200:
             if response.status in SERVICE_UNAVAILABLE_HTTP_CODES:
-                return ServiceStatus.DEGRADED  # Temporary issues
-            return ServiceStatus.UNHEALTHY
+                return DiscoveryHealth.DEGRADED  # Temporary issues
+            return DiscoveryHealth.UNHEALTHY
 
         # Try to parse response for additional health info
         try:
@@ -459,9 +459,9 @@ class ServiceDiscovery:
         except Exception:
             logger.debug("Suppressed exception in try block", exc_info=True)
 
-        return ServiceStatus.HEALTHY
+        return DiscoveryHealth.HEALTHY
 
-    async def _check_tcp_service(self, service: ServiceEndpoint) -> ServiceStatus:
+    async def _check_tcp_service(self, service: ServiceEndpoint) -> DiscoveryHealth:
         """Check TCP-based service health (e.g., Redis)
 
         NOTE: This method uses direct Redis instantiation intentionally
@@ -492,7 +492,7 @@ class ServiceDiscovery:
                 pong = await client.ping()
                 await client.close()
 
-                return ServiceStatus.HEALTHY if pong else ServiceStatus.UNHEALTHY
+                return DiscoveryHealth.HEALTHY if pong else DiscoveryHealth.UNHEALTHY
 
             else:
                 # Generic TCP connection test
@@ -502,10 +502,10 @@ class ServiceDiscovery:
                 )
                 writer.close()
                 await writer.wait_closed()
-                return ServiceStatus.HEALTHY
+                return DiscoveryHealth.HEALTHY
 
         except Exception:
-            return ServiceStatus.UNHEALTHY
+            return DiscoveryHealth.UNHEALTHY
 
     async def get_service_url(self, service_name: str) -> str | None:
         """Get service URL with automatic failover (thread-safe)"""
@@ -524,7 +524,7 @@ class ServiceDiscovery:
     async def get_healthy_services(self) -> List[str]:
         """Get list of currently healthy services (thread-safe)"""
         async with self._lock:
-            return [name for name, service in self.services.items() if service.status == ServiceStatus.HEALTHY]
+            return [name for name, service in self.services.items() if service.status == DiscoveryHealth.HEALTHY]
 
     def _format_service_data(self, service_data: dict) -> dict:
         """Format service data for summary output."""
@@ -538,12 +538,12 @@ class ServiceDiscovery:
             "error": service_data["error"],
         }
 
-    def _update_status_counters(self, status: ServiceStatus, summary: dict) -> None:
+    def _update_status_counters(self, status: DiscoveryHealth, summary: dict) -> None:
         """Update summary status counters based on service status."""
         counter_map = {
-            ServiceStatus.HEALTHY: "healthy",
-            ServiceStatus.DEGRADED: "degraded",
-            ServiceStatus.UNHEALTHY: "unhealthy",
+            DiscoveryHealth.HEALTHY: "healthy",
+            DiscoveryHealth.DEGRADED: "degraded",
+            DiscoveryHealth.UNHEALTHY: "unhealthy",
         }
         key = counter_map.get(status, "unknown")
         summary[key] += 1
@@ -594,7 +594,7 @@ class ServiceDiscovery:
 
         while time.time() - start_time < timeout:
             status = await self.check_service_health(service_name)
-            if status == ServiceStatus.HEALTHY:
+            if status == DiscoveryHealth.HEALTHY:
                 return True
 
             await asyncio.sleep(ServiceDiscoveryConfig.SERVICE_WAIT_INTERVAL_S)
@@ -620,7 +620,7 @@ class ServiceDiscovery:
                 ready_services = [
                     name
                     for name in required_services
-                    if name in self.services and self.services[name].status == ServiceStatus.HEALTHY
+                    if name in self.services and self.services[name].status == DiscoveryHealth.HEALTHY
                 ]
 
             if len(ready_services) == len(required_services):
@@ -644,12 +644,12 @@ async def get_service_url(service_name: str) -> str | None:
     return await service_discovery.get_service_url(service_name)
 
 
-async def check_service_health(service_name: str) -> ServiceStatus:
+async def check_service_health(service_name: str) -> DiscoveryHealth:
     """Check specific service health - backward compatible function"""
     return await service_discovery.check_service_health(service_name)
 
 
-async def get_all_service_health() -> Dict[str, ServiceStatus]:
+async def get_all_service_health() -> Dict[str, DiscoveryHealth]:
     """Get health status of all services - backward compatible function"""
     return await service_discovery.check_all_services()
 

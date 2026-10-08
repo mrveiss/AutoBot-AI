@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from api.websocket import ws_manager
-from models.database import Node, Service, ServiceStatus
+from models.database import Node, Service, SystemdState
 from models.schemas import ServiceActionRequest
 from services.ansible_utils import summarize_playbook_failure
 from services.auth import get_current_user
@@ -177,7 +177,7 @@ async def _per_node_systemd_action(
         )
         svc = svc_result.scalar_one_or_none()
         if svc:
-            new_status = ServiceStatus.STOPPED.value if action == "stop" else ServiceStatus.RUNNING.value
+            new_status = SystemdState.STOPPED.value if action == "stop" else SystemdState.RUNNING.value
             svc.status = new_status
             await db.commit()
 
@@ -814,7 +814,7 @@ async def start_fleet_service(
         "start",
         services,
         nodes,
-        ServiceStatus.RUNNING.value,
+        SystemdState.RUNNING.value,
         "active",
         "running",
     )
@@ -848,7 +848,7 @@ async def stop_fleet_service(
         "stop",
         services,
         nodes,
-        ServiceStatus.STOPPED.value,
+        SystemdState.STOPPED.value,
         "inactive",
         "dead",
     )
@@ -882,7 +882,7 @@ async def restart_fleet_service(
         "restart",
         services,
         nodes,
-        ServiceStatus.RUNNING.value,
+        SystemdState.RUNNING.value,
         "active",
         "running",
     )

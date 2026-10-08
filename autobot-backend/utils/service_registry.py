@@ -45,7 +45,7 @@ from autobot_shared.logging_manager import get_logger
 from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH, PATH_OLLAMA_TAGS
 
 
-class ServiceStatus(Enum):
+class RegistryServiceStatus(Enum):
     """Service health status"""
 
     HEALTHY = "healthy"
@@ -84,7 +84,7 @@ class ServiceConfig:
 class ServiceHealth:
     """Service health state"""
 
-    status: ServiceStatus
+    status: RegistryServiceStatus
     last_check: float
     failure_count: int = 0
     circuit_open_until: float = 0
@@ -251,7 +251,7 @@ class ServiceRegistry:
             )
 
             self.services[service_name] = service_config
-            self.health_status[service_name] = ServiceHealth(status=ServiceStatus.UNKNOWN, last_check=0)
+            self.health_status[service_name] = ServiceHealth(status=RegistryServiceStatus.UNKNOWN, last_check=0)
 
     def _resolve_host(self, service_name: str) -> str:
         """Resolve hostname based on deployment mode and service"""
@@ -378,7 +378,7 @@ class ServiceRegistry:
     def register_service(self, service_config: ServiceConfig):
         """Register a new service"""
         self.services[service_config.name] = service_config
-        self.health_status[service_config.name] = ServiceHealth(status=ServiceStatus.UNKNOWN, last_check=0)
+        self.health_status[service_config.name] = ServiceHealth(status=RegistryServiceStatus.UNKNOWN, last_check=0)
         self.logger.info("Registered service: %s", service_config.name)
 
     async def check_service_health(self, service_name: str) -> ServiceHealth:
@@ -392,7 +392,7 @@ class ServiceRegistry:
         # Check if circuit breaker is open
         current_time = time.time()
         if health.circuit_open_until > current_time:
-            health.status = ServiceStatus.CIRCUIT_OPEN
+            health.status = RegistryServiceStatus.CIRCUIT_OPEN
             return health
 
         try:
@@ -407,21 +407,21 @@ class ServiceRegistry:
                 health.response_time = time.time() - start_time
 
                 if response.status == 200:
-                    health.status = ServiceStatus.HEALTHY
+                    health.status = RegistryServiceStatus.HEALTHY
                     health.failure_count = 0
                 else:
-                    health.status = ServiceStatus.UNHEALTHY
+                    health.status = RegistryServiceStatus.UNHEALTHY
                     health.failure_count += 1
 
         except Exception as e:
             self.logger.warning("Health check failed for %s: %s", service_name, e)
-            health.status = ServiceStatus.UNHEALTHY
+            health.status = RegistryServiceStatus.UNHEALTHY
             health.failure_count += 1
 
         # Update circuit breaker
         if health.failure_count >= service.circuit_breaker_threshold:
             health.circuit_open_until = current_time + service.circuit_breaker_timeout
-            health.status = ServiceStatus.CIRCUIT_OPEN
+            health.status = RegistryServiceStatus.CIRCUIT_OPEN
             self.logger.error("Circuit breaker opened for %s", service_name)
 
         health.last_check = current_time
@@ -440,7 +440,9 @@ class ServiceRegistry:
         for i, service_name in enumerate(self.services):
             if isinstance(results[i], Exception):
                 self.logger.error(f"Health check error for {service_name}: {results[i]}")
-                health_report[service_name] = ServiceHealth(status=ServiceStatus.UNHEALTHY, last_check=time.time())
+                health_report[service_name] = ServiceHealth(
+                    status=RegistryServiceStatus.UNHEALTHY, last_check=time.time()
+                )
             else:
                 health_report[service_name] = results[i]
 
@@ -448,7 +450,7 @@ class ServiceRegistry:
 
     def get_service_health(self, service_name: str) -> ServiceHealth:
         """Get cached health status for a service"""
-        return self.health_status.get(service_name, ServiceHealth(status=ServiceStatus.UNKNOWN, last_check=0))
+        return self.health_status.get(service_name, ServiceHealth(status=RegistryServiceStatus.UNKNOWN, last_check=0))
 
     def is_service_healthy(self, service_name: str, max_age: int = 60) -> bool:
         """Check if service is healthy (with cache age limit)"""
@@ -458,7 +460,7 @@ class ServiceRegistry:
         if time.time() - health.last_check > max_age:
             return False
 
-        return health.status == ServiceStatus.HEALTHY
+        return health.status == RegistryServiceStatus.HEALTHY
 
     def get_deployment_info(self) -> Dict[str, Any]:
         """Get deployment information"""

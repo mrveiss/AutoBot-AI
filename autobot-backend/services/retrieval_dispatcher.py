@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, List, Tuple
 from autobot_shared.logging_manager import get_llm_logger
 
 if TYPE_CHECKING:
-    from advanced_rag_optimizer import RAGMetrics, SearchResult
+    from advanced_rag_optimizer import RAGMetrics, RankedResult
     from services.cag_service import CAGService
     from services.graph_rag_service import GraphRAGService
     from services.rag_config import RAGConfig
@@ -77,8 +77,8 @@ def select_strategy(mode: str, config: "RAGConfig", collection_mode: str | None 
     return "rag"
 
 
-def _build_kag_context(results: List["SearchResult"]) -> str:
-    """Assemble a context string from graph-aware SearchResult list.
+def _build_kag_context(results: List["RankedResult"]) -> str:
+    """Assemble a context string from graph-aware RankedResult list.
 
     Mirrors RAG context assembly: ordered, provenance-headed blocks.
     """

@@ -164,8 +164,8 @@ class CacheOpportunity:
 
 
 @dataclass
-class OptimizationRecommendation:
-    """Optimization recommendation"""
+class LLMPatternRecommendation:
+    """A saving found in live prompt traffic, keyed to a count of prompts."""
 
     type: OptimizationType
     title: str

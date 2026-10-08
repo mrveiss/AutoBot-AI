@@ -34,8 +34,56 @@ ceiling="${ceiling#"${ceiling%%[![:space:]]*}"}"   # trim leading
 ceiling="${ceiling%"${ceiling##*[![:space:]]}"}"   # trim trailing -- OUTER only, so "9 0" stays "9 0" and is rejected
 [[ "$ceiling" =~ ^[0-9]+$ ]] || fail "ceiling '${ceiling_values[0]}' in $CEILING_FILE is not a number"
 
+# THE REF UNDER TEST, not the default branch (#18065). Without a `ref` the API
+# answers for the DEFAULT BRANCH, so this gate counted main's backlog whatever
+# the pull request contained. That made it unable to validate the one thing it
+# demands: a PR that removes an alert still read main's count and still failed,
+# so the only way to go green was to be merged already. Three fixes were
+# attempted against a check that could not see any of them.
+#
+# On a `pull_request` run GITHUB_REF is `refs/pull/<n>/merge`, which is the ref
+# CodeQL uploads a PR analysis against; on a push it is `refs/heads/<branch>`.
+# ALERT_REF overrides both, for local runs and for the tests.
+ALERT_REF="${ALERT_REF:-${GITHUB_REF:-}}"
+
+alerts_query="repos/${REPO}/code-scanning/alerts?state=open&per_page=100"
+if [ -n "$ALERT_REF" ]; then
+  # FAIL CLOSED ON AN UNSCANNED REF. An empty alert list is returned both for
+  # "scanned, nothing found" and for "never scanned", and this script exists
+  # because those must not share a green tick. So the analysis must be shown to
+  # EXIST before a 0 from that ref is believed.
+  analyses_json=$(gh api "repos/${REPO}/code-scanning/analyses?ref=${ALERT_REF}&per_page=100" 2>/dev/null) \
+    || fail "could not read code-scanning analyses for ${ALERT_REF} (token scope, or the API errored)"
+  # "An analysis exists for this ref" was NOT enough, and that was a fail-open in
+  # the first version of this scoping. A pull request ref keeps its analyses when
+  # a new commit lands, so a STALE scan of the previous commit satisfied it; and
+  # any other tool uploading SARIF to the same ref satisfied it too. Both let the
+  # gate count alerts that do not describe the commit under test.
+  #
+  # So the analysis must be CodeQL's AND must name the commit being tested.
+  # GITHUB_SHA on a `pull_request` run is the merge-ref commit the analysis is
+  # recorded against, which is what makes this comparable.
+  analyses_count=$(printf '%s' "$analyses_json" | jq -e --arg sha "${GITHUB_SHA:-}" '
+    if type != "array" then error("expected an array of analyses")
+    elif $sha == "" then [.[] | select(.tool.name == "CodeQL")] | length
+    else [.[] | select(.tool.name == "CodeQL" and .commit_sha == $sha)] | length
+    end
+  ' 2>/dev/null)
+  [[ "$analyses_count" =~ ^[0-9]+$ ]] \
+    || fail "the analyses API did not return a list for ${ALERT_REF} (an error body, or an empty response)"
+  if [ -z "${GITHUB_SHA:-}" ]; then
+    printf '[codeql-ceiling] GITHUB_SHA unset — the analysis commit is NOT verified\n'
+  fi
+  [ "$analyses_count" -gt 0 ] \
+    || fail "no CodeQL analysis for ${ALERT_REF}${GITHUB_SHA:+ at commit ${GITHUB_SHA}} — refusing to report 0 open alerts for a ref that was never scanned (a stale or non-CodeQL analysis does not count)"
+  alerts_query="${alerts_query}&ref=${ALERT_REF}"
+  printf '[codeql-ceiling] counting alerts on %s\n' "$ALERT_REF"
+else
+  printf '[codeql-ceiling] no ref available — counting the default branch\n'
+fi
+
 # --paginate: the API caps a page at 100, and the count is the whole point.
-open_json=$(gh api --paginate "repos/${REPO}/code-scanning/alerts?state=open&per_page=100" 2>/dev/null) \
+open_json=$(gh api --paginate "$alerts_query" 2>/dev/null) \
   || fail "could not read code-scanning alerts for ${REPO} (token missing the security-events scope, or the API errored)"
 
 # Every page must BE an array before anything is counted. `jq -s 'add | length'`

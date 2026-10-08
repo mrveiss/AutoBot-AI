@@ -22,7 +22,7 @@ import json
 import sys
 import time
 
-from .service_registry import ServiceStatus, get_service_registry, get_service_url
+from .service_registry import RegistryServiceStatus, get_service_registry, get_service_url
 
 
 def print_header(title: str):
@@ -75,14 +75,14 @@ async def cmd_health(args):
         total_count = len(health_results)
 
         for service, health in health_results.items():
-            if health.status == ServiceStatus.HEALTHY:
+            if health.status == RegistryServiceStatus.HEALTHY:
                 print_status("success", f"{service:15} → {health.status.value}")
                 if hasattr(health, "response_time") and health.response_time > 0:
                     print(
                         f"{'':18}Response time: {health.response_time:.3f}s"
                     )  # noqa: print  # canonical: ignore py-print-smoke
                 healthy_count += 1
-            elif health.status == ServiceStatus.CIRCUIT_OPEN:
+            elif health.status == RegistryServiceStatus.CIRCUIT_OPEN:
                 print_status("error", f"{service:15} → Circuit breaker OPEN")
             else:
                 print_status("error", f"{service:15} → {health.status.value}")
@@ -159,7 +159,7 @@ async def cmd_test_service(args):
         # Check health
         health = await registry.check_service_health(args.service)
 
-        if health.status == ServiceStatus.HEALTHY:
+        if health.status == RegistryServiceStatus.HEALTHY:
             print_status("success", "Service is healthy")
             if hasattr(health, "response_time") and health.response_time > 0:
                 print(
@@ -168,7 +168,7 @@ async def cmd_test_service(args):
         else:
             print_status("error", f"Service is {health.status.value}")
 
-        return 0 if health.status == ServiceStatus.HEALTHY else 1
+        return 0 if health.status == RegistryServiceStatus.HEALTHY else 1
 
     except Exception as e:
         print_status("error", f"Test failed: {e}")
