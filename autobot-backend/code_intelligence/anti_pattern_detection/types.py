@@ -14,6 +14,15 @@ Part of Issue #381 - God Class Refactoring
 import re
 from enum import Enum
 
+# AntiPatternType is deliberately NOT defined here.  GH#6757 made
+# ``code_analysis.src.anti_pattern_detector.AntiPatternType`` the canonical SSOT and
+# merged this package's members into it, but this module kept a diverged 19-member
+# copy -- so the name resolved to two distinct Enum classes depending on the import
+# path (the ``anti_pattern_detector`` facade vs this package) and members compared
+# unequal across that boundary.  Re-exported so ``from .types import AntiPatternType``
+# keeps working for every detector in this package.
+from code_analysis.src.anti_pattern_detector import AntiPatternType  # noqa: F401
+
 
 class AntiPatternSeverity(Enum):
     """Severity levels for anti-patterns."""
@@ -23,39 +32,6 @@ class AntiPatternSeverity(Enum):
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
-
-
-class AntiPatternType(Enum):
-    """Types of anti-patterns detected."""
-
-    # Bloaters
-    GOD_CLASS = "god_class"
-    LONG_METHOD = "long_method"
-    LONG_PARAMETER_LIST = "long_parameter_list"
-    LARGE_FILE = "large_file"
-    DEEP_NESTING = "deep_nesting"
-    DATA_CLUMPS = "data_clumps"
-
-    # Couplers
-    CIRCULAR_DEPENDENCY = "circular_dependency"
-    FEATURE_ENVY = "feature_envy"
-    MESSAGE_CHAINS = "message_chains"
-    INAPPROPRIATE_INTIMACY = "inappropriate_intimacy"
-
-    # Dispensables
-    DEAD_CODE = "dead_code"
-    DUPLICATE_ABSTRACTION = "duplicate_abstraction"
-    LAZY_CLASS = "lazy_class"
-    SPECULATIVE_GENERALITY = "speculative_generality"
-
-    # Naming Issues
-    INCONSISTENT_NAMING = "inconsistent_naming"
-    SINGLE_LETTER_VARIABLE = "single_letter_variable"
-    MAGIC_NUMBER = "magic_number"
-
-    # Other
-    COMPLEX_CONDITIONAL = "complex_conditional"
-    MISSING_DOCSTRING = "missing_docstring"
 
 
 # ============================================================================

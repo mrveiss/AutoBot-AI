@@ -1604,7 +1604,9 @@
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "סריקת הכפילויות לא רצה, ולכן זו אינה תוצאה. בדוק את מקור הקוד שנבחר והפעל את הסריקה שוב.",
+      "notScanned": "עדיין לא הורצה סריקת כפילויות עבור מקור קוד זה."
     },
     "hardcodes": {
       "title": "ערכים קשיחים",
@@ -5996,7 +5998,44 @@
       "deleteCredential": "Delete Credential",
       "username": "Username",
       "transferBtn": "Transfer",
-      "sshKeyHint": "Paste your entire private key including BEGIN/END markers"
+      "sshKeyHint": "Paste your entire private key including BEGIN/END markers",
+      "categories": {
+        "api_key": "מפתחות API",
+        "token": "אסימוני גישה",
+        "oauth_refresh_token": "אסימוני רענון OAuth",
+        "connector_oauth_token": "אסימוני מחברים",
+        "password": "סיסמאות",
+        "ssh_key": "מפתחות SSH",
+        "infrastructure_host": "מארחי תשתית",
+        "database_url": "מסדי נתונים",
+        "certificate": "אישורים",
+        "other": "אחר"
+      },
+      "kinds": {
+        "api_key": "מפתח API",
+        "token": "אסימון גישה",
+        "oauth_refresh_token": "אסימון רענון OAuth",
+        "connector_oauth_token": "אסימון מחבר",
+        "password": "סיסמה",
+        "ssh_key": "מפתח SSH",
+        "infrastructure_host": "מארח תשתית",
+        "database_url": "מסד נתונים",
+        "certificate": "אישור",
+        "other": "אחר"
+      },
+      "templates": {
+        "openaiDesc": "גישה ל-API של GPT",
+        "anthropicDesc": "גישה ל-API של Claude",
+        "awsDesc": "שירותי הענן של אמזון",
+        "githubDesc": "אסימון אישי של GitHub",
+        "postgresDesc": "חיבור למסד נתונים",
+        "redisDesc": "חיבור ל-Redis",
+        "sshLabel": "מפתח SSH",
+        "sshDesc": "גישה לשרת",
+        "slackDesc": "אסימון בוט של Slack",
+        "serverLabel": "מארח שרת",
+        "serverDesc": "גישה לשרת SSH/VNC"
+      }
     },
     "threatDashboard": {
       "checking": "Checking...",

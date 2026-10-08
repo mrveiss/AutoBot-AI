@@ -182,6 +182,7 @@
       <!-- Duplicate Code Analysis (#1469, #184) -->
       <DuplicatesSection
         :duplicates="duplicateAnalysis"
+        :scan-state="duplicateScanState"
         :loading="loadingProgress.duplicates"
         @export="(fmt: string) => exportSection('duplicates', fmt as 'md' | 'json')"
       />
@@ -574,6 +575,7 @@ const {
   codebaseStats,
   problemsReport,
   duplicateAnalysis,
+  duplicateScanState,
   declarationAnalysis,
   hardcodeAnalysis,
   loadingProgress,
