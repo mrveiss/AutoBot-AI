@@ -10,7 +10,6 @@
     "AgentStatus",
     "AgentType",
     "AlertRule",
-    "AntiPatternDetector",
     "ApiKeyAuth",
     "ApprovalDecision",
     "AsyncSQLiteConnectionPool",

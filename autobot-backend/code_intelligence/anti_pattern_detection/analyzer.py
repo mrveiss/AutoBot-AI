@@ -54,12 +54,12 @@ except ImportError:
 logger = get_logger(__name__)
 
 
-class AntiPatternDetector(SemanticAnalysisMixin):
+class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
     """
-    Detects code anti-patterns and smells in Python code.
+    Runs the suite of category detectors over a file or a directory tree.
 
-    Uses AST parsing to analyze code structure and identify common
-    anti-patterns that indicate potential code quality issues.
+    Not the canonical ``AntiPatternDetector`` (``code_analysis.src``, GH#6757),
+    which owns the per-file/cross-file rules; this one held that name until #12771.
 
     Issue #554: Now includes optional semantic analysis via ChromaDB/Redis/LLM
     infrastructure for detecting semantically similar anti-patterns.
@@ -728,7 +728,7 @@ def analyze_codebase(
     Returns:
         AnalysisReport with all detected anti-patterns
     """
-    detector = AntiPatternDetector(
+    detector = AntiPatternSuiteAnalyzer(
         exclude_dirs=exclude_dirs,
         detect_circular=detect_circular,
         detect_naming=detect_naming,
@@ -760,7 +760,7 @@ async def analyze_codebase_async(
     Returns:
         Dictionary with analysis results including semantic matches
     """
-    detector = AntiPatternDetector(
+    detector = AntiPatternSuiteAnalyzer(
         exclude_dirs=exclude_dirs,
         detect_circular=detect_circular,
         detect_naming=detect_naming,

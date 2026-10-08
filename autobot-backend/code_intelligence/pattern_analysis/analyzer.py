@@ -43,7 +43,7 @@ except ImportError:
     logger.warning("Fingerprinting module not available")
 
 try:
-    from code_intelligence.anti_pattern_detection import AntiPatternDetector
+    from code_intelligence.anti_pattern_detection import AntiPatternSuiteAnalyzer
 
     ANTI_PATTERN_AVAILABLE = True
 except ImportError:
@@ -128,7 +128,7 @@ class CodePatternAnalyzer:
             CloneDetector(exclude_dirs=list(self.exclude_dirs)) if self.enable_clone_detection else None
         )
         self._anti_pattern_detector = (
-            AntiPatternDetector(exclude_dirs=list(self.exclude_dirs)) if self.enable_anti_pattern_detection else None
+            AntiPatternSuiteAnalyzer(exclude_dirs=[*self.exclude_dirs]) if self.enable_anti_pattern_detection else None
         )
         self._regex_detector = (
             RegexPatternDetector(exclude_dirs=self.exclude_dirs) if self.enable_regex_detection else None
