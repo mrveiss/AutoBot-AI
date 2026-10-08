@@ -570,10 +570,10 @@ SPECIFIC_REASONS: dict[BaselineKey, str] = {
 # label reproduces the stored hashed_secret).
 _SECRETS_CATEGORY_LABELS = (
     ("ar", "d27284876a7b732ef49257da961c9359499c51cf", "api_key", "مفاتيح API"),  # pragma: allowlist secret
-    ("es", "5de6e06c5bcb3cc07690af0096b73df4bb060e51", "api_key", "Claves de API"),  # pragma: allowlist secret
+    ("es", "7c679565756b2a3e6eb3cc6753e7c3055242f92f", "api_key", "Claves API"),  # pragma: allowlist secret
     ("fa", "1ab08a21b8d719b395908b421d08bfff87c8bb54", "api_key", "کلیدهای API"),  # pragma: allowlist secret
     ("he", "6fd45fcadd7fb7acb7022e777547f47c53b18d7f", "api_key", "מפתחות API"),  # pragma: allowlist secret
-    ("pt", "5476ca656516c77b4fd2f3b209f3a56ce4838a6e", "api_key", "Chaves de API"),  # pragma: allowlist secret
+    ("pt", "21cccea267c9ccd2bce0a45a783d54fe59233b3a", "api_key", "Chaves API"),  # pragma: allowlist secret
     ("pt", "e33dc67583b5ca424d6ec11b74ceee559d2aba6c", "password", "Senhas"),  # pragma: allowlist secret
     ("ur", "93ed2b9190fc912659d2145123a9c319963da152", "api_key", "API کلیدیں"),  # pragma: allowlist secret
 )

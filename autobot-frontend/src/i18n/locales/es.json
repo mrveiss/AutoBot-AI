@@ -838,7 +838,7 @@
       "statusMissing": "Missing",
       "summaryDescription": "Review your API key configuration before saving.",
       "statusSkipped": "Skipped (optional)",
-      "stepKeys": "API Keys",
+      "stepKeys": "Claves API",
       "selectRolesDescription": "Select the roles deployed on your nodes to see which API keys are needed."
     },
     "connection": {
@@ -6847,7 +6847,7 @@
       "timeDaysAgo": "{count}d ago",
       "timeInDays": "in {count}d",
       "categories": {
-        "api_key": "Claves de API",
+        "api_key": "Claves API",
         "token": "Tokens de acceso",
         "oauth_refresh_token": "Tokens de actualización OAuth",
         "connector_oauth_token": "Tokens de conectores",
