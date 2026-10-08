@@ -158,7 +158,11 @@ async def test_get_chat_sessions_reaches_the_chat_history_manager() -> None:
     app = SimpleNamespace(state=SimpleNamespace(chat_history_manager=manager))
     result = await get_chat_sessions(app)
     assert result == {"sessions": []}
-    manager._get_chats_directory.assert_called(), "never reached app.state.chat_history_manager"
+    # Reaching the mock at all is the proof: the probe directory does not exist, so a
+    # pre-fix ModuleNotFoundError died before app.state was ever touched. `assert_called()`
+    # takes no message, so this rationale is a comment -- as a trailing string it built a
+    # tuple that was evaluated and discarded, which read like an assertion message.
+    manager._get_chats_directory.assert_called()
 
 
 @pytest.mark.asyncio
