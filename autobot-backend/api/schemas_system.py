@@ -3519,6 +3519,18 @@ class SecretModel(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.now)
     expires_at: datetime | None = None
     metadata: Metadata = Field(default_factory=dict)
+    # #13051: SecretCreateRequest has accepted these four since #685 and the
+    # response could not express any of them, so a caller set ownership and got
+    # a body back that looked as if they had not. They are *descriptive* --
+    # self-asserted by the request body, never resolved from the authenticated
+    # principal -- so nothing may authorize on them while that is true; the
+    # legacy store gates on `scope`/`chat_id` alone (api/secrets.py
+    # get_secret/list_secrets) and `secrets_ownership_fields_13051_test.py`
+    # fails if that changes. Real enforcement is #16450 / umbrella #10088.
+    owner_id: str | None = None
+    org_id: str | None = None
+    team_ids: List[str] = Field(default_factory=list)
+    shared_with: List[str] = Field(default_factory=list)
 
 
 class SecretCreateRequest(BaseModel):
@@ -3591,6 +3603,10 @@ class SecretCreateRequest(BaseModel):
             tags=self.tags,
             expires_at=self.expires_at,
             metadata=self.metadata,
+            owner_id=self.owner_id,
+            org_id=self.org_id,
+            team_ids=self.team_ids,
+            shared_with=self.shared_with,
         )
 
     def is_chat_scoped(self) -> bool:

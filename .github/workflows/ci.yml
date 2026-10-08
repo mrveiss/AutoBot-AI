@@ -138,9 +138,53 @@ jobs:
   # verify-generated-types, auto-fix-generated-types and auto-update use that).
   # Six concurrent shards therefore cost the self-hosted queue nothing — which
   # is what makes a matrix safe here and was the original #10691 objection.
+  # #18102: fetch the CI system packages ONCE per run, not once per shard.
+  #
+  # The twelve shards each ran the same ~100MB apt fetch, so one run made the same
+  # download up to twelve times and a different shard drew the slow mirror every time --
+  # four reds on 2026-10-08 (shards 4, 1, 2, 6), each burning ~16 minutes and reporting
+  # red having run no tests. Exposure is now one fetch per run instead of twelve, and a
+  # provisioning failure is a single named job rather than a random 1-of-12 shard red.
+  #
+  # This job runs the setup action UNCHANGED rather than carrying its own copy of the apt
+  # retry logic -- a second copy of that is the kind of fork the repo is trying to retire.
+  # Running the whole action also warms the venv cache the shards read, so the redundant
+  # work is not wasted.
+  provision-packages:
+    name: provision-packages
+    needs: changes
+    if: ${{ (needs.changes.outputs.python == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v7
+
+    - uses: ./.github/actions/setup-python-suite
+
+    - name: "Collect the downloaded .debs for the shards (#18102)"
+      shell: bash
+      run: |
+        set -euo pipefail
+        dest="${RUNNER_TEMP}/apt-debs"
+        mkdir -p "$dest"
+        # An empty archive cache means the runner image already carried the binaries, so
+        # the shards will find them too and their own early-out applies. Not a failure.
+        if ! sudo cp /var/cache/apt/archives/*.deb "$dest"/ 2>/dev/null; then
+          echo "::notice title=no .debs to share::the image already provides ffmpeg/tesseract (#18102)"
+        fi
+        sudo chown -R "$(id -u):$(id -g)" "$dest"
+        echo "collected $(find "$dest" -maxdepth 1 -name '*.deb' | wc -l) .deb(s)"
+
+    - uses: actions/upload-artifact@v7.0.1
+      with:
+        name: ci-apt-debs
+        path: ${{ runner.temp }}/apt-debs
+        retention-days: 1
+        if-no-files-found: ignore
+
   python-shard:
     name: python-suite shard ${{ matrix.shard }}/12
-    needs: changes
+    needs: [changes, provision-packages]
     if: ${{ (needs.changes.outputs.python == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
     # #16320: first in, first out across PRs.
@@ -227,6 +271,16 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
+
+    # #18102: the .debs provision-packages already fetched. The setup action installs from
+    # this directory with --no-download when it exists, so a shard does no network fetch.
+    # `continue-on-error` keeps the suite alive if the artifact is missing: the action
+    # falls back to fetching, which is exactly its behaviour for coverage.yml.
+    - uses: actions/download-artifact@v8
+      continue-on-error: true
+      with:
+        name: ci-apt-debs
+        path: ${{ runner.temp }}/apt-debs
 
     - uses: ./.github/actions/setup-python-suite
       # #16394: named so the SLM venv's own path (the `slm-venv` output) is

@@ -25,6 +25,7 @@ arbitrary file write hid among them.
 
 from __future__ import annotations
 
+import pytest
 import yaml
 from repo_tests._paths import repo_root
 
@@ -171,6 +172,13 @@ def test_the_gate_is_not_soft_failed():
 
 _SCRIPT_SRC = _SCRIPT.read_text(encoding="utf-8")
 
+#: Check-runs on a commit CodeQL never ran for -- the paths filter excluded it (#18105).
+_CHECKS_WITHOUT_CODEQL = '{"check_runs":[{"name":"python-suite"},{"name":"code-quality"}]}'
+#: codeql.yml's own job name.
+_CHECKS_WORKFLOW_JOB = '{"check_runs":[{"name":"Analyze (python)"},{"name":"python-suite"}]}'
+#: GitHub's code-scanning status check, which codeql.yml does not name.
+_CHECKS_PLATFORM = '{"check_runs":[{"name":"CodeQL"},{"name":"python-suite"}]}'
+
 
 # ---------------------------------------------------------------------------
 # CONTRAST PAIR, driving the SCRIPT with stubbed API responses (#18065).
@@ -186,7 +194,15 @@ import stat
 import subprocess
 
 
-def _fake_gh(tmp_path, *, analyses: str, alerts: str, alerts_unscoped: str | None = None) -> pathlib.Path:
+def _fake_gh(
+    tmp_path,
+    *,
+    analyses: str,
+    alerts: str,
+    alerts_unscoped: str | None = None,
+    checks: str = _CHECKS_WITHOUT_CODEQL,
+    checks_fail: bool = False,
+) -> pathlib.Path:
     """A `gh` answering the two endpoints this gate calls, and nothing else.
 
     It DISTINGUISHES a ref-scoped alerts query from an unscoped one. That is the
@@ -202,9 +218,19 @@ def _fake_gh(tmp_path, *, analyses: str, alerts: str, alerts_unscoped: str | Non
     script = bin_dir / "gh"
     script.write_text(
         "#!/usr/bin/env bash\n"
+        # The check-runs call is the only one made with `--jq`, so the filter is pulled
+        # out and applied with real jq (#18105). Returning a pre-reduced number instead
+        # would leave the matcher itself untested, which is the half that can be wrong:
+        # it must catch GitHub's own `CodeQL` status check AND codeql.yml's
+        # `Analyze (<language>)` / `Detect changed languages` jobs.
+        'JQF=""; prev=""\n'
+        'for a in "$@"; do [ "$prev" = "--jq" ] && JQF="$a"; prev="$a"; done\n'
         'for a in "$@"; do\n'
         '  case "$a" in\n'
         f"    *code-scanning/analyses*) printf '%s' '{analyses}'; exit 0 ;;\n"
+        f"    *check-runs*) {'exit 1' if checks_fail else 'true'}\n"
+        f"      if [ -n \"$JQF\" ]; then printf '%s' '{checks}' | jq -r \"$JQF\"; else printf '%s' '{checks}'; fi\n"
+        "      exit 0 ;;\n"
         f"    *code-scanning/alerts*ref=*) printf '%s' '{alerts}'; exit 0 ;;\n"
         f"    *code-scanning/alerts*)   printf '%s' '{unscoped}'; exit 0 ;;\n"
         "  esac\n"
@@ -217,9 +243,23 @@ def _fake_gh(tmp_path, *, analyses: str, alerts: str, alerts_unscoped: str | Non
 
 
 def _run_gate(
-    tmp_path, *, analyses: str, alerts: str, sha: str = "cafe1234", alerts_unscoped: str | None = None
+    tmp_path,
+    *,
+    analyses: str,
+    alerts: str,
+    sha: str = "cafe1234",
+    alerts_unscoped: str | None = None,
+    checks: str = _CHECKS_WITHOUT_CODEQL,
+    checks_fail: bool = False,
 ) -> int:
-    bin_dir = _fake_gh(tmp_path, analyses=analyses, alerts=alerts, alerts_unscoped=alerts_unscoped)
+    bin_dir = _fake_gh(
+        tmp_path,
+        analyses=analyses,
+        alerts=alerts,
+        alerts_unscoped=alerts_unscoped,
+        checks=checks,
+        checks_fail=checks_fail,
+    )
     env = dict(os.environ)
     env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
     env["ALERT_REF"] = "refs/pull/1/merge"
@@ -242,9 +282,39 @@ def test_the_gate_passes_with_a_codeql_analysis_of_the_commit_and_no_alerts(tmp_
     assert _run_gate(tmp_path, analyses=_CODEQL_AT_SHA, alerts=_NO_ALERTS) == 0
 
 
-def test_the_gate_stops_when_no_analysis_exists_for_the_ref(tmp_path):
-    """SHOULD trip: 0 alerts from an unscanned ref is 'could not look', not 'clean'."""
-    assert _run_gate(tmp_path, analyses="[]", alerts=_NO_ALERTS) == 1
+def test_nothing_scanned_the_ref_and_codeql_never_ran_falls_back_to_the_default_branch(tmp_path):
+    """SHOULD NOT trip (#18105): CodeQL does not run on a change it does not scan.
+
+    This case used to fail, and it made `code-quality` — a REQUIRED check —
+    unpassable for every dependency-only and docs-only PR. codeql.yml's
+    `pull_request` trigger carries a `paths` filter, so #18105 (a two-line
+    requirements bump) read `no CodeQL analysis for refs/pull/18105/merge` forever,
+    on a change that cannot grow the backlog.
+
+    The ceiling is still enforced — against the default branch, which such a PR
+    cannot have changed. That is weaker than a per-ref scan and it is the correct
+    trade against a check that can never pass.
+    """
+    assert _run_gate(tmp_path, analyses="[]", alerts=_NO_ALERTS, checks=_CHECKS_WITHOUT_CODEQL) == 0
+
+
+@pytest.mark.parametrize(
+    "checks,label",
+    [(_CHECKS_WORKFLOW_JOB, "codeql.yml's own Analyze job"), (_CHECKS_PLATFORM, "GitHub's CodeQL status check")],
+)
+def test_a_codeql_check_without_any_analysis_still_trips(tmp_path, checks, label):
+    """SHOULD trip: the contrast for the case above — CodeQL ran and produced nothing.
+
+    Both names are asserted because each is what the other's absence would hide. A
+    matcher that only looked for "codeql" would miss `Analyze (python)`; one that only
+    looked for the workflow's jobs would miss the status check GitHub publishes itself.
+    """
+    assert _run_gate(tmp_path, analyses="[]", alerts=_NO_ALERTS, checks=checks) == 1, label
+
+
+def test_an_errored_check_runs_api_trips_rather_than_guessing(tmp_path):
+    """SHOULD trip: an undetermined answer is the one thing this gate may not call clean."""
+    assert _run_gate(tmp_path, analyses="[]", alerts=_NO_ALERTS, checks_fail=True) == 1
 
 
 def test_the_gate_stops_on_a_stale_analysis_of_an_earlier_commit(tmp_path):
