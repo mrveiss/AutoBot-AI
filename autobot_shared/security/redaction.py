@@ -27,6 +27,8 @@ the problem, and add a new detector there rather than starting an eighth (#16688
 import re
 from typing import Dict, Mapping
 
+from autobot_shared.env_utils import env_int
+
 # ---------------------------------------------------------------------------
 # Text / log-line redaction (union of the former monitoring._redact_app_log_line)
 # ---------------------------------------------------------------------------
@@ -155,4 +157,63 @@ def redact_provider_error(exc: BaseException) -> str:
     return redact_cloud_identifiers(redact_text(message))
 
 
-__all__ = ["redact_text", "redact_mapping", "redact_cloud_identifiers", "redact_provider_error"]
+# ---------------------------------------------------------------------------
+# Untrusted-value neutralisation for log lines (#13602)
+# ---------------------------------------------------------------------------
+
+#: Longest untrusted value interpolated into a single log line. A rejected path
+#: can be megabytes long and a log store is not the place to replay it.
+LOG_VALUE_MAX_CHARS = env_int("AUTOBOT_LOG_VALUE_MAX_CHARS", 256)
+
+#: Everything that lets the author of a value author *log records* rather than
+#: appear inside one: the C0 controls (CR/LF start a new line, so a forged
+#: ``2026-01-01 ERROR ...`` entry is one ``\r\n`` away), DEL and the C1 range,
+#: ESC-driven ANSI sequences that rewrite a terminal reading the log, the
+#: Unicode line/paragraph separators many viewers break on, and the bidi
+#: overrides that reorder a rendered line without changing its bytes.
+_UNSAFE_LOG_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]")
+
+
+def sanitize_log_value(value: object, *, max_chars: int | None = None) -> str:
+    r"""Render *value* safe to interpolate into a log line (#13602).
+
+    This is **not** a secret detector and declares no secret vocabulary of its
+    own — it neutralises *structure*, not content, so it is not an eighth
+    implementation under ``docs/developer/REDACTION_BOUNDARY.md``. Pair it with
+    :func:`redact_text` when the value may also carry a credential.
+
+    Control characters become a visible ``\xNN``/``\uNNNN`` escape rather than
+    being dropped, so the rejected input stays diagnosable; the result is
+    truncated to *max_chars* (default :data:`LOG_VALUE_MAX_CHARS`) with an
+    explicit marker, so a log line can never be padded out by its subject.
+    """
+    text = value if isinstance(value, str) else repr(value)
+    escaped = _UNSAFE_LOG_CHARS.sub(lambda m: _escape_char(m.group(0)), text)
+    limit = LOG_VALUE_MAX_CHARS if max_chars is None else max_chars
+    if limit < 0:
+        # #13602 review: a negative bound skipped truncation entirely, so
+        # AUTOBOT_LOG_VALUE_MAX_CHARS=-1 (or an explicit negative argument) let a rejected
+        # request put its whole path in the log -- the opposite of what this function is
+        # for. A guard has no "unlimited" reading, so a negative bound is refused rather
+        # than honoured: fall back to the module default, and to 0 if that is misconfigured
+        # negative too, so the bound can never be switched off from configuration.
+        limit = LOG_VALUE_MAX_CHARS if LOG_VALUE_MAX_CHARS >= 0 else 0
+    if len(escaped) > limit:
+        return f"{escaped[:limit]}...[truncated {len(escaped) - limit} chars]"
+    return escaped
+
+
+def _escape_char(char: str) -> str:
+    """One unsafe character as a readable escape."""
+    code = ord(char)
+    return f"\\x{code:02x}" if code < 0x100 else f"\\u{code:04x}"
+
+
+__all__ = [
+    "LOG_VALUE_MAX_CHARS",
+    "redact_text",
+    "redact_mapping",
+    "redact_cloud_identifiers",
+    "redact_provider_error",
+    "sanitize_log_value",
+]

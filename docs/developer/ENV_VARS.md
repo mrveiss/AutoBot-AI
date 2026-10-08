@@ -142,6 +142,7 @@ conflict when their rows sort next to each other.
 | `AUTOBOT_LOG_FLOOD_MAX_KEYS` | logging | int | `2048` | Maximum distinct call sites tracked by the log-flood guard before least-recent eviction. |
 | `AUTOBOT_LOG_FLOOD_THRESHOLD` | logging | int | `5` | Records one log call site may emit per flood window before the rest are suppressed. |
 | `AUTOBOT_LOG_FLOOD_WINDOW_SECONDS` | logging | float | `60.0` | Length of the log-flood suppression window, in seconds. |
+| `AUTOBOT_LOG_VALUE_MAX_CHARS` | security | int | `256` | Longest untrusted value sanitize_log_value() will interpolate into a log line (#13602). Beyond it the value is truncated with an explicit marker, so the subject of a rejected request cannot pad the log store out. A negative value is rejected in favour of the default: disabling the bound would defeat the guard. |
 | `AUTOBOT_LOG_VIEWER_URL` | logging | str | `'http://localhost:5341'` | Base URL of the Seq (or compatible) structured-log viewer. |
 | `AUTOBOT_MATRIX_E2EE` | gateway | bool | false | Opt in to end-to-end encryption for the Matrix adapter. Off by default because E2EE needs the optional olm dependency and a persisted device store. |
 | `AUTOBOT_MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S` | backend | int | `3600` | How often to re-broadcast that a node is still at MAX_REMEDIATION_ATTEMPTS. Once exhausted, last_attempt freezes and this refusal is refused again on every reconcile pass forever — unthrottled, that is once per reconcile_interval (services/reconciler.py, #14465). |
