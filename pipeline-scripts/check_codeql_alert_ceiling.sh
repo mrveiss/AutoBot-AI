@@ -92,8 +92,15 @@ if [ -n "$ALERT_REF" ]; then
     #
     # They are distinguishable by evidence rather than assumption: ask whether CodeQL
     # reported a check for this commit at all.
+    # Three names, because one of them is not ours to keep. GitHub publishes a
+    # code-scanning status check literally named "CodeQL" (observed `neutral` on a
+    # commit CodeQL analysed), and codeql.yml publishes its own jobs "Detect changed
+    # languages" and "Analyze (<language>)" (#18113 review). Matching only the first
+    # would rest the whole discrimination on a platform-chosen name; matching only the
+    # workflow's would miss a run that reported the status check and nothing else. Any
+    # of the three means CodeQL ran here.
     codeql_checks=$(gh api "repos/${REPO}/commits/${GITHUB_SHA:-${ALERT_REF}}/check-runs?per_page=100" \
-      --jq '[.check_runs[] | select(.name | test("codeql"; "i"))] | length' 2>/dev/null) || codeql_checks=""
+      --jq '[.check_runs[] | select(.name | test("codeql|^Analyze \\(|Detect changed languages"; "i"))] | length' 2>/dev/null) || codeql_checks=""
     if [ -z "$codeql_checks" ] || ! [[ "$codeql_checks" =~ ^[0-9]+$ ]]; then
       fail "could not determine whether CodeQL ran for ${ALERT_REF} (the check-runs API errored) — an undetermined answer is not a pass"
     elif [ "$codeql_checks" -eq 0 ]; then

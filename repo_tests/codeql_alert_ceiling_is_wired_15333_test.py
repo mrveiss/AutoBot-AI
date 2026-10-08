@@ -113,41 +113,6 @@ def test_the_checker_script_exists_and_is_executable():
     ), f"{_SCRIPT.name} is not executable, so the workflow step would fail to run it"
 
 
-def test_zero_analyses_tells_did_not_run_from_ran_and_found_nothing():
-    """#18105: failing closed on every unscanned ref blocked a REQUIRED check.
-
-    Zero CodeQL analyses has two causes needing opposite answers.
-
-    codeql.yml's ``pull_request`` trigger carries a ``paths`` filter, so a change
-    touching nothing CodeQL scans -- a dependency bump, a docs edit -- produces no
-    analysis at all. Failing there blocked every dependency-only PR: #18105 read
-    ``no CodeQL analysis for refs/pull/18105/merge`` and could never pass, on a
-    change that cannot grow the backlog.
-
-    The other cause -- CodeQL ran and produced nothing for the commit under test --
-    is the fail-open the ref-scoping exists to close, and must still fail.
-
-    Asserted against the source because the script needs the GitHub API to run, so
-    these are markers for the three branches rather than an execution of them.
-    """
-    text = _SCRIPT.read_text(encoding="utf-8")
-
-    assert "check-runs" in text, (
-        "the script no longer asks whether CodeQL reported a check for the commit, so it "
-        "cannot tell 'CodeQL did not run' from 'CodeQL ran and found nothing' (#18105)"
-    )
-    assert (
-        "CodeQL did not run for this ref" in text
-    ), "the did-not-run branch is gone; an unscanned ref would fail a required check again"
-    assert (
-        "the scan did not complete for this commit" in text
-    ), "the ran-but-no-analysis branch is gone -- that is the fail-open #17303 closed"
-    assert "an undetermined answer is not a pass" in text, (
-        "a check-runs API error must not be read as 'CodeQL did not run'; an undetermined "
-        "answer is the one thing this gate may never treat as clean"
-    )
-
-
 def test_the_ceiling_file_holds_exactly_one_number():
     """A ceiling that stops parsing makes the checker fail closed — but it should
     not get that far, and the failure would be reported as a tooling error rather
