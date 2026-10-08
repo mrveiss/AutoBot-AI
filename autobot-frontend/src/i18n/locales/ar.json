@@ -2232,7 +2232,9 @@
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "لم يتم تشغيل فحص التكرارات، لذا هذه ليست نتيجة. تحقق من مصدر الشيفرة المحدد وأعد تشغيل الفحص.",
+      "notScanned": "لم يتم تشغيل أي فحص للتكرارات لمصدر الشيفرة هذا بعد."
     },
     "hardcodes": {
       "title": "قيم مشفرة ثابتة",
@@ -6320,7 +6322,7 @@
       "subtitle": "Secure Access Portal",
       "usernameLabel": "Username",
       "usernamePlaceholder": "Enter your username",
-      "passwordLabel": "Password",
+      "passwordLabel": "كلمة المرور",
       "passwordPlaceholder": "Enter your password",
       "signIn": "Sign In",
       "footerText": "AutoBot Security Portal - Authenticated Access Required",
@@ -6712,12 +6714,12 @@
       "username": "Username",
       "usernamePlaceholder": "Enter username",
       "authType": "Authentication Type",
-      "authPassword": "Password",
+      "authPassword": "كلمة المرور",
       "authSshKey": "SSH Key",
       "authApiKey": "API Key",
       "authToken": "Token",
       "authCertificate": "Certificate",
-      "password": "Password",
+      "password": "كلمة المرور",
       "passwordPlaceholder": "Enter password",
       "sshKey": "SSH Key / Private Key",
       "sshKeyPlaceholder": "Paste SSH private key here...",
@@ -6774,7 +6776,7 @@
       "expired": "Expired",
       "typeSSH": "SSH Credential",
       "typeAPI": "API Key",
-      "typePassword": "Password",
+      "typePassword": "كلمة المرور",
       "typeToken": "Token",
       "typeCertificate": "Certificate",
       "typeDatabase": "Database",
@@ -6843,7 +6845,44 @@
       "timeHoursAgo": "{count}h ago",
       "timeInHours": "in {count}h",
       "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d"
+      "timeInDays": "in {count}d",
+      "categories": {
+        "api_key": "مفاتيح API",
+        "token": "رموز الوصول",
+        "oauth_refresh_token": "رموز تحديث OAuth",
+        "connector_oauth_token": "رموز الموصلات",
+        "password": "كلمات المرور",
+        "ssh_key": "مفاتيح SSH",
+        "infrastructure_host": "مضيفو البنية التحتية",
+        "database_url": "قواعد البيانات",
+        "certificate": "الشهادات",
+        "other": "أخرى"
+      },
+      "kinds": {
+        "api_key": "مفتاح API",
+        "token": "رمز وصول",
+        "oauth_refresh_token": "رمز تحديث OAuth",
+        "connector_oauth_token": "رمز موصل",
+        "password": "كلمة المرور",
+        "ssh_key": "مفتاح SSH",
+        "infrastructure_host": "مضيف بنية تحتية",
+        "database_url": "قاعدة بيانات",
+        "certificate": "شهادة",
+        "other": "أخرى"
+      },
+      "templates": {
+        "openaiDesc": "الوصول إلى واجهة GPT",
+        "anthropicDesc": "الوصول إلى واجهة Claude",
+        "awsDesc": "خدمات أمازون السحابية",
+        "githubDesc": "رمز GitHub الشخصي",
+        "postgresDesc": "اتصال بقاعدة البيانات",
+        "redisDesc": "اتصال Redis",
+        "sshLabel": "مفتاح SSH",
+        "sshDesc": "الوصول إلى الخادم",
+        "slackDesc": "رمز بوت Slack",
+        "serverLabel": "مضيف الخادم",
+        "serverDesc": "الوصول إلى خادم SSH/VNC"
+      }
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -9472,7 +9511,7 @@
     "empty": "No users found.",
     "fieldEmail": "Email",
     "fieldUsername": "Username",
-    "fieldPassword": "Password",
+    "fieldPassword": "كلمة المرور",
     "fieldDisplayName": "Display Name",
     "createUser": "Create User",
     "userLabel": "User:",
