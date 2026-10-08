@@ -74,9 +74,21 @@ if [ -n "$ALERT_REF" ]; then
   if [ -z "${GITHUB_SHA:-}" ]; then
     printf '[codeql-ceiling] GITHUB_SHA unset — the analysis commit is NOT verified\n'
   fi
+  # Analyses present for this ref AT ALL, whatever tool and whatever commit. This is
+  # the discriminator for a STALE or FOREIGN analysis (#17303): if anything has
+  # uploaded to this ref, scanning happens here, so a missing CodeQL analysis for the
+  # commit under test is a scan that did not complete -- never "CodeQL does not run
+  # here". Deciding that from check-runs instead broke exactly those two cases
+  # (#18105 review), because the stub-visible checks of the CURRENT commit say nothing
+  # about an analysis uploaded for an earlier one.
+  total_analyses=$(printf '%s' "$analyses_json" | jq -e 'if type != "array" then error("not an array") else length end' 2>/dev/null)
+  [[ "$total_analyses" =~ ^[0-9]+$ ]] || total_analyses=0
+
   if [ "$analyses_count" -gt 0 ]; then
     alerts_query="${alerts_query}&ref=${ALERT_REF}"
     printf '[codeql-ceiling] counting alerts on %s\n' "$ALERT_REF"
+  elif [ "$total_analyses" -gt 0 ]; then
+    fail "no CodeQL analysis names ${GITHUB_SHA:-the ref under test} for ${ALERT_REF}, though ${total_analyses} analysis/analyses exist for that ref — a stale scan of an earlier commit, or another tool's SARIF, is not a scan of this commit (#17303)"
   else
     # #18105: zero analyses has two causes and they need opposite answers.
     #
