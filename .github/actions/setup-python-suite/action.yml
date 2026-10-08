@@ -172,6 +172,32 @@ runs:
         fi
         export DEBIAN_FRONTEND=noninteractive
 
+        # #18102: install from prefetched .debs when a caller supplied them, touching the
+        # network not at all.
+        #
+        # The twelve shards used to run this same ~100MB fetch each, so one CI run made the
+        # same download up to twelve times and a different shard drew the slow mirror every
+        # time -- four reds on 2026-10-08 were shards 4, 1, 2 and 6. ci.yml now fetches once
+        # in `provision-packages` and hands the archives to every shard as an artifact.
+        #
+        # This branch is OPTIONAL on purpose. coverage.yml and test-durations.yml call this
+        # action without that job, so an absent directory must fall through to the fetch
+        # below rather than fail -- and an insufficient set must fall through too, since a
+        # stale artifact that cannot satisfy the install is not a reason to lose the suite.
+        readonly PREFETCHED_DEBS="${RUNNER_TEMP:-/tmp}/apt-debs"
+        if [ -n "$(find "$PREFETCHED_DEBS" -maxdepth 1 -name '*.deb' -print -quit 2>/dev/null)" ]; then
+          echo "provisioning from $(find "$PREFETCHED_DEBS" -maxdepth 1 -name '*.deb' | wc -l) prefetched .deb(s) — no network (#18102)"
+          sudo cp "$PREFETCHED_DEBS"/*.deb /var/cache/apt/archives/
+          # Installed exactly as they were downloaded: ffmpeg without recommends and
+          # tesseract-ocr with them, so the cached set matches what apt resolves here.
+          if sudo apt-get install -y --no-download --no-install-recommends ffmpeg \
+            && sudo apt-get install -y --no-download tesseract-ocr; then
+            echo "installed: $(ffmpeg -version | head -1); $(tesseract --version 2>&1 | head -1)"
+            exit 0
+          fi
+          echo "::warning title=prefetched .debs did not satisfy the install::falling back to a network fetch (#18102)" >&2
+        fi
+
         # Every bound this step uses, named once (#15515).
         readonly APT_ATTEMPTS=3           # tries per apt command
         readonly APT_TIMEOUT_S=300        # wall-clock bound per try, and per dpkg repair
