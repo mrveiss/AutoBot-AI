@@ -11,7 +11,6 @@
     "AgentType",
     "AlertRule",
     "AntiPatternDetector",
-    "AntiPatternType",
     "ApiKeyAuth",
     "ApprovalDecision",
     "AsyncSQLiteConnectionPool",
