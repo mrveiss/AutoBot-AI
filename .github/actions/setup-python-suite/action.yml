@@ -172,32 +172,6 @@ runs:
         fi
         export DEBIAN_FRONTEND=noninteractive
 
-        # #18102: install from prefetched .debs when a caller supplied them, touching the
-        # network not at all.
-        #
-        # The twelve shards used to run this same ~100MB fetch each, so one CI run made the
-        # same download up to twelve times and a different shard drew the slow mirror every
-        # time -- four reds on 2026-10-08 were shards 4, 1, 2 and 6. ci.yml now fetches once
-        # in `provision-packages` and hands the archives to every shard as an artifact.
-        #
-        # This branch is OPTIONAL on purpose. coverage.yml and test-durations.yml call this
-        # action without that job, so an absent directory must fall through to the fetch
-        # below rather than fail -- and an insufficient set must fall through too, since a
-        # stale artifact that cannot satisfy the install is not a reason to lose the suite.
-        readonly PREFETCHED_DEBS="${RUNNER_TEMP:-/tmp}/apt-debs"
-        if [ -n "$(find "$PREFETCHED_DEBS" -maxdepth 1 -name '*.deb' -print -quit 2>/dev/null)" ]; then
-          echo "provisioning from $(find "$PREFETCHED_DEBS" -maxdepth 1 -name '*.deb' | wc -l) prefetched .deb(s) — no network (#18102)"
-          sudo cp "$PREFETCHED_DEBS"/*.deb /var/cache/apt/archives/
-          # Installed exactly as they were downloaded: ffmpeg without recommends and
-          # tesseract-ocr with them, so the cached set matches what apt resolves here.
-          if sudo apt-get install -y --no-download --no-install-recommends ffmpeg \
-            && sudo apt-get install -y --no-download tesseract-ocr; then
-            echo "installed: $(ffmpeg -version | head -1); $(tesseract --version 2>&1 | head -1)"
-            exit 0
-          fi
-          echo "::warning title=prefetched .debs did not satisfy the install::falling back to a network fetch (#18102)" >&2
-        fi
-
         # Every bound this step uses, named once (#15515).
         readonly APT_ATTEMPTS=3           # tries per apt command
         readonly APT_TIMEOUT_S=300        # wall-clock bound per try, and per dpkg repair
@@ -290,6 +264,41 @@ runs:
           | sudo tee /etc/apt/apt.conf.d/80-ci-provisioning >/dev/null
 
         APT_ADVISORY=1 apt_retry "update" timeout "$APT_TIMEOUT_S" sudo apt-get update -qq
+
+        # #18102: install from prefetched .debs when a caller supplied them, touching the
+        # network not at all.
+        #
+        # The twelve shards used to run this same ~100MB fetch each, so one CI run made the
+        # same download up to twelve times and a different shard drew the slow mirror every
+        # time -- four reds on 2026-10-08 were shards 4, 1, 2 and 6. ci.yml now fetches once
+        # in `provision-packages` and hands the archives to every shard as an artifact.
+        #
+        # Placed AFTER `apt-get update` deliberately (#18102 review): `--no-download`
+        # resolves the version to install from THIS runner's package indexes, and a
+        # GitHub-hosted image can ship indexes older than the provisioning runner's. If
+        # the shard's stale index selects a different version than the archive on disk,
+        # `--no-download` cannot satisfy it and the shard silently falls back to the
+        # network -- restoring the twelve downloads this change exists to remove. Both
+        # sides now resolve against freshly updated indexes. The update itself is
+        # advisory and small; the ~100MB of packages is what was being repeated.
+        #
+        # This branch is OPTIONAL on purpose. coverage.yml and test-durations.yml call this
+        # action without that job, so an absent directory must fall through to the fetch
+        # below rather than fail -- and an insufficient set must fall through too, since a
+        # stale artifact that cannot satisfy the install is not a reason to lose the suite.
+        readonly PREFETCHED_DEBS="${RUNNER_TEMP:-/tmp}/apt-debs"
+        if [ -n "$(find "$PREFETCHED_DEBS" -maxdepth 1 -name '*.deb' -print -quit 2>/dev/null)" ]; then
+          echo "provisioning from $(find "$PREFETCHED_DEBS" -maxdepth 1 -name '*.deb' | wc -l) prefetched .deb(s) — no network (#18102)"
+          sudo cp "$PREFETCHED_DEBS"/*.deb /var/cache/apt/archives/
+          # Installed exactly as they were downloaded: ffmpeg without recommends and
+          # tesseract-ocr with them, so the cached set matches what apt resolves here.
+          if sudo apt-get install -y --no-download --no-install-recommends ffmpeg \
+            && sudo apt-get install -y --no-download tesseract-ocr; then
+            echo "installed: $(ffmpeg -version | head -1); $(tesseract --version 2>&1 | head -1)"
+            exit 0
+          fi
+          echo "::warning title=prefetched .debs did not satisfy the install::falling back to a network fetch (#18102)" >&2
+        fi
         APT_TRIES=$APT_DOWNLOAD_ATTEMPTS apt_retry "download ffmpeg" \
           timeout "$APT_DOWNLOAD_TIMEOUT_S" sudo apt-get install -y --download-only --no-install-recommends ffmpeg
         APT_TRIES=$APT_DOWNLOAD_ATTEMPTS apt_retry "download tesseract-ocr" \
