@@ -59,6 +59,7 @@ from chat_workflow.tool_dispatch_guards import (
 )
 from chat_workflow.tool_permission_gate import permission_denial
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
+from services.remote_approval_sender import mirror_approval_request
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
 
@@ -1718,6 +1719,15 @@ class ToolHandlerMixin:
         )
 
         await self._persist_approval_request(approval_msg, session_id, terminal_session_id)
+        # #14068: also ask wherever this session's human actually is. A mirror,
+        # never a second source of truth -- False (not routed remotely, Redis
+        # down, channel refused) changes nothing and the in-app gate below
+        # still decides, denying on timeout.
+        await mirror_approval_request(
+            session_id=session_id,
+            approval_id=approval_id,
+            body=f"Approval required: `{command}`\n{description or ''}".strip(),
+        )
         yield self._build_waiting_message(command, result)
 
         logger.info("🔍 [APPROVAL POLLING] Waiting for approval of command: %s", command)

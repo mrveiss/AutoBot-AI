@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.schemas_workflows import (
     APIBatchRequest,
@@ -328,8 +328,9 @@ async def run_batch_job_now(
 
     # Issue #12439: local import — tasks.batch_job_tasks pulls in the full
     # tasks/__init__.py registration chain; deferring it to call-time keeps
-    # this module's own import surface light (matches the existing
-    # fast_app_factory_fix local-import pattern used elsewhere in this file).
+    # this module's own import surface light. The precedent this comment cited
+    # until #13558 -- a "local-import pattern used elsewhere in this file" --
+    # was three imports of a module deleted in #567: the same break repeated.
     from tasks.batch_job_tasks import run_batch_job
 
     run_batch_job.delay(job_id)
@@ -841,11 +842,14 @@ async def batch_load(batch_request: APIBatchRequest):
     operation="batch_chat_initialization",
     error_code_prefix="BATCH_JOBS",
 )
-async def batch_chat_initialization():
+async def batch_chat_initialization(request: Request):
     """
     Optimized endpoint for chat interface initialization.
     Returns all data needed to start the chat in one request.
     Supports both GET and POST methods.
+
+    ``request`` lets the helpers below reach live app state (#13558); it adds
+    no field to the request or response schema.
     """
     import time
 
@@ -854,10 +858,10 @@ async def batch_chat_initialization():
 
     try:
         results = await asyncio.gather(
-            get_chat_sessions(),
+            get_chat_sessions(request.app),
             get_system_health(),
             get_service_health_legacy(),
-            get_settings(),
+            get_settings(request.app),
             return_exceptions=True,
         )
 
@@ -885,10 +889,8 @@ async def batch_chat_initialization():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-async def get_chat_sessions():
-    """Get chat sessions list using async file operations"""
-    from fast_app_factory_fix import app
-
+async def get_chat_sessions(app):
+    """Get chat sessions list; `app` is passed in, not imported (#13558)."""
     if hasattr(app.state, "chat_history_manager") and app.state.chat_history_manager:
         try:
             sessions = await asyncio.to_thread(
@@ -945,11 +947,9 @@ async def get_service_health_legacy():
     }
 
 
-async def get_settings():
-    """Get user settings"""
+async def get_settings(app):
+    """Get user settings; `app` is passed in, not imported (#13558)."""
     try:
-        from fast_app_factory_fix import app
-
         if hasattr(app.state, "settings"):
             return app.state.settings
 

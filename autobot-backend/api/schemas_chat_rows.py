@@ -72,8 +72,9 @@ class SessionSummary(BaseModel):
     createdTime: str | None = None
     updatedAt: str | None = None
     lastModified: str | None = None
-    # #13948: the unambiguous ordering key — the ISO fields above are naive
-    # local time and collide across a DST fallback.
+    # #13948/#13856: the unambiguous ordering key. The ISO fields above are
+    # tz-aware UTC since #13856 (naive local, and so DST-ambiguous, before it);
+    # this one needs no parser at all.
     updatedAtEpoch: float | None = None
     isActive: bool | None = None
     fileSize: int | None = None
