@@ -244,6 +244,15 @@ def audit_ceilings(
     return reached, problems
 
 
+def audit_tracked(cfg: GateConfig, root: pathlib.Path, tracked: list[str]) -> tuple[int, list[str]]:
+    """The audit over an explicit file list, with the engine's own scanner.
+
+    The seam a test injects through (#17377 AC3): a ``GateConfig``, a root and the files,
+    instead of ``monkeypatch.setattr`` on a gate's attributes.
+    """
+    return audit_ceilings(cfg, root, lambda _root: tracked, lambda r, t: scan_tracked_files(cfg, r, t))
+
+
 def run_audit(cfg: GateConfig, logger: logging.Logger, audit: Callable[[], tuple[int, list[str]]]) -> int:
     """``--audit-ceilings``: rule on the whole tree, and refuse a walk that covered too little.
 
