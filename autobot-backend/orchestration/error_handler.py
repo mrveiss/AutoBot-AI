@@ -33,7 +33,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc
 from constants.ttl_constants import TTL_30_DAYS
-from retry_mechanism import BackoffStrategy, RetryConfig, RetryMechanism
+from retry_mechanism import BackoffStrategy, RetryMechanism, RetryPolicy
 
 logger = get_logger(__name__)
 
@@ -348,7 +348,7 @@ class StepErrorHandler:
         Delegates to RetryMechanism.calculate_delay so all backoff curves are
         computed by a single implementation (Issue #3830).
         """
-        retry_config = RetryConfig(
+        retry_config = RetryPolicy(
             max_attempts=config.max_retries,
             base_delay=config.base_delay,
             max_delay=config.base_delay * (2**config.max_retries),  # no hard cap needed
