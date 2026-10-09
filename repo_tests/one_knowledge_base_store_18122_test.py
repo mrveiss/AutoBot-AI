@@ -261,17 +261,26 @@ def _publication_report(source: str) -> tuple[dict[str, set[str]], set[str], set
     # hole: a creator could call the publisher and then assign a different instance to
     # `app.state.knowledge_base`, so the call was present, one function still owned the
     # global, both assertions passed, and the two stores diverged anyway.
-    projectors = {
-        node.name
-        for node in funcs
-        for sub in ast.walk(node)
-        if isinstance(sub, (ast.Assign, ast.AugAssign, ast.AnnAssign))
-        for tgt in (sub.targets if isinstance(sub, ast.Assign) else [sub.target])
-        if isinstance(tgt, ast.Attribute)
+    # A write outside every function -- module or class body -- runs at import time and
+    # is reported as `<module>`; collecting from function bodies only made it invisible.
+    in_funcs = {id(sub) for node in funcs for sub in ast.walk(node)}
+    projectors = {node.name for node in funcs if any(map(_writes_projection, ast.walk(node)))}
+    if any(_writes_projection(sub) and id(sub) not in in_funcs for sub in ast.walk(tree)):
+        projectors.add("<module>")
+    return callers, assigners, projectors
+
+
+def _writes_projection(node: ast.AST) -> bool:
+    """True when `node` assigns to `<something>.state.knowledge_base`."""
+    if not isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
+        return False
+    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+    return any(
+        isinstance(tgt, ast.Attribute)
         and tgt.attr == "knowledge_base"
         and ast.unparse(tgt).endswith(".state.knowledge_base")
-    }
-    return callers, assigners, projectors
+        for tgt in targets
+    )
 
 
 _CREATORS = ("_create_new_knowledge_base", "get_knowledge_base_async")
@@ -362,6 +371,19 @@ def test_the_matcher_catches_a_rival_write_to_the_projection() -> None:
         "_publish_knowledge_base",
         "_create_new_knowledge_base",
     }, "the matcher must name the creator that wrote a rival instance to the projection"
+
+
+@pytest.mark.parametrize(
+    ("label", "source", "expected"),
+    [
+        ("module level", "app.state.knowledge_base = KnowledgeBase()\n", {"<module>"}),
+        ("class body", "class C:\n    app.state.knowledge_base = None\n", {"<module>"}),
+        ("a read, not a write", "kb = app.state.knowledge_base\n", set()),
+    ],
+)
+def test_the_projection_matcher_sees_writes_outside_functions(label: str, source: str, expected: set[str]) -> None:
+    """A module-level write runs at import and must reach the backend-wide check."""
+    assert _publication_report(source)[2] == expected, label
 
 
 def test_the_publication_matcher_accepts_the_consolidated_shape() -> None:
@@ -504,3 +526,63 @@ def test_the_statement_order_probe_has_a_contrast_pair() -> None:
     )
     func = fixed.body[0]
     assert _stmt_index(func, _calls_peek) < _stmt_index(func, _reads_cooldown)
+
+
+#: Files permitted to write the `app.state.knowledge_base` projection, and the function
+#: in each that may do it. The publisher owns the projection; nothing else writes it.
+_PROJECTION_OWNER = {"autobot-backend/knowledge_factory.py": {"_publish_knowledge_base"}}
+
+
+def test_only_the_publisher_writes_the_projection_anywhere_in_the_backend() -> None:
+    """#18122: widened from one module to the tree, now that the owner decision landed.
+
+    The #18130 guard read `knowledge_factory.py` only, which was a stated blind spot:
+    `initialization/lifespan.py` wrote the projection twice -- redundantly on success and
+    destructively on failure, where it overwrote a live projection while the singleton
+    still held the instance. Owner decision 2026-10-09 removed both writes rather than
+    guarding them, so the invariant is now checkable across the whole backend instead of
+    inside one file.
+    """
+    root = repo_root()
+    offenders: dict[str, set[str]] = {}
+    parsed = 0
+    for rel in _tracked_python_files():
+        if not rel.startswith("autobot-backend/"):
+            continue
+        if rel.endswith("_test.py") or rel.rsplit("/", 1)[-1].startswith("test_") or "tests/" in rel:
+            continue
+        try:
+            source = (root / rel).read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if ".state.knowledge_base" not in source:
+            continue
+        try:
+            ast.parse(source)
+        except SyntaxError:
+            continue
+        parsed += 1
+        _, _, projectors = _publication_report(source)
+        allowed = _PROJECTION_OWNER.get(rel, set())
+        extra = projectors - allowed
+        if extra:
+            offenders[rel] = extra
+
+    assert parsed > 0, "no backend file mentions the projection — the scan is looking in the wrong place"
+    assert offenders == {}, (
+        f"#18122: these write app.state.knowledge_base outside the publisher: "
+        f"{ {k: sorted(v) for k, v in offenders.items()} }. The projection has one writer, "
+        "`knowledge_factory._publish_knowledge_base`; anything else can set it to a value "
+        "the singleton disagrees with — which is the whole defect this file exists for."
+    )
+
+
+def test_the_publisher_is_still_the_declared_owner() -> None:
+    """The allowlist must name a function that exists, or it exempts nothing."""
+    root = repo_root()
+    for rel, fns in _PROJECTION_OWNER.items():
+        _, _, projectors = _publication_report((root / rel).read_text(encoding="utf-8"))
+        assert projectors == fns, (
+            f"#18122: {rel} projection writers are {sorted(projectors)}, declared {sorted(fns)} — "
+            "update _PROJECTION_OWNER deliberately, not to silence this"
+        )
