@@ -98,7 +98,13 @@ jobs:
       # the reported number would have RAISED a ratchet, which is the one direction
       # it must never move. Measured here instead: the SLM scope is 2831 against a
       # 2831 pin, exact, so it stays.
-      MAX_DUP_LINES: '11707'
+      # 11707 -> 11604 (#17377): RECLAIMED SLACK, not a reduction made by #17377. The
+      # size-gate consolidation lives in scripts/ and tools/lint/, which neither scope
+      # scans, and jscpd measured both trees identically: 11,604 lines, 672 clones,
+      # 1,603,884 lines scanned, on origin/main and on the branch alike (this
+      # workflow's exact flags, jscpd 5.0.6, locally). The 103 lines were freed by
+      # other merges since #17317 and are pinned before a later PR can spend them.
+      MAX_DUP_LINES: '11604'
       # #13044: the three trees this guard used to skip get their OWN pin rather
       # than being folded into the one above. When first scanned they carried
       # 2.4x the duplication ratio of the gated trees, and averaging would hide
@@ -120,7 +126,9 @@ jobs:
       # 0 when the count is UNDER its pin, so a fall in duplication is never noticed
       # and a later PR can spend it. Both figures are recorded so the next person
       # can tell a real reduction from reclaimed slack.
-      SLM_MAX_DUP_LINES: '2831'
+      # 2831 -> 2830 (#17377): one line of reclaimed slack, measured in the same run --
+      # 2,830 lines, 123 clones, 265,516 lines scanned, identical on base and branch.
+      SLM_MAX_DUP_LINES: '2830'
       JSCPD_VERSION: '5.0.6'
     steps:
       - uses: actions/checkout@v7
