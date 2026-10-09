@@ -100,3 +100,12 @@ def test_the_underscore_slugify_is_a_different_contract_and_is_left_alone() -> N
     """
     assert url_slug("hello world") == "hello-world"
     assert "_" not in url_slug("hello world")
+
+    # Assert the other side of the boundary directly. Without this the test named a
+    # contract it never called, so a change to `slugify` could not fail it — and the
+    # whole reason this file exists is that `url_slug` was first written under that
+    # helper's name and collided with it.
+    from agent_loop.text_utils import slugify
+
+    assert slugify("hello world") == "hello_world"
+    assert "-" not in slugify("hello world")

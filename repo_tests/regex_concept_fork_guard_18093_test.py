@@ -47,11 +47,25 @@ _RE_FUNCS = frozenset({"compile", "match", "search", "sub", "fullmatch", "findal
 class Concept:
     """One regex concept: how to recognise it, and where it is allowed to live."""
 
-    def __init__(self, name: str, recognizer: str, canonical: dict[str, str], allowed: dict[str, str]):
+    def __init__(
+        self,
+        name: str,
+        recognizer: str,
+        canonical: dict[str, str],
+        allowed: dict[str, str],
+        matches: tuple[str, ...] = (),
+        rejects: tuple[str, ...] = (),
+    ):
         self.name = name
         self.recognizer = re.compile(recognizer)
         self.canonical = canonical
         self.allowed = allowed
+        #: Synthetic pattern literals this recognizer must match, and must not. The
+        #: negative half is the one that matters: a recognizer that matches every
+        #: pattern makes the tree-wide fork test fail in some unrelated file, with
+        #: nothing pointing at the recognizer as the cause.
+        self.matches = matches
+        self.rejects = rejects
 
     @property
     def permitted(self) -> set[str]:
@@ -72,6 +86,11 @@ CONCEPTS = (
             "pipeline-scripts/check_gating_precommit_hooks.py": ("standalone CI tool; cannot import the backend"),
             "scripts/duplication_gate.py": "standalone CI tool; cannot import the backend",
         },
+        matches=(r"\x1b\[[0-9;]*m", r"\033\[[0-9;]*m", r"[\x1B\x9B]"),
+        # `\\x1B` is deliberately NOT here: a doubled backslash still contains this
+        # concept's text, so the recognizer is right to match it. That literal is the
+        # dead no-op pattern pinned in `ansi_strip_consolidation_18093_test.py`.
+        rejects=(r"\[0-9;]*m", r"\[[0-9;]*m", r"ESC\[0m", r"[0-9;]*m"),
     ),
     Concept(
         "frontmatter-fence",
@@ -88,6 +107,8 @@ CONCEPTS = (
                 "`_MD_BOLD_RE` and `_MD_LIST_ITEM_RE`"
             ),
         },
+        matches=(r"^---\s*$", r"^---\r?\n", r"---[ \t]*\r?", r"^---$"),
+        rejects=(r"-{2}", r"--", r"^-+$", r"^\*\*\*$", r"^===$"),
     ),
     Concept(
         "uuid",
@@ -100,6 +121,11 @@ CONCEPTS = (
             ),
         },
         allowed={},
+        matches=(
+            r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+            r"^[0-9a-f]{8}-[0-9a-f]{4}",
+        ),
+        rejects=(r"[0-9a-f]{8}", r"[0-9]{4}-[0-9]{2}", r"[0-9a-fA-F]{32}", r"[a-z]{8}-[a-z]{4}"),
     ),
 )
 
@@ -172,6 +198,26 @@ def test_each_concept_recognises_its_own_canonical(concept: Concept) -> None:
         f"{sorted(missing)} — the recognizer is broken, not the tree, and the fork test "
         "below would pass while seeing nothing."
     )
+
+
+@pytest.mark.parametrize("concept", CONCEPTS, ids=lambda c: c.name)
+def test_each_concept_recognizer_has_a_contrast_pair(concept: Concept) -> None:
+    """Every recognizer must match its own concept AND reject a near neighbour.
+
+    `test_each_concept_recognises_its_own_canonical` proves only that a recognizer CAN
+    match. A recognizer that matches every pattern literal also passes it, and then
+    `test_no_new_fork_of_a_consolidated_concept` fails in some unrelated file with
+    nothing naming the recognizer as the cause. These synthetic literals localise it.
+    """
+    assert concept.matches, f"{concept.name}: no positive fixture — add one"
+    assert concept.rejects, f"{concept.name}: no negative fixture — a recognizer needs a contrast pair"
+    for pattern in concept.matches:
+        assert concept.recognizer.search(pattern), f"{concept.name}: must match {pattern!r} and does not"
+    for pattern in concept.rejects:
+        assert not concept.recognizer.search(pattern), (
+            f"{concept.name}: must reject {pattern!r} and matches it — the recognizer is too broad, "
+            "so every fork finding it produces is suspect"
+        )
 
 
 @pytest.mark.parametrize("concept", CONCEPTS, ids=lambda c: c.name)

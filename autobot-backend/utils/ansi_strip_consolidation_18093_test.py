@@ -143,3 +143,53 @@ def test_a_double_escaped_ansi_pattern_would_be_a_no_op() -> None:
     assert broken.sub("", r"\x1BA") == "", "it matches the literal text, not the ESC byte"
     assert broken.sub("", r"\x1B[31m") == r"\x1B[31m", "not even the literal spelling of a CSI sequence"
     assert strip_ansi_escapes(control) == "Red", "the canonical actually strips the ESC byte"
+
+
+#: Source snippets `_ESC_PATTERN_LITERAL` must flag, and must not. Without the second
+#: half, a detector that matches nothing produces exactly the same green as a clean
+#: tree -- and the assertion above is `not found`, so a dead regex reads as success.
+_MUST_FLAG = (
+    r're.compile(r"\x1b\[[0-9;]*m")',
+    r"re.compile('\033\[[0-9;]*m')",
+    # `\e[` with a literal bracket -- the shell/`sed` spelling the detector's third
+    # alternative targets; `\e\[` is a different string and genuinely does not match.
+    r're.compile(r"\e[0m")',
+    r're.compile(  r"\x1B[@-Z]")',
+)
+_MUST_NOT_FLAG = (
+    r're.compile(r"[0-9;]*m")',
+    r're.compile(r"^---[ \t]*$")',
+    r'ANSI = "\x1b[0m"',
+    r're.compile(r"%s")',
+)
+
+
+def test_the_consolidation_detector_has_a_contrast_pair() -> None:
+    """The detector must flag a re-introduced ANSI pattern and ignore everything else.
+
+    `test_consolidated_sites_hold_no_ansi_regex` asserts an EMPTY result, so a detector
+    that stopped matching would keep it green forever. These synthetic snippets are what
+    tells the two apart, and they localise the fault to the detector rather than to some
+    file in the tree.
+    """
+    for snippet in _MUST_FLAG:
+        assert _ESC_PATTERN_LITERAL.findall(snippet), f"detector missed a real ANSI pattern: {snippet!r}"
+    for snippet in _MUST_NOT_FLAG:
+        assert not _ESC_PATTERN_LITERAL.findall(snippet), f"detector falsely flagged: {snippet!r}"
+
+
+def test_the_detectors_blind_spot_is_recorded() -> None:
+    """Stated, not implied: this detector only sees `re.compile`.
+
+    An inline `re.sub` with the same pattern re-introduces the concept without compiling
+    it and is NOT caught here. Recorded as a test so a clean run is read as "no compiled
+    pattern" rather than as "no ANSI handling", which is a different claim (#18093). The
+    tree-wide guard that does cover call sites is
+    `repo_tests/regex_concept_fork_guard_18093_test.py`, which reads the pattern argument
+    of every `re.*` entry point.
+    """
+    inline = r're.sub(r"\x1b\[[0-9;]*m", "", text)'
+    assert not _ESC_PATTERN_LITERAL.findall(inline), (
+        "if this now matches, the detector grew to cover call sites -- widen "
+        "_MUST_FLAG and delete this blind-spot record"
+    )

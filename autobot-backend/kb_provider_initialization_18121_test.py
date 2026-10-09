@@ -84,6 +84,7 @@ def test_dependency_provider_is_async(provider: str) -> None:
 @pytest.mark.parametrize("provider", ["get_knowledge_base", "get_cached_knowledge_base"])
 def test_dependency_provider_does_not_construct(provider: str) -> None:
     fn = _find_function(_parse(_DEPENDENCIES), provider)
+    assert fn is not None, f"dependencies.{provider} not found"
     assert not _constructs_knowledge_base(fn), (
         f"dependencies.{provider} constructs a KnowledgeBase directly; it must resolve the "
         "already-initialized instance through knowledge_factory instead"
@@ -93,11 +94,13 @@ def test_dependency_provider_does_not_construct(provider: str) -> None:
 def test_dependency_provider_delegates_to_the_canonical_factory() -> None:
     tree = _parse(_DEPENDENCIES)
     live = _find_function(tree, "get_knowledge_base")
+    assert live is not None, "dependencies.get_knowledge_base not found"
     assert "get_or_create_knowledge_base" in _called_names(live), (
         "dependencies.get_knowledge_base must return the app-state instance via "
         "knowledge_factory.get_or_create_knowledge_base"
     )
     cached = _find_function(tree, "get_cached_knowledge_base")
+    assert cached is not None, "dependencies.get_cached_knowledge_base not found"
     delegates = _called_names(cached)
     assert "get_knowledge_base" in delegates or "get_or_create_knowledge_base" in delegates, (
         "dependencies.get_cached_knowledge_base must resolve the same instance as "

@@ -107,10 +107,19 @@ def test_unicode_line_separators_survive_inside_a_value() -> None:
 
     The module splits on "\\n" alone for exactly this reason; this test is the pin,
     because the offset arithmetic for the body depends on the split being reversible.
+
+    The separator is written as the `\\u2028` escape, never as the literal character: as
+    a raw byte it is invisible in a diff and in most editors, so a formatter or a
+    copy-paste that dropped it would leave this test passing while testing nothing.
     """
-    text = "---\nname: a b\n---\nbody\n"
+    text = "---\nname: a\u2028b\n---\nbody\n"
+    # Control: the separator really is one str.splitlines() breaks on, so the pin below
+    # is testing the hazard it names and not an ordinary character.
+    assert len("a\u2028b".splitlines()) == 2, "control: U+2028 must be a splitlines() boundary"
+    assert len("a\u2028b".split("\n")) == 1, "control: and must NOT be a split(chr(10)) boundary"
+
     yaml_text, body = split_frontmatter(text)
-    assert yaml_text == "name: a b"
+    assert yaml_text == "name: a\u2028b"
     assert body == "body\n"
 
 

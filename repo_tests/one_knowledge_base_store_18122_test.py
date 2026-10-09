@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import ast
 import functools
+from typing import NamedTuple
 
 import pytest
 from repo_tests._paths import repo_root
@@ -107,10 +108,21 @@ def _caches_a_knowledge_base(tree: ast.Module) -> bool:
     return False
 
 
+class _Scan(NamedTuple):
+    """Findings AND reach. A floor bound to findings cannot see a shrinking sweep."""
+
+    found: tuple[str, ...]
+    files_parsed: int
+    files_unparsable: tuple[str, ...]
+    statements_inspected: int
+
+
 @functools.lru_cache(maxsize=1)
-def _modules_caching_a_knowledge_base() -> tuple[str, ...]:
+def _scan() -> _Scan:
     root = repo_root()
     found: list[str] = []
+    unparsable: list[str] = []
+    parsed = statements = 0
     for rel in _tracked_python_files():
         if not rel.startswith(_SEARCH_ROOTS):
             continue
@@ -118,17 +130,36 @@ def _modules_caching_a_knowledge_base() -> tuple[str, ...]:
             continue
         try:
             tree = ast.parse((root / rel).read_text(encoding="utf-8"))
-        except (OSError, SyntaxError):
+        except (OSError, SyntaxError) as exc:
+            # Recorded, not swallowed. A file that stopped parsing is lost reach, and
+            # `continue` alone made that indistinguishable from a file with no store.
+            unparsable.append(f"{rel}: {type(exc).__name__}")
             continue
+        parsed += 1
+        statements += sum(1 for _ in ast.walk(tree))
         if _caches_a_knowledge_base(tree):
             found.append(rel)
-    return tuple(sorted(found))
+    return _Scan(tuple(sorted(found)), parsed, tuple(unparsable), statements)
+
+
+def _modules_caching_a_knowledge_base() -> tuple[str, ...]:
+    return _scan().found
 
 
 def test_the_scan_is_not_vacuous() -> None:
-    """An empty sweep satisfies every assertion below by looking at nothing."""
+    """An empty sweep satisfies every assertion below by looking at nothing.
+
+    The floors bind to REACH -- files parsed, AST nodes inspected -- not to the number
+    of stores found. `KNOWN_STORES` is shrink-only, so a matcher that quietly stopped
+    recognising declarations would make this file greener the more it missed; a
+    findings-based floor is the one shape that cannot notice that.
+    """
+    scan = _scan()
     assert len(_tracked_python_files()) > 3000, "git ls-files returned almost nothing"
-    assert _modules_caching_a_knowledge_base(), "matched no store at all — the matcher is broken"
+    assert scan.files_parsed > 500, f"only {scan.files_parsed} files parsed — the roots are wrong"
+    assert scan.statements_inspected > 50_000, f"only {scan.statements_inspected} AST nodes inspected"
+    assert not scan.files_unparsable, f"lost reach, {len(scan.files_unparsable)} file(s): {scan.files_unparsable[:3]}"
+    assert scan.found, "matched no store at all — the matcher is broken, not the tree"
 
 
 def test_the_matcher_sees_both_declaration_shapes() -> None:
@@ -201,3 +232,46 @@ def test_the_store_count_is_recorded() -> None:
     call sites read, and is tracked on #18122 rather than smuggled into a facade change.
     """
     assert len(_modules_caching_a_knowledge_base()) == 2
+
+
+def test_both_creation_paths_publish_through_one_helper() -> None:
+    """#18130: the two creators wrote to different stores and neither saw the other.
+
+    `_create_new_knowledge_base(app)` set only `app.state.knowledge_base`, and
+    `get_knowledge_base_async()` set only `_knowledge_base_instance`. Whichever ran
+    second therefore built a SECOND KnowledgeBase, and `peek_knowledge_base()` reported
+    no instance for an app that had one -- two live stores in the file whose whole
+    subject is that there is one. Found in review, not by this guard, which is why the
+    assertion exists: both paths must publish through `_publish_knowledge_base`.
+    """
+    source = (repo_root() / "autobot-backend" / "knowledge_factory.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    publishers = {
+        node.name: {
+            ast.unparse(sub.func)
+            for sub in ast.walk(node)
+            if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Name)
+        }
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    for creator in ("_create_new_knowledge_base", "get_knowledge_base_async"):
+        assert creator in publishers, f"{creator} is gone — re-point this guard"
+        assert "_publish_knowledge_base" in publishers[creator], (
+            f"#18122/#18130: {creator} no longer publishes through _publish_knowledge_base, "
+            "so the instance it creates is invisible to the other creation path and a "
+            "second KnowledgeBase gets built"
+        )
+
+    # And the helper is the only place that assigns the module singleton.
+    assigners = {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        for sub in ast.walk(node)
+        if isinstance(sub, ast.Global) and "_knowledge_base_instance" in sub.names
+    }
+    assert assigners == {"_publish_knowledge_base"}, (
+        f"#18122: {sorted(assigners)} declare the singleton global; exactly one function "
+        "may write it, or the stores diverge again"
+    )

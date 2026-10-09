@@ -240,7 +240,7 @@
   ansible.builtin.set_fact:
     _tts_torch_requirement: >-
       {{ lookup('file', playbook_dir ~ '/../../../autobot-tts-worker/requirements.txt')
-         | regex_search('^torch[^\s#]*', multiline=True) }}
+         | regex_search('^torch(?![A-Za-z0-9_.-])[^\s#]*', multiline=True) }}
   tags: ['tts', 'packages']
 
 # Fail closed: an unreadable manifest or a renamed package would otherwise render an

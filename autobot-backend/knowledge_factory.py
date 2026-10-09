@@ -86,6 +86,21 @@ async def _adopt_then_backfill(kb) -> None:
     await kb.backfill_document_visibility()
 
 
+def _publish_knowledge_base(kb, app: "FastAPI | None" = None) -> None:
+    """Record ``kb`` as the one store, projecting it onto app state when there is an app.
+
+    #18122: the module singleton is the system of record; ``app.state.knowledge_base``
+    is a rebuildable projection of it. Both creation paths land here, so an instance
+    built with an app is visible to the app-less callers and the reverse. Before this,
+    the lifespan path set only app state, which left ``peek_knowledge_base()`` reporting
+    no instance and made ``get_knowledge_base_async()`` construct a second store.
+    """
+    global _knowledge_base_instance
+    _knowledge_base_instance = kb
+    if app is not None:
+        app.state.knowledge_base = kb
+
+
 async def _create_new_knowledge_base(app: FastAPI):
     """Create and initialize a new knowledge base (Issue #315: extracted).
 
@@ -109,7 +124,7 @@ async def _create_new_knowledge_base(app: FastAPI):
 
         if result:
             _last_kb_init_failure = 0.0  # Reset cooldown on success
-            app.state.knowledge_base = kb
+            _publish_knowledge_base(kb, app)
             _adopt_legacy_facts(kb)
             logger.info("✅ Knowledge base created and initialized (unified KnowledgeBase with ChromaDB)")
             return kb
@@ -171,6 +186,14 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
                 )
                 return None
 
+        # #18122: an app-less caller may already hold an initialized store. Project it
+        # onto this app rather than constructing a rival one.
+        adopted = peek_knowledge_base()
+        if adopted is not None and not force_refresh:
+            logger.info("Adopting the existing knowledge base singleton for this app")
+            app.state.knowledge_base = adopted
+            return adopted
+
         # Create new knowledge base
         return await _create_new_knowledge_base(app)
 
@@ -206,8 +229,6 @@ async def get_knowledge_base_async() -> "KnowledgeBase" | None:  # noqa: F821
     Returns:
         KnowledgeBase instance or None if initialization fails
     """
-    global _knowledge_base_instance
-
     try:
         # Return existing instance if already initialized
         if _knowledge_base_instance is not None:
@@ -233,7 +254,7 @@ async def get_knowledge_base_async() -> "KnowledgeBase" | None:  # noqa: F821
             result = await kb.initialize()
 
             if result:
-                _knowledge_base_instance = kb
+                _publish_knowledge_base(kb)
                 logger.info("✅ Knowledge base singleton created and initialized")
                 _adopt_legacy_facts(kb)
                 return kb
