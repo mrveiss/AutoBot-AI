@@ -28,6 +28,7 @@ See ``repo_tests/one_rate_limiter_18087_test.py``.
 import asyncio
 import time
 from dataclasses import dataclass
+from email.utils import parsedate_to_datetime
 from typing import Dict
 
 from autobot_shared.logging_manager import get_logger
@@ -69,20 +70,40 @@ class RateLimitState:
         self.retry_after_until = now + retry_after_seconds
         logger.warning("Rate limit enforced: pausing requests for %.1fs", retry_after_seconds)
 
-    def apply_github_headers(self, headers: Dict[str, str], now: float) -> None:
+    def apply_github_headers(self, headers: Dict[str, str], now: float, wall_now: float) -> None:
         """Update quota state from GitHub X-RateLimit-* response headers.
 
         GitHub provides: X-RateLimit-Remaining, X-RateLimit-Reset (epoch),
-        X-RateLimit-Limit.
+        X-RateLimit-Limit. *now* is the monotonic clock the pause deadline is
+        stored on; *wall_now* is ``time.time()``, the clock ``X-RateLimit-Reset``
+        is an epoch on. The wait is measured on the wall clock and only then
+        added to the monotonic *now*; never subtract one clock from the other.
         """
         remaining = headers.get("X-RateLimit-Remaining") or headers.get("x-ratelimit-remaining")
         reset = headers.get("X-RateLimit-Reset") or headers.get("x-ratelimit-reset")
 
-        if remaining is not None and int(remaining) == 0 and reset is not None:
-            wait = max(float(reset) - now, 1.0)
-            self.apply_retry_after(wait, now)
-        elif remaining is not None and int(remaining) < 10:
+        try:
+            remaining_n = int(remaining) if remaining is not None else None
+            reset_epoch = float(reset) if reset is not None else None
+        except ValueError:
+            logger.warning("Ignoring malformed GitHub rate-limit headers")
+            return
+        if remaining_n == 0 and reset_epoch is not None:
+            self.apply_retry_after(max(reset_epoch - wall_now, 1.0), now)
+        elif remaining_n is not None and remaining_n < 10:
             logger.warning("GitHub rate limit quota nearly exhausted: %s remaining", remaining)
+
+
+def _retry_after_seconds(value: str, wall_now: float) -> float | None:
+    """Parse a ``Retry-After`` value: delta-seconds, or an HTTP-date (wall clock)."""
+    try:
+        return max(float(value), 0.0)
+    except ValueError:
+        pass
+    try:
+        return max(parsedate_to_datetime(value).timestamp() - wall_now, 0.0)
+    except (TypeError, ValueError):
+        return None
 
 
 class IntegrationRateLimiter:
@@ -155,20 +176,20 @@ class IntegrationRateLimiter:
         """Update rate limit state from HTTP response headers.
 
         Supports GitHub X-RateLimit-* headers and the standard Retry-After
-        header used by Slack (HTTP 429).
+        header used by Slack (HTTP 429), as delta-seconds or an HTTP-date.
         """
         now = time.monotonic()
+        wall_now = time.time()
         state = self._get_state(key)
 
         retry_after = headers.get("Retry-After") or headers.get("retry-after")
         if retry_after is not None:
-            try:
-                state.apply_retry_after(float(retry_after), now)
-            except ValueError:
-                pass
+            seconds = _retry_after_seconds(retry_after, wall_now)
+            if seconds is not None:
+                state.apply_retry_after(seconds, now)
 
         if service == "github":
-            state.apply_github_headers(headers, now)
+            state.apply_github_headers(headers, now, wall_now)
 
     async def acquire(self, key: str, max_wait: float = 120.0) -> None:
         """Async acquire: waits until the rate limit allows a request.

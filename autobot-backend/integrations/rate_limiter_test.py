@@ -11,6 +11,7 @@ there are no real sleeps.
 
 import asyncio
 import time
+from email.utils import formatdate
 
 import pytest
 
@@ -93,21 +94,41 @@ def test_limiter_provider_pause_wins_over_open_windows():
 
 def test_github_headers_zero_remaining_sets_retry_after():
     state = RateLimitState()
-    time.monotonic()
-    reset_epoch = time.time() + 60  # 60 s from now (wall clock)
-    # Map monotonic now to wall-clock: we pass reset as monotonic equivalent
+    mono, wall = time.monotonic(), time.time()
     state.apply_github_headers(
-        {
-            "X-RateLimit-Remaining": "0",
-            "X-RateLimit-Reset": str(int(time.time()) + 60),
-        },
-        time.time(),  # apply_github_headers uses the passed 'now' as wall time
+        {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": str(int(wall) + 60)},
+        mono,
+        wall,
     )
-    # retry_after_until should be set to a future monotonic value
-    # We can't compare monotonic directly; just verify state blocked
-    # by calling is_ready shortly after
-    # Since we pass wall-clock 'now' but state stores monotonic, we test indirectly
-    assert state.retry_after_until > 0.0
+    assert 58.0 < state.pending_wait(mono) <= 61.0
+
+
+def test_github_reset_epoch_through_the_entry_point_pauses_about_the_reset_delta():
+    """#18087: the epoch is a wall-clock value; measured on the monotonic clock it paused ~1.7e9 s."""
+    limiter = IntegrationRateLimiter(requests_per_minute=1000, requests_per_hour=5000)
+    limiter.apply_response_headers(
+        "tok",
+        {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": str(int(time.time()) + 60)},
+        service="github",
+    )
+    can, wait = limiter.check("tok")
+    assert can is False
+    assert 58.0 < wait <= 61.0
+
+
+def test_retry_after_http_date_is_a_wall_clock_delta():
+    limiter = IntegrationRateLimiter(requests_per_minute=1000, requests_per_hour=5000)
+    date = formatdate(time.time() + 45, usegmt=True)
+    limiter.apply_response_headers("tok", {"Retry-After": date})
+    can, wait = limiter.check("tok")
+    assert can is False
+    assert 43.0 < wait <= 46.0
+
+
+def test_unparseable_retry_after_is_ignored():
+    limiter = IntegrationRateLimiter(requests_per_minute=1000, requests_per_hour=5000)
+    limiter.apply_response_headers("tok", {"Retry-After": "soon"})
+    assert limiter.check("tok") == (True, 0.0)
 
 
 def test_github_headers_nonzero_remaining_no_block():
@@ -116,6 +137,7 @@ def test_github_headers_nonzero_remaining_no_block():
     state.apply_github_headers(
         {"X-RateLimit-Remaining": "100", "X-RateLimit-Reset": str(int(time.time()) + 3600)},
         now,
+        time.time(),
     )
     assert state.pending_wait(now) == 0.0
 
