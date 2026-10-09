@@ -99,8 +99,8 @@ Chinese (the relay protocol spec).
   other; the docs push that onto the user ("give bots explicit file ownership").
 - Non-Claude harnesses get degraded context handling (no system-prompt channel, no compaction
   signal → instructions only refresh on new session).
-- Memory is per-bot only; no shared user memory or project memory; history search is plain
-  substring, no semantic retrieval; group chats are not searchable from a member's history.
+- Memory is per-bot only; no shared user memory or project memory; history search uses plain
+  substring matching, no semantic retrieval; group chats are not searchable from a member's history.
 - Delegated work is never replayed after restart — correct, but leaves partial changes for the user
   to inspect.
 - Bus factor of one; heavy surface (iOS + Electron + TUI + Rust host + two edge workers) for a solo

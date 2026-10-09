@@ -145,12 +145,18 @@ def _enums_in_tree(tree: ast.Module) -> list[tuple[str, frozenset[str]]]:
             continue
         if not any(_is_enum_base(base, aliases) for base in node.bases):
             continue
+        # A member is any plain assignment in the class body, WHATEVER its value
+        # expression. Requiring `ast.Constant` missed `INFO = auto()` -- the idiomatic
+        # spelling -- so a five-rung ladder written with `auto()` passed this guard
+        # entirely. Names starting with `_` are excluded: `_order_` and friends are
+        # Enum machinery, not rungs. Annotated assignments are excluded too, because
+        # `x: int = 1` in an Enum body is a class attribute rather than a member.
         members = frozenset(
             target.id
             for stmt in node.body
-            if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Constant)
+            if isinstance(stmt, ast.Assign)
             for target in stmt.targets
-            if isinstance(target, ast.Name)
+            if isinstance(target, ast.Name) and not target.id.startswith("_")
         )
         if members:
             found.append((node.name, members))
@@ -238,6 +244,9 @@ _MUST_DETECT = {
     "str-enum": "from enum import StrEnum\n\n\nclass R(StrEnum):\n    INFO = 'info'\n",
     "mixin": "from enum import Enum\n\n\nclass R(str, Enum):\n    INFO = 'info'\n",
     "int-enum-alias": "from enum import IntEnum as I\n\n\nclass R(I):\n    INFO = 1\n",
+    "auto-member": "from enum import Enum, auto\n\n\nclass R(Enum):\n    INFO = auto()\n",
+    "auto-aliased-base": ("from enum import Enum as E, auto\n\n\nclass R(E):\n    INFO = auto()\n"),
+    "call-valued-member": "from enum import Enum\n\n\nclass R(Enum):\n    INFO = compute()\n",
 }
 
 #: And the contrast half: modules it must NOT report. A detector that matches
@@ -249,7 +258,6 @@ _MUST_NOT_DETECT = {
     "enum-shaped-name-only": "class REnum:\n    INFO = 'info'\n",
     "a-name-containing-enum": "from x import Enumerator\n\n\nclass R(Enumerator):\n    INFO = 'info'\n",
     "no-members": "from enum import Enum\n\n\nclass R(Enum):\n    pass\n",
-    "non-constant-members": "from enum import Enum\n\n\nclass R(Enum):\n    INFO = compute()\n",
 }
 
 
@@ -286,6 +294,29 @@ def test_the_subset_probe_catches_an_aliased_severity_fork() -> None:
     assert (
         not SEVERITY_SUBSET_PROBE <= _enums_in_tree(ast.parse(near_miss))[0][1]
     ), "control: a four-rung ladder is not an exact subset and must not match"
+
+
+def test_the_subset_probe_catches_a_ladder_written_with_auto() -> None:
+    """`auto()` is the idiomatic spelling, and it used to defeat this guard outright.
+
+    The member scan required `ast.Constant`, so every rung of an `auto()` ladder was
+    invisible, the class reported zero members, and it was dropped before the subset
+    probe ever saw it. A fork written the ordinary way passed.
+    """
+    fork = (
+        "from enum import Enum, auto\n\n\nclass Urgency(Enum):\n"
+        "    INFO = auto()\n    LOW = auto()\n    MEDIUM = auto()\n"
+        "    HIGH = auto()\n    CRITICAL = auto()\n"
+    )
+    found = _enums_in_tree(ast.parse(fork))
+    assert found == [("Urgency", SEVERITY_SUBSET_PROBE)], f"auto() ladder not seen: {found}"
+
+    # Control: enum machinery and annotations are not rungs.
+    machinery = (
+        "from enum import Enum, auto\n\n\nclass R(Enum):\n"
+        "    _order_ = 'INFO'\n    _ignore_ = 'x'\n    INFO = auto()\n"
+    )
+    assert _enums_in_tree(ast.parse(machinery)) == [("R", frozenset({"INFO"}))]
 
 
 def test_the_iteration_probe_has_a_contrast_pair() -> None:

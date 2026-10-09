@@ -174,6 +174,18 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
                 return result
             # Fall through to create new instance
 
+        # #18122/#18130: adopt an existing singleton BEFORE the cooldown gate. Adoption
+        # touches no store -- it only projects an already-initialized instance onto this
+        # app -- so a recent ChromaDB failure must not suppress it. With this block after
+        # the gate, a cooldown made this function return None while peek_knowledge_base()
+        # held a healthy instance: the cooldown exists to stop re-initialization attempts,
+        # not to withhold an instance that already exists.
+        adopted = peek_knowledge_base()
+        if adopted is not None and not force_refresh:
+            logger.info("Adopting the existing knowledge base singleton for this app")
+            app.state.knowledge_base = adopted
+            return adopted
+
         # Issue #3094/#3106: Enforce retry cooldown to avoid hammering ChromaDB after
         # a startup failure.  force_refresh bypasses the cooldown (e.g. admin /reinit).
         if not force_refresh and _last_kb_init_failure > 0.0:
@@ -185,14 +197,6 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
                     remaining,
                 )
                 return None
-
-        # #18122: an app-less caller may already hold an initialized store. Project it
-        # onto this app rather than constructing a rival one.
-        adopted = peek_knowledge_base()
-        if adopted is not None and not force_refresh:
-            logger.info("Adopting the existing knowledge base singleton for this app")
-            app.state.knowledge_base = adopted
-            return adopted
 
         # Create new knowledge base
         return await _create_new_knowledge_base(app)

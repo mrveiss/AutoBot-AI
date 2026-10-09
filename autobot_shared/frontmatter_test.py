@@ -116,7 +116,9 @@ def test_unicode_line_separators_survive_inside_a_value() -> None:
     # Control: the separator really is one str.splitlines() breaks on, so the pin below
     # is testing the hazard it names and not an ordinary character.
     assert len("a\u2028b".splitlines()) == 2, "control: U+2028 must be a splitlines() boundary"
-    assert len("a\u2028b".split("\n")) == 1, "control: and must NOT be a split(chr(10)) boundary"
+    # noqa SIM905: the split() call IS what is under test here. Ruff wants a list
+    # literal, which would delete the call and leave the control checking nothing.
+    assert len("a\u2028b".split("\n")) == 1, "control: and must NOT be a split(chr(10)) boundary"  # noqa: SIM905
 
     yaml_text, body = split_frontmatter(text)
     assert yaml_text == "name: a\u2028b"

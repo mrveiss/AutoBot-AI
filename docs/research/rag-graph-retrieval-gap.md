@@ -39,7 +39,7 @@ via `components/knowledge/GraphRAGQuery.vue`.
   `api/agent_config.py:229`'s "invoked by kb_librarian during ingestion" still has no caller found.
   **Not verified:** live node/edge counts — did not query the host DB.
 - **Recorded decision vs reality.** #4761 closed with "Phase 3 is now active" for the mesh
-  retriever. The wiring is active (`initialization/neural_mesh_wiring.py`); the retrieval is not,
+  retriever. The wiring is active (`initialization/neural_mesh_wiring.py`); the retrieval is not
   because the flag defaults off.
 - **Three graphs, one concept.** Mesh, memory graph and fact relations each have their own
   storage and expansion logic — a consolidation question before wiring any of them into chat.

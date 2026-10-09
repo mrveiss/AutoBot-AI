@@ -234,6 +234,104 @@ def test_the_store_count_is_recorded() -> None:
     assert len(_modules_caching_a_knowledge_base()) == 2
 
 
+def _publication_report(source: str) -> tuple[dict[str, set[str]], set[str]]:
+    """Which functions call the publisher, and which declare the singleton global.
+
+    Takes source TEXT rather than reading the module, so the matcher itself can be put
+    in front of synthetic fixtures. Reading only the real file made this guard the shape
+    it exists to forbid: a broken matcher would report a clean tree.
+    """
+    tree = ast.parse(source)
+    funcs = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    callers = {
+        node.name: {
+            ast.unparse(sub.func)
+            for sub in ast.walk(node)
+            if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Name)
+        }
+        for node in funcs
+    }
+    assigners = {
+        node.name
+        for node in funcs
+        for sub in ast.walk(node)
+        if isinstance(sub, ast.Global) and "_knowledge_base_instance" in sub.names
+    }
+    return callers, assigners
+
+
+_CREATORS = ("_create_new_knowledge_base", "get_knowledge_base_async")
+
+#: The real shape: both creators delegate, only the helper writes the global.
+_GOOD_SOURCE = """
+def _publish_knowledge_base(kb, app=None):
+    global _knowledge_base_instance
+    _knowledge_base_instance = kb
+
+async def _create_new_knowledge_base(app):
+    kb = KnowledgeBase()
+    _publish_knowledge_base(kb, app)
+
+async def get_knowledge_base_async():
+    kb = KnowledgeBase()
+    _publish_knowledge_base(kb)
+"""
+
+#: One creator writes app state directly -- the exact regression this guard is for.
+_BYPASS_SOURCE = """
+def _publish_knowledge_base(kb, app=None):
+    global _knowledge_base_instance
+    _knowledge_base_instance = kb
+
+async def _create_new_knowledge_base(app):
+    kb = KnowledgeBase()
+    app.state.knowledge_base = kb
+
+async def get_knowledge_base_async():
+    kb = KnowledgeBase()
+    _publish_knowledge_base(kb)
+"""
+
+#: Two writers of the singleton -- the divergence returning by another route.
+_SECOND_WRITER_SOURCE = """
+def _publish_knowledge_base(kb, app=None):
+    global _knowledge_base_instance
+    _knowledge_base_instance = kb
+
+async def _create_new_knowledge_base(app):
+    kb = KnowledgeBase()
+    _publish_knowledge_base(kb, app)
+
+async def get_knowledge_base_async():
+    global _knowledge_base_instance
+    kb = KnowledgeBase()
+    _knowledge_base_instance = kb
+    _publish_knowledge_base(kb)
+"""
+
+
+def test_the_publication_matcher_accepts_the_consolidated_shape() -> None:
+    callers, assigners = _publication_report(_GOOD_SOURCE)
+    assert all("_publish_knowledge_base" in callers[c] for c in _CREATORS)
+    assert assigners == {"_publish_knowledge_base"}
+
+
+def test_the_publication_matcher_catches_a_creator_that_bypasses_the_helper() -> None:
+    """The contrast half. Without it, a matcher that finds nothing also passes."""
+    callers, _ = _publication_report(_BYPASS_SOURCE)
+    assert (
+        "_publish_knowledge_base" not in callers["_create_new_knowledge_base"]
+    ), "the matcher must notice a creator that writes app state directly"
+
+
+def test_the_publication_matcher_catches_a_second_writer_of_the_singleton() -> None:
+    _, assigners = _publication_report(_SECOND_WRITER_SOURCE)
+    assert assigners == {
+        "_publish_knowledge_base",
+        "get_knowledge_base_async",
+    }, "the matcher must notice a second function declaring the singleton global"
+
+
 def test_both_creation_paths_publish_through_one_helper() -> None:
     """#18130: the two creators wrote to different stores and neither saw the other.
 
@@ -242,36 +340,107 @@ def test_both_creation_paths_publish_through_one_helper() -> None:
     second therefore built a SECOND KnowledgeBase, and `peek_knowledge_base()` reported
     no instance for an app that had one -- two live stores in the file whose whole
     subject is that there is one. Found in review, not by this guard, which is why the
-    assertion exists: both paths must publish through `_publish_knowledge_base`.
+    assertion exists. The matcher is pinned both ways by the three tests above.
     """
     source = (repo_root() / "autobot-backend" / "knowledge_factory.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    publishers = {
-        node.name: {
-            ast.unparse(sub.func)
-            for sub in ast.walk(node)
-            if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Name)
-        }
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
-    for creator in ("_create_new_knowledge_base", "get_knowledge_base_async"):
-        assert creator in publishers, f"{creator} is gone — re-point this guard"
-        assert "_publish_knowledge_base" in publishers[creator], (
+    callers, assigners = _publication_report(source)
+    for creator in _CREATORS:
+        assert creator in callers, f"{creator} is gone -- re-point this guard"
+        assert "_publish_knowledge_base" in callers[creator], (
             f"#18122/#18130: {creator} no longer publishes through _publish_knowledge_base, "
             "so the instance it creates is invisible to the other creation path and a "
             "second KnowledgeBase gets built"
         )
-
-    # And the helper is the only place that assigns the module singleton.
-    assigners = {
-        node.name
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        for sub in ast.walk(node)
-        if isinstance(sub, ast.Global) and "_knowledge_base_instance" in sub.names
-    }
     assert assigners == {"_publish_knowledge_base"}, (
         f"#18122: {sorted(assigners)} declare the singleton global; exactly one function "
         "may write it, or the stores diverge again"
     )
+
+
+def _stmt_index(func: ast.AST, predicate) -> int:
+    """Position of the first top-level statement in `func` satisfying `predicate`.
+
+    Top-level statements only, and the docstring is skipped -- a text search for either
+    anchor here is fooled by the docstring, which names the cooldown constant several
+    lines ABOVE the code that reads it. That is the same comment-satisfies-the-probe
+    defect this PR fixed in the severity guard, and it reappeared in this very test.
+    """
+    body = list(func.body)
+    if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+        body = body[1:]
+    # The real function wraps everything in one `try:`, so the top-level list is a
+    # single statement and both anchors land at index 0. Descend through a lone
+    # wrapper so the comparison is between the statements that carry the logic.
+    while len(body) == 1 and isinstance(body[0], (ast.Try, ast.With, ast.AsyncWith)):
+        body = list(body[0].body)
+    for i, stmt in enumerate(body):
+        if any(predicate(node) for node in ast.walk(stmt)):
+            return i
+    return -1
+
+
+def _reads_cooldown(node: ast.AST) -> bool:
+    return isinstance(node, ast.Name) and node.id == "KB_RETRY_COOLDOWN_SECONDS"
+
+
+def _calls_peek(node: ast.AST) -> bool:
+    return isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "peek_knowledge_base"
+
+
+def test_adoption_is_not_gated_behind_the_retry_cooldown() -> None:
+    """#18130 review: a cooldown must not withhold an instance that already exists.
+
+    The adoption branch was placed after the cooldown gate, so a recent ChromaDB
+    failure made `get_or_create_knowledge_base` return None while
+    `peek_knowledge_base()` held a healthy instance. The cooldown exists to stop
+    re-initialization attempts; adoption initializes nothing, so it precedes the gate.
+    """
+    tree = ast.parse((repo_root() / "autobot-backend" / "knowledge_factory.py").read_text(encoding="utf-8"))
+    func = next(
+        (
+            n
+            for n in ast.walk(tree)
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == "get_or_create_knowledge_base"
+        ),
+        None,
+    )
+    assert func is not None, "get_or_create_knowledge_base is gone -- re-point this guard"
+
+    adopt_at = _stmt_index(func, _calls_peek)
+    cooldown_at = _stmt_index(func, _reads_cooldown)
+    assert adopt_at >= 0, "the app accessor no longer adopts the existing singleton"
+    assert cooldown_at >= 0, "the retry cooldown gate is gone -- re-point this guard"
+    assert adopt_at < cooldown_at, (
+        f"#18130: adoption is at statement {adopt_at} and the cooldown gate at {cooldown_at}. "
+        "Adoption must come FIRST, or a recent init failure makes this function return None "
+        "while peek_knowledge_base() holds a healthy instance."
+    )
+
+
+def test_the_statement_order_probe_has_a_contrast_pair() -> None:
+    """The probe must fail on the broken order, or it proves nothing about the good one."""
+    broken = ast.parse(
+        "async def get_or_create_knowledge_base(app):\n"
+        '    """Mentions KB_RETRY_COOLDOWN_SECONDS in the docstring, as the real one does."""\n'
+        "    if _last_kb_init_failure > 0.0:\n"
+        "        if elapsed < KB_RETRY_COOLDOWN_SECONDS:\n"
+        "            return None\n"
+        "    adopted = peek_knowledge_base()\n"
+        "    return adopted\n"
+    )
+    func = broken.body[0]
+    assert _stmt_index(func, _reads_cooldown) < _stmt_index(
+        func, _calls_peek
+    ), "control: this fixture IS the broken order and the probe must see it that way"
+
+    fixed = ast.parse(
+        "async def get_or_create_knowledge_base(app):\n"
+        '    """Mentions KB_RETRY_COOLDOWN_SECONDS in the docstring, as the real one does."""\n'
+        "    adopted = peek_knowledge_base()\n"
+        "    if adopted is not None:\n"
+        "        return adopted\n"
+        "    if elapsed < KB_RETRY_COOLDOWN_SECONDS:\n"
+        "        return None\n"
+    )
+    func = fixed.body[0]
+    assert _stmt_index(func, _calls_peek) < _stmt_index(func, _reads_cooldown)
