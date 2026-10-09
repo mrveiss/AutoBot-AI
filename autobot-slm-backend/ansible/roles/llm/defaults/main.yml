@@ -12,6 +12,28 @@ llm_models_dir: /var/lib/ollama
 llm_install_ollama: true
 llm_pull_models: true
 
+# Minimum Ollama the model list below needs (#18128).
+#
+# The install tasks ran only when /usr/local/bin/ollama was ABSENT, so an Ollama
+# already on the box was never upgraded. The registry refused a manifest the
+# installed version could not read, and the role failed on a model it ships by
+# default:
+#
+#   ollama pull gemma3:4b
+#   Error: pull model manifest: 412:
+#   The model you are attempting to pull requires a newer version of Ollama.
+#
+# Observed on a node running 0.19.0. The pull failing is the right signal; what
+# was wrong is that no task upstream could fix the cause, on any run, ever.
+#
+# This value is a TRIGGER, not a target. The vendor installer this role fetches
+# installs the current release, so any floor above a node's installed version
+# upgrades it to latest -- the number only decides WHETHER to upgrade. 0.20.0 is
+# the first version above the 0.19.0 observed failing, not a verified claim
+# of gemma3:4b, which is not published anywhere this role can read. Raise it
+# together with the model list.
+llm_ollama_min_version: "0.20.0"
+
 # GPU detection: "auto" runs nvidia-smi at deploy time.
 # Override with true/false to skip detection.
 llm_has_gpu: "auto"

@@ -110,9 +110,13 @@ def test_no_checker_redeclares_a_shared_helper() -> None:
         "there, so the guard would police a helper that does not exist"
     )
 
-    candidates = tracked_paths(root, "tools/lint/*.py", "pipeline-scripts/*.py")
+    # `scripts/*.py` was missing until #18093: three byte-identical copies of
+    # `configure_logging` lived in the file-size gates there, so this guard reported
+    # clean while the exact duplication it exists to stop was in the tree. A guard is
+    # only as wide as its glob -- "no offenders" and "did not look" read identically.
+    candidates = tracked_paths(root, "tools/lint/*.py", "pipeline-scripts/*.py", "scripts/*.py")
     # Non-vacuity: an empty sweep satisfies the assertion by looking at nothing.
-    assert len(candidates) > 40, f"only {len(candidates)} files swept -- the patterns or the root are wrong"
+    assert len(candidates) > 100, f"only {len(candidates)} files swept -- the patterns or the root are wrong"
 
     offenders: list[str] = []
     for rel in candidates:

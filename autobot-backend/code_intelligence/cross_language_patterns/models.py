@@ -15,6 +15,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List
 
+from autobot_shared.status_enums import Severity
+
 
 class PatternType(Enum):
     """Types of cross-language patterns detected."""
@@ -50,14 +52,10 @@ class PatternType(Enum):
     CONSTANT_DEFINITION = "constant_definition"
 
 
-class PatternSeverity(Enum):
-    """Severity levels for pattern issues."""
-
-    CRITICAL = "critical"  # API contract breaks, type mismatches
-    HIGH = "high"  # Significant duplications
-    MEDIUM = "medium"  # Minor inconsistencies
-    LOW = "low"  # Suggestions for improvement
-    INFO = "info"  # Informational findings
+#: An exact subset of the canonical ladder (#18098). Declaration order differed from the
+#: other `PatternSeverity` and from canonical; order was never load-bearing here, as
+#: nothing iterates this enum -- the distributions count observed values.
+PatternSeverity = Severity
 
 
 class PatternCategory(Enum):

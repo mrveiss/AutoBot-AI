@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
+from autobot_shared.frontmatter import split_frontmatter
 from autobot_shared.logging_manager import get_logger
 from memory import MemoryManager
 
@@ -22,7 +23,6 @@ logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for markdown parsing
 _WORD_RE = re.compile(r"\b\w+\b")
-_FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
 _TAGS_RE = re.compile(r"tags:\s*\[(.*?)\]")
 _INLINE_TAGS_RE = re.compile(r"#(\w+)")
 _HEADER_RE = re.compile(r"^(#{1,6})\s+(.+)")
@@ -250,9 +250,8 @@ class MarkdownReferenceSystem:
         tags = set()
 
         # Look for YAML frontmatter tags
-        frontmatter_match = _FRONTMATTER_RE.match(content)
-        if frontmatter_match:
-            frontmatter = frontmatter_match.group(1)
+        frontmatter, _ = split_frontmatter(content)
+        if frontmatter is not None:
             # Simple tag extraction from YAML
             tag_matches = _TAGS_RE.findall(frontmatter)
             for tag_list in tag_matches:

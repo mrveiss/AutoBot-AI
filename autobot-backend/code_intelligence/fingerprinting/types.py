@@ -15,6 +15,7 @@ from enum import Enum
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.code_graph import compute_node_id, module_path_from_rel_path, project_relative_path
+from autobot_shared.status_enums import Severity
 
 # =============================================================================
 # Enums and Constants
@@ -39,14 +40,10 @@ class FingerprintType(Enum):
     TOKEN_SEQUENCE = "token_sequence"  # nosec B105  # enum value for fingerprint strategy type, not a credential
 
 
-class CloneSeverity(Enum):
-    """Severity levels for detected clones."""
-
-    INFO = "info"  # Single occurrence, just documentation
-    LOW = "low"  # 2-3 occurrences, minor duplication
-    MEDIUM = "medium"  # 4-6 occurrences, should be refactored
-    HIGH = "high"  # 7+ occurrences, significant technical debt
-    CRITICAL = "critical"  # Large clones, urgent refactoring needed
+#: An exact subset of the canonical ladder (#18098). The occurrence-count meaning of
+#: each rung -- INFO single, LOW 2-3, MEDIUM 4-6, HIGH 7+, CRITICAL large -- is decided by
+#: the detector that assigns it, not by the enum, so nothing is lost by aliasing.
+CloneSeverity = Severity
 
 
 # =============================================================================
