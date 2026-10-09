@@ -20,6 +20,10 @@ from typing import Any, Callable, Dict, Optional
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.singleton_factory import lazy_singleton
+
+# #12771: the local policy class is RetryPolicy now, so this alias no longer exists to
+# avoid shadowing it. Kept because the name says WHICH of the two this is -- the
+# UPPERCASE defaults namespace in ssot_constants, not a policy object.
 from autobot_shared.ssot_constants import RetryConfig as ThresholdRetryConfig
 from autobot_shared.ssot_constants import TimingConstants
 
@@ -57,7 +61,7 @@ class BackoffStrategy(Enum):
 
 # Canonical transient (retryable) exception set (#11689). Single source of
 # truth for "which concrete exceptions are transient": Celery derives
-# CELERY_TRANSIENT_ERRORS from this tuple, and RetryConfig builds its
+# CELERY_TRANSIENT_ERRORS from this tuple, and RetryPolicy builds its
 # retryable default from it, so the split can never silently drift.
 RETRYABLE_EXCEPTIONS: tuple = (
     ConnectionError,
@@ -67,7 +71,7 @@ RETRYABLE_EXCEPTIONS: tuple = (
 
 
 @dataclass
-class RetryConfig:
+class RetryPolicy:
     """Configuration for retry mechanism (Issue #376 - use named constants)"""
 
     max_attempts: int = ThresholdRetryConfig.DEFAULT_RETRIES
@@ -117,9 +121,9 @@ class RetryExhaustedError(Exception):
 class RetryMechanism:
     """Retry mechanism with various backoff strategies"""
 
-    def __init__(self, config: RetryConfig | None = None):
+    def __init__(self, config: RetryPolicy | None = None):
         """Initialize retry mechanism with optional configuration."""
-        self.config = config or RetryConfig()
+        self.config = config or RetryPolicy()
         self._stats_lock = threading.Lock()
         self.stats: Dict[str, Any] = {
             "total_attempts": 0,
@@ -375,7 +379,7 @@ def retry_async(
         @wraps(func)
         async def wrapper(*args, **kwargs):
             """Async wrapper that executes function with retry mechanism."""
-            config = RetryConfig(
+            config = RetryPolicy(
                 max_attempts=max_attempts,
                 base_delay=base_delay,
                 max_delay=max_delay,
@@ -425,7 +429,7 @@ def retry_sync(
         @wraps(func)
         def wrapper(*args, **kwargs):
             """Sync wrapper that executes function with retry mechanism."""
-            config = RetryConfig(
+            config = RetryPolicy(
                 max_attempts=max_attempts,
                 base_delay=base_delay,
                 max_delay=max_delay,
@@ -446,13 +450,13 @@ def retry_sync(
 
 
 # Alias matching the target API documented in Issue #3830.
-#   @with_retry(RetryConfig(max_attempts=3, strategy=BackoffStrategy.EXPONENTIAL))
-def with_retry(config: "RetryConfig"):
-    """Decorator factory accepting a RetryConfig instance (Issue #3830).
+#   @with_retry(RetryPolicy(max_attempts=3, strategy=BackoffStrategy.EXPONENTIAL))
+def with_retry(config: "RetryPolicy"):
+    """Decorator factory accepting a RetryPolicy instance (Issue #3830).
 
     Usage::
 
-        @with_retry(RetryConfig(max_attempts=3, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
+        @with_retry(RetryPolicy(max_attempts=3, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
         async def my_op(): ...
 
     Both sync and async callables are supported.
@@ -486,7 +490,7 @@ async def retry_database_operation(func: Callable, *args, **kwargs) -> Any:
     import sqlite3
 
     # Database operations use faster retries with shorter delays
-    config = RetryConfig(
+    config = RetryPolicy(
         max_attempts=ThresholdRetryConfig.DEFAULT_RETRIES,
         base_delay=TimingConstants.SHORT_DELAY,
         max_delay=TimingConstants.MEDIUM_DELAY,
@@ -508,7 +512,7 @@ async def retry_network_operation(func: Callable, *args, **kwargs) -> Any:
     import aiohttp
 
     # Network operations use moderate delays, capped to prevent long waits
-    config = RetryConfig(
+    config = RetryPolicy(
         max_attempts=ThresholdRetryConfig.DEFAULT_RETRIES,
         base_delay=TimingConstants.SHORT_DELAY,
         max_delay=TimingConstants.LONG_DELAY,  # 10s max - reduced from 30s for responsiveness
@@ -529,7 +533,7 @@ async def retry_network_operation(func: Callable, *args, **kwargs) -> Any:
 async def retry_file_operation(func: Callable, *args, **kwargs) -> Any:
     """Retry file operations with file-specific configuration"""
     # File operations use very short delays - usually file locks are brief
-    config = RetryConfig(
+    config = RetryPolicy(
         max_attempts=ThresholdRetryConfig.DEFAULT_RETRIES,
         base_delay=TimingConstants.MICRO_DELAY,
         max_delay=TimingConstants.STANDARD_DELAY * 2,  # 2s max for file ops
@@ -571,7 +575,7 @@ if __name__ == "__main__":
             logger.info("Network call failed: %s", e)
 
         # Example 2: Using retry mechanism directly
-        retry_mechanism = RetryMechanism(RetryConfig(max_attempts=3, strategy=RetryStrategy.JITTERED_BACKOFF))
+        retry_mechanism = RetryMechanism(RetryPolicy(max_attempts=3, strategy=RetryStrategy.JITTERED_BACKOFF))
 
         async def another_flaky_operation():
             """Example operation that may timeout randomly."""
