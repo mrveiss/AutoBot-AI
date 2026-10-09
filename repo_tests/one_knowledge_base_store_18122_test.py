@@ -261,17 +261,26 @@ def _publication_report(source: str) -> tuple[dict[str, set[str]], set[str], set
     # hole: a creator could call the publisher and then assign a different instance to
     # `app.state.knowledge_base`, so the call was present, one function still owned the
     # global, both assertions passed, and the two stores diverged anyway.
-    projectors = {
-        node.name
-        for node in funcs
-        for sub in ast.walk(node)
-        if isinstance(sub, (ast.Assign, ast.AugAssign, ast.AnnAssign))
-        for tgt in (sub.targets if isinstance(sub, ast.Assign) else [sub.target])
-        if isinstance(tgt, ast.Attribute)
+    # A write outside every function -- module or class body -- runs at import time and
+    # is reported as `<module>`; collecting from function bodies only made it invisible.
+    in_funcs = {id(sub) for node in funcs for sub in ast.walk(node)}
+    projectors = {node.name for node in funcs if any(map(_writes_projection, ast.walk(node)))}
+    if any(_writes_projection(sub) and id(sub) not in in_funcs for sub in ast.walk(tree)):
+        projectors.add("<module>")
+    return callers, assigners, projectors
+
+
+def _writes_projection(node: ast.AST) -> bool:
+    """True when `node` assigns to `<something>.state.knowledge_base`."""
+    if not isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
+        return False
+    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+    return any(
+        isinstance(tgt, ast.Attribute)
         and tgt.attr == "knowledge_base"
         and ast.unparse(tgt).endswith(".state.knowledge_base")
-    }
-    return callers, assigners, projectors
+        for tgt in targets
+    )
 
 
 _CREATORS = ("_create_new_knowledge_base", "get_knowledge_base_async")
@@ -362,6 +371,19 @@ def test_the_matcher_catches_a_rival_write_to_the_projection() -> None:
         "_publish_knowledge_base",
         "_create_new_knowledge_base",
     }, "the matcher must name the creator that wrote a rival instance to the projection"
+
+
+@pytest.mark.parametrize(
+    ("label", "source", "expected"),
+    [
+        ("module level", "app.state.knowledge_base = KnowledgeBase()\n", {"<module>"}),
+        ("class body", "class C:\n    app.state.knowledge_base = None\n", {"<module>"}),
+        ("a read, not a write", "kb = app.state.knowledge_base\n", set()),
+    ],
+)
+def test_the_projection_matcher_sees_writes_outside_functions(label: str, source: str, expected: set[str]) -> None:
+    """A module-level write runs at import and must reach the backend-wide check."""
+    assert _publication_report(source)[2] == expected, label
 
 
 def test_the_publication_matcher_accepts_the_consolidated_shape() -> None:
