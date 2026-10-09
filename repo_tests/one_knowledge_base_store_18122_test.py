@@ -30,12 +30,11 @@ from __future__ import annotations
 
 import ast
 import functools
-import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths
 
 #: Modules still allowed to cache a KnowledgeBase, with why. SHRINK-ONLY: removing a
 #: store means deleting its line, never adding one.
@@ -58,16 +57,11 @@ _SEARCH_ROOTS = ("autobot-backend/",)
 
 @functools.lru_cache(maxsize=1)
 def _tracked_python_files() -> tuple[str, ...]:
-    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", "*.py"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        cwd=str(repo_root()),
-        env=scrubbed_git_env(),
-        check=True,
-    )
-    return tuple(line for line in result.stdout.splitlines() if line)
+    # #15926: `tracked_paths` is the one git enumerator -- it builds the pathspec and
+    # raises on an empty result, so a guard cannot report clean having enumerated
+    # nothing. Three new guards of mine each re-ran `git ls-files` directly, which is
+    # what `one_git_enumeration_15926_test` counts and refuses to let grow.
+    return tuple(tracked_paths(repo_root(), "*.py"))
 
 
 def _is_knowledge_base_ref(node: ast.AST | None) -> bool:
