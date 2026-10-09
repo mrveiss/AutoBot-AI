@@ -25,8 +25,8 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from autobot_shared.db_session import async_session_scope
 from autobot_shared.ssot_config import database_pool_settings
-from autobot_shared.user_management.session_scope import session_scope
 from user_management.config import get_autobot_db_config, get_slm_db_config
 
 logger = logging.getLogger(__name__)
@@ -144,7 +144,7 @@ def get_autobot_session_maker() -> async_sessionmaker[AsyncSession]:
 @asynccontextmanager
 async def get_slm_session() -> AsyncGenerator[AsyncSession, None]:
     """Get SLM database session (context manager)."""
-    async with session_scope(get_slm_session_maker()) as session:
+    async with async_session_scope(get_slm_session_maker()) as session:
         yield session
 
 
@@ -164,7 +164,7 @@ async def get_slm_db() -> AsyncGenerator[AsyncSession, None]:
 @asynccontextmanager
 async def get_autobot_session() -> AsyncGenerator[AsyncSession, None]:
     """Get AutoBot database session (context manager)."""
-    async with session_scope(get_autobot_session_maker()) as session:
+    async with async_session_scope(get_autobot_session_maker()) as session:
         yield session
 
 

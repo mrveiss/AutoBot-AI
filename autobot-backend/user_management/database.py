@@ -22,9 +22,9 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from autobot_shared.db_session import async_session_scope
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import database_pool_settings
-from autobot_shared.user_management.session_scope import session_scope
 from config import config_manager
 from user_management.config import get_deployment_config
 
@@ -202,7 +202,7 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
         async def get_users(session: AsyncSession = Depends(get_async_session)):
             ...
     """
-    async with session_scope(get_async_session_factory()) as session:
+    async with async_session_scope(get_async_session_factory()) as session:
         yield session
 
 
@@ -215,7 +215,7 @@ async def db_session_context() -> AsyncGenerator[AsyncSession, None]:
         async with db_session_context() as session:
             result = await session.execute(query)
     """
-    async with session_scope(get_async_session_factory()) as session:
+    async with async_session_scope(get_async_session_factory()) as session:
         yield session
 
 

@@ -39,7 +39,7 @@ class RBACDependencies:
     The session factory, the user service and the deployment config are per-service
     (each binds its own engine and settings), so the shared module takes them as
     arguments instead of importing `user_management.*` -- which would resolve to
-    whichever service's package is on `sys.path`. Same pattern as `session_scope`.
+    whichever service's package is on `sys.path`. Same pattern as `async_session_scope`.
     """
 
     db_session_context: Callable[[], AbstractAsyncContextManager[Any]]

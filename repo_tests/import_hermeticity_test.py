@@ -168,7 +168,7 @@ REACH = declare(
     # growth` -- zero headroom by construction, so one added module is enough.
     # Second time this declaration has gone red that way in a night.
     #
-    # 635 is mid-window, not the bottom. The block above records this population
+    # 660 is mid-window, not the bottom. The block above records this population
     # growing ~52 modules per 30 days, so a floor at the bottom of its band is
     # red again within weeks of ordinary work.
     #
@@ -178,7 +178,7 @@ REACH = declare(
     # nothing owns the sentence. The arithmetic is in the commit message, which
     # cannot drift from the tree it describes. Re-derive rather than trusting
     # any figure written here.
-    floor=635,
+    floor=660,
     what="non-test modules under api/ and autobot_shared/, both backends",
     growth=60,
 )

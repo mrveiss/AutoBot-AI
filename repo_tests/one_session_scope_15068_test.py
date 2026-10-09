@@ -8,7 +8,7 @@ Owner decision 2026-10-09: of the user-management modules shared by both service
 `db_session_context` is consolidated. Its body -- seed the post-commit callbacks, commit,
 run them, roll back on error -- was written four times across the two services'
 `user_management/database.py`. It now lives once in
-`autobot_shared/user_management/session_scope.py`.
+`autobot_shared/db_session.py`.
 
 The marker is the SEEDING of the post-commit list: assigning to
 `session.info["_post_commit_cbs"]`. Only a transaction scope does that. A reader such as
@@ -26,7 +26,7 @@ from repo_tests._paths import repo_root
 
 from tools.lint._scan_helpers import tracked_paths
 
-_CANONICAL = "autobot_shared/user_management/session_scope.py"
+_CANONICAL = "autobot_shared/db_session.py"
 _KEY = "_post_commit_cbs"
 _KEY_CONSTANT = "POST_COMMIT_CALLBACKS"
 
@@ -98,7 +98,7 @@ def test_one_transaction_scope_seeds_the_post_commit_list() -> None:
     seeders, _ = _seeders()
     assert seeders == (_CANONICAL,), (
         f"#15068: {list(seeders)} seed session.info['{_KEY}']; the transaction scope lives once in "
-        f"{_CANONICAL}. Call `session_scope(<your session maker>)` instead of copying its body."
+        f"{_CANONICAL}. Call `async_session_scope(<your session maker>)` instead of copying its body."
     )
 
 
@@ -108,6 +108,6 @@ def test_each_service_uses_the_shared_scope(rel: str) -> None:
     calls = [
         n
         for n in ast.walk(tree)
-        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "session_scope"
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "async_session_scope"
     ]
-    assert calls, f"#15068: {rel} no longer opens its sessions through session_scope"
+    assert calls, f"#15068: {rel} no longer opens its sessions through async_session_scope"
