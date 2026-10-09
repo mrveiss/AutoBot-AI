@@ -79,6 +79,45 @@
     path: /usr/local/bin/ollama
   register: _ollama_binary
 
+# #18128: presence is not enough. Gating install on the binary existing meant
+# an Ollama already on the box was never upgraded, so the registry refused a
+# manifest it could not read and the role failed pulling a model it ships by
+# default (412, observed on 0.19.0). Compare the version and install when absent
+# OR below the floor; the vendor installer upgrades in place.
+- name: "Install | Read the installed Ollama version (#18128)"
+  ansible.builtin.command:
+    cmd: ollama --version
+  register: _ollama_version_raw
+  changed_when: false
+  failed_when: false
+  when: _ollama_binary.stat.exists
+
+- name: "Install | Parse the installed Ollama version (#18128)"
+  ansible.builtin.set_fact:
+    # `ollama version is 0.19.0` -> `0.19.0`. An unparseable or failed read
+    # this empty, which the condition below treats as "needs installing" and not
+    # as "satisfied" -- a version we could not read must not pass a floor check.
+    _ollama_version: >-
+      {{ (_ollama_version_raw.stdout | default('')
+          | regex_search('[0-9]+\.[0-9]+\.[0-9]+') | default('', true))
+         if (_ollama_binary.stat.exists
+             and (_ollama_version_raw.rc | default(1)) == 0)
+         else '' }}
+
+- name: "Install | Decide whether Ollama must be installed or upgraded (#18128)"
+  ansible.builtin.set_fact:
+    _ollama_needs_install: >-
+      {{ (not _ollama_binary.stat.exists)
+         or (_ollama_version | length == 0)
+         or (_ollama_version is version(llm_ollama_min_version, '<')) }}
+
+- name: "Install | Report the Ollama version decision (#18128)"
+  ansible.builtin.debug:
+    msg: >-
+      Ollama installed={{ _ollama_version | default('(none)', true) }}
+      floor={{ llm_ollama_min_version }}
+      action={{ 'install/upgrade' if _ollama_needs_install else 'keep' }}
+
 # #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
 - name: "Install | Refresh apt cache (best-effort, bounded; #6719)"
   ansible.builtin.command:
@@ -89,7 +128,7 @@
   become: true
   changed_when: false
   failed_when: false
-  when: not _ollama_binary.stat.exists
+  when: _ollama_needs_install
 
 - name: "Install | Install LLM dependencies"
   ansible.builtin.apt:
@@ -98,7 +137,7 @@
       - ca-certificates
       - zstd
     state: present
-  when: not _ollama_binary.stat.exists
+  when: _ollama_needs_install
 
 - name: "Install | Download Ollama installer"
   ansible.builtin.get_url:
@@ -107,15 +146,16 @@
     mode: "0755"
   when:
     - llm_install_ollama | default(true)
-    - not _ollama_binary.stat.exists
+    - _ollama_needs_install
 
 - name: "Install | Install Ollama"
+  # No `creates:` guard (#18128): it skipped when the binary existed, which is
+  # the upgrade case. `_ollama_needs_install` is the idempotence condition now.
   ansible.builtin.shell:
     cmd: /tmp/ollama-install.sh
-    creates: /usr/local/bin/ollama
   when:
     - llm_install_ollama | default(true)
-    - not _ollama_binary.stat.exists
+    - _ollama_needs_install
 
 - name: "Install | Create Ollama data directory"
   ansible.builtin.file:
