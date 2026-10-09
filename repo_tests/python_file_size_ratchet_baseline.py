@@ -226,7 +226,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/intent_classification_test.py": 622,
     "autobot-backend/judges/multi_agent_arbitrator.py": 611,
     "autobot-backend/judges/security_risk_judge.py": 842,
-    "autobot-backend/knowledge/adapters/okf_adapter.py": 776,
+    "autobot-backend/knowledge/adapters/okf_adapter.py": 770,
     "autobot-backend/knowledge/base.py": 709,
     "autobot-backend/knowledge/bulk.py": 2013,
     "autobot-backend/knowledge/categories.py": 965,
