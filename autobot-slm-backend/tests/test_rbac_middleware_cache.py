@@ -36,6 +36,11 @@ import pytest
 # ---------------------------------------------------------------------------
 
 _SLM_ROOT = Path(__file__).parent.parent
+
+# #18088: the implementation is shared by both services now. These tests load it by
+# path with stubbed deps, so they follow the file rather than this service's copy --
+# which is a 29-line re-export shim and would make every assertion below vacuous.
+_SHARED_MIDDLEWARE = _SLM_ROOT.parent / "autobot_shared" / "user_management" / "middleware" / "rbac_middleware.py"
 _SHARED_ROOT = _SLM_ROOT.parent / "autobot_shared"
 
 for _p in (str(_SLM_ROOT), str(_SHARED_ROOT)):
@@ -115,7 +120,7 @@ sys.modules["autobot_shared.ssot_constants"] = _ssot_constants_mod
 try:
     _SPEC = importlib.util.spec_from_file_location(
         "user_management.middleware.rbac_middleware",
-        _SLM_ROOT / "user_management" / "middleware" / "rbac_middleware.py",
+        _SHARED_MIDDLEWARE,
     )
     _rbac_mod: types.ModuleType = types.ModuleType(_SPEC.name)
     _SPEC.loader.exec_module(_rbac_mod)
@@ -527,6 +532,6 @@ class TestStructuralInvariants:
 
     def test_middleware_uses_get_async_redis_client(self):
         """rbac_middleware.py must import from autobot_shared.redis_client."""
-        src = (_SLM_ROOT / "user_management" / "middleware" / "rbac_middleware.py").read_text(encoding="utf-8")
+        src = (_SHARED_MIDDLEWARE).read_text(encoding="utf-8")
         assert "get_async_redis_client" in src
         assert "autobot_shared.redis_client" in src

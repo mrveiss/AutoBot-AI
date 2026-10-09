@@ -21,7 +21,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-_SRC = Path(__file__).resolve().parent / "rbac_middleware.py"
+# #18088: the implementation moved to autobot_shared; this test reads it by path for
+# AST assertions, so it follows the file rather than its own directory.
+_SRC = Path(__file__).resolve().parents[3] / "autobot_shared/user_management/middleware/rbac_middleware.py"
 
 
 def _source() -> str:
@@ -106,7 +108,7 @@ class TestFailureIsolation:
     @pytest.mark.asyncio
     async def test_db_failure_does_not_propagate(self):
         """A failing audit write must not convert a 403 into a 500."""
-        from user_management.middleware import rbac_middleware as mod
+        from autobot_shared.user_management.middleware import rbac_middleware as mod
 
         with patch.object(mod, "db_session_context", side_effect=RuntimeError("db down")):
             # Must return normally rather than raise.
@@ -115,7 +117,7 @@ class TestFailureIsolation:
     @pytest.mark.asyncio
     async def test_denial_is_logged_even_when_the_write_fails(self, caplog):
         """The warning is emitted first, so a DB outage cannot hide the denial."""
-        from user_management.middleware import rbac_middleware as mod
+        from autobot_shared.user_management.middleware import rbac_middleware as mod
 
         with patch.object(mod, "db_session_context", side_effect=RuntimeError("db down")):
             with caplog.at_level("WARNING"):
@@ -127,7 +129,7 @@ class TestFailureIsolation:
     @pytest.mark.asyncio
     async def test_entry_carries_the_forensic_fields(self):
         """user, permission, path, ip and user-agent — the point of the trail."""
-        from user_management.middleware import rbac_middleware as mod
+        from autobot_shared.user_management.middleware import rbac_middleware as mod
 
         session = MagicMock()
         ctx = MagicMock()
@@ -155,7 +157,7 @@ class TestFailureIsolation:
 
 def test_request_context_survives_a_clientless_request():
     """Starlette leaves request.client None behind some proxies — must not crash."""
-    from user_management.middleware import rbac_middleware as mod
+    from autobot_shared.user_management.middleware import rbac_middleware as mod
 
     request = MagicMock()
     request.url.path = "/api/users"
