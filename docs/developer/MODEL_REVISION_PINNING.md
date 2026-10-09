@@ -27,6 +27,15 @@ weight-loading call site:
 A `repo_id` not in the registry raises `KeyError` from `get_pinned_revision`
 — a new call site cannot silently load an unpinned model by omission.
 
+The one stated exception is the dynamic `model_name` sites (`layer_inference`,
+`model_inspector`), whose name arrives from a routing request. They call
+`pinned_revision_kwargs(model_name)` instead, which returns
+`{"revision": <pin>}` for a registered id and `{}` for any other name rather
+than raising, so an unregistered name still loads from the mutable default
+branch. That is the documented interim state, not a second rule; see
+[Scope: this does not yet cover every `from_pretrained` call
+site](#scope-this-does-not-yet-cover-every-from_pretrained-call-site).
+
 ## Bump procedure — who owns it, and how
 
 **Owner:** whoever adds or bumps an entry records their name and date in the
