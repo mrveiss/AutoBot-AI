@@ -235,6 +235,11 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
     ),
     "npm-audit-workspace-coverage": (ABSOLUTE, "FIXED_INVENTORY", "Workspaces, not files; a named, single-digit set."),
     "one-claim-registry": (ABSOLUTE, "SUBSET_DRIFTS", "Python under five named trees, against all tracked Python."),
+    "one-rate-limiter-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Production Python under three trees, against all tracked Python.",
+    ),
     "post-sync-branch-functions": (ABSOLUTE, "NOT_PATHS", "Functions inside one module, not files."),
     "prompt-injection-detector-strict-mode": (
         ABSOLUTE,
