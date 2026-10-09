@@ -179,6 +179,23 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
         return None
 
 
+def peek_knowledge_base() -> "KnowledgeBase" | None:  # noqa: F821
+    """Return the app-free singleton if it is already initialized, else None.
+
+    Never constructs and never initializes -- the question is "is there one right now",
+    which is what a synchronous caller and a status report can honestly ask. Use
+    :func:`get_knowledge_base_async` when the answer should be "make one".
+
+    Added for #18122 so `knowledge_base_factory` could become a facade over this store
+    instead of keeping its own: a second module reaching into
+    ``_knowledge_base_instance`` would make the private global a shared one in all but
+    name, which is the fork this replaces.
+    """
+    if _knowledge_base_instance is None:
+        return None
+    return _knowledge_base_instance if _is_kb_initialized(_knowledge_base_instance) else None
+
+
 async def get_knowledge_base_async() -> "KnowledgeBase" | None:  # noqa: F821
     """
     Get or create a knowledge base instance without requiring FastAPI app context (thread-safe).
