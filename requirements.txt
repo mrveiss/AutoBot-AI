@@ -4,7 +4,7 @@ paramiko>=5.0.0
 tenacity>=9.1.4
 
 # Async SSH for PKI certificate distribution (Issue #166)
-asyncssh>=2.24.0
+asyncssh>=2.24.1
 
 # protobuf — cap and floor, re-derived 2026-08-26 (#15070).
 #
