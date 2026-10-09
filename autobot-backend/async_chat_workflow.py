@@ -23,7 +23,7 @@ from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER as _RESEARCH_QUARANT
 from knowledge.search import map_kb_result_to_dict
 from knowledge_base_factory import get_knowledge_base
 from llm_shared.models import ChatMessage, LLMResponse  # Phase 2D #3185
-from retry_mechanism import RetryConfig, RetryStrategy, with_retry
+from retry_mechanism import RetryPolicy, RetryStrategy, with_retry
 
 logger = get_logger(__name__)
 
@@ -130,7 +130,7 @@ class AsyncChatWorkflow:
         self.workflow_messages.append(message)
         logger.info("WORKFLOW MESSAGE (%s): %s", msg_type, content)
 
-    @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=5.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
+    @with_retry(RetryPolicy(max_attempts=3, base_delay=1.0, max_delay=5.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
     @inject_services(llm="llm", config="config")
     async def process_chat_message(
         self, user_message: str, chat_id: str = "default", llm=None, config=None
@@ -342,7 +342,7 @@ class AsyncChatWorkflow:
         context, _ = await budget_grounded_context(kb_results, model_name=None)
         return context
 
-    @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=10.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
+    @with_retry(RetryPolicy(max_attempts=3, base_delay=1.0, max_delay=10.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
     async def _generate_llm_response(
         self, user_message: str, llm, kb_results: List[Dict[str, Any]] | None = None
     ) -> LLMResponse:
