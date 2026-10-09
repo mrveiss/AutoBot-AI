@@ -157,6 +157,11 @@ jobs:
       # both trigger lists name exactly these trees.
       MAIN_SCOPE_DIRS: 'autobot-backend autobot-frontend/src scripts tools pipeline-scripts'
       SLM_SCOPE_DIRS: 'autobot_shared autobot-slm-backend autobot-slm-frontend/src'
+      # Where each scan tees jscpd's report, stated once (#17377): the scan, its gate
+      # and "Explain failure" all read these, and the tests point them at a temp
+      # directory so a stray /tmp file on a developer machine cannot change a verdict.
+      MAIN_LOG: '/tmp/main-dup.log'
+      SLM_LOG: '/tmp/slm-gate.log'
     steps:
       - uses: actions/checkout@v7
 
@@ -174,8 +179,8 @@ jobs:
             -k 70 -l 8 --skip-comments \
             -f python,typescript,javascript,vue \
             -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**" \
-            -r console 2>&1 | tee /tmp/main-dup.log
-          python3 scripts/duplication_gate.py /tmp/main-dup.log "${MAX_DUP_LINES}"
+            -r console 2>&1 | tee "${MAIN_LOG}"
+          python3 scripts/duplication_gate.py "${MAIN_LOG}" "${MAX_DUP_LINES}"
 
       # The report-only scan that used to run before this one existed to print the
       # figure for an UNMEASURED pin. The gate prints it on every run now, and an
@@ -198,8 +203,8 @@ jobs:
             -k 70 -l 8 --skip-comments \
             -f python,typescript,javascript,vue \
             -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**,**/ansible/roles/slm_agent/files/**" \
-            -r console 2>&1 | tee /tmp/slm-gate.log
-          python3 scripts/duplication_gate.py /tmp/slm-gate.log "${SLM_MAX_DUP_LINES}"
+            -r console 2>&1 | tee "${SLM_LOG}"
+          python3 scripts/duplication_gate.py "${SLM_LOG}" "${SLM_MAX_DUP_LINES}"
 
       - name: Explain failure
         if: failure()
@@ -233,12 +238,12 @@ jobs:
           failed=0
           if [ "${MAIN_OUTCOME}" = "failure" ]; then
             failed=1
-            report "The main duplication scope" "${MAIN_LOG:-/tmp/main-dup.log}" "${MAX_DUP_LINES}" \
+            report "The main duplication scope" "${MAIN_LOG}" "${MAX_DUP_LINES}" \
               "${MAIN_SCOPE_DIRS// / + }" MAX_DUP_LINES
           fi
           if [ "${SLM_OUTCOME}" = "failure" ]; then
             failed=1
-            report "The shared/SLM duplication scope" "${SLM_LOG:-/tmp/slm-gate.log}" "${SLM_MAX_DUP_LINES}" \
+            report "The shared/SLM duplication scope" "${SLM_LOG}" "${SLM_MAX_DUP_LINES}" \
               "${SLM_SCOPE_DIRS// / + }" SLM_MAX_DUP_LINES
           fi
           if [ "${failed}" = "0" ]; then
