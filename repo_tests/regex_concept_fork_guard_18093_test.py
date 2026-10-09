@@ -232,3 +232,93 @@ def test_the_blind_spots_are_recorded() -> None:
         "git_refs.py now holds a literal revision pattern — a `git-revision` concept "
         "can and should be added to CONCEPTS."
     )
+
+
+# --------------------------------------------------------------------------
+# The blind spot that actually cost something (#18093)
+# --------------------------------------------------------------------------
+
+#: Front-matter fence detection written WITHOUT a regex. `doc_indexer._parse_frontmatter`
+#: was an eighth variant using `content.startswith("---")` plus `content.find("\n---", 3)`,
+#: `scripts/compile_changelog.py` a ninth using `find("---", 3)`, and
+#: `optimize_agents.py` a tenth using `split("---", 2)`. Every assertion above was blind
+#: to all three, because none of them calls `re` for the fence.
+#:
+#: TWO signals are required, not one. `.startswith("---")` alone is ambiguous: in a diff
+#: parser `line.startswith("-") and not line.startswith("---")` means "a removed line,
+#: excluding the file header", which is a different concept entirely. Flagging on that
+#: alone reported four false positives (`analytics_code_review`, `code_review_engine`,
+#: `analytics_code_generation`, `security_tool_parsers`). So a file must ALSO mention
+#: front matter by name.
+_STRING_FENCE_CALLS = (
+    '.startswith("---")',
+    ".startswith('---')",
+    '.find("---"',
+    ".find('---'",
+    '.split("---"',
+    ".split('---'",
+)
+
+_STRING_FENCE_ALLOWED = {
+    "autobot_shared/frontmatter.py": "the canonical parser; `startswith` is its fast reject",
+    "autobot-infrastructure/shared/scripts/utilities/optimize_agents.py": (
+        "a tenth variant, left in place: this tree's sys.path bootstrap is itself broken "
+        "(#18126), so adding an autobot_shared import here would depend on a path that "
+        "does not resolve. Fix #18126 first, then migrate it."
+    ),
+}
+
+
+def _mentions_frontmatter(source: str) -> bool:
+    lowered = source.lower()
+    return "frontmatter" in lowered or "front matter" in lowered or "front-matter" in lowered
+
+
+def test_no_frontmatter_fence_is_detected_with_string_methods() -> None:
+    """The shape that evaded the regex sweep, and cost three missed variants.
+
+    Not hypothetical tidiness: an eighth front-matter variant lived in
+    `services/knowledge/doc_indexer.py` for the whole time the other seven were being
+    consolidated, because it never called `re` for the fence. Two more followed.
+    """
+    root = repo_root()
+    offenders: list[str] = []
+    for rel in _tracked_python_files():
+        if _is_test(rel) or rel in _STRING_FENCE_ALLOWED:
+            continue
+        try:
+            source = (root / rel).read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if not _mentions_frontmatter(source):
+            continue
+        for needle in _STRING_FENCE_CALLS:
+            if needle in source:
+                offenders.append(f"{rel}: {needle}")
+                break
+    assert not offenders, (
+        "#18093: front-matter fence detection written with string methods, which the "
+        f"regex sweep above cannot see: {sorted(offenders)}. Use "
+        "`autobot_shared.frontmatter.split_frontmatter`."
+    )
+
+
+def test_the_discriminator_needs_both_signals() -> None:
+    """Pinned against synthetic source, because the one-signal version was wrong.
+
+    A diff parser contains `.startswith("---")` and is not a front-matter parser. If
+    this guard ever goes back to a single signal it will report those again.
+    """
+    diff_parser = 'if line.startswith("-") and not line.startswith("---"):\n    pass\n'
+    assert not _mentions_frontmatter(diff_parser)
+    real = 'def parse(c):\n    """Extract frontmatter."""\n    return c.split("---", 2)\n'
+    assert _mentions_frontmatter(real)
+    assert any(n in real for n in _STRING_FENCE_CALLS)
+
+
+@pytest.mark.parametrize("rel", sorted(_STRING_FENCE_ALLOWED))
+def test_the_string_fence_allowlist_still_holds_what_it_claims(rel: str) -> None:
+    source = (repo_root() / rel).read_text(encoding="utf-8")
+    assert any(n in source for n in _STRING_FENCE_CALLS), (
+        f"#18093: {rel} is allowlisted for string-method fence detection but no longer " "does any. Remove the entry."
+    )
