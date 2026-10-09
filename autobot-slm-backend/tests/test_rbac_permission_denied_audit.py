@@ -61,7 +61,7 @@ _MOCK_NAMES = [
     "user_management.database",
     "user_management.config",
     # audit model — we supply a hand-rolled stub below
-    "user_management.models.audit",
+    "autobot_shared.user_management.models.audit",
     "user_management.models",
     "user_management.models.base",
     # The shared audit counter rbac_middleware imports at module level (#14750).
@@ -83,7 +83,7 @@ _fastapi_mock.Request = type("Request", (), {})
 _fastapi_mock.status = http.HTTPStatus
 
 # Provide just enough of the AuditLog model/constants for the module to import.
-_audit_mod = sys.modules["user_management.models.audit"]
+_audit_mod = sys.modules["autobot_shared.user_management.models.audit"]
 
 
 class _AuditLog:
@@ -144,6 +144,20 @@ finally:
     del _PRE_BOOTSTRAP_MODULES
 
 
+def _wired(db_session_context=None, user_service_cls=None):
+    """Inject fakes through the middleware's seam (#18088) -- it imports no service module."""
+    return patch.object(
+        _rbac_mod,
+        "_dependencies",
+        _rbac_mod.RBACDependencies(
+            db_session_context=db_session_context or MagicMock(),
+            user_service_cls=user_service_cls or MagicMock(),
+            tenant_context_cls=MagicMock(),
+            get_deployment_config=MagicMock(),
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -177,7 +191,7 @@ class TestEmitPermissionDeniedAudit:
         session = MagicMock()
         session.add = MagicMock(side_effect=added_entries.append)
 
-        with patch.object(_rbac_mod, "db_session_context", return_value=_make_session_ctx(session)):
+        with _wired(db_session_context=MagicMock(return_value=_make_session_ctx(session))):
             await _rbac_mod._emit_permission_denied_audit(user_id, permission, path, ip_address=ip, user_agent=ua)
 
         assert len(added_entries) == 1
@@ -201,7 +215,7 @@ class TestEmitPermissionDeniedAudit:
         broken_ctx.__aexit__ = AsyncMock(return_value=False)
 
         # Must NOT raise — the deny flow must be unaffected
-        with patch.object(_rbac_mod, "db_session_context", return_value=broken_ctx):
+        with _wired(db_session_context=MagicMock(return_value=broken_ctx)):
             await _rbac_mod._emit_permission_denied_audit(user_id, "agents.read", "/api/x")
 
     @pytest.mark.asyncio
@@ -215,7 +229,7 @@ class TestEmitPermissionDeniedAudit:
         broken_ctx.__aenter__ = AsyncMock(side_effect=OSError("timeout"))
         broken_ctx.__aexit__ = AsyncMock(return_value=False)
 
-        with patch.object(_rbac_mod, "db_session_context", return_value=broken_ctx):
+        with _wired(db_session_context=MagicMock(return_value=broken_ctx)):
             with caplog.at_level(logging.ERROR):
                 await _rbac_mod._emit_permission_denied_audit(user_id, "admin.system", "/admin")
 
@@ -228,7 +242,7 @@ class TestEmitPermissionDeniedAudit:
         session = MagicMock()
         session.add = MagicMock(side_effect=added_entries.append)
 
-        with patch.object(_rbac_mod, "db_session_context", return_value=_make_session_ctx(session)):
+        with _wired(db_session_context=MagicMock(return_value=_make_session_ctx(session))):
             await _rbac_mod._emit_permission_denied_audit(None, "users.read", "/api/users")
 
         assert len(added_entries) == 1
@@ -241,7 +255,7 @@ class TestEmitPermissionDeniedAudit:
         session = MagicMock()
         session.add = MagicMock(side_effect=added_entries.append)
 
-        with patch.object(_rbac_mod, "db_session_context", return_value=_make_session_ctx(session)):
+        with _wired(db_session_context=MagicMock(return_value=_make_session_ctx(session))):
             await _rbac_mod._emit_permission_denied_audit(uuid.uuid4(), "reports.view", "/reports")
 
         entry = added_entries[0]
@@ -258,7 +272,7 @@ class TestEmitPermissionDeniedAudit:
         session = MagicMock()
         session.add = MagicMock(side_effect=added_entries.append)
 
-        with patch.object(_rbac_mod, "db_session_context", return_value=_make_session_ctx(session)):
+        with _wired(db_session_context=MagicMock(return_value=_make_session_ctx(session))):
             await _rbac_mod._emit_permission_denied_audit(user_id, "admin.read", "/admin", org_id=org_id)
 
         assert len(added_entries) == 1
@@ -271,7 +285,7 @@ class TestEmitPermissionDeniedAudit:
         session = MagicMock()
         session.add = MagicMock(side_effect=added_entries.append)
 
-        with patch.object(_rbac_mod, "db_session_context", return_value=_make_session_ctx(session)):
+        with _wired(db_session_context=MagicMock(return_value=_make_session_ctx(session))):
             await _rbac_mod._emit_permission_denied_audit(uuid.uuid4(), "users.write", "/api/users", org_id=None)
 
         assert len(added_entries) == 1

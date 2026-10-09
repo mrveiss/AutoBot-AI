@@ -19,14 +19,33 @@ and `_permission_cache` crosses the module boundary despite the underscore. Re-e
 singleton keeps one instance per process, which is what the cache invalidation depends on.
 """
 
-from autobot_shared.user_management.middleware.rbac_middleware import (  # noqa: F401
-    CACHE_TTL_SECONDS,
-    RBACMiddleware,
-    _permission_cache,
-    rbac_middleware,
+from autobot_shared.user_management.middleware.rbac_decorators import (  # noqa: F401
     require_all_permissions,
     require_any_permission,
     require_permission,
+)
+from autobot_shared.user_management.middleware.rbac_middleware import (  # noqa: F401
+    CACHE_TTL_SECONDS,
+    RBACDependencies,
+    RBACMiddleware,
+    _permission_cache,
+    configure_rbac,
+    rbac_middleware,
+)
+from user_management.config import get_deployment_config
+from user_management.database import db_session_context
+from user_management.services import TenantContext, UserService
+
+# The shared middleware imports nothing from a service; this service hands it its own
+# session factory, user service and deployment config. Wiring happens at import, before
+# any call site can reach the singleton, and an unwired call raises RBACNotConfiguredError.
+configure_rbac(
+    RBACDependencies(
+        db_session_context=db_session_context,
+        user_service_cls=UserService,
+        tenant_context_cls=TenantContext,
+        get_deployment_config=get_deployment_config,
+    )
 )
 
 __all__ = [

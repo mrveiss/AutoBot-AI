@@ -13,23 +13,59 @@ import asyncio
 import json
 import time
 import uuid
-from functools import wraps
-from typing import Callable, List, Set
+from contextlib import AbstractAsyncContextManager
+from dataclasses import dataclass
+from typing import Any, Callable, List, Set
 
-from fastapi import HTTPException, Request, status
+from fastapi import Request
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_constants import TTL_5_MINUTES
-from user_management.config import get_deployment_config
-from user_management.database import db_session_context
-from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
-from user_management.services import TenantContext, UserService
-
-# #18088: one impl, both services; `user_management.*` resolves per-service at import.
+from autobot_shared.user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 
 logger = get_logger(__name__)
+
+
+class RBACNotConfiguredError(RuntimeError):
+    """Raised when the middleware runs before a service injected its dependencies."""
+
+
+@dataclass(frozen=True)
+class RBACDependencies:
+    """What the shared middleware needs from the service that hosts it (#18088).
+
+    The session factory, the user service and the deployment config are per-service
+    (each binds its own engine and settings), so the shared module takes them as
+    arguments instead of importing `user_management.*` -- which would resolve to
+    whichever service's package is on `sys.path`. Same pattern as `session_scope`.
+    """
+
+    db_session_context: Callable[[], AbstractAsyncContextManager[Any]]
+    user_service_cls: Callable[..., Any]
+    tenant_context_cls: Callable[..., Any]
+    get_deployment_config: Callable[[], Any]
+
+
+_dependencies: RBACDependencies | None = None
+
+
+def configure_rbac(dependencies: RBACDependencies) -> None:
+    """Inject the hosting service's objects. Each service's shim calls this once."""
+    global _dependencies
+    _dependencies = dependencies
+
+
+def _require_dependencies() -> RBACDependencies:
+    """The injected dependencies, or a loud failure -- never a silent allow or deny."""
+    if _dependencies is None:
+        raise RBACNotConfiguredError(
+            "RBAC middleware used before configure_rbac(); import it through the service's "
+            "user_management.middleware.rbac_middleware shim, which wires its dependencies."
+        )
+    return _dependencies
+
 
 _PUBSUB_CHANNEL = "autobot:rbac:invalidate"
 _REDIS_KEY_PREFIX = "rbac:perm:"
@@ -93,8 +129,14 @@ class RBACMiddleware:
     """
 
     def __init__(self):
-        """Initialize RBAC middleware."""
-        self._config = get_deployment_config()
+        """Initialize RBAC middleware; the deployment config resolves on first use."""
+        self._config = None
+
+    def _deployment_config(self):
+        """The service's deployment config, read through the injected getter once."""
+        if self._config is None:
+            self._config = _require_dependencies().get_deployment_config()
+        return self._config
 
     # ------------------------------------------------------------------
     # Cache helpers (#12925)
@@ -191,11 +233,12 @@ class RBACMiddleware:
         if cached is not None:
             return cached
 
-        if self._config.postgres_enabled:
+        deps = _require_dependencies()  # outside the try: a missing wiring must not read as "no permissions"
+        if self._deployment_config().postgres_enabled:
             try:
-                async with db_session_context() as session:
-                    context = TenantContext(org_id=org_id, user_id=user_id)
-                    user_service = UserService(session, context)
+                async with deps.db_session_context() as session:
+                    context = deps.tenant_context_cls(org_id=org_id, user_id=user_id)
+                    user_service = deps.user_service_cls(session, context)
                     permissions = await user_service.get_user_permissions(user_id)
 
                     await self._cache_set(user_id, permissions)
@@ -315,90 +358,6 @@ class RBACMiddleware:
 rbac_middleware = RBACMiddleware()
 
 
-def _extract_request(args: tuple, request: Request | None) -> Request:
-    """
-    Extract Request object from function arguments.
-
-    Issue #620: Extracted from permission decorators to reduce duplication.
-
-    Args:
-        args: Positional arguments
-        request: Request from kwargs (may be None)
-
-    Returns:
-        Request object
-
-    Raises:
-        HTTPException: 500 if Request not found
-    """
-    if request is None:
-        for arg in args:
-            if isinstance(arg, Request):
-                return arg
-
-    if request is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Request object not found",
-        )
-    return request
-
-
-def _extract_user_context(
-    request: Request,
-) -> tuple[uuid.UUID | None, uuid.UUID | None]:
-    """
-    Extract user_id and org_id from request state.
-
-    Issue #620: Extracted from permission decorators to reduce duplication.
-
-    Args:
-        request: FastAPI Request object
-
-    Returns:
-        Tuple of (user_id, org_id), either may be None
-    """
-    user_id = None
-    org_id = None
-
-    if hasattr(request.state, "user"):
-        user_data = request.state.user
-        if "user_id" in user_data:
-            try:
-                user_id = uuid.UUID(user_data["user_id"])
-            except (ValueError, TypeError):
-                pass
-        if "org_id" in user_data:
-            try:
-                org_id = uuid.UUID(user_data["org_id"])
-            except (ValueError, TypeError):
-                pass
-
-    return user_id, org_id
-
-
-def _require_authentication(user_id: uuid.UUID | None, permissions_desc: str) -> None:
-    """
-    Check that user is authenticated, raise 401 if not.
-
-    Issue #620: Extracted from permission decorators to reduce duplication.
-    Issue #744: Return 401 for unauthenticated users.
-
-    Args:
-        user_id: User UUID (None if not authenticated)
-        permissions_desc: Description of required permissions for logging
-
-    Raises:
-        HTTPException: 401 if user_id is None
-    """
-    if user_id is None:
-        logger.warning("Authentication required for permission: %s", permissions_desc)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-        )
-
-
 async def _emit_permission_denied_audit(
     user_id: uuid.UUID | None,
     permission: str,
@@ -420,8 +379,9 @@ async def _emit_permission_denied_audit(
     into a 500.
     """
     logger.warning("Permission denied: user=%s org=%s permission=%s path=%s", user_id, org_id, permission, path)
+    deps = _require_dependencies()  # outside the try: an unwired audit must fail loudly
     try:
-        async with db_session_context() as session:
+        async with deps.db_session_context() as session:
             entry = AuditLog(
                 id=uuid.uuid4(),
                 user_id=user_id,
@@ -451,148 +411,3 @@ def _request_audit_context(request: Request) -> tuple[str, str | None, str | Non
         request.client.host if request.client else None,
         request.headers.get("user-agent"),
     )
-
-
-def require_permission(permission: str):
-    """
-    Decorator to require a specific permission for an endpoint.
-
-    Issue #620: Refactored to use extracted helper functions.
-
-    Usage:
-        @router.get("/admin/users")
-        @require_permission("users.read")
-        async def list_users(request: Request):
-            ...
-
-    Args:
-        permission: Permission name required
-    """
-
-    def decorator(func: Callable):
-        @wraps(func)
-        async def wrapper(*args, request: Request = None, **kwargs):
-            # Issue #620: Use extracted helpers
-            request = _extract_request(args, request)
-            user_id, org_id = _extract_user_context(request)
-            _require_authentication(user_id, permission)
-
-            # Check permission
-            has_permission = await rbac_middleware.check_permission(user_id, permission, org_id)
-
-            if not has_permission:
-                _path, _ip, _ua = _request_audit_context(request)
-                await _emit_permission_denied_audit(
-                    user_id,
-                    permission,
-                    _path,
-                    org_id=org_id,
-                    ip_address=_ip,
-                    user_agent=_ua,
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Permission '{permission}' required",
-                )
-
-            return await func(*args, request=request, **kwargs)
-
-        return wrapper
-
-    return decorator
-
-
-def require_any_permission(permissions: List[str]):
-    """
-    Decorator to require any of the specified permissions.
-
-    Issue #620: Refactored to use extracted helper functions.
-
-    Usage:
-        @router.get("/content")
-        @require_any_permission(["content.read", "content.admin"])
-        async def get_content(request: Request):
-            ...
-
-    Args:
-        permissions: List of permission names (any one is sufficient)
-    """
-
-    def decorator(func: Callable):
-        @wraps(func)
-        async def wrapper(*args, request: Request = None, **kwargs):
-            # Issue #620: Use extracted helpers
-            request = _extract_request(args, request)
-            user_id, org_id = _extract_user_context(request)
-            _require_authentication(user_id, str(permissions))
-
-            has_permission = await rbac_middleware.check_any_permission(user_id, permissions, org_id)
-
-            if not has_permission:
-                _path, _ip, _ua = _request_audit_context(request)
-                await _emit_permission_denied_audit(
-                    user_id,
-                    str(permissions),
-                    _path,
-                    org_id=org_id,
-                    ip_address=_ip,
-                    user_agent=_ua,
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"One of these permissions required: {permissions}",
-                )
-
-            return await func(*args, request=request, **kwargs)
-
-        return wrapper
-
-    return decorator
-
-
-def require_all_permissions(permissions: List[str]):
-    """
-    Decorator to require all of the specified permissions.
-
-    Issue #620: Refactored to use extracted helper functions.
-
-    Usage:
-        @router.delete("/admin/users/{user_id}")
-        @require_all_permissions(["users.read", "users.delete"])
-        async def delete_user(request: Request, user_id: str):
-            ...
-
-    Args:
-        permissions: List of permission names (all are required)
-    """
-
-    def decorator(func: Callable):
-        @wraps(func)
-        async def wrapper(*args, request: Request = None, **kwargs):
-            # Issue #620: Use extracted helpers
-            request = _extract_request(args, request)
-            user_id, org_id = _extract_user_context(request)
-            _require_authentication(user_id, str(permissions))
-
-            has_permission = await rbac_middleware.check_all_permissions(user_id, permissions, org_id)
-
-            if not has_permission:
-                _path, _ip, _ua = _request_audit_context(request)
-                await _emit_permission_denied_audit(
-                    user_id,
-                    str(permissions),
-                    _path,
-                    org_id=org_id,
-                    ip_address=_ip,
-                    user_agent=_ua,
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"All of these permissions required: {permissions}",
-                )
-
-            return await func(*args, request=request, **kwargs)
-
-        return wrapper
-
-    return decorator
