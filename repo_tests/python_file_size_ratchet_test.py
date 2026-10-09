@@ -41,6 +41,7 @@ agreeing with a counter that shares its blind spot.
 from __future__ import annotations
 
 import ast
+import dataclasses
 import importlib.util
 import logging
 from pathlib import Path
@@ -49,6 +50,7 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint import file_size_engine as engine
 from tools.lint._scan_helpers import TRACKED_PY_FLOOR, tracked_paths
 
 REPO_ROOT = repo_root()
@@ -121,6 +123,16 @@ def hook():
 
 
 @pytest.fixture(scope="module")
+def cfg(hook) -> engine.GateConfig:
+    """The Python gate's REAL configuration, injected through the engine's seam (#17377 AC3).
+
+    Replaces ``monkeypatch.setattr(hook, ...)``, which asserted that the gate still read its
+    attributes, not that the ratchet works. Variants are built with ``dataclasses.replace``.
+    """
+    return hook._config()
+
+
+@pytest.fixture(scope="module")
 def tracked_py_files() -> list[str]:
     """Every tracked ``*.py`` path, enumerated by git rather than by the hook."""
     return tracked_paths(REPO_ROOT, "*.py")
@@ -157,7 +169,7 @@ def test_recorded_ceilings_match_the_files_today(hook):
 # --------------------------------------------------------------------------
 
 
-def test_audit_discovers_an_unlisted_oversized_file(hook, tmp_path, monkeypatch):
+def test_audit_discovers_an_unlisted_oversized_file(hook, cfg, tmp_path):
     """The exact defect #14547 is for: a file over MAX_LINES with no entry.
 
     ``audit_ceilings`` used to iterate ``KNOWN_LARGE.items()``, so a file like
@@ -165,32 +177,28 @@ def test_audit_discovers_an_unlisted_oversized_file(hook, tmp_path, monkeypatch)
     — was invisible to every audit run forever. Walking the tracked-file list
     instead of the dict is what makes this fail.
     """
-    monkeypatch.setattr(hook, "repo_root", lambda: tmp_path)
-    monkeypatch.setattr(hook, "KNOWN_LARGE", {})
+    config = dataclasses.replace(cfg, known_large={})
     unlisted = "autobot-slm-backend/services/never_added.py"
-    monkeypatch.setattr(hook, "tracked_python_files", lambda root: [unlisted])
     target = tmp_path / unlisted
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("x\n" * (hook.MAX_LINES + 50), encoding="utf-8")
 
-    reached, problems = hook.audit_ceilings()
+    reached, problems = engine.audit_tracked(config, tmp_path, [unlisted])
     assert reached == 1
     assert len(problems) == 1
     assert unlisted in problems[0]
-    assert hook.run_audit() == 1
+    assert engine.run_audit(config, hook.logger, lambda: engine.audit_tracked(config, tmp_path, [unlisted])) == 1
 
 
-def test_audit_is_clean_for_an_unlisted_compliant_file(hook, tmp_path, monkeypatch):
+def test_audit_is_clean_for_an_unlisted_compliant_file(cfg, tmp_path):
     """A file the walk reaches but that was never over the limit stays silent."""
-    monkeypatch.setattr(hook, "repo_root", lambda: tmp_path)
-    monkeypatch.setattr(hook, "KNOWN_LARGE", {})
+    config = dataclasses.replace(cfg, known_large={})
     compliant = "autobot-slm-backend/services/small.py"
-    monkeypatch.setattr(hook, "tracked_python_files", lambda root: [compliant])
     target = tmp_path / compliant
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("x\n" * 10, encoding="utf-8")
 
-    reached, problems = hook.audit_ceilings()
+    reached, problems = engine.audit_tracked(config, tmp_path, [compliant])
     assert reached == 1
     assert problems == []
 
@@ -377,41 +385,37 @@ def test_a_shrunk_file_must_lower_its_ceiling(hook):
             assert f"Lower the ceiling to {shrunk}" in message
 
 
-def test_the_audit_surfaces_a_ceiling_violation(hook, tmp_path, monkeypatch):
+def test_the_audit_surfaces_a_ceiling_violation(hook, cfg, tmp_path):
     """Reaching a file is not the same as reporting on it.
 
     Today's tree is at its ceilings, so a clean audit run cannot distinguish
     "no violations" from "violations discarded". This stages a real breach.
     """
-    monkeypatch.setattr(hook, "repo_root", lambda: tmp_path)
-    monkeypatch.setattr(hook, "tracked_python_files", lambda root: list(hook.KNOWN_LARGE))
-    for rel, ceiling in hook.KNOWN_LARGE.items():
+    tracked = list(cfg.known_large)
+    for rel, ceiling in cfg.known_large.items():
         target = tmp_path / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text("x\n" * (ceiling + 5), encoding="utf-8")
 
-    reached, problems = hook.audit_ceilings()
+    reached, problems = engine.audit_tracked(cfg, tmp_path, tracked)
     assert reached == len(hook.KNOWN_LARGE)
     assert len(problems) == len(hook.KNOWN_LARGE)
     assert all("over its recorded ceiling" in problem for problem in problems)
-    assert hook.run_audit() == 1
+    assert engine.run_audit(cfg, hook.logger, lambda: engine.audit_tracked(cfg, tmp_path, tracked)) == 1
 
 
-def test_run_audit_fails_when_the_scan_reached_nothing(hook, monkeypatch):
+def test_run_audit_fails_when_the_scan_reached_nothing(hook, cfg):
     """A scan of nothing must never read as a clean scan."""
-    monkeypatch.setattr(hook, "audit_ceilings", lambda: (0, []))
-    assert hook.run_audit() == 1
+    assert engine.run_audit(cfg, hook.logger, lambda: (0, [])) == 1
 
 
-def test_the_audit_reports_a_vanished_entry(hook, tmp_path, monkeypatch):
+def test_the_audit_reports_a_vanished_entry(hook, cfg, tmp_path):
     """A renamed or deleted file must be a hard error, not a silent no-op."""
-    monkeypatch.setattr(hook, "repo_root", lambda: tmp_path)
-    monkeypatch.setattr(hook, "tracked_python_files", lambda root: [])
-    reached, problems = hook.audit_ceilings()
+    reached, problems = engine.audit_tracked(cfg, tmp_path, [])
     assert reached == 0
     assert len(problems) == len(hook.KNOWN_LARGE)
     assert all("moved or was deleted" in problem for problem in problems)
-    assert hook.run_audit() == 1
+    assert engine.run_audit(cfg, hook.logger, lambda: engine.audit_tracked(cfg, tmp_path, [])) == 1
 
 
 # --------------------------------------------------------------------------
@@ -473,10 +477,9 @@ def test_findings_are_emitted_above_the_lastresort_threshold(hook, tmp_path, cap
     assert levels and min(levels) >= logging.WARNING
 
 
-def test_audit_problems_are_reported_to_the_developer(hook, tmp_path, caplog, monkeypatch):
-    monkeypatch.setattr(hook, "audit_ceilings", lambda: (0, ["ceiling drifted"]))
+def test_audit_problems_are_reported_to_the_developer(hook, cfg, caplog):
     with caplog.at_level(logging.DEBUG, logger=hook.logger.name):
-        assert hook.run_audit() == 1
+        assert engine.run_audit(cfg, hook.logger, lambda: (0, ["ceiling drifted"])) == 1
     emitted = "\n".join(record.getMessage() for record in caplog.records)
     assert "ceiling drifted" in emitted
     assert min(record.levelno for record in caplog.records) >= logging.WARNING
