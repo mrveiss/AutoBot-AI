@@ -29,8 +29,19 @@ from repo_tests._paths import repo_root
 
 WORKFLOW = Path(".github/workflows/duplication-guard.yml")
 
-MAIN_SCOPE = "autobot-backend + autobot-frontend/src"
-SLM_SCOPE = "autobot_shared + autobot-slm-backend + autobot-slm-frontend/src"
+
+def _scope_label(var: str) -> str:
+    """How "Explain failure" names a scope: its env tree list joined with `` + `` (#17377).
+
+    Derived from the workflow's one statement of the scope rather than restated here, so
+    widening a scope cannot leave this test asserting the old one.
+    """
+    document = yaml.safe_load((repo_root() / WORKFLOW).read_text(encoding="utf-8"))
+    return document["jobs"][next(iter(document["jobs"]))]["env"][var].replace(" ", " + ")
+
+
+MAIN_SCOPE = _scope_label("MAIN_SCOPE_DIRS")
+SLM_SCOPE = _scope_label("SLM_SCOPE_DIRS")
 
 
 def _explain_step() -> dict:
@@ -75,6 +86,8 @@ def _run_explain(main_outcome: str, slm_outcome: str, **extra_env: str) -> str:
             "SLM_OUTCOME": slm_outcome,
             "MAX_DUP_LINES": "11723",
             "SLM_MAX_DUP_LINES": "4729",
+            "MAIN_SCOPE_DIRS": _job()["env"]["MAIN_SCOPE_DIRS"],
+            "SLM_SCOPE_DIRS": _job()["env"]["SLM_SCOPE_DIRS"],
             **extra_env,
         },
     )
@@ -215,18 +228,13 @@ def test_explain_reports_the_overage_in_lines_against_the_pin(tmp_path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("step_id", "trees", "log", "pin"),
+    ("step_id", "scope_var", "log", "pin"),
     [
-        ("main_scope", "autobot-backend autobot-frontend/src", "/tmp/main-dup.log", "MAX_DUP_LINES"),
-        (
-            "slm_scope",
-            "autobot_shared autobot-slm-backend autobot-slm-frontend/src",
-            "/tmp/slm-gate.log",
-            "SLM_MAX_DUP_LINES",
-        ),
+        ("main_scope", "MAIN_SCOPE_DIRS", "/tmp/main-dup.log", "MAX_DUP_LINES"),
+        ("slm_scope", "SLM_SCOPE_DIRS", "/tmp/slm-gate.log", "SLM_MAX_DUP_LINES"),
     ],
 )
-def test_each_gate_scans_its_declared_scope_and_applies_its_own_pin(step_id, trees, log, pin) -> None:
+def test_each_gate_scans_its_declared_scope_and_applies_its_own_pin(step_id, scope_var, log, pin) -> None:
     """The boundary a reader meets in the env comments must be the one scanned (RATCHET_BASELINES rule 2).
 
     Also pins that the percentage gate is gone: jscpd's own ``--threshold`` must
@@ -234,7 +242,7 @@ def test_each_gate_scans_its_declared_scope_and_applies_its_own_pin(step_id, tre
     """
     run = _step(step_id)["run"]
 
-    assert trees in run
+    assert f'read -r -a scope <<< "${{{scope_var}}}"' in run and '"${scope[@]}"' in run
     assert f'scripts/duplication_gate.py {log} "${{{pin}}}"' in run
     assert "--threshold" not in run
 
