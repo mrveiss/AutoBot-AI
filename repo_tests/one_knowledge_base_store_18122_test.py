@@ -234,7 +234,7 @@ def test_the_store_count_is_recorded() -> None:
     assert len(_modules_caching_a_knowledge_base()) == 2
 
 
-def _publication_report(source: str) -> tuple[dict[str, set[str]], set[str]]:
+def _publication_report(source: str) -> tuple[dict[str, set[str]], set[str], set[str]]:
     """Which functions call the publisher, and which declare the singleton global.
 
     Takes source TEXT rather than reading the module, so the matcher itself can be put
@@ -257,7 +257,21 @@ def _publication_report(source: str) -> tuple[dict[str, set[str]], set[str]]:
         for sub in ast.walk(node)
         if isinstance(sub, ast.Global) and "_knowledge_base_instance" in sub.names
     }
-    return callers, assigners
+    # Writers of the app-state PROJECTION. Tracking only the singleton global left a
+    # hole: a creator could call the publisher and then assign a different instance to
+    # `app.state.knowledge_base`, so the call was present, one function still owned the
+    # global, both assertions passed, and the two stores diverged anyway.
+    projectors = {
+        node.name
+        for node in funcs
+        for sub in ast.walk(node)
+        if isinstance(sub, (ast.Assign, ast.AugAssign, ast.AnnAssign))
+        for tgt in (sub.targets if isinstance(sub, ast.Assign) else [sub.target])
+        if isinstance(tgt, ast.Attribute)
+        and tgt.attr == "knowledge_base"
+        and ast.unparse(tgt).endswith(".state.knowledge_base")
+    }
+    return callers, assigners, projectors
 
 
 _CREATORS = ("_create_new_knowledge_base", "get_knowledge_base_async")
@@ -267,6 +281,8 @@ _GOOD_SOURCE = """
 def _publish_knowledge_base(kb, app=None):
     global _knowledge_base_instance
     _knowledge_base_instance = kb
+    if app is not None:
+        app.state.knowledge_base = kb
 
 async def _create_new_knowledge_base(app):
     kb = KnowledgeBase()
@@ -297,6 +313,8 @@ _SECOND_WRITER_SOURCE = """
 def _publish_knowledge_base(kb, app=None):
     global _knowledge_base_instance
     _knowledge_base_instance = kb
+    if app is not None:
+        app.state.knowledge_base = kb
 
 async def _create_new_knowledge_base(app):
     kb = KnowledgeBase()
@@ -310,22 +328,59 @@ async def get_knowledge_base_async():
 """
 
 
+#: The hole: the publisher is called AND a rival instance is written to the projection.
+#: Both earlier assertions pass on this source, which is why it is a fixture now.
+_MIXED_SOURCE = """
+def _publish_knowledge_base(kb, app=None):
+    global _knowledge_base_instance
+    _knowledge_base_instance = kb
+    if app is not None:
+        app.state.knowledge_base = kb
+
+async def _create_new_knowledge_base(app):
+    kb = KnowledgeBase()
+    _publish_knowledge_base(kb, app)
+    app.state.knowledge_base = KnowledgeBase()
+
+async def get_knowledge_base_async():
+    kb = KnowledgeBase()
+    _publish_knowledge_base(kb)
+"""
+
+
+def test_the_matcher_catches_a_rival_write_to_the_projection() -> None:
+    """A creator may call the publisher and still diverge the stores afterwards.
+
+    On `_MIXED_SOURCE` the publisher IS called by both creators and only the publisher
+    declares the singleton global, so the call check and the global check both pass.
+    Only a check on who writes `app.state.knowledge_base` sees the second instance.
+    """
+    callers, assigners, projectors = _publication_report(_MIXED_SOURCE)
+    assert "_publish_knowledge_base" in callers["_create_new_knowledge_base"]
+    assert assigners == {"_publish_knowledge_base"}
+    assert projectors == {
+        "_publish_knowledge_base",
+        "_create_new_knowledge_base",
+    }, "the matcher must name the creator that wrote a rival instance to the projection"
+
+
 def test_the_publication_matcher_accepts_the_consolidated_shape() -> None:
-    callers, assigners = _publication_report(_GOOD_SOURCE)
+    callers, assigners, projectors = _publication_report(_GOOD_SOURCE)
+    assert projectors == {"_publish_knowledge_base"}
     assert all("_publish_knowledge_base" in callers[c] for c in _CREATORS)
     assert assigners == {"_publish_knowledge_base"}
 
 
 def test_the_publication_matcher_catches_a_creator_that_bypasses_the_helper() -> None:
     """The contrast half. Without it, a matcher that finds nothing also passes."""
-    callers, _ = _publication_report(_BYPASS_SOURCE)
+    callers, _, _ = _publication_report(_BYPASS_SOURCE)
     assert (
         "_publish_knowledge_base" not in callers["_create_new_knowledge_base"]
     ), "the matcher must notice a creator that writes app state directly"
 
 
 def test_the_publication_matcher_catches_a_second_writer_of_the_singleton() -> None:
-    _, assigners = _publication_report(_SECOND_WRITER_SOURCE)
+    _, assigners, _ = _publication_report(_SECOND_WRITER_SOURCE)
     assert assigners == {
         "_publish_knowledge_base",
         "get_knowledge_base_async",
@@ -343,7 +398,7 @@ def test_both_creation_paths_publish_through_one_helper() -> None:
     assertion exists. The matcher is pinned both ways by the three tests above.
     """
     source = (repo_root() / "autobot-backend" / "knowledge_factory.py").read_text(encoding="utf-8")
-    callers, assigners = _publication_report(source)
+    callers, assigners, projectors = _publication_report(source)
     for creator in _CREATORS:
         assert creator in callers, f"{creator} is gone -- re-point this guard"
         assert "_publish_knowledge_base" in callers[creator], (
@@ -354,6 +409,11 @@ def test_both_creation_paths_publish_through_one_helper() -> None:
     assert assigners == {"_publish_knowledge_base"}, (
         f"#18122: {sorted(assigners)} declare the singleton global; exactly one function "
         "may write it, or the stores diverge again"
+    )
+    assert projectors == {"_publish_knowledge_base"}, (
+        f"#18122: {sorted(projectors)} write app.state.knowledge_base; only the publisher "
+        "may, or a creator can call it and then assign a rival instance -- which passes "
+        "both checks above while the two stores disagree"
     )
 
 

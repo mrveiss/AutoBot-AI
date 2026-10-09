@@ -183,7 +183,10 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
         adopted = peek_knowledge_base()
         if adopted is not None and not force_refresh:
             logger.info("Adopting the existing knowledge base singleton for this app")
-            app.state.knowledge_base = adopted
+            # Through the publisher, not a direct write: one function owns the projection,
+            # so "the stores agree" is checkable at a single site instead of at every
+            # assignment. Idempotent here -- the singleton is already this instance.
+            _publish_knowledge_base(adopted, app)
             return adopted
 
         # Issue #3094/#3106: Enforce retry cooldown to avoid hammering ChromaDB after
