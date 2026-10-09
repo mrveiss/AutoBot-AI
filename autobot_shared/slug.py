@@ -42,13 +42,13 @@ from __future__ import annotations
 import re
 import unicodedata
 
-__all__ = ["slugify"]
+__all__ = ["url_slug"]
 
 #: A run of anything that is not a lowercase ASCII alphanumeric becomes one hyphen.
 _NON_SLUG_RUN = re.compile(r"[^a-z0-9]+")
 
 
-def slugify(text: str, *, max_length: int = 100, fold_unicode: bool = True) -> str:
+def url_slug(text: str, *, max_length: int = 100, fold_unicode: bool = True) -> str:
     """Return a URL-safe hyphen slug, or "" when nothing survives.
 
     Args:
@@ -63,15 +63,15 @@ def slugify(text: str, *, max_length: int = 100, fold_unicode: bool = True) -> s
         A string matching ``[a-z0-9]([a-z0-9-]*[a-z0-9])?``, or "".
 
     Examples:
-        >>> slugify("Hello, World!")
+        >>> url_slug("Hello, World!")
         'hello-world'
-        >>> slugify("Zürich")
+        >>> url_slug("Zürich")
         'zurich'
-        >>> slugify("Zürich", fold_unicode=False)
+        >>> url_slug("Zürich", fold_unicode=False)
         'z-rich'
-        >>> slugify("a very long name indeed", max_length=12)
+        >>> url_slug("a very long name indeed", max_length=12)
         'a-very-long'
-        >>> slugify("!!!")
+        >>> url_slug("!!!")
         ''
     """
     if fold_unicode:

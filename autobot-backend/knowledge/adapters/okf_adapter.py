@@ -67,7 +67,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import yaml
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.slug import slugify
+from autobot_shared.slug import url_slug
 
 logger = get_logger(__name__)
 
@@ -145,7 +145,7 @@ def _slugify(text: str) -> str:
     Returns:
         Slug string matching ``[a-z0-9]([a-z0-9-]*[a-z0-9])?``, or "concept".
     """
-    return slugify(text, max_length=_SLUG_MAX_LEN) or "concept"
+    return url_slug(text, max_length=_SLUG_MAX_LEN) or "concept"
 
 
 def _unique_slug(base_slug: str, taken: set, *, counter_start: int = 2) -> str:

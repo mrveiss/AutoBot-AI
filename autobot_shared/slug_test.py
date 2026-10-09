@@ -12,7 +12,7 @@ are the first tests here.
 
 import pytest
 
-from autobot_shared.slug import slugify
+from autobot_shared.slug import url_slug
 
 
 def test_truncation_never_leaves_a_trailing_hyphen() -> None:
@@ -22,9 +22,9 @@ def test_truncation_never_leaves_a_trailing_hyphen() -> None:
     cut landing mid-run emitted a trailing hyphen. Asserted with a cap that lands
     exactly on a separator.
     """
-    assert slugify("alpha beta gamma", max_length=10) == "alpha-beta"
-    assert slugify("alpha beta gamma", max_length=11) == "alpha-beta"
-    assert not slugify("alpha beta gamma", max_length=11).endswith("-")
+    assert url_slug("alpha beta gamma", max_length=10) == "alpha-beta"
+    assert url_slug("alpha beta gamma", max_length=11) == "alpha-beta"
+    assert not url_slug("alpha beta gamma", max_length=11).endswith("-")
     # The pre-consolidation behaviour, as a control.
     naive = "alpha-beta-gamma"[:11]
     assert naive == "alpha-beta-", "control: strip-then-truncate leaves the hyphen"
@@ -36,14 +36,14 @@ def test_unicode_is_transliterated_not_treated_as_a_separator() -> None:
     Without the fold a non-ASCII letter is simply not in `[a-z0-9]`, so it becomes a
     separator and splits the word: "Zürich" -> "z-rich".
     """
-    assert slugify("Zürich") == "zurich"
-    assert slugify("Zürich", fold_unicode=False) == "z-rich"
-    assert slugify("Café Münster") == "cafe-munster"
+    assert url_slug("Zürich") == "zurich"
+    assert url_slug("Zürich", fold_unicode=False) == "z-rich"
+    assert url_slug("Café Münster") == "cafe-munster"
     # Accents strip and the LETTERS survive -- my first draft of the empty-result test
     # asserted "éè" -> "" and was wrong about its own fixture, not about the code.
-    assert slugify("éè") == "ee"
+    assert url_slug("éè") == "ee"
     # An em dash carries no letter, so it is a separator and nothing survives.
-    assert slugify("——") == ""
+    assert url_slug("——") == ""
 
 
 @pytest.mark.parametrize(
@@ -61,7 +61,7 @@ def test_unicode_is_transliterated_not_treated_as_a_separator() -> None:
     ],
 )
 def test_ordinary_slugs(text: str, expected: str) -> None:
-    assert slugify(text) == expected
+    assert url_slug(text) == expected
 
 
 @pytest.mark.parametrize("text", ["", "!!!", "   ", "---", "***", "——"])
@@ -72,7 +72,7 @@ def test_nothing_survivable_gives_an_empty_string(text: str) -> None:
     to "concept", `llc/models/company` raises, `organization_service` returns it. Baking
     any one of those in would have forced a behaviour change on the other two.
     """
-    assert slugify(text) == ""
+    assert url_slug(text) == ""
 
 
 def test_the_result_matches_the_contract_the_callers_declare() -> None:
@@ -81,14 +81,14 @@ def test_the_result_matches_the_contract_the_callers_declare() -> None:
 
     contract = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
     for text in ["Hello, World!", "Zürich", "2026 Q1 Report", "a...b___c---d", "x"]:
-        slug = slugify(text)
+        slug = url_slug(text)
         assert contract.match(slug), f"{text!r} -> {slug!r} violates the slug contract"
 
 
 def test_max_length_is_respected_exactly() -> None:
     long = "a" * 300
-    assert len(slugify(long, max_length=80)) == 80
-    assert len(slugify(long, max_length=100)) == 100
+    assert len(url_slug(long, max_length=80)) == 80
+    assert len(url_slug(long, max_length=100)) == 100
 
 
 def test_the_underscore_slugify_is_a_different_contract_and_is_left_alone() -> None:
@@ -98,5 +98,5 @@ def test_the_underscore_slugify_is_a_different_contract_and_is_left_alone() -> N
     so flattening it would change identifiers it has already produced. Asserted here so
     a later consolidation pass sees the decision rather than rediscovering it.
     """
-    assert slugify("hello world") == "hello-world"
-    assert "_" not in slugify("hello world")
+    assert url_slug("hello world") == "hello-world"
+    assert "_" not in url_slug("hello world")

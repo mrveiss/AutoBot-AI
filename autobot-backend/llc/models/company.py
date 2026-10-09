@@ -15,7 +15,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from autobot_shared.slug import slugify
+from autobot_shared.slug import url_slug
 from llc.models.enums import LLCCompanyStatus
 
 
@@ -61,7 +61,7 @@ class CompanyCreate(CompanyBase):
         # #18093: `autobot_shared.slug.slugify` is this rule, shared with
         # `knowledge/adapters/okf_adapter` and `user_management/organization_service`.
         # The strip-after-truncate that only this site did is now the shared behaviour.
-        slug = slugify(source)  # 100 is slugify's default cap, which this site used
+        slug = url_slug(source)  # 100 is slugify's default cap, which this site used
         if not slug:
             raise ValueError("Unable to derive a slug from the company name; provide a slug explicitly")
         self.slug = slug

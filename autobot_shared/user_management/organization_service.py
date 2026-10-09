@@ -33,7 +33,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.slug import slugify
+from autobot_shared.slug import url_slug
 from autobot_shared.time_utils import now_utc
 from autobot_shared.user_management.base_service import BaseService, TenantContext
 from autobot_shared.user_management.models.audit import (
@@ -574,7 +574,7 @@ class OrganizationService(BaseService):
         "Zürich", and a strip after truncation, so a cut mid-run no longer leaves a
         trailing hyphen.
         """
-        return slugify(name)  # 100 is slugify's default cap
+        return url_slug(name)  # 100 is slugify's default cap
 
     async def _audit_log(
         self,
