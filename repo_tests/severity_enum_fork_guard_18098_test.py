@@ -50,20 +50,22 @@ SEVERITY_SUBSET_PROBE = frozenset({"INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL"})
 SCANNED_ROOTS = ("autobot-backend", "autobot_shared")
 
 #: Exact subsets that are NOT aliased, because something builds an API or report dict
-#: key set by ITERATING their members:
+#: key set by ITERATING their members. The sites, by file and the enum each iterates --
+#: deliberately not by line, per #15877:
 #:
-#:   api/code_intelligence.py:1049,1176  {sev.value: ... for sev in OptimizationSeverity}
-#:   api/code_intelligence.py:1286       ... for sev in SecuritySeverity
-#:   api/code_intelligence.py:1539       ... for sev in PerformanceSeverity
-#:   testing_pattern_analyzer.py:1142    ... for s in TestPatternSeverity
-#:   llm_pattern_analyzer.py:413         [priority.value for priority in OptimizationPriority]
+#:   api/code_intelligence.py        `for sev in OptimizationSeverity` (twice),
+#:                                   `for sev in SecuritySeverity`,
+#:                                   `for sev in PerformanceSeverity`
+#:   code_intelligence/testing_pattern_analyzer.py   `for s in TestPatternSeverity`
+#:   code_intelligence/llm_pattern_analyzer.py       `for priority in OptimizationPriority`
 #:
 #: Aliasing these to the ten-rung canonical grows those responses from five keys to ten,
-#: against a frontend type that is deliberately the narrow five
-#: (`autobot-frontend/src/types/codeIntelligence.ts:21`, where a value the generated
-#: `Severity` does not carry fails to compile). Each is a wire-format decision, not a
-#: refactor: #18098's "no serialized value changes, each is a drop-in migration" does not
-#: hold for them. `Severity.score_ladder()` is the mechanism if they migrate.
+#: against a frontend type that is deliberately the narrow five --
+#: `CODE_INTELLIGENCE_SEVERITIES` in `autobot-frontend/src/types/codeIntelligence.ts`,
+#: where a value the generated `Severity` does not carry fails to compile. Each is a
+#: wire-format decision, not a refactor: #18098's "no serialized value changes, each is a
+#: drop-in migration" does not hold for them. `Severity.score_ladder()` is the mechanism
+#: if they migrate.
 #:
 #: `OptimizationPriority` also ranks urgency rather than severity, which is a second
 #: question to answer before folding it in.
