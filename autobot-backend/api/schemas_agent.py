@@ -9,7 +9,7 @@ Agent config, memory, and LLM schemas.
 import uuid
 from typing import Any, Dict, List
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from models.session_collaboration import PermissionLevel
 from services.personality_service import SUPPORTED_LANGUAGES
@@ -1460,7 +1460,7 @@ class ChangePasswordResponse(BaseModel):
 
 class SignupRequest(BaseModel):
     username: str
-    email: str
+    email: EmailStr
     password: str
     display_name: str | None = None
 
@@ -1479,7 +1479,7 @@ class SignupRequest(BaseModel):
     @field_validator("email")
     @classmethod
     def validate_email(cls, v):
-        if "@" not in v or len(v) > 255:
+        if len(v) > 255:
             raise ValueError("Invalid email address")
         return v.strip().lower()
 

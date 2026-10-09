@@ -49,6 +49,7 @@ from api.schemas_code import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.git_probe import start_git
+from autobot_shared.git_refs import is_safe_ref
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
 from autobot_shared.ssot_config import PROJECT_ROOT
@@ -78,8 +79,6 @@ router = APIRouter(
 # These are called on every git request validation
 _SAFE_PATH_RE = re.compile(r"^[a-zA-Z0-9_\-./]+$")  # Safe file paths
 _SHELL_METACHAR_RE = re.compile(r"[;&|`$]")  # Shell injection characters
-_COMMIT_REF_RE = re.compile(r"^[a-zA-Z0-9_\-./^~]+$")  # Git commit refs
-_FULL_REF_RE = re.compile(r"^[a-zA-Z0-9_\-./^~:]+$")  # Git refs with colon
 
 # Security Configuration
 
@@ -1030,7 +1029,7 @@ async def read_git_resource(request: Metadata) -> Metadata:
     try:
         if resource_type == "commit":
             # Show commit details
-            if not _COMMIT_REF_RE.match(identifier):
+            if not is_safe_ref(identifier):
                 raise HTTPException(status_code=400, detail="Invalid commit reference")
             result = await execute_git_command(repo_path, ["show", identifier])
             content = result["stdout"]
@@ -1048,7 +1047,7 @@ async def read_git_resource(request: Metadata) -> Metadata:
             # Show diff between commits
             if ".." in identifier:
                 base, head = identifier.split("..", 1)
-                if not _COMMIT_REF_RE.match(base) or not _COMMIT_REF_RE.match(head):
+                if not is_safe_ref(base) or not is_safe_ref(head):
                     raise HTTPException(status_code=400, detail="Invalid diff reference")
                 result = await execute_git_command(repo_path, ["diff", f"{base}..{head}"])
             else:

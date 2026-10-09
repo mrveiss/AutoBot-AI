@@ -716,8 +716,8 @@ async def _init_knowledge_base(app: FastAPI):
     """
     logger.info("✅ [ 70%] Knowledge Base: Initializing knowledge base...")
     try:
+        # #18122: the factory publishes both stores; a None write here clobbered a live one.
         knowledge_base = await get_or_create_knowledge_base(app)
-        app.state.knowledge_base = knowledge_base
         await update_app_state("knowledge_base", knowledge_base)
         logger.info("✅ [ 70%] Knowledge Base: Knowledge base ready")
 
@@ -745,8 +745,8 @@ async def _init_knowledge_base(app: FastAPI):
         except Exception as _tm_err:
             logger.warning("CollectionTierManager startup failed: %s", _tm_err)
     except Exception as kb_error:
-        logger.warning("Knowledge base initialization failed: %s", kb_error)
-        app.state.knowledge_base = None
+        # #18122: keep the last good instance; the warning is the signal, not a null store.
+        logger.warning("Knowledge base init failed, keeping any published instance: %s", kb_error)
 
 
 async def _init_npu_worker_websocket():

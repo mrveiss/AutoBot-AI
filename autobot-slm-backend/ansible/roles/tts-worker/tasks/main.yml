@@ -224,14 +224,42 @@
   timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
   tags: ['tts', 'packages']
 
-# #15598: floor raised from `>=2.5.0` to the `>=2.13.0` that
-# `autobot-tts-worker/requirements.txt` declares. Pocket TTS needs >=2.5, but
-# the worker ships against 2.13 and this task is what actually populates its
-# venv, so the lower number was the one that bound.
+# #15598 raised this floor by hand to match `autobot-tts-worker/requirements.txt`,
+# and #18127 is what that hand-editing costs: a dependabot bump moved the manifest and
+# not this file, so `ansible_requirements_parity_test` failed #18105 on a shard. One
+# declaration now -- the manifest -- read here instead of restated.
+#
+# Read from the CONTROLLER via playbook_dir, the same anchor
+# `_shared/tasks/stage_shared_manifests.yml` uses for `constraints/shared.txt`; the
+# component manifest is not synced to the node, so it cannot be read from there.
+#
+# `[^\s#]*` stops at whitespace, so a trailing comment is excluded and so is an
+# environment marker. A marker on torch would be silently dropped, which is why the
+# assert below also fails if the extracted value is not a torch requirement.
+- name: "TTS Worker | Read the torch requirement from the component manifest (#18127)"
+  ansible.builtin.set_fact:
+    _tts_torch_requirement: >-
+      {{ lookup('file', playbook_dir ~ '/../../../autobot-tts-worker/requirements.txt')
+         | regex_search('^torch(?![A-Za-z0-9_.-])[^\s#]*', multiline=True) }}
+  tags: ['tts', 'packages']
+
+# Fail closed: an unreadable manifest or a renamed package would otherwise render an
+# empty pip name, and `pip install ""` is not an error pip reports usefully.
+- name: "TTS Worker | The torch requirement must have been found (#18127)"
+  ansible.builtin.assert:
+    that:
+      - _tts_torch_requirement is string
+      - _tts_torch_requirement.startswith('torch')
+    fail_msg: >-
+      Could not read a torch requirement from autobot-tts-worker/requirements.txt
+      (got {{ _tts_torch_requirement | default('<undefined>') }}). This role installs
+      torch from the CPU wheel index and takes its version from that manifest (#18127).
+  tags: ['tts', 'packages']
+
 - name: "TTS Worker | Install torch CPU-only from the CPU wheel index"
   ansible.builtin.pip:
     name:
-      - "torch>=2.14.0"
+      - "{{ _tts_torch_requirement }}"
     virtualenv: "{{ tts_install_dir }}/venv"
     # #16641: see "TTS Worker | Upgrade pip in venv" above.
     virtualenv_command: "{{ python_interpreter_binary }} -m venv"

@@ -86,6 +86,21 @@ async def _adopt_then_backfill(kb) -> None:
     await kb.backfill_document_visibility()
 
 
+def _publish_knowledge_base(kb, app: "FastAPI | None" = None) -> None:
+    """Record ``kb`` as the one store, projecting it onto app state when there is an app.
+
+    #18122: the module singleton is the system of record; ``app.state.knowledge_base``
+    is a rebuildable projection of it. Both creation paths land here, so an instance
+    built with an app is visible to the app-less callers and the reverse. Before this,
+    the lifespan path set only app state, which left ``peek_knowledge_base()`` reporting
+    no instance and made ``get_knowledge_base_async()`` construct a second store.
+    """
+    global _knowledge_base_instance
+    _knowledge_base_instance = kb
+    if app is not None:
+        app.state.knowledge_base = kb
+
+
 async def _create_new_knowledge_base(app: FastAPI):
     """Create and initialize a new knowledge base (Issue #315: extracted).
 
@@ -109,7 +124,7 @@ async def _create_new_knowledge_base(app: FastAPI):
 
         if result:
             _last_kb_init_failure = 0.0  # Reset cooldown on success
-            app.state.knowledge_base = kb
+            _publish_knowledge_base(kb, app)
             _adopt_legacy_facts(kb)
             logger.info("✅ Knowledge base created and initialized (unified KnowledgeBase with ChromaDB)")
             return kb
@@ -159,6 +174,21 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
                 return result
             # Fall through to create new instance
 
+        # #18122/#18130: adopt an existing singleton BEFORE the cooldown gate. Adoption
+        # touches no store -- it only projects an already-initialized instance onto this
+        # app -- so a recent ChromaDB failure must not suppress it. With this block after
+        # the gate, a cooldown made this function return None while peek_knowledge_base()
+        # held a healthy instance: the cooldown exists to stop re-initialization attempts,
+        # not to withhold an instance that already exists.
+        adopted = peek_knowledge_base()
+        if adopted is not None and not force_refresh:
+            logger.info("Adopting the existing knowledge base singleton for this app")
+            # Through the publisher, not a direct write: one function owns the projection,
+            # so "the stores agree" is checkable at a single site instead of at every
+            # assignment. Idempotent here -- the singleton is already this instance.
+            _publish_knowledge_base(adopted, app)
+            return adopted
+
         # Issue #3094/#3106: Enforce retry cooldown to avoid hammering ChromaDB after
         # a startup failure.  force_refresh bypasses the cooldown (e.g. admin /reinit).
         if not force_refresh and _last_kb_init_failure > 0.0:
@@ -179,6 +209,23 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
         return None
 
 
+def peek_knowledge_base() -> "KnowledgeBase" | None:  # noqa: F821
+    """Return the app-free singleton if it is already initialized, else None.
+
+    Never constructs and never initializes -- the question is "is there one right now",
+    which is what a synchronous caller and a status report can honestly ask. Use
+    :func:`get_knowledge_base_async` when the answer should be "make one".
+
+    Added for #18122 so `knowledge_base_factory` could become a facade over this store
+    instead of keeping its own: a second module reaching into
+    ``_knowledge_base_instance`` would make the private global a shared one in all but
+    name, which is the fork this replaces.
+    """
+    if _knowledge_base_instance is None:
+        return None
+    return _knowledge_base_instance if _is_kb_initialized(_knowledge_base_instance) else None
+
+
 async def get_knowledge_base_async() -> "KnowledgeBase" | None:  # noqa: F821
     """
     Get or create a knowledge base instance without requiring FastAPI app context (thread-safe).
@@ -189,8 +236,6 @@ async def get_knowledge_base_async() -> "KnowledgeBase" | None:  # noqa: F821
     Returns:
         KnowledgeBase instance or None if initialization fails
     """
-    global _knowledge_base_instance
-
     try:
         # Return existing instance if already initialized
         if _knowledge_base_instance is not None:
@@ -216,7 +261,7 @@ async def get_knowledge_base_async() -> "KnowledgeBase" | None:  # noqa: F821
             result = await kb.initialize()
 
             if result:
-                _knowledge_base_instance = kb
+                _publish_knowledge_base(kb)
                 logger.info("✅ Knowledge base singleton created and initialized")
                 _adopt_legacy_facts(kb)
                 return kb

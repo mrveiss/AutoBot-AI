@@ -16,7 +16,6 @@ Related Issues: #185 (Split), #212 (Analytics split)
 
 import asyncio
 import json
-import re
 import sys
 import time
 from collections import defaultdict
@@ -27,6 +26,7 @@ import psutil
 import redis
 
 from api.schemas_analytics import CodeAnalysisRequest, CommunicationPattern
+from autobot_shared.endpoint_normalization import collapse_dynamic_segments
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
 from autobot_shared.ssot_config import config as _ssot
@@ -51,19 +51,6 @@ CODE_INDEXING_ANALYSIS_TYPES = {"full", "incremental"}
 # After normalization these should stay well under the cap, but it acts as a
 # last-resort safety net against truly novel path shapes.
 MAX_API_FREQUENCY_ENTRIES = 2000
-
-# Patterns matched left-to-right; first match wins per path segment.
-_DYNAMIC_SEGMENT_PATTERNS = [
-    # UUID v4: 8-4-4-4-12 hex groups
-    re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.I),
-    # Long hex strings (SHA-like, ≥16 chars)
-    re.compile(r"[0-9a-f]{16,}", re.I),
-    # Pure numeric IDs (one or more digits)
-    re.compile(r"^\d+$"),
-    # Alphanumeric slugs that look generated: starts with alpha/digit, contains
-    # both letters and digits, length ≥ 8.  Avoids collapsing short word slugs.
-    re.compile(r"^(?=[a-z0-9_-]{0,200}[a-z])(?=[a-z0-9_-]{0,200}\d)[a-z0-9_-]{8,}$", re.I),
-]
 
 
 # Simple service address function using configuration
@@ -135,23 +122,10 @@ class AnalyticsController:
         if len(parts) != 2:
             return endpoint
         method, path = parts
-        segments = path.split("/")
-        normalized = []
-        for segment in segments:
-            if not segment:
-                normalized.append(segment)
-                continue
-            # Strip query string from the last segment before pattern-matching.
-            clean = segment.split("?")[0]
-            replaced = False
-            for pattern in _DYNAMIC_SEGMENT_PATTERNS:
-                if pattern.search(clean):
-                    normalized.append("{id}")
-                    replaced = True
-                    break
-            if not replaced:
-                normalized.append(segment)
-        return f"{method} {'/'.join(normalized)}"
+        # #18093: the segment rules live in autobot_shared so the monitoring collector
+        # cannot drift from them again -- its own copy had the substitutions ordered
+        # such that a uuid was never collapsed at all.
+        return f"{method} {collapse_dynamic_segments(path)}"
 
     def _prune_api_dicts(self) -> None:
         """Drop the least-frequent entries when ``api_frequencies`` exceeds the cap.

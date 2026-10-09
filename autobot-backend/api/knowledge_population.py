@@ -19,7 +19,6 @@ Related Issues: #185 (Split), #209 (Knowledge split)
 """
 
 import asyncio
-import re
 from pathlib import Path as PathLib
 
 import aiofiles
@@ -41,12 +40,11 @@ from knowledge.schemas.population import (
     TaskStatusResponse,
 )
 from knowledge_factory import get_or_create_knowledge_base
+from utils.encoding_utils import strip_ansi_escapes
 from utils.template_loader import knowledge_data_exists, load_knowledge_data
 
 logger = get_logger(__name__)
 
-# Issue #380: Pre-compiled regex for ANSI escape sequence removal
-_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 # Create router for population endpoints
 router = APIRouter(
@@ -512,7 +510,7 @@ async def _fetch_man_page(command: str) -> str | None:
 
         man_content = stdout.decode("utf-8").strip()
         # Remove ANSI escape sequences
-        return _ANSI_ESCAPE_RE.sub("", man_content)
+        return strip_ansi_escapes(man_content)
 
     except Exception as e:
         logger.error("Error fetching man page for %s: %s", command, e)
