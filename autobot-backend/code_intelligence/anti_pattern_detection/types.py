@@ -12,7 +12,8 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import re
-from enum import Enum
+
+from autobot_shared.status_enums import Severity
 
 # AntiPatternType is deliberately NOT defined here.  GH#6757 made
 # ``code_analysis.src.anti_pattern_detector.AntiPatternType`` the canonical SSOT and
@@ -23,15 +24,12 @@ from enum import Enum
 # keeps working for every detector in this package.
 from code_analysis.src.anti_pattern_detector import AntiPatternType  # noqa: F401
 
-
-class AntiPatternSeverity(Enum):
-    """Severity levels for anti-patterns."""
-
-    INFO = "info"
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+#: An exact subset of the canonical ladder, so an alias rather than a class (#18098).
+#: Safe to alias because every severity distribution built from this is built from the
+#: values actually OBSERVED in results, never by iterating the member set -- so the
+#: canonical's ten members do not add five always-zero keys to a response. Four of its
+#: former siblings do iterate, and are deliberately left alone; see the issue.
+AntiPatternSeverity = Severity
 
 
 # ============================================================================

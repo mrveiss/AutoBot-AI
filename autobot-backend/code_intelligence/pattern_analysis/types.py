@@ -13,6 +13,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List
 
+from autobot_shared.status_enums import Severity
+
 
 class PatternType(Enum):
     """Types of code patterns that can be detected."""
@@ -29,14 +31,10 @@ class PatternType(Enum):
     DATA_TRANSFORMATION = "data_transformation"
 
 
-class PatternSeverity(Enum):
-    """Severity levels for pattern analysis findings."""
-
-    INFO = "info"
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+#: An exact subset of the canonical ladder (#18098). The second of two unrelated modules
+#: declaring `PatternSeverity`; both were the same five rungs, which is why the name
+#: collision was harmless and why both collapse to the same alias.
+PatternSeverity = Severity
 
 
 @dataclass
