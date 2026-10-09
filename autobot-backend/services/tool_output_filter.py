@@ -27,6 +27,7 @@ import yaml
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
+from utils.encoding_utils import strip_ansi_escapes
 
 logger = get_logger(__name__)
 
@@ -46,7 +47,6 @@ _NO_OP_PATTERNS = re.compile(
     r"(Everything up-to-date|nothing to commit|Already up to date|" r"no changes added|working tree clean)",
     re.IGNORECASE,
 )
-_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[mGKHF]")
 _BADGE_RE = re.compile(r"^\[!\[.*?\]\(.*?\)\]\(.*?\)\s*$")
 _IMAGE_ONLY_RE = re.compile(r"^!\[.*?\]\(.*?\)\s*$")
 _HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
@@ -60,7 +60,7 @@ _SHORT_SUMMARY_RE = re.compile(r"^=+ short test summary info =+", re.IGNORECASE)
 
 
 def _strip_ansi(text: str) -> str:
-    return _ANSI_RE.sub("", text)
+    return strip_ansi_escapes(text)
 
 
 def _dedup_consecutive(text: str) -> str:

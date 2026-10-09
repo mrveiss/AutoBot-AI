@@ -28,6 +28,7 @@ from autobot_shared.doc_chunking import chunk_large_content as _chunk_large_cont
 from autobot_shared.doc_chunking import create_chunk as _create_chunk
 from autobot_shared.doc_chunking import estimate_tokens as _estimate_tokens
 from autobot_shared.doc_chunking import process_h2_sections as _process_h2_sections
+from autobot_shared.frontmatter import split_frontmatter
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import shared_cache_path
 
@@ -255,16 +256,15 @@ def _parse_frontmatter(content: str) -> Tuple[str, List[str], List[str]]:
     ``---`` together with any ``tags`` and ``aliases`` values found inside it.
     If no frontmatter is present the original content is returned unchanged
     with empty tag and alias lists.
+
+    #18093: an EIGHTH fence variant, invisible to the regex-by-concept guard because it
+    used no regex -- `startswith("---")` plus `find("\n---", 3)` -- and it leaked `\r`
+    on CRLF and accepted `---yaml` as a fence. Key scanning below is unchanged.
     """
-    if not content.startswith("---"):
+    fm_block, body = split_frontmatter(content)
+    if fm_block is None:
         return content, [], []
-
-    end = content.find("\n---", 3)
-    if end == -1:
-        return content, [], []
-
-    fm_block = content[3:end]
-    body = content[end + 4 :].lstrip("\n")
+    body = body.lstrip("\n")  # preserved: blank lines after the fence are not body
 
     fm_tags: List[str] = []
     fm_aliases: List[str] = []

@@ -181,9 +181,16 @@ def _tracked_python_files(root: Path = REPO_ROOT) -> list[Path]:
 # (see the `rel.parts[0] == "repo_tests"` continue below), so `completed` FALLS
 # as guards are added -- five sessions added some tonight -- while population
 # rises. The two bounds close from opposite directions and only the gap one is
-# ever measured. Not re-pinning it here: main's value holds, and one branch
-# unilaterally widening a floor another just set is how two correct numbers
-# become a conflict. Recorded on #17142 instead.
+# ever measured.
+# #18130: the deferral that stood here ("not re-pinning it, main's value holds,
+# recorded on #17142 instead") has had both of its premises removed, so it is
+# replaced rather than carried. #17142 is CLOSED, so it is no longer a home for
+# the finding; and no open PR touches this file, so the concurrent-branch
+# collision it was avoiding cannot happen. The #17818 window check now fails this
+# declaration outright -- 5764 sat in the bottom 40 of [5737, 6137] -- and that
+# check is the thing the deferral was waiting for: it turns "thin" from a number
+# a human watches into one the suite measures. Re-pinned MID-window at the value
+# this run reported, which is also the strict (upward) direction for a reach floor.
 REACH = declare(
     "audio-extension-allowlist",
     discover=_tracked_python_files,
@@ -194,7 +201,11 @@ REACH = declare(
     # are legal in a 700-wide window (skips=300 + growth=400); the highest is
     # kept because a floor only ever ratchets up, asserting the sweep reached
     # MORE, which is the strict direction for a reach floor.
-    floor=5764,
+    # 5764 -> 5937 (#18130): measured against a population of 6437, whose window
+    # is [5737, 6137]. 5764 was 27 files from red, which the #17818 check calls
+    # zero tolerance dressed as an allowance -- this PR's own new modules were
+    # that ordinary growth. Mid-window, re-measured here, not carried (#15928).
+    floor=5937,
     growth=400,
     skips=300,
     what="tracked python files",
