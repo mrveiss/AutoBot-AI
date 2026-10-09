@@ -61,13 +61,13 @@ from __future__ import annotations
 
 import asyncio
 import re
-import unicodedata
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.slug import url_slug
 
 logger = get_logger(__name__)
 
@@ -134,24 +134,18 @@ _SKIP_KEYS = frozenset(
 def _slugify(text: str) -> str:
     """Convert *text* to an OKF-safe slug.
 
-    Rules: lowercase Unicode -> ASCII transliteration -> keep ``[a-z0-9]`` and
-    spaces -> replace spaces/hyphens with single hyphens -> strip leading/trailing
-    hyphens -> truncate to ``_SLUG_MAX_LEN``.
+    #18093: the rule is `autobot_shared.slug.slugify`, shared with `llc/models/company`
+    and `user_management/organization_service`. The NFKD fold this site had is now the
+    default there, and the trailing-hyphen-after-truncation strip this site LACKED comes
+    with it. "concept" stays here: what an empty slug means is this caller's policy.
 
     Args:
         text: Source text (title or fact_id).
 
     Returns:
-        Slug string matching ``[a-z0-9][a-z0-9-]*``.
+        Slug string matching ``[a-z0-9]([a-z0-9-]*[a-z0-9])?``, or "concept".
     """
-    # Normalise Unicode and transliterate to ASCII
-    nfkd = unicodedata.normalize("NFKD", text)
-    ascii_text = nfkd.encode("ascii", "ignore").decode("ascii")
-    lowered = ascii_text.lower()
-    # Replace any non-alphanumeric character with a hyphen
-    slugged = re.sub(r"[^a-z0-9]+", "-", lowered)
-    slugged = slugged.strip("-")
-    return slugged[:_SLUG_MAX_LEN] or "concept"
+    return url_slug(text, max_length=_SLUG_MAX_LEN) or "concept"
 
 
 def _unique_slug(base_slug: str, taken: set, *, counter_start: int = 2) -> str:

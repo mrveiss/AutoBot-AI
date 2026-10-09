@@ -484,7 +484,7 @@ def test_audit_problems_are_reported_to_the_developer(hook, tmp_path, caplog, mo
 
 def test_configure_logging_makes_the_clean_run_visible(hook):
     """The 'all live' line is INFO, so it needs a handler to exist at all."""
-    hook.configure_logging()
+    hook.configure_logging(hook.logger)
     assert hook.logger.handlers, "no handler — INFO output would be discarded"
     assert hook.logger.isEnabledFor(logging.INFO)
 

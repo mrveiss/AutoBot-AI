@@ -9,13 +9,13 @@ storage is the ``organizations`` table; the LLC layer adds company-lifecycle
 semantics on top (sub-company hierarchy, budget, issue prefix, status).
 """
 
-import re
 import uuid
 from datetime import datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from autobot_shared.slug import url_slug
 from llc.models.enums import LLCCompanyStatus
 
 
@@ -58,7 +58,10 @@ class CompanyCreate(CompanyBase):
         # the CompanyBase contract (^[a-z0-9-]+$). Lowercase, collapse any run of
         # non-alphanumeric chars to a single hyphen, strip leading/trailing hyphens.
         source = (self.slug or "").strip() or self.name
-        slug = re.sub(r"[^a-z0-9]+", "-", source.lower()).strip("-")[:100].strip("-")
+        # #18093: `autobot_shared.slug.slugify` is this rule, shared with
+        # `knowledge/adapters/okf_adapter` and `user_management/organization_service`.
+        # The strip-after-truncate that only this site did is now the shared behaviour.
+        slug = url_slug(source)  # 100 is slugify's default cap, which this site used
         if not slug:
             raise ValueError("Unable to derive a slug from the company name; provide a slug explicitly")
         self.slug = slug

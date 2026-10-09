@@ -323,7 +323,21 @@ class TestNeverDeletesUnlandedWork:
         """
         add_worktree(repo, "wt-ff", [("ff.txt", "fix(y): work (#8)")])
         sha = _git(repo, "rev-parse", "wt-ff").stdout.strip()
-        _git(repo, "cherry-pick", sha)  # fast-forwards base onto that commit
+        # A REAL fast-forward. `git cherry-pick <sha>` only fast-forwards with `--ff`;
+        # by default it writes a NEW commit carrying the same patch under a different
+        # sha, which leaves `base..wt-ff` ahead by one and routes this fixture to the
+        # landed-by-patch-id verdict instead of the `ahead == 0` guard it exists to
+        # check. git 2.34 fast-forwarded here anyway and git 2.55 does not, so the
+        # fixture passed locally while testing nothing on CI (#18130).
+        _git(repo, "merge", "--ff-only", "wt-ff")
+        # Control: assert the fixture built the topology this test is named for. Without
+        # it, a git that stops fast-forwarding silently moves the test onto a different
+        # code path and the failure reads as a defect in the script under test.
+        assert _git(repo, "rev-parse", "base").stdout.strip() == sha, (
+            "fixture: base did not fast-forward onto wt-ff, so ahead != 0 and this test "
+            "no longer exercises the ahead == 0 guard"
+        )
+        assert _git(repo, "rev-list", "--count", "base..wt-ff").stdout.strip() == "0"
         res = run(repo, "--base", "base", merged_pr="4305")
         assert VERDICT["no commits"] in res.stdout, res.stdout
         assert "CANDIDATE" not in res.stdout, res.stdout
