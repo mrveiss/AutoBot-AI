@@ -52,9 +52,16 @@ _dependencies: RBACDependencies | None = None
 
 
 def configure_rbac(dependencies: RBACDependencies) -> None:
-    """Inject the hosting service's objects. Each service's shim calls this once."""
+    """Inject the hosting service's objects. Each service's shim calls this once.
+
+    Re-configuring drops the singleton's cached deployment config, so it is re-read
+    through the new getter; swapping in a different object is logged, the same one is not.
+    """
     global _dependencies
+    if _dependencies is not None and _dependencies is not dependencies:
+        logger.warning("RBAC: configure_rbac() replaced already-injected dependencies; resetting cached config")
     _dependencies = dependencies
+    rbac_middleware._config = None
 
 
 def _require_dependencies() -> RBACDependencies:
@@ -223,6 +230,10 @@ class RBACMiddleware:
 
         Returns:
             Set of permission names
+
+        Raises:
+            RBACNotConfiguredError: on a cache MISS before configure_rbac(). An L1/L2 hit
+                returns the real cached permissions first, which is not fail-open.
         """
         if not user_id:
             return set()

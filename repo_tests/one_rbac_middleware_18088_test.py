@@ -82,25 +82,55 @@ def _redefines_enforcement(tree: ast.Module) -> bool:
     return False
 
 
-def _runtime_service_imports(tree: ast.Module) -> list[str]:
-    """Module-level `user_management.*` imports outside a `TYPE_CHECKING` block.
+def _is_type_checking(test: ast.expr) -> bool:
+    """Exactly `TYPE_CHECKING` or `typing.TYPE_CHECKING` -- not `not TYPE_CHECKING`."""
+    if isinstance(test, ast.Name):
+        return test.id == "TYPE_CHECKING"
+    return isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING" and isinstance(test.value, ast.Name)
 
-    Shared code may not import a service package at runtime: `user_management` resolves to
-    whichever service is on `sys.path`, so it would bind to the wrong one (#18088).
-    """
-    found = []
-    for node in tree.body:
-        if isinstance(node, ast.If) and "TYPE_CHECKING" in ast.dump(node.test):
+
+def _is_service_module(name: str) -> bool:
+    return name == "user_management" or name.startswith("user_management.")
+
+
+def _service_import_names(sub: ast.AST) -> list[str]:
+    """`user_management.*` modules named by one node: an import or a literal dynamic import."""
+    if isinstance(sub, ast.ImportFrom) and sub.level == 0 and sub.module:
+        names = [sub.module]
+    elif isinstance(sub, ast.Import):
+        names = [alias.name for alias in sub.names]
+    elif isinstance(sub, ast.Call) and sub.args and isinstance(sub.args[0], ast.Constant):
+        func = sub.func
+        callee = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+        if callee not in ("import_module", "__import__") or not isinstance(sub.args[0].value, str):
+            return []
+        names = [sub.args[0].value]
+    else:
+        return []
+    return [n for n in names if _is_service_module(n)]
+
+
+def _scan_statements(nodes: list[ast.stmt]) -> list[str]:
+    found: list[str] = []
+    for node in nodes:
+        if isinstance(node, ast.If) and _is_type_checking(node.test):
+            found += _scan_statements(node.orelse)  # only the body is type-only
             continue
         for sub in ast.walk(node):
-            if isinstance(sub, ast.ImportFrom) and sub.level == 0 and sub.module:
-                names = [sub.module]
-            elif isinstance(sub, ast.Import):
-                names = [alias.name for alias in sub.names]
-            else:
-                continue
-            found += [n for n in names if n == "user_management" or n.startswith("user_management.")]
+            found += _service_import_names(sub)
     return found
+
+
+def _runtime_service_imports(tree: ast.Module) -> list[str]:
+    """Module-level `user_management.*` imports outside a `TYPE_CHECKING` body.
+
+    Shared code may not import a service package at runtime: `user_management` resolves to
+    whichever service is on `sys.path`, so it would bind to the wrong one (#18088). Only the
+    body of `if TYPE_CHECKING:` is exempt; its `else:` runs, and so does
+    `if not TYPE_CHECKING:`. `importlib.import_module("user_management.x")` and
+    `__import__(...)` with a literal are the same import by another spelling.
+    """
+    return _scan_statements(tree.body)
 
 
 def _imported_names(tree: ast.Module) -> set[str]:
@@ -232,3 +262,24 @@ def test_the_copy_detector_catches_a_partial_copy_with_a_contrast_pair() -> None
     assert not _redefines_enforcement(ast.parse(shim)), "a re-export is not a definition"
     unrelated = "def require_permission(p):\n    return security_layer.check_permission(p)\n"
     assert not _redefines_enforcement(ast.parse(unrelated)), "a different implementation is not a copy"
+
+
+def test_the_type_checking_exemption_covers_only_the_body() -> None:
+    """Contrast fixtures: the else branch and dynamic imports run, so they are flagged."""
+    in_else = "if TYPE_CHECKING:\n    pass\nelse:\n    from user_management.x import Y\n"
+    assert _runtime_service_imports(ast.parse(in_else)) == ["user_management.x"]
+
+    in_body = "if TYPE_CHECKING:\n    from user_management.x import Y\n"
+    assert _runtime_service_imports(ast.parse(in_body)) == []
+
+    qualified = "import typing\nif typing.TYPE_CHECKING:\n    from user_management.x import Y\n"
+    assert _runtime_service_imports(ast.parse(qualified)) == []
+
+    negated = "if not TYPE_CHECKING:\n    from user_management.x import Y\n"
+    assert _runtime_service_imports(ast.parse(negated)) == ["user_management.x"]
+
+    dynamic = 'import importlib\nimportlib.import_module("user_management.x")\n__import__("user_management.y")\n'
+    assert _runtime_service_imports(ast.parse(dynamic)) == ["user_management.x", "user_management.y"]
+
+    harmless = 'import importlib\nimportlib.import_module("autobot_shared.x")\n'
+    assert _runtime_service_imports(ast.parse(harmless)) == []
