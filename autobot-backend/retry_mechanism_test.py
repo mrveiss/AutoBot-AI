@@ -11,9 +11,9 @@ import time
 import pytest
 
 from retry_mechanism import (
-    RetryConfig,
     RetryExhaustedError,
     RetryMechanism,
+    RetryPolicy,
     RetryStrategy,
     retry_async,
     retry_database_operation,
@@ -28,7 +28,7 @@ class TestRetryMechanism:
 
     def test_retry_config_defaults(self):
         """Test default retry configuration"""
-        config = RetryConfig()
+        config = RetryPolicy()
 
         assert config.max_attempts == 3
         assert config.base_delay == 1.0
@@ -39,7 +39,7 @@ class TestRetryMechanism:
 
     def test_delay_calculation_exponential(self):
         """Test exponential backoff delay calculation"""
-        config = RetryConfig(
+        config = RetryPolicy(
             base_delay=1.0,
             backoff_multiplier=2.0,
             jitter=False,  # Disable for predictable testing
@@ -54,7 +54,7 @@ class TestRetryMechanism:
 
     def test_delay_calculation_linear(self):
         """Test linear backoff delay calculation"""
-        config = RetryConfig(base_delay=0.5, strategy=RetryStrategy.LINEAR_BACKOFF, jitter=False)
+        config = RetryPolicy(base_delay=0.5, strategy=RetryStrategy.LINEAR_BACKOFF, jitter=False)
 
         retry_mechanism = RetryMechanism(config)
 
@@ -64,7 +64,7 @@ class TestRetryMechanism:
 
     def test_delay_calculation_fixed(self):
         """Test fixed delay calculation"""
-        config = RetryConfig(base_delay=2.0, strategy=RetryStrategy.FIXED_DELAY, jitter=False)
+        config = RetryPolicy(base_delay=2.0, strategy=RetryStrategy.FIXED_DELAY, jitter=False)
 
         retry_mechanism = RetryMechanism(config)
 
@@ -74,7 +74,7 @@ class TestRetryMechanism:
 
     def test_delay_max_limit(self):
         """Test that delays don't exceed maximum"""
-        config = RetryConfig(base_delay=1.0, max_delay=5.0, backoff_multiplier=3.0, jitter=False)
+        config = RetryPolicy(base_delay=1.0, max_delay=5.0, backoff_multiplier=3.0, jitter=False)
 
         retry_mechanism = RetryMechanism(config)
 
@@ -83,7 +83,7 @@ class TestRetryMechanism:
 
     def test_jitter_adds_randomness(self):
         """Test that jitter adds randomness to delays"""
-        config = RetryConfig(base_delay=1.0, jitter=True, strategy=RetryStrategy.FIXED_DELAY)
+        config = RetryPolicy(base_delay=1.0, jitter=True, strategy=RetryStrategy.FIXED_DELAY)
 
         retry_mechanism = RetryMechanism(config)
 
@@ -132,7 +132,7 @@ class TestRetryMechanism:
     @pytest.mark.asyncio
     async def test_successful_execution_after_retries(self):
         """Test successful execution after retries"""
-        retry_mechanism = RetryMechanism(RetryConfig(max_attempts=3, base_delay=0.01))
+        retry_mechanism = RetryMechanism(RetryPolicy(max_attempts=3, base_delay=0.01))
 
         call_count = 0
 
@@ -156,7 +156,7 @@ class TestRetryMechanism:
     @pytest.mark.asyncio
     async def test_retry_exhausted_failure(self):
         """Test failure after all retry attempts exhausted"""
-        retry_mechanism = RetryMechanism(RetryConfig(max_attempts=2, base_delay=0.01))
+        retry_mechanism = RetryMechanism(RetryPolicy(max_attempts=2, base_delay=0.01))
 
         async def always_fail():
             raise ConnectionError("Always fails")
@@ -176,7 +176,7 @@ class TestRetryMechanism:
     @pytest.mark.asyncio
     async def test_non_retryable_exception_immediate_failure(self):
         """Test immediate failure for non-retryable exceptions"""
-        retry_mechanism = RetryMechanism(RetryConfig(max_attempts=3))
+        retry_mechanism = RetryMechanism(RetryPolicy(max_attempts=3))
 
         async def non_retryable_fail():
             raise ValueError("Bad input")
@@ -191,7 +191,7 @@ class TestRetryMechanism:
 
     def test_sync_execution_successful(self):
         """Test synchronous execution with retry mechanism"""
-        retry_mechanism = RetryMechanism(RetryConfig(max_attempts=3, base_delay=0.01))
+        retry_mechanism = RetryMechanism(RetryPolicy(max_attempts=3, base_delay=0.01))
 
         call_count = 0
 
@@ -211,7 +211,7 @@ class TestRetryMechanism:
 
     def test_sync_execution_failure(self):
         """Test synchronous execution failure after retries"""
-        retry_mechanism = RetryMechanism(RetryConfig(max_attempts=2, base_delay=0.01))
+        retry_mechanism = RetryMechanism(RetryPolicy(max_attempts=2, base_delay=0.01))
 
         def always_fail_sync():
             raise TimeoutError("Always times out")
@@ -221,7 +221,7 @@ class TestRetryMechanism:
 
     def test_operation_statistics(self):
         """Test operation statistics tracking"""
-        retry_mechanism = RetryMechanism(RetryConfig(max_attempts=3, base_delay=0.01))
+        retry_mechanism = RetryMechanism(RetryPolicy(max_attempts=3, base_delay=0.01))
 
         def successful_op():
             return "ok"
@@ -422,7 +422,7 @@ class TestRetryMechanismIntegration:
     def test_performance_under_load(self):
         """Test retry mechanism performance under load"""
         retry_mechanism = RetryMechanism(
-            RetryConfig(
+            RetryPolicy(
                 max_attempts=2,
                 base_delay=0.001,  # Very fast for performance test
                 jitter=False,
@@ -452,7 +452,7 @@ class TestRetryMechanismIntegration:
 
     def test_stats_accuracy(self):
         """Test statistics accuracy across multiple operations"""
-        retry_mechanism = RetryMechanism(RetryConfig(max_attempts=3, base_delay=0.01))
+        retry_mechanism = RetryMechanism(RetryPolicy(max_attempts=3, base_delay=0.01))
 
         # Mix of operations
         def success_op():
@@ -501,7 +501,7 @@ class TestRetryMechanismIntegration:
 
     def test_reset_stats(self):
         """Test statistics reset functionality"""
-        retry_mechanism = RetryMechanism(RetryConfig(base_delay=0.01))
+        retry_mechanism = RetryMechanism(RetryPolicy(base_delay=0.01))
 
         # Execute some operations
         retry_mechanism.execute_sync(lambda: "test", operation_name="test_op")

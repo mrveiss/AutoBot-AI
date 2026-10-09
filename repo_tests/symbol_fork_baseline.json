@@ -155,7 +155,6 @@
     "ResearchRequest",
     "ResearchResponse",
     "RestoreRequest",
-    "RetryConfig",
     "RetryStrategy",
     "ReviewComment",
     "ReviewResult",
