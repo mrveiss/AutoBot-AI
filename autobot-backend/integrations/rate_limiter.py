@@ -9,8 +9,12 @@ Async-native sliding-window rate limiter for external API integrations.
 Tracks rate limit state per service key and supports header-based quota
 updates (X-RateLimit-*, Retry-After) from GitHub and Slack API responses.
 
-Delegates to the shared ``autobot_shared.rate_limiter.RateLimiter`` for the
-core sliding-window logic (Issue #4460).
+Kept as a distinct concept from ``autobot_shared.rate_limiter.RateLimiter``
+(#18087): this class keeps its own in-process windows because the provider's
+``X-RateLimit-*`` / ``Retry-After`` response headers correct them
+(``apply_response_headers``), a feedback loop the canonical limiter does not
+have. Only the module-level ``integration_rate_limiter`` below is a canonical
+``RateLimiter`` instance. See ``repo_tests/one_rate_limiter_18087_test.py``.
 """
 
 import asyncio

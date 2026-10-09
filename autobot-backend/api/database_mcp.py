@@ -36,6 +36,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.rate_limiter_window import WindowFailurePolicy, WindowQuota
 from autobot_shared.security.sql_identifier import validate_sql_identifier
 from autobot_shared.time_utils import now_utc
 from services.mcp_bridge_manifest import MCPBridgeManifest
@@ -130,8 +131,16 @@ BLOCKED_SQL_COMMENT_PATTERNS = [
 
 # Rate limiting
 MAX_QUERIES_PER_MINUTE = 60
-query_counter = {"count": 0, "reset_time": now_utc()}
-_rate_limit_lock = asyncio.Lock()
+# One canonical window quota shared by every worker (#18087). LOCAL keeps
+# enforcing per worker while Redis is down: these admin MCP operations were
+# always enforced, so the control must not turn off during an outage.
+mcp_quota = WindowQuota.for_scope(
+    "database_mcp",
+    policy=WindowFailurePolicy.LOCAL,
+    max_requests=MAX_QUERIES_PER_MINUTE,
+    window_seconds=60,
+    label="database queries",
+)
 
 # Query limits
 MAX_RESULT_ROWS = 1000
@@ -247,30 +256,6 @@ def is_database_read_only(db_name: str) -> bool:
     if db_name not in DATABASE_WHITELIST:
         return True  # Default to read-only for safety
     return DATABASE_WHITELIST[db_name].get("read_only", True)
-
-
-async def check_rate_limit() -> bool:
-    """
-    Enforce rate limiting for database operations
-
-    Uses asyncio.Lock for thread safety in concurrent async environments
-    """
-
-    async with _rate_limit_lock:
-        now = now_utc()
-        elapsed = (now - query_counter["reset_time"]).total_seconds()
-
-        # Reset counter every minute (in-place modification for thread safety)
-        if elapsed >= 60:
-            query_counter["count"] = 0
-            query_counter["reset_time"] = now
-
-        if query_counter["count"] >= MAX_QUERIES_PER_MINUTE:
-            logger.warning("Rate limit exceeded: %s queries/min", query_counter["count"])
-            return False
-
-        query_counter["count"] += 1
-        return True
 
 
 def _execute_sqlite_query_sync(db_path: Path, query: str, params: list | None, limit: int) -> tuple[list, list]:
@@ -721,7 +706,7 @@ async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
     Issue #357: Uses asyncio.to_thread() for non-blocking database operations.
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_database_allowed(request.database):
@@ -785,7 +770,7 @@ async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
 async def database_execute_mcp(request: SQLExecuteRequest) -> Metadata:
     """Execute INSERT/UPDATE/DELETE on SQLite with security controls. Ref: #1088."""
     # Security checks
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_database_allowed(request.database):
@@ -845,7 +830,7 @@ async def database_list_tables_mcp(request: TableListRequest) -> Metadata:
     Returns table names with row counts
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_database_allowed(request.database):
@@ -892,7 +877,7 @@ async def database_describe_schema_mcp(request: SchemaRequest) -> Metadata:
     Returns column names, types, and constraints
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_database_allowed(request.database):
@@ -943,7 +928,7 @@ async def database_list_databases_mcp() -> Metadata:
     Returns database names, paths, access permissions, and descriptions
     """
     # Security check
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     logger.info("Listing available databases")
@@ -987,7 +972,7 @@ async def database_statistics_mcp(request: TableListRequest) -> Metadata:
     Returns size, table count, total rows, and last modified time
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_database_allowed(request.database):
@@ -1040,12 +1025,7 @@ async def get_database_mcp_status() -> Metadata:
     - Database availability
     """
 
-    async with _rate_limit_lock:
-        current_rate = query_counter["count"]
-        time_until_reset = max(
-            0,
-            60 - (now_utc() - query_counter["reset_time"]).total_seconds(),
-        )
+    rate_status = await mcp_quota.status()
 
     # Check database availability
     db_status = {}
@@ -1061,11 +1041,7 @@ async def get_database_mcp_status() -> Metadata:
     return {
         "status": "operational",
         "service": "database_mcp",
-        "rate_limit": {
-            "current": current_rate,
-            "max": MAX_QUERIES_PER_MINUTE,
-            "reset_in_seconds": round(time_until_reset, 1),
-        },
+        "rate_limit": rate_status,
         "configuration": {
             "whitelisted_databases": len(DATABASE_WHITELIST),
             "max_result_rows": MAX_RESULT_ROWS,

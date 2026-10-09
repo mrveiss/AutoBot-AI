@@ -310,12 +310,13 @@ class TestExistingLockVerification:
         assert hasattr(analytics_precommit, "_history_lock")
         assert isinstance(analytics_precommit._history_lock, type(threading.Lock()))
 
-    def test_browser_mcp_has_lock(self):
-        """Verify browser_mcp.py has async lock"""
+    def test_browser_mcp_rate_limit_is_canonical_not_a_local_lock(self):
+        """browser_mcp.py's counter is the shared quota, not a local dict + lock (#18087)"""
         from api import browser_mcp
+        from autobot_shared.rate_limiter_window import WindowQuota
 
-        assert hasattr(browser_mcp, "_rate_limit_lock")
-        assert isinstance(browser_mcp._rate_limit_lock, asyncio.Lock)
+        assert isinstance(browser_mcp.mcp_quota, WindowQuota)
+        assert not hasattr(browser_mcp, "_rate_limit_lock")
 
     def test_analytics_controller_has_lock(self):
         """Verify analytics_controller.py has async lock"""

@@ -246,7 +246,6 @@
     "cache_response",
     "can_access",
     "check_admin_permission",
-    "check_rate_limit",
     "content_hash",
     "create_error_response",
     "decrypt_data",

@@ -536,3 +536,18 @@ register_env_var(
         component="knowledge",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_RATE_LIMIT_LOCAL_MAX_KEYS",
+        type=int,
+        default=10_000,
+        description=(
+            "Cap on distinct keys the per-process rate-limit fallback tracks before it evicts keys "
+            "whose every hit has aged out of the window (#18087). Only used while Redis is "
+            "unavailable and a limiter's window_failure_policy is LOCAL; bounds memory when an "
+            "outage outlasts the window."
+        ),
+        component="rate_limit",
+    )
+)

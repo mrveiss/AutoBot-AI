@@ -31,7 +31,7 @@ Issue #49 - Additional MCP Bridges (Browser, HTTP, Database, Git)
 import asyncio
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List
 
 import aiohttp
@@ -79,6 +79,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.rate_limiter_window import WindowFailurePolicy, WindowQuota
 from autobot_shared.time_utils import now_utc
 from autobot_shared.url_safety import is_public_url_async
 from constants.network_constants import NetworkConstants
@@ -132,8 +133,16 @@ DEFAULT_BROWSER_SESSION_ID = "default"
 
 # Rate limiting: max requests per minute
 MAX_REQUESTS_PER_MINUTE = 60
-request_counter = {"count": 0, "reset_time": now_utc()}
-_rate_limit_lock = asyncio.Lock()
+# One canonical window quota shared by every worker (#18087). LOCAL keeps
+# enforcing per worker while Redis is down: these admin MCP operations were
+# always enforced, so the control must not turn off during an outage.
+mcp_quota = WindowQuota.for_scope(
+    "browser_mcp",
+    policy=WindowFailurePolicy.LOCAL,
+    max_requests=MAX_REQUESTS_PER_MINUTE,
+    window_seconds=60,
+    label="browser requests",
+)
 
 # Blocked JavaScript patterns (security) - enhanced to prevent bypass vectors
 BLOCKED_JS_PATTERNS = [
@@ -176,31 +185,6 @@ def is_script_safe(script: str) -> bool:
     except Exception as e:
         logger.error("Script validation error: %s", e)
         return False
-
-
-async def check_rate_limit() -> bool:
-    """
-    Enforce rate limiting for browser automation requests
-
-    Returns True if request is allowed, False if rate limit exceeded
-
-    Uses asyncio.Lock for thread safety in concurrent async environments
-    """
-    async with _rate_limit_lock:
-        now = now_utc()
-        elapsed = (now - request_counter["reset_time"]).total_seconds()
-
-        # Reset counter every minute (in-place modification for thread safety)
-        if elapsed >= 60:
-            request_counter["count"] = 0
-            request_counter["reset_time"] = now
-
-        if request_counter["count"] >= MAX_REQUESTS_PER_MINUTE:
-            logger.warning(f"Rate limit exceeded: {request_counter['count']} requests/min")
-            return False
-
-        request_counter["count"] += 1
-        return True
 
 
 def _get_browser_navigation_tools() -> List[MCPTool]:
@@ -727,7 +711,7 @@ async def send_to_browser_vm(
 )
 async def navigate_mcp(request: BrowserNavigateRequest) -> Metadata:
     """Navigate browser to URL with security validation"""
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     # #15228: one refusal sentence used to answer for a non-HTTP scheme, a
@@ -767,7 +751,7 @@ async def navigate_mcp(request: BrowserNavigateRequest) -> Metadata:
 )
 async def click_mcp(request: BrowserClickRequest) -> Metadata:
     """Click on element by selector"""
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     logger.info("Browser click on: %s", request.selector)
@@ -796,7 +780,7 @@ async def click_mcp(request: BrowserClickRequest) -> Metadata:
 )
 async def fill_mcp(request: BrowserFillRequest) -> Metadata:
     """Fill form field with value"""
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     logger.info("Browser fill: %s", request.selector)
@@ -830,7 +814,7 @@ async def fill_mcp(request: BrowserFillRequest) -> Metadata:
 )
 async def screenshot_mcp(request: BrowserScreenshotRequest) -> Metadata:
     """Capture screenshot of page or element"""
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     logger.info(f"Browser screenshot: selector={request.selector}, full_page={request.full_page}")
@@ -861,7 +845,7 @@ async def screenshot_mcp(request: BrowserScreenshotRequest) -> Metadata:
 )
 async def evaluate_mcp(request: BrowserEvaluateRequest) -> Metadata:
     """Execute JavaScript with security validation"""
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     if not is_script_safe(request.script):
@@ -896,7 +880,7 @@ async def evaluate_mcp(request: BrowserEvaluateRequest) -> Metadata:
 )
 async def wait_for_selector_mcp(request: BrowserWaitForSelectorRequest) -> Metadata:
     """Wait for element to reach specified state"""
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     logger.info("Browser wait_for_selector: %s (%s)", request.selector, request.state)
@@ -930,7 +914,7 @@ async def wait_for_selector_mcp(request: BrowserWaitForSelectorRequest) -> Metad
 )
 async def get_text_mcp(request: BrowserGetTextRequest) -> Metadata:
     """Extract text content from element"""
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     logger.info("Browser get_text: %s", request.selector)
@@ -959,7 +943,7 @@ async def get_text_mcp(request: BrowserGetTextRequest) -> Metadata:
 )
 async def get_attribute_mcp(request: BrowserGetAttributeRequest) -> Metadata:
     """Get attribute value from element"""
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     logger.info("Browser get_attribute: %s -> %s", request.selector, request.attribute)
@@ -989,7 +973,7 @@ async def get_attribute_mcp(request: BrowserGetAttributeRequest) -> Metadata:
 )
 async def select_mcp(request: BrowserSelectRequest) -> Metadata:
     """Select option from dropdown"""
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     logger.info("Browser select: %s -> %s", request.selector, request.value)
@@ -1019,7 +1003,7 @@ async def select_mcp(request: BrowserSelectRequest) -> Metadata:
 )
 async def hover_mcp(request: BrowserHoverRequest) -> Metadata:
     """Hover mouse over element"""
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     logger.info("Browser hover: %s", request.selector)
@@ -1051,7 +1035,7 @@ async def hover_mcp(request: BrowserHoverRequest) -> Metadata:
 )
 async def browser_state_mcp(request: BrowserStateRequest) -> Metadata:
     """Get the current page state: URL, title, scroll info, numbered elements."""
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     result = await send_to_browser_vm(
@@ -1077,7 +1061,7 @@ async def browser_state_mcp(request: BrowserStateRequest) -> Metadata:
 )
 async def click_index_mcp(request: BrowserClickIndexRequest) -> Metadata:
     """Click an element by its numbered index, resolved server-side."""
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     logger.info("Browser click_index: %s", request.index)
@@ -1110,7 +1094,7 @@ async def click_index_mcp(request: BrowserClickIndexRequest) -> Metadata:
 )
 async def fill_index_mcp(request: BrowserFillIndexRequest) -> Metadata:
     """Fill an element by its numbered index, resolved server-side."""
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     logger.info("Browser fill_index: %s", request.index)
@@ -1145,7 +1129,7 @@ async def fill_index_mcp(request: BrowserFillIndexRequest) -> Metadata:
 )
 async def select_index_mcp(request: BrowserSelectIndexRequest) -> Metadata:
     """Select a dropdown option on an element by its numbered index."""
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     logger.info("Browser select_index: %s -> %s", request.index, request.value)
@@ -1179,7 +1163,7 @@ async def select_index_mcp(request: BrowserSelectIndexRequest) -> Metadata:
 )
 async def hover_index_mcp(request: BrowserHoverIndexRequest) -> Metadata:
     """Hover over an element by its numbered index, resolved server-side."""
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     logger.info("Browser hover_index: %s", request.index)
@@ -1228,10 +1212,8 @@ async def get_browser_mcp_status() -> Metadata:
 
     fleet = await fleet_snapshot()
 
-    # Thread-safe access to rate limit state
-    async with _rate_limit_lock:
-        current_count = request_counter["count"]
-        reset_time_iso = request_counter["reset_time"].isoformat()
+    rate_status = await mcp_quota.status()
+    reset_time_iso = (now_utc() + timedelta(seconds=rate_status["reset_in_seconds"])).isoformat()
 
     return {
         "success": True,
@@ -1255,7 +1237,7 @@ async def get_browser_mcp_status() -> Metadata:
             "rate_limit": f"{MAX_REQUESTS_PER_MINUTE} requests/minute",
         },
         "rate_limit_status": {
-            "current_count": current_count,
+            "current_count": rate_status["current"],
             "max_per_minute": MAX_REQUESTS_PER_MINUTE,
             "reset_time": reset_time_iso,
         },
@@ -1276,7 +1258,7 @@ async def page_snapshot_mcp(request: BrowserPageSnapshotRequest) -> Metadata:
     Wires in AccessibilitySnapshot from services/web_pipeline/snapshot.py (#5136 Phase 1,
     closes #5138).
     """
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     manager = get_research_browser_manager()
@@ -1314,7 +1296,7 @@ async def intercept_api_mcp(request: BrowserInterceptApiRequest) -> Metadata:
     closes #5138).  Injects the interception script if not already present, then
     collects whatever the page has captured so far.
     """
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     manager = get_research_browser_manager()

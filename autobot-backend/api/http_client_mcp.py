@@ -46,6 +46,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.rate_limiter_window import WindowFailurePolicy, WindowQuota
 from autobot_shared.time_utils import now_utc
 from constants.network_constants import NetworkConstants
 from services.mcp_bridge_manifest import MCPBridgeManifest
@@ -116,8 +117,16 @@ BLOCKED_HEADERS = [
 
 # Rate limiting
 MAX_REQUESTS_PER_MINUTE = 120
-request_counter = {"count": 0, "reset_time": now_utc()}
-_rate_limit_lock = asyncio.Lock()
+# One canonical window quota shared by every worker (#18087). LOCAL keeps
+# enforcing per worker while Redis is down: these admin MCP operations were
+# always enforced, so the control must not turn off during an outage.
+mcp_quota = WindowQuota.for_scope(
+    "http_client_mcp",
+    policy=WindowFailurePolicy.LOCAL,
+    max_requests=MAX_REQUESTS_PER_MINUTE,
+    window_seconds=60,
+    label="HTTP requests",
+)
 
 # Request limits
 MAX_REQUEST_BODY_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -293,32 +302,6 @@ def validate_headers(headers: Dict[str, str]) -> bool:
             return False
 
     return True
-
-
-async def check_rate_limit() -> bool:
-    """
-    Enforce rate limiting for HTTP requests
-
-    Returns True if request is allowed, False if rate limit exceeded
-
-    Uses asyncio.Lock for thread safety in concurrent async environments
-    """
-
-    async with _rate_limit_lock:
-        now = now_utc()
-        elapsed = (now - request_counter["reset_time"]).total_seconds()
-
-        # Reset counter every minute (in-place modification for thread safety)
-        if elapsed >= 60:
-            request_counter["count"] = 0
-            request_counter["reset_time"] = now
-
-        if request_counter["count"] >= MAX_REQUESTS_PER_MINUTE:
-            logger.warning(f"Rate limit exceeded: {request_counter['count']} requests/min")
-            return False
-
-        request_counter["count"] += 1
-        return True
 
 
 # Pydantic Models
@@ -659,7 +642,7 @@ async def http_get_mcp(request: HTTPGetRequest) -> JSONObject:
     - Timeout enforcement
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_domain_allowed(request.url):
@@ -700,7 +683,7 @@ async def http_post_mcp(request: HTTPPostRequest) -> JSONObject:
     - Rate limiting
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_domain_allowed(request.url):
@@ -758,7 +741,7 @@ async def http_put_mcp(request: HTTPPutRequest) -> JSONObject:
     - Rate limiting
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_domain_allowed(request.url):
@@ -808,7 +791,7 @@ async def http_patch_mcp(request: HTTPPatchRequest) -> JSONObject:
     - Rate limiting
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_domain_allowed(request.url):
@@ -858,7 +841,7 @@ async def http_delete_mcp(request: HTTPDeleteRequest) -> JSONObject:
     - Warning log for destructive operation
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_domain_allowed(request.url):
@@ -897,7 +880,7 @@ async def http_head_mcp(request: HTTPHeadRequest) -> JSONObject:
     - Retrieving metadata
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await mcp_quota.acquire():
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_domain_allowed(request.url):
@@ -936,21 +919,12 @@ async def get_http_client_mcp_status() -> Metadata:
     - Configuration info
     """
 
-    async with _rate_limit_lock:
-        current_rate = request_counter["count"]
-        time_until_reset = max(
-            0,
-            60 - (now_utc() - request_counter["reset_time"]).total_seconds(),
-        )
+    rate_status = await mcp_quota.status()
 
     return {
         "status": "operational",
         "service": "http_client_mcp",
-        "rate_limit": {
-            "current": current_rate,
-            "max": MAX_REQUESTS_PER_MINUTE,
-            "reset_in_seconds": round(time_until_reset, 1),
-        },
+        "rate_limit": rate_status,
         "configuration": {
             "allowed_domains_count": len(ALLOWED_DOMAINS),
             "blocked_headers_count": len(BLOCKED_HEADERS),

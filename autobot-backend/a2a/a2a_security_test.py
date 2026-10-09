@@ -301,23 +301,19 @@ class TestCapabilityVerifier:
 
 
 class TestRateLimiting:
-    """Rate-limit tests — use the in-process fallback path of the shared
-    IPRateLimiter so tests don't require a live Redis. The limiter logic
-    itself is comprehensively tested in
-    ``autobot_shared/rate_limit_test.py`` (#7271). These tests only verify
-    a2a's wiring + that the shared limiter behaves correctly when stubbed
-    to use the fallback path.
-
-    Pre-#7271 this file directly poked module-level globals
-    (``_rate_buckets``, ``_check_rate_limit``, ``_RATE_LIMIT``). Those
-    symbols were collapsed into ``_a2a_limiter`` (an IPRateLimiter
-    instance); tests now exercise the limiter's public API.
+    """Rate-limit tests -- use the LOCAL fallback of the canonical RateLimiter
+    (Redis stubbed to None) so tests don't require a live Redis. The limiter
+    logic itself is tested in ``autobot_shared/rate_limiter_test.py`` and
+    ``autobot_shared/rate_limiter_window_18087_test.py``; these only verify
+    a2a's wiring (#7271, #18087).
     """
+
+    _REDIS = "autobot_shared.rate_limiter.get_async_redis_client"
 
     def teardown_method(self):
         from api.a2a import _a2a_limiter
 
-        _a2a_limiter._reset_inprocess()
+        _a2a_limiter.reset_local()
 
     @pytest.mark.asyncio
     async def test_within_limit_passes(self):
@@ -325,11 +321,7 @@ class TestRateLimiting:
 
         from api.a2a import _a2a_limiter
 
-        # Stub Redis to None → forces in-process fallback path.
-        with patch(
-            "autobot_shared.redis_client.get_async_redis_client",
-            new=AsyncMock(return_value=None),
-        ):
+        with patch(self._REDIS, new=AsyncMock(return_value=None)):
             for _ in range(5):
                 await _a2a_limiter.check_or_429("1.2.3.4")  # should not raise
 
@@ -341,31 +333,26 @@ class TestRateLimiting:
 
         from api.a2a import _a2a_limiter
 
-        # Pre-seed the in-process bucket at the limit.
-        now = time.time()
-        _a2a_limiter._inprocess_buckets["9.9.9.9"] = [now] * _a2a_limiter.limit
-        with patch(
-            "autobot_shared.redis_client.get_async_redis_client",
-            new=AsyncMock(return_value=None),
-        ):
+        with patch(self._REDIS, new=AsyncMock(return_value=None)):
+            for _ in range(_a2a_limiter.max_requests):
+                await _a2a_limiter.check_or_429("9.9.9.9")
             with pytest.raises(HTTPException) as exc_info:
                 await _a2a_limiter.check_or_429("9.9.9.9")
             assert exc_info.value.status_code == 429
 
     @pytest.mark.asyncio
     async def test_old_entries_expire(self):
+        from collections import deque
         from unittest.mock import AsyncMock, patch
 
         from api.a2a import _a2a_limiter
 
-        # Entries from 2 minutes ago — outside the 60s sliding window.
+        # Entries from 2 minutes ago -- outside the 60s sliding window.
         old_time = time.time() - 120
-        _a2a_limiter._inprocess_buckets["5.5.5.5"] = [old_time] * _a2a_limiter.limit
-        with patch(
-            "autobot_shared.redis_client.get_async_redis_client",
-            new=AsyncMock(return_value=None),
-        ):
-            await _a2a_limiter.check_or_429("5.5.5.5")  # should NOT raise — entries are stale
+        hits = _a2a_limiter.limiter._local_windows._hits
+        hits["a2a:5.5.5.5"] = deque([old_time] * _a2a_limiter.max_requests)
+        with patch(self._REDIS, new=AsyncMock(return_value=None)):
+            await _a2a_limiter.check_or_429("5.5.5.5")  # should NOT raise -- entries are stale
 
 
 # ---------------------------------------------------------------------------
