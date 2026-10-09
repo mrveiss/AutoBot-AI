@@ -5,32 +5,43 @@
 """
 Integration Rate Limiter (Issue #4162)
 
-Async-native sliding-window rate limiter for external API integrations.
-Tracks rate limit state per service key and supports header-based quota
-updates (X-RateLimit-*, Retry-After) from GitHub and Slack API responses.
+Async-native rate limiter for external API integrations. Tracks rate limit
+state per service key and supports header-based quota updates
+(X-RateLimit-*, Retry-After) from GitHub and Slack API responses.
 
-Kept as a distinct concept from ``autobot_shared.rate_limiter.RateLimiter``
-(#18087): this class keeps its own in-process windows because the provider's
-``X-RateLimit-*`` / ``Retry-After`` response headers correct them
-(``apply_response_headers``), a feedback loop the canonical limiter does not
-have. Only the module-level ``integration_rate_limiter`` below is a canonical
-``RateLimiter`` instance. See ``repo_tests/one_rate_limiter_18087_test.py``.
+What is distinct, and what is not (#18087, #7271):
+
+* Distinct: the provider-header state (``RateLimitState``, ``apply_response_headers``).
+  The provider's own ``X-RateLimit-*`` / ``Retry-After`` response headers
+  correct the local view, a feedback loop the canonical limiter does not have.
+* Not distinct: the request-count windows. The per-minute and per-hour windows
+  are NOT implemented here; they are two ``LocalWindowCounter`` windows from
+  ``autobot_shared.rate_limiter_window`` -- the per-process engine behind
+  ``WindowFailurePolicy.LOCAL`` of the canonical ``RateLimiter``. Redis is
+  never consulted because the keys are API tokens, which must not become Redis
+  key names. Only the module-level ``integration_rate_limiter`` below is a
+  Redis-backed canonical ``RateLimiter`` instance.
+
+See ``repo_tests/one_rate_limiter_18087_test.py``.
 """
 
 import asyncio
 import time
-from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
+from autobot_shared.rate_limiter_window import LocalWindowCounter
 
 logger = get_logger(__name__)
 
 # GitHub: 5000 req/hr per authenticated token; 60 req/hr unauthenticated
 GITHUB_REQUESTS_PER_HOUR = 5000
 GITHUB_REQUESTS_PER_MINUTE = 90  # conservative local window
+
+_MINUTE = 60.0
+_HOUR = 3600.0
 
 # Slack: variable per method; ~1 req/s for most Tier 1 methods
 SLACK_REQUESTS_PER_MINUTE = 50
@@ -39,53 +50,19 @@ SLACK_REQUESTS_PER_HOUR = 2000
 
 @dataclass
 class RateLimitState:
-    """Sliding-window request history for a single service/token pair."""
+    """Provider-enforced pause for a single service/token pair.
 
-    requests_per_minute: int
-    requests_per_hour: int
-    # Timestamps of recent requests (epoch seconds)
-    history: deque = field(default_factory=deque)
-    # Absolute epoch time before which no new requests should be sent
+    Holds only what the provider told us (``Retry-After`` / ``X-RateLimit-*``).
+    Request-count windows live in ``IntegrationRateLimiter`` on the canonical
+    ``LocalWindowCounter``.
+    """
+
+    # Absolute monotonic time before which no new requests should be sent
     retry_after_until: float = 0.0
 
-    def _prune(self, now: float) -> None:
-        """Remove history entries older than one hour."""
-        cutoff = now - 3600.0
-        while self.history and self.history[0] < cutoff:
-            self.history.popleft()
-
-    def is_ready(self, now: float) -> tuple[bool, float]:
-        """Return (can_proceed, seconds_to_wait).
-
-        Returns False and the wait duration when the service enforced a
-        Retry-After header or when local sliding windows are exhausted.
-        """
-        if now < self.retry_after_until:
-            return False, self.retry_after_until - now
-
-        self._prune(now)
-
-        minute_window = now - 60.0
-        now - 3600.0
-        minute_count = sum(1 for t in self.history if t > minute_window)
-        hour_count = len(self.history)
-
-        if minute_count >= self.requests_per_minute:
-            oldest_in_minute = next(t for t in self.history if t > minute_window)
-            wait = 60.0 - (now - oldest_in_minute)
-            return False, max(wait, 0.0)
-
-        if hour_count >= self.requests_per_hour:
-            oldest_in_hour = self.history[0]
-            wait = 3600.0 - (now - oldest_in_hour)
-            return False, max(wait, 0.0)
-
-        return True, 0.0
-
-    def record(self, now: float) -> None:
-        """Record that a request was dispatched at *now*."""
-        self._prune(now)
-        self.history.append(now)
+    def pending_wait(self, now: float) -> float:
+        """Return the seconds left on a provider-enforced pause (0.0 when none)."""
+        return max(self.retry_after_until - now, 0.0)
 
     def apply_retry_after(self, retry_after_seconds: float, now: float) -> None:
         """Set a hard pause based on a Retry-After response header."""
@@ -137,6 +114,9 @@ class IntegrationRateLimiter:
         self._rpm = requests_per_minute
         self._rph = requests_per_hour
         self._states: Dict[str, RateLimitState] = {}
+        # One counter per window: its stale-key eviction is keyed to a single window size.
+        self._minute = LocalWindowCounter()
+        self._hour = LocalWindowCounter()
         # Lock is created lazily in acquire() so it always belongs to the
         # running event loop (avoids "lock created in different loop" hangs
         # in tests that create a new loop per test).
@@ -144,24 +124,32 @@ class IntegrationRateLimiter:
 
     def _get_state(self, key: str) -> RateLimitState:
         if key not in self._states:
-            self._states[key] = RateLimitState(
-                requests_per_minute=self._rpm,
-                requests_per_hour=self._rph,
-            )
+            self._states[key] = RateLimitState()
         return self._states[key]
+
+    def _windows(self) -> tuple[tuple[LocalWindowCounter, int, float], ...]:
+        """(counter, limit, window seconds) for the minute then the hour window."""
+        return ((self._minute, self._rpm, _MINUTE), (self._hour, self._rph, _HOUR))
 
     def check(self, key: str) -> tuple[bool, float]:
         """Check whether a request for *key* may proceed right now.
 
-        Returns (can_proceed, seconds_to_wait).  Non-blocking.
+        Returns (can_proceed, seconds_to_wait).  Non-blocking.  Waits on a
+        provider pause first, then on the minute window, then on the hour window.
         """
-        state = self._get_state(key)
-        return state.is_ready(time.monotonic())
+        wait = self._get_state(key).pending_wait(time.monotonic())
+        if wait > 0.0:
+            return False, wait
+        for counter, limit, seconds in self._windows():
+            used, reset_in = counter.usage(key, seconds)
+            if used >= limit:
+                return False, reset_in
+        return True, 0.0
 
     def record(self, key: str) -> None:
         """Record that a request for *key* was dispatched."""
-        state = self._get_state(key)
-        state.record(time.monotonic())
+        for counter, _limit, seconds in self._windows():
+            counter.record(key, seconds)
 
     def apply_response_headers(self, key: str, headers: Dict[str, str], service: str = "generic") -> None:
         """Update rate limit state from HTTP response headers.

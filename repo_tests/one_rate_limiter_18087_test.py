@@ -63,14 +63,18 @@ DISTINCT_CONCEPTS: dict[str, str] = {
         "RPM/burst come from AUTOBOT_LLM_RL_*. Cannot be expressed as RateLimiter.acquire_window."
     ),
     "autobot-backend/integrations/rate_limiter.py": (
-        "Outbound quota for GitHub/Slack calls whose state is corrected by the provider's own "
-        "X-RateLimit-*/Retry-After response headers (apply_response_headers). Its in-process dual window "
-        "overlaps RateLimiter.is_allowed; the header feedback loop does not exist in the canonical class."
+        "Outbound quota for GitHub/Slack calls whose pause state is corrected by the provider's own "
+        "X-RateLimit-*/Retry-After response headers (apply_response_headers) -- a feedback loop the canonical "
+        "class does not have. Only that header state is distinct: its request-count windows are two "
+        "LocalWindowCounter instances (the canonical LOCAL-policy engine), pinned by "
+        "test_integration_limiter_keeps_no_window_of_its_own."
     ),
     "autobot-backend/utils/conversation_rate_limiter.py": (
         "Outbound Claude API budget that also tracks payload size, warning thresholds and backoff "
         "advice, with a synchronous dict-returning API. A per-process budget for one client, not a "
-        "request gate. Audited in #7271 as a different shape."
+        "request gate. Audited in #7271 as a different shape: the retired claude_api_optimization_suite "
+        "(deleted in 248d6dae1e, #10796) only imported ConversationRateLimiter and its successor claude_api_integration "
+        "delegates here."
     ),
     "autobot-backend/user_management/middleware/rate_limit.py": (
         "TargetedPasswordChangeRateLimiter counts FAILED attempts only (INCR + EXPIRE) and clears the "
@@ -261,3 +265,12 @@ def test_the_mcp_modules_take_their_quota_from_the_canonical_limiter(rel: str) -
     assert "WindowQuota.for_scope(" in source
     assert "_rate_limit_lock" not in source
     assert signals(source) == set()
+
+
+def test_integration_limiter_keeps_no_window_of_its_own() -> None:
+    """#18087/#7271: only header state is distinct; the dual window must stay on the canonical engine."""
+    source = (REPO_ROOT / "autobot-backend/integrations/rate_limiter.py").read_text(encoding="utf-8")
+    assert "LocalWindowCounter" in source
+    assert "deque" not in source
+    assert "history" not in source
+    assert "_prune" not in source

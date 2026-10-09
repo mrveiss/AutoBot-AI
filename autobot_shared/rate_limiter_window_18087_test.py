@@ -209,3 +209,13 @@ class TestLocalWindowCounter:
         counter.try_acquire("k", 1, 60)
         allowed, retry_after = counter.try_acquire("k", 1, 60)
         assert allowed is False and 59 < retry_after <= 60
+
+
+class TestLocalWindowCounterRecord:
+    def test_record_counts_without_checking(self):
+        counter = LocalWindowCounter()
+        for _ in range(3):
+            counter.record("k", 60)
+        used, reset_in = counter.usage("k", 60)
+        assert used == 3 and 59 < reset_in <= 60
+        assert counter.try_acquire("k", 3, 60)[0] is False

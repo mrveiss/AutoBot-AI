@@ -92,6 +92,14 @@ class LocalWindowCounter:
                 self._evict_stale(window_seconds, now)
             return True, 0.0
 
+    def record(self, key: str, window_seconds: float) -> None:
+        """Record a hit unconditionally (the caller checked, or owes the count)."""
+        now = time.time()
+        with self._lock:
+            self._live(key, window_seconds, now).append(now)
+            if len(self._hits) > self._max_keys:
+                self._evict_stale(window_seconds, now)
+
     def usage(self, key: str, window_seconds: float) -> tuple[int, float]:
         """Return ``(hits_in_window, seconds_until_the_oldest_hit_expires)``."""
         now = time.time()

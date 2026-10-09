@@ -17,66 +17,73 @@ import pytest
 from integrations.rate_limiter import IntegrationRateLimiter, RateLimitState
 
 # ---------------------------------------------------------------------------
-# RateLimitState: basic window logic
+# RateLimitState: provider pause
 # ---------------------------------------------------------------------------
 
 
-def test_state_allows_first_request():
-    state = RateLimitState(requests_per_minute=10, requests_per_hour=100)
-    now = time.monotonic()
-    can, wait = state.is_ready(now)
-    assert can is True
-    assert wait == 0.0
-
-
-def test_state_blocks_when_minute_window_full():
-    state = RateLimitState(requests_per_minute=3, requests_per_hour=1000)
-    now = time.monotonic()
-    for _ in range(3):
-        state.record(now)
-    can, wait = state.is_ready(now)
-    assert can is False
-    assert wait > 0.0
-
-
-def test_state_blocks_when_hour_window_full():
-    state = RateLimitState(requests_per_minute=1000, requests_per_hour=3)
-    now = time.monotonic()
-    for _ in range(3):
-        state.record(now)
-    can, wait = state.is_ready(now)
-    assert can is False
-    assert wait > 0.0
-
-
-def test_state_allows_after_minute_window_expires():
-    state = RateLimitState(requests_per_minute=2, requests_per_hour=1000)
-    now = time.monotonic()
-    # Fill minute window with old timestamps (65 s ago)
-    old = now - 65.0
-    state.record(old)
-    state.record(old)
-    # Both old entries should be pruned from minute window
-    can, wait = state.is_ready(now)
-    assert can is True
+def test_state_has_no_pause_by_default():
+    assert RateLimitState().pending_wait(time.monotonic()) == 0.0
 
 
 def test_state_retry_after_blocks():
-    state = RateLimitState(requests_per_minute=1000, requests_per_hour=1000)
+    state = RateLimitState()
     now = time.monotonic()
     state.apply_retry_after(30.0, now)
-    can, wait = state.is_ready(now + 1.0)
-    assert can is False
-    assert 28.0 < wait <= 30.0
+    assert 28.0 < state.pending_wait(now + 1.0) <= 30.0
 
 
 def test_state_retry_after_expires():
-    state = RateLimitState(requests_per_minute=1000, requests_per_hour=1000)
+    state = RateLimitState()
     now = time.monotonic()
     state.apply_retry_after(10.0, now)
-    can, wait = state.is_ready(now + 15.0)
-    assert can is True
-    assert wait == 0.0
+    assert state.pending_wait(now + 15.0) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# IntegrationRateLimiter: window logic (delegated to LocalWindowCounter, #18087)
+# ---------------------------------------------------------------------------
+
+
+def test_limiter_blocks_when_minute_window_full():
+    limiter = IntegrationRateLimiter(requests_per_minute=3, requests_per_hour=1000)
+    for _ in range(3):
+        limiter.record("tok")
+    can, wait = limiter.check("tok")
+    assert can is False
+    assert 0.0 < wait <= 60.0
+
+
+def test_limiter_blocks_when_hour_window_full():
+    limiter = IntegrationRateLimiter(requests_per_minute=1000, requests_per_hour=3)
+    for _ in range(3):
+        limiter.record("tok")
+    can, wait = limiter.check("tok")
+    assert can is False
+    assert 60.0 < wait <= 3600.0
+
+
+def test_limiter_allows_after_minute_window_expires(monkeypatch):
+    limiter = IntegrationRateLimiter(requests_per_minute=2, requests_per_hour=1000)
+    real = time.time()
+    monkeypatch.setattr("autobot_shared.rate_limiter_window.time.time", lambda: real - 65.0)
+    limiter.record("tok")
+    limiter.record("tok")
+    monkeypatch.setattr("autobot_shared.rate_limiter_window.time.time", lambda: real)
+    assert limiter.check("tok") == (True, 0.0)
+
+
+def test_limiter_check_does_not_consume_a_slot():
+    limiter = IntegrationRateLimiter(requests_per_minute=1, requests_per_hour=1000)
+    assert limiter.check("tok")[0] is True
+    assert limiter.check("tok")[0] is True
+
+
+def test_limiter_provider_pause_wins_over_open_windows():
+    limiter = IntegrationRateLimiter(requests_per_minute=1000, requests_per_hour=1000)
+    limiter._get_state("tok").apply_retry_after(30.0, time.monotonic())
+    can, wait = limiter.check("tok")
+    assert can is False
+    assert 28.0 < wait <= 30.0
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +92,7 @@ def test_state_retry_after_expires():
 
 
 def test_github_headers_zero_remaining_sets_retry_after():
-    state = RateLimitState(requests_per_minute=1000, requests_per_hour=1000)
+    state = RateLimitState()
     time.monotonic()
     reset_epoch = time.time() + 60  # 60 s from now (wall clock)
     # Map monotonic now to wall-clock: we pass reset as monotonic equivalent
@@ -104,14 +111,13 @@ def test_github_headers_zero_remaining_sets_retry_after():
 
 
 def test_github_headers_nonzero_remaining_no_block():
-    state = RateLimitState(requests_per_minute=1000, requests_per_hour=1000)
+    state = RateLimitState()
     now = time.monotonic()
     state.apply_github_headers(
         {"X-RateLimit-Remaining": "100", "X-RateLimit-Reset": str(int(time.time()) + 3600)},
         now,
     )
-    can, _ = state.is_ready(now)
-    assert can is True
+    assert state.pending_wait(now) == 0.0
 
 
 # ---------------------------------------------------------------------------
