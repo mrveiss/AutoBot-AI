@@ -11,7 +11,7 @@ removing the need for components to directly import and use global_config_manage
 
 import threading
 
-from fastapi import Depends
+from fastapi import Depends, Request
 
 from config.manager import ConfigManager, get_config_manager
 
@@ -46,22 +46,33 @@ def get_diagnostics(config: ConfigManager = Depends(provide_config_manager)):
     return Diagnostics(config_manager=config)
 
 
-def get_knowledge_base(config: ConfigManager = Depends(provide_config_manager)):
-    """
-    Dependency injection provider for knowledge base.
+async def get_knowledge_base(request: Request):
+    """Dependency injection provider for the knowledge base.
 
-    Args:
-        config: Configuration manager instance
+    Returns the app-wide *initialized* instance — the same object every
+    ``api/knowledge*.py`` route reaches through
+    ``knowledge_factory.get_or_create_knowledge_base`` — rather than constructing one
+    per request.
+
+    #18121: this provider used to be synchronous and return
+    ``KnowledgeBase(config_manager=config)``. ``KnowledgeBaseCore.initialize()`` is what
+    creates the vector store and must be awaited after construction, which a sync
+    dependency can never do, so every injected instance had ``initialized is False`` and
+    the first search raised ``RuntimeError`` out of ``ensure_initialized()``. All eight
+    call sites catch ``Exception`` into a warning and substitute an empty result, so the
+    knowledge base silently contributed nothing instead of failing visibly.
+
+    The dropped ``config`` parameter does not regress #13162: that fix stopped a resolved
+    config being accepted and discarded, and the app-state instance is built once at
+    lifespan from the real config rather than per request.
 
     Returns:
-        KnowledgeBase: Knowledge base instance configured with the provided config
+        The initialized ``KnowledgeBase``, or ``None`` when it is unavailable — every
+        caller already treats ``None`` as "no knowledge base".
     """
-    from knowledge_base import KnowledgeBase as KnowledgeBase
+    from knowledge_factory import get_or_create_knowledge_base
 
-    # #13162: the resolved config was previously accepted and then discarded —
-    # every request-scoped KnowledgeBase silently read the global singleton,
-    # so a dependency_overrides[provide_config_manager] in tests had no effect here.
-    return KnowledgeBase(config_manager=config)
+    return await get_or_create_knowledge_base(request.app)
 
 
 def get_llm_interface(config: ConfigManager = Depends(provide_config_manager)):
@@ -157,23 +168,16 @@ class DependencyCache:
 dependency_cache = DependencyCache()
 
 
-def get_cached_knowledge_base(config: ConfigManager = Depends(provide_config_manager)):
+async def get_cached_knowledge_base(request: Request):
+    """Cached knowledge base dependency.
+
+    #18121: delegates to :func:`get_knowledge_base`. ``app.state.knowledge_base`` already
+    is the cache — ``get_or_create_knowledge_base`` returns the existing instance when one
+    is initialized — so a second ``dependency_cache`` entry only created a second
+    uninitialized instance to go stale. Kept as a wired name so
+    ``CachedKnowledgeBaseDep`` cannot reintroduce the defect.
     """
-    Cached version of knowledge base dependency.
-
-    This version caches the knowledge base instance to avoid
-    repeated initialization costs.
-
-    Args:
-        config: Configuration manager instance
-
-    Returns:
-        KnowledgeBase: Cached knowledge base instance
-    """
-    from knowledge_base import KnowledgeBase as KnowledgeBase
-
-    # #13162: same dropped-config bug as get_knowledge_base above.
-    return dependency_cache.get_or_create("knowledge_base", lambda: KnowledgeBase(config_manager=config))
+    return await get_knowledge_base(request)
 
 
 def get_cached_orchestrator(config: ConfigManager = Depends(provide_config_manager)):

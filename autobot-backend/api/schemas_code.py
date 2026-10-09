@@ -20,6 +20,7 @@ from api.schemas_playwright import (  # noqa: F401 - re-exported for existing im
     PlaywrightScreenshotRequest,
     PlaywrightSessionRequest,
 )
+from autobot_shared.git_refs import is_safe_ref, is_safe_rev_pathspec
 from autobot_shared.ssot_config import PROJECT_ROOT
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.threshold_constants import QueryDefaults
@@ -2448,8 +2449,6 @@ def _git_default_repo_path() -> str:
 _GIT_MAX_LOG_ENTRIES = 100
 _GIT_SAFE_PATH_RE = re.compile(r"^[a-zA-Z0-9_\-./]+$")
 _GIT_SHELL_METACHAR_RE = re.compile(r"[;&|`$]")
-_GIT_COMMIT_REF_RE = re.compile(r"^[a-zA-Z0-9_\-./^~]+$")
-_GIT_FULL_REF_RE = re.compile(r"^[a-zA-Z0-9_\-./^~:]+$")
 
 
 class GitStatusRequest(BaseModel):
@@ -2517,7 +2516,7 @@ class GitDiffRequest(BaseModel):
     @field_validator("commit")
     @classmethod
     def validate_commit_ref(cls, v):
-        if v and not _GIT_COMMIT_REF_RE.match(v):
+        if v and not is_safe_ref(v):
             raise ValueError("Invalid commit reference format")
         return v
 
@@ -2576,7 +2575,7 @@ class GitShowRequest(BaseModel):
     @field_validator("ref")
     @classmethod
     def validate_ref(cls, v):
-        if not _GIT_FULL_REF_RE.match(v):
+        if not is_safe_rev_pathspec(v):
             raise ValueError("Invalid ref format")
         return v
 

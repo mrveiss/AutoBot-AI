@@ -67,7 +67,10 @@ updates:
       - dependency-name: "pydantic"
         update-types: ["version-update:semver-major"]
       - dependency-name: "sqlalchemy"
-        update-types: ["version-update:semver-major"]
+        # #17445: every manifest caps sqlalchemy <2.1 -- 2.1.x breaks the SLM
+        # suite with InternalTraversal. A semver-major ignore let #18104 lift
+        # the cap; the range holds it until the 2.1 migration lands.
+        versions: [">=2.1"]
       - dependency-name: "fastapi"
         update-types: ["version-update:semver-major"]
       - dependency-name: "torch"
@@ -137,7 +140,10 @@ updates:
       - dependency-name: "pydantic"
         update-types: ["version-update:semver-major"]
       - dependency-name: "sqlalchemy"
-        update-types: ["version-update:semver-major"]
+        # #17445: every manifest caps sqlalchemy <2.1 -- 2.1.x breaks the SLM
+        # suite with InternalTraversal. A semver-major ignore let #18104 lift
+        # the cap; the range holds it until the 2.1 migration lands.
+        versions: [">=2.1"]
       - dependency-name: "fastapi"
         update-types: ["version-update:semver-major"]
       - dependency-name: "pydantic-settings"
@@ -463,7 +469,10 @@ updates:
       - dependency-name: "pydantic"
         update-types: ["version-update:semver-major"]
       - dependency-name: "sqlalchemy"
-        update-types: ["version-update:semver-major"]
+        # #17445: every manifest caps sqlalchemy <2.1 -- 2.1.x breaks the SLM
+        # suite with InternalTraversal. A semver-major ignore let #18104 lift
+        # the cap; the range holds it until the 2.1 migration lands.
+        versions: [">=2.1"]
       - dependency-name: "fastapi"
         update-types: ["version-update:semver-major"]
 
@@ -631,7 +640,10 @@ updates:
       - dependency-name: "pydantic"
         update-types: ["version-update:semver-major"]
       - dependency-name: "sqlalchemy"
-        update-types: ["version-update:semver-major"]
+        # #17445: every manifest caps sqlalchemy <2.1 -- 2.1.x breaks the SLM
+        # suite with InternalTraversal. A semver-major ignore let #18104 lift
+        # the cap; the range holds it until the 2.1 migration lands.
+        versions: [">=2.1"]
       - dependency-name: "starlette"
         update-types: ["version-update:semver-major"]
       - dependency-name: "protobuf"

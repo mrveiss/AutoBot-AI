@@ -70,6 +70,7 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from autobot_shared.paths import scrubbed_git_env  # noqa: E402
+from tools.lint._scan_helpers import configure_logging  # noqa: E402
 
 MAX_LINES = 600
 
@@ -131,23 +132,6 @@ def _load_known_large() -> dict[str, int]:
 #: to make a new file pass — split the file. Mirrored in RATCHET_REL; lower an
 #: entry in both in the same commit.
 KNOWN_LARGE: dict[str, int] = _load_known_large()
-
-
-def configure_logging() -> None:
-    """Attach a stderr handler so findings actually reach the developer.
-
-    Run as a bare script the module logger has no handler, and logging's
-    ``lastResort`` fallback emits WARNING and above only -- the informational
-    "all live" line would vanish silently. Findings themselves are logged at
-    ERROR precisely so they survive even when this was never called, which is
-    why the levels below are not interchangeable with INFO.
-    """
-    logger.setLevel(logging.INFO)
-    if logger.handlers:
-        return
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(logging.Formatter("%(message)s"))
-    logger.addHandler(handler)
 
 
 def repo_root() -> pathlib.Path:
@@ -370,7 +354,7 @@ def check_paths(paths: list[str]) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point for both the hook path and ``--audit-ceilings``."""
-    configure_logging()
+    configure_logging(logger)
     parser = argparse.ArgumentParser(description="Reject oversized .ts/.vue files (#17885).")
     parser.add_argument("--audit-ceilings", action="store_true", help="walk every tracked .ts/.vue file")
     parser.add_argument("paths", nargs="*", help="staged files, as pre-commit passes them")

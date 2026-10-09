@@ -75,6 +75,7 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from autobot_shared.paths import scrubbed_git_env  # noqa: E402
+from tools.lint._scan_helpers import configure_logging  # noqa: E402
 
 MAX_LINES = 600
 
@@ -323,22 +324,6 @@ def audit_ceilings() -> tuple[int, list[str]]:
     return reached, problems
 
 
-def configure_logging() -> None:
-    """Attach a stderr handler so findings actually reach the developer.
-
-    Run as a bare script the module logger has no handler, and logging's
-    ``lastResort`` fallback emits WARNING and above only — the informational
-    "all live" line would vanish silently. Findings themselves are logged at
-    ERROR precisely so they survive even when this was never called.
-    """
-    logger.setLevel(logging.INFO)
-    if logger.handlers:
-        return
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(logging.Formatter("%(message)s"))
-    logger.addHandler(handler)
-
-
 def _reach_breach_problem(reached: int) -> str:
     """The reach-breach finding, worded identically in both gates (#17377).
 
@@ -377,7 +362,7 @@ def run_audit() -> int:
 
 
 def main(argv: list[str]) -> int:
-    configure_logging()
+    configure_logging(logger)
     if "--audit-ceilings" in argv:
         return run_audit()
 

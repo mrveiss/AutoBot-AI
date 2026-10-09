@@ -47,7 +47,7 @@ def gate(request):
     """Load one gate and leave the shared logger exactly as it was found.
 
     ``logging.getLogger(name)`` returns the SAME object for every load of a gate, so
-    ``configure_logging()`` -- which attaches a stderr handler and sets INFO -- leaks out
+    ``configure_logging(logger)`` -- which attaches a stderr handler and sets INFO -- leaks out
     of whichever test called it into every later test in the process. Two tests here call
     it, directly and through ``main()``, and neither removes the handler.
 
@@ -68,7 +68,7 @@ def test_findings_go_to_stderr(gate) -> None:
     """Not stdout. The shell gate used stdout, so its findings were not where the
     python gate's were, and a caller redirecting one stream saw half the gates."""
     gate.logger.handlers.clear()
-    gate.configure_logging()
+    gate.configure_logging(gate.logger)
     streams = [h.stream for h in gate.logger.handlers if isinstance(h, logging.StreamHandler)]
     assert streams, "configure_logging attached no stream handler"
     assert all(s is sys.stderr for s in streams), f"findings are not on stderr: {streams}"
@@ -83,7 +83,7 @@ def test_configure_logging_sets_the_informational_level(gate) -> None:
     (``python_file_size_ratchet_test.test_configure_logging_makes_the_clean_run_visible``);
     the shell gate had none, so for one of these two gates the line was unguarded.
     """
-    gate.configure_logging()
+    gate.configure_logging(gate.logger)
     assert gate.logger.level == logging.INFO, (
         f"configure_logging left the logger at {gate.logger.level}; the clean-run summary "
         "is emitted at INFO and vanishes under lastResort's WARNING floor"
