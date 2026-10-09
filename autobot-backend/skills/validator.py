@@ -10,12 +10,12 @@ Checks: SKILL.md frontmatter, Python syntax, MCP server starts.
 """
 
 import ast
-import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Tuple
 
 import yaml
 
+from autobot_shared.frontmatter import split_frontmatter
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 
@@ -83,12 +83,12 @@ class SkillValidator:
 def _check_manifest(skill_md: str) -> List[str]:
     """Validate SKILL.md has required YAML frontmatter with name, description, tools."""
     errors: List[str] = []
-    match = re.match(r"^---\n(.*?)\n---", skill_md, re.DOTALL)
-    if not match:
+    raw, _ = split_frontmatter(skill_md)
+    if raw is None:
         errors.append("SKILL.md missing YAML frontmatter (--- block)")
         return errors
     try:
-        manifest = yaml.safe_load(match.group(1)) or {}
+        manifest = yaml.safe_load(raw) or {}
     except yaml.YAMLError as exc:
         errors.append(f"Invalid YAML frontmatter: {exc}")
         return errors

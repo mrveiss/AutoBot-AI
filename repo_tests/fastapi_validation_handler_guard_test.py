@@ -133,7 +133,10 @@ def _candidate_files(root: Path) -> list[str]:
 REACH = declare(
     "fastapi-validation-handler",
     discover=_candidate_files,
-    floor=3300,
+    # 3300 -> 3384 (#18130): measured against a population of 3484, window
+    # [3284, 3484]. 3300 was 16 files from red on a PR that does not touch this
+    # guard; mid-window per the #17818 check, re-measured here, not carried.
+    floor=3384,
     growth=200,
     skips=0,
     what="git-tracked, non-test python files (candidates for a real FastAPI app construction)",

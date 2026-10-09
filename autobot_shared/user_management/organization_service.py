@@ -26,7 +26,6 @@ Used in multi_company and provider deployment modes.
 """
 
 import asyncio
-import re
 import uuid
 from typing import ClassVar, List
 
@@ -34,6 +33,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.slug import url_slug
 from autobot_shared.time_utils import now_utc
 from autobot_shared.user_management.base_service import BaseService, TenantContext
 from autobot_shared.user_management.models.audit import (
@@ -566,15 +566,15 @@ class OrganizationService(BaseService):
         return changes
 
     def _generate_slug(self, name: str) -> str:
-        """Generate URL-safe slug from name."""
-        # Convert to lowercase
-        slug = name.lower()
-        # Replace spaces and special chars with hyphens
-        slug = re.sub(r"[^a-z0-9]+", "-", slug)
-        # Remove leading/trailing hyphens
-        slug = slug.strip("-")
-        # Limit length
-        return slug[:100]
+        """Generate a URL-safe slug from *name* (#18093).
+
+        The rule is `autobot_shared.slug.slugify`, shared with
+        `knowledge/adapters/okf_adapter` and `llc/models/company`. This site gains two
+        behaviours it did not have: an NFKD fold, so "Zurich" rather than "z-rich" for
+        "Zürich", and a strip after truncation, so a cut mid-run no longer leaves a
+        trailing hyphen.
+        """
+        return url_slug(name)  # 100 is slugify's default cap
 
     async def _audit_log(
         self,

@@ -9,11 +9,11 @@ Uses the LLM to generate SKILL.md + skill.py for a detected capability gap.
 Structured output ensures valid manifests every time.
 """
 
-import re
 from typing import Any, Dict
 
 import yaml
 
+from autobot_shared.frontmatter import split_frontmatter
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -95,10 +95,10 @@ class SkillGenerator:
 
 def _parse_manifest(skill_md: str) -> Dict[str, Any]:
     """Parse YAML frontmatter from SKILL.md content into manifest dict."""
-    match = re.match(r"^---\n(.*?)\n---", skill_md, re.DOTALL)
-    if not match:
+    raw, _ = split_frontmatter(skill_md)
+    if raw is None:
         return {}
     try:
-        return yaml.safe_load(match.group(1)) or {}
+        return yaml.safe_load(raw) or {}
     except yaml.YAMLError:
         return {}

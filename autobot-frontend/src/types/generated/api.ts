@@ -95247,7 +95247,10 @@ export interface components {
         SignupRequest: {
             /** Username */
             username: string;
-            /** Email */
+            /**
+             * Email
+             * Format: email
+             */
             email: string;
             /** Password */
             password: string;
