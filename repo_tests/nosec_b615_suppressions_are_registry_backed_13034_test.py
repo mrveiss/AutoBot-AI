@@ -40,8 +40,9 @@ the registry:
 
 * `registry_backed=True` -- the call takes a caller-supplied name, so no static
   pin fits, but it must still call
-  :func:`autobot_shared.pinned_model_registry.pinned_revision_kwargs`, which
-  pins the name whenever it *is* a registered model. The suppression then
+  :func:`autobot_shared.pinned_model_registry.pinned_revision_kwargs`, and
+  each suppressed call must itself pass the result (AST-checked, per call),
+  which pins the name whenever it *is* a registered model. The suppression then
   covers only the genuinely unregistered remainder.
 * `registry_backed=False` -- the call resolves nothing from the Hub at all, so
   a `revision=` would be a no-op rather than a guarantee. One site qualifies
@@ -189,16 +190,85 @@ def _calls_resolver(module: ast.Module) -> bool:
     return False
 
 
+def _is_resolver_call(node: ast.AST) -> bool:
+    """True for a call to the registry resolver, by name or by attribute."""
+    if not isinstance(node, ast.Call):
+        return False
+    func = node.func
+    return (isinstance(func, ast.Name) and func.id == _RESOLVER) or (
+        isinstance(func, ast.Attribute) and func.attr == _RESOLVER
+    )
+
+
+def _holds_resolver_call(value: ast.AST | None) -> bool:
+    """True when *value* is, or contains (e.g. ``{"a": 1, **resolver(x)}``), a resolver call."""
+    return value is not None and any(_is_resolver_call(n) for n in ast.walk(value))
+
+
+def _resolver_bound_names(scope: ast.AST) -> set[str]:
+    """Names assigned, inside *scope*, from an expression containing a resolver call."""
+    names: set[str] = set()
+    for node in ast.walk(scope):
+        if isinstance(node, ast.Assign) and _holds_resolver_call(node.value):
+            names.update(t.id for t in node.targets if isinstance(t, ast.Name))
+        elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)) and _holds_resolver_call(node.value):
+            if isinstance(node.target, ast.Name):
+                names.add(node.target.id)
+    return names
+
+
+def _call_carries_pin(call: ast.Call, bound: set[str]) -> bool:
+    """True when this call itself passes ``revision=`` or ``**<resolver-bound name>``."""
+    for kw in call.keywords:
+        if kw.arg == "revision":
+            return True
+        if kw.arg is None and (
+            _holds_resolver_call(kw.value) or (isinstance(kw.value, ast.Name) and kw.value.id in bound)
+        ):
+            return True
+    return False
+
+
+def _is_from_pretrained(node: ast.AST) -> bool:
+    return isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "from_pretrained"
+
+
+def unpinned_suppressed_calls(source: str) -> list[int]:
+    """Lines of suppressed ``from_pretrained`` calls that do not carry a registry pin themselves.
+
+    "The file calls the resolver somewhere" is not the property: a resolver call
+    whose result is dropped on the floor pins nothing. Each suppressed call must
+    pass ``revision=`` or ``**<name>`` where ``<name>`` is bound from a resolver
+    call in the same function (module level counts as its own scope).
+    """
+    marker_lines = set(comment_markers(source))
+    module = ast.parse(source)
+    scopes = [n for n in ast.walk(module) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))] + [module]
+    bad: set[int] = set()
+    seen: set[int] = set()
+    for scope in sorted(scopes, key=lambda n: -getattr(n, "lineno", 0)):  # innermost first
+        bound = _resolver_bound_names(scope)
+        for node in ast.walk(scope):
+            if not _is_from_pretrained(node) or id(node) in seen:
+                continue
+            if not any(node.lineno <= ln <= (node.end_lineno or node.lineno) for ln in marker_lines):
+                continue
+            seen.add(id(node))
+            if not _call_carries_pin(node, bound):
+                bad.add(node.lineno)
+    return sorted(bad)
+
+
 @lru_cache(maxsize=1)
-def _sweep() -> tuple[dict[str, int], set[str], tuple[str, ...]]:
-    """`(suppressions, resolver_users, unreadable)` over every tracked `.py`.
+def _sweep() -> tuple[dict[str, int], dict[str, list[int]], tuple[str, ...]]:
+    """`(suppressions, unpinned_calls, unreadable)` over every tracked `.py`.
 
     Cached: four assertions consume this and each would otherwise tokenize and
     parse the whole tree again.
     """
     root = repo_root()
     suppressions: dict[str, int] = {}
-    resolver_users: set[str] = set()
+    unpinned: dict[str, list[int]] = {}
     unreadable: list[str] = []
     for rel in _python_files(root):
         path = root / rel
@@ -218,9 +288,11 @@ def _sweep() -> tuple[dict[str, int], set[str], tuple[str, ...]]:
         if module is None:
             unreadable.append(rel)
             continue
-        if _calls_resolver(module):
-            resolver_users.add(rel)
-    return suppressions, resolver_users, tuple(sorted(unreadable))
+        if markers:
+            lines = unpinned_suppressed_calls(source)
+            if lines:
+                unpinned[rel] = lines
+    return suppressions, unpinned, tuple(sorted(unreadable))
 
 
 def test_no_unrecorded_suppression_exists() -> None:
@@ -268,13 +340,18 @@ def test_every_dynamic_suppression_consults_the_registry() -> None:
     it. A dynamic site may not be statically pinnable, but it can still pin the
     names the registry DOES know, and that is enforced here rather than trusted.
     """
-    _, resolver_users, _ = _sweep()
-    missing = sorted(rel for rel, entry in _SUPPRESSED.items() if entry.registry_backed and rel not in resolver_users)
+    _, unpinned, _ = _sweep()
+    missing = sorted(
+        f"{rel}: line(s) {unpinned[rel]}"
+        for rel, entry in _SUPPRESSED.items()
+        if entry.registry_backed and rel in unpinned
+    )
     assert not missing, (
-        f"these files are recorded as registry-backed but never call {_RESOLVER}():\n  "
+        f"these registry-backed suppressed from_pretrained calls do not pass a {_RESOLVER}() pin "
+        "(revision= or **<name> bound from the resolver in the same function):\n  "
         + "\n  ".join(missing)
-        + f"\n\nEither call {_RESOLVER}() so a registered model id is pinned even on a dynamic "
-        "path, or change the entry to registry_backed=False and say why nothing can be resolved."
+        + f"\n\nEither pass the {_RESOLVER}() result into the call itself, or change the entry to "
+        "registry_backed=False and say why nothing can be resolved."
     )
 
 
@@ -406,3 +483,54 @@ def test_the_resolver_is_recognised_called_by_name_and_by_attribute() -> None:
     assert _calls_resolver(ast.parse(by_name)) is True
     assert _calls_resolver(ast.parse(by_attribute)) is True, "an attribute-style resolver call was not recognised"
     assert _calls_resolver(ast.parse(absent)) is False
+
+
+_RESOLVER_BUT_PIN_DROPPED = """
+from autobot_shared.pinned_model_registry import pinned_revision_kwargs
+from transformers import AutoConfig
+def go(name):
+    pin = pinned_revision_kwargs(name)
+    return AutoConfig.from_pretrained(name)  # nosec B615
+"""
+
+_RESOLVER_PIN_PASSED = """
+from autobot_shared.pinned_model_registry import pinned_revision_kwargs
+from transformers import AutoConfig
+def go(name):
+    pin = pinned_revision_kwargs(name)
+    return AutoConfig.from_pretrained(name, **pin)  # nosec B615
+"""
+
+_PIN_FROM_OTHER_FUNCTION = """
+from autobot_shared.pinned_model_registry import pinned_revision_kwargs
+from transformers import AutoConfig
+def a(name):
+    pin = pinned_revision_kwargs(name)
+    return pin
+def b(name, pin):
+    return AutoConfig.from_pretrained(name, **pin)  # nosec B615
+"""
+
+_PIN_IN_DICT_LITERAL = """
+from autobot_shared.pinned_model_registry import pinned_revision_kwargs
+from transformers import AutoTokenizer
+def go(name):
+    kwargs = {"use_fast": True, **pinned_revision_kwargs(name)}
+    return AutoTokenizer.from_pretrained(name, **kwargs)  # nosec B615
+"""
+
+
+def test_a_resolver_call_whose_pin_is_dropped_from_the_load_fails() -> None:
+    """Contrast pair, failing half: the file calls the resolver, the load ignores it."""
+    assert unpinned_suppressed_calls(_RESOLVER_BUT_PIN_DROPPED) == [6]
+
+
+def test_a_load_passing_the_resolver_pin_passes() -> None:
+    """Contrast pair, passing half: `**pin` bound from the resolver in the same function."""
+    assert unpinned_suppressed_calls(_RESOLVER_PIN_PASSED) == []
+    assert unpinned_suppressed_calls(_PIN_IN_DICT_LITERAL) == []
+
+
+def test_a_pin_bound_in_a_different_function_does_not_count() -> None:
+    """The name must be resolver-bound in the call's own function, not elsewhere in the file."""
+    assert unpinned_suppressed_calls(_PIN_FROM_OTHER_FUNCTION) == [8]
