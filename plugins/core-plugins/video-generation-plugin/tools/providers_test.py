@@ -201,3 +201,43 @@ async def test_kling_submit_and_poll():
     with _patch_http_client(get=get):
         st = await p.poll("kling-1")
     assert st.status == "succeeded" and st.video_url == "https://k/o.mp4"
+
+
+# ---------------------------------------------------------------------------
+# Every pooled request carries an explicit timeout (#12979)
+# ---------------------------------------------------------------------------
+
+
+class _RecordingHTTPClient:
+    """Records the kwargs of each ``tracked_request`` call."""
+
+    def __init__(self, payload: dict):
+        self.calls: list = []
+        self._payload = payload
+
+    def tracked_request(self, method, url, **kwargs):
+        self.calls.append((method, url, kwargs))
+        return _FakeResponse(200, self._payload)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "provider_cls,submit_body,poll_body",
+    [
+        (providers.RunwayProvider, {"id": "j"}, {"status": "PENDING"}),
+        (providers.SoraProvider, {"id": "j"}, {"status": "queued"}),
+        (providers.KlingProvider, {"data": {"task_id": "j"}}, {"data": {"task_status": "submitted"}}),
+    ],
+)
+async def test_every_request_passes_a_timeout(provider_cls, submit_body, poll_body):
+    import aiohttp
+
+    p = provider_cls(api_key="k")
+    for body, call in ((submit_body, lambda: p.submit("a cat")), (poll_body, lambda: p.poll("j"))):
+        client = _RecordingHTTPClient(body)
+        with patch.object(providers, "get_http_client", lambda c=client: c):
+            await call()
+        ((_, _, kwargs),) = client.calls
+        assert isinstance(kwargs.get("timeout"), aiohttp.ClientTimeout)
+        # Must not fall back to the pooled 10s sock_read default.
+        assert kwargs["timeout"].sock_read >= 30

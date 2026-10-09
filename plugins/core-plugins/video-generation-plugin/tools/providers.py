@@ -31,6 +31,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
+from autobot_shared.generation_http_timeouts import poll_timeout
 from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
@@ -146,6 +147,7 @@ class RunwayProvider(BaseVideoProvider):
             f"{RUNWAY_API_BASE}/text_to_video",
             json=payload,
             headers=self._headers(),
+            timeout=poll_timeout(),
         ) as resp:
             body = await resp.json()
             if resp.status == 429:
@@ -162,6 +164,7 @@ class RunwayProvider(BaseVideoProvider):
             "GET",
             f"{RUNWAY_API_BASE}/tasks/{job_id}",
             headers=self._headers(),
+            timeout=poll_timeout(),
         ) as resp:
             body = await resp.json()
             if resp.status != 200:
@@ -210,7 +213,7 @@ class SoraProvider(BaseVideoProvider):
     ) -> str:
         payload = {"model": "sora-2", "prompt": prompt, "seconds": str(max(1, int(duration)))}
         async with get_http_client().tracked_request(
-            "POST", self.SORA_API_BASE, json=payload, headers=self._headers()
+            "POST", self.SORA_API_BASE, json=payload, headers=self._headers(), timeout=poll_timeout()
         ) as resp:
             body = await resp.json()
             if resp.status == 429:
@@ -224,7 +227,7 @@ class SoraProvider(BaseVideoProvider):
 
     async def poll(self, job_id: str) -> JobStatus:
         async with get_http_client().tracked_request(
-            "GET", f"{self.SORA_API_BASE}/{job_id}", headers=self._headers()
+            "GET", f"{self.SORA_API_BASE}/{job_id}", headers=self._headers(), timeout=poll_timeout()
         ) as resp:
             body = await resp.json()
             if resp.status != 200:
@@ -265,7 +268,7 @@ class KlingProvider(BaseVideoProvider):
     ) -> str:
         payload = {"prompt": prompt, "duration": str(max(1, int(duration))), "aspect_ratio": aspect_ratio}
         async with get_http_client().tracked_request(
-            "POST", self.KLING_API_BASE, json=payload, headers=self._headers()
+            "POST", self.KLING_API_BASE, json=payload, headers=self._headers(), timeout=poll_timeout()
         ) as resp:
             body = await resp.json()
             if resp.status == 429:
@@ -279,7 +282,7 @@ class KlingProvider(BaseVideoProvider):
 
     async def poll(self, job_id: str) -> JobStatus:
         async with get_http_client().tracked_request(
-            "GET", f"{self.KLING_API_BASE}/{job_id}", headers=self._headers()
+            "GET", f"{self.KLING_API_BASE}/{job_id}", headers=self._headers(), timeout=poll_timeout()
         ) as resp:
             body = await resp.json()
             if resp.status != 200:

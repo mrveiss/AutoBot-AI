@@ -16,6 +16,7 @@ import os
 from typing import Any, Dict
 
 # Fully-qualified (#14373) — see plugins/core-plugins/image-generation-plugin/main.py.
+from autobot_shared.generation_http_timeouts import generation_timeout, poll_timeout
 from autobot_shared.http_client import get_http_client
 from autobot_shared.tool_sdk.base import BaseTool, ToolMetadata, ToolPermission, ToolResult
 
@@ -178,6 +179,7 @@ class GenerateImageTool(BaseTool):
             "https://api.bfl.ml/v1/flux-pro-1.1",
             json=payload,
             headers={"x-key": api_key, "Content-Type": "application/json"},
+            timeout=poll_timeout(),
         ) as resp:
             if resp.status != 200:
                 body = await resp.text()
@@ -197,6 +199,7 @@ class GenerateImageTool(BaseTool):
                 "GET",
                 f"https://api.bfl.ml/v1/get_result?id={task_id}",
                 headers={"x-key": api_key},
+                timeout=poll_timeout(),
             ) as poll:
                 if poll.status != 200:
                     continue
@@ -254,6 +257,7 @@ class GenerateImageTool(BaseTool):
                 "Content-Type": "application/json",
                 "Accept": "application/json",
             },
+            timeout=generation_timeout(),
         ) as resp:
             if resp.status != 200:
                 body = await resp.text()
