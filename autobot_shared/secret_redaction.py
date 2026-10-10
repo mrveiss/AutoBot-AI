@@ -374,15 +374,6 @@ def redact_mapping(mapping: Mapping[str, Any]) -> Dict[str, Any]:
 _SCALARS = (bool, int, float)
 
 
-def _user_only(url: str) -> bool:
-    """``https://<key>@host``: no password, so the credential is the user part (#17899)."""
-    try:
-        p = urlsplit(url)
-    except ValueError:
-        return False
-    return bool(p.username and not p.password)
-
-
 def _redact_nested_leaf(name: str, value: Any, policy: MatchPolicy) -> Any:
     """One non-container leaf of :func:`redact_nested` (#18193)."""
     if value is None or value == "":
@@ -394,7 +385,7 @@ def _redact_nested_leaf(name: str, value: Any, policy: MatchPolicy) -> Any:
     if cred and not (url and is_url_field(name)):
         return REDACTED_PLACEHOLDER  # a URL-shaped value under a credential name (webhook secret) is masked whole
     if url:
-        return redact_url_credentials(redact_url_userinfo(value, mask_username=cred or _user_only(value)), policy)
+        return redact_url_credentials(redact_url_userinfo(value, mask_username=True), policy)
     return redact_content(value)
 
 
@@ -403,10 +394,10 @@ def redact_nested(value: Any, policy: MatchPolicy = MatchPolicy.BROAD, name: str
 
     Walks dicts, lists, tuples and sets (a set comes back as a list), masking like :func:`redact_value`
     (``REDACTED_PLACEHOLDER``): a set value, or a non-empty container, under a credential name is masked
-    whole -- except under a URL-shaped name (``db_url``), where a URL keeps its host and loses userinfo
-    and credential query params. A URL string under any other name is scrubbed the same way, including
-    a user-only ``https://<key>@host``; other strings go through :func:`redact_content` (``sk-...``,
-    JWTs, inline ``user:pass@``), so ordinary text is byte-identical. Keys, order, bool and numbers are
+    whole -- except under a URL-shaped name (``db_url``), where a URL keeps its host and loses ALL userinfo
+    (the user part too: a key can sit there) and credential query params. A URL string under any other
+    name is scrubbed the same way; other strings go through :func:`redact_content` (``sk-...``, JWTs,
+    inline ``user:pass@``), so ordinary text is byte-identical. Keys, order, bool and numbers are
     unchanged; an unknown non-scalar type fails closed. List items inherit their parent's name.
     ``BROAD`` (also for query params): over-masking costs a field, a leak costs a secret.
     ``exempt_counts=True`` keeps ``max_tokens=4096`` a number (GET /config and /current returned it before).

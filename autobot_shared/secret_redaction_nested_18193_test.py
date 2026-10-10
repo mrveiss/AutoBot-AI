@@ -21,14 +21,14 @@ def test_nested_dicts_are_masked_at_any_depth() -> None:
 def test_lists_of_dicts_and_url_items_are_walked() -> None:
     tree = {"hosts": [{"token": _X, "name": "n"}, f"http://u:{_PW}@h:1/x", 7], "api_keys": ["a", "b"]}
     out = redact_nested(tree)
-    assert out["hosts"] == [{"token": MASK, "name": "n"}, f"http://u:{MASK}@h:1/x", 7]
+    assert out["hosts"] == [{"token": MASK, "name": "n"}, f"http://{MASK}:{MASK}@h:1/x", 7]
     assert out["api_keys"] == MASK
 
 
 def test_url_userinfo_is_masked_under_any_key_and_host_kept() -> None:
     out = redact_nested({"anything": f"http://user:{_PW}@host:1234/p?api_key=zz&a=b"})
     assert _PW not in out["anything"] and "zz" not in out["anything"]
-    assert out["anything"].startswith("http://user:") and "@host:1234/p" in out["anything"]
+    assert out["anything"].startswith(f"http://{MASK}:{MASK}@host:1234/p")  # user masked too
     assert "a=b" in out["anything"]
 
 
@@ -72,7 +72,7 @@ def test_a_url_under_a_credential_name_is_masked_whole_unless_the_name_is_url_sh
     hook = "https://hooks.example/T0/B0/" + _PW
     out = redact_nested({"webhook_secret": hook, "db_url": f"postgres://u:{_PW}@db:5432/app"})
     assert out["webhook_secret"] == MASK
-    assert out["db_url"] == f"postgres://u:{MASK}@db:5432/app"  # url-shaped name: userinfo only
+    assert out["db_url"] == f"postgres://{MASK}:{MASK}@db:5432/app"  # url-shaped name: userinfo only
     assert redact_nested({"password": f"pa://{_PW}"}) == {"password": MASK}
 
 
@@ -119,10 +119,10 @@ def test_a_non_numeric_port_fails_closed_instead_of_raising() -> None:
 
 
 def test_userinfo_is_masked_under_an_ordinary_key_in_both_forms() -> None:
-    """A username-only userinfo (``https://<key>@host``) carries the key; mask it, keep the rest (#17899)."""
+    """A key can sit in either userinfo slot, so all userinfo is masked and the rest kept (#17899)."""
     user_only = redact_nested({"endpoint": f"https://{_PW}@ingest.example:8443/1?a=b"})["endpoint"]
     assert _PW not in user_only and user_only == f"https://{MASK}@ingest.example:8443/1?a=b"
     both = redact_nested({"endpoint": f"https://u:{_PW}@ingest.example/1"})["endpoint"]
-    assert _PW not in both and both == f"https://u:{MASK}@ingest.example/1"  # password masked, user kept
+    assert _PW not in both and both == f"https://{MASK}:{MASK}@ingest.example/1"  # user AND password masked
     plain = "https://ingest.example:8443/1?a=b"  # contrast: no userinfo, unchanged
     assert redact_nested({"endpoint": plain}) == {"endpoint": plain}

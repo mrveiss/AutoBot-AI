@@ -79,7 +79,7 @@ def test_config_response_keeps_every_non_secret_field(monkeypatch) -> None:
     assert body["ollama"]["selected_model"] == _MODEL
     unified = body["unified"]
     assert unified["local"]["providers"]["ollama"]["endpoint"] == "http://ollama.example:11434/api/generate"
-    assert unified["local"]["providers"]["ollama"]["host"] == "http://user:" + "*" * 10 + "@host:1234"
+    assert unified["local"]["providers"]["ollama"]["host"] == "http://" + "*" * 10 + ":" + "*" * 10 + "@host:1234"
     assert unified["local"]["providers"]["ollama"]["max_tokens"] == 4096
     assert unified["local"]["providers"]["ollama"]["models"] == ["alpha", "beta"]
     assert unified["cloud"]["providers"]["openai"] == {"api_key": "**********", "model": "gpt-x", "timeout": 30}
