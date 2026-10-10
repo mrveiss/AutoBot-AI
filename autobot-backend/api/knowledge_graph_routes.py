@@ -12,7 +12,7 @@ hierarchical summarization, and document processing.
 import re
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.schemas_knowledge import (
     KnowledgeGraphDocumentOverviewResponse,
@@ -28,6 +28,8 @@ from api.schemas_knowledge import (
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from knowledge.search_filters import authorize_fact_read
+from knowledge_factory import get_or_create_knowledge_base
 
 logger = get_logger(__name__)
 
@@ -50,10 +52,23 @@ _SAFE_NAME_RE = re.compile(r"^[\w .'-]{1,200}$")
 )
 async def run_pipeline(
     request: PipelineRunRequest,
+    http_request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     """Run the Extract-Cognify-Load pipeline on a document."""
+    # #18184: the pipeline runs on the document's text, read through the canonical fact-read check.
     try:
+        try:
+            document_uuid = UUID(request.document_id)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="document_id must be a UUID")
+        kb = await get_or_create_knowledge_base(http_request.app, force_refresh=False)
+        document_id = str(document_uuid)  # canonical form: UUID() also accepts upper-case and un-hyphenated input
+        fact = await authorize_fact_read(kb, document_id, current_user)
+        text = fact.get("content") or ""
+        if not text.strip():
+            raise HTTPException(status_code=404, detail="Document has no text")
+
         from knowledge.pipeline.base import PipelineContext
         from knowledge.pipeline.config import get_default_config, load_pipeline_config
         from knowledge.pipeline.runner import PipelineRunner
@@ -65,12 +80,13 @@ async def run_pipeline(
 
         runner = PipelineRunner(config)
         context = PipelineContext()
-        context.document_id = UUID(request.document_id)
+        context.document_id = document_uuid
+        context.metadata["document_id"] = document_id
 
-        result = await runner.run(request.document_id, context)
+        result = await runner.run(text, context)
 
         return PipelineRunResponse(
-            document_id=request.document_id,
+            document_id=document_id,
             entities_count=result.entities_count,
             relationships_count=result.relationships_count,
             events_count=result.events_count,
@@ -80,6 +96,8 @@ async def run_pipeline(
             errors=result.errors,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Pipeline execution failed: %s", e)
         raise HTTPException(

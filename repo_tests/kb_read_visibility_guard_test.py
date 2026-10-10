@@ -100,6 +100,7 @@ FILTER_HELPERS = frozenset(
         "augment_search_request_with_permissions",
         "build_chromadb_permission_filter",
         "check_access",
+        "can_read_fact",
         "filter_accessible_facts",
         "get_all_accessible_facts",
     }
