@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """A bare ``user:password@host[:port]`` loses its password in the canonical module (#18206)."""
 
+import time
 from pathlib import Path
 
 import pytest
@@ -73,3 +74,37 @@ def test_no_name_leaves_the_masked_set_and_a_plain_value_is_untouched_for_every_
                 assert redact_value(name, "plain") in ("plain", _MASK)
         if not is_credential_entry(name, "plain", MatchPolicy.PRECISE):
             assert redact_value(name, "plain") == "plain", name
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("user:p@ss@host", f"user:{_MASK}@host"),
+        ("user:pa/ss@host", f"user:{_MASK}@host"),
+        ("user:p#w@host", f"user:{_MASK}@host"),
+        ("user:pw@[::1]:5432", f"user:{_MASK}@[::1]:5432"),
+        ("user:pw@[fe80::1]/db", f"user:{_MASK}@[fe80::1]/db"),
+    ],
+)
+def test_the_password_ends_at_the_last_at_sign_like_urlsplit(raw: str, expected: str) -> None:
+    assert redact_schemeless_userinfo(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "benign", ["C:\\x@y", "c:\\users\\a@b", "https://h/a@b", "user:pw@", "user:pw@[zz]", "u:@host"]
+)
+def test_a_drive_path_a_scheme_url_and_a_malformed_host_are_unchanged(benign: str) -> None:
+    assert redact_schemeless_userinfo(benign) == benign
+
+
+def test_a_multi_letter_user_with_a_backslash_password_is_still_masked() -> None:
+    assert redact_schemeless_userinfo("svc:a\\b@host") == f"svc:{_MASK}@host"
+
+
+@pytest.mark.parametrize(
+    "adversarial", ["u:" + "@a" * 10000, "u:" + "@" * 20000, "u:" + "a" * 20000 + "@[:", "u:" + "/#" * 10000]
+)
+def test_an_adversarial_value_is_linear_time(adversarial: str) -> None:
+    start = time.perf_counter()
+    redact_schemeless_userinfo(adversarial)
+    assert time.perf_counter() - start < 0.05

@@ -223,10 +223,10 @@ def redact_url_credentials(url: str, policy: MatchPolicy = MatchPolicy.PRECISE) 
 
 # A whole value shaped ``user:password@host[:port][/path]`` with NO ``scheme://`` (a bare DSN, proxy or
 # endpoint). Whole-value, never inside prose: ``note: a@b.com`` has whitespace and does not match.
-# ``name@host.com`` has no colon and ``host:port`` no ``@``, so neither matches (#18206).
-_SCHEMELESS_USERINFO_RE = re.compile(
-    r"(?P<user>[^\s:/@?#]+):(?P<pw>[^\s/@?#]+)@(?P<host>[^\s/@?#:]+(?::\d{1,5})?)(?P<rest>[/?#]\S*)?"
-)
+# ``name@host.com`` has no colon and ``host:port`` no ``@``, so neither matches (#18206).  Like ``urlsplit``,
+# the password ends at the LAST ``@``, so it may hold ``@``, ``/`` and ``#``; both regexes are linear.
+_SCHEMELESS_USER_RE = re.compile(r"(?P<user>[^\s:/@?#]+):(?P<pw>\S+)")
+_SCHEMELESS_HOST_RE = re.compile(r"(?P<host>\[[0-9A-Fa-f:.]+\]|[^\s/@?#:\[\]]+)(?P<port>:\d{1,5})?(?P<rest>[/?#]\S*)?")
 # URI schemes with no ``//`` authority whose ``scheme:addr@host`` is an address, not userinfo.
 _NO_AUTHORITY_SCHEMES = frozenset({"mailto", "sip", "sips", "xmpp", "tel", "urn", "news", "acct"})
 
@@ -234,14 +234,21 @@ _NO_AUTHORITY_SCHEMES = frozenset({"mailto", "sip", "sips", "xmpp", "tel", "urn"
 def redact_schemeless_userinfo(value: str) -> str:
     """Mask the password of a bare ``user:password@host[:port]`` value, keeping user, host, port (#18206).
 
-    ``user:pw@host:<port>`` becomes ``user:**********@host:<port>``.  Ordinary emails, ``host:port`` pairs,
-    ``mailto:`` style addresses, scheme URLs (handled by :func:`redact_url_userinfo`) and any value with
+    ``user:pw@host:<port>`` becomes ``user:**********@host:<port>``; the password may hold ``@ / #`` and the
+    host may be a bracketed IPv6 literal.  Ordinary emails, ``host:port`` pairs, ``mailto:`` style addresses,
+    scheme URLs (handled by :func:`redact_url_userinfo`), a Windows ``C:\\x@y`` path and any value with
     whitespace come back unchanged.
     """
-    m = _SCHEMELESS_USERINFO_RE.fullmatch(value)
-    if m is None or m["user"].lower() in _NO_AUTHORITY_SCHEMES:
+    m = _SCHEMELESS_USER_RE.fullmatch(value)
+    if m is None or m["user"].lower() in _NO_AUTHORITY_SCHEMES or m["pw"].startswith("//"):
         return value
-    return f"{m['user']}:{REDACTED_PLACEHOLDER}@{m['host']}{m['rest'] or ''}"
+    if len(m["user"]) == 1 and m["pw"].startswith("\\"):
+        return value
+    password, at, tail = m["pw"].rpartition("@")
+    host = _SCHEMELESS_HOST_RE.fullmatch(tail) if at and password else None
+    if host is None:
+        return value
+    return f"{m['user']}:{REDACTED_PLACEHOLDER}@{host['host']}{host['port'] or ''}{host['rest'] or ''}"
 
 
 def redact_value(name: str, value: Any) -> Any:
