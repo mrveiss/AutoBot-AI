@@ -103,5 +103,3 @@ def detect_category(file_path: Path) -> str:
                 return category
 
     return "general"
-
-
