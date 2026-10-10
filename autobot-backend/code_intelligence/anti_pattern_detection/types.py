@@ -23,6 +23,7 @@ from autobot_shared.status_enums import Severity
 # unequal across that boundary.  Re-exported so ``from .types import AntiPatternType``
 # keeps working for every detector in this package.
 from code_analysis.src.anti_pattern_detector import AntiPatternType  # noqa: F401
+from code_analysis.src.anti_pattern_detector import MAGIC_NUMBER_MIN_OCCURRENCES
 
 #: An exact subset of the canonical ladder, so an alias rather than a class (#18098).
 #: Safe to alias because every severity distribution built from this is built from the
@@ -82,7 +83,7 @@ class Thresholds:
     COMPLEX_CONDITIONAL_THRESHOLD = 3
 
     # Magic number detection
-    MAGIC_NUMBER_THRESHOLD = 3  # Same number appears more than N times
+    MAGIC_NUMBER_THRESHOLD = MAGIC_NUMBER_MIN_OCCURRENCES  # Same number appears at least N times (>=)
 
 
 # ============================================================================

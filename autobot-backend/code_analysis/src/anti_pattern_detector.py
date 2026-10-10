@@ -125,6 +125,9 @@ _VUE_COMP_CALL_RE = re.compile(
     r"(<[^>]*>)?\s*\(",
 )
 _COMPOSABLE_THRESHOLD = 5
+# #18188: the ONE magic-number threshold -- a number is flagged when it appears AT LEAST
+# this many times (>=). Defined here because Thresholds (types.py) imports this module.
+MAGIC_NUMBER_MIN_OCCURRENCES = 2
 _COMPOSABLE_EXCL_DIRS = frozenset({"composables", "node_modules", ".git", "__pycache__"})
 
 
@@ -457,7 +460,7 @@ class AntiPatternDetector:
     DEEP_NESTING_THRESHOLD = 4  # alias for api.code_intelligence compat
     MESSAGE_CHAIN_THRESHOLD = 4  # alias for api.code_intelligence compat
     COMPLEX_CONDITIONAL_THRESHOLD = 3  # alias for api.code_intelligence compat
-    MAGIC_NUMBER_THRESHOLD = 3  # alias for api.code_intelligence compat
+    MAGIC_NUMBER_THRESHOLD = MAGIC_NUMBER_MIN_OCCURRENCES  # alias for api.code_intelligence compat
     FEATURE_ENVY_THRESHOLD = 3
     LAZY_CLASS_METHOD_THRESHOLD = 2
     LAZY_CLASS_LOC_THRESHOLD = 20

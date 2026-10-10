@@ -20,6 +20,7 @@ an empty dict.
 from typing import Any, Dict, Tuple
 
 from code_analysis.src.anti_pattern_detector import AntiPatternType
+from code_intelligence.anti_pattern_detection.types import Thresholds
 
 # Migration aliases kept in the enum for input compatibility (GH#6757). They are
 # accepted on input but not advertised: each duplicates a canonical member.
@@ -174,11 +175,11 @@ _TYPE_DETAILS: Dict[AntiPatternType, Dict[str, Any]] = {
         ["info"],
         _SMELL,
     ),
-    # detectors/naming.py:72 (default magic_number_threshold=2), compared with >= at :242.
+    # Thresholds.MAGIC_NUMBER_THRESHOLD (#18188): the NamingDetector default, compared with >= (naming.py:242).
     AntiPatternType.MAGIC_NUMBER: _d(
         "Magic Number",
         "Unexplained numeric literals repeated within a scope",
-        {"occurrences": ">=2"},
+        {},  # filled at build time from _LIVE_THRESHOLDS
         ["low"],
         _SMELL,
     ),
@@ -234,6 +235,10 @@ _TYPE_DETAILS: Dict[AntiPatternType, Dict[str, Any]] = {
     ),
 }
 
+# Thresholds read from the shared constant when the response is built, so they
+# cannot drift from the detector's comparison (#18188).
+_LIVE_THRESHOLDS = {AntiPatternType.MAGIC_NUMBER: lambda: {"occurrences": f">={Thresholds.MAGIC_NUMBER_THRESHOLD}"}}
+
 
 def build_anti_pattern_type_definitions() -> Tuple[Dict[str, Any], ...]:
     """Return one definition per canonical type, aliases excluded.
@@ -244,4 +249,11 @@ def build_anti_pattern_type_definitions() -> Tuple[Dict[str, Any], ...]:
     missing = [m.name for m in AntiPatternType if m not in _TYPE_DETAILS and m not in ALIAS_TYPES]
     if missing:
         raise RuntimeError(f"AntiPatternType members without a catalog entry: {missing}")
-    return tuple({"type": member.value, **details} for member, details in _TYPE_DETAILS.items())
+    return tuple(
+        {
+            "type": member.value,
+            **details,
+            **({"thresholds": _LIVE_THRESHOLDS[member]()} if member in _LIVE_THRESHOLDS else {}),
+        }
+        for member, details in _TYPE_DETAILS.items()
+    )
