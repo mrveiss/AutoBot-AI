@@ -60,25 +60,19 @@ quietly widened -- not that it is empty.
 from __future__ import annotations
 
 import ast
-import io
 import tokenize
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from repo_tests._nosec_b615_scan import MARKER
+from repo_tests._nosec_b615_scan import RESOLVER as _RESOLVER
+from repo_tests._nosec_b615_scan import calls_resolver as _calls_resolver
+from repo_tests._nosec_b615_scan import comment_markers, unpinned_suppressed_calls
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
-
-#: The bandit test id this guard is about. Built from parts so that this
-#: module's own source carries no occurrence of the marker outside a string --
-#: the guard would otherwise appear in its own population and the contrast
-#: fixture below would be asserting against a file that violates it.
-MARKER = "nosec " + "B615"
-
-#: The registry helper a dynamic call site must consult.
-_RESOLVER = "pinned_revision_kwargs"
 
 
 @dataclass(frozen=True)
@@ -150,21 +144,6 @@ REACH = declare(
 )
 
 
-def comment_markers(source: str) -> list[int]:
-    """Line numbers of `COMMENT` tokens in *source* that carry the marker.
-
-    `tokenize` is the whole point: it is what separates a suppression from a
-    sentence about one. A `STRING` token holding the identical text -- a
-    docstring, an error message, a test fixture -- contributes nothing.
-    """
-    found: list[int] = []
-    reader = io.StringIO(source).readline
-    for token in tokenize.generate_tokens(reader):
-        if token.type == tokenize.COMMENT and MARKER in token.string:
-            found.append(token.start[0])
-    return found
-
-
 def _parse(path: Path) -> ast.Module | None:
     """The parsed module, or ``None`` when it could not be read as Python.
 
@@ -176,95 +155,6 @@ def _parse(path: Path) -> ast.Module | None:
         return ast.parse(path.read_text(encoding="utf-8"))
     except (SyntaxError, UnicodeDecodeError, ValueError, OSError):
         return None
-
-
-def _calls_resolver(module: ast.Module) -> bool:
-    """True when this module calls the registry resolver, by name or attribute."""
-    for node in ast.walk(module):
-        if not isinstance(node, ast.Call):
-            continue
-        func = node.func
-        if isinstance(func, ast.Name) and func.id == _RESOLVER:
-            return True
-        if isinstance(func, ast.Attribute) and func.attr == _RESOLVER:
-            return True
-    return False
-
-
-def _is_resolver_call(node: ast.AST) -> bool:
-    """True for a call to the registry resolver, by name or by attribute."""
-    if not isinstance(node, ast.Call):
-        return False
-    func = node.func
-    return (isinstance(func, ast.Name) and func.id == _RESOLVER) or (
-        isinstance(func, ast.Attribute) and func.attr == _RESOLVER
-    )
-
-
-def _holds_resolver_call(value: ast.AST | None) -> bool:
-    """True when *value* is, or contains (e.g. ``{"a": 1, **resolver(x)}``), a resolver call."""
-    return value is not None and any(_is_resolver_call(n) for n in ast.walk(value))
-
-
-def _resolver_bound_names(scope: ast.AST) -> set[str]:
-    """Names assigned, inside *scope*, from an expression containing a resolver call."""
-    names: set[str] = set()
-    for node in ast.walk(scope):
-        if isinstance(node, ast.Assign) and _holds_resolver_call(node.value):
-            names.update(t.id for t in node.targets if isinstance(t, ast.Name))
-        elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)) and _holds_resolver_call(node.value):
-            if isinstance(node.target, ast.Name):
-                names.add(node.target.id)
-    return names
-
-
-def _call_carries_pin(call: ast.Call, bound: set[str]) -> bool:
-    """True when this call itself passes ``revision=`` or ``**<resolver-bound name>``.
-
-    ``revision=None`` / ``revision=""`` pin nothing and do not count. Known limit:
-    a resolver-bound name counts as pinned wherever in the function it was bound,
-    so a later reassignment to something unpinned is not tracked.
-    """
-    for kw in call.keywords:
-        if kw.arg == "revision":
-            if isinstance(kw.value, ast.Constant) and not kw.value.value:
-                continue
-            return True
-        if kw.arg is None and (
-            _holds_resolver_call(kw.value) or (isinstance(kw.value, ast.Name) and kw.value.id in bound)
-        ):
-            return True
-    return False
-
-
-def _is_from_pretrained(node: ast.AST) -> bool:
-    return isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "from_pretrained"
-
-
-def unpinned_suppressed_calls(source: str) -> list[int]:
-    """Lines of suppressed ``from_pretrained`` calls that do not carry a registry pin themselves.
-
-    "The file calls the resolver somewhere" is not the property: a resolver call
-    whose result is dropped on the floor pins nothing. Each suppressed call must
-    pass ``revision=`` or ``**<name>`` where ``<name>`` is bound from a resolver
-    call in the same function (module level counts as its own scope).
-    """
-    marker_lines = set(comment_markers(source))
-    module = ast.parse(source)
-    scopes = [n for n in ast.walk(module) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))] + [module]
-    bad: set[int] = set()
-    seen: set[int] = set()
-    for scope in sorted(scopes, key=lambda n: -getattr(n, "lineno", 0)):  # innermost first
-        bound = _resolver_bound_names(scope)
-        for node in ast.walk(scope):
-            if not _is_from_pretrained(node) or id(node) in seen:
-                continue
-            if not any(node.lineno <= ln <= (node.end_lineno or node.lineno) for ln in marker_lines):
-                continue
-            seen.add(id(node))
-            if not _call_carries_pin(node, bound):
-                bad.add(node.lineno)
-    return sorted(bad)
 
 
 @lru_cache(maxsize=1)
@@ -598,3 +488,43 @@ def test_an_empty_dict_kwargs_fails() -> None:
 def test_revision_none_fails() -> None:
     """`revision=None` is the default branch spelled out, not a pin."""
     assert unpinned_suppressed_calls(_REVISION_NONE) == [4]
+
+
+_PIN_REBOUND_TO_EMPTY = """
+from autobot_shared.pinned_model_registry import pinned_revision_kwargs
+from transformers import AutoConfig
+def go(name):
+    kwargs = pinned_revision_kwargs(name)
+    kwargs = {}
+    return AutoConfig.from_pretrained(name, **kwargs)  # nosec B615
+"""
+
+_EMPTY_REBOUND_TO_PIN = """
+from autobot_shared.pinned_model_registry import pinned_revision_kwargs
+from transformers import AutoConfig
+def go(name):
+    kwargs = {}
+    kwargs = pinned_revision_kwargs(name)
+    return AutoConfig.from_pretrained(name, **kwargs)  # nosec B615
+"""
+
+_PIN_REBOUND_AFTER_THE_LOAD = """
+from autobot_shared.pinned_model_registry import pinned_revision_kwargs
+from transformers import AutoConfig
+def go(name):
+    kwargs = pinned_revision_kwargs(name)
+    model = AutoConfig.from_pretrained(name, **kwargs)  # nosec B615
+    kwargs = {}
+    return model
+"""
+
+
+def test_a_pin_rebound_to_an_unpinned_value_before_the_load_fails() -> None:
+    """Contrast pair, failing half: the last binding before the call wins, not any binding."""
+    assert unpinned_suppressed_calls(_PIN_REBOUND_TO_EMPTY) == [7]
+
+
+def test_the_last_binding_before_the_load_decides() -> None:
+    """Contrast pair, passing half: rebinding TO the resolver pins; rebinding after the load is irrelevant."""
+    assert unpinned_suppressed_calls(_EMPTY_REBOUND_TO_PIN) == []
+    assert unpinned_suppressed_calls(_PIN_REBOUND_AFTER_THE_LOAD) == []
