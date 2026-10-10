@@ -10,8 +10,9 @@ admin role, then ask the ownership manager -- lives once, in `knowledge/search_f
 call it. A second inline `<x>.check_access(...)` sequence is a security-path fork: it can
 drift on the admin rule, on the group list, or on the 403/404 split.
 
-The detector reads the syntax tree: a call whose callee attribute is `check_access`. The
-files below are the only ones allowed to make that call.
+The detector reads the syntax tree: any code reference to the attribute `check_access` (called,
+aliased, passed to `partial`, or fetched with `getattr`). The files below are the only ones
+allowed to reference it.
 """
 
 from __future__ import annotations
@@ -32,12 +33,25 @@ _ALLOWED = {
 }
 
 
-def _calls_check_access(source: str) -> bool:
-    """True when `source` calls `<something>.check_access(...)`."""
-    return any(
-        isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "check_access"
-        for n in ast.walk(ast.parse(source))
-    )
+def _references_check_access(source: str) -> bool:
+    """True when `source` references `check_access` as code, called or not.
+
+    Flags any Load-context `<x>.check_access` attribute (a call, an alias, a `partial` argument)
+    and any `getattr(<x>, "check_access")` with a constant name. Strings and comments are not code.
+    """
+    for n in ast.walk(ast.parse(source)):
+        if isinstance(n, ast.Attribute) and n.attr == "check_access" and isinstance(n.ctx, ast.Load):
+            return True
+        if (
+            isinstance(n, ast.Call)
+            and isinstance(n.func, ast.Name)
+            and n.func.id == "getattr"
+            and len(n.args) >= 2
+            and isinstance(n.args[1], ast.Constant)
+            and n.args[1].value == "check_access"
+        ):
+            return True
+    return False
 
 
 def _is_source_python(rel: str) -> bool:
@@ -73,7 +87,7 @@ def _callers() -> tuple[tuple[str, ...], int]:
         if "check_access" not in source:
             continue
         parsed += 1
-        if _calls_check_access(source):
+        if _references_check_access(source):
             found.append(rel)
     return tuple(sorted(found)), parsed
 
@@ -83,13 +97,18 @@ def _callers() -> tuple[tuple[str, ...], int]:
     [
         ("an attribute call", "await mgr.check_access(fact_id=f)\n", True),
         ("a chained call", "await kb.ownership_manager.check_access(f, u, m)\n", True),
+        ("a bare attribute alias", "ca = mgr.check_access\nawait ca(f)\n", True),
+        ("a getattr fetch", 'await getattr(mgr, "check_access")(f)\n', True),
+        ("a partial argument", "p = functools.partial(mgr.check_access, f)\n", True),
+        ("a store to the attribute", "mgr.check_access = None\n", False),
+        ("a getattr of another name", 'getattr(mgr, "other")\n', False),
         ("a comment naming it", "# mgr.check_access(f)\nx = 1\n", False),
         ("a string naming it", 's = "mgr.check_access(f)"\n', False),
         ("the helper call", "await can_read_fact(mgr, f, m, user)\n", False),
     ],
 )
-def test_the_matcher_tells_a_call_from_a_mention(label: str, source: str, expected: bool) -> None:
-    assert _calls_check_access(source) is expected, label
+def test_the_matcher_tells_a_reference_from_a_mention(label: str, source: str, expected: bool) -> None:
+    assert _references_check_access(source) is expected, label
 
 
 def test_the_scan_is_not_vacuous() -> None:
