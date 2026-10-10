@@ -30,10 +30,13 @@ class CaptchaType(Enum):
 
     @classmethod
     def _missing_(cls, value: object) -> "CaptchaType | None":
-        """Map a value recorded before the merge to its member: ``text_image`` was ``TEXT``."""
-        if isinstance(value, str):
-            return _LEGACY_VALUES.get(value.strip().lower())
-        return None
+        """Accept a case or whitespace variant, and ``text_image`` (the browser's old ``TEXT``)."""
+        if not isinstance(value, str):
+            return None
+        key = value.strip().lower()
+        if key in _LEGACY_VALUES:
+            return _LEGACY_VALUES[key]
+        return next((member for member in cls if member.value == key), None)
 
     @classmethod
     def parse(cls, raw: str | None) -> "CaptchaType":

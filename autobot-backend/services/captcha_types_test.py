@@ -68,3 +68,40 @@ def test_requires_human_is_the_inverse_of_success() -> None:
 )
 def test_math_expressions(text: str, expected: int | None) -> None:
     assert solve_math_expression(text) == expected
+
+
+# Every value either enum emitted before the merge, frozen as literals from origin/main (#18131):
+# `CaptchaType` in services/captcha_solver.py and in agents/browser/captcha_solver.py.
+_OLD_SERVICES = {
+    "text": CaptchaType.TEXT,
+    "math": CaptchaType.MATH,
+    "image_select": CaptchaType.IMAGE_SELECT,
+    "recaptcha": CaptchaType.RECAPTCHA,
+    "hcaptcha": CaptchaType.HCAPTCHA,
+    "cloudflare": CaptchaType.CLOUDFLARE,
+    "unknown": CaptchaType.UNKNOWN,
+}
+_OLD_BROWSER = {
+    "text_image": CaptchaType.TEXT,
+    "math": CaptchaType.MATH,
+    "slider": CaptchaType.SLIDER,
+    "recaptcha": CaptchaType.RECAPTCHA,
+    "hcaptcha": CaptchaType.HCAPTCHA,
+    "unknown": CaptchaType.UNKNOWN,
+}
+_OLD_VALUES = {**_OLD_SERVICES, **_OLD_BROWSER}
+
+
+@pytest.mark.parametrize("old", sorted(_OLD_VALUES))
+def test_every_old_value_maps_to_its_member_in_any_case(old: str) -> None:
+    expected = _OLD_VALUES[old]
+    for variant in (old, old.upper(), old.title(), f"  {old} "):
+        assert CaptchaType(variant) is expected, variant
+        assert CaptchaType.parse(variant) is expected, variant
+
+
+@pytest.mark.parametrize("raw", ["captcha", "text image", "recaptcha_v3", "image-select", 7, None])
+def test_an_unknown_value_degrades_in_parse_and_is_refused_by_the_constructor(raw: object) -> None:
+    assert CaptchaType.parse(raw) is CaptchaType.UNKNOWN  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        CaptchaType(raw)

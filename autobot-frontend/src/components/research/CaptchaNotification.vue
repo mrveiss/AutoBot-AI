@@ -10,7 +10,7 @@
             </div>
             <div class="captcha-title">
               <h3>{{ $t('research.captcha.detected') }}</h3>
-              <p class="captcha-type">{{ captchaTypeLabel }}</p>
+              <p class="captcha-type">{{ $t(captchaTypeLabelKey) }}</p>
             </div>
             <div class="captcha-timer" :class="{ 'timer-warning': timeRemaining < 30 }">
               <Icon name="clock" />
@@ -82,7 +82,7 @@ const {
   activeCaptcha,
   timeRemaining,
   isSubmitting,
-  captchaTypeLabel,
+  captchaTypeLabelKey,
   truncatedUrl,
   progressPercentage,
   formatTime,
