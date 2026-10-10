@@ -46,8 +46,9 @@ def _is_source_python(rel: str) -> bool:
 
 
 def _source_population(root: Path) -> list[str]:
+    """Every tracked .py under the swept roots; entries filter test modules out themselves."""
     try:
-        return [rel for rel in tracked_paths(root, *_ROOTS) if _is_source_python(rel)]
+        return [rel for rel in tracked_paths(root, *_ROOTS) if rel.endswith(".py")]
     except EmptyEnumeration:
         return []
 
@@ -55,9 +56,9 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "extraction-registry-sweep",
     discover=_source_population,
-    # Mid-window, from REACH.window() = (2826, 3126, 2976) at the pin.
-    floor=2976,
-    what="non-test python source",
+    # Mid-window, from REACH.window() = (5233, 5533, 5383) at the pin.
+    floor=5383,
+    what="python source and tests",
     roots=_ROOTS,
     growth=300,
 )
@@ -74,6 +75,8 @@ def _offenders() -> list[str]:
         for entry in (e for e in REGISTRY if e.status == GUARDED):
             allowed = {entry.canonical, *(p for p, _ in entry.allowed)}
             if not rel.startswith(tuple(r + "/" for r in entry.roots)):
+                continue
+            if not entry.include_tests and not _is_source_python(rel):
                 continue
             if rel not in allowed and entry.detector(tree):
                 found.append(f"{rel}: carries its own copy of '{entry.concept}' (canonical: {entry.canonical})")

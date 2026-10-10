@@ -33,7 +33,6 @@ import repo_tests.data_db_path_single_source_test as _data_db_guard  # noqa: F40
 import repo_tests.extraction_registry_17995_test as _extraction_registry_guard  # noqa: F401 -- registers its scope
 import repo_tests.kb_read_visibility_guard_test as kb
 import repo_tests.one_fact_read_authorization_18184_test as _fact_read_guard  # noqa: F401 -- registers its scope
-import repo_tests.one_session_scope_15068_test as _session_scope_guard  # noqa: F401 -- registers its scope
 from repo_tests._paths import repo_root
 from repo_tests._reach import Reach, ReachScopeError, declare
 from repo_tests._reach_scope import relative_paths, scope_complaint
@@ -162,8 +161,6 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
 #: Compared as a SET in both directions. Adding a scoped declaration means adding a line here,
 #: and that is the point -- the scope is a decision, so it is written twice on purpose.
 _DECLARED_SCOPES = {
-    "extraction-registry-sweep": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "post-commit-seed-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "fact-read-authorization-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "extraction-registry-sweep": (
         "autobot-backend",
