@@ -21,6 +21,7 @@ from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 from config import get_config_section
 from llm_shared.torch_loader import lazy_torch
+from media.audio.pipeline import get_whisper_pipeline, transcribe_array
 from voice_processing.hallucination_filter import is_silence_hallucination, peak_window_rms
 
 from ..base import BaseModalProcessor
@@ -52,8 +53,6 @@ try:
     from transformers import (
         Wav2Vec2ForCTC,
         Wav2Vec2Processor,
-        WhisperForConditionalGeneration,
-        WhisperProcessor,
     )
 
     AUDIO_MODELS_AVAILABLE = True
@@ -78,6 +77,10 @@ logger = get_logger(__name__)
 VOICE_CONFIDENCE_THRESHOLD_DEFAULT = env_float("AUTOBOT_MULTIMODAL_VOICE_CONFIDENCE_THRESHOLD", 0.7)
 VOICE_PROCESSING_TIMEOUT_DEFAULT = env_int("AUTOBOT_MULTIMODAL_VOICE_PROCESSING_TIMEOUT", 30)
 
+#: Decode settings this processor has always used, kept identical when Whisper moved
+#: onto the one pinned pipeline (#17778) so transcripts do not change.
+WHISPER_GENERATE_KWARGS = {"max_length": 448, "num_beams": 5, "temperature": 0.8}
+
 
 class VoiceProcessor(BaseModalProcessor):
     """Voice processing component with GPU acceleration"""
@@ -101,8 +104,6 @@ class VoiceProcessor(BaseModalProcessor):
         self.logger.info("VoiceProcessor initialized with device: %s", self.device)
 
         # Initialize audio models if available
-        self.whisper_model = None
-        self.whisper_processor = None
         self.wav2vec_model = None
         self.wav2vec_processor = None
 
@@ -110,40 +111,23 @@ class VoiceProcessor(BaseModalProcessor):
             self._load_models()
 
     def _load_models(self):
-        """Load Whisper and Wav2Vec2 models for audio processing.
+        """Load the Wav2Vec2 model for audio embeddings and command classification.
 
-        #13034: pinned to exact, integrity-verified revisions instead of the
+        #13034: pinned to an exact, integrity-verified revision instead of the
         mutable default branch -- see autobot_shared/pinned_model_registry.py.
+        Whisper is no longer loaded here (#17778): transcription goes through the
+        one pinned pipeline, ``media.audio.pipeline.get_whisper_pipeline``.
         """
         from autobot_shared.pinned_model_registry import get_pinned_revision, verify_cached_model
 
         torch = _get_torch()
-        whisper_repo_id = "openai/whisper-base"
-        whisper_revision = get_pinned_revision(whisper_repo_id)
         wav2vec_repo_id = "facebook/wav2vec2-base-960h"
         wav2vec_revision = get_pinned_revision(wav2vec_repo_id)
 
         from autobot_shared.pinned_model_registry import ModelIntegrityError
 
         try:
-            # Load Whisper model for speech recognition.
-            # #17124: load into locals and verify BEFORE assigning to self.* --
-            # assigning first (the prior shape) left a tampered model reachable
-            # if verify_cached_model raised and the broad except below swallowed
-            # it (fail-open).
-            self.logger.info("Loading Whisper model...")
-            whisper_processor = WhisperProcessor.from_pretrained(whisper_repo_id, revision=whisper_revision)
-            whisper_model = WhisperForConditionalGeneration.from_pretrained(
-                whisper_repo_id,
-                revision=whisper_revision,
-                torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
-            ).to(self.device)
-            verify_cached_model(whisper_repo_id)
-            whisper_model.eval()
-            self.whisper_processor = whisper_processor
-            self.whisper_model = whisper_model
-
-            # Load Wav2Vec2 model for audio embeddings and feature extraction
+            # #17124: load into locals and verify BEFORE assigning to self.* (fail-open otherwise).
             self.logger.info("Loading Wav2Vec2 model...")
             wav2vec_processor = Wav2Vec2Processor.from_pretrained(
                 wav2vec_repo_id, revision=wav2vec_revision, use_fast=True
@@ -158,12 +142,11 @@ class VoiceProcessor(BaseModalProcessor):
             self.wav2vec_processor = wav2vec_processor
             self.wav2vec_model = wav2vec_model
 
-            self.logger.info("Audio models loaded successfully")
+            self.logger.info("Wav2Vec2 model loaded successfully")
         except ModelIntegrityError as e:
             # #17124: named, distinct from a generic load failure -- a tampered
-            # cached model was detected. Whichever model's verify raised never
-            # assigned its self.* attributes; a model that already verified
-            # successfully in this call stays assigned and usable.
+            # cached model was detected. The model's verify raised before its
+            # self.* attributes were assigned.
             self.logger.error("SECURITY: audio model integrity check failed, refusing to serve: %s", e)
             self.logger.warning("VoiceProcessor will raise errors when processing - models unavailable")
         except Exception as e:
@@ -318,27 +301,11 @@ class VoiceProcessor(BaseModalProcessor):
         return audio_array, sampling_rate
 
     def _transcribe_with_whisper(self, audio_array: np.ndarray, sampling_rate: int) -> str:
-        """Transcribe audio with Whisper model (Issue #315 - extracted method)"""
-        torch = _get_torch()
-
-        if not self.whisper_model or not self.whisper_processor:
+        """Transcribe via the ONE pinned Whisper pipeline (#17778), same decode settings."""
+        pipe = get_whisper_pipeline()
+        if pipe is None:
             return ""
-
-        with torch.no_grad():
-            input_features = self.whisper_processor(
-                audio_array, sampling_rate=sampling_rate, return_tensors="pt"
-            ).input_features
-
-            # Use CUDA with autocast if available, otherwise CPU
-            use_cuda = torch.cuda.is_available()
-            if use_cuda:
-                input_features = input_features.to(self.device)
-
-            with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_cuda):
-                predicted_ids = self.whisper_model.generate(
-                    input_features, max_length=448, num_beams=5, temperature=0.8
-                )
-                return self.whisper_processor.batch_decode(predicted_ids, skip_special_tokens=True)[0].strip()
+        return transcribe_array(pipe, audio_array, sampling_rate, generate_kwargs=WHISPER_GENERATE_KWARGS).text
 
     def _process_wav2vec_embeddings(self, audio_array: np.ndarray, sampling_rate: int) -> Tuple[Any, str]:
         """Process audio with Wav2Vec2 for embeddings (Issue #315 - extracted method)"""
@@ -442,7 +409,7 @@ class VoiceProcessor(BaseModalProcessor):
 
     def _validate_audio_models_available(self) -> None:
         """Validate that audio models are loaded and available. Issue #620."""
-        if not AUDIO_MODELS_AVAILABLE or self.whisper_model is None or self.wav2vec_model is None:
+        if not AUDIO_MODELS_AVAILABLE or get_whisper_pipeline() is None or self.wav2vec_model is None:
             self.logger.error("Audio models not available - cannot process voice")
             raise RuntimeError(
                 "Voice processing unavailable: Required models (Whisper, Wav2Vec2) "

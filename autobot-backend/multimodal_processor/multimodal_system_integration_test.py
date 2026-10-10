@@ -421,7 +421,7 @@ class TestUnifiedMultiModalSystem:
         assert result.modality_type == ModalityType.AUDIO
         assert isinstance(result.processing_time, float)
 
-        if voice.AUDIO_MODELS_AVAILABLE and voice_proc.whisper_model and voice_proc.wav2vec_model:
+        if voice.AUDIO_MODELS_AVAILABLE and voice.get_whisper_pipeline() and voice_proc.wav2vec_model:
             assert result.success is True
             assert result.error_message is None
         else:

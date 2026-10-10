@@ -13,7 +13,6 @@ Fakes are ``create_autospec`` of classes carrying the signatures the code calls,
 so a renamed keyword reddens the test instead of being swallowed by a MagicMock.
 """
 
-from types import SimpleNamespace
 from unittest.mock import MagicMock, create_autospec, patch
 
 import numpy as np
@@ -24,16 +23,10 @@ from multimodal_processor.models import MultiModalInput
 from multimodal_processor.types import ModalityType, ProcessingIntent
 
 
-class _WhisperProcessor:
-    def __call__(self, audio, *, sampling_rate, return_tensors):
-        raise NotImplementedError
+class _WhisperPipe:
+    """The HF ASR pipeline's call signature, as ``transcribe_array`` uses it."""
 
-    def batch_decode(self, ids, *, skip_special_tokens):
-        raise NotImplementedError
-
-
-class _WhisperModel:
-    def generate(self, input_features, *, max_length, num_beams, temperature):
+    def __call__(self, inputs, *, return_timestamps, generate_kwargs):
         raise NotImplementedError
 
 
@@ -53,15 +46,11 @@ def processor():
 
 @pytest.fixture
 def wired(processor):
-    """The processor with an autospec'd Whisper processor and model attached."""
-    asr_processor = create_autospec(_WhisperProcessor, instance=True, spec_set=True)
-    asr_processor.return_value = SimpleNamespace(input_features="FEATURES")
-    asr_processor.batch_decode.return_value = ["  hello  "]
-    model = create_autospec(_WhisperModel, instance=True, spec_set=True)
-    model.generate.return_value = "IDS"
-    processor.whisper_processor = asr_processor
-    processor.whisper_model = model
-    return processor, asr_processor, model
+    """The processor with the ONE pinned Whisper pipeline replaced by an autospec'd fake (#17778)."""
+    pipe = create_autospec(_WhisperPipe, instance=True, spec_set=True)
+    pipe.return_value = {"text": "  hello  "}
+    with patch.object(voice_module, "get_whisper_pipeline", return_value=pipe):
+        yield processor, pipe
 
 
 def _audio_input(data) -> MultiModalInput:
@@ -77,16 +66,21 @@ def _no_cuda_torch():
 
 
 def test_whisper_is_fed_the_given_rate_and_float32_and_generate_keywords(wired) -> None:
-    processor, asr_processor, model = wired
+    """Adapted to the pipeline seam (#17778): the asserted VALUES are unchanged -- rate,
+    float32 samples, and max_length=448 / num_beams=5 / temperature=0.8."""
+    processor, pipe = wired
     audio = np.zeros(1600, dtype=np.float32)
-    with patch.object(voice_module, "_get_torch", return_value=_no_cuda_torch()):
-        text = processor._transcribe_with_whisper(audio, 16000)
+    text = processor._transcribe_with_whisper(audio, 16000)
     assert text == "hello"
-    (seen_audio,), kwargs = asr_processor.call_args
-    assert seen_audio.dtype == np.float32
-    assert kwargs == {"sampling_rate": 16000, "return_tensors": "pt"}
-    model.generate.assert_called_once_with("FEATURES", max_length=448, num_beams=5, temperature=0.8)
-    asr_processor.batch_decode.assert_called_once_with("IDS", skip_special_tokens=True)
+    (inputs,), kwargs = pipe.call_args
+    assert inputs["sampling_rate"] == 16000
+    assert inputs["raw"].dtype == np.float32
+    assert kwargs["generate_kwargs"] == {"max_length": 448, "num_beams": 5, "temperature": 0.8}
+
+
+def test_no_pipeline_means_empty_text(processor) -> None:
+    with patch.object(voice_module, "get_whisper_pipeline", return_value=None):
+        assert processor._transcribe_with_whisper(np.zeros(4, dtype=np.float32), 16000) == ""
 
 
 def test_raw_bytes_are_read_as_float32_at_16khz(processor) -> None:

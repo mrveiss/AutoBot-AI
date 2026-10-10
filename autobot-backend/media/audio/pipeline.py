@@ -128,7 +128,27 @@ def transcribe_path(pipe: Any, path: str, *, language: str = "") -> WhisperTrans
     a file (#17778). *language* is a BCP-47 hint; empty means auto-detect.
     """
     generate_kwargs = {"language": language} if language else None
-    output = pipe(path, return_timestamps=False, generate_kwargs=generate_kwargs)
+    return _as_transcription(pipe(path, return_timestamps=False, generate_kwargs=generate_kwargs))
+
+
+def transcribe_array(
+    pipe: Any, samples: Any, sampling_rate: int, *, generate_kwargs: dict | None = None
+) -> WhisperTranscription:
+    """Run Whisper over decoded *samples* (mono float array). BLOCKING (#17778).
+
+    The ndarray input the multimodal voice processor needs so it can stop loading a
+    second copy of ``openai/whisper-base``. The HF pipeline accepts
+    ``{"raw": array, "sampling_rate": sr}`` and resamples to the model's rate itself.
+    *generate_kwargs* reach ``model.generate`` untouched (e.g. the beam settings).
+    """
+    output = pipe(
+        {"raw": samples, "sampling_rate": sampling_rate}, return_timestamps=False, generate_kwargs=generate_kwargs
+    )
+    return _as_transcription(output)
+
+
+def _as_transcription(output: Any) -> WhisperTranscription:
+    """Shape a pipeline output; anything but a dict is empty text."""
     if not isinstance(output, dict):
         return WhisperTranscription(text="", language="unknown", chunks=[])
     return WhisperTranscription(

@@ -12,7 +12,7 @@
 import os
 from unittest.mock import MagicMock
 
-from media.audio.pipeline import suffix_for_mime, transcribe_bytes
+from media.audio.pipeline import suffix_for_mime, transcribe_array, transcribe_bytes
 
 
 class TestSuffixMapping:
@@ -56,3 +56,18 @@ class TestTranscribeBytes:
         assert pipe.call_args.kwargs["generate_kwargs"] == {"language": "lv"}
         transcribe_bytes(pipe, b"b")
         assert pipe.call_args.kwargs["generate_kwargs"] is None
+
+
+class TestTranscribeArray:
+    def test_passes_raw_array_rate_and_generate_kwargs_untouched(self):
+        pipe = MagicMock(return_value={"text": " hi ", "language": "en"})
+        samples = [0.0, 0.1]
+        kwargs = {"max_length": 448, "num_beams": 5, "temperature": 0.8}
+        result = transcribe_array(pipe, samples, 16000, generate_kwargs=kwargs)
+        assert result.text == "hi"
+        (inputs,), call_kwargs = pipe.call_args
+        assert inputs == {"raw": samples, "sampling_rate": 16000}
+        assert call_kwargs["generate_kwargs"] == kwargs
+
+    def test_non_dict_output_is_empty(self):
+        assert transcribe_array(MagicMock(return_value=None), [0.0], 16000).text == ""
