@@ -288,14 +288,23 @@ def object_metadata(fact_id: str, metadata) -> Dict:
     return {}
 
 
-def parse_fact_metadata(fact_id: str, raw) -> Dict:
-    """Decode a stored metadata JSON value into a dict; anything unparseable or non-object reads as ``{}`` (#18220)."""
+def parse_fact_metadata(fact_id: str, raw, *, strict: bool = False) -> Dict | None:
+    """Decode a stored metadata JSON value into a dict (#18220).
+
+    Anything unparseable or non-object reads as ``{}``, with a WARNING naming the fact id. With
+    ``strict`` such a value returns ``None`` instead, so a batch job can skip the fact and go on.
+    """
     if isinstance(raw, (bytes, bytearray)):
         raw = raw.decode("utf-8", errors="replace")
     try:
         parsed = json.loads(raw) if isinstance(raw, str) else raw
     except ValueError:
         parsed = raw
+    if strict:
+        if isinstance(parsed, dict):
+            return parsed
+        logger.warning("Fact %s has non-object metadata (%s); skipping it", fact_id, type(parsed).__name__)
+        return None
     return object_metadata(fact_id, parsed)
 
 

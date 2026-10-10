@@ -44,6 +44,7 @@ from knowledge.schemas.vectorization import (
     VectorizeFactsResponse,
     VectorizeJobStatusResponse,
 )
+from knowledge.search_filters import parse_fact_metadata
 from knowledge.vector_membership import vectorized_ids
 from knowledge_factory import get_or_create_knowledge_base
 from type_defs.common import Metadata
@@ -379,9 +380,7 @@ def _extract_fact_content(fact_data: dict) -> str:
 def _extract_fact_metadata(fact_data: dict) -> dict:
     """Extract metadata from fact data, handling both bytes and string keys."""
     metadata_str = fact_data.get("metadata") or fact_data.get(b"metadata", b"{}")
-    if isinstance(metadata_str, bytes):
-        return json.loads(metadata_str.decode("utf-8"))
-    return json.loads(metadata_str)
+    return parse_fact_metadata("", metadata_str)  # #18220: non-object metadata reads as {}
 
 
 async def _fetch_batch_data(kb, batch: List[str], skip_existing: bool) -> tuple:
@@ -691,9 +690,10 @@ async def _get_fact_content(kb_instance, fact_id: str) -> tuple:
         else fact_hash.get("content", b"").decode("utf-8")
     )
 
-    # Extract metadata
     metadata_str = fact_hash.get("metadata", "{}")
-    metadata = json.loads(metadata_str) if isinstance(metadata_str, str) else json.loads(metadata_str.decode("utf-8"))
+    metadata = parse_fact_metadata(fact_id, metadata_str, strict=True)  # #18220
+    if metadata is None:
+        raise ValueError(f"Fact {fact_id} has non-object metadata")
 
     return content, metadata
 
