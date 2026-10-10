@@ -19,6 +19,8 @@ from unittest.mock import patch
 
 import pytest
 
+from autobot_shared import generation_http_timeouts as gt
+
 # Load the providers module by file path (hyphenated plugin dir is not importable).
 _PROVIDERS_PATH = Path(__file__).resolve().parent / "providers.py"
 _spec = importlib.util.spec_from_file_location("vg_providers_under_test", _PROVIDERS_PATH)
@@ -239,5 +241,8 @@ async def test_every_request_passes_a_timeout(provider_cls, submit_body, poll_bo
             await call()
         ((_, _, kwargs),) = client.calls
         assert isinstance(kwargs.get("timeout"), aiohttp.ClientTimeout)
-        # Must not fall back to the pooled 10s sock_read default.
-        assert kwargs["timeout"].sock_read >= 30
+        # Exact values, so neither the pooled 10s sock_read default nor a drifted
+        # constant can pass.
+        assert kwargs["timeout"].total == gt.POLL_TIMEOUT_S
+        assert kwargs["timeout"].sock_read == gt.POLL_TIMEOUT_S
+        assert kwargs["timeout"].connect == gt.CONNECT_TIMEOUT_S

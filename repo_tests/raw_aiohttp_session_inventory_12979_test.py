@@ -64,7 +64,6 @@ from __future__ import annotations
 
 import ast
 import importlib.util
-import subprocess
 from pathlib import Path
 from typing import Iterator
 
@@ -72,7 +71,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._raw_aiohttp_session import Site, client_session_sites, scan_paths
 
-from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths
 
 #: Owners allowed to construct a session: the pooled client itself, and the
 #: SSRF guard, whose entire job is handing callers a session pinned to a
@@ -136,21 +135,11 @@ FOREIGN_RUNTIME_PREFIX = "autobot-npu-worker/resources/windows-npu-worker/"
 
 def _tracked_python_files(root: Path) -> list[str]:
     """Every tracked ``*.py`` path, or fail — an empty list is not a clean tree."""
-    # `env=scrubbed_git_env()` is not optional here: an inherited GIT_DIR (every
-    # git hook exports one) outranks `cwd=`, so this would enumerate the other
-    # checkout's index and answer confidently about the wrong tree rather than
-    # erroring (#15176, #15245, #14896).
-    result = subprocess.run(
-        ["git", "ls-files", "-z", "--", "*.py"],
-        cwd=root,
-        env=scrubbed_git_env(),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    paths = [p for p in result.stdout.split("\0") if p]
+    # The one sanctioned enumeration (#15926): it scrubs the inherited GIT_DIR a
+    # hook exports, anchors on cwd, and raises on an empty listing.
+    paths = tracked_paths(root, "*.py")
     assert len(paths) > 3000, (
-        f"git ls-files returned {len(paths)} python paths from {root}; expected the whole tree. "
+        f"tracked_paths returned {len(paths)} python paths from {root}; expected the whole tree. "
         "FIX THE ENUMERATION — a truncated listing reads exactly like a tree with no raw sessions."
     )
     return paths
@@ -267,10 +256,36 @@ def _module_has_main_guard(tree: ast.Module) -> bool:
     for node in tree.body:
         if not isinstance(node, ast.If) or not isinstance(node.test, ast.Compare):
             continue
-        left = node.test.left
-        if isinstance(left, ast.Name) and left.id == "__name__":
+        if _is_name_eq_main(node.test):
             return True
     return False
+
+
+def _is_name_eq_main(test: ast.Compare) -> bool:
+    """True only for ``__name__ == "__main__"`` -- not ``!=``, not another constant."""
+    left = test.left
+    if not (isinstance(left, ast.Name) and left.id == "__name__"):
+        return False
+    if len(test.ops) != 1 or not isinstance(test.ops[0], ast.Eq):
+        return False
+    comparator = test.comparators[0]
+    return isinstance(comparator, ast.Constant) and comparator.value == "__main__"
+
+
+@pytest.mark.parametrize(
+    "source,expected",
+    [
+        ('if __name__ == "__main__":\n    pass\n', True),
+        ('if __name__ == "foo":\n    pass\n', False),
+        ('if __name__ != "__main__":\n    pass\n', False),
+        ('if __name__ in ("__main__",):\n    pass\n', False),
+        ("if __name__ == other:\n    pass\n", False),
+        ("x = 1\n", False),
+    ],
+)
+def test_main_guard_requires_eq_and_the_main_constant(source: str, expected: bool) -> None:
+    """Contrast fixtures: a lookalike comparison must not satisfy the ``entrypoint`` category."""
+    assert _module_has_main_guard(ast.parse(source)) is expected
 
 
 def _category_holds(path: str, category: str, source: str, sites: tuple[Site, ...]) -> bool:

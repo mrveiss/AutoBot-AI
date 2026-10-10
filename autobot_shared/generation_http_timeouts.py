@@ -26,11 +26,14 @@ from __future__ import annotations
 
 import aiohttp
 
-from autobot_shared.env_utils import env_float
+from autobot_shared.env_utils import env_float_clamped
 
-GENERATION_TIMEOUT_S: float = env_float("AUTOBOT_GENERATION_REQUEST_TIMEOUT_S", 300.0)
-POLL_TIMEOUT_S: float = env_float("AUTOBOT_GENERATION_POLL_TIMEOUT_S", 30.0)
-CONNECT_TIMEOUT_S: float = env_float("AUTOBOT_GENERATION_CONNECT_TIMEOUT_S", 10.0)
+# ``positive_finite``: aiohttp reads 0 and NaN as "no timer", a negative as
+# "already expired" and inf can overflow the timer, so a bad override falls back
+# to the default (with a warning) instead of silently disabling the timeout.
+GENERATION_TIMEOUT_S: float = env_float_clamped("AUTOBOT_GENERATION_REQUEST_TIMEOUT_S", 300.0, positive_finite=True)
+POLL_TIMEOUT_S: float = env_float_clamped("AUTOBOT_GENERATION_POLL_TIMEOUT_S", 30.0, positive_finite=True)
+CONNECT_TIMEOUT_S: float = env_float_clamped("AUTOBOT_GENERATION_CONNECT_TIMEOUT_S", 10.0, positive_finite=True)
 
 
 def generation_timeout() -> aiohttp.ClientTimeout:

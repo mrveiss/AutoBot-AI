@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import importlib.util
-import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -15,9 +14,10 @@ import aiohttp
 import pytest
 
 _PATH = Path(__file__).resolve().parent / "generate_image.py"
+# Not registered in sys.modules: nothing in the module needs it, and an entry
+# nobody restores leaks into every later test in the session.
 _spec = importlib.util.spec_from_file_location("gi_under_test", _PATH)
 gi = importlib.util.module_from_spec(_spec)
-sys.modules["gi_under_test"] = gi
 _spec.loader.exec_module(gi)
 
 from autobot_shared import generation_http_timeouts as gt  # noqa: E402
