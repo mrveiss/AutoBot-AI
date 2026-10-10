@@ -30,7 +30,6 @@ All I/O is async-first; no blocking operations.
 import time
 
 from api.knowledge_grounding_models import (
-    Claim,
     Conflict,
     ConflictResolution,
     KBFact,
@@ -43,6 +42,7 @@ from api.knowledge_grounding_models import (
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.ssot_constants import TTL_30_DAYS, TTL_90_DAYS
+from services.knowledge_grounding_models import Claim
 
 logger = get_logger(__name__)
 

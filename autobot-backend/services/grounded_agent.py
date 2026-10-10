@@ -42,7 +42,6 @@ from services.ai_stack_client import get_ai_stack_client
 from services.causal_inference_engine import CausalInferenceEngine
 from services.grounded_agent_models import (
     CausalTrace,
-    Claim,
     ClaimStatus,
     Conflict,
     ConflictResolution,
@@ -50,7 +49,7 @@ from services.grounded_agent_models import (
     VerifiedClaim,
 )
 from services.grounding_stats import record_conflict_resolved, record_grounding_stats
-from services.knowledge_grounding_models import VerificationMethod
+from services.knowledge_grounding_models import Claim, VerificationMethod
 
 logger = get_logger(__name__)
 

@@ -30,7 +30,6 @@ from unittest.mock import AsyncMock
 import pytest
 
 from api.knowledge_grounding_models import (
-    Claim,
     Conflict,
     ConflictResolution,
     KBFact,
@@ -38,6 +37,7 @@ from api.knowledge_grounding_models import (
     ReviewTicketPriority,
 )
 from services.conflict_resolver import ConflictResolver
+from services.knowledge_grounding_models import Claim
 
 
 @pytest.fixture(autouse=True)

@@ -151,3 +151,40 @@ def test_no_bare_verification_method_literal_outside_the_enum_or_prose():
 def test_the_deliberate_prose_file_still_carries_the_literal():
     """A stale exemption would exempt nothing while looking authoritative."""
     assert _DELIBERATE_PROSE_FILE in _bare_literal_files()
+
+
+class TestTheMergedClaimKeepsEveryProducersWireShape:
+    """#18086: one Claim for the classifier, GroundedAgent and the conflict resolver."""
+
+    _PRE_MERGE_PAYLOAD = {
+        "claim_text": "port 8080 is open",
+        "claim_type": "factual",
+        "kb_status": "in_kb",
+        "confidence": 0.9,
+        "sources": [],
+        "kb_fact": None,
+        "timestamp": 1.0,
+        "metadata": {"k": "v"},
+    }
+
+    def test_a_cached_pre_merge_payload_still_loads(self):
+        from services.knowledge_grounding_models import Claim, ClaimType, KBStatus
+
+        claim = Claim.from_dict(self._PRE_MERGE_PAYLOAD)
+        assert (claim.claim_type, claim.kb_status) == (ClaimType.FACTUAL, KBStatus.IN_KB)
+        assert claim.source == "" and claim.subject == ""
+
+    def test_an_unclassified_claim_round_trips(self):
+        from services.knowledge_grounding_models import Claim
+
+        claim = Claim(claim_text="x", source="agent", subject="s", predicate="p", object="o")
+        assert Claim.from_dict(claim.to_dict()) == claim
+
+    def test_confidence_is_validated_and_timestamp_is_stamped(self):
+        import pytest
+
+        from services.knowledge_grounding_models import Claim
+
+        assert Claim(claim_text="x").timestamp is not None
+        with pytest.raises(ValueError):
+            Claim(claim_text="x", confidence=1.5)

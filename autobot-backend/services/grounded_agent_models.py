@@ -10,10 +10,9 @@ The claim, verification, conflict and response types that GroundedAgent
 Split out of the agent module so the orchestration and the data it passes
 around can each be read, and sized, on their own (#14981).
 
-Not the same types as the claim classifier's Claim/KBStatus in
-services/knowledge_grounding_models.py, or the conflict resolver's
-Claim/Conflict/ConflictResolution in api/knowledge_grounding_models.py: the same
-domain, but different shapes, each with its own callers.
+Claim is the one model in services/knowledge_grounding_models.py (#18086), shared
+with the claim classifier and the conflict resolver. Conflict/ConflictResolution
+here are still distinct from the resolver's in api/knowledge_grounding_models.py.
 """
 
 import time
@@ -21,6 +20,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List
 from uuid import uuid4
+
+from services.knowledge_grounding_models import Claim
 
 
 class ClaimStatus(str, Enum):
@@ -40,20 +41,6 @@ class ConflictResolution(str, Enum):
     RESOLVED = "resolved"  # Conflict resolved with clear winner
     PENDING_REVIEW = "pending_review"  # Needs human review
     INCONCLUSIVE = "inconclusive"  # Multiple valid interpretations
-
-
-@dataclass
-class Claim:
-    """Extracted claim from response text."""
-
-    claim_id: str = field(default_factory=lambda: str(uuid4()))
-    claim_text: str = ""
-    subject: str = ""  # Subject entity
-    predicate: str = ""  # Relationship/property
-    object: str = ""  # Object/value
-    confidence: float = 0.0  # LLM confidence in the claim (0.0-1.0)
-    context: Dict[str, Any] = field(default_factory=dict)  # Context from response
-    timestamp: float = field(default_factory=time.time)
 
 
 @dataclass

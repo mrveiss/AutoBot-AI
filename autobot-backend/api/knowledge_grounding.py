@@ -43,8 +43,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_utils import decode_redis_value
 from constants.threshold_constants import QueryDefaults
 from services.grounded_agent import get_grounded_agent
-from services.grounded_agent_models import Claim
-from services.knowledge_grounding_models import VerificationMethod
+from services.knowledge_grounding_models import Claim, VerificationMethod
 
 logger = get_logger(__name__)
 
@@ -187,6 +186,7 @@ async def verify_claim(
     """
     claim = Claim(
         claim_text=request.claim_text,
+        confidence=0.0,
         subject=request.subject or "",
         predicate=request.predicate or "",
         object=request.object or "",

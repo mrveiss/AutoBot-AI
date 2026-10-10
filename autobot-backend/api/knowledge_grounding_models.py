@@ -27,6 +27,8 @@ from enum import Enum
 from typing import List
 from uuid import uuid4
 
+from services.knowledge_grounding_models import Claim
+
 
 class GroundingSourceType(str, Enum):
     """Types of information sources for facts."""
@@ -131,32 +133,6 @@ class KBFact:
             Bool: True if age > 30 days
         """
         return self.age_days() > 30
-
-
-@dataclass
-class Claim:
-    """Agent claim/assertion to compare against KB facts.
-
-    Attributes:
-        claim_text: The actual claim being made
-        source: Where the claim came from (agent name, etc.)
-        confidence: Confidence level [0.0-1.0], defaults to 0.5 for unknown
-        timestamp: Unix timestamp of when claim was made
-        metadata: Additional metadata (reasoning, sources, etc.)
-    """
-
-    claim_text: str
-    source: str
-    confidence: float = 0.5
-    timestamp: float | None = None
-    metadata: dict = field(default_factory=dict)
-
-    def __post_init__(self):
-        """Validate and normalize claim."""
-        if not 0.0 <= self.confidence <= 1.0:
-            raise ValueError(f"Confidence must be in [0.0, 1.0], got {self.confidence}")
-        if self.timestamp is None:
-            self.timestamp = time.time()
 
 
 @dataclass

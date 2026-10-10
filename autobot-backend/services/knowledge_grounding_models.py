@@ -18,6 +18,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List
+from uuid import uuid4
 
 
 class ClaimType(str, Enum):
@@ -128,34 +129,54 @@ class KBSource:
 @dataclass
 class Claim:
     """
-    Extracted and classified claim from LLM output.
+    The one Claim model for the knowledge-grounding tiers (#18086).
+
+    Replaces three same-named dataclasses: the classifier's (claim_type/kb_status/
+    sources/kb_fact), GroundedAgent's (claim_id/subject/predicate/object) and the
+    conflict resolver's (source). A claim is classified, extracted or asserted by
+    an agent; every field a given producer does not know keeps its neutral default.
 
     Attributes:
-        claim_text: The extracted claim as text
-        claim_type: Type classification (FACTUAL, PROCEDURAL, PREDICTIVE, OPINION)
-        kb_status: Knowledge base matching status
-        confidence: Overall confidence score (0.0-1.0)
-        sources: List of matching KB sources
-        kb_fact: If CONTRADICTS, the conflicting fact from KB
-        timestamp: Unix timestamp of claim classification
-        metadata: Additional context (original_context, claim_position, etc.)
+        claim_text: The claim as text
+        claim_type: Classifier output (FACTUAL, PROCEDURAL, ...); None until classified
+        kb_status: KB matching status; None until matched
+        confidence: Confidence in [0.0, 1.0]; 0.5 means "unknown"
+        sources: Matching KB sources
+        kb_fact: If CONTRADICTS, the conflicting fact from the KB
+        timestamp: Unix time of creation (filled in when omitted)
+        metadata: Additional context (original_context, reasoning, ...)
+        claim_id: Stable id, referenced by Conflict.claim_1_id
+        source: Who made the claim (agent name, ...)
+        subject, predicate, object: Extracted triple, empty when not extracted
     """
 
     claim_text: str
-    claim_type: ClaimType
-    kb_status: KBStatus
-    confidence: float
+    claim_type: ClaimType | None = None
+    kb_status: KBStatus | None = None
+    confidence: float = 0.5
     sources: List[KBSource] = field(default_factory=list)
     kb_fact: str | None = None
-    timestamp: float = field(default_factory=time.time)
+    timestamp: float | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    claim_id: str = field(default_factory=lambda: str(uuid4()))
+    source: str = ""
+    subject: str = ""
+    predicate: str = ""
+    object: str = ""
+
+    def __post_init__(self):
+        """Validate confidence and stamp the creation time."""
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError(f"Confidence must be in [0.0, 1.0], got {self.confidence}")
+        if self.timestamp is None:
+            self.timestamp = time.time()
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert claim to dictionary for serialization."""
         return {
             "claim_text": self.claim_text,
-            "claim_type": self.claim_type.value,
-            "kb_status": self.kb_status.value,
+            "claim_type": self.claim_type.value if self.claim_type else None,
+            "kb_status": self.kb_status.value if self.kb_status else None,
             "confidence": self.confidence,
             "sources": [
                 {
@@ -171,11 +192,16 @@ class Claim:
             "kb_fact": self.kb_fact,
             "timestamp": self.timestamp,
             "metadata": self.metadata,
+            "claim_id": self.claim_id,
+            "source": self.source,
+            "subject": self.subject,
+            "predicate": self.predicate,
+            "object": self.object,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Claim":
-        """Reconstruct claim from dictionary."""
+        """Reconstruct claim from dictionary (tolerates pre-merge cached payloads)."""
         sources = [
             KBSource(
                 source_id=s["source_id"],
@@ -187,16 +213,19 @@ class Claim:
             )
             for s in data.get("sources", [])
         ]
-
+        claim_type = data.get("claim_type")
+        kb_status = data.get("kb_status")
+        extra = {k: data[k] for k in ("claim_id", "source", "subject", "predicate", "object") if k in data}
         return cls(
             claim_text=data["claim_text"],
-            claim_type=ClaimType(data["claim_type"]),
-            kb_status=KBStatus(data["kb_status"]),
+            claim_type=ClaimType(claim_type) if claim_type else None,
+            kb_status=KBStatus(kb_status) if kb_status else None,
             confidence=data["confidence"],
             sources=sources,
             kb_fact=data.get("kb_fact"),
             timestamp=data.get("timestamp", time.time()),
             metadata=data.get("metadata", {}),
+            **extra,
         )
 
 

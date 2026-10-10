@@ -20,8 +20,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from services.grounded_agent import GroundedAgent
-from services.grounded_agent_models import Claim, ClaimStatus
-from services.knowledge_grounding_models import VerificationMethod
+from services.grounded_agent_models import ClaimStatus
+from services.knowledge_grounding_models import Claim, VerificationMethod
 
 
 def _make_claim(text: str = "test claim") -> Claim:
