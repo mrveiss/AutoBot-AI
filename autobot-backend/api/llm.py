@@ -37,12 +37,13 @@ from api.schemas_workflows import (
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import redact_nested
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import now_utc
 from config.manager import get_config_manager
 
 # Import unified configuration system - NO HARDCODED VALUES
-from constants.model_constants import ModelConstants
+from config.model_config import resolve_active_llm
 from services.config_service import ConfigService
 from services.llm_service import get_llm_service
 
@@ -68,14 +69,13 @@ TEXT_MODEL_SIZE_INDICATORS = {"small", "large", "medium"}
     error_code_prefix="LLM",
 )
 async def get_llm_config(
-    current_user: dict = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """Get current LLM configuration.
 
-    Issue #744: Requires authenticated user.
-    """
+    Issue #18193: admin-only, and nested credentials are redacted (defence in depth)."""
     try:
-        return ConfigService.get_llm_config()
+        return redact_nested(ConfigService.get_llm_config())
     except Exception as e:
         logger.error("Error getting LLM config: %s", str(e))
         raise HTTPException(status_code=500, detail="Error getting LLM config")
@@ -179,14 +179,10 @@ async def get_current_llm(
     Issue #744: Requires authenticated user.
     """
     try:
-        config = ConfigService.get_llm_config()
-        current_model = config.get("model", ModelConstants.DEFAULT_OLLAMA_MODEL)
-
-        return {
-            "model": current_model,
-            "provider": config.get("provider", "ollama"),
-            "config": config,
-        }
+        # #18193: model and provider only (the tree is admin-only on GET /config); `config` stays
+        # in the schema for the generated TS type but is always empty.  #18215: the ACTIVE selection.
+        provider, model = resolve_active_llm(ConfigService.get_llm_config())
+        return {"model": model, "provider": provider, "config": {}}
     except Exception as e:
         logger.error("Error getting current LLM: %s", str(e))
         raise HTTPException(status_code=500, detail="Error getting current LLM")
