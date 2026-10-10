@@ -37,8 +37,17 @@ def _module(rel: str) -> ast.Module:
     return ast.parse((repo_root() / rel).read_text(encoding="utf-8"))
 
 
-def _audio_mime_maps() -> list[tuple[str, int, int]]:
-    """Every dict literal mapping ``audio/*`` keys to ``.ext`` values."""
+def _parse_source(path, rel: str, unparsed: list[str]):
+    """The AST of *path*, or ``None`` after recording *rel*: an unparsed file is a gap, never a pass."""
+    try:
+        return ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+    except SyntaxError as exc:
+        unparsed.append(f"{rel}: {exc.msg}")
+        return None
+
+
+def _audio_mime_maps(unparsed: list[str]) -> list[tuple[str, int, int]]:
+    """Every dict literal mapping ``audio/*`` keys to ``.ext`` values; unparsed files go to *unparsed*."""
     found: list[tuple[str, int, int]] = []
     root = repo_root()
     for tree in ("autobot-backend", "autobot_shared"):
@@ -46,9 +55,8 @@ def _audio_mime_maps() -> list[tuple[str, int, int]]:
             rel = path.relative_to(root).as_posix()
             if rel.endswith("_test.py") or "/tests/" in rel:
                 continue
-            try:
-                mod = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
-            except SyntaxError:
+            mod = _parse_source(path, rel, unparsed)
+            if mod is None:
                 continue
             for node in ast.walk(mod):
                 if not isinstance(node, ast.Dict) or not node.keys:
@@ -64,7 +72,9 @@ def _audio_mime_maps() -> list[tuple[str, int, int]]:
 
 def test_exactly_one_audio_mime_map_exists() -> None:
     """Two of these drifted before anyone noticed; a third would drift again."""
-    maps = _audio_mime_maps()
+    unparsed: list[str] = []
+    maps = _audio_mime_maps(unparsed)
+    assert not unparsed, f"Files the guard could not parse (it did not look at them): {unparsed}"
     assert len(maps) == 1, (
         "expected one audio MIME -> suffix map, found "
         f"{len(maps)}: {[f'{rel}:{ln} ({n} entries)' for rel, ln, n in maps]}"
@@ -256,17 +266,19 @@ def test_the_detector_follows_annotated_walrus_and_attribute_bindings() -> None:
 
 def test_only_the_shared_module_runs_whisper_directly() -> None:
     root = repo_root()
-    offenders = []
+    offenders: list[str] = []
+    unparsed: list[str] = []
     for tree in ("autobot-backend", "autobot_shared"):
         for path in (root / tree).rglob("*.py"):
             rel = path.relative_to(root).as_posix()
             if rel == _PIPELINE or rel.endswith("_test.py") or "/tests/" in rel or "/test_" in rel:
                 continue
-            try:
-                lines = direct_whisper_invocations(path.read_text(encoding="utf-8", errors="replace"))
-            except SyntaxError:
+            if _parse_source(path, rel, unparsed) is None:
                 continue
-            offenders += [f"{rel}:{ln}" for ln in lines]
+            offenders += [
+                f"{rel}:{ln}" for ln in direct_whisper_invocations(path.read_text(encoding="utf-8", errors="replace"))
+            ]
+    assert not unparsed, f"Files the guard could not parse (it did not look at them): {unparsed}"
     assert not offenders, f"Whisper is run directly outside media/audio/pipeline.py: {offenders}"
 
 
@@ -280,3 +292,14 @@ def test_provider_and_multimodal_voice_call_the_shared_entry_points() -> None:
 
     assert {"transcribe_path", "get_whisper_pipeline"} <= called(_PROVIDER)
     assert {"transcribe_array", "get_whisper_pipeline"} <= called(_MULTIMODAL_VOICE)
+
+
+def test_an_unparsable_file_is_recorded_not_skipped(tmp_path) -> None:
+    """Contrast pair: a SyntaxError is reported to the caller, a valid file is not."""
+    broken, fine = tmp_path / "broken.py", tmp_path / "fine.py"
+    broken.write_text("def (:\n", encoding="utf-8")
+    fine.write_text("x = 1\n", encoding="utf-8")
+    unparsed: list[str] = []
+    assert _parse_source(broken, "broken.py", unparsed) is None
+    assert _parse_source(fine, "fine.py", unparsed) is not None
+    assert len(unparsed) == 1 and unparsed[0].startswith("broken.py")
