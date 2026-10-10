@@ -104,3 +104,34 @@ async def test_non_uuid_document_id_is_422():
     with pytest.raises(HTTPException) as exc:
         await routes.run_pipeline(PipelineRunRequest(document_id="not-a-uuid"), MagicMock(), USER)
     assert exc.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_real_runner_hands_the_chunk_text_extractor_the_stored_text():
+    """AC3 through a real PipelineRunner: only the chunk_text extractor runs, and it is spied on."""
+    from knowledge.pipeline.extractors.semantic_chunker import SemanticChunker
+
+    doc_id = str(uuid4())
+    text = "Alice met Bob in Riga."
+    kb = _kb({"fact_id": doc_id, "content": text, "metadata": {"owner_id": "alice"}})
+    only_chunking = {"name": "chunk-only", "extract": [{"task": "chunk_text", "params": {}}], "cognify": [], "load": []}
+    seen = []
+    original = SemanticChunker.process
+
+    async def spy(self, input_data, context):
+        seen.append(input_data)
+        async for item in original(self, input_data, context):
+            yield item
+
+    with (
+        patch.object(routes, "get_or_create_knowledge_base", AsyncMock(return_value=kb)),
+        patch.object(SemanticChunker, "process", spy),
+    ):
+        resp = await routes.run_pipeline(
+            PipelineRunRequest(document_id=doc_id, config=only_chunking), MagicMock(), USER
+        )
+    assert len(seen) == 1
+    assert isinstance(seen[0], str) and text in seen[0]
+    assert seen[0] != doc_id and not UUID_RE.match(seen[0])
+    assert resp.errors == []
+    assert resp.chunks_count >= 1
