@@ -53,6 +53,27 @@ def _seeds_post_commit_list(source: str) -> bool:
     return False
 
 
+def _is_source_python(rel: str) -> bool:
+    """A non-test Python file: the only kind that can be a second transaction scope."""
+    name = rel.rsplit("/", 1)[-1]
+    return rel.endswith(".py") and not (name.endswith("_test.py") or name.startswith("test_") or "/tests/" in rel)
+
+
+@pytest.mark.parametrize(
+    ("rel", "expected"),
+    [
+        ("autobot-backend/user_management/database.py", True),
+        ("autobot-backend/user_management/database_test.py", False),
+        ("autobot-backend/tests/test_database.py", False),
+        ("autobot-slm-backend/tests/conftest.py", False),
+        ("autobot-backend/user_management/test_database.py", False),
+        ("autobot-backend/user_management/schema.sql", False),
+    ],
+)
+def test_the_test_path_filter_skips_tests_and_keeps_source(rel: str, expected: bool) -> None:
+    assert _is_source_python(rel) is expected
+
+
 def _read(rel: str) -> str:
     return (repo_root() / rel).read_text(encoding="utf-8")
 
@@ -63,8 +84,7 @@ def _seeders() -> tuple[tuple[str, ...], int]:
     found: list[str] = []
     parsed = 0
     for rel in tracked_paths(repo_root(), "autobot-backend", "autobot-slm-backend", "autobot_shared"):
-        name = rel.rsplit("/", 1)[-1]
-        if not rel.endswith(".py") or name.endswith("_test.py") or name.startswith("test_") or "/tests/" in rel:
+        if not _is_source_python(rel):
             continue
         source = _read(rel)
         if _KEY not in source and _KEY_CONSTANT not in source:
@@ -102,12 +122,38 @@ def test_one_transaction_scope_seeds_the_post_commit_list() -> None:
     )
 
 
+#: Every provider that opens a session, per service. Checking the file for ANY call would let
+#: one provider keep a hand-rolled body while another satisfies the check.
+_PROVIDERS = {
+    "autobot-backend/user_management/database.py": ("get_async_session", "db_session_context"),
+    "autobot-slm-backend/user_management/database.py": ("get_slm_session", "get_autobot_session"),
+}
+
+
+def _providers_not_using_the_scope(source: str, names: tuple[str, ...]) -> list[str]:
+    """Names of `names` that are missing or do not call `async_session_scope`."""
+    funcs = {n.name: n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.AsyncFunctionDef)}
+    bad = []
+    for name in names:
+        fn = funcs.get(name)
+        calls = fn is not None and any(
+            isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "async_session_scope"
+            for n in ast.walk(fn)
+        )
+        if not calls:
+            bad.append(name)
+    return bad
+
+
+def test_the_provider_check_names_the_one_that_does_not_use_the_scope() -> None:
+    good = "async def a():\n    async with async_session_scope(m()) as s:\n        yield s\n"
+    bad = "async def b():\n    async with m() as s:\n        yield s\n"
+    assert _providers_not_using_the_scope(good + good.replace("def a", "def c"), ("a", "c")) == []
+    assert _providers_not_using_the_scope(good + bad, ("a", "b")) == ["b"]
+    assert _providers_not_using_the_scope(good, ("a", "gone")) == ["gone"]
+
+
 @pytest.mark.parametrize("rel", _CONSUMERS)
 def test_each_service_uses_the_shared_scope(rel: str) -> None:
-    tree = ast.parse(_read(rel))
-    calls = [
-        n
-        for n in ast.walk(tree)
-        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "async_session_scope"
-    ]
-    assert calls, f"#15068: {rel} no longer opens its sessions through async_session_scope"
+    bad = _providers_not_using_the_scope(_read(rel), _PROVIDERS[rel])
+    assert not bad, f"#15068: {rel}: {bad} no longer open their sessions through async_session_scope"
