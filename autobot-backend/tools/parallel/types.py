@@ -27,7 +27,7 @@ class DependencyType(Enum):
 
 
 @dataclass
-class ToolCall:
+class ParallelToolCall:
     """Representation of a tool call for execution"""
 
     # Identity
@@ -70,7 +70,7 @@ class ToolCall:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ToolCall":
+    def from_dict(cls, data: dict) -> "ParallelToolCall":
         return cls(
             call_id=data.get("call_id", str(uuid.uuid4())),
             tool_name=data.get("tool_name", ""),
@@ -86,7 +86,7 @@ class ToolCall:
         )
 
     def __repr__(self) -> str:
-        return f"ToolCall({self.tool_name}, status={self.status})"
+        return f"ParallelToolCall({self.tool_name}, status={self.status})"
 
 
 @dataclass

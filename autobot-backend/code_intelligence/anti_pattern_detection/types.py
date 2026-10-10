@@ -12,50 +12,24 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import re
-from enum import Enum
 
+from autobot_shared.status_enums import Severity
 
-class AntiPatternSeverity(Enum):
-    """Severity levels for anti-patterns."""
+# AntiPatternType is deliberately NOT defined here.  GH#6757 made
+# ``code_analysis.src.anti_pattern_detector.AntiPatternType`` the canonical SSOT and
+# merged this package's members into it, but this module kept a diverged 19-member
+# copy -- so the name resolved to two distinct Enum classes depending on the import
+# path (the ``anti_pattern_detector`` facade vs this package) and members compared
+# unequal across that boundary.  Re-exported so ``from .types import AntiPatternType``
+# keeps working for every detector in this package.
+from code_analysis.src.anti_pattern_detector import AntiPatternType  # noqa: F401
 
-    INFO = "info"
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
-
-
-class AntiPatternType(Enum):
-    """Types of anti-patterns detected."""
-
-    # Bloaters
-    GOD_CLASS = "god_class"
-    LONG_METHOD = "long_method"
-    LONG_PARAMETER_LIST = "long_parameter_list"
-    LARGE_FILE = "large_file"
-    DEEP_NESTING = "deep_nesting"
-    DATA_CLUMPS = "data_clumps"
-
-    # Couplers
-    CIRCULAR_DEPENDENCY = "circular_dependency"
-    FEATURE_ENVY = "feature_envy"
-    MESSAGE_CHAINS = "message_chains"
-    INAPPROPRIATE_INTIMACY = "inappropriate_intimacy"
-
-    # Dispensables
-    DEAD_CODE = "dead_code"
-    DUPLICATE_ABSTRACTION = "duplicate_abstraction"
-    LAZY_CLASS = "lazy_class"
-    SPECULATIVE_GENERALITY = "speculative_generality"
-
-    # Naming Issues
-    INCONSISTENT_NAMING = "inconsistent_naming"
-    SINGLE_LETTER_VARIABLE = "single_letter_variable"
-    MAGIC_NUMBER = "magic_number"
-
-    # Other
-    COMPLEX_CONDITIONAL = "complex_conditional"
-    MISSING_DOCSTRING = "missing_docstring"
+#: An exact subset of the canonical ladder, so an alias rather than a class (#18098).
+#: Safe to alias because every severity distribution built from this is built from the
+#: values actually OBSERVED in results, never by iterating the member set -- so the
+#: canonical's ten members do not add five always-zero keys to a response. Four of its
+#: former siblings do iterate, and are deliberately left alone; see the issue.
+AntiPatternSeverity = Severity
 
 
 # ============================================================================

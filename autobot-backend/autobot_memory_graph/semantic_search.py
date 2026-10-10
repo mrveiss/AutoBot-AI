@@ -11,7 +11,7 @@ parallel knowledge/memory_graph/ package is never needed.
 Architecture:
     MemoryGraphQueryProcessor  - natural-language → structured search pipeline
     HybridScorer               - cosine similarity + BM25 re-ranking
-    SearchResult               - result dataclass (entity + scores)
+    EntitySearchResult               - result dataclass (entity + scores)
     QueryIntent                - extracted intent dataclass
 """
 
@@ -89,7 +89,7 @@ class QueryIntent:
 
 
 @dataclass
-class SearchResult:
+class EntitySearchResult:
     """A single ranked search result from the memory graph."""
 
     entity: Dict[str, Any]
@@ -229,7 +229,7 @@ class MemoryGraphQueryProcessor:
         query: str,
         filters: Dict[str, Any] | None = None,
         limit: int = 10,
-    ) -> List[SearchResult]:
+    ) -> List[EntitySearchResult]:
         """
         Execute a hybrid memory graph search.
 
@@ -239,7 +239,7 @@ class MemoryGraphQueryProcessor:
             limit:   Maximum number of results to return.
 
         Returns:
-            Ranked list of SearchResult objects.
+            Ranked list of EntitySearchResult objects.
         """
         if not query or not query.strip():
             return []
@@ -507,12 +507,12 @@ class MemoryGraphQueryProcessor:
         query_embedding: List[float],
         intent: QueryIntent,
         limit: int,
-    ) -> List[SearchResult]:
+    ) -> List[EntitySearchResult]:
         """Score candidates with hybrid scorer and return top-N."""
         if not candidates:
             return []
 
-        scored: List[SearchResult] = []
+        scored: List[EntitySearchResult] = []
         query_terms = intent.keywords
 
         for entity in candidates:
@@ -537,7 +537,7 @@ class MemoryGraphQueryProcessor:
             )
 
             scored.append(
-                SearchResult(
+                EntitySearchResult(
                     entity=entity,
                     score=combined,
                     semantic_score=sem_score,
@@ -711,7 +711,7 @@ async def _index_exists(redis_client: Any, index_name: str) -> bool:
 __all__ = [
     "MemoryGraphQueryProcessor",
     "HybridScorer",
-    "SearchResult",
+    "EntitySearchResult",
     "QueryIntent",
     "ensure_indexes",
 ]

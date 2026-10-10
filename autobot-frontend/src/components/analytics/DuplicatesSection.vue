@@ -91,6 +91,17 @@
         </div>
       </div>
     </div>
+    <!-- #17983: a failed or never-run scan is not "no duplicates found" -->
+    <EmptyState
+      v-else-if="scanState === 'failed'"
+      icon="exclamation-triangle"
+      :message="$t('analytics.duplicates.scanFailed')"
+    />
+    <EmptyState
+      v-else-if="scanState === 'not_scanned'"
+      icon="search"
+      :message="$t('analytics.duplicates.notScanned')"
+    />
     <EmptyState
       v-else-if="!loading"
       icon="check-circle"
@@ -117,6 +128,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import type { DuplicateScanState } from '@/composables/analytics/duplicatePayload'
 import { useAggregationMemo } from '@/composables/useComputedMemo'
 import { useExpansion } from '@/composables/useExpansion'
 
@@ -133,6 +145,8 @@ interface Props {
   duplicates: Duplicate[]
   /** #5368: render a spinner during the scan instead of empty-state. */
   loading?: boolean
+  /** #17983: done | not_scanned | failed -- only "done" may show "none found". */
+  scanState?: DuplicateScanState
 }
 
 const props = defineProps<Props>()

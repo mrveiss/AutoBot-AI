@@ -24,17 +24,17 @@ from .egress_governor import egress_governor
 from .ingest_governor import ingest_governor
 from .message_router import MessageRouter
 from .session_manager import SessionManager
-from .types import ChannelMessage, ChannelType, GatewaySession, MessageType
+from .types import ChannelMessage, ChannelType, GatewayMessageType, GatewaySession
 
 logger = get_logger(__name__)
 
 # Message types that represent an agent-authored conversational turn, as
 # opposed to session/system control traffic (#14028 recursion guard).
 _AGENT_MESSAGE_TYPES = {
-    MessageType.AGENT_TEXT,
-    MessageType.AGENT_THOUGHT,
-    MessageType.AGENT_TOOL_CODE,
-    MessageType.AGENT_TOOL_OUTPUT,
+    GatewayMessageType.AGENT_TEXT,
+    GatewayMessageType.AGENT_THOUGHT,
+    GatewayMessageType.AGENT_TOOL_CODE,
+    GatewayMessageType.AGENT_TOOL_OUTPUT,
 }
 
 
@@ -181,7 +181,7 @@ class Gateway:
         start_message = ChannelMessage(
             session_id=session.session_id,
             channel=channel,
-            message_type=MessageType.SESSION_START,
+            message_type=GatewayMessageType.SESSION_START,
             content={"session_id": session.session_id},
             metadata={"user_id": user_id},
         )
@@ -208,7 +208,7 @@ class Gateway:
         end_message = ChannelMessage(
             session_id=session_id,
             channel=session.channel,
-            message_type=MessageType.SESSION_END,
+            message_type=GatewayMessageType.SESSION_END,
             content={"session_id": session_id},
         )
 
@@ -327,7 +327,7 @@ class Gateway:
             error_msg = ChannelMessage(
                 session_id=session_id,
                 channel=session.channel,
-                message_type=MessageType.SYSTEM_ERROR,
+                message_type=GatewayMessageType.SYSTEM_ERROR,
                 content={"error": "Rate limit exceeded. Please slow down."},
             )
             await self.send_message(error_msg)

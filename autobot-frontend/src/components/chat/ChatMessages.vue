@@ -560,6 +560,7 @@
 </template>
 
 <script setup lang="ts">
+import { stripProtocolTagsForDisplay } from '@/utils/llmProtocolTags'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
@@ -898,14 +899,10 @@ const formatMessageContentRaw = (content: string): string => {
     .replace(/\u001b\]0;[^\u0007\n]*\u0007?/g, '') // Set title
     .trim()
 
-  // Strip message type tags (Issue #680)
-  formatted = formatted
-    .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
-    .replace(/\[\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)\]?$/gi, '')
-    .trim()
-
-  // Strip TOOL_CALL tags
-  formatted = formatted.replace(/<tool_call[^>]*>.*?<\/tool_call>/gs, '')
+  // Strip internal protocol tags — ONE spelling, shared (#680, #18065).
+  // This line used to carry /<tool_call…>/gs with no `i`, so it could not strip
+  // the UPPERCASE tag the prompts actually teach.
+  formatted = stripProtocolTagsForDisplay(formatted)
 
   // Process code blocks
   formatted = formatted.replace(/```(\w+)?\n([\s\S]*?)```/g, (_match, lang, code) => {

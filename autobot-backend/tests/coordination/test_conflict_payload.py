@@ -15,10 +15,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from autobot_shared.coordination.work_claims import Claim, ClaimConflict, claim_payload, conflict_payload
+from autobot_shared.coordination.work_claims import ClaimConflict, WorkClaim, claim_payload, conflict_payload
 from services import claim_projection
 
-_HOLDER = Claim(
+_HOLDER = WorkClaim(
     scope="path:a/b.py",
     agent_id="agent-9",
     task_id="t9",
@@ -44,15 +44,15 @@ async def test_a_refusal_holder_is_the_claims_table_row_for_that_claim(monkeypat
 
 def test_every_field_of_a_conflict_and_its_holder_reaches_the_payload():
     """A field added to either dataclass later cannot be dropped by a projection nobody updated."""
-    holder = Claim(**{f.name: f"value-of-{f.name}" for f in fields(Claim)} | {"scope": "path:a/b.py"})
+    holder = WorkClaim(**{f.name: f"value-of-{f.name}" for f in fields(WorkClaim)} | {"scope": "path:a/b.py"})
     conflict = ClaimConflict(requested="path:a/c.py", holder=holder)
     payload = conflict_payload(conflict)
 
     for f in fields(ClaimConflict):
         expected = claim_payload(holder) if f.name == "holder" else getattr(conflict, f.name)
         assert payload[f.name] == expected, f"ClaimConflict.{f.name} did not reach the payload"
-    for f in fields(Claim):
-        assert payload["holder"][f.name] == getattr(holder, f.name), f"Claim.{f.name} did not reach the holder"
+    for f in fields(WorkClaim):
+        assert payload["holder"][f.name] == getattr(holder, f.name), f"WorkClaim.{f.name} did not reach the holder"
 
 
 @pytest.mark.asyncio

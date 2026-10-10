@@ -46,7 +46,7 @@ class ValidationIssue:
         return f"[{self.level.upper()}] {self.category}: {self.message}"
 
 
-class ValidationResult:
+class WorkflowValidation:
     """Aggregated validation results for a workflow."""
 
     def __init__(self, workflow_id: str):
@@ -106,7 +106,7 @@ class CausalValidator:
         self,
         dag: WorkflowDAG,
         metadata_map: Dict[str, CausalMetadata],
-    ) -> ValidationResult:
+    ) -> WorkflowValidation:
         """
         Validate a complete workflow for causal consistency.
 
@@ -115,9 +115,9 @@ class CausalValidator:
             metadata_map: Map of step_id → CausalMetadata for steps with effects.
 
         Returns:
-            ValidationResult with all issues found.
+            WorkflowValidation with all issues found.
         """
-        result = ValidationResult(dag.nodes.get("_workflow_id", "unknown"))
+        result = WorkflowValidation(dag.nodes.get("_workflow_id", "unknown"))
 
         # Build node ordering (topological sort)
         node_order = self._topological_sort(dag)
@@ -158,7 +158,7 @@ class CausalValidator:
         self,
         dag: WorkflowDAG,
         metadata_map: Dict[str, CausalMetadata],
-        result: ValidationResult,
+        result: WorkflowValidation,
     ) -> None:
         """Check all steps referenced in metadata exist in the DAG."""
         step_ids = set(dag.nodes.keys())
@@ -188,7 +188,7 @@ class CausalValidator:
         dag: WorkflowDAG,
         metadata_map: Dict[str, CausalMetadata],
         node_order: List[str],
-        result: ValidationResult,
+        result: WorkflowValidation,
     ) -> None:
         """Check causal effects point forward in the DAG (no backward edges)."""
         position = {nid: i for i, nid in enumerate(node_order)}
@@ -217,7 +217,7 @@ class CausalValidator:
         self,
         dag: WorkflowDAG,
         metadata_map: Dict[str, CausalMetadata],
-        result: ValidationResult,
+        result: WorkflowValidation,
     ) -> None:
         """Check PREVENTS relationships are properly guarded (steps don't execute in same branch)."""
         for step_id, metadata in metadata_map.items():
@@ -243,7 +243,7 @@ class CausalValidator:
         dag: WorkflowDAG,
         metadata_map: Dict[str, CausalMetadata],
         node_order: List[str],
-        result: ValidationResult,
+        result: WorkflowValidation,
     ) -> None:
         """Check ENABLES effects have upstream sources (prerequisites satisfied before use)."""
         position = {nid: i for i, nid in enumerate(node_order)}
@@ -270,7 +270,7 @@ class CausalValidator:
     def _validate_state_mutations(
         self,
         metadata_map: Dict[str, CausalMetadata],
-        result: ValidationResult,
+        result: WorkflowValidation,
     ) -> None:
         """Check for conflicting state mutations (same key modified by multiple steps)."""
         state_mutations: Dict[str, List[str]] = {}
@@ -296,7 +296,7 @@ class CausalValidator:
     def _validate_cascade_guards(
         self,
         metadata_map: Dict[str, CausalMetadata],
-        result: ValidationResult,
+        result: WorkflowValidation,
     ) -> None:
         """Check failure cascades have guards (AMPLIFIES should have error handlers)."""
         for step_id, metadata in metadata_map.items():
@@ -319,7 +319,7 @@ class CausalValidator:
         self,
         dag: WorkflowDAG,
         metadata_map: Dict[str, CausalMetadata],
-        result: ValidationResult,
+        result: WorkflowValidation,
     ) -> None:
         """Suggest workflow optimizations based on causal metadata."""
         # Detect parallelizable steps (no causal dependencies between them)
@@ -358,7 +358,7 @@ class ValidationReporter:
     """Helper to format and log validation results."""
 
     @staticmethod
-    def report(result: ValidationResult) -> str:
+    def report(result: WorkflowValidation) -> str:
         """Generate a detailed validation report."""
         lines = [f"# Validation Report: {result.workflow_id}", "", result.summary(), ""]
 

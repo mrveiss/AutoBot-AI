@@ -80,13 +80,13 @@ def test_content_reach_schema_has_five_source_enum() -> None:
 async def test_content_reach_success() -> None:
     """content_reach returns status='success' and includes result text."""
     from content_reach.base import ContentResult
-    from source_attribution import SourceType
+    from source_attribution import SourceKind
 
     registry = _make_registry()
 
     mock_result = ContentResult(
         success=True,
-        source_type=SourceType.WEB_SEARCH,
+        source_type=SourceKind.WEB_SEARCH,
         backend_used="ddgs",
         text="Some search content",
         url="",
@@ -111,11 +111,11 @@ async def test_content_reach_success() -> None:
 async def test_content_reach_unsuccessful_result() -> None:
     """content_reach returns status='error' when ContentResult.success is False."""
     from content_reach.base import ContentResult
-    from source_attribution import SourceType
+    from source_attribution import SourceKind
 
     registry = _make_registry()
 
-    mock_result = ContentResult.failure(SourceType.WEB_SEARCH, "backend timeout")
+    mock_result = ContentResult.failure(SourceKind.WEB_SEARCH, "backend timeout")
     mock_registry = MagicMock()
     mock_registry.fetch = AsyncMock(return_value=mock_result)
 

@@ -5,13 +5,13 @@
 import pytest
 
 from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
-from source_attribution import SourceReliability, SourceType
+from source_attribution import SourceKind, SourceReliability
 
 
 def test_content_result_failure_factory():
-    r = ContentResult.failure(SourceType.WEB_SEARCH, "boom")
+    r = ContentResult.failure(SourceKind.WEB_SEARCH, "boom")
     assert r.success is False
-    assert r.source_type is SourceType.WEB_SEARCH
+    assert r.source_type is SourceKind.WEB_SEARCH
     assert r.backend_used == "none"
     assert r.metadata["error"] == "boom"
 
@@ -32,7 +32,7 @@ def test_content_backend_is_abstract():
 async def test_concrete_backend_roundtrip():
     class Dummy(ContentBackend):
         name = "dummy"
-        source_type = SourceType.WEB_SEARCH
+        source_type = SourceKind.WEB_SEARCH
 
         async def probe(self) -> bool:
             return True

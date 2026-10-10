@@ -310,11 +310,36 @@ class TestNeverDeletesUnlandedWork:
         A branch whose commits base already contains looks identical to a
         worktree created seconds ago that has done nothing yet. Keeping a
         removable worktree costs disk; deleting an active one costs work.
+
+        ``merged_pr`` is load-bearing and was the last absence-only assertion in
+        this suite (#13986). Without the stub the real ``gh`` finds no GitHub
+        remote for a tmp repo, the merged-PR signal reads ``(gh failed)``, and
+        the CANDIDATE branch is unreachable WHATEVER ``branch_state`` returns --
+        so "CANDIDATE not in stdout" held for a reason unrelated to the
+        ``ahead == 0`` guard it claimed to check. With the stub supplying the
+        second signal, the only thing still keeping the instruction away is the
+        guard itself, and the positive assertion below names the verdict rather
+        than the absence of a string.
         """
         add_worktree(repo, "wt-ff", [("ff.txt", "fix(y): work (#8)")])
         sha = _git(repo, "rev-parse", "wt-ff").stdout.strip()
-        _git(repo, "cherry-pick", sha)  # fast-forwards base onto that commit
-        res = run(repo, "--base", "base")
+        # A REAL fast-forward. `git cherry-pick <sha>` only fast-forwards with `--ff`;
+        # by default it writes a NEW commit carrying the same patch under a different
+        # sha, which leaves `base..wt-ff` ahead by one and routes this fixture to the
+        # landed-by-patch-id verdict instead of the `ahead == 0` guard it exists to
+        # check. git 2.34 fast-forwarded here anyway and git 2.55 does not, so the
+        # fixture passed locally while testing nothing on CI (#18130).
+        _git(repo, "merge", "--ff-only", "wt-ff")
+        # Control: assert the fixture built the topology this test is named for. Without
+        # it, a git that stops fast-forwarding silently moves the test onto a different
+        # code path and the failure reads as a defect in the script under test.
+        assert _git(repo, "rev-parse", "base").stdout.strip() == sha, (
+            "fixture: base did not fast-forward onto wt-ff, so ahead != 0 and this test "
+            "no longer exercises the ahead == 0 guard"
+        )
+        assert _git(repo, "rev-list", "--count", "base..wt-ff").stdout.strip() == "0"
+        res = run(repo, "--base", "base", merged_pr="4305")
+        assert VERDICT["no commits"] in res.stdout, res.stdout
         assert "CANDIDATE" not in res.stdout, res.stdout
         assert res.returncode == 0
 
@@ -421,6 +446,13 @@ class TestDeletePath:
         assert "CANDIDATE" not in res.stdout, (
             "base holds a tab, the branch holds 4 spaces — the fix is NOT in base\n" + res.stdout
         )
+        # The verdict, not only the absence of the instruction (#13986 AC3).
+        # The patch-ids DO collide here, so `git cherry` says landed and the
+        # tree comparison is the only thing that disagrees -- which is the
+        # whole claim. Asserting the absence alone would hold just as well if
+        # the branch were reported plainly unlanded, i.e. if the collision had
+        # never happened and the test were exercising nothing.
+        assert VERDICT["content moved"] in res.stdout, res.stdout
 
     def test_reverted_work_is_not_still_landed(self, repo: Path) -> None:
         """`git cherry` answers "was it ever applied", not "is it in base now"."""

@@ -102,7 +102,7 @@ response, a log line, an issue, a PR comment — is already redacted.
 [`autobot_shared/field_encryption.py`](../../autobot_shared/field_encryption.py) `encrypt_field`/`decrypt_field` for single columns ·
 [`credential_store.py`](../../autobot-backend/knowledge/connectors/credential_store.py) `ConnectorCredentialStore` (:195) for connector/OAuth creds, ownership via `_require_owner` (:643) ·
 [`auth_middleware.py`](../../autobot-backend/auth_middleware.py) `verify_internal_api_key` (:949) for service-to-service ·
-[`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:123) for SLM token revocation.
+[`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:124) for SLM token revocation.
 
 **Invariants**
 - No parallel crypto path. A diff introducing its own `Fernet(...)` or `AESGCM(...)` instead
@@ -112,8 +112,8 @@ response, a log line, an issue, a PR comment — is already redacted.
 - Every `ConnectorCredentialStore` read takes `owner_id` and passes `_require_owner`; a new
   method that skips it grants cross-tenant credential read.
 - Nothing reaches a log, HTTP error body, or outward artifact without
-  [`redaction.py`](../../autobot_shared/security/redaction.py) (`redact_text` (:102) /
-  `redact_mapping` (:114) / `redact_cloud_identifiers` (:131) / `redact_provider_error` (:145)).
+  [`redaction.py`](../../autobot_shared/security/redaction.py) (`redact_text` (:104) /
+  `redact_mapping` (:116) / `redact_cloud_identifiers` (:133) / `redact_provider_error` (:147)).
   Exception text counts; a boto3 `ClientError` carries the account number in an ARN (#15324).
 - Keys come from SSOT config, never a literal. A default value for an encryption key is a
   finding even when production overrides it via env var.

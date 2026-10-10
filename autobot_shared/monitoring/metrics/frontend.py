@@ -18,6 +18,8 @@ Covers:
 
 from prometheus_client import Counter, Gauge, Histogram
 
+from autobot_shared.endpoint_normalization import collapse_dynamic_segments
+
 from .base import BaseMetricsRecorder
 
 
@@ -315,20 +317,12 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
         if "?" in endpoint:
             endpoint = endpoint.split("?")[0]
 
-        # Replace numeric IDs with placeholder
-        import re
-
-        endpoint = re.sub(r"/\d+", "/{id}", endpoint)
-
-        # Replace UUIDs with placeholder
-        endpoint = re.sub(
-            r"/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
-            "/{uuid}",
-            endpoint,
-            flags=re.IGNORECASE,
-        )
-
-        return endpoint
+        # #18093: was two sequential re.sub calls with the numeric one FIRST, which ate
+        # a uuid's leading digits so the uuid pattern could never match -- a uuid in a
+        # path was never collapsed, and SHA-like hex had no pattern at all. Both left
+        # unbounded values on the `endpoint` label, the cardinality blowup this function
+        # exists to prevent. The shared rule classifies each segment once.
+        return collapse_dynamic_segments(endpoint)
 
     # =========================================================================
     # JavaScript Error Methods

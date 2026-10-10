@@ -57,7 +57,7 @@ def _parse_priority(priority: Any) -> "MessagePriority":
     return MessagePriority.NORMAL
 
 
-from autobot_shared.async_compat import fire_and_forget, run_or_schedule  # noqa: E402
+from autobot_shared.async_compat import fire_and_forget  # noqa: E402
 from protocols.agent_channels import (  # noqa: E402,F401 -- #16986: channels and delivery by recipient live there
     INBOX_MAX_LENGTH,
     CommunicationChannel,
@@ -652,60 +652,3 @@ async def broadcast_to_all_agents(sender_id: str, message_data: Any) -> int:
     )
 
     return await sender_protocol.broadcast(broadcast_msg)
-
-
-# CLI for testing the communication protocol
-if __name__ == "__main__":
-    import argparse
-
-    async def test_communication_protocol():
-        """Run integration test for agent communication protocol."""
-
-        logger.info("🧪 Testing Agent Communication Protocol")
-        logger.info("=" * 50)
-
-        manager = get_communication_manager()
-
-        agent1_identity = AgentIdentity(agent_id="test_agent_1", agent_type="test", capabilities=["test", "demo"])
-
-        agent2_identity = AgentIdentity(agent_id="test_agent_2", agent_type="test", capabilities=["test", "demo"])
-
-        await manager.register_agent(agent1_identity, [{"type": "direct"}])
-        protocol2 = await manager.register_agent(agent2_identity, [{"type": "direct"}])
-
-        async def handle_request(message: StandardMessage) -> StandardMessage:
-            """Handle incoming request and return response message."""
-            logger.info(f"Agent 2 received request: {message.payload.content}")
-
-            return StandardMessage(
-                header=MessageHeader(message_type=MessageType.RESPONSE),
-                payload=MessagePayload(content={"response": "Hello from Agent 2!"}),
-            )
-
-        protocol2.register_message_handler(MessageType.REQUEST, handle_request)
-
-        # Test direct communication
-        logger.info("Testing direct agent communication...")
-
-        response = await send_agent_request("test_agent_1", "test_agent_2", {"message": "Hello from Agent 1!"})
-
-        logger.info("Response received: %s", response)
-
-        # Test broadcast
-        logger.info("\nTesting broadcast communication...")
-        broadcast_count = await broadcast_to_all_agents("test_agent_1", {"broadcast": "Hello everyone!"})
-
-        logger.info("Broadcast sent to %s channels", broadcast_count)
-
-        await manager.shutdown_all()
-        logger.info("✅ Communication protocol test completed!")
-
-    parser = argparse.ArgumentParser(description="Agent Communication Protocol Test")
-    parser.add_argument("--test", action="store_true", help="Run communication test")
-
-    args = parser.parse_args()
-
-    if args.test:
-        run_or_schedule(test_communication_protocol())
-    else:
-        logger.info("Use --test to run the communication protocol test")

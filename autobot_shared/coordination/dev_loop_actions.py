@@ -20,7 +20,7 @@ from an action that was never attempted -- the distinction
 It lives beside ``work_claims`` and in its keyspace (``work_claims:actions:*``)
 because it is the same registry from the claimant's point of view: the claim
 says who holds an issue now, this says what was done to it and at what cost.
-It is deliberately NOT a field on :class:`work_claims.Claim` -- a claim is a
+It is deliberately NOT a field on :class:`work_claims.WorkClaim` -- a claim is a
 live lock that disappears on release, so hanging the audit trail off it would
 delete the record at exactly the moment it becomes history.
 

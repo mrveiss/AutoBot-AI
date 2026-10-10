@@ -54,8 +54,8 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/analytics_architecture.py": 1264,
     "autobot-backend/api/analytics_bug_prediction.py": 1438,
     "autobot-backend/api/analytics_cfg.py": 1331,
-    "autobot-backend/api/analytics_code_generation.py": 1012,
-    "autobot-backend/api/analytics_code_review.py": 929,
+    "autobot-backend/api/analytics_code_generation.py": 1006,
+    "autobot-backend/api/analytics_code_review.py": 927,
     "autobot-backend/api/analytics_continuous_learning.py": 1170,
     "autobot-backend/api/analytics_conversation.py": 988,
     "autobot-backend/api/analytics_cost.py": 616,
@@ -86,7 +86,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1326,
     "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 756,
     "autobot-backend/api/codebase_analytics/endpoints/duplicates.py": 660,  # #17758: triplicated cached body collapsed
-    "autobot-backend/api/codebase_analytics/endpoints/environment.py": 694,
+    "autobot-backend/api/codebase_analytics/endpoints/environment.py": 698,  # #13602: sanitised traversal log
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 827,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2267,
     "autobot-backend/api/codebase_analytics/endpoints/stats.py": 663,
@@ -97,7 +97,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/envelope_secrets.py": 615,
     "autobot-backend/api/files.py": 1365,
     "autobot-backend/api/filesystem_mcp.py": 1968,
-    "autobot-backend/api/git_mcp.py": 1357,
+    "autobot-backend/api/git_mcp.py": 1356,
     "autobot-backend/api/http_client_mcp.py": 963,
     "autobot-backend/api/ide_integration.py": 928,
     "autobot-backend/api/knowledge.py": 3414,
@@ -107,8 +107,8 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/knowledge_connectors.py": 929,
     "autobot-backend/api/knowledge_maintenance.py": 1979,
     "autobot-backend/api/knowledge_mcp.py": 1455,
-    "autobot-backend/api/knowledge_population.py": 1445,
-    "autobot-backend/api/knowledge_search.py": 820,  # #16665: analytics endpoints moved out
+    "autobot-backend/api/knowledge_population.py": 1443,
+    "autobot-backend/api/knowledge_search.py": 819,  # #16665: analytics endpoints moved out
     "autobot-backend/api/knowledge_search_aggregator.py": 951,  # #16665: doc-search moved out
     "autobot-backend/api/knowledge_tags.py": 887,
     "autobot-backend/api/knowledge_vectorization.py": 1704,
@@ -131,9 +131,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_agent.py": 2225,
     "autobot-backend/api/schemas_analytics.py": 3543,
     "autobot-backend/api/schemas_chat.py": 702,
-    "autobot-backend/api/schemas_code.py": 3266,
+    "autobot-backend/api/schemas_code.py": 3265,
     "autobot-backend/api/schemas_knowledge.py": 5156,
-    "autobot-backend/api/schemas_system.py": 4346,  # #16444 review: RequestValidationError import comment
+    "autobot-backend/api/schemas_system.py": 4362,  # #13051: SecretModel ownership fields
     "autobot-backend/api/schemas_workflows.py": 3011,
     "autobot-backend/api/secrets.py": 1216,  # #16444 review: except HTTPException, ValueError handlers
     "autobot-backend/api/security_assessment.py": 913,
@@ -156,8 +156,8 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1682,
     "autobot-backend/chat_workflow/llm_handler.py": 1343,
-    "autobot-backend/chat_workflow/manager.py": 3982,  # #17513: markers extracted
-    "autobot-backend/chat_workflow/tool_handler.py": 3721,  # #11542: external MCP dispatch merged into MCPDispatcher
+    "autobot-backend/chat_workflow/manager.py": 3976,  # #17513: markers extracted
+    "autobot-backend/chat_workflow/tool_handler.py": 3731,  # #11542 dispatch merge + #14068 mirror
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
     "autobot-backend/circuit_breaker.py": 689,
@@ -196,7 +196,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/code_intelligence/vue_analyzer.py": 613,
     "autobot-backend/command_manual_manager.py": 908,
     "autobot-backend/computer_vision/screen_analyzer.py": 662,
-    "autobot-backend/conftest.py": 1505,  # #16483: _make_pkg_stub/_real_load_and_bind moved to testkit/module_stubs.py
+    "autobot-backend/conftest.py": 1504,  # #16483: _make_pkg_stub/_real_load_and_bind moved to testkit/module_stubs.py
     "autobot-backend/context_aware_decision/decision_engine.py": 815,
     "autobot-backend/context_aware_decision/tests/test_counterfactual_reasoner.py": 663,
     "autobot-backend/context_window_manager.py": 640,
@@ -221,7 +221,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/intent_classification_test.py": 622,
     "autobot-backend/judges/multi_agent_arbitrator.py": 611,
     "autobot-backend/judges/security_risk_judge.py": 842,
-    "autobot-backend/knowledge/adapters/okf_adapter.py": 776,
+    "autobot-backend/knowledge/adapters/okf_adapter.py": 770,
     "autobot-backend/knowledge/base.py": 709,
     "autobot-backend/knowledge/bulk.py": 2013,
     "autobot-backend/knowledge/categories.py": 965,
@@ -236,7 +236,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/knowledge/ownership.py": 757,
     "autobot-backend/knowledge/pipeline/cognifiers/cognifiers_test.py": 806,
     "autobot-backend/knowledge/rag_benchmarks.py": 1607,
-    "autobot-backend/knowledge/search.py": 1102,
+    "autobot-backend/knowledge/search.py": 1050,
     "autobot-backend/knowledge/search_components/retrieval_learner.py": 734,
     "autobot-backend/knowledge/search_quality.py": 931,
     "autobot-backend/knowledge/search_quality_test.py": 667,
@@ -268,7 +268,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llm_shared/optimization/layer_inference_test.py": 715,
     "autobot-backend/llm_shared/provider_auth.py": 664,
     "autobot-backend/llm_shared/tests/test_provider_auth.py": 1187,
-    "autobot-backend/markdown_reference_system.py": 708,
+    "autobot-backend/markdown_reference_system.py": 707,
     "autobot-backend/mcp_server/autobot_server.py": 948,
     "autobot-backend/mcp_server/mcp_security_test.py": 812,
     "autobot-backend/media/link/pipeline_test.py": 965,
@@ -297,7 +297,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/plugin_manager.py": 702,
     "autobot-backend/project_state_manager.py": 998,
     "autobot-backend/prompt_manager.py": 1481,
-    "autobot-backend/protocols/agent_communication.py": 711,
+    "autobot-backend/protocols/agent_communication.py": 654,
     "autobot-backend/research_browser_manager.py": 704,
     "autobot-backend/secure_command_executor.py": 1220,
     "autobot-backend/secure_sandbox_executor.py": 1019,
@@ -320,7 +320,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/ai_stack_client.py": 790,
     "autobot-backend/services/analytics_service.py": 838,
     "autobot-backend/services/audit_logger.py": 1022,
-    "autobot-backend/services/autoresearch/auto_research_agent.py": 1274,
+    "autobot-backend/services/autoresearch/auto_research_agent.py": 1262,
     "autobot-backend/services/autoresearch/auto_research_agent_test.py": 823,
     "autobot-backend/services/autoresearch/routes.py": 726,
     "autobot-backend/services/autoresearch/routes_test.py": 615,
@@ -345,7 +345,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/knowledge/doc_indexer.py": 1274,
     "autobot-backend/services/knowledge/service.py": 851,
     "autobot-backend/services/knowledge/test_autonomous_loop.py": 708,
-    "autobot-backend/services/knowledge/test_doc_indexer.py": 1468,
+    "autobot-backend/services/knowledge/test_doc_indexer.py": 1466,
     "autobot-backend/services/knowledge/test_kb_synthesizer.py": 802,
     "autobot-backend/services/llm_cost_tracker.py": 1166,  # #16230: MODEL_PRICING table removed
     "autobot-backend/services/llm_service.py": 1199,  # #16845: _track_usage delegated to llm_usage_recording
@@ -353,7 +353,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/nl_database_service.py": 775,
     "autobot-backend/services/notification_service.py": 634,
     "autobot-backend/services/npu_worker_manager.py": 1419,
-    "autobot-backend/services/rag_service.py": 1312,
+    "autobot-backend/services/rag_service.py": 1303,
     "autobot-backend/services/redis_service_manager.py": 623,
     "autobot-backend/services/redis_service_manager_test.py": 839,
     "autobot-backend/services/secrets_service.py": 688,
@@ -427,7 +427,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/utils/timeout_migration_examples.py": 1024,
     "autobot-backend/utils/todowrite_optimizer.py": 806,
     "autobot-backend/utils/tool_pattern_analyzer.py": 917,
-    "autobot-backend/utils/validators.py": 696,
+    "autobot-backend/utils/validators.py": 695,
     "autobot-backend/voice_interface.py": 910,
     "autobot-backend/workers/audit_tasks.py": 991,
     "autobot-backend/workers/audit_tasks_test.py": 1197,
@@ -485,7 +485,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
     "autobot-slm-backend/user_management/services/sso_service.py": 778,
     "autobot-slm-backend/user_management/services/user_service.py": 863,
-    "autobot_shared/env_registry.py": 1214,  # #13099: LLC vars split to env_registry_llc.py
+    "autobot_shared/env_registry.py": 1215,  # #13602: +1 sibling import, -14 registration
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
     "autobot_shared/network_constants.py": 616,
     "autobot_shared/npu/integration.py": 929,

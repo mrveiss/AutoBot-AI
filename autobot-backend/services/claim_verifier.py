@@ -93,7 +93,7 @@ class RAGResult:
 
 
 @dataclass
-class ResearchResult:
+class ResearchAgentResult:
     """Result from research agent investigation."""
 
     claim: str
@@ -509,7 +509,7 @@ class ClaimVerifier:
             logger.error("KB RAG search failed: %s", e)
             return None
 
-    async def research_agent_lookup(self, claim: str) -> ResearchResult | None:
+    async def research_agent_lookup(self, claim: str) -> ResearchAgentResult | None:
         """
         Delegate claim investigation to research agent.
 
@@ -520,7 +520,7 @@ class ClaimVerifier:
             claim: Claim text to investigate
 
         Returns:
-            ResearchResult with investigation outcome, or None on error/timeout
+            ResearchAgentResult with investigation outcome, or None on error/timeout
         """
         if not self.research_agent_service:
             logger.debug("Research agent service not available")
@@ -560,7 +560,7 @@ class ClaimVerifier:
                 url,
             )
 
-            return ResearchResult(
+            return ResearchAgentResult(
                 claim=claim,
                 fact=verified_fact,
                 status=status,
@@ -571,7 +571,7 @@ class ClaimVerifier:
 
         except asyncio.TimeoutError:
             logger.warning("Research agent lookup timed out after %.1fs", _RESEARCH_AGENT_TIMEOUT)
-            return ResearchResult(
+            return ResearchAgentResult(
                 claim=claim,
                 fact=None,
                 status=ResearchStatus.TIMEOUT,

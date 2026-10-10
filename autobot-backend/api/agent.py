@@ -50,7 +50,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from constants.threshold_constants import TimingConstants
-from dependencies import get_config, get_knowledge_base
+from dependencies import get_knowledge_base, provide_config_manager
 from exceptions import InternalError, SubprocessError
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from monitoring.prometheus_metrics import get_metrics_manager
@@ -1000,7 +1000,7 @@ def _determine_coordination_mode(payload, selected_agents: list) -> str:
 async def execute_orchestrated_goal(
     payload: GoalPayload,
     request: Request,
-    config=Depends(get_config),
+    config=Depends(provide_config_manager),
     knowledge_base=Depends(get_knowledge_base),
     current_user: dict = Depends(get_current_user),
 ):

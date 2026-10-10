@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
-from models.database import Node, Service, ServiceStatus
+from models.database import Node, Service, SystemdState
 
 logger = logging.getLogger(__name__)
 
@@ -471,7 +471,7 @@ class ServiceOrchestrator:
 
         # Update service record if we have a node
         if success and node:
-            await self._update_service_record(db, node.node_id, service_name, ServiceStatus.RUNNING.value)
+            await self._update_service_record(db, node.node_id, service_name, SystemdState.RUNNING.value)
 
         return success, message
 
@@ -526,7 +526,7 @@ class ServiceOrchestrator:
 
         # Update service record if we have a node
         if success and node:
-            await self._update_service_record(db, node.node_id, service_name, ServiceStatus.STOPPED.value)
+            await self._update_service_record(db, node.node_id, service_name, SystemdState.STOPPED.value)
 
         return success, message
 
@@ -580,7 +580,7 @@ class ServiceOrchestrator:
 
         # Update service record if we have a node
         if success and node:
-            await self._update_service_record(db, node.node_id, service_name, ServiceStatus.RUNNING.value)
+            await self._update_service_record(db, node.node_id, service_name, SystemdState.RUNNING.value)
 
         return success, message
 

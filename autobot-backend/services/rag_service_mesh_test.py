@@ -38,10 +38,10 @@ def _make_service(mesh_retriever_enabled: bool = False):
 
 def _make_mesh_result(chunk_ids):
     """Return a mock MeshRetrievalResult."""
-    from advanced_rag_optimizer import SearchResult
+    from advanced_rag_optimizer import RankedResult
 
     chunks = [
-        SearchResult(
+        RankedResult(
             content=f"content-{cid}",
             metadata={"chunk_id": cid},
             semantic_score=0.5,

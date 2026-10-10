@@ -53,8 +53,8 @@ from autobot_shared.redis_management.statistics import (
     RedisStats,
 )
 from autobot_shared.redis_management.types import ConnectionState, RedisDatabase
-from autobot_shared.retry_mechanism import RetryConfig as _RetryConfig
 from autobot_shared.retry_mechanism import RetryMechanism as _RetryMechanism
+from autobot_shared.retry_mechanism import RetryPolicy as _RetryPolicy
 from autobot_shared.retry_mechanism import RetryStrategy as _RetryStrategy
 
 # ---------------------------------------------------------------------------
@@ -624,7 +624,7 @@ class RedisConnectionManager:
         - Up to 5 attempts
         - TCP keepalive configuration
         """
-        retry_cfg = _RetryConfig(
+        retry_cfg = _RetryPolicy(
             max_attempts=5,
             base_delay=2.0,
             max_delay=30.0,

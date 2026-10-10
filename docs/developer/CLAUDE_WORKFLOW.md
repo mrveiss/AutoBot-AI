@@ -322,6 +322,27 @@ scripts/pr-preflight.sh --issue N --full   # also run the checks a path filter w
 scripts/pr-preflight.sh --issue N --only 'ERE'   # run only the required checks whose name matches; the rest are named as not selected
 ```
 
+**Before merging, run the other half — `scripts/pr-merge-gate.sh` (#15995).**
+
+```bash
+scripts/pr-merge-gate.sh                  # the open PR for the current branch
+scripts/pr-merge-gate.sh --pr N           # or a specific one
+```
+
+It runs `scripts/pr_required_gate.py`, which reads the required-context list **from branch
+protection**, unions check-runs with legacy commit statuses, takes the latest run per name, and
+reports `never-reported` separately from `not-green`. A histogram of check states cannot tell a
+green PR from one where CI never started — a context that never ran contributes to no bucket, so
+`pending=0 fail=0` is produced by both. The verdict also names the preconditions it does **not**
+examine (review threads, base freshness, branch conflicts, app pinning); exit 0 means
+`CONTEXTS-GREEN`, never "mergeable".
+
+It is a **separate command from the preflight, not a flag on it**: the preflight asks whether CI
+would pass on the commit you are about to push, and this asks whether the head already on the PR
+is clear to merge. Run before a push, its verdict would be correct, complete, and about the
+commit the push is replacing — and `never-reported`, which it blocks on deliberately, is the
+normal state seconds after a push.
+
 It reuses the *same* logic CI does rather than approximating it: the same `awk` extraction as `pr-template-check.yml` (so a heading that is present but placeholder-only fails locally exactly as it does in CI), the same keyword regex as `pr-issue-validation.yml`, and black/isort/flake8/bandit with the same flags as `code-quality.yml` — including bandit's absent severity floor, which is stricter than the medium-and-up filter used elsewhere. It also catches backticks in a commit message (the shell executes them when the message is passed via `-m`), authorship trailers, conflict markers, and fleet IPs.
 
 It also runs (or explains why it did not) each of the ten required status checks the `Main` ruleset gates `Dev_new_gui` on. Every check is path-filtered by default, using the same `.github/filters/*.yml` set its own workflow uses, so a diff outside those paths gets the identical "nothing to check" verdict locally that it would in CI. `--full` bypasses that filter and forces every check to actually run, and is also what turns on `api-wiring` (it builds the whole backend app to dump its OpenAPI schema, so it stays behind `--full` even on a relevant diff). Two checks are out of reach either way: `migration-matrix` needs a live PostgreSQL (set `AUTOBOT_MIGRATION_TEST_ADMIN_URL` to enable it), and `smoke-test` needs a Docker daemon plus three image builds and a running compose stack — reported SKIPPED with that reason rather than approximated (#15933). The gates below remain the reference; this runs the mechanical ones early.

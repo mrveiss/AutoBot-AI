@@ -132,9 +132,11 @@ def test_the_required_population_is_an_input_not_a_constant():
     Asserted structurally -- `verdict` cannot answer without being given the list,
     so no hardcoded set can drift out of date with the protection rules.
     """
-    # With no required contexts the required set is vacuously satisfied -- and the
-    # failing check is still surfaced, because "nothing is required" is not
-    # "nothing is wrong".
+    # With no required contexts the failing check is still surfaced, because
+    # "nothing is required" is not "nothing is wrong". The VERDICT for an empty
+    # population is `NO-REQUIREMENTS` rather than a green one (#16044) -- a gate
+    # whose requirement list failed to load must not clear every PR -- so this
+    # asserts the buckets, which is what "the population is an input" is about.
     empty = verdict([], {"anything": "failure"})
     assert empty["not_green"] == []
     assert empty["failing_unrequired"] == [{"context": "anything", "state": "failure"}]
@@ -188,9 +190,16 @@ def test_a_running_unrequired_check_blocks_the_green_verdict():
 
 
 def test_a_failing_unrequired_check_outranks_a_running_one():
-    """Contrast: a known failure must not be softened by something else still going."""
-    observed = {"a": "failure", "b": "pending"}
-    result = verdict([], observed)
+    """Contrast: a known failure must not be softened by something else still going.
+
+    Carries a SATISFIED required context rather than an empty list. `verdict([])`
+    used to reach the green branch vacuously and was the shorthand here, but an
+    empty requirement list is now its own verdict (`NO-REQUIREMENTS`, #16044) --
+    so testing the qualify precedence through it would have tested the one path
+    that no longer gets there.
+    """
+    observed = {"required-and-green": "success", "a": "failure", "b": "pending"}
+    result = verdict(["required-and-green"], observed)
     assert result["verdict"] == "GREEN-BUT-OTHERS-FAILING"
     assert [e["context"] for e in result["failing_unrequired"]] == ["a"]
     assert [e["context"] for e in result["running_unrequired"]] == ["b"]

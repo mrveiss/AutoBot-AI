@@ -34,7 +34,7 @@ from api.knowledge_grounding_models import (
     Conflict,
     ConflictResolution,
     KBFact,
-    ResearchResult,
+    ResearchedFact,
     ReviewTicketPriority,
 )
 from services.conflict_resolver import ConflictResolver
@@ -288,7 +288,7 @@ class TestConflictInitialization:
             timestamp=time.time(),
         )
         claim = Claim(claim_text="Agent claim", source="agent_1", confidence=0.6)
-        research = ResearchResult(
+        research = ResearchedFact(
             fact_text="Research fact",
             source="https://example.com",
             confidence=0.85,
@@ -417,7 +417,7 @@ class TestConflictResolution:
             source="agent_1",
             confidence=0.7,
         )
-        research = ResearchResult(
+        research = ResearchedFact(
             fact_text="Python 3.13 is latest",
             source="https://python.org",
             confidence=0.95,
@@ -525,7 +525,7 @@ class TestConflictResolution:
             timestamp=time.time() - (50 * 86400),  # 50 days old (stale)
         )
         claim = Claim(claim_text="Same old config", source="agent", confidence=0.5)
-        research = ResearchResult(
+        research = ResearchedFact(
             fact_text="New configuration",
             source="https://docs.example.com",
             confidence=0.9,
@@ -549,7 +549,7 @@ class TestConflictResolution:
             timestamp=time.time() - (50 * 86400),  # Stale
         )
         claim = Claim(claim_text="Other value", source="agent", confidence=0.4)
-        research = ResearchResult(
+        research = ResearchedFact(
             fact_text="Different value",
             source="https://example.com",
             confidence=0.65,  # Too low
@@ -573,7 +573,7 @@ class TestConflictResolution:
             timestamp=time.time() - (14 * 86400),  # 14 days, not stale
         )
         claim = Claim(claim_text="Other", source="agent", confidence=0.5)
-        research = ResearchResult(
+        research = ResearchedFact(
             fact_text="Different",
             source="https://example.com",
             confidence=0.95,  # High confidence
@@ -598,7 +598,7 @@ class TestKBUpdate:
             confidence=0.8,
             timestamp=time.time() - (50 * 86400),  # Stale
         )
-        research = ResearchResult(
+        research = ResearchedFact(
             fact_text="New fact",
             source="https://example.com",
             confidence=0.85,  # > 0.75 threshold
@@ -626,7 +626,7 @@ class TestKBUpdate:
             confidence=0.8,
             timestamp=time.time() - (10 * 86400),  # Fresh
         )
-        research = ResearchResult(
+        research = ResearchedFact(
             fact_text="Different",
             source="https://example.com",
             confidence=0.9,
@@ -647,7 +647,7 @@ class TestKBUpdate:
             confidence=0.8,
             timestamp=time.time() - (50 * 86400),  # Stale
         )
-        research = ResearchResult(
+        research = ResearchedFact(
             fact_text="Uncertain finding",
             source="https://example.com",
             confidence=0.60,  # Too low
@@ -847,8 +847,8 @@ class TestEdgeCases:
         assert claim.timestamp <= time.time()
 
     def test_research_defaults_to_current_timestamp(self):
-        """ResearchResult should default to current time if not specified."""
-        research = ResearchResult(
+        """ResearchedFact should default to current time if not specified."""
+        research = ResearchedFact(
             fact_text="test",
             source="https://example.com",
             confidence=0.8,
@@ -888,7 +888,7 @@ class TestConfidenceCalculations:
             timestamp=time.time(),
         )
         claim = Claim(claim_text="Agent", source="agent", confidence=0.6)
-        research = ResearchResult(
+        research = ResearchedFact(
             fact_text="Research",
             source="https://example.com",
             confidence=0.75,  # Highest
@@ -911,7 +911,7 @@ class TestConfidenceCalculations:
             timestamp=time.time(),
         )
         claim = Claim(claim_text="Agent", source="agent", confidence=0.75)
-        research = ResearchResult(
+        research = ResearchedFact(
             fact_text="Research",
             source="https://example.com",
             confidence=0.75,
@@ -953,9 +953,9 @@ class TestValidationErrors:
             Claim(claim_text="test", source="agent", confidence=1.5)
 
     def test_research_rejects_invalid_confidence(self):
-        """ResearchResult should reject invalid confidence."""
+        """ResearchedFact should reject invalid confidence."""
         with pytest.raises(ValueError):
-            ResearchResult(
+            ResearchedFact(
                 fact_text="test",
                 source="https://example.com",
                 confidence=-0.5,

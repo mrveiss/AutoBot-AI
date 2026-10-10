@@ -29,7 +29,7 @@ class ChannelType(str, Enum):
     SLACK = "slack"  # Future
 
 
-class MessageType(str, Enum):
+class GatewayMessageType(str, Enum):
     """Unified message types across all channels."""
 
     # User messages
@@ -83,7 +83,7 @@ class ChannelMessage:
     message_id: str = field(default_factory=lambda: str(uuid4()))
     session_id: str = ""
     channel: ChannelType = ChannelType.WEBSOCKET
-    message_type: MessageType = MessageType.USER_TEXT
+    message_type: GatewayMessageType = GatewayMessageType.USER_TEXT
     content: Any = None
     metadata: Dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=now_utc)
@@ -107,7 +107,7 @@ class ChannelMessage:
             message_id=data.get("message_id", str(uuid4())),
             session_id=data["session_id"],
             channel=ChannelType(data["channel"]),
-            message_type=MessageType(data["message_type"]),
+            message_type=GatewayMessageType(data["message_type"]),
             content=data.get("content"),
             metadata=data.get("metadata", {}),
             created_at=(parse_utc_iso(data["created_at"]) if "created_at" in data else now_utc()),

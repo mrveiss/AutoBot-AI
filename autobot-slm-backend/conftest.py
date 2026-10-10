@@ -577,4 +577,4 @@ def pytest_configure(config) -> None:
     module = importlib.util.module_from_spec(spec)
     sys.modules.setdefault("_slm_stub_lifetime", module)
     spec.loader.exec_module(module)
-    module.register(config, _SLM_ROOT, _INSTALLED_STUBS)
+    module.register_stub_lifetime(config, _SLM_ROOT, _INSTALLED_STUBS)

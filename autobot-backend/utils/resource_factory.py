@@ -21,31 +21,36 @@ class ResourceFactory:
 
     @staticmethod
     async def get_knowledge_base(request: Request = None):
-        """Get or create KnowledgeBase instance with app.state caching"""
+        """Get the app-wide initialized KnowledgeBase, or the app-free singleton.
+
+        #18121: this used to construct ``KnowledgeBase()`` directly and write it to
+        ``request.app.state.knowledge_base``. ``initialize()`` must be awaited after
+        construction — it is what creates the vector store — so the instance handed back
+        had ``initialized is False`` and would raise out of ``ensure_initialized()`` on
+        first use. Worse, caching it replaced the store that every ``api/knowledge*.py``
+        route reads, so one call here could break knowledge search process-wide.
+
+        Both branches now go through ``knowledge_factory``, which initializes before
+        returning and honours the #3094/#3106 retry cooldown, so no caller can receive an
+        uninitialized instance and ``app.state`` is only ever written by the factory that
+        owns it.
+
+        Returns:
+            The initialized ``KnowledgeBase``, or ``None`` when it is unavailable.
+        """
         try:
-            # Try app.state first
             if request is not None:
-                kb = getattr(request.app.state, "knowledge_base", None)
-                if kb is not None:
-                    logger.debug("Using pre-initialized KnowledgeBase from app.state")
-                    return kb
+                from knowledge_factory import get_or_create_knowledge_base
 
-            # Fallback to module-level import and creation
-            from knowledge_base import KnowledgeBase
+                return await get_or_create_knowledge_base(request.app)
 
-            logger.info("Creating new KnowledgeBase instance (expensive operation)")
+            # No app context (background task, scheduler): the module-level singleton.
+            from knowledge_factory import get_knowledge_base_async
 
-            kb = KnowledgeBase()
-
-            # Cache in app state if available
-            if request is not None:
-                request.app.state.knowledge_base = kb
-                logger.info("Cached KnowledgeBase in app.state for future requests")
-
-            return kb
+            return await get_knowledge_base_async()
 
         except Exception as e:
-            logger.error("Failed to create KnowledgeBase: %s", e)
+            logger.error("Failed to resolve KnowledgeBase: %s", e)
             raise
 
     @staticmethod

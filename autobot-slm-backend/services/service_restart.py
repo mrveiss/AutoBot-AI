@@ -44,7 +44,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.ssot_config import config
-from models.database import Node, Service, ServiceStatus
+from models.database import Node, Service, SystemdState
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +131,7 @@ def _mark_service_running(svc: Service) -> None:
     The caller owns the session ``svc`` is attached to and is responsible for
     committing: these writes are worthless on a row nothing is tracking (#15611).
     """
-    svc.status = ServiceStatus.RUNNING.value
+    svc.status = SystemdState.RUNNING.value
     svc.active_state = "active"
     svc.sub_state = "running"
     svc.last_checked = datetime.now(timezone.utc)

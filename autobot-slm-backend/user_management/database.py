@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from autobot_shared.db_session import async_session_scope
 from autobot_shared.ssot_config import database_pool_settings
 from user_management.config import get_autobot_db_config, get_slm_db_config
 
@@ -143,33 +144,28 @@ def get_autobot_session_maker() -> async_sessionmaker[AsyncSession]:
 @asynccontextmanager
 async def get_slm_session() -> AsyncGenerator[AsyncSession, None]:
     """Get SLM database session (context manager)."""
-    session_maker = get_slm_session_maker()
-    async with session_maker() as session:
-        session.info["_post_commit_cbs"] = []
-        try:
-            yield session
-            await session.commit()
-            for cb in session.info.pop("_post_commit_cbs", []):
-                await cb()
-        except Exception:
-            await session.rollback()
-            raise
+    async with async_session_scope(get_slm_session_maker()) as session:
+        yield session
+
+
+async def get_slm_db() -> AsyncGenerator[AsyncSession, None]:
+    """The FastAPI dependency for an SLM database session (#12771).
+
+    One definition, injected with ``Depends(get_slm_db)``. Six byte-identical
+    copies of this used to live in the routers that needed it, which meant six
+    distinct function objects: a test overriding one via
+    ``app.dependency_overrides`` silently left the other five live. Overriding
+    this one now covers every router that depends on it.
+    """
+    async with get_slm_session() as session:
+        yield session
 
 
 @asynccontextmanager
 async def get_autobot_session() -> AsyncGenerator[AsyncSession, None]:
     """Get AutoBot database session (context manager)."""
-    session_maker = get_autobot_session_maker()
-    async with session_maker() as session:
-        session.info["_post_commit_cbs"] = []
-        try:
-            yield session
-            await session.commit()
-            for cb in session.info.pop("_post_commit_cbs", []):
-                await cb()
-        except Exception:
-            await session.rollback()
-            raise
+    async with async_session_scope(get_autobot_session_maker()) as session:
+        yield session
 
 
 async def health_check_slm() -> bool:
