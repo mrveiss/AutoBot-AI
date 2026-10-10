@@ -36,8 +36,8 @@ from api.knowledge_grounding import router as grounding_router
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.status_enums import Severity
 from services.grounded_agent import GroundedAgent, get_grounded_agent
-from services.grounded_agent_models import ClaimStatus, GroundedResponse, VerifiedClaim
-from services.knowledge_grounding_models import Claim, VerificationMethod
+from services.grounded_agent_models import GroundedResponse
+from services.knowledge_grounding_models import Claim, ClaimStatus, VerificationMethod, VerifiedClaim
 
 
 @pytest.fixture

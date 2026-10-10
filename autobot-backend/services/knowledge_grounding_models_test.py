@@ -188,3 +188,37 @@ class TestTheMergedClaimKeepsEveryProducersWireShape:
         assert Claim(claim_text="x").timestamp is not None
         with pytest.raises(ValueError):
             Claim(claim_text="x", confidence=1.5)
+
+
+class TestTheMergedVerifiedClaimAndConflictKeepTheirWireShapes:
+    """#18086: one VerifiedClaim and one Conflict for GroundedAgent and its siblings."""
+
+    def test_a_cached_pre_merge_verifier_payload_still_loads(self):
+        from services.knowledge_grounding_models import Claim, VerificationStatus, VerifiedClaim
+
+        payload = {
+            "original_claim": Claim(claim_text="x", confidence=0.4).to_dict(),
+            "verified_as": "verified",
+            "source": "kb_rag",
+            "source_text": "t",
+            "source_url": None,
+            "confidence": 0.9,
+            "timestamp": 2.0,
+            "requires_human_review": True,
+        }
+        loaded = VerifiedClaim.from_dict(payload)
+        assert loaded.verified_as is VerificationStatus.VERIFIED and loaded.kb_status is None
+        assert loaded.claim.claim_text == "x" and loaded.requires_human_review is True
+
+    def test_a_grounded_verified_claim_round_trips(self):
+        from services.knowledge_grounding_models import Claim, ClaimStatus, VerifiedClaim
+
+        vc = VerifiedClaim(claim=Claim(claim_text="x"), kb_status=ClaimStatus.IN_KB, kb_source="f1", evidence=["e"])
+        assert VerifiedClaim.from_dict(vc.to_dict()) == vc
+
+    def test_both_conflict_producers_build_the_same_class(self):
+        from api.knowledge_grounding_models import Conflict, ConflictResolution
+
+        by_id = Conflict(claim_1_id="c1", description="d", severity="high")
+        assert by_id.resolution is ConflictResolution.PENDING_REVIEW.__class__("pending_review")
+        assert by_id.max_confidence() == 0.0 and by_id.kb_says is None

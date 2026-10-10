@@ -20,13 +20,13 @@ from services.claim_verifier import (
     ClaimVerifier,
     ResearchStatus,
     SourceAgreement,
-    VerificationStatus,
 )
 from services.knowledge_grounding_models import (
     Claim,
     ClaimType,
     KBSource,
     KBStatus,
+    VerificationStatus,
 )
 
 # ---------------------------------------------------------------------------
@@ -667,7 +667,7 @@ class TestBatchVerification:
 
         assert len(results) == len(claims)
         for i, result in enumerate(results):
-            assert result.original.claim_text == f"Claim {i}"
+            assert result.claim.claim_text == f"Claim {i}"
 
     @pytest.mark.asyncio
     async def test_batch_verify_parallelizes(self, claim_verifier, mock_knowledge_base, mock_research_agent):
@@ -702,8 +702,8 @@ class TestBatchVerification:
 
         # Both should be verified, order preserved
         assert len(results) == 2
-        assert results[0].original.claim_text == "IN KB claim"
-        assert results[1].original.claim_text == "Unknown claim"
+        assert results[0].claim.claim_text == "IN KB claim"
+        assert results[1].claim.claim_text == "Unknown claim"
 
     @pytest.mark.asyncio
     async def test_batch_verify_error_handling(self, claim_verifier, mock_knowledge_base, mock_research_agent):

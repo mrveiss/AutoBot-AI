@@ -49,6 +49,10 @@ class ConflictResolution(str, Enum):
     AGENT_WINS = "agent_wins"  # Agent claim was most confident
     HUMAN_REVIEW = "human_review"  # Escalated for human decision
     UNRESOLVED = "unresolved"  # Could not resolve with confidence
+    # GroundedAgent's status vocabulary for a Conflict (#18086); these values are on its wire.
+    RESOLVED = "resolved"  # Conflict resolved with clear winner
+    PENDING_REVIEW = "pending_review"  # Needs human review
+    INCONCLUSIVE = "inconclusive"  # Multiple valid interpretations
 
 
 class ReviewTicketStatus(str, Enum):
@@ -199,30 +203,46 @@ class ResolvedClaim:
 
 @dataclass
 class Conflict:
-    """Record of a conflict between KB and agent claim.
+    """Record of a conflict between KB, agent claim and research (#18086: the one Conflict).
 
-    Tracks all three sources (KB, agent, research) and their confidence
-    levels for analysis and escalation to human review if needed.
+    Tracks all three sources and their confidence levels for analysis and escalation
+    to human review. ConflictResolver fills the ``*_says`` and ``*_confidence`` fields;
+    GroundedAgent records a claim-versus-KB contradiction by claim id and fills
+    ``claim_1_id``/``description``/``severity`` instead. Each leaves the other's at default.
 
     Attributes:
         kb_says: The KB fact involved
         agent_says: The agent claim involved
-        research_says: Research validation result if available
         kb_confidence: Effective confidence of KB fact
         agent_confidence: Confidence of agent claim
+        research_says: Research validation result if available
         research_confidence: Confidence of research result
         created_at: Unix timestamp when conflict was detected
         conflict_id: Unique identifier for this conflict
+        claim_1_id: First claim id (GroundedAgent)
+        claim_2_id: Second claim id or KB fact id
+        description: Description of the conflict
+        severity: "low", "medium" or "high"
+        resolution: Resolution status
+        chosen_fact: Fact id chosen for resolution
+        reasoning: Human/system reasoning for the resolution
     """
 
-    kb_says: KBFact
-    agent_says: Claim
-    kb_confidence: float
-    agent_confidence: float
+    kb_says: KBFact | None = None
+    agent_says: Claim | None = None
+    kb_confidence: float = 0.0
+    agent_confidence: float = 0.0
     research_says: ResearchedFact | None = None
     research_confidence: float = 0.0
     created_at: float = field(default_factory=time.time)
     conflict_id: str = field(default_factory=lambda: str(uuid4()))
+    claim_1_id: str = ""
+    claim_2_id: str | None = None
+    description: str = ""
+    severity: str = "medium"
+    resolution: ConflictResolution = ConflictResolution.PENDING_REVIEW
+    chosen_fact: str | None = None
+    reasoning: str = ""
 
     def max_confidence(self) -> float:
         """Get highest confidence across all sources.

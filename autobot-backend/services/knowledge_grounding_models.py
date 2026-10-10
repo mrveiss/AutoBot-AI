@@ -229,6 +229,91 @@ class Claim:
         )
 
 
+class ClaimStatus(str, Enum):
+    """Status of a claim in the grounding process (GroundedAgent's vocabulary)."""
+
+    IN_KB = "in_kb"  # Claim verified in knowledge base
+    UNKNOWN = "unknown"  # Claim not found in KB, needs research
+    CONTRADICTS = "contradicts"  # Claim contradicts KB knowledge
+    VERIFIED = "verified"  # Claim verified through external source
+    UNVERIFIABLE = "unverifiable"  # Claim cannot be verified
+    CONFLICTED = "conflicted"  # Claim conflicts with other verified claims
+
+
+class VerificationStatus(str, Enum):
+    """Outcome of ClaimVerifier's verification (the verifier's vocabulary)."""
+
+    VERIFIED = "verified"
+    UNVERIFIED = "unverified"
+    CONFLICTING = "conflicting"
+    NOT_FOUND = "not_found"
+    TIMEOUT = "timeout"
+    ERROR = "error"
+
+
+@dataclass
+class VerifiedClaim:
+    """
+    The one verified-claim model (#18086), replacing GroundedAgent's and ClaimVerifier's.
+
+    GroundedAgent fills ``kb_status`` (a ClaimStatus), ``kb_source`` (KB fact id),
+    ``evidence`` and ``verification_method``; ClaimVerifier fills ``verified_as`` (a
+    VerificationStatus), ``source`` (channel: knowledge_base, kb_rag, research_agent),
+    ``source_text``/``source_url`` and ``requires_human_review``. Each producer leaves the
+    other's fields at their neutral default.
+    """
+
+    claim: Claim
+    kb_status: ClaimStatus | None = None
+    verified_as: VerificationStatus | None = None
+    kb_source: str | None = None
+    source: str = ""
+    source_text: str | None = None
+    source_url: str | None = None
+    confidence: float = 0.0
+    evidence: List[str] = field(default_factory=list)
+    verification_method: str = ""  # a VerificationMethod value; see #15005
+    timestamp: float = field(default_factory=time.time)
+    requires_human_review: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialise for the verifier's Redis cache (key names are the cached wire shape)."""
+        return {
+            "original_claim": self.claim.to_dict(),
+            "verified_as": self.verified_as.value if self.verified_as else None,
+            "kb_status": self.kb_status.value if self.kb_status else None,
+            "source": self.source,
+            "source_text": self.source_text,
+            "source_url": self.source_url,
+            "confidence": self.confidence,
+            "timestamp": self.timestamp,
+            "requires_human_review": self.requires_human_review,
+            "kb_source": self.kb_source,
+            "evidence": self.evidence,
+            "verification_method": self.verification_method,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "VerifiedClaim":
+        """Rebuild from :meth:`to_dict` output; tolerates pre-merge cached payloads."""
+        verified_as = data.get("verified_as", "unverified")
+        kb_status = data.get("kb_status")
+        return cls(
+            claim=Claim.from_dict(data.get("original_claim", {})),
+            verified_as=VerificationStatus(verified_as) if verified_as else None,
+            kb_status=ClaimStatus(kb_status) if kb_status else None,
+            source=data.get("source", "unknown"),
+            source_text=data.get("source_text"),
+            source_url=data.get("source_url"),
+            confidence=data.get("confidence", 0.0),
+            timestamp=data.get("timestamp", time.time()),
+            requires_human_review=data.get("requires_human_review", False),
+            kb_source=data.get("kb_source"),
+            evidence=data.get("evidence", []),
+            verification_method=data.get("verification_method", ""),
+        )
+
+
 @dataclass
 class ClaimExtractionResult:
     """

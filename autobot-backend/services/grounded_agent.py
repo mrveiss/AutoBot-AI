@@ -31,6 +31,7 @@ import re
 import time
 from typing import Any, Dict, List
 
+from api.knowledge_grounding_models import Conflict, ConflictResolution
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -42,14 +43,15 @@ from services.ai_stack_client import get_ai_stack_client
 from services.causal_inference_engine import CausalInferenceEngine
 from services.grounded_agent_models import (
     CausalTrace,
-    ClaimStatus,
-    Conflict,
-    ConflictResolution,
     GroundedResponse,
-    VerifiedClaim,
 )
 from services.grounding_stats import record_conflict_resolved, record_grounding_stats
-from services.knowledge_grounding_models import Claim, VerificationMethod
+from services.knowledge_grounding_models import (
+    Claim,
+    ClaimStatus,
+    VerificationMethod,
+    VerifiedClaim,
+)
 
 logger = get_logger(__name__)
 

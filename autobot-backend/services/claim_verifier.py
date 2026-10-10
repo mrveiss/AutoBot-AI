@@ -37,6 +37,8 @@ from services.knowledge_grounding_models import (
     Claim,
     KBSource,
     KBStatus,
+    VerificationStatus,
+    VerifiedClaim,
 )
 
 logger = get_llm_logger("claim_verifier")
@@ -60,17 +62,6 @@ _CORROBORATION_CONFIDENCE_BASE: float = config.research_corroboration_confidence
 _CORROBORATION_CONFIDENCE_PER_SOURCE: float = config.research_corroboration_confidence_per_source
 _CORROBORATION_CONFIDENCE_CAP: float = config.research_corroboration_confidence_cap
 _CORROBORATION_CLASSIFY_TIMEOUT_SECONDS: float = config.research_corroboration_classify_timeout_seconds
-
-
-class VerificationStatus(str, Enum):
-    """Verification status of a claim."""
-
-    VERIFIED = "verified"
-    UNVERIFIED = "unverified"
-    CONFLICTING = "conflicting"
-    NOT_FOUND = "not_found"
-    TIMEOUT = "timeout"
-    ERROR = "error"
 
 
 class ResearchStatus(str, Enum):
@@ -103,33 +94,6 @@ class ResearchAgentResult:
     confidence: float = 0.0
     timestamp: float = field(default_factory=time.time)
     research_time_ms: float = 0.0
-
-
-@dataclass
-class VerifiedClaim:
-    """Claim verification result with sources and confidence."""
-
-    original: Claim
-    verified_as: VerificationStatus
-    source: str  # "knowledge_base", "kb_rag", "research_agent"
-    source_text: str | None = None
-    source_url: str | None = None
-    confidence: float = 0.0
-    timestamp: float = field(default_factory=time.time)
-    requires_human_review: bool = False
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for serialization."""
-        return {
-            "original_claim": self.original.to_dict(),
-            "verified_as": self.verified_as.value,
-            "source": self.source,
-            "source_text": self.source_text,
-            "source_url": self.source_url,
-            "confidence": self.confidence,
-            "timestamp": self.timestamp,
-            "requires_human_review": self.requires_human_review,
-        }
 
 
 class SourceAgreement(str, Enum):
@@ -419,17 +383,7 @@ class ClaimVerifier:
 
     def _deserialize_verified_claim(self, data: Dict[str, Any]) -> VerifiedClaim:
         """Reconstruct VerifiedClaim from dictionary."""
-        original = Claim.from_dict(data.get("original_claim", {}))
-        return VerifiedClaim(
-            original=original,
-            verified_as=VerificationStatus(data.get("verified_as", "unverified")),
-            source=data.get("source", "unknown"),
-            source_text=data.get("source_text"),
-            source_url=data.get("source_url"),
-            confidence=data.get("confidence", 0.0),
-            timestamp=data.get("timestamp", time.time()),
-            requires_human_review=data.get("requires_human_review", False),
-        )
+        return VerifiedClaim.from_dict(data)
 
     async def kb_rag_search(self, claim: str) -> RAGResult | None:
         """
@@ -582,6 +536,93 @@ class ClaimVerifier:
             logger.error("Research agent lookup failed: %s", e)
             return None
 
+    async def _verify_unknown_claim(self, claim: Claim) -> VerifiedClaim:
+        """RAG search, then the research agent, for an UNKNOWN claim (called by :meth:`verify`)."""
+        rag_result = await self.kb_rag_search(claim.claim_text)
+        rag_confidence = rag_result.confidence if rag_result else 0.0
+
+        # If RAG confidence is high enough, return RAG result
+        if rag_result and rag_confidence >= _RAG_CONFIDENCE_THRESHOLD:
+            logger.info("RAG search confidence %.2f >= threshold, returning result", rag_confidence)
+            verified = VerifiedClaim(
+                claim=claim,
+                verified_as=(VerificationStatus.VERIFIED if rag_confidence > 0.8 else VerificationStatus.UNVERIFIED),
+                source="kb_rag",
+                source_text=rag_result.matches[0].text if rag_result.matches else None,
+                source_url=rag_result.matches[0].url if rag_result.matches else None,
+                confidence=rag_confidence,
+            )
+            return verified
+
+        # RAG confidence too low, escalate to research agent
+        research_result = await self.research_agent_lookup(claim.claim_text)
+
+        if not research_result:
+            # Research agent unavailable or error
+            if rag_result:
+                # Fallback to RAG result
+                logger.warning("Research agent failed, falling back to RAG result")
+                verified = VerifiedClaim(
+                    claim=claim,
+                    verified_as=VerificationStatus.UNVERIFIED,
+                    source="kb_rag",
+                    source_text=rag_result.matches[0].text if rag_result.matches else None,
+                    confidence=rag_confidence,
+                )
+            else:
+                # No evidence found
+                verified = VerifiedClaim(
+                    claim=claim,
+                    verified_as=VerificationStatus.ERROR,
+                    source="unknown",
+                    confidence=0.0,
+                )
+            return verified
+
+        # Compare RAG and research results, return best
+        return self._best_of_rag_and_research(claim, rag_result, rag_confidence, research_result)
+
+    @staticmethod
+    def _best_of_rag_and_research(
+        claim: Claim, rag_result: RAGResult | None, rag_confidence: float, research_result: ResearchAgentResult
+    ) -> VerifiedClaim:
+        """Whichever of the RAG and research results is more confident (called by the UNKNOWN path)."""
+        if research_result.confidence >= rag_confidence:
+            logger.info(
+                "Research agent confidence %.2f >= RAG %.2f, using research result",
+                research_result.confidence,
+                rag_confidence,
+            )
+            status_mapping = {
+                ResearchStatus.FOUND: VerificationStatus.VERIFIED,
+                ResearchStatus.NOT_FOUND: VerificationStatus.NOT_FOUND,
+                ResearchStatus.CONFLICTING: VerificationStatus.CONFLICTING,
+                ResearchStatus.TIMEOUT: VerificationStatus.TIMEOUT,
+            }
+            verified = VerifiedClaim(
+                claim=claim,
+                verified_as=status_mapping.get(research_result.status, VerificationStatus.UNVERIFIED),
+                source="research_agent",
+                source_text=research_result.fact,
+                source_url=research_result.url,
+                confidence=research_result.confidence,
+            )
+        else:
+            logger.info(
+                "RAG confidence %.2f > research agent %.2f, using RAG result",
+                rag_confidence,
+                research_result.confidence,
+            )
+            verified = VerifiedClaim(
+                claim=claim,
+                verified_as=VerificationStatus.UNVERIFIED,
+                source="kb_rag",
+                source_text=rag_result.matches[0].text if rag_result and rag_result.matches else None,
+                confidence=rag_confidence,
+            )
+
+        return verified
+
     async def verify(self, claim: Claim) -> VerifiedClaim:
         """
         Verify a single claim using KB RAG and research agent.
@@ -615,7 +656,7 @@ class ClaimVerifier:
             if claim.kb_status == KBStatus.IN_KB:
                 logger.info("Claim already in KB, marking as VERIFIED")
                 verified = VerifiedClaim(
-                    original=claim,
+                    claim=claim,
                     verified_as=VerificationStatus.VERIFIED,
                     source="knowledge_base",
                     source_text=claim.kb_fact,
@@ -628,7 +669,7 @@ class ClaimVerifier:
             if claim.kb_status == KBStatus.CONTRADICTS:
                 logger.warning("Claim contradicts KB, marking for human review")
                 verified = VerifiedClaim(
-                    original=claim,
+                    claim=claim,
                     verified_as=VerificationStatus.CONFLICTING,
                     source="knowledge_base",
                     source_text=claim.kb_fact,
@@ -640,93 +681,14 @@ class ClaimVerifier:
 
             # Handle UNKNOWN status: RAG search + optional research agent
             if claim.kb_status == KBStatus.UNKNOWN:
-                rag_result = await self.kb_rag_search(claim.claim_text)
-                rag_confidence = rag_result.confidence if rag_result else 0.0
-
-                # If RAG confidence is high enough, return RAG result
-                if rag_result and rag_confidence >= _RAG_CONFIDENCE_THRESHOLD:
-                    logger.info("RAG search confidence %.2f >= threshold, returning result", rag_confidence)
-                    verified = VerifiedClaim(
-                        original=claim,
-                        verified_as=(
-                            VerificationStatus.VERIFIED if rag_confidence > 0.8 else VerificationStatus.UNVERIFIED
-                        ),
-                        source="kb_rag",
-                        source_text=rag_result.matches[0].text if rag_result.matches else None,
-                        source_url=rag_result.matches[0].url if rag_result.matches else None,
-                        confidence=rag_confidence,
-                    )
-                    await self._set_to_cache(cache_key, verified)
-                    return verified
-
-                # RAG confidence too low, escalate to research agent
-                research_result = await self.research_agent_lookup(claim.claim_text)
-
-                if not research_result:
-                    # Research agent unavailable or error
-                    if rag_result:
-                        # Fallback to RAG result
-                        logger.warning("Research agent failed, falling back to RAG result")
-                        verified = VerifiedClaim(
-                            original=claim,
-                            verified_as=VerificationStatus.UNVERIFIED,
-                            source="kb_rag",
-                            source_text=rag_result.matches[0].text if rag_result.matches else None,
-                            confidence=rag_confidence,
-                        )
-                    else:
-                        # No evidence found
-                        verified = VerifiedClaim(
-                            original=claim,
-                            verified_as=VerificationStatus.ERROR,
-                            source="unknown",
-                            confidence=0.0,
-                        )
-                    await self._set_to_cache(cache_key, verified)
-                    return verified
-
-                # Compare RAG and research results, return best
-                if research_result.confidence >= rag_confidence:
-                    logger.info(
-                        "Research agent confidence %.2f >= RAG %.2f, using research result",
-                        research_result.confidence,
-                        rag_confidence,
-                    )
-                    status_mapping = {
-                        ResearchStatus.FOUND: VerificationStatus.VERIFIED,
-                        ResearchStatus.NOT_FOUND: VerificationStatus.NOT_FOUND,
-                        ResearchStatus.CONFLICTING: VerificationStatus.CONFLICTING,
-                        ResearchStatus.TIMEOUT: VerificationStatus.TIMEOUT,
-                    }
-                    verified = VerifiedClaim(
-                        original=claim,
-                        verified_as=status_mapping.get(research_result.status, VerificationStatus.UNVERIFIED),
-                        source="research_agent",
-                        source_text=research_result.fact,
-                        source_url=research_result.url,
-                        confidence=research_result.confidence,
-                    )
-                else:
-                    logger.info(
-                        "RAG confidence %.2f > research agent %.2f, using RAG result",
-                        rag_confidence,
-                        research_result.confidence,
-                    )
-                    verified = VerifiedClaim(
-                        original=claim,
-                        verified_as=VerificationStatus.UNVERIFIED,
-                        source="kb_rag",
-                        source_text=rag_result.matches[0].text if rag_result and rag_result.matches else None,
-                        confidence=rag_confidence,
-                    )
-
+                verified = await self._verify_unknown_claim(claim)
                 await self._set_to_cache(cache_key, verified)
                 return verified
 
             # Fallback for AMBIGUOUS or unknown KB statuses
             logger.warning("Unknown KB status: %s, marking as unverified", claim.kb_status)
             verified = VerifiedClaim(
-                original=claim,
+                claim=claim,
                 verified_as=VerificationStatus.UNVERIFIED,
                 source="unknown",
                 confidence=0.0,
@@ -737,7 +699,7 @@ class ClaimVerifier:
         except Exception as e:
             logger.error("Claim verification failed: %s", e)
             verified = VerifiedClaim(
-                original=claim,
+                claim=claim,
                 verified_as=VerificationStatus.ERROR,
                 source="unknown",
                 confidence=0.0,
@@ -807,7 +769,7 @@ class ClaimVerifier:
             # Return unverified results as fallback
             return [
                 VerifiedClaim(
-                    original=c,
+                    claim=c,
                     verified_as=VerificationStatus.ERROR,
                     source="unknown",
                     confidence=0.0,
