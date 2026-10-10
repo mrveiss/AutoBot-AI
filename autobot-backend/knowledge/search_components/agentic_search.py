@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from typing import Any, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.provenance import document_origin
 from services.context_sufficiency import (
     SufficiencyVerdict,
     get_context_sufficiency_evaluator,
@@ -389,7 +390,8 @@ class AgenticSearchTool:
             if hasattr(r, "source_path") and r.source_path:
                 source = f" [{r.source_path}]"
             elif hasattr(r, "metadata") and isinstance(r.metadata, dict):
-                source = f" [{r.metadata.get('source', r.metadata.get('source_path', ''))}]"
+                label = document_origin(r.metadata).reference or r.metadata.get("source_path", "")
+                source = f" [{label}]"
             content = r.content if hasattr(r, "content") else str(r)
             parts.append(f"[{i}]{source}\n{content}")
 

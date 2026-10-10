@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.provenance import document_origins
 
 from ..config import AGENT_API_BASE_URL, AGENT_API_KEY_PLACEHOLDER
 from ..services.goal import GoalService
@@ -243,10 +244,16 @@ class HeartbeatContextBuilder:
             results: List of dicts from KbInheritanceResolver.search_with_inheritance()
 
         Returns:
-            Dict with 'chunks' and 'sources' keys for compatibility with existing context format.
+            Dict with 'chunks', 'sources' and 'document_sources' keys.
+
+        ``sources`` holds **company** ids and always has -- it answers which tenant a chunk
+        was inherited from. The document's origin is surfaced beside it as
+        ``document_sources`` (#17618), because a key named ``sources`` answering tenancy
+        is a provenance-shaped name over a different question. The tenancy list is
+        unchanged: callers depend on it.
         """
         if not results:
-            return {"chunks": [], "sources": []}
+            return {"chunks": [], "sources": [], "document_sources": []}
 
         chunks = []
         sources_set = set()
@@ -267,6 +274,9 @@ class HeartbeatContextBuilder:
         return {
             "chunks": chunks,
             "sources": list(sources_set),
+            # Five intake legs write provenance in five dialects; the accessor speaks all of
+            # them and omits a shape it does not recognise rather than inventing a placeholder.
+            "document_sources": document_origins(chunks),
         }
 
     def _normalize_rag_context(self, result: Any) -> Dict[str, Any]:
