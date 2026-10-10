@@ -44,12 +44,15 @@ import pytest
 
 yaml = pytest.importorskip("yaml")
 packaging_requirements = pytest.importorskip("packaging.requirements")
+packaging_specifiers = pytest.importorskip("packaging.specifiers")
 
 from repo_tests._paths import repo_root  # noqa: E402
 
 _CONFIG = repo_root() / ".github" / "dependabot.yml"
 _CEILING = "2.1"
 _PROBES = ("2.1.0", "2.1.1", "2.1.9")  # any 2.1.x the pin admits is a failure
+_PATCHES = ("2.0.0", "2.0.54", "2.0.99")  # 2.0.x patches that must stay available
+_EXACT_20X = re.compile(r"2\.0\.\d+")  # a concrete patch; rejects the `2.0.*` wildcard
 
 # (manifest, dependabot directory, shape)
 _ROWS = [
@@ -88,8 +91,12 @@ def _admitted_21x(text: str) -> list[str]:
 def _shape_ok(text: str, shape: str) -> bool:
     spec = _sqlalchemy_requirement(text).specifier
     if shape == "exact":
-        return any(s.operator == "==" and s.version.startswith("2.0.") for s in spec)
-    return any(s.operator == "<" and s.version == _CEILING for s in spec)
+        return any(s.operator == "==" and _EXACT_20X.fullmatch(s.version) for s in spec)
+    # Upper bound: any spelling (`<2.1`, `<2.1.0`, `<=2.0.99`) that excludes 2.1
+    # and still admits a 2.0.x. A missing upper bound admits 2.1 and fails here.
+    return not any(spec.contains(v, prereleases=True) for v in _PROBES) and any(
+        spec.contains(v, prereleases=True) for v in _PATCHES
+    )
 
 
 def _pip_block(document: dict, directory: str) -> dict:
@@ -108,31 +115,25 @@ def _sqlalchemy_ignore(document: dict, directory: str) -> dict:
     return entries[0]
 
 
-def _excludes_the_ceiling(versions: list[str]) -> bool:
-    """True when *versions* bars everything at or above the ceiling."""
+def _blocked(versions: list[str], candidate: str) -> bool:
+    """True when any dependabot ignore range in *versions* covers *candidate*."""
     for spec in versions:
-        match = re.fullmatch(r"\s*>=\s*([0-9][0-9.]*)\s*", spec)
-        if match and _le(match.group(1), _CEILING):
-            return True
+        try:
+            if packaging_specifiers.SpecifierSet(spec.strip()).contains(candidate, prereleases=True):
+                return True
+        except packaging_specifiers.InvalidSpecifier:
+            continue  # a range we cannot parse bars nothing we can show
     return False
 
 
-def _le(left: str, right: str) -> bool:
-    """Numeric version comparison, zero-padded to equal length.
+def _excludes_the_ceiling(versions: list[str]) -> bool:
+    """True when *versions* bars the first release at the ceiling."""
+    return _blocked(versions, f"{_CEILING}.0")
 
-    Padding is the whole point: bare tuple comparison makes `(2, 1, 0) <= (2, 1)`
-    False, because a prefix sorts first. That read `>=2.1.0` as NOT barring 2.1 --
-    caught by this module's own contrast pair rather than in review.
-    """
 
-    def parts(v: str) -> list[int]:
-        return [int(p) for p in v.split(".") if p.isdigit()]
-
-    a, b = parts(left), parts(right)
-    width = max(len(a), len(b))
-    a += [0] * (width - len(a))
-    b += [0] * (width - len(b))
-    return a <= b
+def _keeps_patches_available(versions: list[str]) -> bool:
+    """True when no 2.0.x patch is barred, so security fixes still arrive."""
+    return not any(_blocked(versions, v) for v in _PATCHES)
 
 
 def _ignore_problem(document: dict, directory: str) -> str | None:
@@ -148,8 +149,8 @@ def _ignore_problem(document: dict, directory: str) -> str | None:
         )
     if not _excludes_the_ceiling(versions):
         return f"the ignore range {versions} does not bar >= {_CEILING}, so a 2.1 bump can still be proposed"
-    if any(re.fullmatch(r"\s*>=\s*0[.0]*\s*", v) or v.strip() in {"*", ">=0"} for v in versions):
-        return f"the range {versions} bars everything, including 2.0.x security patches"
+    if not _keeps_patches_available(versions):
+        return f"the range {versions} also bars 2.0.x patches, which must stay available for security fixes"
     return None
 
 
@@ -201,6 +202,15 @@ _MAJOR_ONLY = {
         }
     ]
 }
+_BARS_PATCHES = {
+    "updates": [
+        {
+            "package-ecosystem": "pip",
+            "directory": "/x",
+            "ignore": [{"dependency-name": "sqlalchemy", "versions": [">=2.0"]}],
+        }
+    ]
+}
 _NO_ENTRY = {"updates": [{"package-ecosystem": "pip", "directory": "/x", "ignore": []}]}
 
 
@@ -213,6 +223,11 @@ _NO_ENTRY = {"updates": [{"package-ecosystem": "pip", "directory": "/x", "ignore
         ("sqlalchemy>=2.1.0,<2.2\n", "upper-bound", True, False),  # the #17706 bump
         ("sqlalchemy>=2.0.54\n", "upper-bound", True, False),  # cap deleted
         ("sqlalchemy==2.1.0\n", "exact", True, False),
+        ("sqlalchemy>=2.0.54,<2.1.0\n", "upper-bound", False, True),  # equivalent spelling
+        ("sqlalchemy>=2.0.54,<=2.0.99\n", "upper-bound", False, True),  # safe, different bound
+        ("sqlalchemy>=2.0.54\n", "upper-bound", True, False),  # no upper bound at all
+        ("sqlalchemy<2.0\n", "upper-bound", False, False),  # excludes 2.1 but no 2.0.x left
+        ("sqlalchemy==2.0.*\n", "exact", False, False),  # wildcard is not an exact pin
     ],
 )
 def test_the_manifest_check_itself(text: str, shape: str, admits: bool, shape_ok: bool) -> None:
@@ -222,23 +237,24 @@ def test_the_manifest_check_itself(text: str, shape: str, admits: bool, shape_ok
 
 @pytest.mark.parametrize(
     ("document", "holds"),
-    [(_GOOD_IGNORE, True), (_MAJOR_ONLY, False), (_NO_ENTRY, False)],
-    ids=["versions-range", "semver-major-only (#17706)", "no-entry"],
+    [(_GOOD_IGNORE, True), (_MAJOR_ONLY, False), (_NO_ENTRY, False), (_BARS_PATCHES, False)],
+    ids=["versions-range", "semver-major-only (#17706)", "no-entry", "bars-2.0.x-patches"],
 )
 def test_the_ignore_check_itself(document: dict, holds: bool) -> None:
     assert (_ignore_problem(document, "/x") is None) is holds
 
 
 @pytest.mark.parametrize(
-    ("versions", "expected"),
+    ("versions", "excludes", "keeps_patches"),
     [
-        ([">=2.1"], True),
-        ([">=2.1.0"], True),
-        ([">=2.0"], True),  # stricter than needed, still bars 2.1
-        ([">=2.2"], False),  # lets 2.1 through -- the bug this guards
-        ([">=3.0.0"], False),
-        ([], False),
+        ([">=2.1"], True, True),
+        ([">=2.1.0"], True, True),
+        ([">=2.0"], True, False),  # bars 2.1 but also every 2.0.x patch
+        ([">=2.2"], False, True),  # lets 2.1 through -- the bug this guards
+        ([">=3.0.0"], False, True),
+        ([], False, True),
     ],
 )
-def test_the_range_check_itself(versions: list[str], expected: bool) -> None:
-    assert _excludes_the_ceiling(versions) is expected
+def test_the_range_check_itself(versions: list[str], excludes: bool, keeps_patches: bool) -> None:
+    assert _excludes_the_ceiling(versions) is excludes
+    assert _keeps_patches_available(versions) is keeps_patches
