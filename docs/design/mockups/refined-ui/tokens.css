@@ -1,0 +1,151 @@
+/*
+ * Copyright 2025-2026 mrveiss
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * AutoBot "Refined" design tokens (#18223)
+ *
+ * Extracted verbatim from the Refined UI mockups in ./screens/. In the mockups
+ * the tokens hang off a `.th` wrapper; here they are re-rooted for the app:
+ *
+ *   mockup                         app
+ *   .th                         -> :root
+ *   .th[data-theme="dark"]      -> :root[data-theme="dark"]
+ *   .th.slm                     -> :root[data-app="slm"]   (SLM frontend only)
+ *   .th[data-ui="minimal"]      -> :root[data-ui="minimal"]
+ *
+ * Themes: light (default) · dark · contrast (high contrast, accessibility) ·
+ * mono (monochrome, corporate). The SLM frontend always runs the teal scheme
+ * so users can tell it apart from the user frontend; its identity bar uses
+ * the --slm-bar-* tokens in every theme.
+ *
+ * Rules carried by these values:
+ *   - no box-shadow anywhere (cards, buttons, menus, dialogs) — separation is
+ *     borders (--border / --line, width --bw) and surfaces (--surface/--surface2)
+ *   - focus is always a visible outline in --focus, never colour alone
+ *   - high contrast raises --bw to 2px and puts a border on every pill
+ *
+ * Fonts: IBM Plex Sans (UI) and IBM Plex Mono (data, code, paths, numbers).
+ */
+
+/* ===== Colour themes ===== */
+:root {
+  --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+  --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+  --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+  --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+  --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+  --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+  --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+  --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+:root[data-theme="dark"] {
+  --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+  --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+  --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+  --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+  --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+  --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+  --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+  --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+:root[data-theme="contrast"] {
+  --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+  --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+  --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+  --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+  --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+  --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+  --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+  --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+:root[data-theme="mono"] {
+  --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+  --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+  --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+  --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+  --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+  --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+  --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+  --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+
+/* ===== SLM frontend scheme (always distinct from the user frontend) ===== */
+:root[data-app="slm"] {
+  --slm-bar:#0B2E2B;--slm-bar-fg:#E6F4F1;--slm-bar-muted:#A9CBC5;--slm-bar-hover:#14423D;--slm-bar-line:#1D4A45;--slm-stripe:#14A38B;--slm-badge-bg:#14A38B;--slm-badge-fg:#062220;--slm-bar-on:#2CC5A8;
+}
+:root[data-app="slm"]:not([data-theme]),
+:root[data-app="slm"][data-theme="light"] {
+  --bg:#F2F8F7;--surface:#FFFFFF;--surface2:#F6FBFA;--border:#D7E6E3;--line:#E6F0EE;
+  --text:#10302D;--text2:#3C5A56;--muted:#52706C;--link:#0D5C55;--link-h:#0A4740;
+  --primary:#0D5C55;--primary-h:#0A4A44;--on-primary:#FFFFFF;--accent:#14A38B;--focus:#2563EB;
+  --tile:#EAF4F2;--tile-b:#D7E6E3;--stroke:#10302D;--i1:#9FD8CC;--i2:#E9CF7A;--i3:#5FB8A6;--i1t:#D6EEE9;--i2t:#F5EBC6;--i3t:#CBE8E1;
+  --bar:#0D5C55;--bar-track:#E6F0EE;--info-bg:#DFF1EE;--info-fg:#0D5C55;--idle-bg:#E8F1EF;--idle-fg:#3C5A56;
+  --brand-bg:#0D5C55;--brand-fg:#FFFFFF;
+}
+:root[data-app="slm"][data-theme="dark"] {
+  --bg:#0B1C1B;--surface:#112624;--surface2:#15302D;--border:#24423E;--line:#1B3532;
+  --text:#DDEFEB;--text2:#B3D1CB;--muted:#8FB3AC;--link:#DDEFEB;--link-h:#2CC5A8;
+  --primary:#2CC5A8;--primary-h:#4FD3BA;--on-primary:#06201D;--accent:#2CC5A8;--focus:#7FD8FF;
+  --tile:#173330;--tile-b:#24423E;--stroke:#CBE7E1;--i1:#3E8F80;--i2:#B8973F;--i3:#2E7A6D;--i1t:#1D3F3A;--i2t:#3A3420;--i3t:#1A3A35;
+  --bar:#8FD3C4;--bar-track:#1B3532;--info-bg:#123A35;--info-fg:#9FE3D4;--idle-bg:#1B3532;--idle-fg:#B3D1CB;
+  --brand-bg:#2CC5A8;--brand-fg:#06201D;
+  --slm-bar:#050F0E;--slm-bar-fg:#DDEFEB;--slm-bar-muted:#8FB3AC;--slm-bar-hover:#10272A;--slm-bar-line:#1B3532;--slm-stripe:#2CC5A8;--slm-badge-bg:#2CC5A8;--slm-badge-fg:#06201D;--slm-bar-on:#2CC5A8;
+}
+:root[data-app="slm"][data-theme="contrast"] {
+  --link:#003D36;--link-h:#001F1B;--primary:#003D36;--primary-h:#002420;--accent:#00695C;
+  --brand-bg:#003D36;--brand-fg:#FFFFFF;
+  --slm-bar:#002420;--slm-bar-fg:#FFFFFF;--slm-bar-muted:#FFFFFF;--slm-bar-hover:#003D36;--slm-bar-line:#FFFFFF;--slm-stripe:#00695C;--slm-badge-bg:#FFFFFF;--slm-badge-fg:#002420;--slm-bar-on:#FFFFFF;
+}
+:root[data-app="slm"][data-theme="mono"] {
+  --bg:#EEEEF0;--surface2:#F7F7F8;
+  --slm-bar:#27272A;--slm-bar-fg:#FAFAFA;--slm-bar-muted:#D4D4D8;--slm-bar-hover:#3F3F46;--slm-bar-line:#3F3F46;--slm-stripe:#71717A;--slm-badge-bg:#FAFAFA;--slm-badge-fg:#18181B;--slm-bar-on:#FAFAFA;
+}
+
+/* ===== Layout grid, table, form and overlay tokens (theme-independent sizes) ===== */
+:root {
+  --bp-sm:640px;--bp-md:768px;--bp-lg:1024px;--bp-xl:1280px;--bp-2xl:1536px;
+  --grid-cols:12;--grid-gutter:24px;--page-margin:clamp(16px,2.5vw,32px);
+  --topbar-h:56px;--subnav-w:220px;--subnav-rail:56px;--panel-w:360px;--content-max:1440px;--reading-max:72ch;
+  --space-section:32px;--stack:16px;
+  --widget-s:4;--widget-m:6;--widget-l:8;--widget-full:12;--kpi-span:3;
+
+  --tbl-font-size:13px;--tbl-row-h:44px;--tbl-cell-px:16px;--tbl-cell-py:10px;--tbl-head-h:36px;
+  --tbl-head-bg:var(--surface2);--tbl-head-fg:var(--muted);--tbl-head-font:600 11.5px/1.2 'IBM Plex Sans',system-ui,sans-serif;--tbl-head-case:uppercase;--tbl-head-ls:.05em;--tbl-head-border:var(--bw) solid var(--border);
+  --tbl-border:var(--bw) solid var(--line);--tbl-row-hover:var(--surface2);--tbl-row-selected:var(--surface2);--tbl-selected-edge:3px solid var(--primary);
+  --tbl-zebra:transparent;--tbl-zebra-bg:var(--surface2);
+  --tbl-check-col-w:44px;--tbl-actions-col-w:48px;--tbl-min-col:96px;--tbl-cell-max:360px;--tbl-num:tabular-nums;--tbl-sticky-top:var(--topbar-h);
+
+  --field-h-sm:32px;--field-h-md:36px;--field-h-lg:44px;--field-px:12px;--field-radius:6px;--field-font-size:13.5px;
+  --field-border:var(--bw) solid var(--border);--field-border-hover:var(--muted);--field-bg:var(--surface);--field-bg-disabled:var(--surface2);--field-fg:var(--text);
+  --field-focus-ring:3px solid var(--focus);--field-focus-offset:1px;
+  --label-size:13px;--label-weight:500;--label-gap:6px;--help-size:12.5px;--help-fg:var(--muted);
+  --error-fg:var(--alert-text);--error-border:var(--bar-alert);--error-bw:2px;
+  --field-gap:16px;--inline-gap:8px;--form-section-gap:28px;--form-label-col:200px;--form-max:640px;--action-gap:8px;
+  --check-gap:8px;--control-size:18px;--switch-w:36px;--switch-h:20px;--switch-knob:14px;
+
+  --tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px;
+}
+@media (max-width:1023.98px){:root{--grid-cols:8;--grid-gutter:16px;--space-section:24px;--stack:12px}}
+@media (max-width:767.98px){:root{--grid-cols:4}}
+[data-density="compact"]{--tbl-row-h:32px;--tbl-cell-px:12px;--tbl-cell-py:6px;--tbl-head-h:32px}
+[data-zebra="on"]{--tbl-zebra:var(--tbl-zebra-bg);--tbl-row-hover:var(--line)}
+
+/* ===== UI mode: Minimal hides advanced features, Full shows everything ===== */
+:root[data-ui="minimal"] .adv{display:none !important}
+:root:not([data-ui="minimal"]) .only-min{display:none !important}
+
+/* ===== Tooltip (CSS-only reference; the app should use the shared Tooltip primitive, #14779) ===== */
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}

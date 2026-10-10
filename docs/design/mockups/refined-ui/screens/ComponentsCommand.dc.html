@@ -1,0 +1,847 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot Components · Command menu</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.wgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:start}
+.wgrid>.card{min-width:0;position:relative;display:flex;flex-direction:column}
+.card.editing{outline:1.5px dashed var(--muted);outline-offset:3px}
+.card.editing[draggable="true"]{cursor:grab}
+.grip{display:inline-grid;place-items:center;width:18px;height:28px;cursor:grab;flex:none}
+.wtools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto}
+.mbtn{width:30px;height:30px;padding:0;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);display:inline-grid;place-items:center;cursor:pointer;flex:none}
+.mbtn:hover{background:var(--surface2)}
+.mbtn[aria-disabled="true"]{opacity:.45;cursor:default}
+.segg{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.segg .seg{height:26px;padding:0 8px}
+.hint{margin:0;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;border:var(--bw) dashed var(--border);background:var(--surface2);font-size:13px;color:var(--text2)}
+.rsz{position:absolute;right:5px;bottom:5px;fill:none;stroke:var(--muted);stroke-width:1.5;stroke-linecap:round;pointer-events:none}
+@media (max-width:760px){.wgrid>.card{grid-column:1 / -1 !important}}
+.sub2{font-size:12.5px;color:var(--muted)}
+.specbar{flex:1 1 100%;box-sizing:border-box;padding:14px clamp(16px,2.5vw,32px);display:flex;flex-wrap:wrap;align-items:center;gap:16px;background:var(--surface);border-bottom:var(--bw) solid var(--border)}
+.stage{position:relative;height:720px;border-radius:10px;border:var(--bw) solid var(--border);overflow:hidden;background:var(--bg)}
+.cmdk-ov{position:absolute;inset:0;background:var(--text);opacity:.45}
+.cmdk{position:absolute;top:56px;left:50%;transform:translateX(-50%);width:min(660px,calc(100% - 32px));max-height:600px;background:var(--surface);border:var(--bw) solid var(--border);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;color:var(--text)}
+.cmdk-head{display:flex;align-items:center;gap:10px;padding:0 12px 0 16px;border-bottom:var(--bw) solid var(--line)}
+.cmdk-head:focus-within{outline:2px solid var(--focus);outline-offset:-2px;border-radius:12px 12px 0 0}
+.cmdk-in{flex-grow:1;min-width:0;height:52px;border:0;background:transparent;color:var(--text);font:inherit;font-size:16px;outline:none}
+.cmdk-in::placeholder{color:var(--muted)}
+.cmdk-list{overflow-y:auto;padding:4px 0 8px;flex:1 1 auto;min-height:0}
+.gh{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 18px 4px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.gh span{text-transform:none;letter-spacing:0;font-weight:500}
+.opt{display:flex;align-items:center;gap:12px;padding:6px 12px 6px 9px;margin:0 6px;border-radius:7px;border-left:3px solid transparent;cursor:pointer;font-size:13.5px;color:var(--text);min-height:44px;box-sizing:border-box}
+.opt.hov{background:var(--surface2)}
+.opt.on{background:var(--surface2);border-left-color:var(--accent);outline:var(--bw) solid var(--border)}
+.opt[aria-disabled="true"]{opacity:.55;cursor:not-allowed}
+.opt .tile{width:28px;height:28px;border-radius:7px}
+.ol{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mt{background:var(--i2t);color:inherit;font-weight:600;text-decoration:underline;text-underline-offset:2px;padding:0;border-radius:2px}
+.kbd{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;box-sizing:border-box;border-radius:4px;border:var(--bw) solid var(--border);background:var(--surface2);color:var(--text2);font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;font-weight:500;line-height:1;white-space:nowrap}
+.chip{height:28px;padding:0 11px;border-radius:99px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.chip:hover{color:var(--text);background:var(--surface2)}
+.chip.on{background:var(--primary);border-color:var(--primary);color:var(--on-primary);font-weight:600}
+.cmdk-foot{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:9px 16px;border-top:var(--bw) solid var(--line);background:var(--surface2);font-size:12px;color:var(--muted)}
+.cmdk-foot>span{display:inline-flex;align-items:center;gap:5px}
+.cmdk-trig{display:inline-flex;align-items:center;gap:8px;height:34px;width:280px;padding:0 6px 0 10px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface2);color:var(--muted);font:inherit;font-size:13px;cursor:pointer;box-sizing:border-box;text-align:left}
+.cmdk-trig:hover,.cmdk-trig.hov{background:var(--surface);border-color:var(--text2);color:var(--text2)}
+.cmdk-trig.fv{outline:3px solid var(--focus);outline-offset:2px}
+.cmdk-trig.act{background:var(--surface);border-color:var(--primary);color:var(--text)}
+.st{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.skel{display:block;height:9px;border-radius:4px;background:var(--bar-track);outline:var(--pill-b)}
+.rules{margin:0;padding:12px 16px;font-size:12.5px;line-height:1.5;color:var(--text2);border-top:var(--bw) solid var(--line)}
+.phone{width:360px;height:720px;border-radius:24px;border:var(--bw) solid var(--border);background:var(--surface);overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;flex:none}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <a href="ThemeManager.dc.html" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon" aria-label="Plugins" title="Plugins"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon" aria-label="Secrets" title="Secrets"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" title="Preferences"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <a href="AdminUsers.dc.html" class="icon" aria-label="Admin panel" title="Admin panel"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <button type="button" aria-label="Profile menu" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer">MV</button>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+  <aside class="sub" aria-label="Design system" style="flex: 1 1 230px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+    <a href="DesignSystem.dc.html" style="font-weight: 600; color: var(--text)">AutoBot Design System</a>
+    <span class="sub2" style="padding: 0 13px 4px">v1 · 4 themes</span>
+    <p class="sect">Overview</p>
+    <a href="DesignSystem.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z" class="i1"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z" class="it1"/></svg>Introduction</a>
+    <p class="sect">Foundations</p>
+    <a href="ComponentsStates.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4" class="i3"/><circle cx="16" cy="9" r="4" class="i2"/><circle cx="12" cy="16" r="4" class="i1"/></svg>Tokens &amp; states</a>
+    <a href="ComponentsGrid.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5" class="i1"/><rect x="13" y="4" width="7" height="7" rx="1.5" class="iw"/><rect x="4" y="13" width="7" height="7" rx="1.5" class="iw"/><rect x="13" y="13" width="7" height="7" rx="1.5" class="i2"/></svg>Grid, tables &amp; forms</a>
+    <a href="ComponentsCharts.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><rect x="5.5" y="11" width="3.5" height="7" class="i1"/><rect x="10.5" y="6" width="3.5" height="12" class="i2"/><rect x="15.5" y="13" width="3.5" height="5" class="i3"/></svg>Charts &amp; data viz</a>
+    <p class="sect">Components</p>
+    <a href="ComponentsForms.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4" class="i1"/><circle cx="16.5" cy="12" r="2.5" class="iw"/></svg>Form controls</a>
+    <a href="ComponentsTable.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="iw"/><path d="M4 10h16M4 14.5h16M10 10v9"/></svg>Data table</a>
+    <a href="ComponentsDialogs.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="it1"/><rect x="6" y="8" width="12" height="9" rx="1.5" class="iw"/></svg>Dialogs</a>
+    <a href="ComponentsOverlays.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" class="i2"/><path d="M10 21h4"/></svg>Overlays &amp; feedback</a>
+    <a href="ComponentsTooltips.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10h-7l-4 4v-4H4z" class="it1"/><path d="M8 10h8"/></svg>Tooltips</a>
+    <a href="ComponentsCommand.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" class="iw"/><path d="M7 10l3 2-3 2M12 15h5"/></svg>Command menu</a>
+    <a href="ComponentsNavigation.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M15 9l-2 4-4 2 2-4z" class="i3"/></svg>Navigation</a>
+    <a href="ComponentsLayout.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="iw"/><path d="M9 4v16M9 10h12"/></svg>Layout &amp; utility</a>
+    <a href="ComponentsChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h12v9H8l-3 3v-3H3z" class="i1"/><path d="M15 9h6v8h-2v3l-3-3h-5v-3"/></svg>Chat &amp; agent</a>
+    <p class="sect">Patterns</p>
+    <a href="FileBrowser.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="i2"/></svg>File browser</a>
+    <a href="Mailbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" class="iw"/><path d="M3 7l9 6 9-6"/></svg>Mailbox</a>
+    <a href="ComponentsUiModes.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5" class="it1"/><rect x="4.5" y="8.5" width="8" height="7" rx="3.5" class="i2"/></svg>Interface modes</a>
+    <a href="SignUp.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" class="i2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Auth pages</a>
+    <a href="AccountSecurity.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4" class="i1"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>Account settings</a>
+    <a href="SearchResults.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>Global search</a>
+    <a href="HelpCenter.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="i2"/><path d="M10 10a2 2 0 1 1 3 1.7c-.7.4-1 1-1 1.8M12 16.5v.5"/></svg>Help centre</a>
+    <span style="flex-grow: 1; min-height: 16px" aria-hidden="true"></span>
+    <a href="Main.dc.html" style="border-top: var(--bw) solid var(--line); border-radius: 0; padding-top: 12px"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg>← Back to app</a>
+  </aside>
+  <div style="flex: 999 1 520px; min-width: 0; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <div class="specbar">
+    <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 280px">
+      <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.01em">Components · Command menu</h1>
+      <span class="sub2">Ctrl K palette: one keyboard-first place to jump to any screen, run an action, start an agent or find a knowledge document.</span>
+    </div>
+    <div role="group" aria-label="Preview theme" class="segg">
+      <sc-for list="{{themes}}" as="t" hint-placeholder-count="4"><button type="button" class="seg {{t.cls}}" aria-pressed="{{t.pressed}}" onClick="{{t.pick}}">{{t.label}}</button></sc-for>
+    </div>
+  </div>
+
+  <main style="flex: 1 1 100%; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 20px">
+
+    <section class="card" aria-labelledby="sec-live">
+      <div class="ch">
+        <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg></span>
+        <h2 id="sec-live">Command palette · live</h2>
+        <span class="sub2">Use for: navigation, quick actions, agent runs and knowledge lookup from anywhere</span>
+      </div>
+      <div style="padding: 16px">
+        <div class="stage">
+          <div aria-hidden="{{bgHidden}}" style="position: absolute; inset: 0; display: flex; flex-direction: column">
+            <div style="height: 52px; flex: none; display: flex; align-items: center; gap: 18px; padding: 0 18px; background: var(--surface); border-bottom: var(--bw) solid var(--border); font-size: 13.5px; color: var(--text2)">
+              <span style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text)"><span class="tile" style="width: 28px; height: 28px; background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.8"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>AutoBot</span>
+              <span style="font-weight: 600; color: var(--text)">Home</span><span>Chat</span><span>Knowledge</span><span>Company OS</span><span>Analytics</span>
+              <span style="flex-grow: 1"></span>
+              <button type="button" id="cmdk-trigger" class="cmdk-trig {{trigCls}}" tabindex="{{trigTab}}" aria-haspopup="dialog" aria-expanded="{{openStr}}" aria-keyshortcuts="Control+K" onClick="{{openPalette}}">
+                <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>
+                <span style="flex-grow: 1">Search or jump to…</span><span class="kbd">Ctrl</span><span class="kbd">K</span>
+              </button>
+              <span style="width: 30px; height: 30px; border-radius: 99px; background: var(--brand-bg); color: var(--brand-fg); display: grid; place-items: center; font-size: 12px; font-weight: 600">MV</span>
+            </div>
+            <div style="padding: 22px 24px; display: flex; flex-direction: column; gap: 16px">
+              <div style="display: flex; flex-direction: column; gap: 2px"><span class="sub2">AutoBot Labs</span><span style="font-size: 22px; font-weight: 600">Home</span></div>
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px">
+                <div class="card kpi"><div><span>Pending approvals</span><b>3</b></div></div>
+                <div class="card kpi"><div><span>Active agents</span><b>2 / 6</b></div></div>
+                <div class="card kpi"><div><span>Knowledge documents</span><b>1,284</b></div></div>
+                <div class="card kpi"><div><span>Fleet nodes online</span><b>5 / 6</b></div></div>
+              </div>
+              <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 14px">
+                <div class="card">
+                  <div class="ch"><h2>Recent chats</h2></div>
+                  <div class="row"><span style="flex-grow: 1; font-size: 13.5px">Compare vector store benchmarks for 1M chunks</span><span class="sub2 mono">10:41</span></div>
+                  <div class="row"><span style="flex-grow: 1; font-size: 13.5px">Draft Ansible role for Docker Compose redeploy</span><span class="sub2 mono">09:12</span></div>
+                  <div class="row"><span style="flex-grow: 1; font-size: 13.5px">Summarise last week's failed heartbeat runs</span><span class="sub2 mono">Yesterday</span></div>
+                  <div class="row"><span style="flex-grow: 1; font-size: 13.5px">Explain session lifecycle fix in PR</span><span class="sub2 mono">Mon</span></div>
+                </div>
+                <div class="card">
+                  <div class="ch"><h2>Agents</h2></div>
+                  <div class="row"><span class="dot d-ok"></span><span style="flex-grow: 1; font-size: 13.5px">research-agent</span><span class="pill ok">active</span></div>
+                  <div class="row"><span class="dot d-ok"></span><span style="flex-grow: 1; font-size: 13.5px">code-agent</span><span class="pill ok">active</span></div>
+                  <div class="row"><span class="dot d-warn"></span><span style="flex-grow: 1; font-size: 13.5px">performance-engineer</span><span class="pill warn">paused</span></div>
+                  <div class="row"><span class="dot d-bad"></span><span style="flex-grow: 1; font-size: 13.5px">devops-engineer</span><span class="pill bad">error</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <sc-if value="{{closed}}" hint-placeholder-val="{{ false }}">
+            <p class="hint" role="status" style="position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); white-space: nowrap">Command menu closed. Press <span class="kbd">Ctrl</span><span class="kbd">K</span> or click “Search or jump to…” in the top bar.</p>
+          </sc-if>
+
+          <sc-if value="{{open}}" hint-placeholder-val="{{ true }}">
+            <div class="cmdk-ov" aria-hidden="true" onClick="{{close}}"></div>
+            <div class="cmdk" role="dialog" aria-modal="true" aria-labelledby="cmdk-title" onKeyDown="{{onKey}}">
+              <h2 id="cmdk-title" class="vh">Command menu</h2>
+              <div class="cmdk-head">
+                <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>
+                <sc-if value="{{inStep}}" hint-placeholder-val="{{ false }}">
+                  <button type="button" class="chip on" onClick="{{back}}" aria-label="Run agent step. Go back to all commands">Run agent ›</button>
+                </sc-if>
+                <input id="cmdk-input" class="cmdk-in" type="text" role="combobox" aria-expanded="{{listExpanded}}" aria-controls="cmdk-list" aria-autocomplete="list" aria-activedescendant="{{activeId}}" aria-label="Search commands" autocomplete="off" spellcheck="false" placeholder="{{placeholder}}" value="{{query}}" onInput="{{onInput}}">
+                <button type="button" class="kbd" style="cursor: pointer; height: 24px" onClick="{{esc}}" aria-label="{{escLabel}}">Esc</button>
+              </div>
+
+              <sc-if value="{{notStep}}" hint-placeholder-val="{{ true }}">
+                <div style="display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: var(--bw) solid var(--line); flex-wrap: wrap">
+                  <div role="group" aria-label="Search scope" style="display: flex; gap: 6px; flex-wrap: wrap">
+                    <sc-for list="{{scopes}}" as="s" hint-placeholder-count="6"><button type="button" class="chip {{s.cls}}" aria-pressed="{{s.pressed}}" onClick="{{s.pick}}">{{s.label}}</button></sc-for>
+                  </div>
+                  <span style="flex-grow: 1"></span>
+                  <span class="sub2" style="font-size: 12px; display: inline-flex; gap: 5px; align-items: center"><span class="kbd">Tab</span>switch scope</span>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{showRecentSearches}}" hint-placeholder-val="{{ true }}">
+                <div style="display: flex; align-items: center; gap: 8px; padding: 10px 16px 2px; flex-wrap: wrap">
+                  <span class="st">Recent searches</span>
+                  <sc-for list="{{recentSearches}}" as="r" hint-placeholder-count="3"><button type="button" class="chip" style="height: 26px" onClick="{{r.pick}}"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>{{r.label}}</button></sc-for>
+                  <button type="button" class="seg" style="height: 26px; margin-left: auto" onClick="{{clearRecent}}">Clear</button>
+                </div>
+              </sc-if>
+
+              <div id="cmdk-list" class="cmdk-list" role="listbox" aria-label="{{listLabel}}">
+                <sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+                  <div role="group" aria-labelledby="{{g.hid}}">
+                    <div class="gh" id="{{g.hid}}" role="presentation">{{g.name}}<span>{{g.meta}}</span></div>
+                    <sc-for list="{{g.items}}" as="it" hint-placeholder-count="4">
+                      <div role="option" id="{{it.id}}" aria-selected="{{it.sel}}" class="opt {{it.cls}}" onClick="{{it.open}}" onMouseEnter="{{it.hover}}">
+                        <span class="tile" aria-hidden="true">
+                          <sc-if value="{{it.kPage}}" hint-placeholder-val="{{ true }}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" class="it1"/><path d="M4 9h16M9 9v11"/></svg></sc-if>
+                          <sc-if value="{{it.kAction}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24"><path d="M13 2L5 14h6l-1 8 8-12h-6z" class="it2"/></svg></sc-if>
+                          <sc-if value="{{it.kAgent}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24"><rect x="5" y="8" width="14" height="11" rx="3" class="i1"/><circle cx="9.5" cy="13.5" r="1.3" class="iw"/><circle cx="14.5" cy="13.5" r="1.3" class="iw"/><path d="M12 8V5.5"/><circle cx="12" cy="4" r="1.5" class="i3"/></svg></sc-if>
+                          <sc-if value="{{it.kDoc}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z" class="iw"/><path d="M14 3v4h4M9 13h6M9 17h4"/></svg></sc-if>
+                          <sc-if value="{{it.kSettings}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></sc-if>
+                        </span>
+                        <span style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+                          <span class="ol">{{it.pre}}<mark class="mt">{{it.mt}}</mark>{{it.post}}</span>
+                          <span class="sub2" style="font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{it.hint}}</span>
+                        </span>
+                        <sc-if value="{{it.hasPill}}" hint-placeholder-val="{{ false }}"><span class="pill {{it.pillCls}}">{{it.pill}}</span></sc-if>
+                        <sc-if value="{{it.hasNext}}" hint-placeholder-val="{{ false }}"><span class="sub2" style="font-size: 12px">opens list ›</span></sc-if>
+                        <sc-if value="{{it.hasKbd}}" hint-placeholder-val="{{ false }}"><span class="kbd" aria-hidden="true">{{it.kbd}}</span></sc-if>
+                        <sc-if value="{{it.active}}" hint-placeholder-val="{{ false }}"><span class="kbd" aria-hidden="true">↵</span></sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+
+                <sc-if value="{{isEmpty}}" hint-placeholder-val="{{ false }}">
+                  <div role="presentation" style="padding: 28px 24px 24px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center">
+                    <span class="tile lg"><svg class="ic" width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><circle cx="21" cy="21" r="11" class="it1"/><path d="M29 29l9 9"/><path d="M17 21h8"/></svg></span>
+                    <strong style="font-size: 15px; font-weight: 600">{{emptyTitle}}</strong>
+                    <span class="sub2" style="max-width: 420px">No page, action, agent or document matches. AutoBot can answer it in Chat using your knowledge base instead.</span>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 4px">
+                      <a href="Chat.dc.html" class="btn pri sm"><svg class="ic sonp" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z"/></svg>{{askLabel}}</a>
+                      <sc-if value="{{scopeNarrowed}}" hint-placeholder-val="{{ false }}"><button type="button" class="btn sm" onClick="{{searchAll}}">Search all scopes</button></sc-if>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+
+              <div class="cmdk-foot">
+                <span><span class="kbd">↑</span><span class="kbd">↓</span>move</span>
+                <span><span class="kbd">↵</span>open</span>
+                <span><span class="kbd">Tab</span>scope</span>
+                <span><span class="kbd">Esc</span>{{escHint}}</span>
+                <span style="flex-grow: 1"></span>
+                <span role="status" aria-live="polite" style="color: var(--text2)">{{statusLine}}</span>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+          <span class="st" style="margin-right: 4px">Play-mode demo</span>
+          <button type="button" class="btn sm" onClick="{{demoUp}}"><span class="kbd">↑</span>Move up</button>
+          <button type="button" class="btn sm" onClick="{{demoDown}}"><span class="kbd">↓</span>Move down</button>
+          <button type="button" class="btn sm" onClick="{{demoEnter}}"><span class="kbd">↵</span>Open active</button>
+          <button type="button" class="btn sm" onClick="{{demoTab}}"><span class="kbd">Tab</span>Next scope</button>
+          <button type="button" class="btn sm" onClick="{{esc}}"><span class="kbd">Esc</span>Back / close</button>
+          <span style="width: 1px; height: 24px; background: var(--border); margin: 0 4px" aria-hidden="true"></span>
+          <button type="button" class="btn sm" onClick="{{tryQuery}}">Try “appr”</button>
+          <button type="button" class="btn sm" onClick="{{tryStep}}">Try “Run agent ›”</button>
+          <button type="button" class="btn sm" onClick="{{tryEmpty}}">Try empty state</button>
+          <button type="button" class="btn sm" onClick="{{reset}}">Reset</button>
+        </div>
+        <div class="mono" style="margin-top: 10px; font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 18px">
+          <span>scope: {{scopeLabel}}</span><span>step: {{stepLabel}}</span><span>active: {{activePos}}</span><span>aria-activedescendant="{{activeId}}"</span>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules:</strong> Opens with Ctrl K (⌘ K on macOS) or the top-bar search box; focus moves to the input and is trapped in the dialog; Esc steps back, then clears, then closes and returns focus to the trigger. Rows never take DOM focus: the input is <span class="mono">role="combobox"</span> and points at the active <span class="mono">role="option"</span> via <span class="mono">aria-activedescendant</span>; the result count is announced in a polite live region. Active row = left accent bar + tinted surface + ↵ hint, never color alone.</p>
+    </section>
+
+    <section class="card" aria-labelledby="sec-states">
+      <div class="ch">
+        <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="4" rx="1" class="it1"/><rect x="4" y="11" width="16" height="4" rx="1" class="it2"/><rect x="4" y="17" width="10" height="3" rx="1"/></svg></span>
+        <h2 id="sec-states">Result rows &amp; async states</h2>
+        <span class="sub2">Use for: specifying row, loading and partial-failure behaviour</span>
+      </div>
+      <div style="padding: 16px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <span class="st">Row states</span>
+          <div class="card" style="padding: 6px 0">
+            <div class="gh" style="padding-top: 6px">Navigate<span>default</span></div>
+            <div class="opt" aria-hidden="true"><span class="tile"><svg class="ic" width="15" height="15" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" class="it1"/><path d="M4 9h16M9 9v11"/></svg></span><span style="flex-grow: 1; display: flex; flex-direction: column"><span class="ol">Knowledge</span><span class="sub2" style="font-size: 12px">Page · Knowledge.dc.html</span></span><span class="kbd">G K</span></div>
+            <div class="gh">&#160;<span>hover (pointer)</span></div>
+            <div class="opt hov" aria-hidden="true"><span class="tile"><svg class="ic" width="15" height="15" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" class="it1"/><path d="M4 9h16M9 9v11"/></svg></span><span style="flex-grow: 1; display: flex; flex-direction: column"><span class="ol">Company OS</span><span class="sub2" style="font-size: 12px">Page · CompanyOS.dc.html</span></span><span class="kbd">G O</span></div>
+            <div class="gh">&#160;<span>active · aria-selected="true"</span></div>
+            <div class="opt on" aria-hidden="true"><span class="tile"><svg class="ic" width="15" height="15" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" class="it1"/><path d="M4 9h16M9 9v11"/></svg></span><span style="flex-grow: 1; display: flex; flex-direction: column"><span class="ol">Approvals</span><span class="sub2" style="font-size: 12px">Company OS · Approvals.dc.html</span></span><span class="kbd">↵</span></div>
+            <div class="gh">&#160;<span>disabled · aria-disabled="true"</span></div>
+            <div class="opt" aria-hidden="true" aria-disabled="true"><span class="tile"><svg class="ic" width="15" height="15" viewBox="0 0 24 24"><path d="M13 2L5 14h6l-1 8 8-12h-6z" class="it2"/></svg></span><span style="flex-grow: 1; display: flex; flex-direction: column"><span class="ol">Approve pending (3)</span><span class="sub2" style="font-size: 12px">Needs the approver role</span></span><span class="pill idle">locked</span></div>
+          </div>
+          <span class="st" style="margin-top: 6px">Input · focus-visible</span>
+          <div class="cmdk-head card" style="outline: 2px solid var(--focus); outline-offset: -2px; border-radius: 10px">
+            <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>
+            <span style="height: 48px; display: flex; align-items: center; font-size: 15px">appr<span style="width: 1.5px; height: 18px; background: var(--text); margin-left: 1px"></span></span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <span class="st">Loading · knowledge only</span>
+          <div class="card" style="padding: 6px 0" aria-busy="true">
+            <div class="gh" style="padding-top: 6px">Navigate<span>2 · instant</span></div>
+            <div class="opt" aria-hidden="true"><span class="tile"><svg class="ic" width="15" height="15" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" class="it1"/><path d="M4 9h16M9 9v11"/></svg></span><span style="flex-grow: 1; display: flex; flex-direction: column"><span class="ol">Knowledge › <mark class="mt">Vector</mark> store</span><span class="sub2" style="font-size: 12px">Page · KnowledgeVectorStore.dc.html</span></span></div>
+            <div class="opt" aria-hidden="true"><span class="tile"><svg class="ic" width="15" height="15" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" class="it1"/><path d="M4 9h16M9 9v11"/></svg></span><span style="flex-grow: 1; display: flex; flex-direction: column"><span class="ol">Knowledge › Health</span><span class="sub2" style="font-size: 12px"><mark class="mt">vector</mark> index status</span></span></div>
+            <div class="gh">Knowledge documents<span style="display: inline-flex; align-items: center; gap: 6px"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" style="stroke: var(--line)"/><path d="M12 4a8 8 0 0 1 8 8"/></svg>Searching…</span></div>
+            <div style="padding: 8px 18px; display: flex; flex-direction: column; gap: 14px">
+              <div style="display: flex; gap: 12px; align-items: center"><span class="tile" style="width: 28px; height: 28px"></span><span style="flex-grow: 1; display: flex; flex-direction: column; gap: 6px"><span class="skel" style="width: 70%"></span><span class="skel" style="width: 40%"></span></span></div>
+              <div style="display: flex; gap: 12px; align-items: center"><span class="tile" style="width: 28px; height: 28px"></span><span style="flex-grow: 1; display: flex; flex-direction: column; gap: 6px"><span class="skel" style="width: 55%"></span><span class="skel" style="width: 35%"></span></span></div>
+            </div>
+            <div class="cmdk-foot" style="margin-top: 6px"><span role="status">2 results · searching knowledge base…</span></div>
+          </div>
+          <p style="margin: 0; font-size: 12.5px; color: var(--text2); line-height: 1.5">Pages, actions and agents filter locally and render instantly. Only the Knowledge group waits on the vector store: show skeletons after 150 ms, keep the active row where it is, never reorder rows above the cursor.</p>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <span class="st">Partial failure</span>
+          <div class="card" style="padding: 6px 0">
+            <div class="gh" style="padding-top: 6px">Agents<span>1</span></div>
+            <div class="opt" aria-hidden="true"><span class="tile"><svg class="ic" width="15" height="15" viewBox="0 0 24 24"><rect x="5" y="8" width="14" height="11" rx="3" class="i1"/><circle cx="9.5" cy="13.5" r="1.3" class="iw"/><circle cx="14.5" cy="13.5" r="1.3" class="iw"/><path d="M12 8V5.5"/><circle cx="12" cy="4" r="1.5" class="i3"/></svg></span><span style="flex-grow: 1; display: flex; flex-direction: column"><span class="ol"><mark class="mt">research</mark>-agent</span><span class="sub2" style="font-size: 12px">Head of Research · ollama</span></span><span class="pill ok">active</span></div>
+            <div class="gh">Knowledge documents<span class="pill bad">unavailable</span></div>
+            <div style="margin: 4px 12px 6px; padding: 10px 12px; border-radius: 8px; border: var(--bw) solid var(--danger-tile-b); background: var(--danger-tile); display: flex; gap: 10px; align-items: flex-start">
+              <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="margin-top: 2px"><path d="M12 4l9 16H3z" class="iw"/><path d="M12 10v4M12 17v.5"/></svg>
+              <span style="flex-grow: 1; font-size: 12.5px; color: var(--text)"><strong style="font-weight: 600">Error:</strong> vector store on node-04 is unreachable. Knowledge results were skipped; pages, actions and agents still work.</span>
+              <button type="button" class="btn sm" style="height: 28px">Retry</button>
+            </div>
+          </div>
+          <span class="st" style="margin-top: 6px">Group heading anatomy</span>
+          <div class="card" style="padding: 4px 0 8px">
+            <div class="gh">Navigate<span>5 of 28 · Tab to filter</span></div>
+            <p style="margin: 2px 18px 0; font-size: 12.5px; color: var(--text2); line-height: 1.5">With an empty query and scope All, each group shows its top 5; the count tells people the rest is a keystroke away. Group order is fixed: Recent, Actions, Navigate, Agents, Knowledge documents, Settings.</p>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules:</strong> Disabled rows stay visible with the reason in words and are skipped by ↑ ↓. Loading and errors are per group, announced once in the live region; never block the whole palette on one slow source.</p>
+    </section>
+
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: start">
+      <section class="card" aria-labelledby="sec-trigger">
+        <div class="ch">
+          <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2" class="it2"/><path d="M7 12h6"/></svg></span>
+          <h2 id="sec-trigger">Top-bar trigger</h2>
+          <span class="sub2">Use for: the visible, clickable entry point to the palette</span>
+        </div>
+        <div style="padding: 16px; display: flex; flex-direction: column; gap: 18px">
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <span class="st">In context · desktop top bar</span>
+            <div style="height: 52px; display: flex; align-items: center; gap: 18px; padding: 0 16px; border: var(--bw) solid var(--border); border-radius: 8px; background: var(--surface); font-size: 13.5px; color: var(--text2)">
+              <span style="font-weight: 600; color: var(--text)">AutoBot</span><span>Home</span><span>Chat</span><span>Knowledge</span>
+              <span style="flex-grow: 1"></span>
+              <button type="button" class="cmdk-trig" aria-haspopup="dialog" aria-keyshortcuts="Control+K"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg><span style="flex-grow: 1">Search or jump to…</span><span class="kbd">Ctrl</span><span class="kbd">K</span></button>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+            <div style="display: flex; flex-direction: column; gap: 6px"><span class="st">Default</span><span class="cmdk-trig" aria-hidden="true"><svg class="ic" width="16" height="16" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg><span style="flex-grow: 1">Search or jump to…</span><span class="kbd">Ctrl</span><span class="kbd">K</span></span></div>
+            <div style="display: flex; flex-direction: column; gap: 6px"><span class="st">Hover</span><span class="cmdk-trig hov" aria-hidden="true"><svg class="ic" width="16" height="16" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg><span style="flex-grow: 1">Search or jump to…</span><span class="kbd">Ctrl</span><span class="kbd">K</span></span></div>
+            <div style="display: flex; flex-direction: column; gap: 6px"><span class="st">Focus-visible</span><span class="cmdk-trig fv" aria-hidden="true"><svg class="ic" width="16" height="16" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg><span style="flex-grow: 1">Search or jump to…</span><span class="kbd">Ctrl</span><span class="kbd">K</span></span></div>
+            <div style="display: flex; flex-direction: column; gap: 6px"><span class="st">Open · aria-expanded="true"</span><span class="cmdk-trig act" aria-hidden="true"><svg class="ic" width="16" height="16" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg><span style="flex-grow: 1">Search or jump to…</span><span class="kbd">Ctrl</span><span class="kbd">K</span></span></div>
+            <div style="display: flex; flex-direction: column; gap: 6px"><span class="st">macOS label</span><span class="cmdk-trig" aria-hidden="true"><svg class="ic" width="16" height="16" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg><span style="flex-grow: 1">Search or jump to…</span><span class="kbd">⌘</span><span class="kbd">K</span></span></div>
+            <div style="display: flex; flex-direction: column; gap: 6px"><span class="st">Compact · below 1024 px</span><span style="display: flex; gap: 10px; align-items: center"><span class="mbtn" style="width: 36px; height: 36px" aria-hidden="true"><svg class="ic" width="17" height="17" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg></span><span class="sub2 mono" style="font-size: 12px">aria-label="Search (Ctrl K)"</span></span></div>
+          </div>
+        </div>
+        <p class="rules"><strong>Rules:</strong> A real <span class="mono">button</span> with <span class="mono">aria-haspopup="dialog"</span>, <span class="mono">aria-expanded</span> and <span class="mono">aria-keyshortcuts="Control+K"</span>. Show the platform's modifier. The kbd hint is decorative: the shortcut must also be in the accessible name of the compact icon button. Never hide the trigger; the shortcut alone is not discoverable.</p>
+      </section>
+
+      <section class="card" aria-labelledby="sec-mobile">
+        <div class="ch">
+          <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="2" class="it1"/><path d="M11 18h2"/></svg></span>
+          <h2 id="sec-mobile">Mobile · full-screen sheet</h2>
+        </div>
+        <div style="padding: 16px; display: flex; gap: 16px">
+          <div class="phone" aria-label="Mobile command menu specimen" role="img">
+            <div style="height: 28px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; font-size: 11.5px; font-weight: 600; color: var(--text2)" class="mono"><span>10:44</span><span>5G · 82%</span></div>
+            <div style="display: flex; align-items: center; gap: 8px; padding: 6px 12px 10px; border-bottom: var(--bw) solid var(--line)">
+              <div style="flex-grow: 1; height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 8px; border: 2px solid var(--focus); background: var(--surface); box-sizing: border-box">
+                <svg class="ic" width="17" height="17" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>
+                <span style="font-size: 16px">kno</span><span style="width: 1.5px; height: 20px; background: var(--text)"></span>
+              </div>
+              <span style="font-size: 14px; font-weight: 600; color: var(--link); padding: 0 4px">Cancel</span>
+            </div>
+            <div style="display: flex; gap: 6px; padding: 10px 12px; overflow: hidden; border-bottom: var(--bw) solid var(--line)">
+              <span class="chip on" style="height: 32px">All</span><span class="chip" style="height: 32px">Pages</span><span class="chip" style="height: 32px">Actions</span><span class="chip" style="height: 32px">Agents</span><span class="chip" style="height: 32px">Knowledge</span>
+            </div>
+            <div style="flex: 1 1 auto; overflow: hidden; padding-bottom: 6px">
+              <div class="gh">Navigate<span>3</span></div>
+              <div class="opt on" style="min-height: 52px"><span class="tile"><svg class="ic" width="15" height="15" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" class="it1"/><path d="M4 9h16M9 9v11"/></svg></span><span style="flex-grow: 1; display: flex; flex-direction: column"><span class="ol"><mark class="mt">Kno</mark>wledge</span><span class="sub2" style="font-size: 12px">Page</span></span><span class="sub2">›</span></div>
+              <div class="opt" style="min-height: 52px"><span class="tile"><svg class="ic" width="15" height="15" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" class="it1"/><path d="M4 9h16M9 9v11"/></svg></span><span style="flex-grow: 1; display: flex; flex-direction: column"><span class="ol"><mark class="mt">Kno</mark>wledge › Vector store</span><span class="sub2" style="font-size: 12px">Page</span></span><span class="sub2">›</span></div>
+              <div class="opt" style="min-height: 52px"><span class="tile"><svg class="ic" width="15" height="15" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" class="it1"/><path d="M4 9h16M9 9v11"/></svg></span><span style="flex-grow: 1; display: flex; flex-direction: column"><span class="ol"><mark class="mt">Kno</mark>wledge › Graph</span><span class="sub2" style="font-size: 12px">Page</span></span><span class="sub2">›</span></div>
+              <div class="gh">Knowledge documents<span>2</span></div>
+              <div class="opt" style="min-height: 52px"><span class="tile"><svg class="ic" width="15" height="15" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z" class="iw"/><path d="M14 3v4h4M9 13h6M9 17h4"/></svg></span><span style="flex-grow: 1; display: flex; flex-direction: column"><span class="ol"><mark class="mt">Kno</mark>wledge health runbook</span><span class="sub2" style="font-size: 12px">System docs</span></span></div>
+              <div class="opt" style="min-height: 52px"><span class="tile"><svg class="ic" width="15" height="15" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z" class="iw"/><path d="M14 3v4h4M9 13h6M9 17h4"/></svg></span><span style="flex-grow: 1; display: flex; flex-direction: column"><span class="ol">Ingest pipeline: <mark class="mt">kno</mark>wledge chunks</span><span class="sub2" style="font-size: 12px">Documents</span></span></div>
+            </div>
+            <div style="height: 150px; flex: none; background: var(--surface2); border-top: var(--bw) solid var(--border); display: grid; place-items: center"><span class="sub2">System keyboard</span></div>
+          </div>
+          <div style="width: 220px; display: flex; flex-direction: column; gap: 12px; font-size: 12.5px; color: var(--text2); line-height: 1.5">
+            <div><span class="st">Opens from</span><br>Search icon in the mobile header (44 px target). No shortcut hint on touch.</div>
+            <div><span class="st">Layout</span><br>Full-screen sheet, input pinned top, scope chips scroll sideways, results fill to the keyboard.</div>
+            <div><span class="st">Rows</span><br>Min 52 px tall, chevron instead of ↵, no kbd chips.</div>
+            <div><span class="st">Dismiss</span><br>“Cancel” text button (and system back) replaces Esc; returns focus to the search icon.</div>
+            <div><span class="st">Empty state</span><br>Same “Ask AutoBot” fallback as desktop, full-width button above the keyboard.</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section class="card" aria-labelledby="sec-rules">
+      <div class="ch">
+        <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></span>
+        <h2 id="sec-rules">Accessibility &amp; behaviour contract</h2>
+        <span class="sub2">Use for: implementation review checklist</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr))">
+        <div class="row" style="align-items: flex-start"><span class="pill info">ARIA</span><span style="font-size: 13px; line-height: 1.5">Dialog: <span class="mono">role="dialog" aria-modal="true"</span> with a labelled title. Input: <span class="mono">role="combobox" aria-controls aria-expanded aria-autocomplete="list" aria-activedescendant</span>. Results: <span class="mono">role="listbox"</span> with labelled <span class="mono">role="group"</span> sections and <span class="mono">role="option" aria-selected</span>.</span></div>
+        <div class="row" style="align-items: flex-start; border-left: var(--bw) solid var(--line)"><span class="pill info">Focus</span><span style="font-size: 13px; line-height: 1.5">On open, focus the input and make the page behind <span class="mono">inert</span>. Focus is trapped inside the dialog; on close it returns to whatever opened it (trigger or the element that had focus before Ctrl K).</span></div>
+        <div class="row" style="align-items: flex-start"><span class="pill info">Keys</span><span style="font-size: 13px; line-height: 1.5">↑ ↓ move and wrap, Home / End jump, ↵ opens, Ctrl ↵ opens in a new tab, Tab / Shift Tab cycle scope, Backspace on an empty input leaves a nested step, Esc goes back, clears, then closes.</span></div>
+        <div class="row" style="align-items: flex-start; border-left: var(--bw) solid var(--line)"><span class="pill info">Announce</span><span style="font-size: 13px; line-height: 1.5">A polite live region reports “12 results”, “No results for …” and action outcomes (“Queued run for research-agent”). Don't announce on every keystroke: debounce 300 ms.</span></div>
+        <div class="row" style="align-items: flex-start"><span class="pill ok">Do</span><span style="font-size: 13px; line-height: 1.5">Keep group order stable, highlight the matched text, remember the last 3 searches per user, and fall back to Chat with the query instead of a dead end.</span></div>
+        <div class="row" style="align-items: flex-start; border-left: var(--bw) solid var(--line)"><span class="pill bad">Don't</span><span style="font-size: 13px; line-height: 1.5">Run destructive actions straight from the palette (open the confirm screen instead), nest more than one step deep, or hijack Ctrl K inside code editors and chat inputs that use it.</span></div>
+      </div>
+    </section>
+    <nav aria-label="Design system pages" class="card" style="grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px; padding: 12px">
+      <a href="ComponentsTooltips.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">← Previous</span><span style="font-weight: 600; color: var(--text)">Tooltips</span></a>
+      <a href="ComponentsNavigation.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">Next →</span><span style="font-weight: 600; color: var(--text)">Navigation</span></a>
+    </nav>
+  </main>
+  </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"$preview":{"width":1440,"height":2720}}'>
+const SCOPES = [['all', 'All'], ['pages', 'Pages'], ['actions', 'Actions'], ['agents', 'Agents'], ['knowledge', 'Knowledge'], ['settings', 'Settings']];
+const GROUPS = [['recent', 'Recent'], ['actions', 'Actions'], ['nav', 'Navigate'], ['agents', 'Agents'], ['knowledge', 'Knowledge documents'], ['settings', 'Settings']];
+const RECENT_Q = ['vector store', 'budget policy', 'node-04'];
+
+function P(key, label, hint, href, kbd, kw) {
+  return { key: key, group: 'nav', scope: 'pages', kind: 'page', label: label, hint: hint, href: href, kbd: kbd || '', kw: kw || '' };
+}
+function S(key, label, hint, href, kw) {
+  return { key: key, group: 'settings', scope: 'settings', kind: 'settings', label: label, hint: hint, href: href, kw: kw || '' };
+}
+function D(key, label, hint, href, kw) {
+  return { key: key, group: 'knowledge', scope: 'knowledge', kind: 'doc', label: label, hint: hint, href: href, kw: kw || '' };
+}
+const AGENTS = [
+  { key: 'ag-research', label: 'research-agent', hint: 'Head of Research · ollama', pill: 'active', pillCls: 'ok' },
+  { key: 'ag-code', label: 'code-agent', hint: 'Staff Engineer · claude-code', pill: 'active', pillCls: 'ok' },
+  { key: 'ag-docs', label: 'documentation-engineer', hint: 'Technical Writer · ollama', pill: 'idle', pillCls: 'idle' },
+  { key: 'ag-perf', label: 'performance-engineer', hint: 'Performance Lead · openvino', pill: 'paused', pillCls: 'warn' },
+  { key: 'ag-devops', label: 'devops-engineer', hint: 'Ops Lead · ollama', pill: 'error', pillCls: 'bad' }
+].map((a) => Object.assign({ group: 'agents', scope: 'agents', kind: 'agent', href: 'Agents.dc.html', kw: 'agent' }, a));
+
+const ITEMS = [
+  { key: 'rc-appr', group: 'recent', scope: 'pages', kind: 'page', label: 'Approvals', hint: 'Company OS · opened 12 min ago', href: 'Approvals.dc.html' },
+  { key: 'rc-cbo', group: 'recent', scope: 'pages', kind: 'page', label: 'Codebase overview', hint: 'Analytics · opened 1 h ago', href: 'AnalyticsCodebaseOverview.dc.html' },
+  { key: 'rc-research', group: 'recent', scope: 'agents', kind: 'agent', label: 'research-agent', hint: 'Agent · opened yesterday', href: 'Agents.dc.html', pill: 'active', pillCls: 'ok' },
+  { key: 'rc-bench', group: 'recent', scope: 'knowledge', kind: 'doc', label: 'Vector store benchmark notes', hint: 'Research · opened yesterday', href: 'KnowledgeResearch.dc.html' },
+
+  { key: 'ac-chat', group: 'actions', scope: 'actions', kind: 'action', label: 'New chat', hint: 'Start a conversation with AutoBot', href: 'Chat.dc.html', kbd: 'C', kw: 'conversation ask' },
+  { key: 'ac-run', group: 'actions', scope: 'actions', kind: 'action', label: 'Run agent…', hint: 'Pick an agent and start a run', step: 'agents', kw: 'start execute' },
+  { key: 'ac-index', group: 'actions', scope: 'actions', kind: 'action', label: 'Index codebase', hint: 'Analytics · re-index repository', href: 'AnalyticsCodebase.dc.html', kw: 'reindex scan code' },
+  { key: 'ac-work', group: 'actions', scope: 'actions', kind: 'action', label: 'New work item', hint: 'Company OS · backlog', href: 'WorkItem.dc.html', kw: 'task issue ticket' },
+  { key: 'ac-approve', group: 'actions', scope: 'actions', kind: 'action', label: 'Approve pending (3)', hint: 'Company OS · review queue', href: 'Approvals.dc.html', pill: '3 waiting', pillCls: 'warn', kw: 'approvals review' },
+
+  P('pg-home', 'Home', 'Page · Main.dc.html', 'Main.dc.html', 'G H', 'dashboard start'),
+  P('pg-chat', 'Chat', 'Page · Chat.dc.html', 'Chat.dc.html', 'G C', 'conversation'),
+  P('pg-kb', 'Knowledge', 'Page · Knowledge.dc.html', 'Knowledge.dc.html', 'G K', 'kb'),
+  P('pg-cos', 'Company OS', 'Page · CompanyOS.dc.html', 'CompanyOS.dc.html', 'G O', 'company dashboard'),
+  P('pg-an', 'Analytics', 'Page · Analytics.dc.html', 'Analytics.dc.html', 'G A', 'metrics'),
+  P('pg-agents', 'Agents', 'Page · Agents.dc.html', 'Agents.dc.html', '', 'registry'),
+  P('pg-kb-vs', 'Knowledge › Vector store', 'Knowledge · KnowledgeVectorStore.dc.html', 'KnowledgeVectorStore.dc.html', '', 'embeddings chroma'),
+  P('pg-kb-graph', 'Knowledge › Graph', 'Knowledge · KnowledgeGraph.dc.html', 'KnowledgeGraph.dc.html', '', 'entities relations'),
+  P('pg-kb-ent', 'Knowledge › Entities', 'Knowledge · KnowledgeEntities.dc.html', 'KnowledgeEntities.dc.html'),
+  P('pg-kb-health', 'Knowledge › Health', 'Knowledge · KnowledgeHealth.dc.html', 'KnowledgeHealth.dc.html', '', 'vector index status'),
+  P('pg-appr', 'Company OS › Approvals', 'Company OS · Approvals.dc.html', 'Approvals.dc.html'),
+  P('pg-backlog', 'Company OS › Backlog', 'Company OS · Backlog.dc.html', 'Backlog.dc.html', '', 'work items'),
+  P('pg-boards', 'Company OS › Boards', 'Company OS · Boards.dc.html', 'Boards.dc.html', '', 'kanban'),
+  P('pg-org', 'Company OS › Org chart', 'Company OS · OrgChart.dc.html', 'OrgChart.dc.html'),
+  P('pg-costs', 'Company OS › Costs & budget', 'Company OS · Costs.dc.html', 'Costs.dc.html', '', 'spend budget policy'),
+  P('pg-hb', 'Company OS › Heartbeat', 'Company OS · HeartbeatMonitor.dc.html', 'HeartbeatMonitor.dc.html', '', 'runs node-04'),
+  P('pg-cbo', 'Analytics › Codebase overview', 'Analytics · AnalyticsCodebaseOverview.dc.html', 'AnalyticsCodebaseOverview.dc.html', '', 'code repository'),
+  P('pg-cr', 'Analytics › Code review', 'Analytics · AnalyticsCodeReview.dc.html', 'AnalyticsCodeReview.dc.html', '', 'pr'),
+  P('pg-bi', 'Analytics › Business intelligence', 'Analytics · BusinessIntelligence.dc.html', 'BusinessIntelligence.dc.html', '', 'bi'),
+  P('pg-act', 'Agents › Activity', 'Agents · AgentActivity.dc.html', 'AgentActivity.dc.html', '', 'runs log'),
+  P('pg-auto', 'Automation', 'Page · Automation.dc.html', 'Automation.dc.html', '', 'workflows'),
+  P('pg-health', 'System health', 'Operations · SystemHealth.dc.html', 'SystemHealth.dc.html', '', 'fleet nodes node-04 vm'),
+  P('pg-err', 'Error monitoring', 'Operations · ErrorMonitoring.dc.html', 'ErrorMonitoring.dc.html', '', 'logs failures'),
+  P('pg-plugins', 'Plugins', 'Page · Plugins.dc.html', 'Plugins.dc.html', '', 'extensions'),
+  P('pg-market', 'Marketplace', 'Page · Marketplace.dc.html', 'Marketplace.dc.html'),
+  P('pg-canvas', 'Canvas', 'Page · Canvas.dc.html', 'Canvas.dc.html'),
+
+  D('dc-arch', 'AutoBot architecture overview', 'System docs · updated 2 d ago', 'KnowledgeSystemDocs.dc.html', 'design modules'),
+  D('dc-fleet', 'Ansible + Docker Compose fleet conventions', 'Documents · ops runbook', 'Documents.dc.html', 'vm node-04 deploy'),
+  D('dc-bench', 'Vector store benchmark notes', 'Research · 1M chunks, 3 engines', 'KnowledgeResearch.dc.html', 'embeddings'),
+  D('dc-mcp', 'MCP resource catalog', 'MCP resources · 42 entries', 'KnowledgeMcpResources.dc.html', 'servers tools'),
+  D('dc-session', 'Session lifecycle fix: design note', 'Documents · linked to PR', 'Documents.dc.html', 'chat'),
+  D('dc-budget', 'Per-agent budget caps', 'Documents · policy', 'Documents.dc.html', 'budget policy costs'),
+
+  S('st-pref', 'Preferences', 'Settings · Preferences.dc.html', 'Preferences.dc.html', 'theme language'),
+  S('st-llm', 'LLM configuration', 'Settings · LlmConfig.dc.html', 'LlmConfig.dc.html', 'models provider ollama'),
+  S('st-secrets', 'Secrets', 'Settings · Secrets.dc.html', 'Secrets.dc.html', 'keys vault'),
+  S('st-api', 'Secrets › API keys', 'Settings · SecretsApiKeys.dc.html', 'SecretsApiKeys.dc.html', 'tokens'),
+  S('st-users', 'Admin › Users', 'Admin · AdminUsers.dc.html', 'AdminUsers.dc.html', 'members roles'),
+  S('st-adv', 'Admin › Advanced control', 'Admin · AdminAdvancedControl.dc.html', 'AdminAdvancedControl.dc.html', 'system'),
+  S('st-budget', 'Admin › Budget policies', 'Admin · AdminBudgetPolicies.dc.html', 'AdminBudgetPolicies.dc.html', 'budget policy limits'),
+  S('st-mcp', 'Admin › MCP servers', 'Admin · AdminMcpServers.dc.html', 'AdminMcpServers.dc.html'),
+  S('st-sandbox', 'Admin › Sandbox', 'Admin · AdminSandbox.dc.html', 'AdminSandbox.dc.html'),
+  S('st-audit', 'Admin › Audit logs', 'Admin · AuditLogs.dc.html', 'AuditLogs.dc.html', 'history')
+].concat(AGENTS);
+
+function matches(it, q) {
+  if (!q) return true;
+  const hay = (it.label + ' ' + (it.hint || '') + ' ' + (it.kw || '')).toLowerCase();
+  return q.split(/\s+/).filter(Boolean).every((t) => hay.indexOf(t) >= 0);
+}
+function split(label, q) {
+  if (!q) return { pre: label, mt: '', post: '' };
+  const low = label.toLowerCase();
+  let t = q;
+  let i = low.indexOf(t);
+  if (i < 0) { t = q.split(/\s+/)[0]; i = low.indexOf(t); }
+  if (i < 0 || !t) return { pre: label, mt: '', post: '' };
+  return { pre: label.slice(0, i), mt: label.slice(i, i + t.length), post: label.slice(i + t.length) };
+}
+function focusId(id) {
+  setTimeout(() => { try { const el = document.getElementById(id); if (el) el.focus(); } catch (e) {} }, 0);
+}
+
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    this._key = (e) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        const st = this.state || {};
+        if (st.open === false) this.openPalette(); else this.close();
+      }
+    };
+    try { document.addEventListener('keydown', this._key); } catch (e) {}
+  }
+  componentWillUnmount() {
+    try { document.removeEventListener('keydown', this._key); } catch (e) {}
+  }
+  componentDidUpdate() {
+    try {
+      const m = this.model();
+      const it = m.flat[m.idx];
+      if (!it) return;
+      const el = document.getElementById('cmdk-opt-' + it.key);
+      if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+    } catch (e) {}
+  }
+  model() {
+    const st = this.state || {};
+    const query = st.query || '';
+    const q = query.trim().toLowerCase();
+    const scope = st.scope || 'all';
+    const step = st.step || '';
+    const groups = [];
+    let truncated = false;
+    if (step === 'agents') {
+      const its = AGENTS.filter((a) => matches(a, q)).map((a) => Object.assign({}, a, { key: 'run-' + a.key, run: true }));
+      if (its.length) groups.push({ gkey: 'run', name: 'Run agent on…', meta: its.length + ' agents', items: its });
+    } else {
+      GROUPS.forEach((g) => {
+        const gk = g[0];
+        if (gk === 'recent' && (q || scope !== 'all')) return;
+        let its = ITEMS.filter((i) => i.group === gk && (gk === 'recent' || scope === 'all' || i.scope === scope) && matches(i, q));
+        if (!its.length) return;
+        let meta = String(its.length);
+        if (!q && scope === 'all' && gk !== 'recent' && its.length > 5) {
+          meta = '5 of ' + its.length + ' · Tab to filter';
+          its = its.slice(0, 5);
+          truncated = true;
+        }
+        groups.push({ gkey: gk, name: g[1], meta: meta, items: its });
+      });
+    }
+    const flat = [];
+    groups.forEach((g) => g.items.forEach((i) => flat.push(i)));
+    const idx = flat.length ? Math.min(Math.max(st.index || 0, 0), flat.length - 1) : -1;
+    return { query: query, q: q, scope: scope, step: step, groups: groups, flat: flat, idx: idx, truncated: truncated };
+  }
+  move(d) {
+    const m = this.model();
+    const n = m.flat.length;
+    if (!n) return;
+    this.setState({ index: (((m.idx + d) % n) + n) % n });
+  }
+  cycleScope(d) {
+    const st = this.state || {};
+    const cur = SCOPES.findIndex((s) => s[0] === (st.scope || 'all'));
+    const next = SCOPES[(((cur + d) % SCOPES.length) + SCOPES.length) % SCOPES.length][0];
+    this.setState({ scope: next, index: 0, status: '' });
+  }
+  openItem(it) {
+    if (!it) return;
+    if (it.step) { this.setState({ step: it.step, query: '', index: 0, status: '' }); focusId('cmdk-input'); return; }
+    if (it.run) { this.setState({ step: '', query: '', index: 0, status: 'Queued run for ' + it.label + ' · see Agents › Activity' }); focusId('cmdk-input'); return; }
+    if (it.href) {
+      this.setState({ status: 'Opening ' + it.label + '…' });
+      try { window.location.href = it.href; } catch (e) {}
+    }
+  }
+  openActive() {
+    const m = this.model();
+    this.openItem(m.flat[m.idx]);
+  }
+  back() {
+    this.setState({ step: '', query: '', index: 0, status: '' });
+    focusId('cmdk-input');
+  }
+  esc() {
+    const st = this.state || {};
+    if (st.open === false) return;
+    if (st.step) { this.back(); return; }
+    if (st.query) { this.setState({ query: '', index: 0, status: '' }); focusId('cmdk-input'); return; }
+    this.close();
+  }
+  close() {
+    this.setState({ open: false, step: '', query: '', index: 0, status: '' });
+    focusId('cmdk-trigger');
+  }
+  openPalette() {
+    this.setState({ open: true, status: '' });
+    focusId('cmdk-input');
+  }
+  onKey(e) {
+    const st = this.state || {};
+    const k = e.key;
+    const inInput = !!(e.target && e.target.id === 'cmdk-input');
+    if (k === 'Escape') { e.preventDefault(); this.esc(); return; }
+    if (k === 'ArrowDown') { e.preventDefault(); this.move(1); return; }
+    if (k === 'ArrowUp') { e.preventDefault(); this.move(-1); return; }
+    if (inInput && k === 'Home' && !st.query) { e.preventDefault(); this.setState({ index: 0 }); return; }
+    if (inInput && k === 'End' && !st.query) { e.preventDefault(); this.setState({ index: this.model().flat.length - 1 }); return; }
+    if (inInput && k === 'Enter') { e.preventDefault(); this.openActive(); return; }
+    if (inInput && k === 'Backspace' && !st.query && st.step) { e.preventDefault(); this.back(); return; }
+    if (k === 'Tab') {
+      if (inInput && !st.step) { e.preventDefault(); this.cycleScope(e.shiftKey ? -1 : 1); return; }
+      try {
+        const f = e.currentTarget.querySelectorAll('input, button, a[href]');
+        if (!f.length) return;
+        const first = f[0];
+        const last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      } catch (err) {}
+    }
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const open = st.open !== false;
+    const m = this.model();
+    const active = m.flat[m.idx];
+    const scopeLabel = (SCOPES.find((s) => s[0] === m.scope) || SCOPES[0])[1];
+    const n = m.flat.length;
+    let statusLine = st.status || '';
+    if (!statusLine) {
+      if (!n) statusLine = 'No results';
+      else statusLine = n + (m.step ? (n === 1 ? ' agent' : ' agents') : (n === 1 ? ' result' : ' results')) + (m.truncated ? ' shown' : '');
+    }
+    const groups = m.groups.map((g) => ({
+      hid: 'cmdk-g-' + g.gkey,
+      name: g.name,
+      meta: g.meta,
+      items: g.items.map((it) => {
+        const pos = m.flat.indexOf(it);
+        const on = pos === m.idx;
+        const sp = split(it.label, m.q);
+        return {
+          id: 'cmdk-opt-' + it.key,
+          sel: on ? 'true' : 'false',
+          cls: on ? 'on' : '',
+          active: on,
+          pre: sp.pre, mt: sp.mt, post: sp.post,
+          hint: it.hint || '',
+          kPage: it.kind === 'page',
+          kAction: it.kind === 'action',
+          kAgent: it.kind === 'agent',
+          kDoc: it.kind === 'doc',
+          kSettings: it.kind === 'settings',
+          hasPill: !!it.pill,
+          pill: it.pill || '',
+          pillCls: it.pillCls || '',
+          hasNext: !!it.step,
+          hasKbd: !!it.kbd && !on,
+          kbd: it.kbd || '',
+          open: () => this.openItem(it),
+          hover: () => { if (pos !== m.idx) this.setState({ index: pos }); }
+        };
+      })
+    }));
+    const showRecent = !m.query && !m.step && m.scope === 'all' && !st.recentCleared;
+    return {
+      theme: cur,
+      themes: [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']].map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => this.setState({ theme: id })
+      })),
+      open: open,
+      closed: !open,
+      openStr: open ? 'true' : 'false',
+      bgHidden: open ? 'true' : 'false',
+      trigTab: open ? '-1' : '0',
+      trigCls: open ? 'act' : '',
+      inStep: !!m.step,
+      notStep: !m.step,
+      query: m.query,
+      placeholder: m.step ? 'Choose an agent to run…' : 'Search pages, actions, agents, knowledge…',
+      listExpanded: n ? 'true' : 'false',
+      activeId: active ? 'cmdk-opt-' + active.key : '',
+      listLabel: m.step ? 'Agents to run' : 'Results · ' + scopeLabel,
+      groups: groups,
+      isEmpty: n === 0,
+      emptyTitle: 'No results for “' + m.query.trim() + '”' + (m.scope !== 'all' && !m.step ? ' in ' + scopeLabel : ''),
+      askLabel: 'Ask AutoBot about “' + m.query.trim() + '”',
+      scopeNarrowed: m.scope !== 'all' && !m.step,
+      searchAll: () => this.setState({ scope: 'all', index: 0 }),
+      scopes: SCOPES.map(([id, label]) => ({
+        label: label,
+        cls: id === m.scope ? 'on' : '',
+        pressed: id === m.scope ? 'true' : 'false',
+        pick: () => { this.setState({ scope: id, index: 0, status: '' }); focusId('cmdk-input'); }
+      })),
+      showRecentSearches: showRecent,
+      recentSearches: RECENT_Q.map((r) => ({ label: r, pick: () => { this.setState({ query: r, index: 0, status: '' }); focusId('cmdk-input'); } })),
+      clearRecent: () => this.setState({ recentCleared: true }),
+      statusLine: statusLine,
+      escHint: m.step ? 'back' : (m.query ? 'clear' : 'close'),
+      escLabel: m.step ? 'Back to all commands' : (m.query ? 'Clear search' : 'Close command menu'),
+      scopeLabel: scopeLabel,
+      stepLabel: m.step ? 'Run agent ›' : 'root',
+      activePos: active ? active.label + ' (' + (m.idx + 1) + ' / ' + n + ')' : 'none',
+      onInput: (e) => this.setState({ query: e.target.value, index: 0, status: '' }),
+      onKey: (e) => this.onKey(e),
+      openPalette: () => this.openPalette(),
+      close: () => this.close(),
+      esc: () => this.esc(),
+      back: () => this.back(),
+      demoUp: () => { if (open) this.move(-1); },
+      demoDown: () => { if (open) this.move(1); },
+      demoEnter: () => { if (open) this.openActive(); },
+      demoTab: () => { if (open && !m.step) this.cycleScope(1); },
+      tryQuery: () => this.setState({ open: true, step: '', scope: 'all', query: 'appr', index: 0, status: '' }),
+      tryStep: () => this.setState({ open: true, step: 'agents', query: '', index: 0, status: '' }),
+      tryEmpty: () => this.setState({ open: true, step: '', scope: 'all', query: 'kubernetes', index: 0, status: '' }),
+      reset: () => this.setState({ open: true, step: '', scope: 'all', query: '', index: 0, status: '', recentCleared: false })
+    };
+  }
+}
+</script>
+</body>
+</html>

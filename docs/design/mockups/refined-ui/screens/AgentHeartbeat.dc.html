@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot agent heartbeat</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;padding:0 clamp(16px,2.5vw,32px);background:var(--surface);border-bottom:var(--bw) solid var(--border)}
+.tabs a{height:44px;padding:0 12px;display:inline-flex;align-items:center;font-size:13.5px;font-weight:500;color:var(--text2);text-decoration:none;border-bottom:var(--nav-on-bw) solid transparent;box-sizing:border-box}
+.tabs a.on{color:var(--text);font-weight:600;border-bottom-color:var(--accent)}
+.kv{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:8px 0;border-bottom:var(--bw) solid var(--line)}
+.kv span:first-child{color:var(--muted)}
+.kv span:last-child{font-weight:600;text-align:right}
+.fld{display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:500;color:var(--text2)}
+.inp{height:36px;box-sizing:border-box;padding:0 10px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;font-size:13.5px;color:var(--text)}
+.cnt{font-size:12px;font-weight:600;min-width:22px;height:22px;padding:0 6px;box-sizing:border-box;display:inline-grid;place-items:center;border-radius:5px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.ev{display:flex;gap:12px;font-size:13px;padding:4px 0;align-items:baseline}
+.ev .t{color:var(--muted);font-size:12px}
+.ev .y{font-weight:600;min-width:120px}
+.xb{height:28px;padding:0 8px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html" class="adv">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="ThemeManager.dc.html" class="adv" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon adv" aria-label="Plugins" data-tip="Plugins" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Admin panel" data-tip="Admin panel" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="Preferences.dc.html" aria-label="Profile settings" data-tip="Profile settings" data-tip-pos="bottom" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer; display: grid; place-items: center; text-decoration: none">MV</a>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-direction: column">
+    <div class="tabs" role="tablist" aria-label="Agents">
+      <a href="Agents.dc.html" role="tab">Registry</a>
+      <a href="AgentActivity.dc.html" role="tab">Activity</a>
+      <a href="AgentHeartbeat.dc.html" role="tab" aria-selected="true" aria-current="page" class="on">Heartbeat</a>
+    </div>
+
+    <div style="box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 20px">
+      <section class="card only-min" role="note" aria-labelledby="advn-h" style="padding: 14px 16px; gap: 12px; align-items: center; flex-wrap: wrap">
+        <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg></span>
+        <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 240px; min-width: 0">
+          <h2 id="advn-h" style="margin: 0; font-size: 14px; font-weight: 600">This is an advanced area</h2>
+          <span class="sub2">It's hidden from navigation while Minimal interface is on.</span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px">
+          <button type="button" class="btn sm" onClick="{{showAll}}">Show all features</button>
+          <a href="Main.dc.html" class="btn sm">Go to Home</a>
+        </div>
+      </section>
+      <header style="display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end">
+        <span class="tile lg"><svg class="ic" width="28" height="28" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 41S6 31 6 17a9.5 9.5 0 0 1 18-4.2A9.5 9.5 0 0 1 42 17c0 14-18 24-18 24z" class="i3"/><path d="M10 23h8l3-6 5 12 3-6h9"/></svg></span>
+        <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 260px">
+          <span class="sub2">Agents / Heartbeat</span>
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">Heartbeat Status</h1>
+          <p class="sub2" style="margin: 0">Scheduled wakeups, manual runs and run history for one agent</p>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end">
+          <label class="fld" for="agent-id">Agent ID<input id="agent-id" class="inp mono" type="text" value="devops-engineer" placeholder="Enter agent ID" style="width: 220px"></label>
+          <button type="button" class="btn">Load</button>
+        </div>
+      </header>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+        <section class="card" aria-labelledby="cfg" style="flex: 1 1 340px; min-width: 0">
+          <div class="ch">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="26" r="15" class="iw"/><path d="M24 26V16" class="sacc"/><path d="M24 26l7 5"/><circle cx="24" cy="26" r="2.5" class="i2"/><path d="M19 6h10M24 6v5M38 12l3-3"/></svg></span>
+            <h2 id="cfg">Configuration</h2>
+            <span class="pill ok">active</span>
+          </div>
+          <div style="padding: 8px 16px 16px; display: flex; flex-direction: column; gap: 14px">
+            <div>
+              <div class="kv"><span>Status</span><span>active</span></div>
+              <div class="kv adv"><span data-tip="Seconds between scheduled wakeups" tabindex="0">Interval</span><span>300s</span></div>
+              <div class="kv adv"><span data-tip="A run longer than this is stopped and marked timed_out" tabindex="0">Max Duration</span><span>900s</span></div>
+              <div class="kv"><span>Last Heartbeat</span><span class="mono">Oct 10, 10:40:12</span></div>
+              <div class="kv adv" style="border-bottom: 0"><span>Current Task</span><span class="mono" style="font-size: 12.5px" data-tip="Fleet health sweep (task_8f2c91d4)" data-tip-pos="left" tabindex="0">task_8f2c91d4</span></div>
+            </div>
+            <label style="display: flex; align-items: center; gap: 10px; font-size: 13.5px; font-weight: 500; min-height: 32px"><input type="checkbox" checked style="width: 16px; height: 16px; accent-color: var(--primary)">Enable heartbeat</label>
+            <div class="adv" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px">
+              <label class="fld" for="iv">Interval (s)<input id="iv" class="inp" type="number" min="10" value="300"></label>
+              <label class="fld" for="md">Max Duration (s)<input id="md" class="inp" type="number" min="10" value="900"></label>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px">
+              <button type="button" class="btn sm">Save</button>
+              <button type="button" class="btn sm pri"><svg class="ic sonp" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5l12 7-12 7z"/></svg>Run Now</button>
+              <button type="button" class="btn sm"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" class="i2"/><rect x="14" y="5" width="4" height="14" class="i2"/></svg>Pause</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="card adv" aria-labelledby="wq" style="flex: 2 1 420px; min-width: 0">
+          <div class="ch" style="flex-wrap: wrap">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path d="M14 30V20a10 10 0 0 1 20 0v10l4 5H10z" class="i2"/><path d="M20 39a4 4 0 0 0 8 0"/><path d="M6 14c1-4 3-7 6-9M42 14c-1-4-3-7-6-9" class="sacc"/></svg></span>
+            <h2 id="wq" style="flex-grow: 0">Wakeup Queue</h2>
+            <span class="cnt" aria-label="2 pending" data-tip="2 pending wakeup requests" data-tip-pos="bottom" tabindex="0">2</span>
+            <span style="flex-grow: 1"></span>
+            <button type="button" class="btn sm">+ Queue Wakeup</button>
+          </div>
+          <div style="overflow-x: auto">
+            <table style="border-collapse: collapse; width: 100%">
+              <thead><tr><th><span data-tip="0–10; higher priority wakeups run first" tabindex="0">Priority</span></th><th>Reason</th><th>Created</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">8</td><td>Disk alert on node-04 from monitoring</td><td class="mono">Oct 10, 10:44:03</td></tr>
+                <tr><td class="mono">5</td><td>Manual wakeup from dashboard</td><td class="mono">Oct 10, 10:46:51</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="sub2" style="margin: 0; padding: 12px 16px">Pending requests are picked up on the next scheduler tick, highest priority first.</p>
+        </section>
+      </div>
+
+      <section class="card" aria-labelledby="rh">
+        <div class="ch" style="flex-wrap: wrap">
+          <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><rect x="8" y="8" width="32" height="34" rx="3" class="iw"/><path d="M14 17h20M14 25h20M14 33h12"/><circle cx="14" cy="17" r="1.5" class="i3"/><path d="M8 13h32"/></svg></span>
+          <h2 id="rh">Run History</h2>
+          <span class="sub2">Last 24 h • 214 runs<span class="adv"> • <span class="mono" data-tip="Total estimated model spend for these runs" tabindex="0">$0.0612</span></span></span>
+        </div>
+        <div style="overflow-x: auto">
+          <table style="border-collapse: collapse; width: 100%">
+            <thead><tr><th>Status</th><th><span data-tip="schedule = interval tick · manual = Run Now · wakeup = queued request" tabindex="0">Trigger</span></th><th>Started</th><th>Duration</th><th class="adv"><span data-tip="LLM input + output tokens consumed by the run" tabindex="0">Tokens</span></th><th class="adv"><span data-tip="Estimated model spend for the run, in USD" tabindex="0">Cost</span></th><th><span style="position: absolute; left: -9999px">Expand</span></th></tr></thead>
+            <tbody>
+              <tr><td><span class="pill info" data-tip="Run in progress" tabindex="0">running</span></td><td class="mono">schedule</td><td class="mono">10:40:12</td><td class="mono">2m 10s</td><td class="mono adv">—</td><td class="mono adv">—</td><td><button type="button" class="btn sm xb" aria-label="Expand run events" aria-expanded="false" data-tip="Show run events" data-tip-pos="left">▼</button></td></tr>
+              <tr><td><span class="pill ok">completed</span></td><td class="mono">schedule</td><td class="mono">10:35:09</td><td class="mono">48s</td><td class="mono adv">3,412</td><td class="mono adv">$0.0004</td><td><button type="button" class="btn sm xb" aria-label="Expand run events" aria-expanded="false" data-tip="Show run events" data-tip-pos="left">▼</button></td></tr>
+              <tr style="background: var(--surface2)"><td style="border-bottom: 0"><span class="pill bad">failed</span></td><td class="mono" style="border-bottom: 0">manual</td><td class="mono" style="border-bottom: 0">10:12:44</td><td class="mono" style="border-bottom: 0">1m 02s</td><td class="mono adv" style="border-bottom: 0">5,980</td><td class="mono adv" style="border-bottom: 0">$0.0009</td><td style="border-bottom: 0"><button type="button" class="btn sm xb" aria-label="Collapse run events" aria-expanded="true" data-tip="Hide run events" data-tip-pos="left">▲</button></td></tr>
+              <tr><td colspan="7" style="white-space: normal; background: var(--surface2); padding: 4px 16px 14px">
+                <div style="display: flex; align-items: center; gap: 10px; border: var(--bw) solid var(--danger-tile-b); border-radius: 8px; background: var(--danger-tile); padding: 10px 12px; font-size: 13px; color: var(--alert-text); font-weight: 600; margin-bottom: 10px"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z" class="iw"/><path d="M12 10v4M12 17v.5"/></svg>Error: SSH connection to node-05 timed out after 30s (ansible ping)</div>
+                <div class="adv">
+                <div class="ev"><span class="t mono">10:12:44</span><span class="y mono">run_started</span><span>trigger=manual</span></div>
+                <div class="ev"><span class="t mono">10:12:46</span><span class="y mono">task_claimed</span><span>Fleet health sweep</span></div>
+                <div class="ev"><span class="t mono">10:13:16</span><span class="y mono">tool_error</span><span>ansible all -m ping: node-05 UNREACHABLE</span></div>
+                <div class="ev"><span class="t mono">10:13:46</span><span class="y mono">run_failed</span><span>Retry scheduled on next tick</span></div>
+                </div>
+              </td></tr>
+              <tr><td><span class="pill warn" data-tip="Stopped after hitting the 900s max duration" tabindex="0">timed_out</span></td><td class="mono">wakeup</td><td class="mono">09:30:00</td><td class="mono">15m 00s</td><td class="mono adv">21,044</td><td class="mono adv">$0.0031</td><td><button type="button" class="btn sm xb" aria-label="Expand run events" aria-expanded="false" data-tip="Show run events" data-tip-pos="left">▼</button></td></tr>
+              <tr><td><span class="pill ok">completed</span></td><td class="mono">schedule</td><td class="mono">09:25:02</td><td class="mono">51s</td><td class="mono adv">3,288</td><td class="mono adv">$0.0004</td><td><button type="button" class="btn sm xb" aria-label="Expand run events" aria-expanded="false" data-tip="Show run events" data-tip-pos="left">▼</button></td></tr>
+              <tr><td style="border-bottom: 0"><span class="pill idle" data-tip="Stopped by a user before finishing" tabindex="0">cancelled</span></td><td class="mono" style="border-bottom: 0">manual</td><td class="mono" style="border-bottom: 0">09:04:37</td><td class="mono" style="border-bottom: 0">6s</td><td class="mono adv" style="border-bottom: 0">—</td><td class="mono adv" style="border-bottom: 0">—</td><td style="border-bottom: 0"><button type="button" class="btn sm xb" aria-label="Expand run events" aria-expanded="false" data-tip="Show run events" data-tip-pos="left">▼</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":1180}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      themes: defs.map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => { try { window.localStorage.setItem('autobot-theme', id); } catch (e) {} this.setState({ theme: id }); }
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

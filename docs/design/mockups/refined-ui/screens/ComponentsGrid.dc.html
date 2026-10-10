@@ -1,0 +1,1234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot Tokens: Layout grid, tables and forms</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.wgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:start}
+.wgrid>.card{min-width:0;position:relative;display:flex;flex-direction:column}
+.card.editing{outline:1.5px dashed var(--muted);outline-offset:3px}
+.card.editing[draggable="true"]{cursor:grab}
+.grip{display:inline-grid;place-items:center;width:18px;height:28px;cursor:grab;flex:none}
+.wtools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto}
+.mbtn{width:30px;height:30px;padding:0;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);display:inline-grid;place-items:center;cursor:pointer;flex:none}
+.mbtn:hover{background:var(--surface2)}
+.mbtn[aria-disabled="true"]{opacity:.45;cursor:default}
+.segg{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.segg .seg{height:26px;padding:0 8px}
+.hint{margin:0;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;border:var(--bw) dashed var(--border);background:var(--surface2);font-size:13px;color:var(--text2)}
+.rsz{position:absolute;right:5px;bottom:5px;fill:none;stroke:var(--muted);stroke-width:1.5;stroke-linecap:round;pointer-events:none}
+@media (max-width:760px){.wgrid>.card{grid-column:1 / -1 !important}}
+.sub2{font-size:12.5px;color:var(--muted)}
+/* ---- Specimen scaffolding (built on the tokens below) ---- */
+.specbar{flex:1 1 100%;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:14px var(--page-margin);background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+.specbar h1{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.spec{flex:1 1 100%;box-sizing:border-box;padding:var(--space-section) var(--page-margin) 48px;display:grid;grid-template-columns:repeat(var(--grid-cols),minmax(0,1fr));gap:var(--grid-gutter);align-items:start}
+.spec>.s12{grid-column:1 / -1}.spec>.s6{grid-column:span 6;min-width:0}
+@media (max-width:1023.98px){.spec>.s6{grid-column:1 / -1}}
+.gh{grid-column:1 / -1;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;padding:8px 0 10px;border-bottom:var(--bw) solid var(--border)}
+.gh h2{margin:0;font-size:18px;font-weight:600}
+.gh .gn{font-size:12.5px;font-weight:500;color:var(--accent)}
+.ch .use{font-size:12.5px;color:var(--muted);font-weight:400}
+.cb{padding:16px;display:flex;flex-direction:column;gap:16px}
+.lbl{font-size:11.5px;color:var(--muted);font-weight:500}
+.rules{margin:0;padding:11px 16px;border-top:var(--bw) solid var(--line);font-size:12.5px;color:var(--text2);background:var(--surface2);border-radius:0 0 10px 10px;line-height:1.5}
+.rules b{color:var(--text)}
+.th .fx{outline:3px solid var(--focus);outline-offset:2px}
+.ctrls{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+.ann{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;line-height:1.35;color:var(--text2);background:var(--surface);border:1px solid var(--accent);border-radius:4px;padding:1px 5px;white-space:nowrap}
+.tok{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;color:var(--text);background:var(--surface2);border:var(--bw) solid var(--line);border-radius:4px;padding:1px 5px;white-space:nowrap}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--grid-gutter)}
+.col{display:flex;flex-direction:column;gap:8px;min-width:0}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--text2)}
+.btn.ghost:hover{background:var(--surface2);color:var(--text)}
+.btn.danger{background:var(--surface);color:var(--alert-text);border-color:var(--danger-tile-b)}
+.btn.danger:hover{background:var(--danger-tile)}
+.btn[aria-pressed="true"]{background:var(--surface2);border-color:var(--text2)}
+/* ---- Layout grid specimen ---- */
+.gstage{background:var(--surface2);border:var(--bw) solid var(--line);border-radius:8px;padding:16px;overflow:hidden}
+.gframe{--grid-cols:12;--grid-gutter:24px;--page-margin:32px;--space-section:32px;--stack:16px;width:100%;height:520px;margin:0 auto;box-sizing:border-box;border:var(--bw) solid var(--border);border-radius:10px;background:var(--bg);overflow:hidden;display:flex;flex-direction:column;font-size:13px;transition:width .2s}
+.gframe[data-bp="md"]{--grid-cols:8;--grid-gutter:16px;--page-margin:19.2px;--space-section:24px;--stack:12px;width:768px}
+.gframe[data-bp="sm"]{--grid-cols:4;--grid-gutter:16px;--page-margin:16px;--space-section:24px;--stack:12px;width:375px}
+@media (prefers-reduced-motion:reduce){.gframe{transition:none}}
+.gf-top{height:var(--topbar-h);flex:none;display:flex;align-items:center;gap:10px;padding:0 var(--page-margin);background:var(--surface);border-bottom:var(--bw) solid var(--border);box-sizing:border-box}
+.gf-nav{display:flex;gap:16px;margin-left:10px;color:var(--text2);font-weight:500;align-self:stretch;align-items:center}
+.gf-nav .on{color:var(--text);font-weight:600;align-self:stretch;display:flex;align-items:center;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.gf-av{width:28px;height:28px;border-radius:99px;background:var(--brand-bg);color:var(--brand-fg);font-size:11px;font-weight:600;display:grid;place-items:center;flex:none}
+.gf-menu{display:none}
+.gframe[data-bp="sm"] .gf-nav{display:none}.gframe[data-bp="sm"] .gf-menu{display:grid}
+.gf-body{flex:1;display:flex;min-height:0}
+.gf-sub{width:var(--subnav-w);flex:none;box-sizing:border-box;padding:14px 10px;background:var(--surface);border-right:var(--bw) solid var(--border);display:flex;flex-direction:column;gap:2px}
+.gs-h{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:2px 8px 6px}
+.gsi{display:flex;align-items:center;gap:10px;height:30px;padding:0 8px;border-radius:6px;color:var(--text2);font-size:12.5px;border-left:3px solid transparent;white-space:nowrap;flex:none}
+.gsi.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.gf-sub .ann{margin-top:auto;align-self:flex-start}
+.gframe[data-bp="md"] .gf-sub{width:var(--subnav-rail);padding:14px 7px;align-items:center}
+.gframe[data-bp="md"] .gsi{justify-content:center;padding:0;width:40px;border-left:0}
+.gframe[data-bp="md"] .gsi.on{outline:var(--bw) solid var(--border)}
+.gframe[data-bp="md"] .gsi .t,.gframe[data-bp="md"] .gs-h,.gframe[data-bp="md"] .gf-sub .ann,.gframe[data-bp="sm"] .gf-sub .ann{display:none}
+.gframe[data-bp="sm"] .gf-body{flex-direction:column}
+.gframe[data-bp="sm"] .gf-sub{width:auto;height:44px;flex-direction:row;align-items:stretch;gap:16px;padding:0 var(--page-margin);border-right:0;border-bottom:var(--bw) solid var(--border);overflow:hidden}
+.gframe[data-bp="sm"] .gs-h,.gframe[data-bp="sm"] .gsi svg{display:none}
+.gframe[data-bp="sm"] .gsi{height:auto;padding:0;border-radius:0;border-left:0;background:transparent;border-bottom:var(--nav-on-bw) solid transparent}
+.gframe[data-bp="sm"] .gsi.on{border-bottom-color:var(--accent)}
+.gf-main{flex:1;min-width:0;position:relative;padding:var(--space-section) var(--page-margin);box-sizing:border-box;display:flex;flex-direction:column;gap:var(--stack);overflow:hidden}
+.gf-head{display:flex;flex-wrap:wrap;align-items:flex-end;gap:6px 12px}
+.gf-head b{font-size:18px;font-weight:600;display:block}
+.ggrid{display:grid;grid-template-columns:repeat(var(--grid-cols),minmax(0,1fr));gap:var(--stack) var(--grid-gutter);position:relative;z-index:1}
+.gi{grid-column:span var(--s-lg);min-width:0}
+.gframe[data-bp="md"] .gi{grid-column:span var(--s-md)}
+.gframe[data-bp="sm"] .gi{grid-column:span var(--s-sm)}
+.gw{background:var(--surface);border:var(--bw) solid var(--border);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:7px;box-sizing:border-box;min-height:128px}
+.gw.k{min-height:0;gap:3px}
+.gw b.n{font-size:19px;font-weight:600}
+.gw h4{margin:0;font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gl{height:6px;border-radius:3px;background:var(--line)}
+.gsz{align-self:flex-start;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10.5px;color:var(--text2);background:var(--surface2);border:var(--bw) solid var(--line);border-radius:4px;padding:0 5px;white-space:nowrap}
+.o-md,.o-sm{display:none}
+.gframe[data-bp="md"] .o-lg,.gframe[data-bp="sm"] .o-lg{display:none}
+.gframe[data-bp="md"] .o-md,.gframe[data-bp="sm"] .o-sm{display:inline}
+.gov{position:absolute;top:0;bottom:0;left:var(--page-margin);right:var(--page-margin);display:grid;grid-template-columns:repeat(var(--grid-cols),minmax(0,1fr));column-gap:var(--grid-gutter);pointer-events:none;z-index:2}
+.gov i{background:var(--i3t);opacity:.55;outline:1px dashed var(--accent);outline-offset:-1px}
+.gframe[data-bp="md"] .gov i:nth-child(n+9),.gframe[data-bp="sm"] .gov i:nth-child(n+5){display:none}
+.gmar{position:absolute;top:0;bottom:0;width:var(--page-margin);background:var(--i2t);opacity:.75;pointer-events:none;z-index:2}
+.gmar.l{left:0}.gmar.r{right:0}
+.sgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--grid-gutter);align-items:center}
+.sgrid .c{height:30px;border-radius:5px;background:var(--i1t);border:1px solid var(--stroke);box-sizing:border-box;display:flex;align-items:center;padding:0 8px;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;min-width:0}
+.sgrid .g{height:30px;border-radius:5px;border:1px dashed var(--border);box-sizing:border-box}
+.sgrid .n{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10.5px;color:var(--muted);text-align:center;border-bottom:1px solid var(--accent);padding-bottom:2px}
+.cz{display:grid;grid-template-columns:150px minmax(0,1fr);gap:9px 12px;align-items:center;font-size:12.5px}
+.czv{display:flex;align-items:center;gap:8px;min-width:0}
+.czb{height:14px;background:var(--i1t);border:1px solid var(--stroke);border-radius:2px;box-sizing:border-box;flex:none}
+.stk{display:flex;flex-direction:column;gap:var(--stack)}
+.stk>div{height:22px;border-radius:5px;background:var(--surface);border:var(--bw) solid var(--border)}
+.stk-sec{height:var(--space-section);background:var(--i2t);outline:1px dashed var(--accent);outline-offset:-1px;display:flex;align-items:center;padding-left:8px}
+.tpls{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px}
+@media (max-width:1100px){.tpls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.tpl{margin:0;display:flex;flex-direction:column;gap:8px;min-width:0}
+.tpl figcaption{display:flex;flex-direction:column;gap:3px;font-size:13px}
+.wf{position:relative;height:188px;border:var(--bw) solid var(--border);border-radius:8px;background:var(--bg);overflow:hidden;display:flex;flex-direction:column}
+.wf .n{height:14px;flex:none;background:var(--surface);border-bottom:var(--bw) solid var(--border)}
+.wl{height:5px;border-radius:2px;background:var(--border)}
+.wb{border:var(--bw) solid var(--border);background:var(--surface);border-radius:3px;box-sizing:border-box}
+.wf .ann{position:absolute;font-size:9.5px;padding:0 4px;z-index:2}
+/* ---- Table specimen (every rule reads a --tbl token) ---- */
+.tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:var(--tbl-font-size);color:var(--text)}
+.tbl th{height:var(--tbl-head-h);padding:0 var(--tbl-cell-px);box-sizing:border-box;background:var(--tbl-head-bg);color:var(--tbl-head-fg);font:var(--tbl-head-font);text-transform:var(--tbl-head-case);letter-spacing:var(--tbl-head-ls);text-align:left;border-bottom:var(--tbl-head-border);white-space:nowrap;min-width:var(--tbl-min-col)}
+.tbl td{height:var(--tbl-row-h);padding:var(--tbl-cell-py) var(--tbl-cell-px);box-sizing:border-box;border-bottom:var(--tbl-border);white-space:nowrap;vertical-align:middle;font-size:var(--tbl-font-size)}
+.tbl tbody tr:nth-child(even) td{background:var(--tbl-zebra)}
+.tbl tbody tr:hover td,.tbl tbody tr.is-hover td{background:var(--tbl-row-hover)}
+.tbl tbody tr.sel td{background:var(--tbl-row-selected)}
+.tbl tbody tr.sel td:first-child{border-left:var(--tbl-selected-edge)}
+.tbl tbody tr:last-child td{border-bottom:0}
+.tbl .c-chk{width:var(--tbl-check-col-w);min-width:0;padding:0;text-align:center}
+.tbl .c-act{width:var(--tbl-actions-col-w);min-width:0;padding:0;text-align:center}
+.tbl .num{text-align:right;font-variant-numeric:var(--tbl-num)}
+.tbl .idc{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12.5px}
+.tbl td.wrap{white-space:normal;line-height:1.45}
+.tbl td.rel{position:relative}
+.tbl.sticky th{position:sticky;top:var(--tbl-sticky-top);z-index:2}
+.tbl th.stuck{border-bottom:2px solid var(--stroke)}
+.trunc{display:block;max-width:var(--tbl-cell-max);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;line-height:1.4}
+.who{display:inline-flex;align-items:center;gap:8px}
+.av{width:22px;height:22px;border-radius:5px;display:inline-grid;place-items:center;font-size:9.5px;font-weight:600;background:var(--tile);border:var(--bw) solid var(--tile-b);color:var(--text2);flex:none;box-sizing:border-box}
+.av.h{border-radius:99px;background:var(--brand-bg);color:var(--brand-fg);border-color:var(--brand-bg)}
+.prog{display:inline-flex;align-items:center;gap:8px}.prog .bar{width:96px}
+.xbtn{width:28px;height:28px;border:0;border-radius:5px;background:transparent;display:inline-grid;place-items:center;cursor:pointer;padding:0;color:var(--text2);vertical-align:middle}
+.xbtn:hover{background:var(--line)}
+.sh{display:inline-flex;align-items:center;gap:5px;height:26px;margin:0 -6px;padding:0 6px;border:0;border-radius:5px;background:transparent;font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer}
+.sh:hover,.sh.is-hover{background:var(--line);color:var(--text)}
+.si{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.si .u,.si .d{opacity:.35}
+[aria-sort="ascending"] .sh,[aria-sort="descending"] .sh{color:var(--text)}
+[aria-sort="ascending"] .si .u{opacity:1}[aria-sort="ascending"] .si .d{opacity:0}
+[aria-sort="descending"] .si .d{opacity:1}[aria-sort="descending"] .si .u{opacity:0}
+.cbx{width:var(--control-size);height:var(--control-size);padding:0;border-radius:4px;border:1.5px solid var(--text2);background:var(--field-bg);display:inline-grid;place-items:center;cursor:pointer;flex:none;box-sizing:border-box;vertical-align:middle}
+.cbx svg{display:none;fill:none;stroke:var(--on-primary);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.cbx[aria-checked="true"],.cbx[aria-checked="mixed"]{background:var(--primary);border-color:var(--primary)}
+.cbx[aria-checked="true"] .ck,.cbx[aria-checked="mixed"] .mx{display:block}
+.anat{display:grid;grid-template-columns:minmax(0,1fr) 230px;align-items:start}
+.mrow{display:grid;height:24px;margin-bottom:6px}
+.mrow span{display:flex;align-items:flex-end;justify-content:center;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10.5px;color:var(--text2);border-bottom:1px solid var(--accent);border-left:1px solid var(--accent);border-right:1px solid var(--accent);margin:0 1px;padding-bottom:2px;white-space:nowrap;overflow:hidden}
+.rlr{display:flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;color:var(--text2);box-sizing:border-box;white-space:nowrap}
+.rlb{align-self:stretch;width:10px;flex:none;box-sizing:border-box;border:1px solid var(--accent);border-left:0;margin:1px 0}
+.padmk{position:absolute;top:0;bottom:0;left:0;width:var(--tbl-cell-px);background:var(--i2t);border-right:1px dashed var(--accent);pointer-events:none}
+.legend{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 20px;margin:0;font-size:12.5px}
+.legend>div{display:flex;gap:8px;align-items:baseline;min-width:0;line-height:1.45;color:var(--text2)}
+.legend b{flex:none;width:18px;height:18px;border-radius:99px;border:1px solid var(--accent);color:var(--text);font-size:11px;display:inline-grid;place-items:center}
+.tblwrap{border:var(--bw) solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.rl{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:7px;font-size:13px;color:var(--text2);line-height:1.45}
+/* ---- Form specimen (every rule reads a field/form token) ---- */
+.fld{display:flex;flex-direction:column;gap:var(--label-gap);min-width:0}
+.flabel{font-size:var(--label-size);font-weight:var(--label-weight);color:var(--text);line-height:20px}
+.req{color:var(--error-fg);margin-left:2px}
+.fin{width:100%;height:var(--field-h-md);box-sizing:border-box;padding:0 var(--field-px);border:var(--field-border);border-radius:var(--field-radius);background:var(--field-bg);color:var(--field-fg);font:inherit;font-size:var(--field-font-size)}
+.fin::placeholder{color:var(--muted)}
+.fin.sm{height:var(--field-h-sm);font-size:13px}.fin.lg{height:var(--field-h-lg);font-size:15px}
+.fin:hover,.fgrp:hover{border-color:var(--field-border-hover)}
+.th .fin:focus-visible,.th .fin.fx{outline:var(--field-focus-ring);outline-offset:var(--field-focus-offset);border-color:var(--focus)}
+.fin:disabled{background:var(--field-bg-disabled);color:var(--muted);cursor:not-allowed}
+.th .fin[aria-invalid="true"]{border-color:var(--error-border);border-width:var(--error-bw)}
+textarea.fin{height:auto;min-height:84px;padding:8px var(--field-px);line-height:1.5;resize:vertical;display:block}
+select.fin{appearance:none;-webkit-appearance:none;padding-right:32px}
+.selw{position:relative;min-width:0}.selw>svg{position:absolute;right:10px;top:50%;margin-top:-7px;pointer-events:none}
+.fhelp{font-size:var(--help-size);color:var(--help-fg);line-height:1.4}
+.ferr{font-size:var(--help-size);color:var(--error-fg);font-weight:500;line-height:1.4;display:flex;align-items:center;gap:6px}
+.fgrp{display:flex;align-items:stretch;height:var(--field-h-md);box-sizing:border-box;border:var(--field-border);border-radius:var(--field-radius);background:var(--field-bg);overflow:hidden}
+.fgrp .fin{border:0;height:100%;border-radius:0;flex:1;min-width:0;background:transparent}
+.th .fgrp:focus-within{outline:var(--field-focus-ring);outline-offset:var(--field-focus-offset);border-color:var(--focus)}
+.th .fgrp .fin:focus-visible{outline:0}
+.ad{display:flex;align-items:center;padding:0 var(--field-px);background:var(--surface2);color:var(--text2);font-size:13px;white-space:nowrap}
+.ad.l{border-right:var(--field-border)}.ad.r{border-left:var(--field-border)}
+.inl{display:flex;flex-wrap:wrap;align-items:center;gap:var(--inline-gap)}
+.w72{width:72px}.w140{width:140px}.w110{width:110px}
+.ctlg{display:flex;flex-direction:column;gap:10px}
+.ctl{display:flex;align-items:flex-start;gap:var(--check-gap);padding:0;border:0;background:transparent;font:inherit;font-size:13.5px;line-height:20px;color:var(--text);text-align:left;cursor:pointer}
+.box{width:var(--control-size);height:var(--control-size);margin-top:1px;flex:none;box-sizing:border-box;border-radius:4px;border:1.5px solid var(--text2);background:var(--field-bg);display:grid;place-items:center}
+.box svg{display:none;fill:none;stroke:var(--on-primary);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.ctl[aria-checked="true"] .box,.ctl.on .box{background:var(--primary);border-color:var(--primary)}
+.ctl[aria-checked="true"] .box svg,.ctl.on .box svg{display:block}
+.box.rd{border-radius:99px}
+.box.rd i{display:none;width:8px;height:8px;border-radius:99px;background:var(--primary)}
+.ctl.on .box.rd{background:var(--field-bg);border:2px solid var(--primary)}
+.ctl.on .box.rd i{display:block}
+.sw{position:relative;width:var(--switch-w);height:var(--switch-h);flex:none;box-sizing:border-box;border-radius:99px;border:var(--bw) solid var(--text2);background:var(--bar-track)}
+.sw::after{content:"";position:absolute;top:50%;left:2px;width:var(--switch-knob);height:var(--switch-knob);margin-top:calc(var(--switch-knob) / -2);border-radius:99px;background:var(--surface);border:1px solid var(--stroke);box-sizing:border-box;transition:left .15s}
+.ctl[aria-checked="true"] .sw,.ctl.on .sw{background:var(--primary);border-color:var(--primary)}
+.ctl[aria-checked="true"] .sw::after,.ctl.on .sw::after{left:calc(100% - var(--switch-knob) - 2px)}
+@media (prefers-reduced-motion:reduce){.sw::after{transition:none}}
+.form{display:flex;flex-direction:column;gap:var(--field-gap);max-width:var(--form-max);width:100%}
+.form[data-layout="horizontal"]{max-width:calc(var(--form-label-col) + var(--grid-gutter) + var(--form-max))}
+.form[data-layout="horizontal"] .fld{display:grid;grid-template-columns:var(--form-label-col) minmax(0,1fr);column-gap:var(--grid-gutter);row-gap:var(--label-gap);align-items:start}
+.form[data-layout="horizontal"] .fld>.flabel{grid-column:1;grid-row:1 / span 3;padding-top:calc((var(--field-h-md) - 20px) / 2);text-align:left}
+.form[data-layout="horizontal"] .fld>.flabel.ctlab{padding-top:0}
+.form[data-layout="horizontal"] .fld>:not(.flabel){grid-column:2}
+.form[data-layout="horizontal"] .abar{padding-left:calc(var(--form-label-col) + var(--grid-gutter))}
+@media (max-width:767.98px){.form[data-layout="horizontal"] .fld{display:flex;flex-direction:column}.form[data-layout="horizontal"] .fld>.flabel{padding-top:0}.form[data-layout="horizontal"] .abar{padding-left:0}}
+.fdemo{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:var(--grid-gutter);align-items:start}
+.note{border:var(--bw) solid var(--line);border-radius:8px;background:var(--surface2);padding:12px 14px;display:flex;flex-direction:column;gap:8px;font-size:12.5px;color:var(--text2);line-height:1.5}
+.fa{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);column-gap:14px;row-gap:0;align-items:stretch}
+.gapmk{background:var(--i2t);outline:1px dashed var(--accent);outline-offset:-1px}
+.gapmk.lg{height:var(--label-gap)}.gapmk.fg{height:var(--field-gap)}
+.rlx{position:relative;display:flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;color:var(--text2);min-height:0;white-space:nowrap}
+.rlx .br{align-self:stretch;width:10px;flex:none;box-sizing:border-box;border:1px solid var(--accent);border-left:0}
+.rlx.thin span{position:absolute;left:18px;top:50%;transform:translateY(-50%)}
+.pwrap{position:relative}
+.pwrap .pm{position:absolute;top:var(--bw);bottom:var(--bw);left:var(--bw);width:var(--field-px);background:var(--i1t);border-right:1px dashed var(--accent);pointer-events:none;border-radius:var(--field-radius) 0 0 var(--field-radius)}
+.pwrap .pm.r{left:auto;right:var(--bw);border-right:0;border-left:1px dashed var(--accent);border-radius:0 var(--field-radius) var(--field-radius) 0}
+.szr{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:10px 12px;align-items:center}
+.vsum{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:8px;background:var(--bad-bg);color:var(--bad-fg);border:var(--pill-b);font-size:13px;line-height:1.45}
+.th .vsum a{color:inherit;text-decoration:underline}
+.vsum ul{margin:4px 0 0;padding-left:18px}
+.fr2{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,1fr);gap:var(--field-gap)}
+.fsecs{display:flex;flex-direction:column;max-width:var(--form-max)}
+.fsec{display:flex;flex-direction:column;gap:var(--field-gap)}
+.fsec+.fsec{margin-top:var(--form-section-gap);padding-top:var(--form-section-gap);border-top:var(--bw) solid var(--line)}
+.fsec h3{margin:0;font-size:15px;font-weight:600}
+.fsec header{display:flex;flex-direction:column;gap:3px}
+.abar{display:flex;flex-wrap:wrap;align-items:center;gap:var(--action-gap)}
+.abar.end{justify-content:flex-end}
+.abar .push{margin-left:auto}
+.abx{border:var(--bw) solid var(--line);border-radius:8px;background:var(--bg);padding:12px;display:flex;flex-direction:column;gap:10px}
+.abx .fake{background:var(--surface);border:var(--bw) solid var(--border);border-radius:8px;overflow:hidden}
+.abar.sbar{padding:10px 14px;border-top:var(--bw) solid var(--border);background:var(--surface)}
+/* ---- Token table + code ---- */
+.code{margin:0;padding:16px;max-height:640px;overflow:auto;background:var(--surface2);font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;line-height:1.6;color:var(--text);white-space:pre;tab-size:2;border-radius:0 0 10px 10px}
+/* ==== Layout grid, table and form tokens (theme-independent sizes; colours reference theme tokens) ==== */
+.th{
+ --bp-sm:640px;--bp-md:768px;--bp-lg:1024px;--bp-xl:1280px;--bp-2xl:1536px;
+ --grid-cols:12;--grid-gutter:24px;--page-margin:clamp(16px,2.5vw,32px);
+ --topbar-h:56px;--subnav-w:220px;--subnav-rail:56px;--panel-w:360px;--content-max:1440px;--reading-max:72ch;
+ --space-section:32px;--stack:16px;
+ --widget-s:4;--widget-m:6;--widget-l:8;--widget-full:12;--kpi-span:3;
+ --tbl-font-size:13px;--tbl-row-h:44px;--tbl-cell-px:16px;--tbl-cell-py:10px;--tbl-head-h:36px;
+ --tbl-head-bg:var(--surface2);--tbl-head-fg:var(--muted);--tbl-head-font:600 11.5px/1.2 'IBM Plex Sans',system-ui,sans-serif;--tbl-head-case:uppercase;--tbl-head-ls:.05em;--tbl-head-border:var(--bw) solid var(--border);
+ --tbl-border:var(--bw) solid var(--line);--tbl-row-hover:var(--surface2);--tbl-row-selected:var(--surface2);--tbl-selected-edge:3px solid var(--primary);
+ --tbl-zebra:transparent;--tbl-zebra-bg:var(--surface2);
+ --tbl-check-col-w:44px;--tbl-actions-col-w:48px;--tbl-min-col:96px;--tbl-cell-max:360px;--tbl-num:tabular-nums;--tbl-sticky-top:var(--topbar-h);
+ --field-h-sm:32px;--field-h-md:36px;--field-h-lg:44px;--field-px:12px;--field-radius:6px;--field-font-size:13.5px;
+ --field-border:var(--bw) solid var(--border);--field-border-hover:var(--muted);--field-bg:var(--surface);--field-bg-disabled:var(--surface2);--field-fg:var(--text);
+ --field-focus-ring:3px solid var(--focus);--field-focus-offset:1px;
+ --label-size:13px;--label-weight:500;--label-gap:6px;--help-size:12.5px;--help-fg:var(--muted);
+ --error-fg:var(--alert-text);--error-border:var(--bar-alert);--error-bw:2px;
+ --field-gap:16px;--inline-gap:8px;--form-section-gap:28px;--form-label-col:200px;--form-max:640px;--action-gap:8px;
+ --check-gap:8px;--control-size:18px;--switch-w:36px;--switch-h:20px;--switch-knob:14px;
+}
+@media (max-width:1023.98px){.th{--grid-cols:8;--grid-gutter:16px;--space-section:24px;--stack:12px}}
+@media (max-width:767.98px){.th{--grid-cols:4}}
+.th [data-density="compact"]{--tbl-row-h:32px;--tbl-cell-px:12px;--tbl-cell-py:6px;--tbl-head-h:32px}
+.th [data-zebra="on"]{--tbl-zebra:var(--tbl-zebra-bg);--tbl-row-hover:var(--line)}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <a href="ThemeManager.dc.html" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon" aria-label="Plugins" title="Plugins"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon" aria-label="Secrets" title="Secrets"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" title="Preferences"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <a href="AdminUsers.dc.html" class="icon" aria-label="Admin panel" title="Admin panel"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <button type="button" aria-label="Profile menu" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer">MV</button>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+  <aside class="sub" aria-label="Design system" style="flex: 1 1 230px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+    <a href="DesignSystem.dc.html" style="font-weight: 600; color: var(--text)">AutoBot Design System</a>
+    <span class="sub2" style="padding: 0 13px 4px">v1 · 4 themes</span>
+    <p class="sect">Overview</p>
+    <a href="DesignSystem.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z" class="i1"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z" class="it1"/></svg>Introduction</a>
+    <p class="sect">Foundations</p>
+    <a href="ComponentsStates.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4" class="i3"/><circle cx="16" cy="9" r="4" class="i2"/><circle cx="12" cy="16" r="4" class="i1"/></svg>Tokens &amp; states</a>
+    <a href="ComponentsGrid.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5" class="i1"/><rect x="13" y="4" width="7" height="7" rx="1.5" class="iw"/><rect x="4" y="13" width="7" height="7" rx="1.5" class="iw"/><rect x="13" y="13" width="7" height="7" rx="1.5" class="i2"/></svg>Grid, tables &amp; forms</a>
+    <a href="ComponentsCharts.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><rect x="5.5" y="11" width="3.5" height="7" class="i1"/><rect x="10.5" y="6" width="3.5" height="12" class="i2"/><rect x="15.5" y="13" width="3.5" height="5" class="i3"/></svg>Charts &amp; data viz</a>
+    <p class="sect">Components</p>
+    <a href="ComponentsForms.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4" class="i1"/><circle cx="16.5" cy="12" r="2.5" class="iw"/></svg>Form controls</a>
+    <a href="ComponentsTable.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="iw"/><path d="M4 10h16M4 14.5h16M10 10v9"/></svg>Data table</a>
+    <a href="ComponentsDialogs.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="it1"/><rect x="6" y="8" width="12" height="9" rx="1.5" class="iw"/></svg>Dialogs</a>
+    <a href="ComponentsOverlays.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" class="i2"/><path d="M10 21h4"/></svg>Overlays &amp; feedback</a>
+    <a href="ComponentsTooltips.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10h-7l-4 4v-4H4z" class="it1"/><path d="M8 10h8"/></svg>Tooltips</a>
+    <a href="ComponentsCommand.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" class="iw"/><path d="M7 10l3 2-3 2M12 15h5"/></svg>Command menu</a>
+    <a href="ComponentsNavigation.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M15 9l-2 4-4 2 2-4z" class="i3"/></svg>Navigation</a>
+    <a href="ComponentsLayout.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="iw"/><path d="M9 4v16M9 10h12"/></svg>Layout &amp; utility</a>
+    <a href="ComponentsChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h12v9H8l-3 3v-3H3z" class="i1"/><path d="M15 9h6v8h-2v3l-3-3h-5v-3"/></svg>Chat &amp; agent</a>
+    <p class="sect">Patterns</p>
+    <a href="FileBrowser.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="i2"/></svg>File browser</a>
+    <a href="Mailbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" class="iw"/><path d="M3 7l9 6 9-6"/></svg>Mailbox</a>
+    <a href="ComponentsUiModes.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5" class="it1"/><rect x="4.5" y="8.5" width="8" height="7" rx="3.5" class="i2"/></svg>Interface modes</a>
+    <a href="SignUp.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" class="i2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Auth pages</a>
+    <a href="AccountSecurity.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4" class="i1"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>Account settings</a>
+    <a href="SearchResults.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>Global search</a>
+    <a href="HelpCenter.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="i2"/><path d="M10 10a2 2 0 1 1 3 1.7c-.7.4-1 1-1 1.8M12 16.5v.5"/></svg>Help centre</a>
+    <span style="flex-grow: 1; min-height: 16px" aria-hidden="true"></span>
+    <a href="Main.dc.html" style="border-top: var(--bw) solid var(--line); border-radius: 0; padding-top: 12px"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg>← Back to app</a>
+  </aside>
+  <div style="flex: 999 1 520px; min-width: 0; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <div class="specbar">
+    <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1">
+      <h1>Tokens · Layout grid, tables &amp; forms</h1>
+      <span class="sub2">The sizing tokens behind page grids, data tables and forms, defined as CSS custom properties. Every specimen on this board is built on them.</span>
+    </div>
+    <span class="lbl">Preview theme</span>
+    <div role="group" aria-label="Preview theme" class="segg">
+      <sc-for list="{{themes}}" as="t" hint-placeholder-count="4"><button type="button" class="seg {{t.cls}}" aria-pressed="{{t.pressed}}" onClick="{{t.pick}}">{{t.label}}</button></sc-for>
+    </div>
+  </div>
+
+  <main class="spec">
+
+    <!-- ================= 01 LAYOUT GRID ================= -->
+    <div class="gh"><span class="gn mono">01</span><h2>Layout grid</h2><span class="sub2">Breakpoints, columns, gutters, margins and app chrome. This page's own 12-column card grid uses --grid-cols, --grid-gutter, --page-margin and --space-section.</span></div>
+
+    <section class="card s12" aria-labelledby="h-grid">
+      <div class="ch"><h2 id="h-grid">Grid overlay on a real page</h2><span class="use">Use for: placing every page region and widget. Switch the viewport and the same tokens re-resolve to 12 / 8 / 4 columns.</span></div>
+      <div class="cb">
+        <div class="ctrls">
+          <span class="lbl">Viewport</span>
+          <div role="group" aria-label="Specimen viewport" class="segg">
+            <sc-for list="{{bps}}" as="b" hint-placeholder-count="3"><button type="button" class="seg {{b.cls}}" aria-pressed="{{b.pressed}}" onClick="{{b.pick}}">{{b.label}}</button></sc-for>
+          </div>
+          <button type="button" class="btn sm" aria-pressed="{{gridPressed}}" onClick="{{toggleGrid}}">{{gridLabel}}</button>
+          <span class="sub2 mono" role="status" aria-live="polite">{{bpSummary}}</span>
+        </div>
+        <div class="gstage">
+          <div class="gframe" data-bp="{{bp}}">
+            <div class="gf-top">
+              <span class="tile" style="width: 26px; height: 26px; border-radius: 6px; background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="17" height="17" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 3"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+              <b style="font-size: 14px">AutoBot</b>
+              <span class="gf-nav"><span>Home</span><span>Chat</span><span>Knowledge</span><span class="on">Company OS</span><span>Analytics</span></span>
+              <span style="flex: 1"></span>
+              <span class="ann">--topbar-h · 56</span>
+              <span class="gf-menu" aria-hidden="true"><svg class="ic" width="20" height="20" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span>
+              <span class="gf-av">MV</span>
+            </div>
+            <div class="gf-body">
+              <div class="gf-sub">
+                <span class="gs-h">Company OS</span>
+                <span class="gsi on"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5" class="i1"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5" class="i2"/></svg><span class="t">Dashboard</span></span>
+                <span class="gsi"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it3"/><circle cx="12" cy="12" r="3"/></svg><span class="t">Goals</span></span>
+                <span class="gsi"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" class="i1"/><path d="M12 8V5"/></svg><span class="t">Agents</span></span>
+                <span class="gsi"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it2"/><path d="M9 12l2 2 4-4"/></svg><span class="t">Approvals</span></span>
+                <span class="gsi"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h9"/></svg><span class="t">Backlog</span></span>
+                <span class="gsi"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M14.5 9.5a3 3 0 1 0 0 5M8 11h5M8 13h5"/></svg><span class="t">Costs</span></span>
+                <span class="ann">--subnav-w · 220</span>
+              </div>
+              <div class="gf-main">
+                <div class="gf-head"><div><span class="sub2">Company OS / Dashboard</span><b>Company Dashboard</b></div><span style="flex: 1"></span><span class="ann"><span class="o-lg">margin 32 · gutter 24 · section 32</span><span class="o-md">margin 19.2 · gutter 16 · section 24</span><span class="o-sm">margin 16 · gutter 16</span></span></div>
+                <div class="ggrid">
+                  <div class="gi gw k" style="--s-lg: 3; --s-md: 4; --s-sm: 2"><span class="sub2">Active agents</span><b class="n">7</b><span class="gsz"><span class="o-lg">KPI · span 3</span><span class="o-md">span 4</span><span class="o-sm">span 2</span></span></div>
+                  <div class="gi gw k" style="--s-lg: 3; --s-md: 4; --s-sm: 2"><span class="sub2">Pending approvals</span><b class="n">3</b><span class="gsz"><span class="o-lg">KPI · span 3</span><span class="o-md">span 4</span><span class="o-sm">span 2</span></span></div>
+                  <div class="gi gw k" style="--s-lg: 3; --s-md: 4; --s-sm: 2"><span class="sub2">Spend · October</span><b class="n mono">€184.20</b><span class="gsz"><span class="o-lg">KPI · span 3</span><span class="o-md">span 4</span><span class="o-sm">span 2</span></span></div>
+                  <div class="gi gw k" style="--s-lg: 3; --s-md: 4; --s-sm: 2"><span class="sub2">Fleet nodes up</span><b class="n">4 / 5</b><span class="gsz"><span class="o-lg">KPI · span 3</span><span class="o-md">span 4</span><span class="o-sm">span 2</span></span></div>
+                  <div class="gi gw" style="--s-lg: 6; --s-md: 4; --s-sm: 4"><h4>Pending Approvals</h4><div class="gl" style="width: 80%"></div><div class="gl" style="width: 64%"></div><div class="gl" style="width: 72%"></div><span class="gsz"><span class="o-lg">M · span 6</span><span class="o-md">M · span 4</span><span class="o-sm">span 4 (full)</span></span></div>
+                  <div class="gi gw" style="--s-lg: 6; --s-md: 4; --s-sm: 4"><h4>Budget</h4><div class="bar"><div class="bf" style="width: 46%"></div></div><div class="gl" style="width: 50%"></div><div class="gl" style="width: 60%"></div><span class="gsz"><span class="o-lg">M · span 6</span><span class="o-md">M · span 4</span><span class="o-sm">span 4 (full)</span></span></div>
+                  <div class="gi gw" style="--s-lg: 4; --s-md: 4; --s-sm: 4"><h4>Agents</h4><div class="gl" style="width: 70%"></div><div class="gl" style="width: 55%"></div><span class="gsz"><span class="o-lg">S · span 4</span><span class="o-md">S · span 4</span><span class="o-sm">span 4 (full)</span></span></div>
+                  <div class="gi gw" style="--s-lg: 8; --s-md: 8; --s-sm: 4"><h4>Recent Heartbeat Runs</h4><div class="gl" style="width: 90%"></div><div class="gl" style="width: 76%"></div><span class="gsz"><span class="o-lg">L · span 8</span><span class="o-md">L · span 8 (full)</span><span class="o-sm">span 4 (full)</span></span></div>
+                </div>
+                <sc-if value="{{showGrid}}" hint-placeholder-val="{{ true }}">
+                  <span class="gmar l" aria-hidden="true"></span><span class="gmar r" aria-hidden="true"></span>
+                  <div class="gov" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                </sc-if>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="chips"><span class="ann">coral columns = --grid-cols</span><span class="ann">gaps between them = --grid-gutter</span><span class="ann">mustard bands = --page-margin</span><span class="ann">row gap = --stack</span><span class="ann">top padding = --space-section</span></div>
+      </div>
+      <p class="rules"><b>Rules:</b> every page grid is <span class="mono">repeat(var(--grid-cols), minmax(0, 1fr))</span> with <span class="mono">gap: var(--stack) var(--grid-gutter)</span>; items declare a span per breakpoint and never set pixel widths. Sub-nav collapses to a 56px icon rail below lg (labels move to tooltips + aria-label) and to scrollable top tabs below md. Overlay is a design aid only (aria-hidden).</p>
+    </section>
+
+    <section class="card s12" aria-labelledby="h-bp">
+      <div class="ch"><h2 id="h-bp">Breakpoints</h2><span class="use">Use for: deciding what changes at each width. Rows matching the viewport picked above are highlighted.</span></div>
+      <table class="tbl">
+        <thead><tr><th>Breakpoint</th><th>Token</th><th class="num">Min width</th><th class="num">Columns</th><th class="num">Gutter</th><th>Page margin</th><th>Section / stack</th><th>Sub-nav</th><th>Right panel</th><th>Shown above</th></tr></thead>
+        <tbody>
+          <sc-for list="{{bpRows}}" as="r" hint-placeholder-count="6">
+            <tr class="{{r.cls}}"><td style="font-weight: 600">{{r.name}}</td><td class="idc">{{r.tok}}</td><td class="num idc">{{r.min}}</td><td class="num idc">{{r.cols}}</td><td class="num idc">{{r.gut}}</td><td class="idc">{{r.mar}}</td><td class="idc">{{r.sp}}</td><td>{{r.sub}}</td><td>{{r.panel}}</td><td class="sub2">{{r.cur}}</td></tr>
+          </sc-for>
+        </tbody>
+      </table>
+      <p class="rules"><b>Rules:</b> mobile-first: write base styles for 4 columns, then <span class="mono">@media (min-width: 768px)</span> / <span class="mono">1024px</span> / <span class="mono">1280px</span>. Custom properties cannot be read inside media queries, so --bp-* are the documented source of truth and the Vue build mirrors them as SCSS/JS constants. Page margin is fluid <span class="mono">clamp(16px, 2.5vw, 32px)</span>; content stops at --content-max 1440 and centres from 2xl. The right panel replaces the ad-hoc 1100px collapse with --bp-xl.</p>
+    </section>
+
+    <section class="card s6" aria-labelledby="h-span">
+      <div class="ch"><h2 id="h-span">Column spans</h2><span class="use">Use for: widget and region widths on the 12-column grid.</span></div>
+      <div class="cb" style="gap: 10px">
+        <div class="sgrid" aria-hidden="true"><span class="n">1</span><span class="n">2</span><span class="n">3</span><span class="n">4</span><span class="n">5</span><span class="n">6</span><span class="n">7</span><span class="n">8</span><span class="n">9</span><span class="n">10</span><span class="n">11</span><span class="n">12</span></div>
+        <div class="sgrid"><span class="c" style="grid-column: span 3">3 · KPI</span><span class="g" style="grid-column: span 9"></span></div>
+        <div class="sgrid"><span class="c" style="grid-column: span 4">4 · S</span><span class="g" style="grid-column: span 8"></span></div>
+        <div class="sgrid"><span class="c" style="grid-column: span 6">6 · M · half</span><span class="g" style="grid-column: span 6"></span></div>
+        <div class="sgrid"><span class="c" style="grid-column: span 8">8 · L · two thirds</span><span class="g" style="grid-column: span 4"></span></div>
+        <div class="sgrid"><span class="c" style="grid-column: span 12">12 · Full width</span></div>
+        <table class="tbl" data-density="compact" style="margin-top: 8px; border: var(--bw) solid var(--border); border-radius: 8px; overflow: hidden">
+          <thead><tr><th>Customize layout size</th><th>Token</th><th class="num">≥ lg</th><th class="num">md</th><th class="num">&lt; md</th></tr></thead>
+          <tbody>
+            <tr><td>KPI tile</td><td class="idc">--kpi-span</td><td class="num idc">3</td><td class="num idc">4</td><td class="num idc">2</td></tr>
+            <tr><td>S · Small (one third)</td><td class="idc">--widget-s</td><td class="num idc">4</td><td class="num idc">4</td><td class="num idc">4</td></tr>
+            <tr><td>M · Medium (half)</td><td class="idc">--widget-m</td><td class="num idc">6</td><td class="num idc">4</td><td class="num idc">4</td></tr>
+            <tr><td>L · Large (two thirds)</td><td class="idc">--widget-l</td><td class="num idc">8</td><td class="num idc">8</td><td class="num idc">4</td></tr>
+            <tr><td>Full · Full width</td><td class="idc">--widget-full</td><td class="num idc">12</td><td class="num idc">8</td><td class="num idc">4</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="rules"><b>Rules:</b> S/M/L/Full are exactly the four sizes in Customize layout on Home and Company OS (spans 4 / 6 / 8 / 12). Rows should sum to 12; a lone S or M leaves a visible gap, which is allowed while editing only. KPI tiles always come in fours.</p>
+    </section>
+
+    <section class="card s6" aria-labelledby="h-chrome">
+      <div class="ch"><h2 id="h-chrome">App chrome &amp; spacing</h2><span class="use">Use for: fixed regions around the grid. Bars drawn from the tokens at 1:4.</span></div>
+      <div class="cb">
+        <div class="cz">
+          <span class="tok">--topbar-h</span><span class="czv"><span class="czb" style="width: calc(var(--topbar-h) / 4)"></span><span class="mono sub2">56 · main nav, sticky offset</span></span>
+          <span class="tok">--subnav-rail</span><span class="czv"><span class="czb" style="width: calc(var(--subnav-rail) / 4)"></span><span class="mono sub2">56 · icon-only sub-nav, md</span></span>
+          <span class="tok">--subnav-w</span><span class="czv"><span class="czb" style="width: calc(var(--subnav-w) / 4)"></span><span class="mono sub2">220 · section sub-sidebar</span></span>
+          <span class="tok">--panel-w</span><span class="czv"><span class="czb" style="width: calc(var(--panel-w) / 4)"></span><span class="mono sub2">360 · right properties panel</span></span>
+          <span class="tok">--form-max</span><span class="czv"><span class="czb" style="width: calc(var(--form-max) / 4)"></span><span class="mono sub2">640 · single-column forms</span></span>
+          <span class="tok">--reading-max</span><span class="czv"><span class="czb" style="width: calc(var(--reading-max) / 4)"></span><span class="mono sub2">72ch · docs, chat, help</span></span>
+          <span class="tok">--content-max</span><span class="czv"><span class="czb" style="width: calc(var(--content-max) / 4)"></span><span class="mono sub2">1440 · main column cap</span></span>
+        </div>
+        <div class="g2" style="align-items: start">
+          <div class="col">
+            <span class="lbl">--stack · between cards</span>
+            <div class="stk" aria-hidden="true"><div></div><div></div><div></div></div>
+            <span class="sub2 mono">16 (12 below lg)</span>
+          </div>
+          <div class="col">
+            <span class="lbl">--space-section · page top / between sections</span>
+            <div aria-hidden="true" style="display: flex; flex-direction: column"><div class="stk"><div></div></div><div class="stk-sec"><span class="mono" style="font-size: 10.5px">32</span></div><div class="stk"><div></div></div></div>
+            <span class="sub2 mono">32 (24 below lg)</span>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> chrome sizes never flex; the grid takes the remaining width (<span class="mono">flex: 999 1 520px</span> on main, as in every app screen). Long-form text is capped at --reading-max even inside a wide column.</p>
+    </section>
+
+    <section class="card s12" aria-labelledby="h-tpl">
+      <div class="ch"><h2 id="h-tpl">Page templates</h2><span class="use">Use for: starting every new screen from one of five shells. Annotations name the token behind each width.</span></div>
+      <div class="cb">
+        <div class="tpls">
+          <figure class="tpl">
+            <div class="wf" aria-hidden="true"><div class="n"></div>
+              <div style="flex: 1; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px">
+                <div style="display: flex; gap: 6px; align-items: center"><div class="wl" style="width: 36%; height: 7px"></div><span style="flex: 1"></span><div class="wb" style="width: 34px; height: 12px; background: var(--primary)"></div></div>
+                <div style="display: flex; gap: 4px"><div class="wb" style="width: 44%; height: 12px"></div><div class="wb" style="width: 16%; height: 12px"></div><div class="wb" style="width: 16%; height: 12px"></div></div>
+                <div class="wb" style="flex: 1; display: flex; flex-direction: column"><div style="height: 10px; background: var(--surface2); border-bottom: var(--bw) solid var(--border)"></div><div style="flex: 1; border-bottom: var(--bw) solid var(--line)"></div><div style="flex: 1; border-bottom: var(--bw) solid var(--line)"></div><div style="flex: 1; border-bottom: var(--bw) solid var(--line)"></div><div style="flex: 1"></div></div>
+              </div>
+              <span class="ann" style="left: 3px; top: 18px">margin</span><span class="ann" style="right: 4px; bottom: 4px">rows 44</span>
+            </div>
+            <figcaption><b>List page</b><span class="sub2 mono">topbar 56 · margin 16–32 · content ≤ 1440 · row 44 · head 36</span><span class="sub2">Backlog, Agents, Audit logs.</span></figcaption>
+          </figure>
+          <figure class="tpl">
+            <div class="wf" aria-hidden="true"><div class="n"></div>
+              <div style="flex: 1; display: grid; grid-template-columns: 1fr 36%">
+                <div style="padding: 10px; display: flex; flex-direction: column; gap: 6px"><div class="wl" style="width: 30%"></div><div class="wl" style="width: 62%; height: 7px"></div><div style="display: flex; gap: 6px; border-bottom: var(--bw) solid var(--line); padding-bottom: 3px"><div class="wl" style="width: 16%; background: var(--accent)"></div><div class="wl" style="width: 16%"></div><div class="wl" style="width: 16%"></div></div><div class="wb" style="flex: 1"></div></div>
+                <div style="background: var(--surface); border-left: var(--bw) solid var(--border); padding: 10px 8px; display: flex; flex-direction: column; gap: 6px"><div class="wl" style="width: 60%"></div><div class="wl"></div><div class="wl" style="width: 80%"></div><div class="wl" style="width: 70%"></div></div>
+              </div>
+              <span class="ann" style="right: 4px; bottom: 4px">--panel-w 360</span><span class="ann" style="left: 4px; bottom: 4px">main 1fr</span>
+            </div>
+            <figcaption><b>Detail + right panel</b><span class="sub2 mono">main 1fr · panel 360 inline ≥ xl, sheet below</span><span class="sub2">Agent detail, work item.</span></figcaption>
+          </figure>
+          <figure class="tpl">
+            <div class="wf" aria-hidden="true"><div class="n"></div>
+              <div style="flex: 1; display: grid; grid-template-columns: 26% 1fr">
+                <div style="background: var(--surface); border-right: var(--bw) solid var(--border); padding: 10px 6px; display: flex; flex-direction: column; gap: 6px"><div class="wl" style="width: 50%; height: 3px"></div><div class="wl" style="border-left: 2px solid var(--primary)"></div><div class="wl"></div><div class="wl"></div><div class="wl" style="width: 50%; height: 3px; margin-top: 4px"></div><div class="wl"></div></div>
+                <div style="padding: 10px 12px; display: flex; flex-direction: column; gap: 5px; max-width: 78%"><div class="wl" style="width: 44%; height: 7px"></div><div class="wl" style="width: 28%"></div><div class="wb" style="height: 11px"></div><div class="wl" style="width: 28%"></div><div class="wb" style="height: 11px"></div><div class="wl" style="width: 28%"></div><div class="wb" style="height: 11px"></div><div class="wb" style="width: 32%; height: 11px; background: var(--primary)"></div></div>
+              </div>
+              <span class="ann" style="left: 3px; bottom: 4px">--subnav-w 220</span><span class="ann" style="right: 4px; top: 18px">≤ --form-max</span>
+            </div>
+            <figcaption><b>Settings + sub-sidebar</b><span class="sub2 mono">sub-nav 220 · form ≤ 640 · fields 16 apart · sections 28</span><span class="sub2">Account security, Preferences, Admin.</span></figcaption>
+          </figure>
+          <figure class="tpl">
+            <div class="wf" aria-hidden="true"><div class="n"></div>
+              <div style="flex: 1; padding: 10px 14px; display: grid; grid-template-columns: repeat(12, 1fr); grid-template-rows: 18px 1fr 1fr; gap: 6px">
+                <div class="wb" style="grid-column: span 3"></div><div class="wb" style="grid-column: span 3"></div><div class="wb" style="grid-column: span 3"></div><div class="wb" style="grid-column: span 3"></div>
+                <div class="wb" style="grid-column: span 6"></div><div class="wb" style="grid-column: span 6"></div>
+                <div class="wb" style="grid-column: span 4"></div><div class="wb" style="grid-column: span 8"></div>
+              </div>
+              <span class="ann" style="right: 4px; bottom: 4px">12 col · gutter 24</span>
+            </div>
+            <figcaption><b>Dashboard grid</b><span class="sub2 mono">KPI span 3 · widgets 4 / 6 / 8 / 12 · gutter 24</span><span class="sub2">Home, Company OS, Analytics.</span></figcaption>
+          </figure>
+          <figure class="tpl">
+            <div class="wf" aria-hidden="true" style="background: var(--surface2)"><div class="n"></div>
+              <div style="flex: 1; position: relative">
+                <div class="wb" style="position: absolute; left: 50%; top: 8px; width: 46%; height: 14px; margin-left: -23%"></div>
+                <div class="wb" style="position: absolute; left: 8px; top: 30px; width: 14px; height: 60px"></div>
+                <div class="wb" style="position: absolute; left: 30%; top: 44%; width: 16%; height: 16%; background: var(--i1t)"></div><div class="wb" style="position: absolute; left: 56%; top: 44%; width: 16%; height: 16%; background: var(--i2t)"></div>
+                <div class="wb" style="position: absolute; right: 8px; bottom: 8px; width: 22%; height: 22%"></div>
+              </div>
+              <span class="ann" style="left: 4px; bottom: 4px">0 margin · 12 insets</span>
+            </div>
+            <figcaption><b>Full-bleed canvas</b><span class="sub2 mono">topbar 56 only · floating tools on 12px insets</span><span class="sub2">Workflow Builder, Canvas, Knowledge graph.</span></figcaption>
+          </figure>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> pick the shell first, then fill it; don't invent a sixth. Every shell keeps the 56px top bar and the same page margin, so moving between screens never shifts the content edge.</p>
+    </section>
+
+    <!-- ================= 02 TABLES ================= -->
+    <div class="gh"><span class="gn mono">02</span><h2>Tables</h2><span class="sub2">Row heights, cell padding, header styling, column widths and row states. Density switches by setting data-density="compact" on any ancestor.</span></div>
+
+    <section class="card s12" aria-labelledby="h-tanat">
+      <div class="ch"><h2 id="h-tanat">Table anatomy</h2><span class="use">Use for: every list of work items, agents, runs, nodes and audit events. Redlines are measured from the live tokens.</span></div>
+      <div class="cb">
+        <div class="anat">
+          <div class="mrow" style="grid-template-columns: var(--tbl-check-col-w) 130px minmax(0, 1fr) 150px var(--tbl-actions-col-w)" aria-hidden="true"><span>44</span><span>ID · nowrap</span><span>text · min 96 · ellipsis at 360</span><span>numeric · right</span><span>48</span></div>
+          <div></div>
+          <div class="tblwrap">
+            <table class="tbl" style="table-layout: fixed">
+              <colgroup><col style="width: var(--tbl-check-col-w)"><col style="width: 130px"><col><col style="width: 150px"><col style="width: var(--tbl-actions-col-w)"></colgroup>
+              <thead><tr><th class="c-chk"><button type="button" class="cbx" role="checkbox" aria-checked="mixed" aria-label="Select all work items"><svg class="mx" width="10" height="10" viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button></th><th>ID</th><th>Work item</th><th class="num">Cost (€)</th><th class="c-act"><span class="sr" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Actions</span></th></tr></thead>
+              <tbody>
+                <tr><td class="c-chk"><button type="button" class="cbx" role="checkbox" aria-checked="false" aria-label="Select AL-142"></button></td><td class="idc rel"><span class="padmk" aria-hidden="true"></span>AL-142</td><td><span class="trunc">Publish security artifact pack</span></td><td class="num idc">2.20</td><td class="c-act"><button type="button" class="xbtn" aria-label="Actions for AL-142"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="stroke: currentColor"><circle cx="12" cy="6" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="18" r="1"/></svg></button></td></tr>
+                <tr class="is-hover"><td class="c-chk"><button type="button" class="cbx" role="checkbox" aria-checked="false" aria-label="Select AL-139"></button></td><td class="idc">AL-139</td><td><span class="trunc">Fix session lifecycle leak in chat worker</span></td><td class="num idc">9.80</td><td class="c-act"><button type="button" class="xbtn" aria-label="Actions for AL-139"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="stroke: currentColor"><circle cx="12" cy="6" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="18" r="1"/></svg></button></td></tr>
+                <tr class="sel" aria-selected="true"><td class="c-chk"><button type="button" class="cbx" role="checkbox" aria-checked="true" aria-label="Select AL-137"><svg class="ck" width="11" height="11" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></button></td><td class="idc">AL-137</td><td><span class="trunc">Benchmark vector stores for Knowledge</span></td><td class="num idc">12.40</td><td class="c-act"><button type="button" class="xbtn" aria-label="Actions for AL-137"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="stroke: currentColor"><circle cx="12" cy="6" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="18" r="1"/></svg></button></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="display: flex; flex-direction: column; padding-top: var(--bw)" aria-hidden="true">
+            <div class="rlr" style="height: var(--tbl-head-h)"><span class="rlb"></span>--tbl-head-h · 36</div>
+            <div class="rlr" style="height: var(--tbl-row-h)"><span class="rlb"></span>--tbl-row-h · 44 · default</div>
+            <div class="rlr" style="height: var(--tbl-row-h)"><span class="rlb"></span>hover · --tbl-row-hover</div>
+            <div class="rlr" style="height: var(--tbl-row-h)"><span class="rlb"></span>selected · --tbl-row-selected</div>
+          </div>
+        </div>
+        <div class="legend">
+          <div><b>1</b><span>Head: <span class="mono">--tbl-head-bg</span> surface2, <span class="mono">--tbl-head-fg</span> muted, 11.5 / 600 uppercase .05em, <span class="mono">--tbl-head-border</span> below.</span></div>
+          <div><b>2</b><span>Cell padding <span class="mono">--tbl-cell-px 16</span> (mustard band) × <span class="mono">--tbl-cell-py 10</span>; same side padding in the head.</span></div>
+          <div><b>3</b><span>Rows divided by <span class="mono">--tbl-border</span> (bw + line). No vertical rules, no outer row border on the last row.</span></div>
+          <div><b>4</b><span>Selected = fill + <span class="mono">--tbl-selected-edge</span> 3px primary + checked box + aria-selected. Never fill alone.</span></div>
+          <div><b>5</b><span>Check column <span class="mono">--tbl-check-col-w 44</span>, centred, 18px box (<span class="mono">--control-size</span>).</span></div>
+          <div><b>6</b><span>Actions column <span class="mono">--tbl-actions-col-w 48</span>, a 28px kebab with aria-label naming the row.</span></div>
+          <div><b>7</b><span>Numbers right-aligned with <span class="mono">--tbl-num</span> tabular-nums; header aligns with its data.</span></div>
+          <div><b>8</b><span>Head is sticky at <span class="mono">--tbl-sticky-top</span> = --topbar-h when the page scrolls (class .sticky).</span></div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> use a real &lt;table&gt; with th scope, not div grids, whenever rows are data. Row height is a minimum: wrapping cells grow by --tbl-cell-py. Keep at most one primary text column flexible; everything else gets a width from the tokens or its content.</p>
+    </section>
+
+    <section class="card s12" aria-labelledby="h-dens">
+      <div class="ch"><h2 id="h-dens">Density comparison</h2><span class="use">Use for: choosing comfortable (default) or compact. Both tables are identical markup; only data-density differs.</span></div>
+      <div class="cb">
+        <div class="g2">
+          <div class="col">
+            <div class="ctrls"><b style="font-size: 13.5px">Comfortable</b><span class="ann">row 44 · head 36 · px 16 · py 10</span></div>
+            <div class="tblwrap">
+              <table class="tbl">
+                <thead><tr><th>ID</th><th>Work item</th><th>Owner</th><th>Status</th><th class="num">Cost (€)</th></tr></thead>
+                <tbody>
+                  <tr><td class="idc">AL-142</td><td><span class="trunc" style="max-width: 200px">Publish security artifact pack</span></td><td><span class="who"><span class="av">DE</span>documentation-engineer</span></td><td><span class="pill warn">In review</span></td><td class="num idc">2.20</td></tr>
+                  <tr><td class="idc">AL-139</td><td><span class="trunc" style="max-width: 200px">Fix session lifecycle leak in chat worker</span></td><td><span class="who"><span class="av">CA</span>code-agent</span></td><td><span class="pill info">In progress</span></td><td class="num idc">9.80</td></tr>
+                  <tr><td class="idc">AL-135</td><td><span class="trunc" style="max-width: 200px">Rotate fleet SSH host keys</span></td><td><span class="who"><span class="av">DO</span>devops-engineer</span></td><td><span class="pill bad">Blocked</span></td><td class="num idc">0.90</td></tr>
+                  <tr><td class="idc">AL-133</td><td><span class="trunc" style="max-width: 200px">Raise NPU worker budget to €40</span></td><td><span class="who"><span class="av h">MV</span>Mārtiņš Veiss</span></td><td><span class="pill warn">In review</span></td><td class="num idc">0.00</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <span class="sub2">Default. Mixed-content rows (avatars, pills, progress), touch and pointer.</span>
+          </div>
+          <div class="col">
+            <div class="ctrls"><b style="font-size: 13.5px">Compact</b><span class="ann">row 32 · head 32 · px 12 · py 6</span></div>
+            <div class="tblwrap" data-density="compact">
+              <table class="tbl">
+                <thead><tr><th>ID</th><th>Work item</th><th>Owner</th><th>Status</th><th class="num">Cost (€)</th></tr></thead>
+                <tbody>
+                  <tr><td class="idc">AL-142</td><td><span class="trunc" style="max-width: 200px">Publish security artifact pack</span></td><td><span class="who"><span class="av">DE</span>documentation-engineer</span></td><td><span class="pill warn">In review</span></td><td class="num idc">2.20</td></tr>
+                  <tr><td class="idc">AL-139</td><td><span class="trunc" style="max-width: 200px">Fix session lifecycle leak in chat worker</span></td><td><span class="who"><span class="av">CA</span>code-agent</span></td><td><span class="pill info">In progress</span></td><td class="num idc">9.80</td></tr>
+                  <tr><td class="idc">AL-135</td><td><span class="trunc" style="max-width: 200px">Rotate fleet SSH host keys</span></td><td><span class="who"><span class="av">DO</span>devops-engineer</span></td><td><span class="pill bad">Blocked</span></td><td class="num idc">0.90</td></tr>
+                  <tr><td class="idc">AL-133</td><td><span class="trunc" style="max-width: 200px">Raise NPU worker budget to €40</span></td><td><span class="who"><span class="av h">MV</span>Mārtiņš Veiss</span></td><td><span class="pill warn">In review</span></td><td class="num idc">0.00</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <span class="sub2">Audit logs, heartbeat runs, token tables: dense, mostly text, pointer only.</span>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> density is a user preference stored per table, not per row. Compact never goes below 32px rows or 12px text-cell padding; on touch (pointer: coarse) force comfortable so targets stay at least 24px with spacing. Try the live toggle on the next card.</p>
+    </section>
+
+    <section class="card s12" aria-labelledby="h-cells">
+      <div class="ch"><h2 id="h-cells">Cell types · live density &amp; zebra</h2><span class="use">Use for: picking the right cell renderer. Every cell reads only table tokens.</span></div>
+      <div class="cb">
+        <div class="ctrls">
+          <span class="lbl">Density</span>
+          <div role="group" aria-label="Table density" class="segg"><sc-for list="{{densities}}" as="d" hint-placeholder-count="2"><button type="button" class="seg {{d.cls}}" aria-pressed="{{d.pressed}}" onClick="{{d.pick}}">{{d.label}}</button></sc-for></div>
+          <button type="button" class="btn sm" aria-pressed="{{zebraPressed}}" onClick="{{toggleZebra}}">{{zebraLabel}}</button>
+          <span class="sub2 mono" role="status" aria-live="polite">{{densityNote}}</span>
+        </div>
+        <div class="tblwrap" data-density="{{density}}" data-zebra="{{zebra}}">
+          <table class="tbl">
+            <thead><tr><th class="c-chk"><button type="button" class="cbx" role="checkbox" aria-checked="mixed" aria-label="Select all"><svg class="mx" width="10" height="10" viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button></th><th>ID</th><th>Work item</th><th>Owner</th><th>Status</th><th>Progress</th><th class="num">Runs</th><th class="num">Cost (€)</th><th class="c-act"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Actions</span></th></tr></thead>
+            <tbody>
+              <tr><td class="c-chk"><button type="button" class="cbx" role="checkbox" aria-checked="false" aria-label="Select AL-142"></button></td><td class="idc">AL-142</td><td><span class="trunc" title="Publish security artifact pack">Publish security artifact pack</span></td><td><span class="who"><span class="av">DE</span>documentation-engineer</span></td><td><span class="pill warn">In review</span></td><td><span class="prog"><span class="bar"><span class="bf" style="display: block; width: 80%"></span></span><span class="idc sub2">80%</span></span></td><td class="num idc">6</td><td class="num idc">2.20</td><td class="c-act"><button type="button" class="xbtn" aria-label="Actions for AL-142"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="stroke: currentColor"><circle cx="12" cy="6" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="18" r="1"/></svg></button></td></tr>
+              <tr class="sel" aria-selected="true"><td class="c-chk"><button type="button" class="cbx" role="checkbox" aria-checked="true" aria-label="Select AL-139"><svg class="ck" width="11" height="11" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></button></td><td class="idc">AL-139</td><td><span class="trunc" title="Fix session lifecycle leak in chat worker">Fix session lifecycle leak in chat worker</span></td><td><span class="who"><span class="av">CA</span>code-agent</span></td><td><span class="pill info">In progress</span></td><td><span class="prog"><span class="bar"><span class="bf" style="display: block; width: 55%"></span></span><span class="idc sub2">55%</span></span></td><td class="num idc">14</td><td class="num idc">9.80</td><td class="c-act"><button type="button" class="xbtn" aria-label="Actions for AL-139"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="stroke: currentColor"><circle cx="12" cy="6" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="18" r="1"/></svg></button></td></tr>
+              <tr><td class="c-chk"><button type="button" class="cbx" role="checkbox" aria-checked="false" aria-label="Select AL-137"></button></td><td class="idc">AL-137</td><td><span class="trunc" title="Benchmark vector stores for Knowledge: ChromaDB, Qdrant and pgvector on recall@10 and p95 latency">Benchmark vector stores for Knowledge: ChromaDB, Qdrant and pgvector on recall@10 and p95 latency</span></td><td><span class="who"><span class="av">RA</span>research-agent</span></td><td><span class="pill info">In progress</span></td><td><span class="prog"><span class="bar"><span class="bf" style="display: block; width: 40%"></span></span><span class="idc sub2">40%</span></span></td><td class="num idc">21</td><td class="num idc">12.40</td><td class="c-act"><button type="button" class="xbtn" aria-label="Actions for AL-137"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="stroke: currentColor"><circle cx="12" cy="6" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="18" r="1"/></svg></button></td></tr>
+              <tr><td class="c-chk"><button type="button" class="cbx" role="checkbox" aria-checked="false" aria-label="Select AL-135"></button></td><td class="idc">AL-135</td><td><span class="trunc" title="Rotate fleet SSH host keys">Rotate fleet SSH host keys</span></td><td><span class="who"><span class="av">DO</span>devops-engineer</span></td><td><span class="pill bad">Blocked</span></td><td><span class="prog"><span class="bar"><span class="bf alert" style="display: block; width: 60%"></span></span><span class="idc sub2">60% · stalled</span></span></td><td class="num idc">3</td><td class="num idc">0.90</td><td class="c-act"><button type="button" class="xbtn" aria-label="Actions for AL-135"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="stroke: currentColor"><circle cx="12" cy="6" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="18" r="1"/></svg></button></td></tr>
+              <tr><td class="c-chk"><button type="button" class="cbx" role="checkbox" aria-checked="false" aria-label="Select AL-133"></button></td><td class="idc">AL-133</td><td><span class="trunc" title="Raise NPU worker budget to €40">Raise NPU worker budget to €40</span></td><td><span class="who"><span class="av h">MV</span>Mārtiņš Veiss</span></td><td><span class="pill warn">In review</span></td><td><span class="prog"><span class="bar"><span class="bf" style="display: block; width: 0%"></span></span><span class="idc sub2">0%</span></span></td><td class="num idc">0</td><td class="num idc">0.00</td><td class="c-act"><button type="button" class="xbtn" aria-label="Actions for AL-133"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="stroke: currentColor"><circle cx="12" cy="6" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="18" r="1"/></svg></button></td></tr>
+              <tr><td class="c-chk"><button type="button" class="cbx" role="checkbox" aria-checked="false" aria-label="Select AL-131"></button></td><td class="idc">AL-131</td><td><span class="trunc" title="Migrate node-04 to Docker Compose v2">Migrate node-04 to Docker Compose v2</span></td><td><span class="who"><span class="av">DO</span>devops-engineer</span></td><td><span class="pill bad">Blocked</span></td><td><span class="prog"><span class="bar"><span class="bf alert" style="display: block; width: 20%"></span></span><span class="idc sub2">20% · stalled</span></span></td><td class="num idc">5</td><td class="num idc">1.75</td><td class="c-act"><button type="button" class="xbtn" aria-label="Actions for AL-131"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="stroke: currentColor"><circle cx="12" cy="6" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="18" r="1"/></svg></button></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="legend">
+          <div><b>A</b><span><b style="all: unset; font-weight: 600; color: var(--text)">Text</b> · 13px, one line, ellipsis at --tbl-cell-max with the full value in title + accessible name.</span></div>
+          <div><b>B</b><span><b style="all: unset; font-weight: 600; color: var(--text)">Mono ID</b> · Plex Mono 12.5, never truncates, links to the item.</span></div>
+          <div><b>C</b><span><b style="all: unset; font-weight: 600; color: var(--text)">Avatar + name</b> · 22px avatar, 8 gap; agents rounded square, humans circle.</span></div>
+          <div><b>D</b><span><b style="all: unset; font-weight: 600; color: var(--text)">Status pill</b> · subtle pill with the word; never a colour dot alone.</span></div>
+          <div><b>E</b><span><b style="all: unset; font-weight: 600; color: var(--text)">Progress</b> · 96px bar + percentage text; alert fill also says "stalled".</span></div>
+          <div><b>F</b><span><b style="all: unset; font-weight: 600; color: var(--text)">Numeric</b> · right-aligned, tabular-nums, unit in the header not the cell.</span></div>
+          <div><b>G</b><span><b style="all: unset; font-weight: 600; color: var(--text)">Actions</b> · 48 column, kebab opens a row menu; destructive items inside, not inline.</span></div>
+          <div><b>H</b><span><b style="all: unset; font-weight: 600; color: var(--text)">Zebra</b> · off by default; opt in with data-zebra="on" for wide read-only tables. Hover then steps to --line.</span></div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> hover only on rows that open something. With zebra on, selection still uses the 3px edge so it never reads as just another stripe. Empty cells show an em dash in muted text, never blank.</p>
+    </section>
+
+    <section class="card s12" aria-labelledby="h-hstate">
+      <div class="ch"><h2 id="h-hstate">Header states</h2><span class="use">Use for: sortable, numeric, sticky and selection headers.</span></div>
+      <table class="tbl">
+        <thead><tr>
+          <th scope="col">Work item</th>
+          <th scope="col"><button type="button" class="sh is-hover">Owner<svg class="si" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path class="u" d="M7 10l5-5 5 5"/><path class="d" d="M7 14l5 5 5-5"/></svg></button></th>
+          <th scope="col" aria-sort="ascending"><button type="button" class="sh">Started<svg class="si" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path class="u" d="M7 10l5-5 5 5"/><path class="d" d="M7 14l5 5 5-5"/></svg></button></th>
+          <th scope="col" aria-sort="descending"><button type="button" class="sh">Node<svg class="si" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path class="u" d="M7 10l5-5 5 5"/><path class="d" d="M7 14l5 5 5-5"/></svg></button></th>
+          <th scope="col"><button type="button" class="sh fx" tabindex="-1">Status<svg class="si" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path class="u" d="M7 10l5-5 5 5"/><path class="d" d="M7 14l5 5 5-5"/></svg></button></th>
+          <th scope="col" class="num"><button type="button" class="sh">Tokens<svg class="si" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path class="u" d="M7 10l5-5 5 5"/><path class="d" d="M7 14l5 5 5-5"/></svg></button></th>
+          <th scope="col" class="stuck">Goal</th>
+          <th scope="col" class="c-chk"><button type="button" class="cbx" role="checkbox" aria-checked="mixed" aria-label="Select all"><svg class="mx" width="10" height="10" viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button></th>
+        </tr></thead>
+        <tbody><tr>
+          <td class="wrap sub2">Default · not sortable, plain text</td>
+          <td class="wrap sub2">Hover · sortable, both arrows dim</td>
+          <td class="wrap sub2">Sorted ascending · aria-sort, up arrow solid</td>
+          <td class="wrap sub2">Sorted descending · down arrow solid</td>
+          <td class="wrap sub2">Focus-visible · 3px ring on the sort button</td>
+          <td class="wrap sub2 num">Numeric · right-aligned with data</td>
+          <td class="wrap sub2">Stuck · 2px stroke edge while scrolled</td>
+          <td class="wrap sub2">Select all · mixed</td>
+        </tr></tbody>
+      </table>
+      <p class="rules"><b>Rules:</b> the sort control is a button inside th; aria-sort sits on the th and only one column is sorted at a time (shift-click adds a secondary sort, announced as such). Sticky head offset is <span class="mono">top: var(--tbl-sticky-top)</span> in page-scrolling tables and <span class="mono">0</span> inside a scroll container. Head text never wraps; shorten the label instead.</p>
+    </section>
+
+    <section class="card s12" aria-labelledby="h-trunc">
+      <div class="ch"><h2 id="h-trunc">Column width &amp; truncation</h2><span class="use">Use for: deciding what shrinks when the table is narrower than its content.</span></div>
+      <div class="cb">
+        <div class="g2" style="align-items: start">
+          <div class="col">
+            <div class="tblwrap">
+              <table class="tbl" style="table-layout: fixed">
+                <colgroup><col style="width: var(--tbl-min-col)"><col style="width: 180px"><col><col style="width: var(--tbl-min-col)"></colgroup>
+                <thead><tr><th>ID</th><th>Work item</th><th>Note</th><th class="num">Tokens</th></tr></thead>
+                <tbody>
+                  <tr><td class="idc">AL-142</td><td><span class="trunc" title="Publish security artifact pack">Publish security artifact pack</span></td><td class="wrap"><span class="clamp2">Bundles SBOM, threat model and pen-test summary. Waiting on a data_access approval before publishing to Knowledge.</span></td><td class="num idc">48,210</td></tr>
+                  <tr><td class="idc">AL-137</td><td><span class="trunc" title="Benchmark vector stores for Knowledge">Benchmark vector stores for Knowledge</span></td><td class="wrap"><span class="clamp2">Comparing ChromaDB, Qdrant and pgvector on recall@10 and p95 latency with the ADR corpus.</span></td><td class="num idc">596,118</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="chips"><span class="ann">ID col = --tbl-min-col 96</span><span class="ann">title: ellipsis</span><span class="ann">note: 2-line clamp</span><span class="ann">numbers: never cut</span></div>
+          </div>
+          <ol class="rl">
+            <li><b>Never truncate</b> IDs, numbers, money, dates or status words. Their column widens instead.</li>
+            <li><b>Ellipsis</b> one-line text past <span class="mono">--tbl-cell-max 360</span> (or its fixed column); put the full value in title and keep it in the accessible name.</li>
+            <li><b>Two-line clamp</b> only for secondary description columns, and only in comfortable density; compact always single-line.</li>
+            <li><b>Minimum</b> every column at least <span class="mono">--tbl-min-col 96</span>; below that, hide the column via the column picker instead of squeezing it.</li>
+            <li><b>Overflow</b> wider tables scroll horizontally inside their card with the first ID column pinned; under 760px switch to the card-list fallback.</li>
+          </ol>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> truncation is a last resort after hiding optional columns. Hover tooltips are not enough on their own: the row detail must show the full text.</p>
+    </section>
+
+    <!-- ================= 03 FORMS ================= -->
+    <div class="gh"><span class="gn mono">03</span><h2>Forms</h2><span class="sub2">Field heights, padding, labels, help and error text, spacing between fields and sections, and the two layouts.</span></div>
+
+    <section class="card s12" aria-labelledby="h-fanat">
+      <div class="ch"><h2 id="h-fanat">Field anatomy</h2><span class="use">Use for: every text, number, select and grouped input. Redlines are the live tokens: mustard = gaps, blue = padding.</span></div>
+      <div class="cb">
+        <div class="g2" style="align-items: start">
+          <div class="fa">
+            <label class="flabel" for="an-name">Agent name<span class="req" aria-hidden="true">*</span></label><div class="rlx">label · --label-size 13 / --label-weight 500</div>
+            <div class="gapmk lg" aria-hidden="true"></div><div class="rlx thin" aria-hidden="true"><span>--label-gap · 6</span></div>
+            <div class="pwrap"><input id="an-name" class="fin" value="research-agent" aria-describedby="an-name-h" aria-required="true"><span class="pm" aria-hidden="true"></span><span class="pm r" aria-hidden="true"></span></div><div class="rlx" aria-hidden="true"><span class="br"></span>--field-h-md 36 · --field-px 12 · --field-radius 6</div>
+            <div class="gapmk lg" aria-hidden="true"></div><div class="rlx thin" aria-hidden="true"><span>--label-gap · 6</span></div>
+            <span class="fhelp" id="an-name-h">Lowercase letters, digits and dashes.</span><div class="rlx">help · --help-size 12.5 · --help-fg muted</div>
+            <div class="gapmk fg" aria-hidden="true"></div><div class="rlx" aria-hidden="true"><span class="br"></span>--field-gap · 16 to next field</div>
+            <label class="flabel" for="an-bud">Monthly budget (€)</label><div class="rlx"></div>
+            <div class="gapmk lg" aria-hidden="true"></div><div class="rlx thin" aria-hidden="true"><span>--label-gap · 6</span></div>
+            <input id="an-bud" class="fin mono" value="-5" aria-invalid="true" aria-describedby="an-bud-e"><div class="rlx" aria-hidden="true"><span class="br"></span>--error-border · --error-bw 2</div>
+            <div class="gapmk lg" aria-hidden="true"></div><div class="rlx thin" aria-hidden="true"><span>--label-gap · 6</span></div>
+            <span class="ferr" id="an-bud-e"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="stroke: currentColor"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/></svg>Error: budget must be 0 or more.</span><div class="rlx">--error-fg = alert-text · icon + "Error:"</div>
+          </div>
+          <div class="col" style="gap: 14px">
+            <span class="lbl">Heights</span>
+            <div class="szr"><input class="fin sm" aria-label="Small field example" value="node-03.example"><span class="rlx">--field-h-sm · 32 · toolbars, filters</span></div>
+            <div class="szr"><input class="fin" aria-label="Medium field example" value="node-03.example"><span class="rlx">--field-h-md · 36 · default</span></div>
+            <div class="szr"><input class="fin lg" aria-label="Large field example" value="node-03.example"><span class="rlx">--field-h-lg · 44 · auth, touch</span></div>
+            <div class="szr"><input class="fin fx" aria-label="Focused field example" value="research-"><span class="rlx">focus · --field-focus-ring 3px focus, offset 1</span></div>
+            <div class="szr"><input class="fin" aria-label="Disabled field example" value="ollama" disabled><span class="rlx">disabled · --field-bg-disabled</span></div>
+            <span class="lbl" style="margin-top: 6px">Choice controls</span>
+            <div class="szr"><span class="ctl on" aria-hidden="true"><span class="box"><svg width="12" height="12" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span>Require approval</span><span class="rlx">--control-size 18 · --check-gap 8</span></div>
+            <div class="szr"><span class="ctl on" aria-hidden="true"><span class="box rd"><i></i></span>ollama runtime</span><span class="rlx">radio · 18 · same gap</span></div>
+            <div class="szr"><span class="ctl on" aria-hidden="true"><span class="sw"></span>Agent enabled</span><span class="rlx">--switch-w 36 × --switch-h 20 · knob 14</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> every field has a visible label above it (or in the label column); placeholder is an example, never the label. Help and error share the slot under the field; the error replaces help, starts with "Error:", has an icon, sets aria-invalid and is linked with aria-describedby. --error-fg uses --alert-text, not --bad-fg: --bad-fg is the text colour for the filled bad pill and is white in High contrast and Monochrome.</p>
+    </section>
+
+    <section class="card s12" aria-labelledby="h-flay">
+      <div class="ch"><h2 id="h-flay">Vertical vs horizontal layout</h2><span class="use">Use for: vertical by default; horizontal for long settings pages scanned by label.</span></div>
+      <div class="cb">
+        <div class="ctrls">
+          <span class="lbl">Layout</span>
+          <div role="group" aria-label="Form layout" class="segg"><sc-for list="{{layouts}}" as="l" hint-placeholder-count="2"><button type="button" class="seg {{l.cls}}" aria-pressed="{{l.pressed}}" onClick="{{l.pick}}">{{l.label}}</button></sc-for></div>
+          <span class="sub2 mono" role="status" aria-live="polite">data-layout="{{layout}}"</span>
+        </div>
+        <div class="fdemo">
+          <form class="form" data-layout="{{layout}}" aria-label="Agent settings">
+            <div class="fld"><label class="flabel" for="fl-name">Agent name</label><input id="fl-name" class="fin" value="research-agent" aria-describedby="fl-name-h"><span class="fhelp" id="fl-name-h">Shown in Approvals, Backlog and the audit log.</span></div>
+            <div class="fld"><label class="flabel" for="fl-role">Role</label><div class="selw"><select id="fl-role" class="fin"><option>Head of Research</option><option>Staff Engineer</option><option>Ops Lead</option><option>Technical Writer</option></select><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></div></div>
+            <div class="fld"><label class="flabel" for="fl-bud">Monthly budget</label><div class="fgrp"><span class="ad l">€</span><input id="fl-bud" class="fin mono" value="40.00" inputmode="decimal" aria-describedby="fl-bud-h"><span class="ad r">/ month</span></div><span class="fhelp" id="fl-bud-h">Spending above this raises a budget_increase approval.</span></div>
+            <div class="fld"><span class="flabel" id="fl-hb">Heartbeat</span><div class="inl" role="group" aria-labelledby="fl-hb"><span class="sub2">Every</span><input class="fin mono w72" aria-label="Interval" value="15"><div class="selw w140"><select class="fin" aria-label="Interval unit"><option>minutes</option><option>hours</option></select><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></div><span class="sub2">on</span><div class="selw" style="flex: 1; min-width: 140px"><select class="fin mono" aria-label="Fleet node"><option>node-03.example</option><option>node-01.example</option><option>node-02.example</option></select><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></div></div></div>
+            <div class="fld"><label class="flabel" for="fl-prompt">System prompt</label><textarea id="fl-prompt" class="fin" rows="3" aria-describedby="fl-prompt-h">You research infrastructure options for the AutoBot fleet and cite every source in Knowledge.</textarea><span class="fhelp" id="fl-prompt-h">Markdown allowed · 92 / 4,000</span></div>
+            <div class="fld"><span class="flabel ctlab" id="fl-perm">Permissions</span><div class="ctlg" role="group" aria-labelledby="fl-perm">
+              <button type="button" role="checkbox" class="ctl" aria-checked="{{approvalChecked}}" onClick="{{toggleApproval}}"><span class="box"><svg width="12" height="12" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span><span>Require approval for <span class="mono">code_deploy</span><span class="fhelp" style="display: block">A human approves before deploys run on the fleet.</span></span></button>
+              <button type="button" role="checkbox" class="ctl" aria-checked="{{dataChecked}}" onClick="{{toggleData}}"><span class="box"><svg width="12" height="12" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span><span>Allow <span class="mono">data_access</span> to Knowledge collections</span></button>
+            </div></div>
+            <div class="fld"><span class="flabel ctlab" id="fl-st">Status</span><div class="ctlg"><button type="button" role="switch" class="ctl" aria-checked="{{enabledChecked}}" aria-labelledby="fl-st fl-st-t" onClick="{{toggleEnabled}}"><span class="sw" aria-hidden="true"></span><span id="fl-st-t">Agent enabled · {{enabledText}}</span></button></div></div>
+            <div class="abar"><button type="button" class="btn pri">Save agent</button><button type="button" class="btn ghost">Cancel</button></div>
+          </form>
+          <div class="note">
+            <b style="color: var(--text); font-size: 13px">Resolved layout</b>
+            <span>{{layoutNote}}</span>
+            <span class="mono">--field-gap 16 · --label-gap 6 · --inline-gap 8 · --form-label-col 200 · --form-max 640</span>
+            <span>Below md the horizontal layout falls back to vertical automatically.</span>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> horizontal labels are left-aligned in a 200px column and sit on the field's centre line (padding-top = (36 − 20) / 2); checkbox and switch groups align to their first line. Actions align with the field column, never with the label column. One layout per form; don't mix.</p>
+    </section>
+
+    <section class="card s6" aria-labelledby="h-finl">
+      <div class="ch"><h2 id="h-finl">Inline field groups</h2><span class="use">Use for: related inputs on one line.</span></div>
+      <div class="cb" style="gap: var(--field-gap)">
+        <div class="col" style="gap: 6px"><span class="lbl">Separate fields side by side · column gap --field-gap 16</span>
+          <div class="fr2"><div class="fld"><label class="flabel" for="ig-host">Host</label><input id="ig-host" class="fin mono" value="node-05.example"></div><div class="fld"><label class="flabel" for="ig-port">Port</label><input id="ig-port" class="fin mono" value="22" inputmode="numeric"></div></div>
+        </div>
+        <div class="col" style="gap: 6px"><span class="lbl">One label, several controls · --inline-gap 8</span>
+          <div class="fld"><span class="flabel" id="ig-sch">Nightly fleet check</span><div class="inl" role="group" aria-labelledby="ig-sch"><span class="sub2">Run at</span><input class="fin mono w72" aria-label="Time" value="02:00"><div class="selw w140"><select class="fin" aria-label="Timezone"><option>Europe/Riga</option><option>UTC</option></select><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></div><span class="sub2">on weekdays</span></div></div>
+        </div>
+        <div class="col" style="gap: 6px"><span class="lbl">Range</span>
+          <div class="fld"><span class="flabel" id="ig-rng">Alert when daily spend is between</span><div class="inl" role="group" aria-labelledby="ig-rng"><div class="fgrp w110"><span class="ad l">€</span><input class="fin mono" aria-label="Minimum" value="20"></div><span class="sub2" aria-hidden="true">–</span><div class="fgrp w110"><span class="ad l">€</span><input class="fin mono" aria-label="Maximum" value="40"></div></div></div>
+        </div>
+        <div class="col" style="gap: 6px"><span class="lbl">Filter bar · bottom-aligned, all at --field-h-md</span>
+          <div class="inl" style="align-items: flex-end"><div class="fld" style="flex: 1; min-width: 160px"><label class="flabel" for="ig-q">Search</label><input id="ig-q" class="fin" type="search" placeholder="e.g. vector store"></div><div class="fld"><label class="flabel" for="ig-st">Status</label><div class="selw w140"><select id="ig-st" class="fin"><option>Any status</option><option>Blocked</option></select><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></div></div><button type="button" class="btn">Apply</button></div>
+        </div>
+        <div class="col" style="gap: 6px"><span class="lbl">Input + action</span>
+          <div class="fld"><label class="flabel" for="ig-inv">Invite teammate</label><div class="inl"><input id="ig-inv" class="fin" type="email" style="flex: 1; width: auto; min-width: 180px" placeholder="name@company.lv"><button type="button" class="btn">Send invite</button></div></div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> controls sharing one label are grouped with role="group" + aria-labelledby and each gets its own aria-label. Buttons beside fields use the same height token (36), so the row aligns on its bottom edge. Wrap, don't shrink, below md.</p>
+    </section>
+
+    <section class="card s6" aria-labelledby="h-fsec">
+      <div class="ch"><h2 id="h-fsec">Form sections</h2><span class="use">Use for: settings longer than about six fields.</span></div>
+      <div class="cb">
+        <div class="fsecs">
+          <section class="fsec" aria-labelledby="fs-1">
+            <header><h3 id="fs-1">Node identity</h3><span class="sub2">How AutoBot reaches node-05 and labels it in Fleet.</span></header>
+            <div class="fld"><label class="flabel" for="fs-n">Display name</label><input id="fs-n" class="fin" value="NPU worker · node-05"></div>
+            <div class="fld"><label class="flabel" for="fs-h">Host</label><input id="fs-h" class="fin mono" value="node-05.example"></div>
+          </section>
+          <section class="fsec" aria-labelledby="fs-2">
+            <header><h3 id="fs-2">Heartbeat</h3><span class="sub2">Missed beats mark the node unreachable and pause its agents.</span></header>
+            <div class="fld"><label class="flabel" for="fs-i">Interval (seconds)</label><input id="fs-i" class="fin mono w110" value="30"></div>
+            <button type="button" role="switch" class="ctl" aria-checked="true"><span class="sw" aria-hidden="true"></span>Notify Ops Lead after 3 missed beats</button>
+          </section>
+          <section class="fsec" aria-labelledby="fs-3">
+            <header><h3 id="fs-3">Remove node</h3><span class="sub2">Agents on node-05 move to the fallback pool.</span></header>
+            <div><button type="button" class="btn danger">Remove node-05…</button></div>
+          </section>
+        </div>
+        <div class="chips"><span class="ann">heading 15 / 600 + 12.5 description</span><span class="ann">--form-section-gap 28 above + below the rule</span><span class="ann">fields --field-gap 16</span></div>
+      </div>
+      <p class="rules"><b>Rules:</b> each section is a &lt;section&gt; or &lt;fieldset&gt; with a heading the fields belong to. Destructive actions live in the last section, never in the save bar. On settings pages with a sub-nav, sections map 1:1 to anchors.</p>
+    </section>
+
+    <section class="card s6" aria-labelledby="h-fval">
+      <div class="ch"><h2 id="h-fval">Validation summary</h2><span class="use">Use for: submit-time errors on forms with more than two fields.</span></div>
+      <div class="cb">
+        <sc-if value="{{vShow}}" hint-placeholder-val="{{ true }}">
+          <div class="vsum" role="alert"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="stroke: currentColor; margin-top: 1px"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/></svg><div><b>Error: 3 fields need attention before node-05 can be added</b><ul><li><a href="#vn-host">Host: enter a host name</a></li><li><a href="#vn-port">SSH port: must be between 1 and 65535</a></li><li><a href="#vn-key">SSH key: choose a key from Secrets</a></li></ul></div></div>
+        </sc-if>
+        <form class="form" aria-label="Add fleet node" style="gap: var(--field-gap)">
+          <div class="fld"><label class="flabel" for="vn-host">Host<span class="req" aria-hidden="true">*</span></label><input id="vn-host" class="fin mono" placeholder="node-05.example" aria-required="true" aria-invalid="{{vInvalid}}" aria-describedby="vn-host-m"><sc-if value="{{vShow}}" hint-placeholder-val="{{ true }}"><span class="ferr" id="vn-host-m"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="stroke: currentColor"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/></svg>Error: enter a host name.</span></sc-if></div>
+          <div class="fr2">
+            <div class="fld"><label class="flabel" for="vn-key">SSH key<span class="req" aria-hidden="true">*</span></label><div class="selw"><select id="vn-key" class="fin" aria-invalid="{{vInvalid}}" aria-describedby="vn-key-m"><option>Choose a key…</option><option>fleet-deploy-ed25519</option></select><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></div><sc-if value="{{vShow}}" hint-placeholder-val="{{ true }}"><span class="ferr" id="vn-key-m">Error: choose a key.</span></sc-if></div>
+            <div class="fld"><label class="flabel" for="vn-port">SSH port</label><input id="vn-port" class="fin mono" value="70000" inputmode="numeric" aria-invalid="{{vInvalid}}" aria-describedby="vn-port-m"><sc-if value="{{vShow}}" hint-placeholder-val="{{ true }}"><span class="ferr" id="vn-port-m">Error: 1–65535.</span></sc-if></div>
+          </div>
+          <div class="abar"><button type="button" class="btn pri" onClick="{{validate}}">Add node</button><button type="button" class="btn ghost" onClick="{{vReset}}">Clear errors</button><span class="sub2" role="status" aria-live="polite">{{vStatus}}</span></div>
+        </form>
+      </div>
+      <p class="rules"><b>Rules:</b> on submit, show the summary above the form, move focus to it, and link each item to its field (same wording as the inline error). Validate single fields on blur; never block typing. The summary uses the bad-bg / bad-fg pair; inline errors use --error-fg.</p>
+    </section>
+
+    <section class="card s6" aria-labelledby="h-fact">
+      <div class="ch"><h2 id="h-fact">Action bar alignment</h2><span class="use">Use for: where Save, Cancel and Delete go. Gap --action-gap 8.</span></div>
+      <div class="cb">
+        <div class="abx"><span class="lbl">Page form · start-aligned with the field column, primary first</span><div class="abar"><button type="button" class="btn pri">Save changes</button><button type="button" class="btn ghost">Cancel</button></div></div>
+        <div class="abx"><span class="lbl">Dialog / card footer · end-aligned, primary last</span><div class="abar end"><button type="button" class="btn ghost">Cancel</button><button type="button" class="btn pri">Create agent</button></div></div>
+        <div class="abx"><span class="lbl">With destructive · danger isolated on the far left</span><div class="abar"><button type="button" class="btn danger">Delete agent</button><span class="push"></span><button type="button" class="btn ghost">Cancel</button><button type="button" class="btn pri">Save agent</button></div></div>
+        <div class="abx"><span class="lbl">Sticky save bar · long settings, appears once dirty</span><div class="fake"><div style="padding: 12px 14px; display: flex; flex-direction: column; gap: 6px"><div class="gl" style="width: 40%"></div><div class="gl" style="width: 64%"></div></div><div class="abar sbar" role="region" aria-label="Unsaved changes"><span class="sub2" style="color: var(--text2)"><b style="color: var(--text)">Unsaved changes</b> · 3 fields</span><span class="push"></span><button type="button" class="btn ghost">Discard</button><button type="button" class="btn pri">Save changes</button></div></div></div>
+      </div>
+      <p class="rules"><b>Rules:</b> one primary per bar. In horizontal forms the bar is offset by --form-label-col + --grid-gutter so buttons start under the fields. The sticky bar sits at bottom: 0 inside main and never covers the last field (main gets matching bottom padding).</p>
+    </section>
+
+    <!-- ================= 04 TOKENS ================= -->
+    <div class="gh"><span class="gn mono">04</span><h2>Token reference</h2><span class="sub2">All three groups in one table, then a block ready to paste into the Vue app's shared stylesheet.</span></div>
+
+    <section class="card s12" aria-labelledby="h-tok">
+      <div class="ch"><h2 id="h-tok">Token table</h2><span class="use">Rendered in compact density, so the table itself is built from the tokens it lists.</span></div>
+      <div data-density="compact">
+        <table class="tbl">
+          <thead><tr><th>Token</th><th>Group</th><th>Value</th><th>Responsive / density</th><th>Usage</th></tr></thead>
+          <tbody>
+            <sc-for list="{{tokens}}" as="k" hint-placeholder-count="78">
+              <tr><td class="idc" style="font-weight: 500">{{k.name}}</td><td class="sub2">{{k.group}}</td><td class="idc">{{k.value}}</td><td class="idc" style="color: var(--text2)">{{k.alt}}</td><td class="wrap" style="color: var(--text2)">{{k.usage}}</td></tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </div>
+      <p class="rules"><b>Rules:</b> sizes are theme-independent; any token carrying colour points at a theme token (never a literal), so High contrast picks up 2px borders through --bw automatically. Components read these tokens; screens never hard-code 36px, 44px or 220px again.</p>
+    </section>
+
+    <section class="card s12" aria-labelledby="h-css">
+      <div class="ch"><h2 id="h-css">Copy-ready CSS</h2><span class="use">Paste after the colour tokens in the Vue app's shared stylesheet.</span><span class="sub2" role="status" aria-live="polite">{{copyStatus}}</span><button type="button" class="btn sm" onClick="{{copyCss}}">Copy CSS</button></div>
+<pre class="code" id="css-src" tabindex="0" aria-label="Layout grid, table and form tokens CSS">/* AutoBot tokens · layout grid, tables, forms
+   Declare on the element that carries data-theme: colour-bearing values
+   resolve where they are declared, so they must sit next to the theme tokens. */
+:root, [data-theme] {
+  /* Breakpoints: reference only, media queries cannot read var() */
+  --bp-sm: 640px; --bp-md: 768px; --bp-lg: 1024px; --bp-xl: 1280px; --bp-2xl: 1536px;
+
+  /* Layout grid */
+  --grid-cols: 12;
+  --grid-gutter: 24px;
+  --page-margin: clamp(16px, 2.5vw, 32px);
+  --topbar-h: 56px;
+  --subnav-w: 220px;
+  --subnav-rail: 56px;
+  --panel-w: 360px;
+  --content-max: 1440px;
+  --reading-max: 72ch;
+  --space-section: 32px;
+  --stack: 16px;
+  --kpi-span: 3; --widget-s: 4; --widget-m: 6; --widget-l: 8; --widget-full: 12;
+
+  /* Tables */
+  --tbl-font-size: 13px;
+  --tbl-row-h: 44px;
+  --tbl-cell-px: 16px;
+  --tbl-cell-py: 10px;
+  --tbl-head-h: 36px;
+  --tbl-head-bg: var(--surface2);
+  --tbl-head-fg: var(--muted);
+  --tbl-head-font: 600 11.5px/1.2 'IBM Plex Sans', system-ui, sans-serif;
+  --tbl-head-case: uppercase;
+  --tbl-head-ls: .05em;
+  --tbl-head-border: var(--bw) solid var(--border);
+  --tbl-border: var(--bw) solid var(--line);
+  --tbl-row-hover: var(--surface2);
+  --tbl-row-selected: var(--surface2);
+  --tbl-selected-edge: 3px solid var(--primary);
+  --tbl-zebra: transparent;
+  --tbl-zebra-bg: var(--surface2);
+  --tbl-check-col-w: 44px;
+  --tbl-actions-col-w: 48px;
+  --tbl-min-col: 96px;
+  --tbl-cell-max: 360px;
+  --tbl-num: tabular-nums;
+  --tbl-sticky-top: var(--topbar-h);
+
+  /* Forms */
+  --field-h-sm: 32px;
+  --field-h-md: 36px;
+  --field-h-lg: 44px;
+  --field-px: 12px;
+  --field-radius: 6px;
+  --field-font-size: 13.5px;
+  --field-border: var(--bw) solid var(--border);
+  --field-border-hover: var(--muted);
+  --field-bg: var(--surface);
+  --field-bg-disabled: var(--surface2);
+  --field-fg: var(--text);
+  --field-focus-ring: 3px solid var(--focus);
+  --field-focus-offset: 1px;
+  --label-size: 13px;
+  --label-weight: 500;
+  --label-gap: 6px;
+  --help-size: 12.5px;
+  --help-fg: var(--muted);
+  --error-fg: var(--alert-text);   /* not --bad-fg: white in contrast/mono */
+  --error-border: var(--bar-alert);
+  --error-bw: 2px;
+  --field-gap: 16px;
+  --inline-gap: 8px;
+  --form-section-gap: 28px;
+  --form-label-col: 200px;
+  --form-max: 640px;
+  --action-gap: 8px;
+  --check-gap: 8px;
+  --control-size: 18px;
+  --switch-w: 36px;
+  --switch-h: 20px;
+  --switch-knob: 14px;
+}
+
+/* Responsive: below lg 8 cols / 16 gutter, below md 4 cols */
+@media (max-width: 1023.98px) {
+  :root, [data-theme] { --grid-cols: 8; --grid-gutter: 16px; --space-section: 24px; --stack: 12px; }
+}
+@media (max-width: 767.98px) {
+  :root, [data-theme] { --grid-cols: 4; }
+}
+
+/* Table density and zebra, set on any ancestor of the table */
+[data-density="compact"] { --tbl-row-h: 32px; --tbl-cell-px: 12px; --tbl-cell-py: 6px; --tbl-head-h: 32px; }
+[data-zebra="on"] { --tbl-zebra: var(--tbl-zebra-bg); --tbl-row-hover: var(--line); }
+@media (pointer: coarse) { [data-density="compact"] { --tbl-row-h: 44px; --tbl-cell-px: 16px; --tbl-cell-py: 10px; --tbl-head-h: 36px; } }
+
+/* Reference rules */
+.page-grid { display: grid; grid-template-columns: repeat(var(--grid-cols), minmax(0, 1fr)); gap: var(--stack) var(--grid-gutter); }
+.ab-main { padding: var(--space-section) var(--page-margin) 40px; max-width: var(--content-max); }
+.ab-table th { height: var(--tbl-head-h); padding: 0 var(--tbl-cell-px); background: var(--tbl-head-bg); color: var(--tbl-head-fg);
+  font: var(--tbl-head-font); text-transform: var(--tbl-head-case); letter-spacing: var(--tbl-head-ls); border-bottom: var(--tbl-head-border); }
+.ab-table td { height: var(--tbl-row-h); padding: var(--tbl-cell-py) var(--tbl-cell-px); border-bottom: var(--tbl-border); }
+.ab-table tbody tr:nth-child(even) td { background: var(--tbl-zebra); }
+.ab-table tbody tr:hover td { background: var(--tbl-row-hover); }
+.ab-table tr[aria-selected="true"] td { background: var(--tbl-row-selected); }
+.ab-table tr[aria-selected="true"] td:first-child { border-left: var(--tbl-selected-edge); }
+.ab-table .num { text-align: right; font-variant-numeric: var(--tbl-num); }
+.ab-table.sticky th { position: sticky; top: var(--tbl-sticky-top); }
+.ab-field { height: var(--field-h-md); padding: 0 var(--field-px); border: var(--field-border); border-radius: var(--field-radius);
+  background: var(--field-bg); color: var(--field-fg); font-size: var(--field-font-size); }
+.ab-field:focus-visible { outline: var(--field-focus-ring); outline-offset: var(--field-focus-offset); }
+.ab-field[aria-invalid="true"] { border-color: var(--error-border); border-width: var(--error-bw); }
+.ab-form { display: flex; flex-direction: column; gap: var(--field-gap); max-width: var(--form-max); }
+.ab-form[data-layout="horizontal"] .ab-fld { display: grid; grid-template-columns: var(--form-label-col) minmax(0, 1fr); column-gap: var(--grid-gutter); }</pre>
+    </section>
+
+    <nav aria-label="Design system pages" class="card" style="grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px; padding: 12px">
+      <a href="ComponentsStates.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">← Previous</span><span style="font-weight: 600; color: var(--text)">Tokens &amp; states</span></a>
+      <a href="ComponentsCharts.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">Next →</span><span style="font-weight: 600; color: var(--text)">Charts &amp; data viz</span></a>
+    </nav>
+  </main>
+  </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"$preview":{"width":1440,"height":11200}}'>
+const THEMES = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+const BPS = [['lg', 'Desktop · 12 col'], ['md', 'Tablet 768 · 8 col'], ['sm', 'Mobile 375 · 4 col']];
+const BP_NOTE = {
+  lg: '12 cols · gutter 24 · margin 32 · section 32 / stack 16 · sub-nav 220',
+  md: '8 cols · gutter 16 · margin 19.2 · section 24 / stack 12 · sub-nav rail 56',
+  sm: '4 cols · gutter 16 · margin 16 · section 24 / stack 12 · sub-nav as top tabs'
+};
+const BP_ROWS = [
+  ['xs', 'base', '—', '0', '4', '16', '16', '24 / 12', 'Top tabs, scrollable', 'Bottom sheet'],
+  ['smr', 'sm', '--bp-sm', '640', '4', '16', '16', '24 / 12', 'Top tabs', 'Bottom sheet'],
+  ['md', 'md', '--bp-md', '768', '8', '16', '19.2 → 25.6', '24 / 12', 'Icon rail · 56', 'Overlay sheet · 360'],
+  ['lg', 'lg', '--bp-lg', '1024', '12', '24', '25.6 → 32', '32 / 16', 'Full · 220', 'Overlay sheet · 360'],
+  ['xl', 'xl', '--bp-xl', '1280', '12', '24', '32', '32 / 16', 'Full · 220', 'Inline · 360'],
+  ['2xl', '2xl', '--bp-2xl', '1536', '12', '24', '32 · content ≤ 1440, centred', '32 / 16', 'Full · 220', 'Inline · 360']
+];
+const HL = { lg: ['lg', 'xl', '2xl'], md: ['md'], sm: ['xs'] };
+const DENS = [['comfortable', 'Comfortable · 44'], ['compact', 'Compact · 32']];
+const LAYOUTS = [['vertical', 'Vertical'], ['horizontal', 'Horizontal']];
+const LAYOUT_NOTE = {
+  vertical: 'Vertical · label above the field (--label-gap 6), fields 16 apart, max-width --form-max 640.',
+  horizontal: 'Horizontal · label column --form-label-col 200 + --grid-gutter 24, label on the field centre line, max-width 200 + 24 + 640 = 864.'
+};
+const TOK = `bp-sm|Breakpoint|640px|—|Large phones in landscape. Reference value; mirror in SCSS/JS for media queries
+bp-md|Breakpoint|768px|—|Tablet: 8 columns; below it sub-nav becomes top tabs
+bp-lg|Breakpoint|1024px|—|Desktop: 12 columns, gutter 24, full sub-nav; icon rail below it
+bp-xl|Breakpoint|1280px|—|Right panel goes inline at 360; overlay sheet below it
+bp-2xl|Breakpoint|1536px|—|Main content caps at --content-max and centres
+grid-cols|Grid|12|8 below lg · 4 below md|repeat(var(--grid-cols), minmax(0,1fr)) on page and widget grids
+grid-gutter|Grid|24px|16px below lg|Column gap of every page grid and the dashboard widget grid
+page-margin|Grid|clamp(16px, 2.5vw, 32px)|16 → 32 fluid|Side padding of main, top nav and specimen bars
+kpi-span|Grid|3|4 md · 2 below md|KPI tiles, four per row
+widget-s|Grid|4|4 md · 4 below md|Customize layout · Small (one third)
+widget-m|Grid|6|4 md · 4 below md|Customize layout · Medium (half)
+widget-l|Grid|8|8 md · 4 below md|Customize layout · Large (two thirds)
+widget-full|Grid|12|8 md · 4 below md|Customize layout · Full width
+topbar-h|Chrome|56px|—|Main nav height; sticky offset for table heads and sheets
+subnav-w|Chrome|220px|rail below lg · tabs below md|Section sub-sidebar: Company OS, settings, Admin, Knowledge
+subnav-rail|Chrome|56px|—|Icon-only sub-nav between md and lg
+panel-w|Chrome|360px|sheet below xl|Right properties panel: agent detail, work item
+content-max|Chrome|1440px|—|Max width of main content
+reading-max|Chrome|72ch|—|Docs, chat messages, help articles, long descriptions
+space-section|Spacing|32px|24px below lg|Main top padding and gap between page sections
+stack|Spacing|16px|12px below lg|Vertical gap between cards and widget rows
+tbl-font-size|Table|13px|—|Body cell text
+tbl-row-h|Table|44px|32px compact|Minimum row height
+tbl-cell-px|Table|16px|12px compact|Cell and head side padding
+tbl-cell-py|Table|10px|6px compact|Cell top/bottom padding, visible when cells wrap
+tbl-head-h|Table|36px|32px compact|Header row height
+tbl-head-bg|Table|var(--surface2)|—|Header fill
+tbl-head-fg|Table|var(--muted)|—|Header text colour
+tbl-head-font|Table|600 11.5px/1.2 Plex Sans|—|Header type; paired with --tbl-head-case and --tbl-head-ls
+tbl-head-case|Table|uppercase|—|Header text-transform
+tbl-head-ls|Table|.05em|—|Header letter-spacing
+tbl-head-border|Table|var(--bw) solid var(--border)|—|Rule under the header row
+tbl-border|Table|var(--bw) solid var(--line)|—|Rule between rows; no vertical rules
+tbl-row-hover|Table|var(--surface2)|var(--line) with zebra|Hover fill, interactive rows only
+tbl-row-selected|Table|var(--surface2)|—|Selected fill; always with edge, checked box and aria-selected
+tbl-selected-edge|Table|3px solid var(--primary)|—|Left edge of a selected row
+tbl-zebra|Table|transparent|zebra-bg when data-zebra="on"|Even-row fill, opt-in for wide read-only tables
+tbl-zebra-bg|Table|var(--surface2)|—|Fill used when zebra is on
+tbl-check-col-w|Table|44px|—|Selection checkbox column
+tbl-actions-col-w|Table|48px|—|Row actions (kebab) column
+tbl-min-col|Table|96px|—|Minimum width of any data column
+tbl-cell-max|Table|360px|—|Text cells truncate with ellipsis past this
+tbl-num|Table|tabular-nums|—|font-variant-numeric for right-aligned numeric columns
+tbl-sticky-top|Table|var(--topbar-h)|0 in scroll containers|Sticky header offset
+field-h-sm|Form|32px|—|Toolbars, filter bars, table inline edits
+field-h-md|Form|36px|—|Default field and button height
+field-h-lg|Form|44px|—|Auth screens, touch-first forms
+field-px|Form|12px|—|Field side padding; addon padding
+field-radius|Form|6px|—|Field and input group corners
+field-font-size|Form|13.5px|—|Value text (15px in lg)
+field-border|Form|var(--bw) solid var(--border)|—|Resting border
+field-border-hover|Form|var(--muted)|—|Hover border colour
+field-bg|Form|var(--surface)|—|Field fill, checkbox fill
+field-bg-disabled|Form|var(--surface2)|—|Disabled and read-only fill
+field-fg|Form|var(--text)|—|Value text colour
+field-focus-ring|Form|3px solid var(--focus)|—|outline on :focus-visible (no shadows)
+field-focus-offset|Form|1px|—|Outline offset for fields and groups
+label-size|Form|13px|—|Field label size
+label-weight|Form|500|—|Field label weight
+label-gap|Form|6px|—|Label → field → help/error spacing
+help-size|Form|12.5px|—|Help and error text size
+help-fg|Form|var(--muted)|—|Help text colour
+error-fg|Form|var(--alert-text)|—|Inline error text; --bad-fg is white in contrast/mono
+error-border|Form|var(--bar-alert)|—|Invalid field border colour
+error-bw|Form|2px|—|Invalid field border width
+field-gap|Form layout|16px|—|Between fields, and between side-by-side fields
+inline-gap|Form layout|8px|—|Between controls that share one label
+form-section-gap|Form layout|28px|—|Above and below the rule between form sections
+form-label-col|Form layout|200px|vertical below md|Label column in horizontal forms
+form-max|Form layout|640px|—|Max width of single-column forms
+action-gap|Form layout|8px|—|Between buttons in an action bar
+check-gap|Control|8px|—|Checkbox / radio / switch to its label
+control-size|Control|18px|—|Checkbox and radio box
+switch-w|Control|36px|—|Switch track width
+switch-h|Control|20px|—|Switch track height
+switch-knob|Control|14px|—|Switch knob diameter`.split('\n').map((l) => l.split('|'));
+
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+  }
+  copyCss() {
+    let txt = '';
+    try { const el = document.getElementById('css-src'); txt = el ? el.textContent : ''; } catch (e) {}
+    const done = (ok) => this.setState({ copied: ok ? 'Copied to clipboard' : 'Copy failed: select the block and press Ctrl+C' });
+    try { navigator.clipboard.writeText(txt).then(() => done(true), () => done(false)); } catch (e) { done(false); }
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const bp = st.bp || 'lg';
+    const showGrid = st.showGrid !== false;
+    const density = st.density || 'comfortable';
+    const zebra = !!st.zebra;
+    const layout = st.layout || 'vertical';
+    const perm = st.perm || { approval: true, data: false };
+    const enabled = st.enabled !== false;
+    const vShow = st.vShow !== false;
+    return {
+      theme: cur,
+      themes: THEMES.map(([id, label]) => ({ label: label, cls: id === cur ? 'on' : '', pressed: id === cur ? 'true' : 'false', pick: () => this.setState({ theme: id }) })),
+      bp: bp,
+      bps: BPS.map(([id, label]) => ({ label: label, cls: id === bp ? 'on' : '', pressed: id === bp ? 'true' : 'false', pick: () => this.setState({ bp: id }) })),
+      bpSummary: BP_NOTE[bp],
+      showGrid: showGrid,
+      gridPressed: showGrid ? 'true' : 'false',
+      gridLabel: showGrid ? 'Column overlay: on' : 'Column overlay: off',
+      toggleGrid: () => this.setState({ showGrid: !showGrid }),
+      bpRows: BP_ROWS.map((r) => {
+        const on = HL[bp].indexOf(r[0]) >= 0;
+        return { name: r[1], tok: r[2], min: r[3], cols: r[4], gut: r[5], mar: r[6], sp: r[7], sub: r[8], panel: r[9], cls: on ? 'sel' : '', cur: on ? 'Shown in overlay' : '' };
+      }),
+      density: density,
+      densities: DENS.map(([id, label]) => ({ label: label, cls: id === density ? 'on' : '', pressed: id === density ? 'true' : 'false', pick: () => this.setState({ density: id }) })),
+      densityNote: (density === 'compact' ? 'data-density="compact" · row 32 · px 12 · head 32' : 'default density · row 44 · px 16 · head 36') + (zebra ? ' · zebra on' : ''),
+      zebra: zebra ? 'on' : 'off',
+      zebraPressed: zebra ? 'true' : 'false',
+      zebraLabel: zebra ? 'Zebra rows: on' : 'Zebra rows: off',
+      toggleZebra: () => this.setState({ zebra: !zebra }),
+      layout: layout,
+      layouts: LAYOUTS.map(([id, label]) => ({ label: label, cls: id === layout ? 'on' : '', pressed: id === layout ? 'true' : 'false', pick: () => this.setState({ layout: id }) })),
+      layoutNote: LAYOUT_NOTE[layout],
+      approvalChecked: perm.approval ? 'true' : 'false',
+      dataChecked: perm.data ? 'true' : 'false',
+      toggleApproval: () => this.setState({ perm: Object.assign({}, perm, { approval: !perm.approval }) }),
+      toggleData: () => this.setState({ perm: Object.assign({}, perm, { data: !perm.data }) }),
+      enabledChecked: enabled ? 'true' : 'false',
+      enabledText: enabled ? 'On' : 'Off',
+      toggleEnabled: () => this.setState({ enabled: !enabled }),
+      vShow: vShow,
+      vInvalid: vShow ? 'true' : 'false',
+      vStatus: vShow ? '3 errors' : 'No errors shown',
+      validate: () => this.setState({ vShow: true }),
+      vReset: () => this.setState({ vShow: false }),
+      tokens: TOK.map(([name, group, value, alt, usage]) => ({ name: '--' + name, group: group, value: value, alt: alt, usage: usage })),
+      copyCss: () => this.copyCss(),
+      copyStatus: st.copied || ''
+    };
+  }
+}
+</script>
+</body>
+</html>

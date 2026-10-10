@@ -1,0 +1,928 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot data table pattern</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.wgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:start}
+.wgrid>.card{min-width:0;position:relative;display:flex;flex-direction:column}
+.card.editing{outline:1.5px dashed var(--muted);outline-offset:3px}
+.card.editing[draggable="true"]{cursor:grab}
+.grip{display:inline-grid;place-items:center;width:18px;height:28px;cursor:grab;flex:none}
+.wtools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto}
+.mbtn{width:30px;height:30px;padding:0;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);display:inline-grid;place-items:center;cursor:pointer;flex:none}
+.mbtn:hover{background:var(--surface2)}
+.mbtn[aria-disabled="true"]{opacity:.45;cursor:default}
+.segg{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.segg .seg{height:26px;padding:0 8px}
+.hint{margin:0;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;border:var(--bw) dashed var(--border);background:var(--surface2);font-size:13px;color:var(--text2)}
+.rsz{position:absolute;right:5px;bottom:5px;fill:none;stroke:var(--muted);stroke-width:1.5;stroke-linecap:round;pointer-events:none}
+@media (max-width:760px){.wgrid>.card{grid-column:1 / -1 !important}}
+.sub2{font-size:12.5px;color:var(--muted)}
+/* ---- Components · Data table ---- */
+.spec{flex:1 1 100%;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:10px 20px;padding:12px clamp(16px,2.5vw,28px);background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+.lbl{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.slbl{font-size:11.5px;color:var(--muted)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.tb{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 16px;border-bottom:var(--bw) solid var(--line)}
+.inp{height:36px;background:var(--surface);border:var(--bw) solid var(--border);color:var(--text);border-radius:6px;padding:0 10px 0 34px;font:inherit;font-size:13.5px;box-sizing:border-box;width:300px;max-width:100%}
+.inp::placeholder{color:var(--muted)}
+.sfield{position:relative;display:inline-flex;align-items:center}
+.sfield svg{position:absolute;left:10px;pointer-events:none}
+.pop{position:relative;display:inline-flex}
+.menu{position:absolute;top:calc(100% + 4px);left:0;z-index:20;min-width:220px;background:var(--surface);border:var(--bw) solid var(--border);border-radius:8px;padding:4px;display:flex;flex-direction:column;box-sizing:border-box}
+.menu.r{left:auto;right:0}
+.menu.up{top:auto;bottom:calc(100% + 4px)}
+.mh{padding:7px 10px 4px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.mi{display:flex;align-items:center;gap:10px;width:100%;min-height:32px;padding:0 10px;border:0;border-radius:5px;background:transparent;color:var(--text);font:inherit;font-size:13px;text-align:left;cursor:pointer;box-sizing:border-box;white-space:nowrap}
+.mi:hover{background:var(--surface2)}
+.mi .cnt{margin-left:auto;color:var(--muted);font-size:12px}
+.mi.dng{color:var(--alert-text);font-weight:500}
+.mi[aria-disabled="true"]{color:var(--muted);cursor:default}
+.msep{height:var(--bw);background:var(--line);margin:4px 0}
+.rk{width:14px;display:inline-grid;place-items:center;flex:none}
+.rk svg{visibility:hidden}
+.mi[aria-checked="true"] .rk svg{visibility:visible}
+.cbx{width:18px;height:18px;padding:0;border-radius:4px;border:1.5px solid var(--muted);background:var(--surface);display:inline-grid;place-items:center;cursor:pointer;flex:none;box-sizing:border-box}
+.cbx svg{display:none;fill:none;stroke:var(--on-primary);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.cbx[aria-checked="true"],.cbx[aria-checked="mixed"],.mi[aria-checked="true"] .cbx,.cbx.on{background:var(--primary);border-color:var(--primary)}
+.cbx[aria-checked="true"] .ck,.cbx[aria-checked="mixed"] .mx,.mi[aria-checked="true"] .cbx .ck,.cbx.on .ck,.cbx.mix .mx{display:block}
+.cbx.mix{background:var(--primary);border-color:var(--primary)}
+.cbx[aria-disabled="true"],.mi[aria-disabled="true"] .cbx{opacity:.5;cursor:default}
+.chip{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 3px 0 10px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface2);font-size:12.5px;color:var(--text);box-sizing:border-box}
+.chip b{font-weight:600}
+.chip button{width:22px;height:22px;border:0;border-radius:4px;background:transparent;display:grid;place-items:center;cursor:pointer;padding:0}
+.chip button:hover{background:var(--line)}
+.chip.add{border-style:dashed;background:transparent;padding:0 10px;cursor:pointer;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;gap:6px}
+.lnk{border:0;background:transparent;padding:0 4px;font:inherit;font-size:12.5px;font-weight:500;color:var(--link);text-decoration:underline;cursor:pointer}
+.bulk{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border);border-left:3px solid var(--primary);font-size:13px}
+.bulk .sepd{color:var(--muted)}
+.dt-scroll{max-height:468px;overflow:auto;position:relative}
+.dt{min-width:1080px;font-size:13px}
+.dt-h,.dt-r{display:grid;grid-template-columns:var(--cols);align-items:stretch}
+.dt-h{position:sticky;top:0;z-index:3;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+.dt-h>div{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:0 12px;height:38px;display:flex;align-items:center;min-width:0;background:var(--surface2)}
+.dt-h>.num{justify-content:flex-end}
+.sh{display:inline-flex;align-items:center;gap:5px;height:28px;margin:0 -6px;padding:0 6px;border:0;border-radius:5px;background:transparent;font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer}
+.sh:hover,.sh.is-hover{background:var(--line);color:var(--text)}
+.si{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.si .u,.si .d{opacity:.35}
+[aria-sort="ascending"] .sh,[aria-sort="descending"] .sh{color:var(--text)}
+[aria-sort="ascending"] .si .u{opacity:1}[aria-sort="ascending"] .si .d{opacity:0}
+[aria-sort="descending"] .si .d{opacity:1}[aria-sort="descending"] .si .u{opacity:0}
+.dt-r>div{padding:0 12px;min-height:46px;display:flex;align-items:center;gap:8px;min-width:0;border-bottom:var(--bw) solid var(--line);position:relative;box-sizing:border-box}
+.dt.compact .dt-r>div{min-height:34px}
+.dt-r:hover>div,.dt-r.is-hover>div{background:var(--surface2)}
+.dt-r.sel>div{background:var(--surface2)}
+.dt-r.sel>div:first-child{border-left:3px solid var(--primary);padding-left:9px}
+.dt-r.dis>div{color:var(--muted)}
+.num{justify-content:flex-end;text-align:right;font-variant-numeric:tabular-nums}
+.tt a{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500;text-decoration:none;color:var(--text)}
+.tt a:hover{text-decoration:underline}
+.ell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xbtn{width:26px;height:26px;border:0;border-radius:5px;background:transparent;display:grid;place-items:center;cursor:pointer;padding:0}
+.xbtn:hover{background:var(--line)}
+.xbtn svg{transition:transform .15s}
+.xbtn[aria-expanded="true"] svg{transform:rotate(90deg)}
+.dt-x{padding:14px 16px 16px 88px;border-bottom:var(--bw) solid var(--line);background:var(--surface2)}
+.av{width:22px;height:22px;border-radius:5px;display:inline-grid;place-items:center;font-size:9.5px;font-weight:600;background:var(--tile);border:var(--bw) solid var(--tile-b);color:var(--text2);flex:none;box-sizing:border-box}
+.av.h{border-radius:99px;background:var(--brand-bg);color:var(--brand-fg);border-color:var(--brand-bg)}
+.pb{display:inline-flex;align-items:flex-end;gap:2px;height:12px;flex:none}
+.pb i{width:4px;border:1px solid var(--stroke);border-radius:1px;box-sizing:border-box;background:var(--bar-track)}
+.pb i:nth-child(1){height:5px}.pb i:nth-child(2){height:8px}.pb i:nth-child(3){height:10px}.pb i:nth-child(4){height:12px}
+.p1 i:nth-child(-n+1),.p2 i:nth-child(-n+2),.p3 i:nth-child(-n+3){background:var(--bar)}
+.p4 i{background:var(--bar-alert)}
+.sk{display:block;height:10px;border-radius:4px;background:var(--line);animation:skp 1.4s ease-in-out infinite}
+@keyframes skp{50%{opacity:.4}}
+@media (prefers-reduced-motion:reduce){.sk{animation:none}.xbtn svg{transition:none}}
+.foot{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:10px 16px;font-size:13px;color:var(--text2)}
+.state{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:40px 24px}
+.state h3{margin:0;font-size:15px;font-weight:600}
+.state p{margin:0;font-size:13px;color:var(--text2);max-width:440px}
+.dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:7px 24px;margin:0;font-size:13px}
+.dl dt{color:var(--muted)}.dl dd{margin:0;min-width:0}
+.kvg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px 20px;margin:0;font-size:13px}
+.kvg>div{display:flex;flex-direction:column;gap:3px;min-width:0}
+.kvg dt{font-size:11.5px;color:var(--muted)}.kvg dd{margin:0}
+.kvi{display:flex;flex-wrap:wrap;gap:4px 16px;margin:0;font-size:12.5px}
+.kvi>div{display:flex;gap:6px}.kvi dt{color:var(--muted)}.kvi dd{margin:0}
+.dt-cards{display:none;flex-direction:column;gap:10px;padding:12px}
+.mcard{border:var(--bw) solid var(--border);border-radius:8px;background:var(--surface);padding:12px;display:flex;flex-direction:column;gap:8px}
+.mcard.sel{border-left:3px solid var(--primary)}
+.frame{width:360px;max-width:100%;box-sizing:border-box;border:var(--bw) solid var(--border);border-radius:16px;background:var(--bg);padding:12px;display:flex;flex-direction:column;gap:10px}
+.is-focus{outline:3px solid var(--focus);outline-offset:2px}
+.spx{display:flex;flex-wrap:wrap;gap:18px 26px;align-items:flex-end}
+.spx>div{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:0}
+.rules>div{padding:16px;border-right:var(--bw) solid var(--line)}
+.rules h3{margin:0 0 8px;font-size:13.5px;font-weight:600}
+.rules ul{margin:0;padding-left:18px;font-size:13px;color:var(--text2);display:flex;flex-direction:column;gap:6px}
+.note{margin:0;padding:10px 16px;font-size:12.5px;color:var(--text2);border-top:var(--bw) solid var(--line)}
+@media (max-width:760px){.dt-scroll{display:none}.dt-cards{display:flex}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <a href="ThemeManager.dc.html" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon" aria-label="Plugins" title="Plugins"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon" aria-label="Secrets" title="Secrets"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" title="Preferences"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <a href="AdminUsers.dc.html" class="icon" aria-label="Admin panel" title="Admin panel"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <button type="button" aria-label="Profile menu" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer">MV</button>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+  <aside class="sub" aria-label="Design system" style="flex: 1 1 230px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+    <a href="DesignSystem.dc.html" style="font-weight: 600; color: var(--text)">AutoBot Design System</a>
+    <span class="sub2" style="padding: 0 13px 4px">v1 · 4 themes</span>
+    <p class="sect">Overview</p>
+    <a href="DesignSystem.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z" class="i1"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z" class="it1"/></svg>Introduction</a>
+    <p class="sect">Foundations</p>
+    <a href="ComponentsStates.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4" class="i3"/><circle cx="16" cy="9" r="4" class="i2"/><circle cx="12" cy="16" r="4" class="i1"/></svg>Tokens &amp; states</a>
+    <a href="ComponentsGrid.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5" class="i1"/><rect x="13" y="4" width="7" height="7" rx="1.5" class="iw"/><rect x="4" y="13" width="7" height="7" rx="1.5" class="iw"/><rect x="13" y="13" width="7" height="7" rx="1.5" class="i2"/></svg>Grid, tables &amp; forms</a>
+    <a href="ComponentsCharts.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><rect x="5.5" y="11" width="3.5" height="7" class="i1"/><rect x="10.5" y="6" width="3.5" height="12" class="i2"/><rect x="15.5" y="13" width="3.5" height="5" class="i3"/></svg>Charts &amp; data viz</a>
+    <p class="sect">Components</p>
+    <a href="ComponentsForms.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4" class="i1"/><circle cx="16.5" cy="12" r="2.5" class="iw"/></svg>Form controls</a>
+    <a href="ComponentsTable.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="iw"/><path d="M4 10h16M4 14.5h16M10 10v9"/></svg>Data table</a>
+    <a href="ComponentsDialogs.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="it1"/><rect x="6" y="8" width="12" height="9" rx="1.5" class="iw"/></svg>Dialogs</a>
+    <a href="ComponentsOverlays.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" class="i2"/><path d="M10 21h4"/></svg>Overlays &amp; feedback</a>
+    <a href="ComponentsTooltips.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10h-7l-4 4v-4H4z" class="it1"/><path d="M8 10h8"/></svg>Tooltips</a>
+    <a href="ComponentsCommand.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" class="iw"/><path d="M7 10l3 2-3 2M12 15h5"/></svg>Command menu</a>
+    <a href="ComponentsNavigation.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M15 9l-2 4-4 2 2-4z" class="i3"/></svg>Navigation</a>
+    <a href="ComponentsLayout.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="iw"/><path d="M9 4v16M9 10h12"/></svg>Layout &amp; utility</a>
+    <a href="ComponentsChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h12v9H8l-3 3v-3H3z" class="i1"/><path d="M15 9h6v8h-2v3l-3-3h-5v-3"/></svg>Chat &amp; agent</a>
+    <p class="sect">Patterns</p>
+    <a href="FileBrowser.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="i2"/></svg>File browser</a>
+    <a href="Mailbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" class="iw"/><path d="M3 7l9 6 9-6"/></svg>Mailbox</a>
+    <a href="ComponentsUiModes.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5" class="it1"/><rect x="4.5" y="8.5" width="8" height="7" rx="3.5" class="i2"/></svg>Interface modes</a>
+    <a href="SignUp.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" class="i2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Auth pages</a>
+    <a href="AccountSecurity.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4" class="i1"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>Account settings</a>
+    <a href="SearchResults.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>Global search</a>
+    <a href="HelpCenter.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="i2"/><path d="M10 10a2 2 0 1 1 3 1.7c-.7.4-1 1-1 1.8M12 16.5v.5"/></svg>Help centre</a>
+    <span style="flex-grow: 1; min-height: 16px" aria-hidden="true"></span>
+    <a href="Main.dc.html" style="border-top: var(--bw) solid var(--line); border-radius: 0; padding-top: 12px"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg>← Back to app</a>
+  </aside>
+  <div style="flex: 999 1 520px; min-width: 0; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <div class="spec">
+    <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 260px">
+      <strong style="font-size: 15px; font-weight: 600">Components · Data table pattern</strong>
+      <span class="sub2">Sortable, selectable, filterable tables for Company OS work items and agent runs, with states, pagination and a narrow-width card fallback.</span>
+    </div>
+    <span class="lbl" aria-hidden="true">Preview theme</span>
+    <div role="group" aria-label="Preview theme" class="segg">
+      <sc-for list="{{themes}}" as="t" hint-placeholder-count="4"><button type="button" class="seg {{t.cls}}" aria-pressed="{{t.pressed}}" onClick="{{t.pick}}">{{t.label}}</button></sc-for>
+    </div>
+  </div>
+
+  <main style="flex: 1 1 100%; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 48px; display: flex; flex-direction: column; gap: 20px">
+    <header style="display: flex; flex-direction: column; gap: 2px">
+      <span class="sub2">Design system / Components / Patterns</span>
+      <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">Data table</h1>
+      <span class="sub2" style="font-size: 13.5px; color: var(--text2)">Everything below is live in Play mode: sort, select, filter, search, page, hide columns, expand rows and switch demo states.</span>
+    </header>
+
+    <!-- 1 · Working table -->
+    <section class="card" aria-label="Work items table" onKeyDown="{{onKey}}">
+      <div class="ch" style="flex-wrap: wrap">
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px">
+          <h2>Work items · AutoBot Labs</h2>
+          <span class="sub2">Use for: dense, comparable records people scan, sort and act on in bulk — work items, agent runs, approvals.</span>
+        </div>
+        <span class="lbl" id="ds-lbl">Demo state</span>
+        <div class="segg" role="group" aria-labelledby="ds-lbl">
+          <sc-for list="{{modes}}" as="m" hint-placeholder-count="4"><button type="button" class="seg {{m.cls}}" aria-pressed="{{m.pressed}}" onClick="{{m.pick}}">{{m.label}}</button></sc-for>
+        </div>
+      </div>
+
+      <!-- toolbar -->
+      <div class="tb">
+        <div class="pop">
+          <button type="button" class="btn sm" aria-haspopup="menu" aria-expanded="{{viewsOpen}}" onClick="{{toggleViews}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z" class="it2"/></svg><span class="sub2" style="font-size: 13px">View:</span> {{viewLabel}}<svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+          <sc-if value="{{isViews}}" hint-placeholder-val="{{ false }}">
+            <div class="menu" role="menu" aria-label="Saved views">
+              <span class="mh">Saved views</span>
+              <sc-for list="{{views}}" as="v" hint-placeholder-count="4"><button type="button" class="mi" role="menuitemradio" aria-checked="{{v.checked}}" onClick="{{v.pick}}"><span class="rk"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span>{{v.label}}<span class="cnt mono">{{v.count}}</span></button></sc-for>
+              <span class="msep" aria-hidden="true"></span>
+              <button type="button" class="mi" role="menuitem" aria-disabled="true">Save current filters as view…</button>
+            </div>
+          </sc-if>
+        </div>
+        <label class="sfield"><span class="sr">Search work items</span><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg><input type="search" class="inp" placeholder="Search ID, title or assignee" value="{{q}}" onInput="{{onSearch}}" onChange="{{onSearch}}"></label>
+        <span style="flex-grow: 1" aria-hidden="true"></span>
+        <span class="lbl" id="dn-lbl">Density</span>
+        <div class="segg" role="group" aria-labelledby="dn-lbl">
+          <sc-for list="{{dens}}" as="d" hint-placeholder-count="2"><button type="button" class="seg {{d.cls}}" aria-pressed="{{d.pressed}}" onClick="{{d.pick}}">{{d.label}}</button></sc-for>
+        </div>
+        <div class="pop">
+          <button type="button" class="btn sm" aria-haspopup="menu" aria-expanded="{{colsOpen}}" onClick="{{toggleCols}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/><rect x="9" y="4" width="6" height="16" class="it1"/></svg>Columns<span class="pill idle mono">{{visCount}}</span></button>
+          <sc-if value="{{isCols}}" hint-placeholder-val="{{ false }}">
+            <div class="menu r" role="menu" aria-label="Visible columns">
+              <span class="mh">Show columns</span>
+              <button type="button" class="mi" role="menuitemcheckbox" aria-checked="true" aria-disabled="true"><span class="cbx" aria-hidden="true"><svg class="ck" width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 6.2l2.3 2.3 4.7-5"/></svg></span>ID &amp; Title<span class="cnt">always shown</span></button>
+              <sc-for list="{{colOpts}}" as="c" hint-placeholder-count="6"><button type="button" class="mi" role="menuitemcheckbox" aria-checked="{{c.checked}}" onClick="{{c.toggle}}"><span class="cbx" aria-hidden="true"><svg class="ck" width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 6.2l2.3 2.3 4.7-5"/></svg></span>{{c.label}}</button></sc-for>
+              <span class="msep" aria-hidden="true"></span>
+              <button type="button" class="mi" role="menuitem" onClick="{{resetCols}}">Reset to default</button>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+
+      <!-- filter bar -->
+      <div class="tb" role="group" aria-label="Active filters" style="gap: 8px; padding: 10px 16px">
+        <span class="slbl">Filters</span>
+        <sc-for list="{{chips}}" as="f" hint-placeholder-count="2">
+          <span class="chip">{{f.k}}: <b>{{f.v}}</b><button type="button" aria-label="{{f.rmLabel}}" onClick="{{f.remove}}"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 2"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span>
+        </sc-for>
+        <div class="pop">
+          <button type="button" class="chip add" aria-haspopup="menu" aria-expanded="{{addOpen}}" onClick="{{toggleAdd}}"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 2"><path d="M12 5v14M5 12h14"/></svg>Add filter</button>
+          <sc-if value="{{isAdd}}" hint-placeholder-val="{{ false }}">
+            <div class="menu" role="menu" aria-label="Add filter">
+              <span class="mh">Filter by</span>
+              <sc-for list="{{addOpts}}" as="a" hint-placeholder-count="3"><button type="button" class="mi" role="menuitem" onClick="{{a.pick}}">{{a.label}}<span class="cnt mono">{{a.count}}</span></button></sc-for>
+              <sc-if value="{{noAddOpts}}" hint-placeholder-val="{{ false }}"><span class="mi" aria-disabled="true">All filters applied</span></sc-if>
+            </div>
+          </sc-if>
+        </div>
+        <sc-if value="{{hasChips}}" hint-placeholder-val="{{ false }}"><button type="button" class="lnk" onClick="{{clearChips}}">Clear all</button></sc-if>
+        <span style="flex-grow: 1" aria-hidden="true"></span>
+        <span class="sub2 mono">{{countLabel}}</span>
+      </div>
+
+      <!-- bulk actions -->
+      <sc-if value="{{hasSel}}" hint-placeholder-val="{{ false }}">
+        <div class="bulk" role="region" aria-label="Bulk actions">
+          <strong style="font-weight: 600">{{selCount}} selected</strong>
+          <sc-if value="{{canSelAll}}" hint-placeholder-val="{{ false }}"><button type="button" class="lnk" onClick="{{selectAllMatching}}">{{selAllLabel}}</button></sc-if>
+          <span class="sepd" aria-hidden="true">·</span>
+          <div class="pop">
+            <button type="button" class="btn sm" aria-haspopup="menu" aria-expanded="{{bAssignOpen}}" onClick="{{toggleBAssign}}">Assign</button>
+            <sc-if value="{{isBAssign}}" hint-placeholder-val="{{ false }}">
+              <div class="menu" role="menu" aria-label="Assign selected to">
+                <span class="mh">Assign to</span>
+                <sc-for list="{{assignOpts}}" as="o" hint-placeholder-count="4"><button type="button" class="mi" role="menuitem" onClick="{{o.pick}}"><span class="av {{o.avCls}}">{{o.av}}</span>{{o.label}}</button></sc-for>
+              </div>
+            </sc-if>
+          </div>
+          <div class="pop">
+            <button type="button" class="btn sm" aria-haspopup="menu" aria-expanded="{{bStatusOpen}}" onClick="{{toggleBStatus}}">Change status</button>
+            <sc-if value="{{isBStatus}}" hint-placeholder-val="{{ false }}">
+              <div class="menu" role="menu" aria-label="Set status of selected">
+                <span class="mh">Set status</span>
+                <sc-for list="{{statusOpts}}" as="o" hint-placeholder-count="5"><button type="button" class="mi" role="menuitem" onClick="{{o.pick}}"><span class="pill {{o.cls}}">{{o.label}}</span></button></sc-for>
+              </div>
+            </sc-if>
+          </div>
+          <button type="button" class="btn sm" onClick="{{bulkDelete}}" style="color: var(--alert-text)"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></svg>Delete</button>
+          <span class="sepd" aria-hidden="true">·</span>
+          <button type="button" class="lnk" onClick="{{clearSel}}">Clear</button>
+        </div>
+      </sc-if>
+
+      <!-- table -->
+      <sc-if value="{{showTable}}" hint-placeholder-val="{{ true }}">
+        <div class="dt-scroll" tabindex="0" aria-label="Work items, scrollable">
+          <div class="dt {{densCls}}" role="table" aria-label="Work items" aria-rowcount="{{rowCount}}" aria-busy="{{busy}}" style="--cols: {{gridCols}}">
+            <div role="rowgroup">
+              <div class="dt-h" role="row">
+                <div role="columnheader"><button type="button" role="checkbox" class="cbx" aria-checked="{{headChecked}}" aria-label="{{headLabel}}" onClick="{{toggleAll}}"><svg class="ck" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.2l2.3 2.3 4.7-5"/></svg><svg class="mx" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 6h6"/></svg></button></div>
+                <div role="columnheader"><span class="sr">Details</span></div>
+                <div role="columnheader" aria-sort="{{hd.id.aria}}"><button type="button" class="sh" onClick="{{hd.id.click}}">ID<svg class="si" width="9" height="13" viewBox="0 0 16 22" aria-hidden="true"><path class="u" d="M3 8l5-5 5 5"/><path class="d" d="M3 14l5 5 5-5"/></svg></button></div>
+                <div role="columnheader" aria-sort="{{hd.title.aria}}"><button type="button" class="sh" onClick="{{hd.title.click}}">Title<svg class="si" width="9" height="13" viewBox="0 0 16 22" aria-hidden="true"><path class="u" d="M3 8l5-5 5 5"/><path class="d" d="M3 14l5 5 5-5"/></svg></button></div>
+                <sc-if value="{{vis.who}}" hint-placeholder-val="{{ true }}"><div role="columnheader" aria-sort="{{hd.who.aria}}"><button type="button" class="sh" onClick="{{hd.who.click}}">Assignee<svg class="si" width="9" height="13" viewBox="0 0 16 22" aria-hidden="true"><path class="u" d="M3 8l5-5 5 5"/><path class="d" d="M3 14l5 5 5-5"/></svg></button></div></sc-if>
+                <sc-if value="{{vis.st}}" hint-placeholder-val="{{ true }}"><div role="columnheader" aria-sort="{{hd.st.aria}}"><button type="button" class="sh" onClick="{{hd.st.click}}">Status<svg class="si" width="9" height="13" viewBox="0 0 16 22" aria-hidden="true"><path class="u" d="M3 8l5-5 5 5"/><path class="d" d="M3 14l5 5 5-5"/></svg></button></div></sc-if>
+                <sc-if value="{{vis.prio}}" hint-placeholder-val="{{ true }}"><div role="columnheader" aria-sort="{{hd.prio.aria}}"><button type="button" class="sh" onClick="{{hd.prio.click}}">Priority<svg class="si" width="9" height="13" viewBox="0 0 16 22" aria-hidden="true"><path class="u" d="M3 8l5-5 5 5"/><path class="d" d="M3 14l5 5 5-5"/></svg></button></div></sc-if>
+                <sc-if value="{{vis.runs}}" hint-placeholder-val="{{ true }}"><div role="columnheader" class="num" aria-sort="{{hd.runs.aria}}"><button type="button" class="sh" onClick="{{hd.runs.click}}">Runs<svg class="si" width="9" height="13" viewBox="0 0 16 22" aria-hidden="true"><path class="u" d="M3 8l5-5 5 5"/><path class="d" d="M3 14l5 5 5-5"/></svg></button></div></sc-if>
+                <sc-if value="{{vis.cost}}" hint-placeholder-val="{{ true }}"><div role="columnheader" class="num" aria-sort="{{hd.cost.aria}}"><button type="button" class="sh" onClick="{{hd.cost.click}}">Cost<svg class="si" width="9" height="13" viewBox="0 0 16 22" aria-hidden="true"><path class="u" d="M3 8l5-5 5 5"/><path class="d" d="M3 14l5 5 5-5"/></svg></button></div></sc-if>
+                <sc-if value="{{vis.ts}}" hint-placeholder-val="{{ true }}"><div role="columnheader" aria-sort="{{hd.ts.aria}}"><button type="button" class="sh" onClick="{{hd.ts.click}}">Updated<svg class="si" width="9" height="13" viewBox="0 0 16 22" aria-hidden="true"><path class="u" d="M3 8l5-5 5 5"/><path class="d" d="M3 14l5 5 5-5"/></svg></button></div></sc-if>
+                <div role="columnheader"><span class="sr">Actions</span></div>
+              </div>
+            </div>
+
+            <sc-if value="{{isLoading}}" hint-placeholder-val="{{ false }}">
+              <div role="rowgroup" aria-label="Loading work items">
+                <sc-for list="{{skRows}}" as="s" hint-placeholder-count="5">
+                  <div class="dt-r" role="row">
+                    <div role="cell"><span class="sk" style="width: 16px; height: 16px"></span></div>
+                    <div role="cell"></div>
+                    <div role="cell"><span class="sk" style="width: 52px"></span></div>
+                    <div role="cell"><span class="sk" style="width: {{s.w}}"></span></div>
+                    <sc-for list="{{s.cells}}" as="k" hint-placeholder-count="6"><div role="cell" class="{{k.cls}}"><span class="sk" style="width: {{k.w}}"></span></div></sc-for>
+                    <div role="cell"></div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{isData}}" hint-placeholder-val="{{ true }}">
+              <sc-for list="{{rows}}" as="r" hint-placeholder-count="5">
+                <div role="rowgroup">
+                  <div class="dt-r {{r.cls}}" role="row">
+                    <div role="cell"><button type="button" role="checkbox" class="cbx" aria-checked="{{r.checked}}" aria-label="{{r.selLabel}}" onClick="{{r.toggleSel}}"><svg class="ck" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.2l2.3 2.3 4.7-5"/></svg></button></div>
+                    <div role="cell" style="padding: 0 4px"><button type="button" class="xbtn" aria-expanded="{{r.exp}}" aria-label="{{r.expLabel}}" onClick="{{r.toggleExp}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div>
+                    <div role="cell" class="mono" style="font-size: 12.5px">{{r.id}}</div>
+                    <div role="cell" class="tt"><a href="Backlog.dc.html">{{r.title}}</a></div>
+                    <sc-if value="{{r.vis.who}}" hint-placeholder-val="{{ true }}"><div role="cell"><span class="av {{r.avCls}}" aria-hidden="true">{{r.av}}</span><span class="ell">{{r.who}}</span><span class="slbl">{{r.kind}}</span></div></sc-if>
+                    <sc-if value="{{r.vis.st}}" hint-placeholder-val="{{ true }}"><div role="cell"><span class="pill {{r.stCls}}">{{r.st}}</span></div></sc-if>
+                    <sc-if value="{{r.vis.prio}}" hint-placeholder-val="{{ true }}"><div role="cell"><span class="pb {{r.pCls}}" aria-hidden="true"><i></i><i></i><i></i><i></i></span>{{r.prio}}</div></sc-if>
+                    <sc-if value="{{r.vis.runs}}" hint-placeholder-val="{{ true }}"><div role="cell" class="num mono">{{r.runs}}</div></sc-if>
+                    <sc-if value="{{r.vis.cost}}" hint-placeholder-val="{{ true }}"><div role="cell" class="num mono">{{r.cost}}</div></sc-if>
+                    <sc-if value="{{r.vis.ts}}" hint-placeholder-val="{{ true }}"><div role="cell" class="mono" style="font-size: 12.5px; color: var(--text2)">{{r.when}}</div></sc-if>
+                    <div role="cell" style="justify-content: center; padding: 0 6px">
+                      <button type="button" class="mbtn" style="border-color: transparent; background: transparent" aria-haspopup="menu" aria-expanded="{{r.menuOpen}}" aria-label="{{r.menuLabel}}" onClick="{{r.toggleMenu}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6" class="ik"/><circle cx="12" cy="12" r="1.6" class="ik"/><circle cx="19" cy="12" r="1.6" class="ik"/></svg></button>
+                      <sc-if value="{{r.isMenu}}" hint-placeholder-val="{{ false }}">
+                        <div class="menu r {{r.menuCls}}" role="menu" aria-label="{{r.menuLabel}}" style="min-width: 190px">
+                          <sc-for list="{{r.acts}}" as="a" hint-placeholder-count="4"><button type="button" class="mi {{a.cls}}" role="menuitem" onClick="{{a.pick}}">{{a.label}}</button></sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </div>
+                  <sc-if value="{{r.isExp}}" hint-placeholder-val="{{ false }}">
+                    <div class="dt-x" role="row"><div role="cell" style="display: flex; flex-direction: column; gap: 12px">
+                      <p style="margin: 0; font-size: 13px; color: var(--text2)">{{r.note}}</p>
+                      <dl class="kvg">
+                        <div><dt>Goal</dt><dd>{{r.goal}}</dd></div>
+                        <div><dt>Assignee</dt><dd>{{r.who}} · {{r.kind}}</dd></div>
+                        <div><dt>Last run node</dt><dd class="mono">{{r.node}}</dd></div>
+                        <div><dt>Tokens (all runs)</dt><dd class="mono">{{r.tok}}</dd></div>
+                        <div><dt>Spend</dt><dd class="mono">{{r.cost}}</dd></div>
+                        <div><dt>Updated</dt><dd class="mono">{{r.when}}</dd></div>
+                      </dl>
+                    </div></div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </sc-if>
+          </div>
+        </div>
+
+        <!-- narrow-width fallback (shown under 760px) -->
+        <div class="dt-cards" role="list" aria-label="Work items">
+          <sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
+            <div class="mcard {{r.cls}}" role="listitem">
+              <div style="display: flex; align-items: center; gap: 10px"><button type="button" role="checkbox" class="cbx" aria-checked="{{r.checked}}" aria-label="{{r.selLabel}}" onClick="{{r.toggleSel}}"><svg class="ck" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.2l2.3 2.3 4.7-5"/></svg></button><span class="mono sub2">{{r.id}}</span><span style="flex-grow: 1"></span><span class="pill {{r.stCls}}">{{r.st}}</span></div>
+              <a href="Backlog.dc.html" style="font-weight: 600; font-size: 14px; text-decoration: none">{{r.title}}</a>
+              <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text2)"><span class="av {{r.avCls}}" aria-hidden="true">{{r.av}}</span>{{r.who}}<span style="flex-grow: 1"></span><span class="mono">{{r.cost}}</span></div>
+            </div>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{showFoot}}" hint-placeholder-val="{{ true }}">
+          <div class="foot" style="border-top: var(--bw) solid var(--line)">
+            <span class="lbl" id="rpp-lbl">Rows per page</span>
+            <div class="segg" role="group" aria-labelledby="rpp-lbl">
+              <sc-for list="{{perOpts}}" as="p" hint-placeholder-count="3"><button type="button" class="seg {{p.cls}}" aria-pressed="{{p.pressed}}" onClick="{{p.pick}}">{{p.label}}</button></sc-for>
+            </div>
+            <span class="mono">{{pg.range}}</span>
+            <span style="flex-grow: 1" aria-hidden="true"></span>
+            <nav aria-label="Pagination" style="display: flex; align-items: center; gap: 8px">
+              <button type="button" class="btn sm" aria-disabled="{{pg.prevDis}}" onClick="{{pg.prev}}" style="opacity: {{pg.prevOp}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>Previous</button>
+              <span aria-live="polite" style="min-width: 92px; text-align: center">Page <b>{{pg.page}}</b> of {{pg.pages}}</span>
+              <button type="button" class="btn sm" aria-disabled="{{pg.nextDis}}" onClick="{{pg.next}}" style="opacity: {{pg.nextOp}}">Next<svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+            </nav>
+          </div>
+        </sc-if>
+      </sc-if>
+
+      <!-- empty -->
+      <sc-if value="{{showEmpty}}" hint-placeholder-val="{{ false }}">
+        <div class="state" role="status">
+          <svg class="ic" width="112" height="96" viewBox="0 0 112 96" aria-hidden="true"><rect x="22" y="14" width="56" height="70" rx="6" class="iw"/><rect x="38" y="8" width="24" height="12" rx="3" class="i2"/><path d="M32 36h36M32 48h28M32 60h20"/><circle cx="76" cy="62" r="14" class="it1"/><path d="M86 72l10 10" stroke-width="2.4"/></svg>
+          <h3>{{emptyTitle}}</h3>
+          <p>{{emptyBody}}</p>
+          <sc-if value="{{emptyIsFilter}}" hint-placeholder-val="{{ false }}"><button type="button" class="btn sm" onClick="{{clearAll}}">Clear search and filters</button></sc-if>
+          <sc-if value="{{emptyIsNew}}" hint-placeholder-val="{{ true }}"><a href="Backlog.dc.html" class="btn sm pri"><svg class="ic sonp" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New work item</a></sc-if>
+        </div>
+      </sc-if>
+
+      <!-- error -->
+      <sc-if value="{{showError}}" hint-placeholder-val="{{ false }}">
+        <div class="state" role="alert">
+          <span class="tile lg danger"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z" class="iw"/><path d="M12 10v4M12 17v.5"/></svg></span>
+          <h3>Error: work items could not be loaded</h3>
+          <p>The request to <span class="mono">GET /api/company/work-items</span> timed out after 30 s. Your filters are kept — nothing was changed.</p>
+          <div style="display: flex; gap: 8px"><button type="button" class="btn sm pri" onClick="{{retry}}"><svg class="ic sonp" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>Retry</button><a href="HeartbeatMonitor.dc.html" class="btn sm">Check backend health</a></div>
+        </div>
+      </sc-if>
+
+      <div class="note" style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center">
+        <span><b style="font-weight: 600">Sticky header:</b> the column header stays pinned while the body scrolls inside its container (max-height 468px) — try 10 rows per page.</span>
+        <span role="status" aria-live="polite" style="display: inline-flex; gap: 8px; align-items: center"><span>{{msg}}</span><sc-if value="{{canUndo}}" hint-placeholder-val="{{ false }}"><button type="button" class="lnk" onClick="{{undo}}">Undo</button></sc-if></span>
+      </div>
+    </section>
+
+    <!-- 2 · States -->
+    <section class="card" aria-label="Table states">
+      <div class="ch"><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><h2>States at a glance</h2><span class="sub2">Use for: reference when the Play-mode demo is off. Every state keeps the toolbar so people can recover.</span></div></div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; padding: 16px">
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <span class="slbl">Loading · skeleton rows, aria-busy="true"</span>
+          <div class="card" style="overflow: hidden">
+            <div style="display: grid; grid-template-columns: 30px 70px 1fr 80px; gap: 12px; padding: 10px 12px; background: var(--surface2); border-bottom: var(--bw) solid var(--border)"><span class="sk" style="width: 14px; animation: none"></span><span class="lbl">ID</span><span class="lbl">Title</span><span class="lbl" style="text-align: right">Cost</span></div>
+            <div style="display: grid; grid-template-columns: 30px 70px 1fr 80px; gap: 12px; padding: 14px 12px; border-bottom: var(--bw) solid var(--line); align-items: center"><span class="sk" style="width: 14px; height: 14px"></span><span class="sk" style="width: 48px"></span><span class="sk" style="width: 80%"></span><span class="sk" style="width: 44px; justify-self: end"></span></div>
+            <div style="display: grid; grid-template-columns: 30px 70px 1fr 80px; gap: 12px; padding: 14px 12px; border-bottom: var(--bw) solid var(--line); align-items: center"><span class="sk" style="width: 14px; height: 14px"></span><span class="sk" style="width: 48px"></span><span class="sk" style="width: 60%"></span><span class="sk" style="width: 36px; justify-self: end"></span></div>
+            <div style="display: grid; grid-template-columns: 30px 70px 1fr 80px; gap: 12px; padding: 14px 12px; align-items: center"><span class="sk" style="width: 14px; height: 14px"></span><span class="sk" style="width: 48px"></span><span class="sk" style="width: 70%"></span><span class="sk" style="width: 40px; justify-self: end"></span></div>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <span class="slbl">Empty · no data vs. no matches (different copy + action)</span>
+          <div class="card state" style="padding: 22px 16px; gap: 8px">
+            <svg class="ic" width="72" height="62" viewBox="0 0 112 96" aria-hidden="true"><rect x="22" y="14" width="56" height="70" rx="6" class="iw"/><rect x="38" y="8" width="24" height="12" rx="3" class="i2"/><path d="M32 36h36M32 48h28M32 60h20"/><circle cx="76" cy="62" r="14" class="it1"/><path d="M86 72l10 10" stroke-width="2.4"/></svg>
+            <h3 style="font-size: 14px">No work items match these filters</h3>
+            <p style="font-size: 12.5px">Status: Blocked · Assignee: me</p>
+            <button type="button" class="btn sm">Clear search and filters</button>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <span class="slbl">Error · role="alert", says what failed, Retry</span>
+          <div class="card state" style="padding: 22px 16px; gap: 8px">
+            <span class="tile danger"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z" class="iw"/><path d="M12 10v4M12 17v.5"/></svg></span>
+            <h3 style="font-size: 14px">Error: agent runs could not be loaded</h3>
+            <p style="font-size: 12.5px">node-04 unreachable · <span class="mono">503</span> at <span class="mono">10:43:12</span></p>
+            <button type="button" class="btn sm pri">Retry</button>
+          </div>
+        </div>
+      </div>
+      <div style="padding: 0 16px 16px; display: flex; flex-direction: column; gap: 14px">
+        <span class="lbl">Interactive states</span>
+        <div class="spx">
+          <div><span class="slbl">Header · default</span><span style="padding: 6px 10px; background: var(--surface2)" class="lbl"><button type="button" class="sh" tabindex="-1">Cost<svg class="si" width="9" height="13" viewBox="0 0 16 22" aria-hidden="true"><path class="u" d="M3 8l5-5 5 5"/><path class="d" d="M3 14l5 5 5-5"/></svg></button></span></div>
+          <div><span class="slbl">Hover</span><span style="padding: 6px 10px; background: var(--surface2)" class="lbl"><button type="button" class="sh is-hover" tabindex="-1">Cost<svg class="si" width="9" height="13" viewBox="0 0 16 22" aria-hidden="true"><path class="u" d="M3 8l5-5 5 5"/><path class="d" d="M3 14l5 5 5-5"/></svg></button></span></div>
+          <div><span class="slbl">Focus-visible</span><span style="padding: 6px 10px; background: var(--surface2)" class="lbl"><button type="button" class="sh is-focus" tabindex="-1">Cost<svg class="si" width="9" height="13" viewBox="0 0 16 22" aria-hidden="true"><path class="u" d="M3 8l5-5 5 5"/><path class="d" d="M3 14l5 5 5-5"/></svg></button></span></div>
+          <div aria-sort="ascending"><span class="slbl">Sorted ascending</span><span style="padding: 6px 10px; background: var(--surface2)" class="lbl"><button type="button" class="sh" tabindex="-1">Cost<svg class="si" width="9" height="13" viewBox="0 0 16 22" aria-hidden="true"><path class="u" d="M3 8l5-5 5 5"/><path class="d" d="M3 14l5 5 5-5"/></svg></button></span></div>
+          <div aria-sort="descending"><span class="slbl">Sorted descending</span><span style="padding: 6px 10px; background: var(--surface2)" class="lbl"><button type="button" class="sh" tabindex="-1">Cost<svg class="si" width="9" height="13" viewBox="0 0 16 22" aria-hidden="true"><path class="u" d="M3 8l5-5 5 5"/><path class="d" d="M3 14l5 5 5-5"/></svg></button></span></div>
+          <div><span class="slbl">Checkbox · off / on / mixed / disabled / focus</span><span style="display: flex; gap: 12px; padding: 6px 0"><span class="cbx" aria-hidden="true"></span><span class="cbx on" aria-hidden="true"><svg class="ck" width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 6.2l2.3 2.3 4.7-5"/></svg></span><span class="cbx mix" aria-hidden="true"><svg class="mx" width="12" height="12" viewBox="0 0 12 12"><path d="M3 6h6"/></svg></span><span class="cbx" aria-hidden="true" style="opacity: .5"></span><span class="cbx is-focus" aria-hidden="true"></span></span></div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px 16px">
+          <div style="display: flex; flex-direction: column; gap: 6px"><span class="slbl">Row · default</span><div class="dt-r" style="--cols: 40px 80px 1fr 90px; border: var(--bw) solid var(--line); border-radius: 6px; overflow: hidden"><div><span class="cbx" aria-hidden="true"></span></div><div class="mono" style="font-size: 12.5px">AL-139</div><div class="ell">Fix session lifecycle leak</div><div><span class="pill info">In progress</span></div></div></div>
+          <div style="display: flex; flex-direction: column; gap: 6px"><span class="slbl">Row · hover</span><div class="dt-r is-hover" style="--cols: 40px 80px 1fr 90px; border: var(--bw) solid var(--line); border-radius: 6px; overflow: hidden"><div><span class="cbx" aria-hidden="true"></span></div><div class="mono" style="font-size: 12.5px">AL-139</div><div class="ell">Fix session lifecycle leak</div><div><span class="pill info">In progress</span></div></div></div>
+          <div style="display: flex; flex-direction: column; gap: 6px"><span class="slbl">Row · selected (checkbox + left rule, not color alone)</span><div class="dt-r sel" style="--cols: 40px 80px 1fr 90px; border: var(--bw) solid var(--line); border-radius: 6px; overflow: hidden"><div><span class="cbx on" aria-hidden="true"><svg class="ck" width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 6.2l2.3 2.3 4.7-5"/></svg></span></div><div class="mono" style="font-size: 12.5px">AL-135</div><div class="ell">Rotate fleet SSH host keys</div><div><span class="pill bad">Blocked</span></div></div></div>
+          <div style="display: flex; flex-direction: column; gap: 6px"><span class="slbl">Row · disabled (archived, read-only)</span><div class="dt-r dis" style="--cols: 40px 80px 1fr 90px; border: var(--bw) solid var(--line); border-radius: 6px; overflow: hidden"><div><span class="cbx" aria-hidden="true" style="opacity: .5"></span></div><div class="mono" style="font-size: 12.5px">AL-097</div><div class="ell">Archive v0.7 release notes</div><div><span class="pill idle">Archived</span></div></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 · Description list + card fallback -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 20px; align-items: start">
+      <section class="card" aria-label="Description list">
+        <div class="ch"><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><h2>Description list</h2><span class="sub2">Use for: key–value facts about one record — run details, expanded rows, side panels.</span></div></div>
+        <div style="padding: 16px; display: flex; flex-direction: column; gap: 18px">
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <span class="slbl">Two-column · default (dl / dt / dd)</span>
+            <dl class="dl">
+              <dt>Run ID</dt><dd class="mono">run_8f3a21c</dd>
+              <dt>Agent</dt><dd>research-agent <span class="slbl">· Head of Research</span></dd>
+              <dt>Work item</dt><dd><a href="Backlog.dc.html" class="mono">AL-137</a> Benchmark vector stores for Knowledge</dd>
+              <dt>Status</dt><dd><span class="pill info">Running</span></dd>
+              <dt>Node</dt><dd class="mono">node-03 · ollama</dd>
+              <dt>Started</dt><dd class="mono">2026-10-10 10:41:07</dd>
+              <dt>Duration</dt><dd class="mono">3m 12s</dd>
+              <dt>Tokens</dt><dd class="mono">41,822</dd>
+              <dt>Cost</dt><dd class="mono">€0.48</dd>
+              <dt>Trigger</dt><dd>Heartbeat · every 15 min</dd>
+            </dl>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <span class="slbl">Grid · stacked pairs (expanded rows, summaries)</span>
+            <dl class="kvg" style="padding: 12px; border: var(--bw) solid var(--line); border-radius: 8px; background: var(--surface2)">
+              <div><dt>Approval</dt><dd><span class="pill warn">Pending</span></dd></div>
+              <div><dt>Requested by</dt><dd>performance-engineer</dd></div>
+              <div><dt>Amount</dt><dd class="mono">€20 → €40</dd></div>
+              <div><dt>Requested</dt><dd class="mono">Oct 10 09:40</dd></div>
+            </dl>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <span class="slbl">Inline · compact (headers, card footers)</span>
+            <dl class="kvi">
+              <div><dt>Node</dt><dd class="mono">node-04</dd></div>
+              <div><dt>Uptime</dt><dd class="mono">14d 6h</dd></div>
+              <div><dt>Containers</dt><dd class="mono">12</dd></div>
+              <div><dt>Last heartbeat</dt><dd class="mono">10:43:12</dd></div>
+              <div><dt>State</dt><dd><span class="pill bad">Unreachable</span></dd></div>
+            </dl>
+          </div>
+          <p class="sub2" style="margin: 0"><b style="font-weight: 600; color: var(--text)">Rules:</b> keys in muted text, values in body text; mono only for IDs, hashes, times and amounts. Use a real dl so screen readers pair terms with values. Max ~12 pairs — beyond that, group with headings.</p>
+        </div>
+      </section>
+
+      <section class="card" aria-label="Responsive card-list fallback">
+        <div class="ch"><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><h2>Responsive card-list fallback</h2><span class="sub2">Use for: the same table below 760px. Live — mirrors the current page, selection and filters above.</span></div></div>
+        <div style="padding: 16px; display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start">
+          <div class="frame" role="list" aria-label="Work items, narrow layout">
+            <div style="display: flex; align-items: center; gap: 8px"><strong style="font-size: 14px; font-weight: 600; flex-grow: 1">Work items</strong><span class="sub2 mono">{{countLabel}}</span></div>
+            <sc-for list="{{cardRows}}" as="r" hint-placeholder-count="4">
+              <div class="mcard {{r.cls}}" role="listitem">
+                <div style="display: flex; align-items: center; gap: 10px"><button type="button" role="checkbox" class="cbx" aria-checked="{{r.checked}}" aria-label="{{r.selLabel}}" onClick="{{r.toggleSel}}"><svg class="ck" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.2l2.3 2.3 4.7-5"/></svg></button><span class="mono sub2" style="font-size: 12px">{{r.id}}</span><span style="flex-grow: 1"></span><span class="pill {{r.stCls}}">{{r.st}}</span></div>
+                <a href="Backlog.dc.html" style="font-weight: 600; font-size: 14px; text-decoration: none; line-height: 1.35">{{r.title}}</a>
+                <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text2)"><span class="av {{r.avCls}}" aria-hidden="true">{{r.av}}</span><span class="ell">{{r.who}}</span><span style="flex-grow: 1"></span><span class="pb {{r.pCls}}" aria-hidden="true"><i></i><i></i><i></i><i></i></span>{{r.prio}}</div>
+                <div style="display: flex; gap: 12px; font-size: 12px; color: var(--muted); border-top: var(--bw) solid var(--line); padding-top: 8px"><span class="mono">{{r.when}}</span><span style="flex-grow: 1"></span><span class="mono">{{r.runs}} runs</span><span class="mono" style="color: var(--text)">{{r.cost}}</span></div>
+              </div>
+            </sc-for>
+            <sc-if value="{{noCards}}" hint-placeholder-val="{{ false }}"><p class="sub2" style="margin: 0; text-align: center; padding: 16px 0">Nothing to show in this state.</p></sc-if>
+            <div style="display: flex; align-items: center; gap: 8px"><button type="button" class="btn sm" aria-disabled="{{pg.prevDis}}" onClick="{{pg.prev}}" aria-label="Previous page" style="opacity: {{pg.prevOp}}">‹</button><span class="sub2" style="flex-grow: 1; text-align: center">Page {{pg.page}} of {{pg.pages}}</span><button type="button" class="btn sm" aria-disabled="{{pg.nextDis}}" onClick="{{pg.next}}" aria-label="Next page" style="opacity: {{pg.nextOp}}">›</button></div>
+          </div>
+          <ul style="flex: 1 1 180px; margin: 0; padding-left: 18px; font-size: 13px; color: var(--text2); display: flex; flex-direction: column; gap: 8px">
+            <li>One card per row; keep ID, title, status and the one number people compare (cost).</li>
+            <li>Secondary columns collapse into a meta line; hidden columns stay hidden.</li>
+            <li>Sort, filters and search move into a sheet; the bulk bar docks to the bottom.</li>
+            <li>Row actions stay reachable — the card title opens the record.</li>
+          </ul>
+        </div>
+      </section>
+    </div>
+
+    <!-- 4 · Rules -->
+    <section class="card" aria-label="Rules">
+      <div class="ch"><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><h2>Rules</h2><span class="sub2">When to reach for a table, and how to keep it readable in all four themes.</span></div></div>
+      <div class="rules">
+        <div>
+          <h3>Table vs. card grid</h3>
+          <ul>
+            <li><b style="font-weight: 600; color: var(--text)">Table</b> when people compare the same 4+ attributes across many records, sort, or act in bulk (work items, agent runs, secrets, members).</li>
+            <li><b style="font-weight: 600; color: var(--text)">Card grid</b> when records are few (under ~12), visual, or heterogeneous (agents, plugins, portfolios) and each card has its own primary action.</li>
+            <li>Never both for the same data on one screen; offer a view switch instead.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Alignment &amp; type</h3>
+          <ul>
+            <li>Numbers (runs, cost, tokens, durations) right-aligned with tabular figures, header aligned the same way.</li>
+            <li>Mono for IDs, hashes, timestamps, durations and amounts; sans for titles and names.</li>
+            <li>Text left-aligned; truncate titles with ellipsis and full text on the detail view.</li>
+            <li>Status is a pill with words — never a colored dot alone.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Behaviour &amp; a11y</h3>
+          <ul>
+            <li>Sortable headers are buttons inside the header cell; the cell carries aria-sort. One sort key at a time.</li>
+            <li>Select-all covers the current page and shows mixed when partial; offer “select all matching”.</li>
+            <li>Menus close on Esc and on selection; bulk results announce in an aria-live region with Undo.</li>
+            <li>Loading sets aria-busy; errors use role="alert" and keep filters intact.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+    <nav aria-label="Design system pages" class="card" style="grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px; padding: 12px">
+      <a href="ComponentsForms.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">← Previous</span><span style="font-weight: 600; color: var(--text)">Form controls</span></a>
+      <a href="ComponentsDialogs.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">Next →</span><span style="font-weight: 600; color: var(--text)">Dialogs</span></a>
+    </nav>
+  </main>
+  </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"$preview":{"width":1440,"height":2780}}'>
+const THEMES = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+const ME = 'Mārtiņš V.';
+const ROWS = [
+  { id: 'AL-142', title: 'Publish security artifact pack', who: 'documentation-engineer', kind: 'Agent', st: 'review', prio: 3, runs: 6, cost: 2.2, ts: '10-10 10:44', node: 'node-02', tok: '48,210', goal: 'Release v0.9 hardening', note: 'Bundles SBOM, threat model and pen-test summary. Waiting on a data_access approval before publishing to Knowledge.' },
+  { id: 'AL-139', title: 'Fix session lifecycle leak in chat worker', who: 'code-agent', kind: 'Agent', st: 'progress', prio: 3, runs: 14, cost: 9.8, ts: '10-10 10:31', node: 'node-01', tok: '312,904', goal: 'Chat reliability', note: 'Sessions are not released after websocket close. PR open; tests passing on node-01.' },
+  { id: 'AL-137', title: 'Benchmark vector stores for Knowledge', who: 'research-agent', kind: 'Agent', st: 'progress', prio: 2, runs: 21, cost: 12.4, ts: '10-10 10:12', node: 'node-03', tok: '596,118', goal: 'Knowledge v2', note: 'Comparing ChromaDB, Qdrant and pgvector on recall@10 and p95 latency with the ADR corpus.' },
+  { id: 'AL-135', title: 'Rotate fleet SSH host keys', who: 'devops-engineer', kind: 'Agent', st: 'blocked', prio: 4, runs: 3, cost: 0.9, ts: '10-10 09:58', node: 'node-04', tok: '22,540', goal: 'Fleet security baseline', note: 'Blocked: node-04 unreachable since 10:43. Ansible play halted after 3 of 5 nodes.' },
+  { id: 'AL-133', title: 'Raise NPU worker budget to €40', who: ME, kind: 'Human', st: 'review', prio: 2, runs: 0, cost: 0, ts: '10-10 09:40', node: '—', tok: '0', goal: 'Inference cost control', note: 'Budget increase requested by performance-engineer; needs owner approval.' },
+  { id: 'AL-131', title: 'Migrate node-04 to Docker Compose v2', who: 'devops-engineer', kind: 'Agent', st: 'blocked', prio: 3, runs: 5, cost: 1.75, ts: '10-09 17:20', node: 'node-04', tok: '61,007', goal: 'Fleet security baseline', note: 'Blocked by AL-135 — host keys must rotate before the compose migration.' },
+  { id: 'AL-128', title: 'Draft Q4 onboarding guide for new agents', who: ME, kind: 'Human', st: 'open', prio: 1, runs: 0, cost: 0, ts: '10-09 15:02', node: '—', tok: '0', goal: 'Agent onboarding', note: 'Outline exists in Knowledge; needs role descriptions and budget defaults.' },
+  { id: 'AL-126', title: 'Profile OpenVINO inference latency', who: 'performance-engineer', kind: 'Agent', st: 'progress', prio: 2, runs: 9, cost: 18.2, ts: '10-09 11:47', node: 'node-05', tok: '204,331', goal: 'Inference cost control', note: 'Agent is at 91% of its €20 budget — above the 80% alert threshold.' },
+  { id: 'AL-124', title: 'Review plugin permission scopes', who: ME, kind: 'Human', st: 'open', prio: 3, runs: 0, cost: 0, ts: '10-08 16:30', node: '—', tok: '0', goal: 'Release v0.9 hardening', note: 'Audit network and filesystem scopes requested by the six installed plugins.' },
+  { id: 'AL-120', title: 'Index ADR archive into Knowledge', who: 'research-agent', kind: 'Agent', st: 'done', prio: 1, runs: 11, cost: 4.6, ts: '10-08 09:05', node: 'node-03', tok: '138,960', goal: 'Knowledge v2', note: '214 ADRs chunked and embedded; retrieval spot-checked.' }
+];
+const STATUS = { open: ['Open', 'idle'], progress: ['In progress', 'info'], review: ['In review', 'warn'], blocked: ['Blocked', 'bad'], done: ['Done', 'ok'] };
+const ST_ORDER = { blocked: 0, progress: 1, review: 2, open: 3, done: 4 };
+const PRIO = { 4: 'Urgent', 3: 'High', 2: 'Medium', 1: 'Low' };
+const COLS = [['who', 'Assignee', 'minmax(200px,1.2fr)'], ['st', 'Status', '124px'], ['prio', 'Priority', '110px'], ['runs', 'Runs', '72px'], ['cost', 'Cost', '92px'], ['ts', 'Updated', '132px']];
+const DEFAULT_VIS = { who: true, st: true, prio: true, runs: true, cost: true, ts: true };
+const SORTS = { id: (r) => r.id, title: (r) => r.title.toLowerCase(), who: (r) => r.who.toLowerCase(), st: (r) => ST_ORDER[r.st], prio: (r) => r.prio, runs: (r) => r.runs, cost: (r) => r.cost, ts: (r) => r.ts };
+const DESC_FIRST = { prio: 1, runs: 1, cost: 1, ts: 1 };
+const FILTERS = {
+  me: ['Assignee', 'me', (r) => r.who === ME],
+  open: ['Status', 'not Done', (r) => r.st !== 'done'],
+  blocked: ['Status', 'Blocked', (r) => r.st === 'blocked'],
+  review: ['Status', 'In review', (r) => r.st === 'review'],
+  agents: ['Assignee type', 'Agent', (r) => r.kind === 'Agent'],
+  high: ['Priority', 'High or Urgent', (r) => r.prio >= 3]
+};
+const VIEWS = [['all', 'All items', []], ['mine', 'My open items', ['me', 'open']], ['blocked', 'Blocked', ['blocked']], ['agents', 'Agents only', ['agents']]];
+const ASSIGNEES = [ME, 'code-agent', 'research-agent', 'devops-engineer'];
+const MODES = [['data', 'Data'], ['loading', 'Loading'], ['empty', 'Empty'], ['error', 'Error']];
+
+function initials(who, kind) {
+  if (kind === 'Human') return 'MV';
+  return who.split('-').map((s) => s.charAt(0)).join('').toUpperCase().slice(0, 2);
+}
+function fmt(ts) { return 'Oct ' + Number(ts.slice(3, 5)) + ' ' + ts.slice(6); }
+
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+  }
+  st() { return this.state || {}; }
+  menuToggle(name) { const m = this.st().menu || ''; this.setState({ menu: m === name ? '' : name }); }
+  setChips(chips) { this.setState({ chips: chips, page: 1, menu: '' }); }
+  patchIds(ids, fields, msg) {
+    const patch = Object.assign({}, this.st().patch || {});
+    ids.forEach((id) => { patch[id] = Object.assign({}, patch[id] || {}, fields); });
+    this.setState({ patch: patch, menu: '', msg: msg, undo: null });
+  }
+  deleteIds(ids) {
+    const del = Object.assign({}, this.st().del || {});
+    const sel = Object.assign({}, this.st().sel || {});
+    ids.forEach((id) => { del[id] = true; delete sel[id]; });
+    this.setState({ del: del, sel: sel, menu: '', msg: ids.length + (ids.length === 1 ? ' item' : ' items') + ' deleted.', undo: ids });
+  }
+  undo() {
+    const ids = this.st().undo || [];
+    const del = Object.assign({}, this.st().del || {});
+    ids.forEach((id) => { delete del[id]; });
+    this.setState({ del: del, undo: null, msg: ids.length + ' restored.' });
+  }
+  renderVals() {
+    const st = this.st();
+    const cur = st.theme || this.props.theme || 'light';
+    const sortKey = st.sortKey || 'ts';
+    const sortDir = st.sortDir || 'desc';
+    const sel = st.sel || {};
+    const exp = st.exp || {};
+    const del = st.del || {};
+    const patch = st.patch || {};
+    const vis = st.vis || DEFAULT_VIS;
+    const chips = st.chips || [];
+    const q = st.q || '';
+    const per = st.per || 5;
+    const mode = st.mode || 'data';
+    const menu = st.menu || '';
+    const dens = st.dens || 'comfortable';
+
+    const all = mode === 'empty' ? [] : ROWS.filter((r) => !del[r.id]).map((r) => Object.assign({}, r, patch[r.id] || {}));
+    const ql = q.trim().toLowerCase();
+    const passChips = (r, list) => list.every((c) => FILTERS[c][2](r));
+    const list = all.filter((r) => passChips(r, chips) && (!ql || (r.id + ' ' + r.title + ' ' + r.who).toLowerCase().indexOf(ql) >= 0));
+    const dir = sortDir === 'asc' ? 1 : -1;
+    const key = SORTS[sortKey];
+    list.sort((a, b) => { const x = key(a); const y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * dir; });
+    const total = list.length;
+    const pages = Math.max(1, Math.ceil(total / per));
+    const page = Math.min(st.page || 1, pages);
+    const pageRows = list.slice((page - 1) * per, page * per);
+    const pageIds = pageRows.map((r) => r.id);
+    const liveIds = all.map((r) => r.id);
+    const selIds = Object.keys(sel).filter((id) => sel[id] && liveIds.indexOf(id) >= 0);
+    const nSelPage = pageIds.filter((id) => sel[id]).length;
+    const headChecked = nSelPage === 0 ? 'false' : (nSelPage === pageIds.length ? 'true' : 'mixed');
+    const listIds = list.map((r) => r.id);
+
+    const visCols = COLS.filter((c) => vis[c[0]]);
+    const gridCols = '40px 36px 84px minmax(240px,2fr) ' + visCols.map((c) => c[2]).join(' ') + ' 52px';
+
+    const hd = {};
+    Object.keys(SORTS).forEach((k) => {
+      hd[k] = {
+        aria: sortKey === k ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none',
+        click: () => {
+          if (sortKey === k) this.setState({ sortDir: sortDir === 'asc' ? 'desc' : 'asc', page: 1 });
+          else this.setState({ sortKey: k, sortDir: DESC_FIRST[k] ? 'desc' : 'asc', page: 1 });
+        }
+      };
+    });
+
+    const viewMatch = VIEWS.filter((v) => v[2].slice().sort().join(',') === chips.slice().sort().join(','))[0];
+    const showTable = mode === 'loading' || (mode === 'data' && total > 0);
+    const emptyFilter = mode === 'data' && total === 0;
+    const isData = mode === 'data' && total > 0;
+
+    const mk = (r, idx) => {
+      const id = r.id;
+      const checked = !!sel[id];
+      const isExp = !!exp[id];
+      const isMenu = menu === 'row:' + id;
+      return {
+        id: id, title: r.title, who: r.who, kind: r.kind,
+        av: initials(r.who, r.kind), avCls: r.kind === 'Human' ? 'h' : '',
+        st: STATUS[r.st][0], stCls: STATUS[r.st][1],
+        prio: PRIO[r.prio], pCls: 'p' + r.prio,
+        runs: String(r.runs), cost: '€' + r.cost.toFixed(2), when: fmt(r.ts),
+        node: r.node, tok: r.tok, goal: r.goal, note: r.note,
+        vis: vis,
+        cls: checked ? 'sel' : '',
+        checked: checked ? 'true' : 'false',
+        selLabel: 'Select ' + id,
+        toggleSel: () => { const s = Object.assign({}, this.st().sel || {}); if (s[id]) delete s[id]; else s[id] = true; this.setState({ sel: s }); },
+        isExp: isExp, exp: isExp ? 'true' : 'false',
+        expLabel: (isExp ? 'Collapse ' : 'Expand ') + id + ' details',
+        toggleExp: () => { const e = Object.assign({}, this.st().exp || {}); e[id] = !e[id]; this.setState({ exp: e }); },
+        isMenu: isMenu, menuOpen: isMenu ? 'true' : 'false',
+        menuLabel: 'Actions for ' + id,
+        menuCls: pageRows.length > 3 && idx >= pageRows.length - 2 ? 'up' : '',
+        toggleMenu: () => this.menuToggle('row:' + id),
+        acts: [
+          { label: isExp ? 'Hide details' : 'Show details', cls: '', pick: () => { const e = Object.assign({}, this.st().exp || {}); e[id] = !e[id]; this.setState({ exp: e, menu: '' }); } },
+          { label: 'Assign to me', cls: '', pick: () => this.patchIds([id], { who: ME, kind: 'Human' }, id + ' assigned to ' + ME + '.') },
+          { label: 'Mark as done', cls: '', pick: () => this.patchIds([id], { st: 'done' }, id + ' marked Done.') },
+          { label: 'Delete', cls: 'dng', pick: () => this.deleteIds([id]) }
+        ]
+      };
+    };
+    const rows = isData ? pageRows.map(mk) : [];
+
+    const SK_W = ['78%', '62%', '70%', '55%', '66%'];
+    const skRows = SK_W.map((w) => ({ w: w, cells: visCols.map((c) => ({ cls: (c[0] === 'runs' || c[0] === 'cost') ? 'num' : '', w: c[0] === 'who' ? '120px' : c[0] === 'st' ? '72px' : '44px' })) }));
+
+    return {
+      theme: cur,
+      themes: THEMES.map(([id, label]) => ({ label: label, cls: cur === id ? 'on' : '', pressed: cur === id ? 'true' : 'false', pick: () => this.setState({ theme: id }) })),
+      onKey: (e) => { if (e && e.key === 'Escape' && (this.st().menu || '')) this.setState({ menu: '' }); },
+
+      modes: MODES.map(([id, label]) => ({ label: label, cls: mode === id ? 'on' : '', pressed: mode === id ? 'true' : 'false', pick: () => this.setState({ mode: id, menu: '', page: 1 }) })),
+
+      viewLabel: viewMatch ? viewMatch[1] : 'Custom',
+      isViews: menu === 'views', viewsOpen: menu === 'views' ? 'true' : 'false',
+      toggleViews: () => this.menuToggle('views'),
+      views: VIEWS.map((v) => ({ label: v[1], checked: viewMatch && viewMatch[0] === v[0] ? 'true' : 'false', count: String(all.filter((r) => passChips(r, v[2])).length), pick: () => this.setChips(v[2].slice()) })),
+
+      q: q,
+      onSearch: (e) => { const v = e && e.target ? e.target.value : ''; this.setState({ q: v, page: 1 }); },
+
+      dens: [['comfortable', 'Comfortable'], ['compact', 'Compact']].map(([id, label]) => ({ label: label, cls: dens === id ? 'on' : '', pressed: dens === id ? 'true' : 'false', pick: () => this.setState({ dens: id }) })),
+      densCls: dens === 'compact' ? 'compact' : '',
+
+      isCols: menu === 'cols', colsOpen: menu === 'cols' ? 'true' : 'false',
+      toggleCols: () => this.menuToggle('cols'),
+      visCount: (visCols.length + 2) + '/8',
+      colOpts: COLS.map((c) => ({ label: c[1], checked: vis[c[0]] ? 'true' : 'false', toggle: () => { const v = Object.assign({}, this.st().vis || DEFAULT_VIS); v[c[0]] = !v[c[0]]; this.setState({ vis: v }); } })),
+      resetCols: () => this.setState({ vis: DEFAULT_VIS, menu: '' }),
+
+      chips: chips.map((c) => ({ k: FILTERS[c][0], v: FILTERS[c][1], rmLabel: 'Remove filter ' + FILTERS[c][0] + ': ' + FILTERS[c][1], remove: () => this.setChips(chips.filter((x) => x !== c)) })),
+      hasChips: chips.length > 0,
+      clearChips: () => this.setChips([]),
+      isAdd: menu === 'add', addOpen: menu === 'add' ? 'true' : 'false',
+      toggleAdd: () => this.menuToggle('add'),
+      addOpts: Object.keys(FILTERS).filter((k) => chips.indexOf(k) < 0).map((k) => ({ label: FILTERS[k][0] + ': ' + FILTERS[k][1], count: String(all.filter((r) => passChips(r, chips.concat([k]))).length), pick: () => this.setChips(chips.concat([k])) })),
+      noAddOpts: Object.keys(FILTERS).every((k) => chips.indexOf(k) >= 0),
+      countLabel: total + ' of ' + all.length + ' items',
+
+      hasSel: selIds.length > 0 && mode === 'data',
+      selCount: String(selIds.length),
+      canSelAll: headChecked === 'true' && selIds.length < total,
+      selAllLabel: 'Select all ' + total + ' matching',
+      selectAllMatching: () => { const s = Object.assign({}, this.st().sel || {}); listIds.forEach((id) => { s[id] = true; }); this.setState({ sel: s }); },
+      clearSel: () => this.setState({ sel: {}, menu: '' }),
+      isBAssign: menu === 'bAssign', bAssignOpen: menu === 'bAssign' ? 'true' : 'false',
+      toggleBAssign: () => this.menuToggle('bAssign'),
+      assignOpts: ASSIGNEES.map((name) => { const kind = name === ME ? 'Human' : 'Agent'; return { label: name, av: initials(name, kind), avCls: kind === 'Human' ? 'h' : '', pick: () => this.patchIds(selIds, { who: name, kind: kind }, selIds.length + ' assigned to ' + name + '.') }; }),
+      isBStatus: menu === 'bStatus', bStatusOpen: menu === 'bStatus' ? 'true' : 'false',
+      toggleBStatus: () => this.menuToggle('bStatus'),
+      statusOpts: Object.keys(STATUS).map((k) => ({ label: STATUS[k][0], cls: STATUS[k][1], pick: () => this.patchIds(selIds, { st: k }, selIds.length + ' set to ' + STATUS[k][0] + '.') })),
+      bulkDelete: () => this.deleteIds(selIds),
+
+      showTable: showTable,
+      isLoading: mode === 'loading',
+      busy: mode === 'loading' ? 'true' : 'false',
+      isData: isData,
+      rowCount: String(total + 1),
+      gridCols: gridCols,
+      vis: vis,
+      hd: hd,
+      headChecked: headChecked,
+      headLabel: 'Select all ' + pageIds.length + ' rows on this page',
+      toggleAll: () => {
+        const s = Object.assign({}, this.st().sel || {});
+        if (headChecked === 'true') pageIds.forEach((id) => { delete s[id]; });
+        else pageIds.forEach((id) => { s[id] = true; });
+        this.setState({ sel: s });
+      },
+      skRows: skRows,
+      rows: rows,
+      cardRows: rows.slice(0, 4),
+      noCards: rows.length === 0,
+
+      showFoot: isData,
+      perOpts: [5, 10, 25].map((n) => ({ label: String(n), cls: per === n ? 'on' : '', pressed: per === n ? 'true' : 'false', pick: () => this.setState({ per: n, page: 1 }) })),
+      pg: {
+        page: String(page), pages: String(pages),
+        range: total ? ((page - 1) * per + 1) + '–' + Math.min(page * per, total) + ' of ' + total : '0 of 0',
+        prevDis: page <= 1 ? 'true' : 'false', nextDis: page >= pages ? 'true' : 'false',
+        prevOp: page <= 1 ? '0.45' : '1', nextOp: page >= pages ? '0.45' : '1',
+        prev: () => { if (page > 1) this.setState({ page: page - 1, menu: '' }); },
+        next: () => { if (page < pages) this.setState({ page: page + 1, menu: '' }); }
+      },
+
+      showEmpty: mode === 'empty' || emptyFilter,
+      emptyIsFilter: emptyFilter,
+      emptyIsNew: mode === 'empty',
+      emptyTitle: emptyFilter ? 'No work items match these filters' : 'No work items yet',
+      emptyBody: emptyFilter ? ((ql ? 'Nothing matches “' + q.trim() + '”' : 'Nothing matches') + (chips.length ? ' with ' + chips.length + (chips.length === 1 ? ' filter' : ' filters') + ' applied.' : '.') + ' Try removing a filter or a saved view.') : 'Work items appear here when you or an agent creates one from Backlog, CEO Chat or an automation.',
+      clearAll: () => this.setState({ chips: [], q: '', page: 1 }),
+
+      showError: mode === 'error',
+      retry: () => { this.setState({ mode: 'loading' }); setTimeout(() => this.setState({ mode: 'data' }), 1100); },
+
+      msg: st.msg || '',
+      canUndo: !!(st.undo && st.undo.length),
+      undo: () => this.undo()
+    };
+  }
+}
+</script>
+</body>
+</html>

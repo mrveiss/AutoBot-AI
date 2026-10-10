@@ -1,0 +1,1132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot Components · Layout</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.wgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:start}
+.wgrid>.card{min-width:0;position:relative;display:flex;flex-direction:column}
+.card.editing{outline:1.5px dashed var(--muted);outline-offset:3px}
+.card.editing[draggable="true"]{cursor:grab}
+.grip{display:inline-grid;place-items:center;width:18px;height:28px;cursor:grab;flex:none}
+.wtools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto}
+.mbtn{width:30px;height:30px;padding:0;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);display:inline-grid;place-items:center;cursor:pointer;flex:none}
+.mbtn:hover{background:var(--surface2)}
+.mbtn[aria-disabled="true"]{opacity:.45;cursor:default}
+.segg{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.segg .seg{height:26px;padding:0 8px}
+.hint{margin:0;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;border:var(--bw) dashed var(--border);background:var(--surface2);font-size:13px;color:var(--text2)}
+.rsz{position:absolute;right:5px;bottom:5px;fill:none;stroke:var(--muted);stroke-width:1.5;stroke-linecap:round;pointer-events:none}
+@media (max-width:760px){.wgrid>.card{grid-column:1 / -1 !important}}
+.sub2{font-size:12.5px;color:var(--muted)}
+/* ---- Components · Layout & utility ---- */
+.specbar{flex:1 1 100%;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:14px clamp(16px,2.5vw,32px);background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+.specbar h1{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.use{font-size:12.5px;color:var(--muted);font-weight:400}
+.st{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.rules{margin:0;padding:12px 16px;border-top:var(--bw) solid var(--line);font-size:12.5px;color:var(--text2);line-height:1.55}
+.bd{padding:16px}
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:20px;align-items:start}
+.col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.stage{position:relative;border:var(--bw) dashed var(--border);border-radius:10px;background:var(--bg)}
+.fv{outline:3px solid var(--focus);outline-offset:2px}
+.state-row{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end}
+.state-row>div{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.xbtn{width:28px;height:28px;border-radius:6px;border:0;background:transparent;display:grid;place-items:center;cursor:pointer;color:var(--text);padding:0;flex:none}
+.xbtn:hover{background:var(--surface2)}
+.kbd{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:1px 5px;border-radius:4px;border:var(--bw) solid var(--border);background:var(--surface2);color:var(--text2);line-height:1.4}
+.split{display:flex;height:320px;border:var(--bw) solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface)}
+.split.v{flex-direction:column;height:400px}
+.pane{min-width:0;min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.pane-h{display:flex;align-items:center;gap:8px;height:38px;padding:0 6px 0 12px;border-bottom:var(--bw) solid var(--line);font-size:12.5px;font-weight:600;color:var(--text2);flex:none;white-space:nowrap;box-sizing:border-box}
+.hdl{flex:none;display:grid;place-items:center;background:var(--surface2);touch-action:none;user-select:none;box-sizing:border-box}
+.hdl.x{width:9px;cursor:col-resize;border-left:var(--bw) solid var(--border);border-right:var(--bw) solid var(--border)}
+.hdl.y{height:9px;cursor:row-resize;border-top:var(--bw) solid var(--border);border-bottom:var(--bw) solid var(--border)}
+.hdl .knob{border-radius:99px;background:var(--muted)}
+.hdl.x .knob{width:3px;height:26px}.hdl.y .knob{width:26px;height:3px}
+.hdl:hover,.hdl.hov{background:var(--tile)}.hdl:hover .knob,.hdl.hov .knob{background:var(--text)}
+.hdl.drag{background:var(--accent);border-color:var(--accent)}.hdl.drag .knob{background:var(--on-primary)}
+.hdl.dis{cursor:not-allowed;opacity:.45}
+.rail{flex:0 0 44px;display:flex;flex-direction:column;align-items:center;gap:10px;padding-top:6px;background:var(--surface2);font-size:12px;color:var(--text2)}
+.rail span{writing-mode:vertical-rl;font-weight:600}
+.msg{max-width:88%;padding:8px 11px;border-radius:8px;font-size:13px;line-height:1.5;border:var(--bw) solid var(--border);background:var(--surface)}
+.msg.me{align-self:flex-end;background:var(--surface2)}
+.code{font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.75;padding:8px 0;overflow:auto;flex:1 1 0;color:var(--text)}
+.code div{white-space:pre;padding-right:12px}
+.code i{display:inline-block;width:30px;text-align:right;margin-right:14px;color:var(--muted);font-style:normal}
+.code .k{color:var(--info-fg)}.code .s{color:var(--ok-fg)}
+.sa{height:300px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--muted) transparent;overscroll-behavior:contain}
+.sa::-webkit-scrollbar{width:8px;height:8px}.sa::-webkit-scrollbar-track{background:transparent}
+.sa::-webkit-scrollbar-thumb{background:var(--border);border-radius:99px;border:2px solid var(--surface)}.sa::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+.sa.x{height:auto;overflow-x:auto;overflow-y:hidden}
+.mention{font-weight:600;padding:1px 4px;border-radius:4px;text-decoration:none;cursor:pointer;border:var(--pill-b);background:var(--info-bg)}
+.th a.mention{color:var(--info-fg)}
+.hcw{position:relative;display:inline}
+.hcard{position:absolute;left:0;top:calc(100% + 8px);z-index:9;width:300px;background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px;padding:14px;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;font-weight:400;text-align:left;white-space:normal;line-height:1.45;font-size:13px;color:var(--text)}
+.hcard.static{position:static}
+.av{width:44px;height:44px;border-radius:99px;display:grid;place-items:center;font-weight:600;font-size:14px;background:var(--brand-bg);color:var(--brand-fg);flex:none}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:11.5px;color:var(--muted)}
+.stats b{display:block;font-size:14px;color:var(--text);font-weight:600}
+.sk{background:var(--bar-track);border:1px solid var(--line);border-radius:4px;box-sizing:border-box}
+.mbar{display:flex;align-items:center;gap:2px;height:40px;padding:0 6px;background:var(--surface);border-bottom:var(--bw) solid var(--border);border-radius:10px 10px 0 0}
+.mbi{position:relative}
+.mbt{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;font:inherit;font-size:13px;font-weight:500;color:var(--text);cursor:pointer}
+.mbt:hover{background:var(--surface2)}
+.mbt[aria-expanded="true"]{background:var(--surface2);outline:var(--bw) solid var(--border)}
+.menu{position:absolute;left:0;top:calc(100% + 4px);z-index:8;background:var(--surface);border:var(--bw) solid var(--border);border-radius:8px;padding:4px;min-width:250px;box-sizing:border-box;display:flex;flex-direction:column}
+.mi{display:flex;align-items:center;gap:8px;height:32px;padding:0 10px 0 6px;border-radius:5px;border:0;background:transparent;width:100%;box-sizing:border-box;font:inherit;font-size:13.5px;color:var(--text);cursor:pointer;text-align:left}
+.mi:hover,.mi:focus{background:var(--surface2)}
+.mi[aria-disabled="true"]{opacity:.45;cursor:not-allowed}
+.mi.dng{color:var(--alert-text)}
+.ck{width:16px;flex:none;text-align:center;font-size:12px;font-weight:700}
+.mk{margin-left:auto;padding-left:16px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted)}
+.msep{height:var(--bw);background:var(--line);margin:4px 2px}
+.wfc{position:relative;height:250px;background:var(--bg);border-radius:0 0 10px 10px;overflow:hidden}
+.node{position:absolute;display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border:var(--bw) solid var(--border);border-radius:8px;font-size:12.5px;font-weight:600}
+.node small{display:block;font-weight:400;color:var(--muted);font-size:11.5px}
+.edge{position:absolute;height:0;border-top:1.5px solid var(--muted)}
+.nmb{display:flex;align-items:center;gap:2px;height:52px;padding:0 14px;background:var(--surface);border-bottom:var(--bw) solid var(--border);border-radius:10px 10px 0 0}
+.nmt{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 10px;border-radius:6px;border:0;background:transparent;font:inherit;font-size:13.5px;font-weight:500;color:var(--text2);cursor:pointer;text-decoration:none}
+.th .nmt{color:var(--text2)}
+.nmt:hover,.th .nmt:hover{background:var(--surface2);color:var(--text)}
+.nmt[aria-expanded="true"]{color:var(--text);background:var(--surface2);font-weight:600}
+.nmt .ic{transition:transform .15s}
+.nmt[aria-expanded="true"] .ic{transform:rotate(180deg)}
+.mega{position:absolute;left:14px;right:14px;top:58px;z-index:8;background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) 270px;overflow:hidden}
+.mega.sm{right:auto;width:560px;grid-template-columns:1fr 1fr}
+.mg{padding:12px 8px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.mg .sect{margin:4px 8px 6px}
+.th a.ml{display:flex;gap:10px;align-items:flex-start;padding:8px;border-radius:7px;text-decoration:none;color:var(--text)}
+.th a.ml:hover{background:var(--surface2);color:var(--text)}
+.ml b{display:block;font-size:13.5px;font-weight:600}.ml em{display:block;font-style:normal;font-size:12.5px;color:var(--muted);line-height:1.4}
+.mfeat{background:var(--surface2);border-left:var(--bw) solid var(--line);padding:16px;display:flex;flex-direction:column;gap:10px;font-size:13px;line-height:1.5;color:var(--text2)}
+.tg{height:34px;min-width:34px;padding:0 10px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text2);font:inherit;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;box-sizing:border-box}
+.tg:hover,.tg.hov{background:var(--surface2);color:var(--text)}
+.th .tg[aria-pressed="true"]{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .tg[aria-pressed="true"] .ic{stroke:var(--on-primary)}
+.tg:disabled{opacity:.45;cursor:not-allowed}
+.tg.sm{height:28px;min-width:28px;padding:0 8px;font-size:12px}
+.tgg{display:inline-flex;gap:2px;padding:2px;border-radius:8px;border:var(--bw) solid var(--border);background:var(--surface2)}
+.tgg .tg{border-color:transparent;background:transparent}
+.gb{font-weight:700}.gi{font-style:italic;font-family:Georgia,serif}.gc{font-family:'IBM Plex Mono',monospace;font-size:12px}
+.fb{font-weight:700}.fi{font-style:italic}.fc{font-family:'IBM Plex Mono',monospace}
+.car{position:relative;overflow:hidden;border:var(--bw) solid var(--border);border-radius:10px;background:var(--surface)}
+.track{display:flex;transition:transform .35s ease}
+.slide{flex:0 0 100%;box-sizing:border-box;display:grid;grid-template-columns:200px 1fr;gap:28px;align-items:center;padding:24px 28px}
+.slide h3{margin:0;font-size:18px;font-weight:600}.slide p{margin:0;font-size:13.5px;line-height:1.55;color:var(--text2);max-width:520px}
+@media (prefers-reduced-motion:reduce){.track,.nmt .ic{transition:none}}
+.cdb{width:24px;height:24px;border:0;background:transparent;padding:0;display:grid;place-items:center;cursor:pointer}
+.cdot{width:9px;height:9px;border-radius:99px;border:1.5px solid var(--stroke);box-sizing:border-box}
+.cdb.on .cdot{background:var(--stroke);width:20px}
+.es{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:22px 18px 24px}
+.es h3{margin:0;font-size:15px;font-weight:600}.es p{margin:0;font-size:13px;color:var(--text2);line-height:1.5;max-width:300px}
+.ar{position:relative;overflow:hidden;border:var(--bw) solid var(--border);border-radius:8px;background:var(--tile);box-sizing:border-box}
+.ar-tag{position:absolute;left:8px;top:8px;font-family:'IBM Plex Mono',monospace;font-size:11px;padding:1px 6px;border-radius:4px;background:var(--surface);border:var(--bw) solid var(--border);color:var(--text2);z-index:2}
+.li{display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:var(--bw) solid var(--line);background:var(--surface);box-sizing:border-box;border-left:3px solid transparent}
+.li:last-child{border-bottom:0}
+.li.s{min-height:36px;gap:10px}.li.m{min-height:52px}.li.l{min-height:68px}
+.li.hov{background:var(--surface2)}.li.sel{background:var(--surface2);border-left-color:var(--primary)}.li.dis{opacity:.5}
+.lt{flex-grow:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.lt b{font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pos{position:relative;display:inline-flex}
+.num{width:20px;height:20px;border-radius:99px;background:var(--accent);color:var(--on-primary);font-size:11px;font-weight:700;display:grid;place-items:center;flex:none;font-style:normal}
+.pos>.num{position:absolute;top:-24px;left:50%;margin-left:-10px}
+.wf{aspect-ratio:16/10;border:var(--bw) solid var(--border);border-radius:8px;background:var(--bg);overflow:hidden;display:flex;flex-direction:column;position:relative}
+.wf .n{height:12px;flex:none;background:var(--surface);border-bottom:var(--bw) solid var(--border);display:flex;align-items:center;gap:4px;padding:0 6px}
+.wf .n i{width:14px;height:3px;border-radius:2px;background:var(--line)}
+.wf .n i:first-child{width:8px;height:6px;background:var(--primary)}
+.wb{background:var(--surface);border:var(--bw) solid var(--border);border-radius:3px;box-sizing:border-box}
+.wb.t{background:var(--tile)}.wb.p{background:var(--primary);border-color:var(--primary)}
+.wl{height:4px;border-radius:2px;background:var(--line)}
+.wl.h{height:7px;background:var(--text2)}
+.wr{display:flex;gap:5px;align-items:center;padding:4px 6px;border-bottom:var(--bw) solid var(--line)}
+.wr:last-child{border-bottom:0}
+.wr .wb.t{width:9px;height:9px;flex:none}
+.ann{position:absolute;font-family:'IBM Plex Mono',monospace;font-size:9.5px;line-height:1;padding:2px 4px;border-radius:3px;border:1px dashed var(--accent);color:var(--alert-text);background:var(--surface);white-space:nowrap;z-index:2}
+.gcol{background:var(--i2t);border:1px dashed var(--accent);height:44px;box-sizing:border-box}
+.spx{background:var(--i2t);border:1px dashed var(--accent);box-sizing:border-box}
+.fig b{display:block;font-size:13.5px;font-weight:600}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <a href="ThemeManager.dc.html" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon" aria-label="Plugins" title="Plugins"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon" aria-label="Secrets" title="Secrets"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" title="Preferences"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <a href="AdminUsers.dc.html" class="icon" aria-label="Admin panel" title="Admin panel"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <button type="button" aria-label="Profile menu" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer">MV</button>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+  <aside class="sub" aria-label="Design system" style="flex: 1 1 230px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+    <a href="DesignSystem.dc.html" style="font-weight: 600; color: var(--text)">AutoBot Design System</a>
+    <span class="sub2" style="padding: 0 13px 4px">v1 · 4 themes</span>
+    <p class="sect">Overview</p>
+    <a href="DesignSystem.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z" class="i1"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z" class="it1"/></svg>Introduction</a>
+    <p class="sect">Foundations</p>
+    <a href="ComponentsStates.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4" class="i3"/><circle cx="16" cy="9" r="4" class="i2"/><circle cx="12" cy="16" r="4" class="i1"/></svg>Tokens &amp; states</a>
+    <a href="ComponentsGrid.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5" class="i1"/><rect x="13" y="4" width="7" height="7" rx="1.5" class="iw"/><rect x="4" y="13" width="7" height="7" rx="1.5" class="iw"/><rect x="13" y="13" width="7" height="7" rx="1.5" class="i2"/></svg>Grid, tables &amp; forms</a>
+    <a href="ComponentsCharts.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><rect x="5.5" y="11" width="3.5" height="7" class="i1"/><rect x="10.5" y="6" width="3.5" height="12" class="i2"/><rect x="15.5" y="13" width="3.5" height="5" class="i3"/></svg>Charts &amp; data viz</a>
+    <p class="sect">Components</p>
+    <a href="ComponentsForms.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4" class="i1"/><circle cx="16.5" cy="12" r="2.5" class="iw"/></svg>Form controls</a>
+    <a href="ComponentsTable.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="iw"/><path d="M4 10h16M4 14.5h16M10 10v9"/></svg>Data table</a>
+    <a href="ComponentsDialogs.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="it1"/><rect x="6" y="8" width="12" height="9" rx="1.5" class="iw"/></svg>Dialogs</a>
+    <a href="ComponentsOverlays.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" class="i2"/><path d="M10 21h4"/></svg>Overlays &amp; feedback</a>
+    <a href="ComponentsTooltips.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10h-7l-4 4v-4H4z" class="it1"/><path d="M8 10h8"/></svg>Tooltips</a>
+    <a href="ComponentsCommand.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" class="iw"/><path d="M7 10l3 2-3 2M12 15h5"/></svg>Command menu</a>
+    <a href="ComponentsNavigation.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M15 9l-2 4-4 2 2-4z" class="i3"/></svg>Navigation</a>
+    <a href="ComponentsLayout.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="iw"/><path d="M9 4v16M9 10h12"/></svg>Layout &amp; utility</a>
+    <a href="ComponentsChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h12v9H8l-3 3v-3H3z" class="i1"/><path d="M15 9h6v8h-2v3l-3-3h-5v-3"/></svg>Chat &amp; agent</a>
+    <p class="sect">Patterns</p>
+    <a href="FileBrowser.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="i2"/></svg>File browser</a>
+    <a href="Mailbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" class="iw"/><path d="M3 7l9 6 9-6"/></svg>Mailbox</a>
+    <a href="ComponentsUiModes.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5" class="it1"/><rect x="4.5" y="8.5" width="8" height="7" rx="3.5" class="i2"/></svg>Interface modes</a>
+    <a href="SignUp.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" class="i2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Auth pages</a>
+    <a href="AccountSecurity.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4" class="i1"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>Account settings</a>
+    <a href="SearchResults.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>Global search</a>
+    <a href="HelpCenter.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="i2"/><path d="M10 10a2 2 0 1 1 3 1.7c-.7.4-1 1-1 1.8M12 16.5v.5"/></svg>Help centre</a>
+    <span style="flex-grow: 1; min-height: 16px" aria-hidden="true"></span>
+    <a href="Main.dc.html" style="border-top: var(--bw) solid var(--line); border-radius: 0; padding-top: 12px"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg>← Back to app</a>
+  </aside>
+  <div style="flex: 999 1 520px; min-width: 0; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <div class="specbar">
+    <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 280px">
+      <span class="sub2">Design system / Components</span>
+      <h1>Components · Layout &amp; utility</h1>
+      <span class="sub2">Panels, scroll areas, hover cards, menubar, mega navigation, toggles, carousel, empty states, media frames, list items and page templates. Resize, hover and open them in Play mode.</span>
+    </div>
+    <div role="group" aria-label="Preview theme" style="display: flex; gap: 2px; padding: 3px; border-radius: 8px; background: var(--bg); border: var(--bw) solid var(--border)">
+      <sc-for list="{{themes}}" as="t" hint-placeholder-count="4"><button type="button" class="seg {{t.cls}}" aria-pressed="{{t.pressed}}" onClick="{{t.pick}}">{{t.label}}</button></sc-for>
+    </div>
+  </div>
+
+  <main onKeyDown="{{onKey}}" onClick="{{onMainClick}}" style="flex: 1 1 100%; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 48px; display: flex; flex-direction: column; gap: 20px">
+
+    <!-- 1. RESIZABLE PANELS -->
+    <section class="card" aria-labelledby="h-rz">
+      <div class="ch"><h2 id="h-rz">Resizable panels</h2><span class="use">Use for: side-by-side work surfaces people tune to the task — chat | canvas, editor | terminal, list | detail</span></div>
+      <div class="bd col" style="gap: 18px">
+        <div class="g2" style="grid-template-columns: repeat(auto-fit, minmax(560px, 1fr))">
+          <div class="col">
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline"><span class="st">Live · horizontal · chat 20–70%</span><span class="sub2 mono" role="status" aria-live="polite" style="margin-left: auto; font-size: 12px">{{hStatus}}</span></div>
+            <div class="split">
+              <sc-if value="{{hCol}}" hint-placeholder-val="{{ false }}">
+                <div class="rail"><button type="button" class="xbtn" aria-label="Expand chat panel" aria-expanded="false" aria-controls="pn-chat" onClick="{{hToggle}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button><span>Chat</span></div>
+              </sc-if>
+              <sc-if value="{{hOpen}}" hint-placeholder-val="{{ true }}">
+                <div class="pane" id="pn-chat" style="flex: {{hFlex}}">
+                  <div class="pane-h"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="it3"/></svg>Chat · research-agent<span style="flex-grow: 1"></span><button type="button" class="xbtn" aria-label="Collapse chat panel" aria-expanded="true" aria-controls="pn-chat" onClick="{{hToggle}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button></div>
+                  <div style="flex: 1 1 0; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--surface2)">
+                    <div class="msg me">Draft the Q4 fleet capacity report on the canvas.</div>
+                    <div class="msg">Done — I added a node utilisation chart and flagged node-04 as unreachable since 10:12.</div>
+                    <div class="msg me">Add the NPU worker budget note.</div>
+                  </div>
+                </div>
+              </sc-if>
+              <div class="hdl x {{hDragCls}}" role="separator" tabindex="0" aria-orientation="vertical" aria-controls="pn-chat" aria-label="Resize chat and canvas" aria-valuemin="0" aria-valuemax="70" aria-valuenow="{{hNow}}" aria-valuetext="{{hText}}" onPointerDown="{{hDown}}" onPointerMove="{{dMove}}" onPointerUp="{{dUp}}" onPointerCancel="{{dUp}}" onKeyDown="{{hKey}}" onDoubleClick="{{hReset}}"><span class="knob"></span></div>
+              <div class="pane" style="flex: 1 1 0">
+                <div class="pane-h"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="it1"/><path d="M3 9h18M9 9v11"/></svg>Canvas · Q4 fleet capacity report</div>
+                <div style="flex: 1 1 0; overflow: hidden; padding: 16px; display: flex; flex-direction: column; gap: 12px; background: var(--bg)">
+                  <div class="card" style="padding: 12px 14px; display: flex; flex-direction: column; gap: 10px">
+                    <b style="font-size: 13.5px">Node utilisation · last 7 days</b>
+                    <div style="display: flex; align-items: flex-end; gap: 10px; height: 92px; border-bottom: 1px solid var(--line)" aria-hidden="true">
+                      <div style="flex: 1; height: 72%; background: var(--i1); border: 1px solid var(--stroke); border-bottom: 0"></div>
+                      <div style="flex: 1; height: 54%; background: var(--i1); border: 1px solid var(--stroke); border-bottom: 0"></div>
+                      <div style="flex: 1; height: 88%; background: var(--i2); border: 1px solid var(--stroke); border-bottom: 0"></div>
+                      <div style="flex: 1; height: 8%; background: var(--bar-alert); border: 1px solid var(--stroke); border-bottom: 0"></div>
+                    </div>
+                    <div style="display: flex; gap: 10px; font-size: 11.5px; color: var(--muted)" class="mono"><span style="flex: 1">node-01</span><span style="flex: 1">node-02</span><span style="flex: 1">node-03</span><span style="flex: 1">node-04 · down</span></div>
+                  </div>
+                  <div class="wl" style="width: 90%"></div><div class="wl" style="width: 75%"></div><div class="wl" style="width: 60%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col">
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline"><span class="st">Live · vertical · editor 25–85%</span><span class="sub2 mono" role="status" aria-live="polite" style="margin-left: auto; font-size: 12px">{{vStatus}}</span></div>
+            <div class="split v">
+              <div class="pane" id="pn-editor" style="flex: {{vEdFlex}}">
+                <div class="pane-h"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="iw"/><path d="M14 3v4h4"/></svg>workflow.yaml<span class="pill idle" style="margin-left: 6px">unsaved</span></div>
+                <div class="code">
+                  <div><i>1</i><span class="k">name</span>: nightly-knowledge-sync</div>
+                  <div><i>2</i><span class="k">trigger</span>:</div>
+                  <div><i>3</i>  <span class="k">schedule</span>: <span class="s">"0 2 * * *"</span></div>
+                  <div><i>4</i><span class="k">steps</span>:</div>
+                  <div><i>5</i>  - <span class="k">agent</span>: research-agent</div>
+                  <div><i>6</i>    <span class="k">task</span>: embed new documents</div>
+                  <div><i>7</i>  - <span class="k">approval</span>: data_access</div>
+                  <div><i>8</i>  - <span class="k">agent</span>: documentation-engineer</div>
+                  <div><i>9</i>    <span class="k">task</span>: update runbook index</div>
+                </div>
+              </div>
+              <div class="hdl y {{vDragCls}}" role="separator" tabindex="0" aria-orientation="horizontal" aria-controls="pn-editor" aria-label="Resize editor and terminal" aria-valuemin="25" aria-valuemax="100" aria-valuenow="{{vNow}}" aria-valuetext="{{vText}}" onPointerDown="{{vDown}}" onPointerMove="{{dMove}}" onPointerUp="{{dUp}}" onPointerCancel="{{dUp}}" onKeyDown="{{vKey}}" onDoubleClick="{{vReset}}"><span class="knob"></span></div>
+              <div class="pane" style="flex: {{vTermFlex}}; background: var(--surface2)">
+                <div class="pane-h"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 10l3 2-3 2M12 15h5"/></svg>Terminal · node-02<span style="flex-grow: 1"></span><button type="button" class="xbtn" aria-label="{{vToggleLabel}}" aria-expanded="{{vExpanded}}" aria-controls="pn-term" onClick="{{vToggle}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="transform: rotate({{vChevDeg}}deg)"><path d="M6 9l6 6 6-6"/></svg></button></div>
+                <sc-if value="{{vOpen}}" hint-placeholder-val="{{ true }}">
+                  <div class="code" id="pn-term" style="padding: 8px 12px; font-size: 12px">
+                    <div>$ autobot workflow run nightly-knowledge-sync --dry-run</div>
+                    <div>✓ trigger parsed · next run 02:00 EET</div>
+                    <div>✓ research-agent reachable on node-02</div>
+                    <div>! warning: approval gate data_access needs 1 reviewer</div>
+                    <div>→ dry run complete in 1.8 s</div>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="state-row" aria-label="Separator states">
+          <div><span class="st">Default</span><div class="split" style="height: 64px; width: 110px" aria-hidden="true"><div class="pane" style="flex: 1"></div><div class="hdl x"><span class="knob"></span></div><div class="pane" style="flex: 1"></div></div></div>
+          <div><span class="st">Hover · cursor col-resize</span><div class="split" style="height: 64px; width: 110px" aria-hidden="true"><div class="pane" style="flex: 1"></div><div class="hdl x hov"><span class="knob"></span></div><div class="pane" style="flex: 1"></div></div></div>
+          <div><span class="st">Focus-visible</span><div class="split" style="height: 64px; width: 110px; overflow: visible" aria-hidden="true"><div class="pane" style="flex: 1"></div><div class="hdl x fv"><span class="knob"></span></div><div class="pane" style="flex: 1"></div></div></div>
+          <div><span class="st">Dragging</span><div class="split" style="height: 64px; width: 110px" aria-hidden="true"><div class="pane" style="flex: 1"></div><div class="hdl x drag"><span class="knob"></span></div><div class="pane" style="flex: 1"></div></div></div>
+          <div><span class="st">Disabled · layout locked</span><div class="split" style="height: 64px; width: 110px" aria-hidden="true"><div class="pane" style="flex: 1"></div><div class="hdl x dis"><span class="knob"></span></div><div class="pane" style="flex: 1"></div></div></div>
+          <div><span class="st">Collapsed · 44px rail</span><div class="split" style="height: 64px; width: 110px" aria-hidden="true"><div class="rail" style="flex-basis: 24px"></div><div class="hdl x"><span class="knob"></span></div><div class="pane" style="flex: 1"></div></div></div>
+          <div style="margin-left: auto; font-size: 12.5px; color: var(--text2); gap: 4px"><span class="st">Keyboard on the focused separator</span><span><span class="kbd">←</span> <span class="kbd">→</span> / <span class="kbd">↑</span> <span class="kbd">↓</span> 5% · <span class="kbd">Shift</span> 10% · <span class="kbd">Home</span> <span class="kbd">End</span> min/max · <span class="kbd">Enter</span> collapse · double-click resets</span></div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> the handle is a focusable <span class="mono">role="separator"</span> with <span class="mono">aria-valuenow</span> = first pane %, <span class="mono">aria-controls</span> and a readable <span class="mono">aria-valuetext</span>. Enforce min/max in px as well as % (chat never below 320px); collapse to a labelled rail instead of 0px. Persist sizes per user and screen; don't nest more than two splits.</p>
+    </section>
+
+    <!-- 2 + 3. SCROLL AREA / HOVER CARD -->
+    <div class="g2">
+      <section class="card" aria-labelledby="h-sa">
+        <div class="ch"><h2 id="h-sa">Scroll area</h2><span class="use">Use for: bounded lists inside cards — activity logs, run output, member pickers</span></div>
+        <div class="bd col" style="gap: 14px">
+          <span class="st">Live · vertical · 300px · thin token scrollbar</span>
+          <div style="position: relative; border: var(--bw) solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface)">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: var(--bw) solid var(--line); font-size: 12.5px; color: var(--muted)"><span class="dot d-ok"></span><b style="color: var(--text); font-weight: 600">Live activity</b><span style="margin-left: auto" class="mono">32 events · today</span></div>
+            <div class="sa" id="sa-list" tabindex="0" role="region" aria-label="Live activity log, scrollable" onScroll="{{saScroll}}">
+              <sc-for list="{{log}}" as="it" hint-placeholder-count="8">
+                <div class="row" style="padding: 9px 14px"><span class="mono sub2" style="font-size: 12px; width: 40px">{{it.time}}</span><span style="flex-grow: 1; min-width: 0; font-size: 13px"><b style="font-weight: 600">{{it.agent}}</b> {{it.text}}</span><span class="pill {{it.cls}}">{{it.pill}}</span></div>
+              </sc-for>
+            </div>
+            <sc-if value="{{saTop}}" hint-placeholder-val="{{ false }}">
+              <button type="button" class="btn sm" onClick="{{saToTop}}" style="position: absolute; right: 18px; bottom: 12px"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>Scroll to top</button>
+            </sc-if>
+          </div>
+          <span class="st">Horizontal · tag rail</span>
+          <div class="sa x" tabindex="0" role="region" aria-label="Knowledge collections, scrollable" style="border: var(--bw) solid var(--border); border-radius: 8px; background: var(--surface); padding: 10px 10px 12px">
+            <div style="display: flex; gap: 6px; width: max-content">
+              <span class="pill idle">Runbooks · 42</span><span class="pill idle">Research · 118</span><span class="pill idle">Guides · 26</span><span class="pill idle">Security · 14</span><span class="pill idle">Fleet · 31</span><span class="pill idle">Company OS · 19</span><span class="pill idle">Onboarding · 8</span><span class="pill idle">Benchmarks · 23</span><span class="pill idle">Incidents · 11</span><span class="pill idle">Templates · 37</span><span class="pill idle">Archive · 204</span>
+            </div>
+          </div>
+        </div>
+        <p class="rules"><b>Rules:</b> the scroll container is focusable (<span class="mono">tabindex="0"</span>) with a region label so keyboard users can scroll. Keep native scrolling — only restyle the bar (8px, var(--border) thumb). "Scroll to top" appears after 160px and returns focus to the list.</p>
+      </section>
+
+      <section class="card" aria-labelledby="h-hc">
+        <div class="ch"><h2 id="h-hc">Hover card</h2><span class="use">Use for: a quick preview of an agent or person behind a mention</span></div>
+        <div class="bd col" style="gap: 14px">
+          <span class="st">Live · hover or focus a mention · opens after 300 ms</span>
+          <div class="stage" style="padding: 18px; min-height: 300px; box-sizing: border-box">
+            <div style="display: flex; gap: 10px; align-items: flex-start">
+              <span class="av" style="width: 32px; height: 32px; font-size: 12px" aria-hidden="true">MV</span>
+              <div style="font-size: 13.5px; line-height: 1.7; background: var(--surface); border: var(--bw) solid var(--border); border-radius: 8px; padding: 10px 12px">
+                Ask <span class="hcw"><a href="Agents.dc.html" class="mention" aria-describedby="hc-agent" onMouseEnter="{{hcAgentIn}}" onMouseLeave="{{hcOut}}" onFocus="{{hcAgentFocus}}" onBlur="{{hcOut}}">@research-agent</a><sc-if value="{{hcAgent}}" hint-placeholder-val="{{ false }}">
+                  <span class="hcard" id="hc-agent" role="group" aria-label="research-agent preview" onMouseEnter="{{hcKeep}}" onMouseLeave="{{hcOut}}">
+                    <span style="display: flex; gap: 10px; align-items: center"><span class="tile lg"><svg class="ic" width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" class="iw"/><circle cx="29" cy="27" r="3" class="iw"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span><span style="flex-grow: 1; display: flex; flex-direction: column"><b style="font-size: 14px">research-agent</b><span class="sub2">Head of Research · reports to CEO</span></span><span class="pill ok">active</span></span>
+                    <span class="mono sub2" style="font-size: 12px">ollama · llama3.1:8b · node-02</span>
+                    <span class="stats"><span><b>6</b>runs today</span><span><b>72%</b>Oct budget</span><span><b class="mono">10:41</b>last run</span></span>
+                    <span style="display: flex; gap: 8px"><a href="Chat.dc.html" class="btn sm">Message</a><a href="Agents.dc.html" class="btn sm">Open profile</a></span>
+                  </span>
+                </sc-if></span> to summarise the vector store benchmarks, then send the draft to <span class="hcw"><a href="Members.dc.html" class="mention" aria-describedby="hc-user" onMouseEnter="{{hcUserIn}}" onMouseLeave="{{hcOut}}" onFocus="{{hcUserFocus}}" onBlur="{{hcOut}}">@Mārtiņš Veiss</a><sc-if value="{{hcUser}}" hint-placeholder-val="{{ false }}">
+                  <span class="hcard" id="hc-user" role="group" aria-label="Mārtiņš Veiss preview" onMouseEnter="{{hcKeep}}" onMouseLeave="{{hcOut}}">
+                    <span style="display: flex; gap: 10px; align-items: center"><span class="av">MV</span><span style="flex-grow: 1; display: flex; flex-direction: column"><b style="font-size: 14px">Mārtiņš Veiss</b><span class="sub2">Owner · AutoBot Labs</span></span></span>
+                    <span style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text2)"><span class="dot d-ok"></span>Active now · reviews code_deploy, budget_increase</span>
+                    <span style="display: flex; gap: 8px"><a href="ReviewInbox.dc.html" class="btn sm">3 pending reviews</a><a href="Members.dc.html" class="btn sm">View member</a></span>
+                  </span>
+                </sc-if></span> for approval.
+              </div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start">
+            <div class="col" style="gap: 6px"><span class="st">Loading · skeleton</span>
+              <div class="hcard static" aria-hidden="true" style="width: 260px"><span style="display: flex; gap: 10px; align-items: center"><span class="sk" style="width: 44px; height: 44px; border-radius: 99px"></span><span style="flex: 1; display: flex; flex-direction: column; gap: 6px"><span class="sk" style="height: 10px; width: 70%"></span><span class="sk" style="height: 8px; width: 50%"></span></span></span><span class="sk" style="height: 8px; width: 90%"></span></div>
+            </div>
+            <div class="col" style="gap: 6px"><span class="st">Unavailable</span>
+              <div class="hcard static" style="width: 240px"><span style="display: flex; gap: 10px; align-items: center"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" class="it2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><span class="sub2">devops-engineer is in a company you can't view.</span></span></div>
+            </div>
+          </div>
+        </div>
+        <p class="rules"><b>Rules:</b> preview only — everything in it must also be reachable by following the mention link. Open on hover (300 ms) and on keyboard focus, stay open while the pointer is over the card, close on leave (200 ms), blur or Esc. Never put destructive actions in a hover card.</p>
+      </section>
+    </div>
+
+    <!-- 4. MENUBAR -->
+    <section class="card" aria-labelledby="h-mb">
+      <div class="ch"><h2 id="h-mb">Menubar</h2><span class="use">Use for: dense desktop-style tools with many commands — the Workflow Builder</span></div>
+      <div class="bd col" style="gap: 12px">
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline"><span class="st">Live · one menu open at a time · hover switches while open</span><span class="sub2" role="status" aria-live="polite" style="margin-left: auto">{{mbStatus}}</span></div>
+        <div style="border: var(--bw) solid var(--border); border-radius: 10px">
+          <div class="mbar" role="menubar" aria-label="Workflow Builder">
+            <sc-for list="{{menus}}" as="m" hint-placeholder-count="6">
+              <div class="mbi">
+                <button type="button" class="mbt" id="{{m.btnId}}" role="menuitem" aria-haspopup="menu" aria-expanded="{{m.expanded}}" aria-controls="{{m.menuId}}" onClick="{{m.toggle}}" onMouseEnter="{{m.enter}}" onKeyDown="{{m.key}}">{{m.label}}</button>
+                <sc-if value="{{m.open}}" hint-placeholder-val="{{ false }}">
+                  <div class="menu" id="{{m.menuId}}" role="menu" aria-label="{{m.label}}" onKeyDown="{{m.menuKey}}" onClick="{{stop}}">
+                    <sc-for list="{{m.items}}" as="i" hint-placeholder-count="6">
+                      <sc-if value="{{i.sep}}" hint-placeholder-val="{{ false }}"><div class="msep" role="separator"></div></sc-if>
+                      <sc-if value="{{i.isItem}}" hint-placeholder-val="{{ true }}"><button type="button" class="mi {{i.cls}}" role="menuitem" tabindex="-1" aria-disabled="{{i.dis}}" onClick="{{i.pick}}"><span class="ck" aria-hidden="true"></span>{{i.l}}<span class="mk">{{i.k}}</span></button></sc-if>
+                      <sc-if value="{{i.isCheck}}" hint-placeholder-val="{{ false }}"><button type="button" class="mi" role="menuitemcheckbox" tabindex="-1" aria-checked="{{i.checked}}" onClick="{{i.pick}}"><span class="ck" aria-hidden="true">{{i.mark}}</span>{{i.l}}<span class="mk">{{i.k}}</span></button></sc-if>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+            <span style="flex-grow: 1"></span>
+            <span class="pill idle">draft · nightly-knowledge-sync</span>
+          </div>
+          <div class="wfc" aria-label="Workflow canvas preview" role="img">
+            <div class="edge" style="left: 210px; top: 74px; width: 60px"></div>
+            <div class="edge" style="left: 450px; top: 74px; width: 60px"></div>
+            <div class="edge" style="left: 690px; top: 74px; width: 60px"></div>
+            <div class="node" style="left: 40px; top: 52px; width: 170px; box-sizing: border-box"><span class="tile" style="width: 28px; height: 28px"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it2"/><path d="M12 8v4l3 2"/></svg></span><span>Schedule<small>02:00 daily</small></span></div>
+            <div class="node" style="left: 270px; top: 52px; width: 180px; box-sizing: border-box"><span class="tile" style="width: 28px; height: 28px"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" class="i1"/><path d="M12 8V5"/></svg></span><span>research-agent<small>embed new documents</small></span></div>
+            <div class="node" style="left: 510px; top: 52px; width: 180px; box-sizing: border-box; outline: 2px solid var(--accent); outline-offset: 2px"><span class="tile" style="width: 28px; height: 28px"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span><span>Approval gate<small>data_access · selected</small></span></div>
+            <div class="node" style="left: 750px; top: 52px; width: 200px; box-sizing: border-box"><span class="tile" style="width: 28px; height: 28px"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="iw"/></svg></span><span>documentation-engineer<small>update runbook index</small></span></div>
+            <sc-if value="{{snap}}" hint-placeholder-val="{{ true }}"><span class="pill idle" style="position: absolute; left: 16px; bottom: 14px">Snap to grid · 8px</span></sc-if>
+            <sc-if value="{{minimap}}" hint-placeholder-val="{{ true }}">
+              <div style="position: absolute; right: 14px; bottom: 14px; width: 150px; height: 84px; background: var(--surface); border: var(--bw) solid var(--border); border-radius: 6px" aria-hidden="true"><div style="position: absolute; left: 12px; top: 30px; width: 124px; height: 8px; display: flex; gap: 6px"><div class="wb t" style="flex: 1"></div><div class="wb t" style="flex: 1"></div><div class="wb p" style="flex: 1"></div><div class="wb t" style="flex: 1"></div></div><div style="position: absolute; left: 6px; top: 18px; width: 90px; height: 34px; border: 1.5px solid var(--accent); border-radius: 3px"></div></div>
+            </sc-if>
+            <sc-if value="{{runlog}}" hint-placeholder-val="{{ false }}">
+              <div class="mono" style="position: absolute; left: 16px; right: 180px; bottom: 50px; padding: 8px 10px; background: var(--surface); border: var(--bw) solid var(--border); border-radius: 6px; font-size: 12px; color: var(--text2)">run log · last run 10:12 · 4 steps · 1 waiting for approval</div>
+            </sc-if>
+          </div>
+        </div>
+        <div class="state-row">
+          <div><span class="st">Trigger · default / hover / open / focus</span><div style="display: flex; gap: 6px"><button type="button" class="mbt">File</button><button type="button" class="mbt" style="background: var(--surface2)">Edit</button><button type="button" class="mbt" aria-expanded="true">View</button><button type="button" class="mbt fv">Run</button></div></div>
+          <div><span class="st">Item kinds</span><div class="menu" style="position: static; min-width: 280px"><button type="button" class="mi"><span class="ck"></span>Run workflow<span class="mk">F5</span></button><button type="button" class="mi"><span class="ck">✓</span>Minimap · checked<span class="mk"></span></button><button type="button" class="mi" aria-disabled="true"><span class="ck"></span>Stop run · disabled<span class="mk">Shift+Esc</span></button><div class="msep"></div><button type="button" class="mi dng"><span class="ck"></span>Delete node · destructive<span class="mk">Del</span></button></div></div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> <span class="mono">role="menubar"</span> → <span class="mono">menu</span> → <span class="mono">menuitem</span> / <span class="mono">menuitemcheckbox</span>. <span class="kbd">←</span> <span class="kbd">→</span> move between menus, <span class="kbd">↓</span> opens and focuses the first enabled item, <span class="kbd">Esc</span> closes and returns focus to its trigger. Only one menu open; outside click closes. Use only in tool-like screens — never as primary site navigation.</p>
+    </section>
+
+    <!-- 5. NAVIGATION MENU -->
+    <section class="card" aria-labelledby="h-nm">
+      <div class="ch"><h2 id="h-nm">Navigation menu · mega-dropdown</h2><span class="use">Use for: top-level areas with many destinations that benefit from descriptions</span></div>
+      <div class="bd col" style="gap: 12px">
+        <span class="st">Live · click a trigger · moving across triggers switches panels while open</span>
+        <div class="stage" style="height: 440px; border-style: solid">
+          <nav class="nmb" aria-label="Product">
+            <span class="tile" style="width: 28px; height: 28px; margin-right: 10px; background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="16" height="16" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 3"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><path d="M24 16v-6"/></svg></span>
+            <a href="Main.dc.html" class="nmt">Home</a>
+            <button type="button" class="nmt" id="nm-company" aria-expanded="{{nmCExp}}" aria-controls="mega-company" onClick="{{nmCToggle}}" onMouseEnter="{{nmCEnter}}">Company OS<svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+            <button type="button" class="nmt" id="nm-agents" aria-expanded="{{nmAExp}}" aria-controls="mega-agents" onClick="{{nmAToggle}}" onMouseEnter="{{nmAEnter}}">Agents<svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+            <a href="Knowledge.dc.html" class="nmt">Knowledge</a>
+            <a href="Analytics.dc.html" class="nmt">Analytics</a>
+          </nav>
+          <sc-if value="{{nmCompany}}" hint-placeholder-val="{{ true }}">
+            <div class="mega" id="mega-company" onClick="{{stop}}">
+              <div class="mg"><p class="sect">Overview</p>
+                <a class="ml" href="CompanyOS.dc.html"><span class="tile"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5" class="i3"/><rect x="13" y="3" width="8" height="5" rx="1.5" class="i1"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5" class="i2"/></svg></span><span><b>Dashboard</b><em>Approvals, budget and agent health at a glance</em></span></a>
+                <a class="ml" href="Approvals.dc.html"><span class="tile"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span><span><b>Approvals <span class="pill warn" style="margin-left: 4px">3 pending</span></b><em>Deploys, data access and budget requests</em></span></a>
+                <a class="ml" href="Activity.dc.html"><span class="tile"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-6 4 3 7-9"/></svg></span><span><b>Activity</b><em>Every agent action, in order</em></span></a>
+              </div>
+              <div class="mg"><p class="sect">Work</p>
+                <a class="ml" href="Backlog.dc.html"><span class="tile"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span><span><b>Backlog</b><em>Work items waiting for an owner</em></span></a>
+                <a class="ml" href="Boards.dc.html"><span class="tile"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1" class="it1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1" class="it2"/></svg></span><span><b>Boards</b><em>Kanban per team or goal</em></span></a>
+                <a class="ml" href="Goals.dc.html"><span class="tile"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4" class="it3"/></svg></span><span><b>Goals</b><em>Quarterly outcomes and progress</em></span></a>
+                <a class="ml" href="Automation.dc.html"><span class="tile"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L5 14h6l-1 8 8-12h-6z" class="it2"/></svg></span><span><b>Automation</b><em>Rules that route and assign work</em></span></a>
+              </div>
+              <div class="mg"><p class="sect">Organization</p>
+                <a class="ml" href="OrgChart.dc.html"><span class="tile"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="5" rx="1" class="it2"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/></svg></span><span><b>Org Chart</b><em>Who reports to whom, agents included</em></span></a>
+                <a class="ml" href="Members.dc.html"><span class="tile"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/></svg></span><span><b>Members</b><em>People, roles and invitations</em></span></a>
+                <a class="ml" href="Costs.dc.html"><span class="tile"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it2"/><path d="M12 7v10"/></svg></span><span><b>Costs &amp; Budget</b><em>Monthly spend per agent</em></span></a>
+              </div>
+              <div class="mfeat">
+                <span class="st">New in Company OS</span>
+                <div class="ar" style="aspect-ratio: 16 / 9; display: grid; place-items: center"><svg class="ic" width="64" height="40" viewBox="0 0 64 40" aria-hidden="true"><rect x="4" y="6" width="16" height="28" rx="2" class="it1"/><rect x="24" y="6" width="16" height="20" rx="2" class="it2"/><rect x="44" y="6" width="16" height="12" rx="2" class="it3"/></svg></div>
+                <b style="color: var(--text); font-size: 13.5px">Routines</b>
+                <span>Recurring agent work with its own budget and approval gate.</span>
+                <a href="Routines.dc.html" style="font-weight: 600">Set up a routine →</a>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{nmAgents}}" hint-placeholder-val="{{ false }}">
+            <div class="mega sm" id="mega-agents" style="left: 200px" onClick="{{stop}}">
+              <div class="mg"><p class="sect">Manage</p>
+                <a class="ml" href="Agents.dc.html"><span class="tile"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" class="i1"/><path d="M12 8V5"/></svg></span><span><b>Registry</b><em>All agents, models and status</em></span></a>
+                <a class="ml" href="HeartbeatMonitor.dc.html"><span class="tile"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-4 4 8 2-4h6"/></svg></span><span><b>Heartbeat</b><em>Scheduled runs across the fleet</em></span></a>
+              </div>
+              <div class="mg"><p class="sect">Build</p>
+                <a class="ml" href="Agents.dc.html"><span class="tile"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="it3"/><path d="M12 8v8M8 12h8"/></svg></span><span><b>New agent</b><em>Start from a role template</em></span></a>
+                <a class="ml" href="Plugins.dc.html"><span class="tile"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></span><span><b>Plugins</b><em>Tools agents can use</em></span></a>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> triggers are buttons with <span class="mono">aria-expanded</span> + <span class="mono">aria-controls</span>; panels contain plain links (not menu roles), grouped under headings with one-line descriptions. Open on click; hover switches only once a panel is open. <span class="kbd">Esc</span> closes and returns focus. Max 4 columns, one featured slot.</p>
+    </section>
+
+    <!-- 6. TOGGLE + TOGGLE GROUP -->
+    <section class="card" aria-labelledby="h-tg">
+      <div class="ch"><h2 id="h-tg">Toggle &amp; toggle group</h2><span class="use">Use for: on/off formatting and choosing one view of the same data</span></div>
+      <div class="bd g2">
+        <div class="col" style="gap: 14px">
+          <span class="st">Live · multi-select group · formatting</span>
+          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap">
+            <div class="tgg" role="group" aria-label="Text formatting">
+              <sc-for list="{{fmts}}" as="f" hint-placeholder-count="3"><button type="button" class="tg" aria-pressed="{{f.pressed}}" aria-label="{{f.aria}}" title="{{f.title}}" onClick="{{f.toggle}}"><span class="{{f.glyph}}">{{f.label}}</span></button></sc-for>
+            </div>
+            <button type="button" class="tg" aria-pressed="{{pinPressed}}" onClick="{{pinToggle}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l-1 6 4 4H6l4-4zM12 13v8"/></svg>{{pinLabel}}</button>
+          </div>
+          <div style="padding: 12px 14px; border: var(--bw) solid var(--border); border-radius: 8px; background: var(--surface); font-size: 14px; line-height: 1.6"><span class="{{fmtCls}}">Restart heartbeat on node-04</span> after the data_access approval clears.</div>
+          <span class="st">States</span>
+          <div class="state-row">
+            <div><span class="st">Off</span><button type="button" class="tg" aria-pressed="false"><span class="gb">B</span></button></div>
+            <div><span class="st">Hover</span><button type="button" class="tg hov" aria-pressed="false"><span class="gb">B</span></button></div>
+            <div><span class="st">Focus</span><button type="button" class="tg fv" aria-pressed="false"><span class="gb">B</span></button></div>
+            <div><span class="st">On</span><button type="button" class="tg" aria-pressed="true"><span class="gb">B</span></button></div>
+            <div><span class="st">Disabled</span><button type="button" class="tg" aria-pressed="false" disabled><span class="gb">B</span></button></div>
+            <div><span class="st">Small · 28</span><button type="button" class="tg sm" aria-pressed="true"><span class="gi">I</span></button></div>
+          </div>
+        </div>
+        <div class="col" style="gap: 14px">
+          <span class="st">Live · single-select group · view</span>
+          <div class="tgg" role="group" aria-label="Agent view" style="align-self: flex-start">
+            <sc-for list="{{views}}" as="v" hint-placeholder-count="3"><button type="button" class="tg" aria-pressed="{{v.pressed}}" onClick="{{v.pick}}">{{v.label}}</button></sc-for>
+          </div>
+          <div style="border: var(--bw) solid var(--border); border-radius: 8px; background: var(--surface); padding: 10px; min-height: 128px; box-sizing: border-box">
+            <sc-if value="{{isList}}" hint-placeholder-val="{{ true }}">
+              <div class="li s" style="border-left: 0"><span class="dot d-ok"></span><span class="lt"><b>research-agent</b></span><span class="pill ok">active</span></div>
+              <div class="li s" style="border-left: 0"><span class="dot d-ok"></span><span class="lt"><b>code-agent</b></span><span class="pill ok">active</span></div>
+              <div class="li s" style="border-left: 0"><span class="dot d-warn"></span><span class="lt"><b>performance-engineer</b></span><span class="pill warn">paused</span></div>
+            </sc-if>
+            <sc-if value="{{isGrid}}" hint-placeholder-val="{{ false }}">
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px">
+                <div class="card" style="padding: 10px; display: flex; flex-direction: column; gap: 6px; font-size: 13px"><b>research-agent</b><span class="pill ok" style="align-self: flex-start">active</span></div>
+                <div class="card" style="padding: 10px; display: flex; flex-direction: column; gap: 6px; font-size: 13px"><b>code-agent</b><span class="pill ok" style="align-self: flex-start">active</span></div>
+                <div class="card" style="padding: 10px; display: flex; flex-direction: column; gap: 6px; font-size: 13px"><b>performance-engineer</b><span class="pill warn" style="align-self: flex-start">paused</span></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{isBoard}}" hint-placeholder-val="{{ false }}">
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-size: 12.5px">
+                <div style="display: flex; flex-direction: column; gap: 6px"><span class="st">Active · 2</span><div class="card" style="padding: 8px">research-agent</div><div class="card" style="padding: 8px">code-agent</div></div>
+                <div style="display: flex; flex-direction: column; gap: 6px"><span class="st">Paused · 1</span><div class="card" style="padding: 8px">performance-engineer</div></div>
+                <div style="display: flex; flex-direction: column; gap: 6px"><span class="st">Error · 1</span><div class="card" style="padding: 8px">devops-engineer</div></div>
+              </div>
+            </sc-if>
+          </div>
+          <span class="sub2">Toggle group vs segmented control: same look; a toggle group changes a view of the same content, tabs (.seg) switch to different content panels.</span>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> every toggle is a button with <span class="mono">aria-pressed</span>; the label stays the same when pressed (never "Bold" → "Unbold"). Pressed = filled ink, not just a color shift. Group with <span class="mono">role="group"</span> + label. A single-select group always keeps one item pressed.</p>
+    </section>
+
+    <!-- 7. CAROUSEL -->
+    <section class="card" aria-labelledby="h-car">
+      <div class="ch"><h2 id="h-car">Carousel</h2><span class="use">Use for: optional onboarding tips or a template gallery — never for content people must see</span></div>
+      <div class="bd col" style="gap: 12px">
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline"><span class="st">Live · onboarding tips · prev / next / dots / ← →</span><span class="sub2" role="status" aria-live="polite" style="margin-left: auto">{{carStatus}}</span></div>
+        <div class="car" role="region" aria-roledescription="carousel" aria-label="Getting started tips" onKeyDown="{{carKey}}">
+          <div class="track" style="transform: translateX({{carX}})">
+            <sc-for list="{{slides}}" as="s" hint-placeholder-count="5">
+              <div class="slide" role="group" aria-roledescription="slide" aria-label="{{s.label}}" aria-hidden="{{s.hidden}}">
+                <div class="ar" style="aspect-ratio: 4 / 3; display: grid; place-items: center; background: var(--surface2)">
+                  <svg class="ic" width="150" height="110" viewBox="0 0 150 110" aria-hidden="true"><rect x="14" y="16" width="122" height="80" rx="8" class="iw"/><rect x="26" y="28" width="38" height="56" rx="4" class="{{s.c1}}"/><rect x="72" y="28" width="52" height="24" rx="4" class="{{s.c2}}"/><rect x="72" y="60" width="52" height="24" rx="4" class="{{s.c3}}"/><circle cx="124" cy="20" r="10" class="i3"/><path d="M119 20l4 4 6-7"/></svg>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 10px; align-items: flex-start">
+                  <span class="st">{{s.kicker}}</span>
+                  <h3>{{s.title}}</h3>
+                  <p>{{s.body}}</p>
+                  <a href="{{s.href}}" class="btn sm" tabindex="{{s.tab}}">{{s.cta}}</a>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: var(--bw) solid var(--line)">
+            <button type="button" class="mbtn" aria-label="Previous tip" aria-disabled="{{prevDis}}" onClick="{{carPrev}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+            <div style="display: flex; gap: 0; margin: 0 auto" role="group" aria-label="Choose tip">
+              <sc-for list="{{dots}}" as="d" hint-placeholder-count="5"><button type="button" class="cdb {{d.cls}}" aria-label="{{d.label}}" aria-current="{{d.current}}" onClick="{{d.go}}"><span class="cdot"></span></button></sc-for>
+            </div>
+            <button type="button" class="mbtn" aria-label="Next tip" aria-disabled="{{nextDis}}" onClick="{{carNext}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> no autoplay. Region with <span class="mono">aria-roledescription="carousel"</span>; slides are labelled "n of 5", hidden slides get <span class="mono">aria-hidden</span> and untabbable links. Dots are 24px buttons with <span class="mono">aria-current</span>. Reduced motion: <span class="mono">prefers-reduced-motion: reduce</span> removes the slide transition — slides swap instantly.</p>
+    </section>
+
+    <!-- 8. EMPTY STATES -->
+    <section class="card" aria-labelledby="h-es">
+      <div class="ch"><h2 id="h-es">Empty-state patterns</h2><span class="use">Use for: any list, panel or page with nothing to show — always say why and what to do next</span></div>
+      <div class="bd" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px">
+        <div class="card es" style="background: var(--surface2)">
+          <span class="st" style="align-self: flex-start">First use</span>
+          <svg class="ic" width="120" height="96" viewBox="0 0 120 96" aria-hidden="true"><rect x="12" y="62" width="96" height="22" rx="4" class="it1"/><rect x="36" y="26" width="48" height="38" rx="9" class="i1"/><circle cx="50" cy="44" r="5" class="iw"/><circle cx="70" cy="44" r="5" class="iw"/><path d="M60 26V14"/><circle cx="60" cy="10" r="5" class="i3"/><circle cx="96" cy="26" r="11" class="i2"/><path d="M96 20v12M90 26h12"/></svg>
+          <h3>Hire your first agent</h3>
+          <p>Agents take roles in AutoBot Labs, report to a manager and stay inside their budget.</p>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center"><a href="Agents.dc.html" class="btn sm pri">Create agent</a><a href="Agents.dc.html" class="btn sm">Use a template</a></div>
+        </div>
+        <div class="card es">
+          <span class="st" style="align-self: flex-start">No results</span>
+          <span class="tile lg"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4M9 11h4"/></svg></span>
+          <h3>No documents match "qdrant shards"</h3>
+          <p>Search covers 118 documents in Research. Try fewer words or include all collections.</p>
+          <div style="display: flex; gap: 8px"><button type="button" class="btn sm">Clear filters</button><button type="button" class="btn sm">Search all</button></div>
+        </div>
+        <div class="card es">
+          <span class="st" style="align-self: flex-start">No permission</span>
+          <span class="tile lg"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" class="it2"/><path d="M8 11V8a4 4 0 0 1 8 0v3M12 15v2"/></svg></span>
+          <h3>You can't view Costs &amp; Budget</h3>
+          <p>Only Owners and Finance roles see spend. Ask an owner to change your role.</p>
+          <button type="button" class="btn sm">Request access</button>
+        </div>
+        <div class="card es">
+          <span class="st" style="align-self: flex-start">Error · offline</span>
+          <span class="tile lg danger"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18h10a4 4 0 0 0 .5-8 6 6 0 0 0-11.4 1.5A3.3 3.3 0 0 0 7 18z" class="iw"/><path d="M4 4l16 16"/></svg></span>
+          <h3>Can't reach node-04</h3>
+          <p>Error: heartbeat timed out at 10:12. Data shown may be up to 32 minutes old.</p>
+          <div style="display: flex; gap: 8px"><button type="button" class="btn sm pri">Retry</button><a href="HeartbeatMonitor.dc.html" class="btn sm">Open monitor</a></div>
+        </div>
+        <div class="card es">
+          <span class="st" style="align-self: flex-start">All done</span>
+          <span class="tile lg"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M8 12l3 3 5-6"/></svg></span>
+          <h3>No approvals waiting</h3>
+          <p>You've reviewed everything. New requests from agents will appear here.</p>
+          <a href="Activity.dc.html" class="btn sm">View recent decisions</a>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> icon tile (or one calm illustration for first use, ≤ 200px) + headline that names the situation + one sentence of why + at most one primary action. Errors say "Error" in words and keep stale data labelled with its age. Don't reuse the first-use illustration for no-results.</p>
+    </section>
+
+    <!-- 9. ASPECT RATIO -->
+    <section class="card" aria-labelledby="h-ar">
+      <div class="ch"><h2 id="h-ar">Aspect-ratio media frames</h2><span class="use">Use for: screen captures, avatars and thumbnails that must not jump while loading</span></div>
+      <div class="bd" style="display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1.2fr); gap: 20px; align-items: start">
+        <div class="col">
+          <div class="ar" style="aspect-ratio: 16 / 9; background: var(--bg)">
+            <span class="ar-tag">16:9 · cover</span>
+            <div style="position: absolute; inset: 0; display: flex; flex-direction: column" aria-hidden="true">
+              <div style="height: 9%; background: var(--surface); border-bottom: var(--bw) solid var(--border)"></div>
+              <div style="flex: 1; display: grid; grid-template-columns: 18% 1fr; ">
+                <div style="background: var(--surface); border-right: var(--bw) solid var(--border)"></div>
+                <div style="padding: 5%; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: 22% 1fr; gap: 4%">
+                  <div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div>
+                  <div class="wb" style="grid-column: span 2; display: flex; align-items: flex-end; gap: 8%; padding: 6%"><div style="flex: 1; height: 60%; background: var(--i1); border: 1px solid var(--stroke)"></div><div style="flex: 1; height: 85%; background: var(--i2); border: 1px solid var(--stroke)"></div><div style="flex: 1; height: 40%; background: var(--i1); border: 1px solid var(--stroke)"></div></div>
+                  <div class="wb" style="grid-column: span 2"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <span class="fig"><b>Screen capture · 16:9</b><span class="sub2">Company OS dashboard · shared in chat and docs · <span class="mono">aspect-ratio: 16 / 9; object-fit: cover</span></span></span>
+        </div>
+        <div class="col">
+          <div style="display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap">
+            <div class="ar" style="aspect-ratio: 1 / 1; width: 96px; border-radius: 99px; background: var(--brand-bg); display: grid; place-items: center; color: var(--brand-fg); font-weight: 600; font-size: 28px">MV</div>
+            <div class="ar" style="aspect-ratio: 1 / 1; width: 64px; border-radius: 14px; display: grid; place-items: center"><svg class="ic" width="38" height="38" viewBox="0 0 48 48" aria-hidden="true"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" class="iw"/><circle cx="29" cy="27" r="3" class="iw"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></div>
+            <span class="av" style="width: 40px; height: 40px; font-size: 13px">CR</span><span class="av" style="width: 32px; height: 32px; font-size: 12px">MV</span><span class="av" style="width: 24px; height: 24px; font-size: 10px">DE</span>
+          </div>
+          <span class="fig"><b>Avatar · 1:1</b><span class="sub2">People round, agents rounded-square. Sizes 96 · 64 · 40 · 32 · 24. Fallback: initials on brand ink.</span></span>
+        </div>
+        <div class="col">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
+            <div class="ar" style="aspect-ratio: 4 / 3; background: var(--surface)"><span class="ar-tag">4:3</span><div style="position: absolute; inset: 26% 14% 10%; display: flex; flex-direction: column; gap: 7px" aria-hidden="true"><div class="wl h" style="width: 70%"></div><div class="wl"></div><div class="wl" style="width: 85%"></div><div class="wl" style="width: 60%"></div></div></div>
+            <div class="ar" style="aspect-ratio: 4 / 3; background: var(--surface)"><span class="ar-tag">4:3</span><div style="position: absolute; inset: 30% 14% 12%; display: flex; align-items: flex-end; gap: 8%" aria-hidden="true"><div style="flex: 1; height: 50%; background: var(--i3); border: 1px solid var(--stroke)"></div><div style="flex: 1; height: 90%; background: var(--i1); border: 1px solid var(--stroke)"></div><div style="flex: 1; height: 70%; background: var(--i2); border: 1px solid var(--stroke)"></div></div></div>
+            <div class="ar sk" style="aspect-ratio: 4 / 3"><span class="ar-tag">loading</span></div>
+            <div class="ar" style="aspect-ratio: 4 / 3; display: grid; place-items: center; text-align: center; font-size: 12px; color: var(--muted)"><span><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="iw"/><path d="M4 15l5-4 4 3 3-2 4 3M4 4l16 16"/></svg><br>Preview unavailable</span></div>
+          </div>
+          <span class="fig"><b>Knowledge thumbnail · 4:3</b><span class="sub2">Runbook, benchmark chart, loading placeholder, broken-media fallback.</span></span>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> reserve the box with <span class="mono">aspect-ratio</span> before media loads (no layout shift). Meaningful captures need alt text describing the content; avatars next to a name use <span class="mono">alt=""</span>. Crops use cover; diagrams and charts use contain.</p>
+    </section>
+
+    <!-- 10. LIST ITEM ANATOMY -->
+    <section class="card" aria-labelledby="h-li">
+      <div class="ch"><h2 id="h-li">Item / list item anatomy</h2><span class="use">Use for: every row in agent lists, approvals, documents, members and menus</span></div>
+      <div class="bd g2">
+        <div class="col" style="gap: 14px">
+          <span class="st">Anatomy · M 52px</span>
+          <div class="stage" style="padding: 40px 18px 18px">
+            <div class="li m" style="border: var(--bw) solid var(--border); border-radius: 8px">
+              <span class="pos"><i class="num">1</i><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="iw"/><path d="M14 3v4h4M9 13h6M9 17h4"/></svg></span></span>
+              <span class="lt"><span class="pos" style="align-self: flex-start"><i class="num">2</i><b>Publish security artifact pack</b></span><span class="pos sub2" style="align-self: flex-start">documentation-engineer · <span class="mono">12 min ago</span><i class="num" style="top: auto; bottom: -24px">3</i></span></span>
+              <span class="pos"><i class="num">4</i><span class="pill info">data_access</span></span>
+              <span class="pos"><i class="num">5</i><button type="button" class="btn sm pri">Approve</button></span>
+            </div>
+          </div>
+          <ol style="margin: 8px 0 0; padding-left: 20px; font-size: 13px; line-height: 1.7; color: var(--text2)">
+            <li><b>Leading</b> — icon tile 34px, avatar, or status dot + text. One per row.</li>
+            <li><b>Title</b> — 13.5px/600, one line, truncates with ellipsis; full text in the detail view.</li>
+            <li><b>Meta</b> — 12.5px muted; owner · time; IDs and times in mono.</li>
+            <li><b>Badge</b> — status pill, always with text.</li>
+            <li><b>Trailing action</b> — one button, chevron or overflow menu; max two trailing elements.</li>
+          </ol>
+        </div>
+        <div class="col" style="gap: 14px">
+          <span class="st">Sizes</span>
+          <div style="border: var(--bw) solid var(--border); border-radius: 8px; overflow: hidden">
+            <div class="li s"><span class="dot d-ok"></span><span class="lt"><b style="font-size: 13px">S · 36 · research-agent</b></span><span class="sub2 mono">menus, dense tables</span></div>
+            <div class="li m"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" class="i1"/><path d="M12 8V5"/></svg></span><span class="lt"><b>M · 52 · code-agent</b><span class="sub2">Staff Engineer · claude-code</span></span><span class="pill ok">active</span></div>
+            <div class="li l"><span class="tile lg"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" class="it1"/><path d="M7 10h4M7 14h7"/></svg></span><span class="lt"><b>L · 68 · node-02</b><span class="sub2">8 vCPU · 32 GB · 3 agents</span><span class="sub2 mono">uptime 41 d · last heartbeat 10:44</span></span><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div>
+          </div>
+          <span class="st">States</span>
+          <div style="border: var(--bw) solid var(--border); border-radius: 8px; overflow: hidden">
+            <div class="li m"><span class="dot d-ok"></span><span class="lt"><b>Default</b><span class="sub2">Fleet runbook – node recovery.md</span></span><button type="button" class="mbtn" aria-label="More actions for Fleet runbook"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.2" class="ik"/><circle cx="12" cy="12" r="1.2" class="ik"/><circle cx="18" cy="12" r="1.2" class="ik"/></svg></button></div>
+            <div class="li m hov"><span class="dot d-ok"></span><span class="lt"><b>Hover</b><span class="sub2">Company OS onboarding.pdf</span></span><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div>
+            <div class="li m sel" aria-selected="true"><span class="dot d-ok"></span><span class="lt"><b>Selected · 3px ink edge</b><span class="sub2">Vector store benchmarks 2026.md</span></span><span class="pill idle">open</span></div>
+            <div class="li m fv" style="outline-offset: -3px"><span class="dot d-idle"></span><span class="lt"><b>Focus-visible</b><span class="sub2">Security artifact pack.zip</span></span></div>
+            <div class="li m dis" aria-disabled="true"><span class="dot d-idle"></span><span class="lt"><b>Disabled · archived</b><span class="sub2">Q2 incident review.md</span></span><span class="pill idle">archived</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> the whole row is one link or button when it opens a detail; nested actions stop propagation and get their own labels ("More actions for …"). Selected uses the 3px edge plus <span class="mono">aria-selected</span>, never color alone. Keep the same size within one list.</p>
+    </section>
+
+    <!-- 11. PAGE TEMPLATES -->
+    <section class="card" aria-labelledby="h-pt">
+      <div class="ch"><h2 id="h-pt">Page layout templates</h2><span class="use">Use for: starting every new screen from one of five shells</span></div>
+      <div class="bd col" style="gap: 20px">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px">
+          <figure class="col fig" style="margin: 0">
+            <div class="wf" aria-hidden="true"><div class="n"><i></i><i></i><i></i><i></i></div>
+              <div style="flex: 1; padding: 8px 12px; display: flex; flex-direction: column; gap: 5px">
+                <div style="display: flex; gap: 6px; align-items: center"><div class="wl h" style="width: 34%"></div><span style="flex: 1"></span><div class="wb p" style="width: 30px; height: 10px"></div></div>
+                <div style="display: flex; gap: 4px"><div class="wb" style="width: 42%; height: 10px"></div><div class="wb" style="width: 14%; height: 10px"></div><div class="wb" style="width: 14%; height: 10px"></div></div>
+                <div class="wb" style="flex: 1; display: flex; flex-direction: column"><div class="wr"><div class="wb t"></div><div class="wl" style="flex: 1"></div><div class="wl" style="width: 16%"></div></div><div class="wr"><div class="wb t"></div><div class="wl" style="flex: 1"></div><div class="wl" style="width: 16%"></div></div><div class="wr"><div class="wb t"></div><div class="wl" style="flex: 1"></div><div class="wl" style="width: 16%"></div></div><div class="wr"><div class="wb t"></div><div class="wl" style="flex: 1"></div><div class="wl" style="width: 16%"></div></div></div>
+              </div>
+              <span class="ann" style="right: 4px; top: 16px">pad 24/32</span><span class="ann" style="left: 4px; bottom: 4px">rows 52</span>
+            </div>
+            <figcaption><b>List page</b><span class="sub2">Header + filter bar + one list card. Max content 1280. Backlog, Agents, Knowledge.</span></figcaption>
+          </figure>
+          <figure class="col fig" style="margin: 0">
+            <div class="wf" aria-hidden="true"><div class="n"><i></i><i></i><i></i><i></i></div>
+              <div style="flex: 1; display: grid; grid-template-columns: 1fr 34%">
+                <div style="padding: 8px 10px; display: flex; flex-direction: column; gap: 5px"><div class="wl" style="width: 30%"></div><div class="wl h" style="width: 60%"></div><div style="display: flex; gap: 6px; border-bottom: var(--bw) solid var(--line); padding-bottom: 3px"><div class="wl" style="width: 14%; background: var(--accent)"></div><div class="wl" style="width: 14%"></div><div class="wl" style="width: 14%"></div></div><div class="wb" style="flex: 1"></div></div>
+                <div style="background: var(--surface); border-left: var(--bw) solid var(--border); padding: 8px; display: flex; flex-direction: column; gap: 6px"><div class="wl" style="width: 60%"></div><div class="wl"></div><div class="wl" style="width: 80%"></div><div class="wl" style="width: 70%"></div><div class="wb p" style="height: 10px; margin-top: auto"></div></div>
+              </div>
+              <span class="ann" style="right: 4px; top: 16px">panel 360</span><span class="ann" style="left: 4px; bottom: 4px">tabs · 1fr</span>
+            </div>
+            <figcaption><b>Detail + right panel</b><span class="sub2">Main 1fr with tabs; properties panel 360 fixed, collapses under 1100px. Agent, work item.</span></figcaption>
+          </figure>
+          <figure class="col fig" style="margin: 0">
+            <div class="wf" aria-hidden="true"><div class="n"><i></i><i></i><i></i><i></i></div>
+              <div style="flex: 1; display: grid; grid-template-columns: 26% 1fr">
+                <div style="background: var(--surface); border-right: var(--bw) solid var(--border); padding: 8px 6px; display: flex; flex-direction: column; gap: 5px"><div class="wl" style="width: 50%; height: 3px"></div><div class="wl" style="border-left: 2px solid var(--primary)"></div><div class="wl"></div><div class="wl"></div><div class="wl" style="width: 50%; height: 3px; margin-top: 4px"></div><div class="wl"></div><div class="wl"></div></div>
+                <div style="padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; max-width: 80%"><div class="wl h" style="width: 40%"></div><div class="wl" style="width: 30%"></div><div class="wb" style="height: 10px"></div><div class="wl" style="width: 30%"></div><div class="wb" style="height: 10px"></div><div class="wl" style="width: 30%"></div><div class="wb" style="height: 10px"></div><div class="wb p" style="width: 30%; height: 10px"></div></div>
+              </div>
+              <span class="ann" style="left: 4px; bottom: 4px">sub 220</span><span class="ann" style="right: 4px; bottom: 4px">form ≤ 640</span>
+            </div>
+            <figcaption><b>Settings + sub-sidebar</b><span class="sub2">Sub-sidebar 220 with section headings; single form column ≤ 640. Preferences, Admin.</span></figcaption>
+          </figure>
+          <figure class="col fig" style="margin: 0">
+            <div class="wf" aria-hidden="true"><div class="n"><i></i><i></i><i></i><i></i></div>
+              <div style="flex: 1; padding: 8px 12px; display: grid; grid-template-columns: repeat(12, 1fr); grid-template-rows: 14px 1fr 1fr; gap: 5px">
+                <div class="wb" style="grid-column: span 3"></div><div class="wb" style="grid-column: span 3"></div><div class="wb" style="grid-column: span 3"></div><div class="wb" style="grid-column: span 3"></div>
+                <div class="wb" style="grid-column: span 6"></div><div class="wb" style="grid-column: span 6"></div>
+                <div class="wb" style="grid-column: span 4"></div><div class="wb" style="grid-column: span 8"></div>
+              </div>
+              <span class="ann" style="right: 4px; top: 16px">12 col · gap 16</span><span class="ann" style="left: 4px; bottom: 4px">KPI ×4</span>
+            </div>
+            <figcaption><b>Dashboard grid</b><span class="sub2">KPI row + 12-col widget grid, spans 4/6/8/12, stack under 760px. Company OS, Analytics.</span></figcaption>
+          </figure>
+          <figure class="col fig" style="margin: 0">
+            <div class="wf" aria-hidden="true" style="background: var(--surface2)"><div class="n"><i></i><i></i><i></i><i></i></div>
+              <div style="flex: 1; position: relative">
+                <div class="wb" style="position: absolute; left: 50%; top: 6px; width: 46%; height: 12px; margin-left: -23%"></div>
+                <div class="wb" style="position: absolute; left: 6px; top: 26px; width: 12px; height: 54px"></div>
+                <div class="wb t" style="position: absolute; left: 30%; top: 42%; width: 16%; height: 14%"></div><div class="wb t" style="position: absolute; left: 56%; top: 42%; width: 16%; height: 14%"></div>
+                <div class="wb" style="position: absolute; right: 6px; bottom: 6px; width: 22%; height: 22%"></div>
+              </div>
+              <span class="ann" style="left: 4px; bottom: 4px">edge to edge · 0 pad</span>
+            </div>
+            <figcaption><b>Full-bleed canvas</b><span class="sub2">Nav only; floating toolbar, palette and minimap on 12px insets. Workflow Builder, Canvas.</span></figcaption>
+          </figure>
+        </div>
+        <div class="g2">
+          <div class="col">
+            <span class="st">Grid · 1440 viewport</span>
+            <div style="display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; padding: 0 32px; border: var(--bw) dashed var(--border); border-radius: 8px; position: relative" aria-hidden="true">
+              <div class="gcol"></div><div class="gcol"></div><div class="gcol"></div><div class="gcol"></div><div class="gcol"></div><div class="gcol"></div><div class="gcol"></div><div class="gcol"></div><div class="gcol"></div><div class="gcol"></div><div class="gcol"></div><div class="gcol"></div>
+            </div>
+            <span class="sub2">12 columns · 16 gutter · margin clamp(16px, 2.5vw, 32px) · nav 56 · sub-sidebar 220 · right panel 360 · single column under 760px.</span>
+          </div>
+          <div class="col">
+            <span class="st">Spacing scale · px</span>
+            <div style="display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap" aria-hidden="true">
+              <span class="col" style="gap: 4px; align-items: center"><span class="spx" style="width: 4px; height: 4px"></span><span class="mono sub2">4</span></span>
+              <span class="col" style="gap: 4px; align-items: center"><span class="spx" style="width: 8px; height: 8px"></span><span class="mono sub2">8</span></span>
+              <span class="col" style="gap: 4px; align-items: center"><span class="spx" style="width: 12px; height: 12px"></span><span class="mono sub2">12</span></span>
+              <span class="col" style="gap: 4px; align-items: center"><span class="spx" style="width: 16px; height: 16px"></span><span class="mono sub2">16</span></span>
+              <span class="col" style="gap: 4px; align-items: center"><span class="spx" style="width: 20px; height: 20px"></span><span class="mono sub2">20</span></span>
+              <span class="col" style="gap: 4px; align-items: center"><span class="spx" style="width: 24px; height: 24px"></span><span class="mono sub2">24</span></span>
+              <span class="col" style="gap: 4px; align-items: center"><span class="spx" style="width: 32px; height: 32px"></span><span class="mono sub2">32</span></span>
+              <span class="col" style="gap: 4px; align-items: center"><span class="spx" style="width: 48px; height: 48px"></span><span class="mono sub2">48</span></span>
+            </div>
+            <span class="sub2">Inside cards 12–16, between cards 16–20, page sections 20–24, page top padding 24.</span>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> pick a shell before designing content; don't invent a sixth. Landmarks in every shell: <span class="mono">nav</span>, optional <span class="mono">aside</span>, one <span class="mono">main</span> with a single h1. Annotations here (dashed accent) are documentation only — never ship them.</p>
+    </section>
+
+    <nav aria-label="Design system pages" class="card" style="grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px; padding: 12px">
+      <a href="ComponentsNavigation.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">← Previous</span><span style="font-weight: 600; color: var(--text)">Navigation</span></a>
+      <a href="ComponentsChat.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">Next →</span><span style="font-weight: 600; color: var(--text)">Chat &amp; agent</span></a>
+    </nav>
+  </main>
+  </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"$preview":{"width":1440,"height":6300}}'>
+const THEMES = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+const H = { min: 20, max: 70, def: 38 };
+const V = { min: 25, max: 85, def: 62 };
+const clamp = (v, a, b) => Math.max(a, Math.min(b, Math.round(v)));
+const EVENTS = [
+  ['research-agent', 'opened 3 sources on vector store benchmarks', 'running', 'info'],
+  ['code-agent', 'pushed session lifecycle fix to PR #412', 'done', 'ok'],
+  ['devops-engineer', 'heartbeat failed: node-04 unreachable', 'failed', 'bad'],
+  ['documentation-engineer', 'updated Fleet runbook – node recovery.md', 'done', 'ok'],
+  ['performance-engineer', 'reached 91% of October budget', 'alert', 'warn'],
+  ['system', 'approval requested for security artifact pack', 'pending', 'idle'],
+  ['research-agent', 'embedded 14 documents into Research', 'done', 'ok']
+];
+const LOG = [];
+for (let i = 0; i < 32; i++) {
+  const m = 10 * 60 + 44 - i * 4;
+  const e = EVENTS[i % EVENTS.length];
+  LOG.push({ time: String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'), agent: e[0], text: e[1], pill: e[2], cls: e[3] });
+}
+const MENUS = [
+  { id: 'file', label: 'File', items: [{ l: 'New workflow', k: 'Ctrl+N' }, { l: 'Open…', k: 'Ctrl+O' }, { sep: 1 }, { l: 'Save', k: 'Ctrl+S' }, { l: 'Save as template…' }, { sep: 1 }, { l: 'Export as JSON' }, { l: 'Import from YAML…' }] },
+  { id: 'edit', label: 'Edit', items: [{ l: 'Undo move node', k: 'Ctrl+Z' }, { l: 'Redo', k: 'Ctrl+Shift+Z', dis: 1 }, { sep: 1 }, { l: 'Duplicate node', k: 'Ctrl+D' }, { l: 'Delete node', k: 'Del', dng: 1 }, { sep: 1 }, { l: 'Select all nodes', k: 'Ctrl+A' }] },
+  { id: 'view', label: 'View', items: [{ l: 'Minimap', chk: 'minimap' }, { l: 'Snap to grid', chk: 'snap' }, { l: 'Run log panel', chk: 'runlog' }, { sep: 1 }, { l: 'Zoom to fit', k: 'Shift+1' }, { l: 'Actual size', k: 'Ctrl+0' }] },
+  { id: 'run', label: 'Run', items: [{ l: 'Run workflow', k: 'F5' }, { l: 'Run from selected node', k: 'Shift+F5' }, { l: 'Step through', k: 'F10' }, { sep: 1 }, { l: 'Stop run', k: 'Shift+Esc', dis: 1 }, { sep: 1 }, { l: 'Run history…' }] },
+  { id: 'insert', label: 'Insert', items: [{ l: 'Trigger · schedule' }, { l: 'Agent step' }, { l: 'Approval gate' }, { l: 'Condition' }, { l: 'Knowledge lookup' }] },
+  { id: 'help', label: 'Help', items: [{ l: 'Keyboard shortcuts', k: '?' }, { l: 'Workflow Builder guide' }] }
+];
+const VIEW0 = { minimap: true, snap: true, runlog: false };
+const FMTS = [['b', 'B', 'Bold', 'Bold · Ctrl+B', 'gb'], ['i', 'I', 'Italic', 'Italic · Ctrl+I', 'gi'], ['c', '</>', 'Inline code', 'Code · Ctrl+E', 'gc']];
+const VIEWS = [['list', 'List'], ['grid', 'Grid'], ['board', 'Board']];
+const SLIDES = [
+  { kicker: 'Tip 1 · Company OS', title: 'Agents work as a company', body: 'Each agent has a role, a manager and a monthly budget. Start by placing your first agent in the Org Chart.', cta: 'Open Org Chart', href: 'OrgChart.dc.html' },
+  { kicker: 'Tip 2 · Approvals', title: 'You stay in control', body: 'Deploys, data access and budget increases wait in My Reviews until a person approves them.', cta: 'See approvals', href: 'Approvals.dc.html' },
+  { kicker: 'Tip 3 · Knowledge', title: 'Ground answers in your documents', body: 'Upload runbooks and research; agents cite them in chat, workflows and reports.', cta: 'Open Knowledge', href: 'Knowledge.dc.html' },
+  { kicker: 'Tip 4 · Fleet', title: 'Watch every node', body: 'Heartbeat shows each node and scheduled run. Failures appear in Activity within seconds.', cta: 'Open Heartbeat', href: 'HeartbeatMonitor.dc.html' },
+  { kicker: 'Tip 5 · Speed', title: 'Press Ctrl K for anything', body: 'The command palette jumps to agents, documents, settings and actions without leaving the keyboard.', cta: 'Try the palette', href: 'ComponentsCommand.dc.html' }
+];
+const FILLS = ['i1', 'i2', 'i3', 'it1', 'it2'];
+
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+  }
+  componentWillUnmount() { clearTimeout(this._hcT); }
+  g(k, d) { const st = this.state || {}; return st[k] === undefined ? d : st[k]; }
+  focusId(id) { setTimeout(() => { const el = document.getElementById(id); if (el) el.focus(); }, 0); }
+  stop(e) { if (e && e.stopPropagation) e.stopPropagation(); }
+  dragStart(which, e) {
+    const el = e.currentTarget;
+    try { el.setPointerCapture(e.pointerId); } catch (x) {}
+    this._drag = { which: which, rect: el.parentElement.getBoundingClientRect() };
+    this.setState({ [which + 'Drag']: true });
+  }
+  dragMove(e) {
+    const d = this._drag;
+    if (!d) return;
+    if (d.which === 'h') this.setState({ hPct: clamp((e.clientX - d.rect.left) / d.rect.width * 100, H.min, H.max), hCol: false });
+    else this.setState({ vPct: clamp((e.clientY - d.rect.top) / d.rect.height * 100, V.min, V.max), vCol: false });
+  }
+  dragEnd(e) {
+    if (!this._drag) return;
+    const w = this._drag.which;
+    this._drag = null;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (x) {}
+    this.setState({ [w + 'Drag']: false });
+  }
+  sepKey(which, e) {
+    const L = which === 'h' ? H : V;
+    const pk = which + 'Pct', ck = which + 'Col';
+    let p = this.g(pk, L.def);
+    const step = e.shiftKey ? 10 : 5;
+    const k = e.key;
+    if (k === (which === 'h' ? 'ArrowLeft' : 'ArrowUp')) p -= step;
+    else if (k === (which === 'h' ? 'ArrowRight' : 'ArrowDown')) p += step;
+    else if (k === 'Home') p = L.min;
+    else if (k === 'End') p = L.max;
+    else if (k === 'Enter') { e.preventDefault(); this.setState({ [ck]: !this.g(ck, false) }); return; }
+    else return;
+    e.preventDefault();
+    this.setState({ [pk]: clamp(p, L.min, L.max), [ck]: false });
+  }
+  closeMenus(restore) {
+    const st = this.state || {};
+    if (restore && st.mb) this.focusId('mb-' + st.mb);
+    else if (restore && st.nm) this.focusId('nm-' + st.nm);
+    this.setState({ mb: null, nm: null });
+  }
+  openMenuAndFocus(id) {
+    this.setState({ mb: id });
+    setTimeout(() => { const f = document.querySelector('#mbm-' + id + ' [role^="menuitem"]:not([aria-disabled="true"])'); if (f) f.focus(); }, 0);
+  }
+  mbKey(e, idx) {
+    const n = MENUS.length;
+    let ni = null;
+    if (e.key === 'ArrowRight') ni = (idx + 1) % n;
+    else if (e.key === 'ArrowLeft') ni = (idx - 1 + n) % n;
+    if (ni !== null) {
+      e.preventDefault();
+      this.focusId('mb-' + MENUS[ni].id);
+      if ((this.state || {}).mb) this.setState({ mb: MENUS[ni].id });
+      return;
+    }
+    if (e.key === 'ArrowDown') { e.preventDefault(); this.openMenuAndFocus(MENUS[idx].id); }
+  }
+  menuKey(e, idx) {
+    const items = Array.prototype.slice.call(e.currentTarget.querySelectorAll('[role^="menuitem"]:not([aria-disabled="true"])'));
+    const i = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const t = items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length];
+      if (t) t.focus();
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const n = MENUS.length;
+      this.openMenuAndFocus(MENUS[(idx + (e.key === 'ArrowRight' ? 1 : -1) + n) % n].id);
+    } else if (e.key === 'Tab') {
+      this.setState({ mb: null });
+    }
+  }
+  runCmd(m, it) {
+    const patch = { mb: null, mbLast: m.label + ' › ' + it.l };
+    if (it.chk) { const v = Object.assign({}, this.g('wfView', VIEW0)); v[it.chk] = !v[it.chk]; patch.wfView = v; }
+    this.setState(patch);
+    this.focusId('mb-' + m.id);
+  }
+  hcOpen(which, delay) {
+    clearTimeout(this._hcT);
+    if (!delay) { this.setState({ hc: which }); return; }
+    this._hcT = setTimeout(() => this.setState({ hc: which }), delay);
+  }
+  car(i) { this.setState({ car: Math.max(0, Math.min(SLIDES.length - 1, i)) }); }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const hPct = this.g('hPct', H.def), hCol = !!st.hCol;
+    const vPct = this.g('vPct', V.def), vCol = !!st.vCol;
+    const mb = st.mb || null, nm = st.nm || null;
+    const view = this.g('wfView', VIEW0);
+    const fmt = this.g('fmt', { b: false, i: false, c: true });
+    const vw = this.g('vw', 'list');
+    const car = this.g('car', 0);
+    return {
+      theme: cur,
+      themes: THEMES.map(([id, label]) => ({ label: label, cls: id === cur ? 'on' : '', pressed: id === cur ? 'true' : 'false', pick: () => this.setState({ theme: id }) })),
+      stop: (e) => this.stop(e),
+      onKey: (e) => {
+        if (!e || e.key !== 'Escape') return;
+        if (st.mb || st.nm) this.closeMenus(true);
+        else if (st.hc) { clearTimeout(this._hcT); this.setState({ hc: null }); }
+      },
+      onMainClick: () => { const s = this.state || {}; if (s.mb || s.nm) this.closeMenus(false); },
+
+      hCol: hCol, hOpen: !hCol,
+      hFlex: '0 0 ' + hPct + '%',
+      hNow: hCol ? 0 : hPct,
+      hText: hCol ? 'Chat collapsed' : 'Chat ' + hPct + '%, canvas ' + (100 - hPct) + '%',
+      hStatus: hCol ? 'chat collapsed · canvas 100%' : 'chat ' + hPct + '% · canvas ' + (100 - hPct) + '%',
+      hDragCls: st.hDrag ? 'drag' : '',
+      hDown: (e) => this.dragStart('h', e),
+      dMove: (e) => this.dragMove(e),
+      dUp: (e) => this.dragEnd(e),
+      hKey: (e) => this.sepKey('h', e),
+      hReset: () => this.setState({ hPct: H.def, hCol: false }),
+      hToggle: () => this.setState({ hCol: !hCol }),
+
+      vOpen: !vCol,
+      vEdFlex: vCol ? '1 1 0' : '0 0 ' + vPct + '%',
+      vTermFlex: vCol ? '0 0 auto' : '1 1 0',
+      vNow: vCol ? 100 : vPct,
+      vText: vCol ? 'Terminal collapsed' : 'Editor ' + vPct + '%, terminal ' + (100 - vPct) + '%',
+      vStatus: vCol ? 'editor 100% · terminal collapsed' : 'editor ' + vPct + '% · terminal ' + (100 - vPct) + '%',
+      vDragCls: st.vDrag ? 'drag' : '',
+      vDown: (e) => this.dragStart('v', e),
+      vKey: (e) => this.sepKey('v', e),
+      vReset: () => this.setState({ vPct: V.def, vCol: false }),
+      vToggle: () => this.setState({ vCol: !vCol }),
+      vToggleLabel: vCol ? 'Expand terminal' : 'Collapse terminal',
+      vExpanded: vCol ? 'false' : 'true',
+      vChevDeg: vCol ? 180 : 0,
+
+      log: LOG,
+      saTop: !!st.saTop,
+      saScroll: (e) => { const t = e.currentTarget.scrollTop > 160; if (t !== !!(this.state || {}).saTop) this.setState({ saTop: t }); },
+      saToTop: () => {
+        const el = document.getElementById('sa-list');
+        if (!el) return;
+        let reduce = false;
+        try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (x) {}
+        el.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+        el.focus();
+      },
+
+      hcAgent: st.hc === 'agent', hcUser: st.hc === 'user',
+      hcAgentIn: () => this.hcOpen('agent', 300),
+      hcUserIn: () => this.hcOpen('user', 300),
+      hcAgentFocus: () => this.hcOpen('agent', 0),
+      hcUserFocus: () => this.hcOpen('user', 0),
+      hcKeep: () => clearTimeout(this._hcT),
+      hcOut: () => { clearTimeout(this._hcT); this._hcT = setTimeout(() => this.setState({ hc: null }), 200); },
+
+      menus: MENUS.map((m, idx) => ({
+        label: m.label, btnId: 'mb-' + m.id, menuId: 'mbm-' + m.id,
+        open: mb === m.id, expanded: mb === m.id ? 'true' : 'false',
+        toggle: (e) => { this.stop(e); this.setState({ mb: (this.state || {}).mb === m.id ? null : m.id, nm: null }); },
+        enter: () => { const s = this.state || {}; if (s.mb && s.mb !== m.id) this.setState({ mb: m.id }); },
+        key: (e) => this.mbKey(e, idx),
+        menuKey: (e) => this.menuKey(e, idx),
+        items: m.items.map((it) => ({
+          sep: !!it.sep, isItem: !it.sep && !it.chk, isCheck: !!it.chk,
+          l: it.l || '', k: it.k || '', cls: it.dng ? 'dng' : '', dis: it.dis ? 'true' : 'false',
+          checked: it.chk && view[it.chk] ? 'true' : 'false', mark: it.chk && view[it.chk] ? '✓' : '',
+          pick: (e) => { this.stop(e); if (it.dis) return; this.runCmd(m, it); }
+        }))
+      })),
+      mbStatus: st.mbLast ? 'Last command: ' + st.mbLast : 'No command run yet',
+      minimap: !!view.minimap, snap: !!view.snap, runlog: !!view.runlog,
+
+      nmCompany: nm === 'company', nmAgents: nm === 'agents',
+      nmCExp: nm === 'company' ? 'true' : 'false', nmAExp: nm === 'agents' ? 'true' : 'false',
+      nmCToggle: (e) => { this.stop(e); this.setState({ nm: (this.state || {}).nm === 'company' ? null : 'company', mb: null }); },
+      nmAToggle: (e) => { this.stop(e); this.setState({ nm: (this.state || {}).nm === 'agents' ? null : 'agents', mb: null }); },
+      nmCEnter: () => { const s = this.state || {}; if (s.nm && s.nm !== 'company') this.setState({ nm: 'company' }); },
+      nmAEnter: () => { const s = this.state || {}; if (s.nm && s.nm !== 'agents') this.setState({ nm: 'agents' }); },
+
+      fmts: FMTS.map(([k, label, aria, title, glyph]) => ({
+        label: label, aria: aria, title: title, glyph: glyph, pressed: fmt[k] ? 'true' : 'false',
+        toggle: () => this.setState({ fmt: Object.assign({}, fmt, { [k]: !fmt[k] }) })
+      })),
+      fmtCls: [fmt.b ? 'fb' : '', fmt.i ? 'fi' : '', fmt.c ? 'fc' : ''].join(' '),
+      pinPressed: st.pin ? 'true' : 'false',
+      pinLabel: 'Pin to sidebar',
+      pinToggle: () => this.setState({ pin: !st.pin }),
+      views: VIEWS.map(([id, label]) => ({ label: label, pressed: vw === id ? 'true' : 'false', pick: () => this.setState({ vw: id }) })),
+      isList: vw === 'list', isGrid: vw === 'grid', isBoard: vw === 'board',
+
+      slides: SLIDES.map((s, i) => Object.assign({}, s, {
+        label: (i + 1) + ' of ' + SLIDES.length,
+        hidden: i === car ? 'false' : 'true',
+        tab: i === car ? '0' : '-1',
+        c1: FILLS[i % 5], c2: FILLS[(i + 1) % 5], c3: FILLS[(i + 2) % 5]
+      })),
+      carX: (-car * 100) + '%',
+      dots: SLIDES.map((s, i) => ({ label: 'Tip ' + (i + 1) + ': ' + s.title, cls: i === car ? 'on' : '', current: i === car ? 'true' : 'false', go: () => this.car(i) })),
+      prevDis: car === 0 ? 'true' : 'false',
+      nextDis: car === SLIDES.length - 1 ? 'true' : 'false',
+      carPrev: () => this.car(car - 1),
+      carNext: () => this.car(car + 1),
+      carKey: (e) => { if (e.key === 'ArrowLeft') { e.preventDefault(); this.car(car - 1); } else if (e.key === 'ArrowRight') { e.preventDefault(); this.car(car + 1); } },
+      carStatus: 'Tip ' + (car + 1) + ' of ' + SLIDES.length + ': ' + SLIDES[car].title
+    };
+  }
+}
+</script>
+</body>
+</html>

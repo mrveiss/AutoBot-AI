@@ -1,0 +1,783 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Codebase project overview</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.dtw{overflow-x:auto;max-width:100%}
+.dt{width:100%;border-collapse:collapse;table-layout:auto}
+.dt th{white-space:nowrap;padding:0 14px;height:36px;box-sizing:border-box;vertical-align:middle}
+.dt td{padding:9px 14px;height:44px;box-sizing:border-box;vertical-align:middle}
+.dt tbody tr:last-child td{border-bottom:0}
+.dt tbody tr:hover td{background:var(--surface2)}
+.dt .num{text-align:right;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12.5px;font-variant-numeric:tabular-nums}
+.dt th.num{font-family:inherit;font-size:11.5px}
+.dt .wrap{white-space:normal;min-width:280px;line-height:1.45}
+.dt .path{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;color:var(--text2)}
+.dt .code{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px}
+.dt .fct{display:flex;flex-wrap:wrap;gap:4px}
+.dt .sev{width:1%}
+.dt .meter{display:flex;align-items:center;gap:8px;min-width:140px}
+.dt .meter .hb{flex-grow:1;height:8px}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.ptabs{display:flex;flex-wrap:wrap;gap:4px;border-bottom:var(--bw) solid var(--border)}
+.ptabs a{height:40px;padding:0 12px;display:inline-flex;align-items:center;gap:6px;font-size:13.5px;font-weight:500;color:var(--text2);text-decoration:none;border-bottom:var(--nav-on-bw) solid transparent;box-sizing:border-box}
+.ptabs a.on{color:var(--text);font-weight:600;border-bottom-color:var(--accent)}
+.fp{height:28px;padding:0 10px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;font-size:12.5px;font-weight:500;color:var(--text2);cursor:pointer}
+.fp.on{border-color:var(--primary);color:var(--text);font-weight:600;background:var(--surface2)}
+.met{padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.met b{font-size:22px;font-weight:600}
+.lbl{font-size:12.5px;color:var(--muted);font-weight:500}
+.gr{font-weight:600;font-size:11.5px;padding:1px 7px;border-radius:5px;border:var(--bw) solid var(--border);background:var(--surface2)}
+.hb{height:10px;border-radius:3px;background:var(--bar-track);border:1px solid var(--line);box-sizing:border-box}
+.hb i{display:block;height:100%;box-sizing:border-box;border:1px solid var(--stroke);border-radius:2px}
+.c1{background:var(--i1)}.c2{background:var(--i2)}.c3{background:var(--i3)}.cb{background:var(--bar)}.ca{background:var(--bar-alert)}
+.sw{width:12px;height:12px;border:1px solid var(--stroke);box-sizing:border-box;border-radius:2px;display:inline-block;flex:none}
+.up{color:var(--ok-fg);font-weight:600}.dn{color:var(--alert-text);font-weight:600}
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px}
+.g4{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.st{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));border-bottom:var(--bw) solid var(--line)}
+.st>div{padding:11px 16px;border-right:var(--bw) solid var(--line)}
+.st b{display:block;font-size:20px;font-weight:600}
+.st span{font-size:12px;color:var(--muted)}
+.cb2{padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+.acc{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--line);font-size:13px}
+.acc b{font-weight:600;flex-grow:1}
+.it{padding:8px 16px;border-bottom:var(--bw) solid var(--line);font-size:13px;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.loc{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;color:var(--muted)}
+.cd{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;background:var(--surface2);border:var(--bw) solid var(--line);padding:1px 5px;border-radius:4px}
+.tx{font-family:'IBM Plex Sans',sans-serif;font-size:10.5px;fill:var(--muted)}
+.tn{font-family:'IBM Plex Mono',monospace;font-size:10px;fill:var(--text)}
+.gn{fill:var(--surface);stroke:var(--stroke);stroke-width:1}
+.ge{fill:none;stroke:var(--muted);stroke-width:1}
+.ge.hot{stroke:var(--bar-alert);stroke-width:1.5;stroke-dasharray:4 3}
+.m1{fill:var(--i1);stroke:var(--stroke);stroke-width:1}.m2{fill:var(--i2);stroke:var(--stroke);stroke-width:1}.m3{fill:var(--i3);stroke:var(--stroke);stroke-width:1}.mb{fill:var(--bar);stroke:var(--stroke);stroke-width:1}.ma{fill:var(--bar-alert);stroke:var(--stroke);stroke-width:1}.mt{fill:var(--bar-track);stroke:var(--stroke);stroke-width:1}
+.hr{display:grid;grid-template-columns:minmax(110px,170px) 1fr 44px;gap:10px;align-items:center;font-size:12.5px}
+.inp{background:var(--surface);border:var(--bw) solid var(--border);color:var(--text);border-radius:6px;height:36px;padding:0 10px;font:inherit;font-size:13px;box-sizing:border-box}
+.mth{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;border:var(--bw) solid var(--border);background:var(--surface2);min-width:44px;text-align:center;display:inline-block}
+.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:2px 12px;padding:10px 16px 14px;font-size:13px}
+.toc a{text-decoration:none;padding:4px 0;color:var(--text2)}
+.toc a:hover{text-decoration:underline}
+.ttl{font-size:12.5px;font-weight:600;margin:0}
+.dev summary{cursor:pointer;font-size:13px;font-weight:600;list-style:none;display:inline-flex;align-items:center;gap:6px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html" class="on adv" aria-current="page">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="ThemeManager.dc.html" class="adv" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon adv" aria-label="Plugins" data-tip="Plugins" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Admin panel" data-tip="Admin panel" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="Preferences.dc.html" aria-label="Profile settings" data-tip="Profile settings" data-tip-pos="bottom" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer; display: grid; place-items: center; text-decoration: none">MV</a>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+
+    <aside class="sub" aria-label="Analytics sections" style="flex: 1 1 220px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+      <h2 style="margin: 0; padding: 0 10px 4px; font-size: 15px; font-weight: 600">Analytics</h2>
+      <p class="sect">Insights</p>
+      <a href="Analytics.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="it1"/><path d="M9 9l-3 3 3 3M15 9l3 3-3 3"/></svg>Codebase</a>
+      <a href="BusinessIntelligence.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 4a8 8 0 1 0 9 9h-9z" class="i2"/><path d="M14 2.5A7.5 7.5 0 0 1 21.5 10H14z" class="i3"/></svg>Business Intelligence</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6z" class="it1"/><path d="M12 9v4M12 16v.5"/></svg>Security</a>
+      <a href="AuditLogs.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2" class="iw"/><rect x="9" y="2.5" width="6" height="3" rx="1" class="i2"/><path d="M8.5 13l2.5 2.5 4.5-5"/></svg>Audit</a>
+      <a href="DevSpeedup.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L5 14h6l-1 8 8-12h-6z" class="it2"/></svg>Dev Tools</a>
+      <p class="sect">Operations</p>
+      <a href="Usage.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18"/><rect x="5" y="11" width="3.5" height="9" class="i1"/><rect x="10.25" y="6" width="3.5" height="14" class="i3"/><rect x="15.5" y="13" width="3.5" height="7" class="i2"/></svg>Usage</a>
+      <a href="Operations.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>Operations</a>
+      <a href="ErrorMonitoring.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 17H3z" class="it3"/><path d="M12 10v4M12 17v.5"/></svg>Errors</a>
+      <a href="Benchmark.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17a9 9 0 0 1 18 0z" class="it1"/><path d="M12 17l4-5"/></svg>Benchmark</a>
+      <a href="FailureAnalysis.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6.5" class="it2"/><path d="M15 15l5.5 5.5M6.5 10h1.8l1-2 1.6 4 1-2h1.6"/></svg>Diagnostics</a>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 18px">
+
+      <section class="card only-min" aria-labelledby="advn-h" style="padding: 14px 16px; gap: 12px; align-items: center; flex-wrap: wrap">
+        <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg></span>
+        <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 240px; min-width: 0">
+          <h2 id="advn-h" style="margin: 0; font-size: 14px; font-weight: 600">This is an advanced area</h2>
+          <span class="sub2">It's hidden from navigation while Minimal interface is on.</span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px">
+          <button type="button" class="btn sm" onClick="{{showAll}}">Show all features</button>
+          <a href="Main.dc.html" class="btn sm pri">Go to Home</a>
+        </div>
+      </section>
+
+      <header style="display: flex; flex-direction: column; gap: 2px">
+        <span class="sub2"><a href="Analytics.dc.html" style="color: var(--muted); text-decoration: none">Analytics</a> / <a href="Analytics.dc.html" style="color: var(--muted); text-decoration: none">Codebase</a> / AutoBot-AI</span>
+        <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">Real-time Codebase Analytics</h1>
+      </header>
+
+      <section aria-label="Project" class="card" style="padding: 16px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center">
+        <span class="tile lg"><svg class="ic" width="28" height="28" viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="9" width="36" height="28" rx="3" class="iw"/><path d="M6 16h36"/><circle cx="10" cy="12.5" r="1" class="i3"/><circle cx="14" cy="12.5" r="1" class="i2"/><path d="M17 23l-4 4 4 4M31 23l4 4-4 4M26 21l-4 12"/><rect x="18" y="38" width="12" height="4" class="i1"/></svg></span>
+        <div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1">
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center"><span style="font-size: 16px; font-weight: 600">AutoBot-AI</span><span class="pill info" data-tip="Linked project" tabindex="0">Project: AutoBot Platform</span><span class="pill idle">GitHub</span></div>
+          <div style="display: flex; flex-wrap: wrap; gap: 16px; font-size: 12.5px; color: var(--muted)">
+            <span class="mono adv">mrveiss/AutoBot-AI</span><span class="mono adv">Dev_new_gui</span><span style="display: inline-flex; align-items: center; gap: 6px"><span class="dot d-ok"></span>ready</span><span>Synced 12 min ago</span>
+          </div>
+        </div>
+        <button type="button" class="btn sm">Manage Sources</button>
+      </section>
+
+      <nav aria-label="Project analytics" class="ptabs">
+        <a href="AnalyticsCodebaseOverview.dc.html" class="on" aria-current="page"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="5" height="9" class="i1"/><rect x="9.5" y="6" width="5" height="14" class="i2"/><rect x="16" y="3" width="5" height="17" class="i3"/></svg>Overview</a>
+        <a href="AnalyticsCodebase.dc.html">Code Quality</a>
+        <a href="AnalyticsCodeReview.dc.html">Code Review</a>
+        <a href="Evolution.dc.html">Evolution</a>
+        <a href="AnalyticsCodeGeneration.dc.html">Code Generation</a>
+        <span style="flex-grow: 1" aria-hidden="true"></span>
+        <a href="Analytics.dc.html">← Projects</a>
+      </nav>
+
+      <!-- Header controls -->
+      <section aria-label="Analysis controls" class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+          <span data-tip="Indexing is already running — Stop it to start again" tabindex="0" style="display: inline-flex"><button type="button" class="btn pri sm" disabled aria-busy="true">Indexing...</button></span>
+          <button type="button" class="btn sm" style="border-color: var(--bar-alert); color: var(--alert-text)">Stop</button>
+          <span data-tip="Available once indexing finishes" tabindex="0" style="display: inline-flex"><button type="button" class="btn sm" disabled>Analyze All</button></span>
+          <span style="width: 1px; height: 24px; background: var(--border)" aria-hidden="true"></span>
+          <label class="sub2" for="src">Source</label>
+          <select id="src" class="inp" style="height: 32px; min-width: 240px"><option>AutoBot-AI (mrveiss/AutoBot-AI)</option><option>autobot-slm (local)</option><option>Custom path...</option></select>
+          <button type="button" class="btn sm">Manage Sources</button>
+          <span style="flex-grow: 1" aria-hidden="true"></span>
+          <button type="button" class="btn sm adv">API Coverage</button>
+          <button type="button" class="btn sm adv">Code Smells</button>
+          <button type="button" class="btn sm adv">Health Score</button>
+          <button type="button" class="btn sm adv">Export Report</button>
+          <button type="button" class="btn sm adv" data-tip="Discard cached analysis results; the next run recomputes everything" data-tip-pos="left">Clear Cache</button>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding-top: 10px; border-top: var(--bw) solid var(--line)">
+          <label style="display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 500"><input type="checkbox" checked role="switch" style="width: 16px; height: 16px; accent-color: var(--primary)"><span data-tip="Refresh panels automatically as new commits are indexed">Real-time Updates</span></label>
+          <button type="button" class="btn sm">Refresh All</button>
+          <span style="flex-grow: 1" aria-hidden="true"></span>
+          <details class="dev adv" open style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+            <summary>Developer tools ▾</summary>
+            <span style="display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: 8px; vertical-align: middle">
+              <button type="button" class="fp">Test Declarations</button><button type="button" class="fp">Test Duplicates</button><button type="button" class="fp">Test Hardcodes</button><button type="button" class="fp" data-tip="Check that the NPU embedding worker responds">Test NPU</button><button type="button" class="fp">Test All APIs</button><button type="button" class="fp">Debug State</button><button type="button" class="fp" style="color: var(--alert-text)" data-tip="Clear all cached panel data for this source" data-tip-pos="left">Reset State</button>
+            </span>
+          </details>
+        </div>
+      </section>
+
+      <!-- On this page -->
+      <nav aria-label="On this page" class="card">
+        <div class="ch" style="padding: 10px 16px"><h2 style="font-size: 13.5px">On this page</h2><span class="sub2">22 panels</span></div>
+        <div class="toc">
+          <a href="#progress">Indexing progress</a><a href="#overview">System overview</a><a href="#stats">Codebase Statistics</a><a href="#problems">Problem Analytics</a>
+          <a href="#deps">Dependency Analysis</a><a href="#imports">Import Tree Visualization</a><a href="#callgraph">Function Call Graph</a><a href="#report">Problems Report</a>
+          <a href="#smells">Code Smells</a><a href="#intel">Code Intelligence Analysis</a><a href="#impact" class="adv">Impact Analysis</a><a href="#dups">Duplicate Code</a>
+          <a href="#decls">Declarations</a><a href="#hardcodes">Hardcoded Values</a><a href="#api">API Endpoint Coverage</a><a href="#xlang">Cross-Language Patterns</a>
+          <a href="#configdup">Configuration Duplicates</a><a href="#patterns">Code Pattern Analysis</a><a href="#bugs">Bug Prediction Analysis</a><a href="#scores">Code Intelligence Scores</a>
+          <a href="#env">Environment Variables</a><a href="#owners">Code Ownership</a><a href="#sources">Code Source Manager</a>
+        </div>
+      </nav>
+
+      <!-- Progress -->
+      <section id="progress" aria-labelledby="pg-h" class="g2" style="grid-template-columns: repeat(auto-fit, minmax(380px, 1fr))">
+        <div class="card" style="grid-column: span 1">
+          <div class="ch"><span class="dot d-warn"></span><h2 id="pg-h">Indexing in Progress</h2><span class="mono sub2 adv" data-tip="Indexing job ID 7f3c9a21…" tabindex="0">Job: 7f3c9a21...</span><button type="button" class="btn sm" style="color: var(--alert-text)">Stop</button></div>
+          <div class="cb2">
+            <div style="display: flex; flex-wrap: wrap; gap: 6px">
+              <span class="pill ok">✓ Scan files</span><span class="pill ok" data-tip="Abstract Syntax Tree — source parsed into functions, classes and imports" tabindex="0">✓ Parse AST</span><span class="pill warn" data-tip="Writing code embeddings to the ChromaDB vector store for semantic search" tabindex="0">● Store in ChromaDB · running</span><span class="pill idle">○ Problems · pending</span><span class="pill idle">○ Duplicates · pending</span>
+            </div>
+            <div class="bar" style="height: 8px" role="progressbar" aria-valuenow="64" aria-valuemin="0" aria-valuemax="100" aria-label="Indexing progress"><div class="bf" style="width: 64%"></div></div>
+            <div style="font-size: 13px; display: flex; justify-content: space-between"><span data-tip="Currently embedding files under autobot-backend/services/" tabindex="0">Storing embeddings: autobot-backend/services/…</span><span class="mono">64%</span></div>
+            <div style="display: flex; justify-content: space-between; font-size: 12.5px"><span class="lbl">Batch Progress:</span><span class="mono">18 / 28</span></div>
+            <div class="bar"><div class="bf" style="width: 64%; background: var(--i1); outline: 1px solid var(--stroke)"></div></div>
+            <div style="display: flex; flex-wrap: wrap; gap: 16px; font-size: 12.5px; color: var(--text2)"><span><b>2,847</b> files</span><span><b>3,964</b> problems</span><span><b>9,412</b> functions</span><span><b>1,286</b> classes</span><span data-tip="Embedding chunks written to the vector store so far" tabindex="0"><b>11,204</b> stored</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="ch"><h2>Scan Progress</h2><span class="mono sub2">12 / 22</span></div>
+          <div style="padding: 10px 16px 0"><div class="bar"><div class="bf" style="width: 55%"></div></div></div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px 14px; padding: 10px 16px 14px; font-size: 12.5px">
+            <span>✓ Codebase Stats <span class="loc">184ms</span></span><span>✓ Problems Report <span class="loc">912ms</span></span><span>✓ Declarations <span class="loc">640ms</span></span>
+            <span>✓ Duplicates <span class="loc">2.1s</span></span><span>✓ Hardcoded Values <span class="loc">1.4s</span></span><span>✓ Chart Data <span class="loc">310ms</span></span>
+            <span>✓ Dependencies <span class="loc">1.8s</span></span><span>✓ Import Tree <span class="loc">720ms</span></span><span>✓ Call Graph <span class="loc">3.2s</span></span>
+            <span>✓ API Endpoints <span class="loc">1.1s</span></span><span>✓ Config Duplicates <span class="loc">530ms</span></span><span>✗ Redis Health <span class="pill bad" data-tip="Redis did not answer within 5 s — check the Redis node" tabindex="0">failed: timeout</span></span>
+            <span>● Bug Prediction · running</span><span data-tip="Skipped — needs git history, which this source does not provide" tabindex="0">↷ Ownership · skipped</span><span>○ Security Score</span><span>○ Performance Score</span><span>○ Environment Analysis</span><span>○ Cross-Language</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Overview panel -->
+      <section id="overview" aria-label="System overview" class="g4">
+        <div class="card"><div class="ch"><h2>System Overview</h2><span class="pill ok" style="display: inline-flex; gap: 5px; align-items: center"><span class="dot d-ok"></span>Live</span></div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 16px; font-size: 12px"><div><span class="lbl">API Requests/min</span><b style="display: block; font-size: 18px">412</b></div><div><span class="lbl">Avg Response Time</span><b style="display: block; font-size: 18px">86ms</b></div><div><span class="lbl">Active Connections</span><b style="display: block; font-size: 18px">37</b></div><div><span class="lbl">System Health</span><b style="display: block; font-size: 18px; color: var(--ok-fg)">Healthy</b></div></div></div>
+        <div class="card"><div class="ch"><h2>Communication Patterns</h2><button type="button" class="btn sm" aria-label="Refresh communication patterns" data-tip="Refresh communication patterns" data-tip-pos="left">↻</button></div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 16px; font-size: 12px"><div><span class="lbl">WebSocket Connections</span><b style="display: block; font-size: 18px">14</b></div><div><span class="lbl">API Call Frequency</span><b style="display: block; font-size: 18px">388/min</b></div><div><span class="lbl">Data Transfer Rate</span><b style="display: block; font-size: 18px">226 KB/s</b></div><div><span class="lbl">Unique Endpoints</span><b style="display: block; font-size: 18px">143</b></div></div></div>
+        <div class="card"><div class="ch"><h2>Code Quality</h2><button type="button" class="btn sm" aria-label="Refresh code quality" data-tip="Refresh code quality" data-tip-pos="left">↻</button></div>
+          <div style="display: flex; gap: 14px; padding: 12px 16px; align-items: center; font-size: 12.5px"><div style="text-align: center"><b style="display: block; font-size: 26px">78</b><span class="lbl">Overall Score</span></div><div style="display: flex; flex-direction: column; gap: 4px"><span>Test Coverage: <b>41%</b></span><span>Code Duplicates: <b>206</b></span><span data-tip="Estimated effort to fix all open maintainability issues" tabindex="0">Technical Debt: <b>312h</b></span></div></div></div>
+        <div class="card"><div class="ch"><h2>Performance Metrics</h2><button type="button" class="btn sm" aria-label="Refresh performance metrics" data-tip="Refresh performance metrics" data-tip-pos="left">↻</button></div>
+          <div style="display: flex; gap: 14px; padding: 12px 16px; align-items: center; font-size: 12.5px"><div style="text-align: center"><b style="display: block; font-size: 26px">84%</b><span class="lbl" data-tip="Composite of memory, CPU and load-time scores against targets" tabindex="0">Efficiency</span></div><div style="display: flex; flex-direction: column; gap: 4px"><span>Memory Usage: <b>1,842MB</b></span><span>CPU Usage: <b>23%</b></span><span>Load Time: <b>640ms</b></span></div></div></div>
+      </section>
+
+      <!-- Stats -->
+      <section id="stats" aria-labelledby="st-h" class="card">
+        <div class="ch"><h2 id="st-h">Codebase Statistics</h2><button type="button" class="btn sm adv" aria-label="Export as Markdown" data-tip="Export as Markdown">MD</button><button type="button" class="btn sm adv" aria-label="Export as JSON" data-tip="Export as JSON" data-tip-pos="left">JSON</button></div>
+        <div class="st" style="border-bottom: 0"><div><b>2,847</b><span>Total Files</span></div><div><b>486,215</b><span>Lines of Code</span></div><div><b>9,412</b><span>Functions</span></div><div><b>1,286</b><span>Classes</span></div></div>
+      </section>
+
+      <!-- Problem analytics -->
+      <section id="problems" aria-labelledby="pa-h" class="card">
+        <div class="ch"><h2 id="pa-h">Problem Analytics</h2><button type="button" class="btn sm">Load unified report</button><button type="button" class="btn sm" aria-label="Refresh charts">↻ Refresh charts</button></div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 16px 0" role="group" aria-label="Category">
+          <button type="button" class="fp on" aria-pressed="true">All Issues 3,964</button><button type="button" class="fp">Code Quality 1,812</button><button type="button" class="fp">Security 214</button><button type="button" class="fp">Performance 486</button><button type="button" class="fp" data-tip="Race conditions and unsafe shared state">Concurrency 97</button><button type="button" class="fp">Maintainability 1,355</button>
+        </div>
+        <div class="st" style="margin: 12px 0 0; border-top: var(--bw) solid var(--line)"><div><b>3,964</b><span>Total Problems</span></div><div><b>38</b><span>Problem Types</span></div><div><b>712</b><span>Files Affected</span></div><div><b class="dn">97</b><span data-tip="Code where concurrent tasks can read and write shared data out of order" tabindex="0">Race Conditions</span></div></div>
+        <div class="g2" style="padding: 14px 16px; gap: 24px">
+          <div style="display: flex; flex-direction: column; gap: 8px"><p class="ttl">Problem Types Distribution</p>
+            <div class="hr"><span>long_function</span><div class="hb" style="height: 14px"><i class="c3" style="width: 92%"></i></div><span class="mono">412</span></div>
+            <div class="hr"><span>hardcoded_value</span><div class="hb" style="height: 14px"><i class="c2" style="width: 74%"></i></div><span class="mono">328</span></div>
+            <div class="hr"><span>broad_exception</span><div class="hb" style="height: 14px"><i class="c2" style="width: 52%"></i></div><span class="mono">231</span></div>
+            <div class="hr"><span>missing_docstring</span><div class="hb" style="height: 14px"><i class="c1" style="width: 44%"></i></div><span class="mono">196</span></div>
+            <div class="hr"><span>unused_import</span><div class="hb" style="height: 14px"><i class="c1" style="width: 14%"></i></div><span class="mono">64</span></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px"><p class="ttl">Problems by Severity</p>
+            <svg viewBox="0 0 320 130" style="width: 100%; height: 130px" role="img" aria-label="Critical 41, High 486, Medium 1,904, Low 1,533">
+              <path d="M30 110H320M30 75H320M30 40H320" style="stroke: var(--line)"/>
+              <rect x="50" y="108" width="40" height="2" class="ma"/><rect x="120" y="88" width="40" height="22" class="m3"/><rect x="190" y="18" width="40" height="92" class="m2"/><rect x="260" y="36" width="40" height="74" class="m1"/>
+              <text x="70" y="102" text-anchor="middle" class="tn">41</text><text x="140" y="82" text-anchor="middle" class="tn">486</text><text x="210" y="13" text-anchor="middle" class="tn">1,904</text><text x="280" y="31" text-anchor="middle" class="tn">1,533</text>
+              <text x="70" y="124" text-anchor="middle" class="tx">Critical</text><text x="140" y="124" text-anchor="middle" class="tx">High</text><text x="210" y="124" text-anchor="middle" class="tx">Medium</text><text x="280" y="124" text-anchor="middle" class="tx">Low</text>
+            </svg>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px"><p class="ttl">Race Conditions by Category</p>
+            <div style="display: flex; gap: 18px; align-items: center">
+              <svg width="110" height="110" viewBox="0 0 42 42" role="img" aria-label="Race conditions: shared state 46%, async redis 31%, file IO 23%">
+                <circle cx="21" cy="21" r="15.9" stroke-dasharray="46 54" stroke-dashoffset="25" style="fill: none; stroke: var(--i3); stroke-width: 7"/>
+                <circle cx="21" cy="21" r="15.9" stroke-dasharray="31 69" stroke-dashoffset="79" style="fill: none; stroke: var(--i2); stroke-width: 7"/>
+                <circle cx="21" cy="21" r="15.9" stroke-dasharray="23 77" stroke-dashoffset="48" style="fill: none; stroke: var(--i1); stroke-width: 7"/>
+                <circle cx="21" cy="21" r="19.4" style="fill: none; stroke: var(--stroke); stroke-width: .35"/><circle cx="21" cy="21" r="12.4" style="fill: none; stroke: var(--stroke); stroke-width: .35"/>
+                <text x="21" y="23" text-anchor="middle" style="font-family: 'IBM Plex Sans', sans-serif; font-weight: 600; font-size: 6px; fill: var(--text)">97</text>
+              </svg>
+              <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12.5px"><span style="display: flex; gap: 8px; align-items: center"><i class="sw c3"></i>Shared mutable state · 45</span><span style="display: flex; gap: 8px; align-items: center"><i class="sw c2"></i>Async Redis read-modify-write · 30</span><span style="display: flex; gap: 8px; align-items: center"><i class="sw c1"></i>Unlocked file I/O · 22</span></div>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px"><p class="ttl">Top Files with Most Problems</p>
+            <div class="hr" style="grid-template-columns: minmax(150px, 260px) 1fr 36px"><span class="mono" style="font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-tip="autobot-backend/chat_workflow_manager.py" tabindex="0">autobot-backend/chat_workflow_manager.py</span><div class="hb"><i class="ca" style="width: 96%"></i></div><span class="mono">88</span></div>
+            <div class="hr" style="grid-template-columns: minmax(150px, 260px) 1fr 36px"><span class="mono" style="font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">autobot-backend/knowledge_base.py</span><div class="hb"><i class="cb" style="width: 74%"></i></div><span class="mono">68</span></div>
+            <div class="hr" style="grid-template-columns: minmax(150px, 260px) 1fr 36px"><span class="mono" style="font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-tip="autobot-backend/api/analytics_codebase.py" tabindex="0">autobot-backend/api/analytics_codebase.py</span><div class="hb"><i class="cb" style="width: 61%"></i></div><span class="mono">56</span></div>
+            <div class="hr" style="grid-template-columns: minmax(150px, 260px) 1fr 36px"><span class="mono" style="font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">autobot-backend/llm_interface.py</span><div class="hb"><i class="cb" style="width: 50%"></i></div><span class="mono">46</span></div>
+            <div class="hr" style="grid-template-columns: minmax(150px, 260px) 1fr 36px"><span class="mono" style="font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-tip="autobot-frontend/src/components/analytics/CodebaseAnalytics.vue" tabindex="0">autobot-frontend/src/components/analytics/CodebaseAnalytics.vue</span><div class="hb"><i class="cb" style="width: 42%"></i></div><span class="mono">39</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Dependencies + import tree -->
+      <section id="deps" aria-labelledby="dp-h" class="card">
+        <div class="ch"><h2 id="dp-h">Dependency Analysis</h2><button type="button" class="btn sm">↻ Refresh</button></div>
+        <div class="st"><div><b>1,204</b><span>Python Modules</span></div><div><b>8,931</b><span>Import Relationships</span></div><div><b>87</b><span>External Packages</span></div><div><b class="dn">3</b><span data-tip="Modules that import each other directly or through a chain" tabindex="0">Circular Dependencies</span></div></div>
+        <div class="g2" style="padding: 14px 16px; gap: 24px">
+          <div style="display: flex; flex-direction: column; gap: 6px"><p class="ttl">External Dependencies <span class="sub2" style="font-weight: 400">· Package usage across codebase</span></p>
+            <svg viewBox="0 0 360 140" style="width: 100%; height: 140px" role="img" aria-label="Treemap of external package usage">
+              <rect x="1" y="1" width="150" height="138" class="m1"/><rect x="153" y="1" width="110" height="80" class="m2"/><rect x="265" y="1" width="94" height="80" class="m3"/><rect x="153" y="83" width="80" height="56" class="m1"/><rect x="235" y="83" width="64" height="56" class="m2"/><rect x="301" y="83" width="58" height="56" class="mt"/>
+              <text x="10" y="20" class="tn">fastapi · 412</text><text x="162" y="20" class="tn">redis · 286</text><text x="274" y="20" class="tn">pydantic · 241</text><text x="162" y="102" class="tn">chromadb · 132</text><text x="243" y="102" class="tn">httpx · 98</text><text x="309" y="102" class="tn">ollama · 61</text>
+            </svg>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px"><p class="ttl">Modules with Most Imports <span class="sub2" style="font-weight: 400">· Files with highest dependency count</span></p>
+            <div class="hr"><span class="mono" style="font-size: 11.5px">backend.app_factory</span><div class="hb"><i class="c1" style="width: 90%"></i></div><span class="mono">64</span></div>
+            <div class="hr"><span class="mono" style="font-size: 11.5px">chat_workflow_manager</span><div class="hb"><i class="c1" style="width: 70%"></i></div><span class="mono">49</span></div>
+            <div class="hr"><span class="mono" style="font-size: 11.5px">api.analytics_codebase</span><div class="hb"><i class="c1" style="width: 58%"></i></div><span class="mono">41</span></div>
+            <div class="hr"><span class="mono" style="font-size: 11.5px">services.npu_worker</span><div class="hb"><i class="c1" style="width: 36%"></i></div><span class="mono">25</span></div>
+          </div>
+        </div>
+        <div style="margin: 0 16px 14px; padding: 10px 12px; border: var(--bw) solid var(--bar-alert); border-radius: 8px; font-size: 12.5px; display: flex; flex-direction: column; gap: 4px">
+          <b class="dn">⚠ Circular Dependencies Detected</b>
+          <span class="mono">knowledge_base ↔ services.kb_indexer</span><span class="mono">chat_history_manager ↔ api.chat ↔ chat_workflow_manager</span><span class="mono">utils.redis_client ↔ config.ssot_config</span>
+        </div>
+      </section>
+
+      <section class="g2" aria-label="Import tree and call graph">
+        <article id="imports" class="card" aria-labelledby="it-h">
+          <div class="ch"><h2 id="it-h">Import Tree Visualization</h2><button type="button" class="btn sm">↻ Refresh</button></div>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px; align-items: center"><input class="inp" style="height: 30px; flex: 1 1 140px" placeholder="Search files..." aria-label="Search files"><div style="display: inline-flex; padding: 2px; border-radius: 6px; background: var(--surface2)"><button type="button" class="seg on">Network View</button><button type="button" class="seg">Tree View</button></div><span class="sub2">1,204 files</span></div>
+          <svg viewBox="0 0 440 200" style="width: 100%; height: 200px; display: block" role="img" aria-label="Import graph: app_factory hub imports api.chat, api.analytics_codebase, knowledge_base; these import redis_client and chromadb">
+            <path class="ge" d="M220 40L90 100M220 40L220 100M220 40L350 100M90 100L130 165M220 100L130 165M220 100L310 165M350 100L310 165M350 100L410 165"/>
+            <rect x="160" y="26" width="120" height="26" rx="5" class="m2"/><text x="220" y="43" text-anchor="middle" class="tn">app_factory.py</text>
+            <rect x="40" y="88" width="100" height="24" rx="5" class="m1"/><text x="90" y="104" text-anchor="middle" class="tn">api/chat.py</text>
+            <rect x="160" y="88" width="120" height="24" rx="5" class="m2"/><text x="220" y="104" text-anchor="middle" class="tn">knowledge_base.py</text>
+            <rect x="290" y="88" width="120" height="24" rx="5" class="m1"/><text x="350" y="104" text-anchor="middle" class="tn">api/analytics_*.py</text>
+            <rect x="70" y="153" width="120" height="24" rx="5" class="m3"/><text x="130" y="169" text-anchor="middle" class="tn">utils/redis_client</text>
+            <rect x="260" y="153" width="100" height="24" rx="12" class="gn" style="stroke-dasharray: 3 2"/><text x="310" y="169" text-anchor="middle" class="tn">chromadb</text>
+            <rect x="372" y="153" width="64" height="24" rx="12" class="gn" style="stroke-dasharray: 3 2"/><text x="404" y="169" text-anchor="middle" class="tn">fastapi</text>
+          </svg>
+          <div style="display: flex; flex-wrap: wrap; gap: 12px; padding: 8px 16px 12px; font-size: 12px; color: var(--muted)"><span style="display: flex; gap: 6px; align-items: center"><i class="sw c1"></i>Imports Others</span><span style="display: flex; gap: 6px; align-items: center"><i class="sw c3"></i>Imported By Others</span><span style="display: flex; gap: 6px; align-items: center"><i class="sw c2"></i>Hub (Both)</span><span style="display: flex; gap: 6px; align-items: center"><i class="sw" style="border-style: dashed"></i>External Package</span></div>
+        </article>
+
+        <article id="callgraph" class="card" aria-labelledby="cg-h">
+          <div class="ch"><h2 id="cg-h">Function Call Graph</h2><button type="button" class="btn sm">↻ Refresh</button></div>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px; align-items: center"><input class="inp" style="height: 30px; flex: 1 1 120px" placeholder="Search functions..." aria-label="Search functions"><select class="inp" style="height: 30px" aria-label="Module"><option>All Modules</option></select><div style="display: inline-flex; padding: 2px; border-radius: 6px; background: var(--surface2)"><button type="button" class="seg on" data-tip="Network view (Cytoscape)">Network</button><button type="button" class="seg">List</button><button type="button" class="seg">Cluster</button><button type="button" class="seg" data-tip="Orphaned functions — defined but never called" data-tip-pos="left">Orphaned 214</button></div></div>
+          <div style="display: flex; flex-wrap: wrap">
+            <svg viewBox="0 0 300 200" style="flex: 1 1 260px; height: 200px" role="img" aria-label="Call graph around process_message">
+              <path class="ge" d="M150 30L60 95M150 30L150 95M150 30L245 95M60 95L90 165M150 95L90 165M150 95L210 165M245 95L210 165"/>
+              <path class="ge hot" d="M245 95C290 60 220 20 190 30"/>
+              <circle cx="150" cy="30" r="14" class="ma"/><text x="172" y="26" class="tn">process_message</text>
+              <circle cx="60" cy="95" r="10" class="m1"/><text x="12" y="120" class="tn">chat_completion</text>
+              <circle cx="150" cy="95" r="10" class="m2"/><text x="122" y="120" class="tn">kb.search</text>
+              <circle cx="245" cy="95" r="10" class="m1"/><text x="215" y="120" class="tn">run_tool</text>
+              <circle cx="90" cy="165" r="9" class="m3"/><text x="50" y="190" class="tn">get_redis_client</text>
+              <circle cx="210" cy="165" r="9" class="m3"/><text x="180" y="190" class="tn">embed_npu</text>
+            </svg>
+            <div style="flex: 1 1 150px; border-left: var(--bw) solid var(--line); padding: 10px 14px; font-size: 12px; display: flex; flex-direction: column; gap: 5px">
+              <b style="font-size: 12.5px">process_message</b>
+              <span><span class="lbl">Module</span><br><span class="mono">chat_workflow_manager</span></span>
+              <span><span class="lbl">File</span><br><span class="mono" data-tip="autobot-backend/chat_workflow_manager.py" tabindex="0" style="display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom">autobot-backend/chat_workflow_manager.py</span></span>
+              <span>Incoming Calls <b>6</b> · Outgoing Calls <b>14</b></span>
+              <span class="pill warn" style="align-self: flex-start" data-tip="Hub: many callers and callees · recursion: calls itself through run_tool" tabindex="0">Hub · recursion</span>
+            </div>
+          </div>
+          <div class="sub2" style="padding: 8px 16px 12px; border-top: var(--bw) solid var(--line)">9,412 functions · 21,580 call edges · 214 orphaned · dashed = recursive call</div>
+        </article>
+      </section>
+
+      <!-- Problems report + Code smells -->
+      <section class="g2" aria-label="Problems report and code smells">
+        <article id="report" class="card" aria-labelledby="pr-h">
+          <div class="ch"><h2 id="pr-h">Problems Report <span class="sub2" style="font-weight: 400">(3,964 Total)</span></h2><button type="button" class="btn sm adv">Export Markdown</button><button type="button" class="btn sm adv">Export JSON</button></div>
+          <div class="st"><div><b>3,964</b><span>Total</span></div><div><b>41</b><span>Critical</span></div><div><b>486</b><span>High</span></div><div><b>1,904</b><span>Medium</span></div><div><b>1,533</b><span>Low</span></div></div>
+          <div class="acc"><span aria-hidden="true">▾</span><b>Broad Exception (231)</b><span class="pill bad">4 Critical</span><span class="pill warn">61 High</span><span class="pill info">166 Medium</span></div>
+          <div class="it"><span class="pill bad">critical</span><span>Bare <span class="cd">except:</span> swallows CancelledError in stream loop</span><span class="loc">autobot-backend/api/chat.py:418</span></div>
+          <div class="it"><span class="pill warn">high</span><span><span class="cd">except Exception</span> hides Redis connection errors</span><span class="loc">autobot-backend/utils/redis_client.py:92</span></div>
+          <div class="it"><span class="pill info">medium</span><span>Exception logged without traceback</span><span class="loc">autobot-backend/services/npu_worker_client.py:155</span></div>
+          <div class="acc"><span aria-hidden="true">▸</span><b>Long Function (412)</b><span class="pill warn">88 High</span><span class="pill info">324 Medium</span></div>
+          <div class="acc" style="border-bottom: 0"><span aria-hidden="true">▸</span><b>Hardcoded Value (328)</b><span class="pill warn">112 High</span><span class="pill idle">216 Low</span></div>
+        </article>
+
+        <article id="smells" class="card" aria-labelledby="cs-h">
+          <div class="ch"><h2 id="cs-h">Code Smells <span class="sub2" style="font-weight: 400">682 found</span></h2><span class="pill ok">Health 78 · B</span><button type="button" class="btn sm adv">Export as Markdown</button><button type="button" class="btn sm adv">JSON</button></div>
+          <div class="st"><div><b>682</b><span>Total</span></div><div><b>9</b><span>Critical</span></div><div><b>143</b><span>High</span></div><div><b>318</b><span>Medium</span></div><div><b>212</b><span>Low</span></div></div>
+          <div class="acc"><span aria-hidden="true">▾</span><b>God Class (12)</b><span class="pill bad">3 Critical</span><span class="pill warn">9 High</span></div>
+          <div class="it"><span class="pill bad">critical</span><span><span class="cd">ChatWorkflowManager</span> — 64 methods, 2,140 lines</span><span class="loc">autobot-backend/chat_workflow_manager.py:58</span><span class="sub2" style="flex-basis: 100%">Suggestion: extract streaming, tool dispatch and history persistence into services.</span></div>
+          <div class="it"><span class="pill warn">high</span><span><span class="cd">KnowledgeBase</span> — 41 methods</span><span class="loc">autobot-backend/knowledge_base.py:77</span></div>
+          <div class="acc"><span aria-hidden="true">▸</span><b>Deep Nesting (97)</b><span class="pill warn">22 High</span><span class="pill info">75 Medium</span></div>
+          <div class="acc"><span aria-hidden="true">▸</span><b>Feature Envy (64)</b><span class="pill info">64 Medium</span></div>
+          <div class="acc" style="border-bottom: 0"><span aria-hidden="true">▸</span><b>Magic Number (212)</b><span class="pill idle">212 Low</span></div>
+        </article>
+      </section>
+
+      <!-- Code intelligence -->
+      <section id="intel" aria-labelledby="ci-h" class="card">
+        <div class="ch"><h2 id="ci-h">Code Intelligence Analysis <span class="sub2" style="font-weight: 400">· 147 findings</span></h2><button type="button" class="btn sm" data-tip="Scan a specific file">Scan File</button><button type="button" class="btn pri sm" data-tip="Run full code intelligence analysis" data-tip-pos="left">Analyze</button></div>
+        <div style="display: flex; flex-wrap: wrap; gap: 12px; padding: 10px 16px; align-items: center; border-bottom: var(--bw) solid var(--line)">
+          <div style="display: inline-flex; padding: 2px; border-radius: 6px; background: var(--surface2)" role="tablist"><button type="button" class="seg on" role="tab" aria-selected="true">Security 38</button><button type="button" class="seg" role="tab" aria-selected="false">Performance 71</button><button type="button" class="seg" role="tab" aria-selected="false">Redis 38</button></div>
+          <span class="ttl">Security Vulnerabilities</span><span style="flex-grow: 1"></span>
+          <input class="inp" style="height: 30px; width: 240px" placeholder="Search findings..." aria-label="Search findings by file path or message">
+        </div>
+        <div class="dtw"><table class="dt">
+          <thead><tr><th class="sev">Severity</th><th>File / Line</th><th>Type</th><th>Message</th><th>OWASP Category</th></tr></thead>
+          <tbody>
+            <tr><td class="sev"><span class="pill bad">critical</span></td><td class="path">autobot-backend/api/terminal.py:211</td><td class="code">command_injection</td><td class="wrap">User input reaches <span class="cd">subprocess</span> with <span class="cd">shell=True</span></td><td><span data-tip="OWASP Top 10 (2021) category A03 — Injection" data-tip-pos="left" tabindex="0">A03:2021 Injection</span></td></tr>
+            <tr><td class="sev"><span class="pill warn">high</span></td><td class="path">autobot-backend/api/files.py:144</td><td class="code">path_traversal</td><td class="wrap">Joined path not resolved against upload root</td><td>A01:2021 Broken Access Control</td></tr>
+            <tr><td class="sev"><span class="pill warn">high</span></td><td class="path">autobot-backend/services/llm_proxy.py:63</td><td class="code">ssl_verification_disabled</td><td class="wrap"><span class="cd">verify=False</span> on Ollama upstream client</td><td>A02:2021 Cryptographic Failures</td></tr>
+            <tr><td class="sev"><span class="pill info">medium</span></td><td class="path">autobot-backend/config/ssot_config.py:38</td><td class="code">hardcoded_secret</td><td class="wrap">Default Redis password literal in fallback</td><td>A07:2021 Auth Failures</td></tr>
+          </tbody></table></div>
+        <div style="display: flex; flex-wrap: wrap; gap: 16px; padding: 12px 16px; align-items: flex-start; background: var(--surface2); border-top: var(--bw) solid var(--line)">
+          <div style="flex: 1 1 260px; font-size: 12.5px; color: var(--text2)"><b style="color: var(--text)">Expanded row · Recommendation</b><br>Pass an argument list and drop <span class="cd">shell=True</span>; validate against the allowed command list in <span class="cd">security/command_policy.py</span>. <button type="button" class="btn sm" style="margin-top: 6px">Copy Path</button></div>
+          <div role="dialog" aria-label="Scan Single File" class="card" style="flex: 1 1 300px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+            <b style="font-size: 13.5px">Scan Single File</b>
+            <label class="lbl" for="fsp">File Path</label><input id="fsp" class="inp" value="autobot-backend/api/terminal.py">
+            <span class="lbl">Scan Types</span>
+            <div style="display: flex; gap: 14px; font-size: 13px"><label><input type="checkbox" checked> Security</label><label><input type="checkbox" checked> Performance</label><label><input type="checkbox"> Redis</label></div>
+            <span class="sub2">Currently only Python files (.py) are supported.</span>
+            <div style="display: flex; gap: 8px; justify-content: flex-end"><button type="button" class="btn sm">Cancel</button><button type="button" class="btn pri sm">Scan File</button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Impact -->
+      <section id="impact" aria-labelledby="im-h" class="card adv">
+        <div class="ch"><h2 id="im-h">Impact Analysis</h2><span class="sub2">What transitively calls a node — use it before changing or removing one.</span></div>
+        <div class="cb2">
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end"><label style="display: flex; flex-direction: column; gap: 4px; flex: 1 1 320px" class="lbl">Graph node id<input class="inp mono" value="utils.redis_client.get_redis_client" placeholder="e.g. package.module.ClassName"></label><button type="button" class="btn pri">Analyze</button></div>
+          <div style="padding: 9px 12px; border: var(--bw) solid var(--dot-warn); border-radius: 8px; font-size: 12.5px"><b data-tip="Real caller count may be higher than shown" tabindex="0">⚠ Partial result — this is a lower bound</b> · The walk stopped at depth 6 with 4 node(s) still unexpanded. 7 edge(s) could not be resolved, so some callers may be missing.</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 28px"><span><b style="font-size: 20px">142</b> <span class="sub2">callers (at least)</span></span><span><b style="font-size: 20px">389</b> <span class="sub2">edges resolved</span></span><span><b style="font-size: 20px">7</b> <span class="sub2" data-tip="Calls whose target could not be determined statically (dynamic dispatch, getattr)" tabindex="0">edges unresolved</span></span><span><b style="font-size: 20px">6/6</b> <span class="sub2">depth reached</span></span></div>
+          <p class="ttl">Callers reached</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px"><span class="cd">knowledge_base.KnowledgeBase.search</span><span class="cd">chat_history_manager.save_session</span><span class="cd">api.analytics_codebase.get_stats</span><span class="cd">services.npu_worker_client.enqueue</span><span class="cd">chat_workflow_manager.process_message</span><span class="sub2">+137 more</span></div>
+          <span class="sub2">▸ Show 7 unresolved edge(s)</span>
+        </div>
+      </section>
+
+      <!-- Duplicates / Declarations / Hardcodes -->
+      <section class="g2" aria-label="Duplicates and declarations">
+        <article id="dups" class="card" aria-labelledby="du-h">
+          <div class="ch"><h2 id="du-h">Duplicate Code <span class="sub2" style="font-weight: 400">206 pairs</span></h2><button type="button" class="btn sm adv">MD</button><button type="button" class="btn sm adv">JSON</button></div>
+          <div class="st"><div><b>206</b><span>Total Pairs</span></div><div><b>31</b><span>High</span></div><div><b>88</b><span>Medium</span></div><div><b>87</b><span>Low</span></div><div><b>4,812</b><span>Total Lines</span></div></div>
+          <div class="acc"><b>High Similarity</b><span class="pill bad">31</span></div>
+          <div class="it" style="flex-direction: column"><span><b>96%</b> similar · 48 lines</span><span class="loc">api/analytics_quality.py:120 ↔ api/analytics_debt.py:88</span></div>
+          <div class="it" style="flex-direction: column"><span><b>92%</b> similar · 31 lines</span><span class="loc">components/analytics/DuplicatesSection.vue:40 ↔ HardcodesSection.vue:38</span></div>
+          <div class="acc" style="border-bottom: 0"><b>Medium Similarity</b><span class="pill warn">88</span></div>
+        </article>
+        <article id="decls" class="card" aria-labelledby="de-h">
+          <div class="ch"><h2 id="de-h">Declarations</h2><button type="button" class="btn sm adv">MD</button><button type="button" class="btn sm adv">JSON</button></div>
+          <div class="st"><div><b>12,904</b><span>Total</span></div><div><b>3,118</b><span>Exported</span></div></div>
+          <div class="acc"><b>Function (8,126)</b></div>
+          <div class="it"><span class="mono">index_codebase</span><span class="pill ok">exported</span><span class="loc">api/analytics_indexing.py:204</span></div>
+          <div class="it"><span class="mono">get_redis_client</span><span class="pill ok">exported</span><span class="loc">utils/redis_client.py:41</span></div>
+          <div class="acc"><b>Class (1,286)</b></div>
+          <div class="acc"><b>Method (2,904)</b></div>
+          <div class="acc" style="border-bottom: 0"><b>Constant (588)</b></div>
+        </article>
+      </section>
+
+      <article id="hardcodes" class="card" aria-labelledby="hc-h">
+        <div class="ch"><h2 id="hc-h">Hardcoded Values <span class="sub2" style="font-weight: 400">328 values</span></h2><button type="button" class="btn sm adv">MD</button><button type="button" class="btn sm adv">JSON</button></div>
+        <div class="st"><div><b>328</b><span>Total Values</span></div><div><b>112</b><span>High</span></div><div><b>9</b><span>Unique Types</span></div></div>
+        <div class="acc"><b>High Severity</b><span class="pill warn">112</span></div>
+        <div class="dtw"><table class="dt"><thead><tr><th class="sev">Severity</th><th>Variable</th><th>Value</th><th>Type</th><th>File / Line</th><th>Suggested Env Var</th></tr></thead><tbody>
+          <tr><td class="sev"><span class="pill warn">high</span></td><td class="code">REDIS_HOST</td><td class="code">"192.0.2.23"</td><td>IP address</td><td class="path">autobot-backend/config/defaults.py:22</td><td><span class="cd">AUTOBOT_REDIS_HOST</span></td></tr>
+          <tr><td class="sev"><span class="pill warn">high</span></td><td class="code">ollama_url</td><td class="code">"http://localhost:11434"</td><td>URL</td><td class="path">autobot-backend/services/llm_proxy.py:18</td><td><span class="cd">AUTOBOT_OLLAMA_URL</span></td></tr>
+          <tr><td class="sev"><span class="pill warn">high</span></td><td class="code">npu_endpoint</td><td class="code">"http://192.0.2.22:8081"</td><td>URL</td><td class="path">autobot-backend/services/npu_worker_client.py:31</td><td><span class="cd">AUTOBOT_NPU_WORKER_URL</span></td></tr>
+          <tr><td class="sev"><span class="pill info">medium</span></td><td class="code">CHROMA_PATH</td><td class="code">"/opt/autobot/data/chromadb"</td><td>File path</td><td class="path">autobot-backend/knowledge_base.py:40</td><td><span class="cd">AUTOBOT_CHROMA_PATH</span></td></tr>
+        </tbody></table></div>
+      </article>
+
+      <!-- API coverage -->
+      <section id="api" aria-labelledby="ap-h" class="card">
+        <div class="ch"><h2 id="ap-h">API Endpoint Coverage <span class="sub2" style="font-weight: 400">(81.4% coverage)</span></h2><span class="sub2">Last scan: 10:42</span><button type="button" class="btn sm">↻ Refresh</button><button type="button" class="btn sm adv">MD</button><button type="button" class="btn sm adv">JSON</button></div>
+        <div class="st"><div><b>612</b><span>Backend Endpoints</span></div><div><b>538</b><span>Frontend Calls</span></div><div><b>498</b><span>Used Endpoints</span></div><div><b class="dn">114</b><span data-tip="Backend endpoints no frontend code calls" tabindex="0">Orphaned</span></div><div><b class="dn">9</b><span data-tip="Frontend calls to endpoints the backend does not define" tabindex="0">Missing</span></div></div>
+        <div style="padding: 10px 16px; display: flex; gap: 12px; align-items: center; font-size: 12.5px; border-bottom: var(--bw) solid var(--line)"><span class="lbl">API Coverage</span><div class="hb" style="flex-grow: 1; height: 12px"><i class="cb" style="width: 81.4%"></i></div><b>81.4%</b></div>
+        <div class="g2" style="gap: 0">
+          <div style="border-right: var(--bw) solid var(--line)"><div class="acc"><b>Orphaned Endpoints (114)</b><span class="pill idle">Unused Code</span></div>
+            <div class="it"><span class="mth">GET</span><span class="mono">/api/analytics/legacy/summary</span><span class="loc">api/analytics_legacy.py:52</span></div>
+            <div class="it"><span class="mth">POST</span><span class="mono">/api/kb/reindex_all</span><span class="loc">api/knowledge.py:610</span></div>
+            <div class="it" style="border-bottom: 0"><span class="mth">DELETE</span><span class="mono">/api/terminal/sessions/purge</span><span class="loc">api/terminal.py:388</span></div></div>
+          <div style="border-right: var(--bw) solid var(--line)"><div class="acc"><b>Missing Endpoints (9)</b><span class="pill bad">Potential Bugs</span></div>
+            <div class="it"><span class="mth">GET</span><span class="mono">/api/codebase/sources/{id}/owners</span><span class="loc">src/composables/useCodeSources.ts:144</span></div>
+            <div class="it" style="border-bottom: 0"><span class="mth">PUT</span><span class="mono">/api/settings/npu</span><span class="loc">src/components/settings/NpuSettings.vue:212</span></div></div>
+          <div><div class="acc"><b>Used Endpoints (498)</b><span class="pill ok">Active</span></div>
+            <div class="it"><span class="mth">POST</span><span class="mono">/api/chat/stream</span><span class="pill info">42 calls</span></div>
+            <div class="it" style="border-bottom: 0"><span class="mth">GET</span><span class="mono">/api/analytics/codebase/stats</span><span class="pill info">17 calls</span></div></div>
+        </div>
+      </section>
+
+      <!-- Cross-language + patterns -->
+      <section class="g2" aria-label="Cross-language analysis and configuration duplicates">
+        <article id="xlang" class="card" aria-labelledby="xl-h">
+          <div class="ch"><h2 id="xl-h">Cross-Language Pattern Analysis</h2><button type="button" class="btn sm">↻</button><button type="button" class="btn pri sm">Full Scan</button><button type="button" class="btn sm adv">MD</button><button type="button" class="btn sm adv">JSON</button></div>
+          <div class="st"><div><b>1,962</b><span>Files Analyzed</span></div><div><b class="dn">23</b><span data-tip="Data Transfer Object fields whose type differs between Python backend and TypeScript frontend" tabindex="0">DTO Mismatches</span></div><div><b>58</b><span>Semantic Matches</span></div></div>
+          <div class="acc"><b>DTO/Type Mismatches</b><span class="pill info">Type Safety</span></div>
+          <div class="it"><span class="pill bad">critical</span><span>Field: <span class="cd">created_at</span> datetime (py) vs number (ts)</span><span class="loc">models/source.py ↔ types/codeSource.ts</span></div>
+          <div class="it"><span class="pill warn">high</span><span>Field: <span class="cd">risk_level</span> missing in TS interface</span><span class="loc">api/bug_prediction.py ↔ types/analytics.ts</span></div>
+          <div class="acc"><b>API Contract Issues</b><span class="pill info">Contract</span><span class="sub2">6</span></div>
+          <div class="acc"><b>Validation Duplications</b><span class="pill info">DRY Violation</span><span class="sub2">14</span></div>
+          <div class="acc" style="border-bottom: 0"><b>Semantic Pattern Matches</b><span class="pill info" data-tip="Similar logic found by embedding similarity rather than exact text" tabindex="0">AI Detected</span><span class="sub2">58</span></div>
+        </article>
+
+        <article id="configdup" class="card" aria-labelledby="cd-h">
+          <div class="ch"><h2 id="cd-h">Configuration Duplicates</h2><button type="button" class="btn sm">↻</button><button type="button" class="btn sm adv">MD</button><button type="button" class="btn sm adv">JSON</button></div>
+          <div class="st"><div><b>46</b><span>Duplicate Values</span></div><div><b>19</b><span>Unique Patterns</span></div></div>
+          <div class="it" style="flex-direction: column"><span><span class="cd">6379</span> · 11 occurrences</span><span class="loc" data-tip="Plus 8 more files — expand the item to see all" tabindex="0">docker-compose.yml, ansible/group_vars/all.yml, autobot-backend/config/defaults.yaml +8</span></div>
+          <div class="it" style="flex-direction: column"><span><span class="cd">nomic-embed-text</span> · 7 occurrences</span><span class="loc">config/llm.yaml, services/embeddings.py, npu-worker/config.toml +4</span></div>
+          <div class="it" style="flex-direction: column"><span><span class="cd">/opt/autobot/data/chromadb</span> · 5 occurrences</span><span class="loc">ansible/roles/chromadb/defaults/main.yml +4</span></div>
+          <p class="sub2" style="margin: 0; padding: 10px 16px">Consider consolidating duplicate values into shared configuration files or environment variables.</p>
+        </article>
+      </section>
+
+      <!-- Patterns (full width) -->
+      <article id="patterns" class="card" aria-labelledby="pt-h">
+        <div class="ch"><h2 id="pt-h">Code Pattern Analysis <span class="sub2" style="font-weight: 400">412 patterns</span></h2><span class="sub2 adv">1,203 patterns in ChromaDB</span><button type="button" class="btn sm" data-tip="Clear stored patterns">Reset</button><button type="button" class="btn pri sm">Analyze Patterns</button></div>
+        <div class="st"><div><b>2,847</b><span>Files Analyzed</span></div><div><b>412</b><span>Patterns Found</span></div><div><b>6.8%</b><span data-tip="Lines of code that could be removed by applying the suggested refactors" tabindex="0">LOC Reduction</span></div><div><b>C</b><span>Complexity Grade</span></div></div>
+        <div class="acc"><b>Complexity Hotspots</b><span class="sub2">Top 4 of 52</span></div>
+        <div class="dtw"><table class="dt"><thead><tr><th>Function</th><th>File / Line</th><th class="num"><span data-tip="Cyclomatic complexity — independent paths through the function; above 20 is hard to test" data-tip-pos="bottom" tabindex="0">CC</span></th><th class="num"><span data-tip="Cognitive complexity — how hard the code is to read, weighting nesting and breaks in flow" data-tip-pos="bottom" tabindex="0">Cognitive</span></th><th class="num"><span data-tip="Maintainability Index, 0–100; below 20 is hard to maintain" data-tip-pos="bottom" tabindex="0">MI</span></th><th class="num"><span data-tip="Deepest level of nested blocks" data-tip-pos="bottom" tabindex="0">Nesting</span></th><th class="num">Lines</th><th>Suggestion</th></tr></thead><tbody>
+          <tr><td class="code">process_message</td><td class="path">autobot-backend/chat_workflow_manager.py:612</td><td class="num"><span class="pill bad">47</span></td><td class="num">88</td><td class="num">21</td><td class="num">7</td><td class="num">214</td><td class="wrap">Split into stream, tool-dispatch and persistence steps</td></tr>
+          <tr><td class="code">rebuild_chunks</td><td class="path">autobot-backend/services/kb_indexer.py:230</td><td class="num"><span class="pill warn">31</span></td><td class="num">52</td><td class="num">34</td><td class="num">5</td><td class="num">138</td><td class="wrap">Extract per-file-type chunkers behind one interface</td></tr>
+          <tr><td class="code">index_codebase</td><td class="path">autobot-backend/api/analytics_indexing.py:404</td><td class="num"><span class="pill warn">24</span></td><td class="num">39</td><td class="num">41</td><td class="num">4</td><td class="num">121</td><td class="wrap">Move progress reporting into a context manager</td></tr>
+          <tr><td class="code">sendMessage</td><td class="path">autobot-frontend/src/stores/useChatStore.ts:288</td><td class="num"><span class="pill warn">21</span></td><td class="num">33</td><td class="num">46</td><td class="num">4</td><td class="num">96</td><td class="wrap">Separate optimistic update from the streaming handler</td></tr>
+        </tbody></table></div>
+        <div class="acc"><b>Duplicate Code</b><span class="sub2">38 · 1,140 lines saveable</span></div>
+        <div class="acc"><b>Regex Opportunities</b><span class="sub2">17</span></div>
+        <div class="acc" style="border-bottom: 0"><b>Refactoring Suggestions</b><span class="sub2">26</span></div>
+      </article>
+
+      <!-- Bug prediction (full width) -->
+      <article id="bugs" class="card" aria-labelledby="bp-h">
+        <div class="ch"><h2 id="bp-h">Bug Prediction Analysis <span class="sub2" style="font-weight: 400">(64 files need attention)</span></h2><button type="button" class="btn sm">↻</button><button type="button" class="btn sm adv">MD</button><button type="button" class="btn sm adv">JSON</button></div>
+        <div class="st"><div><b>2,847</b><span>Files Analyzed</span></div><div><b class="dn">18</b><span>High Risk</span></div><div><b>46</b><span>Medium Risk</span></div><div><b>2,783</b><span>Low Risk</span></div></div>
+        <div style="padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; border-bottom: var(--bw) solid var(--line)"><span class="ttl">Top Issues Found Across Codebase:</span><span class="pill idle">Complexity · 41 files</span><span class="pill idle">Change Frequency · 33</span><span class="pill idle">Test Coverage · 29</span><span style="flex-grow: 1"></span><span role="group" aria-label="Risk filter" style="display: inline-flex; gap: 6px"><button type="button" class="fp on">All (64)</button><button type="button" class="fp">High (18)</button><button type="button" class="fp">Medium (46)</button><button type="button" class="fp">Low (0)</button></span></div>
+        <div class="dtw"><table class="dt"><thead><tr><th>Risk Score</th><th class="sev">Level</th><th>File</th><th>Risk Factors</th><th class="num"><span data-tip="Commits touching this file in the last 90 days" data-tip-pos="bottom" tabindex="0">Changes 90d</span></th><th class="num">Bug Fixes</th></tr></thead><tbody>
+          <tr><td><div class="meter"><b class="mono" data-tip="Bug risk score 0–100 from complexity, churn, size and test coverage" data-tip-pos="right" tabindex="0">91</b><div class="hb"><i class="ca" style="width: 91%"></i></div></div></td><td class="sev"><span class="pill bad">high</span></td><td class="path">autobot-backend/chat_workflow_manager.py</td><td><div class="fct"><span class="pill idle">Complex</span><span class="pill idle" data-tip="Changed frequently in recent commits" tabindex="0">Unstable</span><span class="pill idle">Bug History</span></div></td><td class="num">38</td><td class="num">11</td></tr>
+          <tr><td><div class="meter"><b class="mono">84</b><div class="hb"><i class="ca" style="width: 84%"></i></div></div></td><td class="sev"><span class="pill bad">high</span></td><td class="path">autobot-backend/api/analytics_indexing.py</td><td><div class="fct"><span class="pill idle">Large</span><span class="pill idle">No Tests</span></div></td><td class="num">22</td><td class="num">6</td></tr>
+          <tr><td><div class="meter"><b class="mono">63</b><div class="hb"><i class="cb" style="width: 63%"></i></div></div></td><td class="sev"><span class="pill warn">medium</span></td><td class="path">autobot-frontend/src/stores/useChatStore.ts</td><td><div class="fct"><span class="pill idle">Unstable</span></div></td><td class="num">19</td><td class="num">3</td></tr>
+        </tbody></table></div>
+      </article>
+
+      <!-- Intelligence scores -->
+      <section id="scores" aria-labelledby="sc-h" class="card">
+        <div class="ch"><h2 id="sc-h">Code Intelligence Scores</h2><button type="button" class="btn sm">↻ Refresh all</button></div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); border-bottom: var(--bw) solid var(--line)">
+          <div style="padding: 12px 14px; display: flex; flex-direction: column; align-items: center; gap: 4px; border-right: var(--bw) solid var(--line)">
+            <svg width="130" height="80" viewBox="0 0 120 76" role="img" aria-label="Security 82, grade B"><path d="M12 65A48 48 0 0 1 108 65" style="fill: none; stroke: var(--bar-track); stroke-width: 12"/><path d="M12 65A48 48 0 0 1 100.5 39.3" style="fill: none; stroke: var(--i1); stroke-width: 12"/><path d="M6 65A54 54 0 0 1 114 65M18 65A42 42 0 0 1 102 65" style="fill: none; stroke: var(--stroke); stroke-width: 1"/><text x="60" y="60" text-anchor="middle" style="font: 600 20px 'IBM Plex Sans', sans-serif; fill: var(--text)">82</text><text x="60" y="73" text-anchor="middle" class="tx">B</text></svg>
+            <b style="font-size: 13px">Security</b><span class="sub2">2 critical · 9 high · 1,204 files</span><button type="button" class="fp">View Details</button></div>
+          <div style="padding: 12px 14px; display: flex; flex-direction: column; align-items: center; gap: 4px; border-right: var(--bw) solid var(--line)">
+            <svg width="130" height="80" viewBox="0 0 120 76" role="img" aria-label="Performance 71, grade C"><path d="M12 65A48 48 0 0 1 108 65" style="fill: none; stroke: var(--bar-track); stroke-width: 12"/><path d="M12 65A48 48 0 0 1 89.4 27.1" style="fill: none; stroke: var(--i2); stroke-width: 12"/><path d="M6 65A54 54 0 0 1 114 65M18 65A42 42 0 0 1 102 65" style="fill: none; stroke: var(--stroke); stroke-width: 1"/><text x="60" y="60" text-anchor="middle" style="font: 600 20px 'IBM Plex Sans', sans-serif; fill: var(--text)">71</text><text x="60" y="73" text-anchor="middle" class="tx">C</text></svg>
+            <b style="font-size: 13px">Performance</b><span class="sub2">71 issues · 1,204 files</span><button type="button" class="fp">View Details</button></div>
+          <div style="padding: 12px 14px; display: flex; flex-direction: column; align-items: center; gap: 4px; border-right: var(--bw) solid var(--line)">
+            <svg width="130" height="80" viewBox="0 0 120 76" role="img" aria-label="Redis usage 64, grade D"><path d="M12 65A48 48 0 0 1 108 65" style="fill: none; stroke: var(--bar-track); stroke-width: 12"/><path d="M12 65A48 48 0 0 1 80.4 21.6" style="fill: none; stroke: var(--i3); stroke-width: 12"/><path d="M6 65A54 54 0 0 1 114 65M18 65A42 42 0 0 1 102 65" style="fill: none; stroke: var(--stroke); stroke-width: 1"/><text x="60" y="60" text-anchor="middle" style="font: 600 20px 'IBM Plex Sans', sans-serif; fill: var(--text)">64</text><text x="60" y="73" text-anchor="middle" class="tx">D</text></svg>
+            <b style="font-size: 13px">Redis Usage</b><span class="sub2">38 issues · 212 files</span><button type="button" class="fp" aria-expanded="true">Hide Details</button></div>
+          <div style="padding: 12px 14px; display: flex; flex-direction: column; align-items: center; gap: 4px; border-right: var(--bw) solid var(--line)">
+            <svg width="130" height="80" viewBox="0 0 120 76" role="img" aria-label="Health score 78, grade B"><path d="M12 65A48 48 0 0 1 108 65" style="fill: none; stroke: var(--bar-track); stroke-width: 12"/><path d="M12 65A48 48 0 0 1 97 34.4" style="fill: none; stroke: var(--i1); stroke-width: 12"/><path d="M6 65A54 54 0 0 1 114 65M18 65A42 42 0 0 1 102 65" style="fill: none; stroke: var(--stroke); stroke-width: 1"/><text x="60" y="60" text-anchor="middle" style="font: 600 20px 'IBM Plex Sans', sans-serif; fill: var(--text)">78</text><text x="60" y="73" text-anchor="middle" class="tx">B</text></svg>
+            <b style="font-size: 13px">Health Score</b><span class="sub2">9 critical · 143 high · 312h debt</span></div>
+          <div style="padding: 12px 14px; display: flex; flex-direction: column; align-items: center; gap: 4px">
+            <svg width="130" height="80" viewBox="0 0 120 76" role="img" aria-label="Quality score 74, grade C"><path d="M12 65A48 48 0 0 1 108 65" style="fill: none; stroke: var(--bar-track); stroke-width: 12"/><path d="M12 65A48 48 0 0 1 92.9 30" style="fill: none; stroke: var(--i2); stroke-width: 12"/><path d="M6 65A54 54 0 0 1 114 65M18 65A42 42 0 0 1 102 65" style="fill: none; stroke: var(--stroke); stroke-width: 1"/><text x="60" y="60" text-anchor="middle" style="font: 600 20px 'IBM Plex Sans', sans-serif; fill: var(--text)">74</text><text x="60" y="73" text-anchor="middle" class="tx">C</text></svg>
+            <b style="font-size: 13px">Quality Score</b><span class="sub2">Complexity 68 · Maintainability 81 · Documentation 71 · Testing 52 · Security 82 · trend ↑</span></div>
+        </div>
+        <div class="g2" style="gap: 0">
+          <div style="border-right: var(--bw) solid var(--line)"><div class="acc"><b>Redis Optimization Suggestions</b><span class="sub2">38 findings</span></div>
+            <div class="it"><span class="pill warn">high</span><span>KEYS used in request path — use SCAN</span><span class="loc">chat_history_manager.py:301</span></div>
+            <div class="it"><span class="pill info">medium</span><span>4 sequential GETs — batch with pipeline</span><span class="loc">services/session_store.py:88</span></div>
+            <div class="it" style="border-bottom: 0"><span class="pill idle">low</span><span>Key without TTL</span><span class="loc">api/analytics_cache.py:57</span></div></div>
+          <div style="border-right: var(--bw) solid var(--line)"><div class="acc"><b>Code Suggestions</b></div>
+            <div class="it">Split <span class="cd">process_message</span> (CC 47) into stream, tool and persistence steps</div>
+            <div class="it">Replace blocking <span class="cd">requests</span> calls in async handlers with <span class="cd">httpx.AsyncClient</span></div>
+            <div class="it" style="border-bottom: 0">Add tests for <span class="cd">api/analytics_indexing.py</span> (no tests detected)</div></div>
+          <div><div class="acc"><b>Analysis History</b></div>
+            <div class="it"><span class="mono">Oct 10 10:42</span><span>Health 78 · B</span><span class="up">+2</span></div>
+            <div class="it"><span class="mono">Oct 03 09:15</span><span>Health 76 · B</span><span class="up">+1</span></div>
+            <div class="it" style="border-bottom: 0"><span class="mono">Sep 26 18:30</span><span>Health 75 · C</span><span class="dn">−3</span></div></div>
+        </div>
+      </section>
+
+      <!-- Environment + ownership -->
+      <section aria-label="Environment variables" style="display: flex; flex-direction: column">
+        <article id="env" class="card" aria-labelledby="en-h">
+          <div class="ch"><h2 id="en-h">Environment Variable Analysis <span class="sub2" style="font-weight: 400">(1,148 hardcoded values)</span></h2><button type="button" class="btn sm">↻</button><button type="button" class="btn sm adv">MD</button><button type="button" class="btn sm adv">JSON</button></div>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 16px; border-bottom: var(--bw) solid var(--line); font-size: 13px">
+            <label style="display: inline-flex; gap: 8px; align-items: center; font-weight: 500"><input type="checkbox" checked role="switch" style="accent-color: var(--primary)">Use AI Filtering</label>
+            <select class="inp" style="height: 30px" aria-label="Priority"><option>High Priority Only</option><option>Medium &amp; Above</option><option>Low &amp; Above</option><option>All Priorities</option></select>
+            <span class="sub2" data-tip="An LLM filters out values that are safe to keep hardcoded" tabindex="0">Model: <span class="mono">qwen2.5-coder:7b</span> · 1,148 → 214 (81% reduced)</span>
+          </div>
+          <div class="st"><div><b>1,148</b><span>Hardcoded Values</span></div><div><b>214</b><span>High Priority</span></div><div><b>63</b><span>Recommendations</span></div><div><b>7</b><span>Categories</span></div></div>
+          <div class="acc"><b>Environment Variable Recommendations</b><span class="sub2">63</span></div>
+          <div class="dtw"><table class="dt"><thead><tr><th>Env Variable</th><th class="sev">Priority</th><th>Category</th><th>Default Value</th><th class="num">Occurrences</th><th>Example Location</th></tr></thead><tbody>
+            <tr><td><span class="cd">AUTOBOT_REDIS_HOST</span></td><td class="sev"><span class="pill warn">high</span></td><td>Network</td><td class="code">192.0.2.23</td><td class="num">27</td><td class="path">autobot-backend/config/defaults.py:22</td></tr>
+            <tr><td><span class="cd">AUTOBOT_OLLAMA_URL</span></td><td class="sev"><span class="pill warn">high</span></td><td>Service URL</td><td class="code">http://localhost:11434</td><td class="num">14</td><td class="path">autobot-backend/services/llm_proxy.py:18</td></tr>
+            <tr><td><span class="cd">AUTOBOT_CHROMA_PATH</span></td><td class="sev"><span class="pill info">medium</span></td><td>File path</td><td class="code">data/chromadb</td><td class="num">9</td><td class="path">autobot-backend/knowledge_base.py:40</td></tr>
+          </tbody></table></div>
+        </article>
+      </section>
+
+      <section aria-label="Code ownership" style="display: flex; flex-direction: column">
+        <article id="owners" class="card" aria-labelledby="ow-h">
+          <div class="ch"><h2 id="ow-h">Code Ownership Analysis <span class="sub2" style="font-weight: 400">(4 contributors)</span></h2><button type="button" class="btn sm">↻</button><button type="button" class="btn sm adv">MD</button><button type="button" class="btn sm adv">JSON</button></div>
+          <div style="padding: 8px 16px; border-bottom: var(--bw) solid var(--line)"><div style="display: inline-flex; padding: 2px; border-radius: 6px; background: var(--surface2)" role="tablist"><button type="button" class="seg on" role="tab" aria-selected="true">Overview</button><button type="button" class="seg" role="tab" aria-selected="false">Contributors</button><button type="button" class="seg" role="tab" aria-selected="false">Files</button><button type="button" class="seg" role="tab" aria-selected="false">Knowledge Gaps 5</button></div></div>
+          <div class="st"><div><b>2,847</b><span>Files Analyzed</span></div><div><b>4</b><span>Contributors</span></div><div><b class="dn">1</b><span data-tip="How many contributors could leave before most of the code has no active owner" tabindex="0">Bus Factor</span></div><div><b>12</b><span data-tip="Areas where only one person has ever changed the code" tabindex="0">Knowledge Gaps</span></div></div>
+          <div style="padding: 8px 16px; font-size: 12.5px; display: flex; gap: 18px; border-bottom: var(--bw) solid var(--line)"><span data-tip="Share of lines written by the top contributor" tabindex="0">Ownership Concentration: <b>87%</b></span><span data-tip="Share of files touched by more than one contributor" tabindex="0">Team Coverage: <b>34%</b></span></div>
+          <div class="acc"><b>Top Contributors</b></div>
+          <div class="dtw"><table class="dt"><thead><tr><th class="num">#</th><th>Contributor</th><th class="num">Lines Owned</th><th>Share</th><th class="num">Files</th><th class="num">Commits</th><th class="num"><span data-tip="Weighted ownership score from lines, recency and review activity" data-tip-pos="bottom" tabindex="0">Score</span></th><th>Last Active</th></tr></thead><tbody>
+            <tr><td class="num">1</td><td><b>mrveiss</b></td><td class="num">318,402</td><td><div class="meter"><div class="hb"><i class="cb" style="width: 69%"></i></div><span class="mono" style="font-size: 12px">69%</span></div></td><td class="num">2,412</td><td class="num">4,871</td><td class="num">96</td><td>Today</td></tr>
+            <tr><td class="num">2</td><td><b>claude[bot]</b></td><td class="num">142,760</td><td><div class="meter"><div class="hb"><i class="cb" style="width: 31%"></i></div><span class="mono" style="font-size: 12px">31%</span></div></td><td class="num">1,306</td><td class="num">1,922</td><td class="num">71</td><td>Today</td></tr>
+            <tr><td class="num">3</td><td><b>dependabot[bot]</b></td><td class="num">2,114</td><td><div class="meter"><div class="hb"><i class="cb" style="width: 1%"></i></div><span class="mono" style="font-size: 12px">&lt;1%</span></div></td><td class="num">38</td><td class="num">146</td><td class="num">8</td><td>3 days ago</td></tr>
+          </tbody></table></div>
+        </article>
+      </section>
+
+      <!-- KB opt-in -->
+      <section aria-label="Knowledge Base" class="card" style="padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; border-color: var(--primary)">
+        <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h7v14H4zM13 5h7v14h-7z" class="it1"/><path d="M6.5 9h2M15.5 9h2"/></svg></span>
+        <span style="flex: 1 1 320px; font-size: 13.5px"><b>Indexing complete!</b> Would you like to add these code analysis results to the Knowledge Base for AI-assisted queries?</span>
+        <button type="button" class="btn pri sm">+ Add to Knowledge Base</button>
+        <button type="button" class="btn sm" aria-label="Dismiss" data-tip="Dismiss" data-tip-pos="left">✕</button>
+      </section>
+
+      <!-- Source manager + modals -->
+      <section id="sources" class="g2" aria-label="Code sources">
+        <article class="card" aria-labelledby="sm-h">
+          <div class="ch"><h2 id="sm-h">Code Source Manager</h2><span class="pill info" data-tip="Waiting for the indexer — sources are processed one at a time" tabindex="0">1 queued</span><button type="button" class="btn pri sm">+ Add Source</button><button type="button" class="btn sm" aria-label="Close" data-tip="Close · Esc" data-tip-pos="left">✕</button></div>
+          <div class="row" style="border-left: 3px solid var(--primary)"><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><span><b>AutoBot-AI</b> <span class="pill info">AutoBot Platform</span></span><span class="loc">mrveiss/AutoBot-AI · Dev_new_gui · Synced 12 min ago</span></div><span class="pill ok">ready</span><span class="pill idle">shared</span><span class="sub2">● Indexing running</span><button type="button" class="fp">Sync Now</button><button type="button" class="fp">Edit</button><button type="button" class="fp">Share</button></div>
+          <div class="row"><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><b>autobot-slm</b><span class="loc">/opt/autobot/slm · main · Synced 2 h ago</span></div><span class="pill warn">syncing</span><span class="pill idle">private</span><button type="button" class="fp">Syncing...</button><button type="button" class="fp">Edit</button><button type="button" class="fp">Share</button></div>
+          <div class="row"><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><b>npu-worker</b><span class="loc">mrveiss/autobot-npu-worker · Never synced</span></div><span class="pill bad">error</span><span class="pill idle">private</span><span class="sub2">queued</span><button type="button" class="fp">Remove from queue</button></div>
+        </article>
+        <div style="display: flex; flex-direction: column; gap: 16px">
+          <article role="dialog" aria-labelledby="as-h" class="card">
+            <div class="ch"><h2 id="as-h">Add Code Source</h2><button type="button" class="btn sm" aria-label="Close dialog" data-tip="Close · Esc" data-tip-pos="left">✕</button></div>
+            <div style="padding: 12px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12.5px">
+              <label class="lbl" style="display: flex; flex-direction: column; gap: 4px">Name<input class="inp" placeholder="e.g. AutoBot Main"></label>
+              <span class="lbl" style="display: flex; flex-direction: column; gap: 4px">Source Type<span style="display: inline-flex; padding: 2px; border-radius: 6px; background: var(--surface2)"><button type="button" class="seg on">GitHub</button><button type="button" class="seg">Local Path</button></span></span>
+              <label class="lbl" style="display: flex; flex-direction: column; gap: 4px">Repository<input class="inp" placeholder="owner/repository"></label>
+              <label class="lbl" style="display: flex; flex-direction: column; gap: 4px">Branch (optional)<input class="inp" placeholder="main"></label>
+              <label class="lbl" style="display: flex; flex-direction: column; gap: 4px">Credential (optional)<select class="inp"><option>-- None (public repo) --</option></select></label>
+              <label class="lbl" style="display: flex; flex-direction: column; gap: 4px">Access Level<select class="inp"><option>Private — Only you can access</option><option>Shared — Shared with specific users</option><option>Public — All users can view</option></select></label>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 0 16px 12px"><button type="button" class="btn sm">Cancel</button><button type="button" class="btn pri sm">Add Source</button></div>
+          </article>
+          <article role="dialog" aria-labelledby="ss-h" class="card">
+            <div class="ch"><h2 id="ss-h">Share Source</h2><span class="sub2">AutoBot-AI</span></div>
+            <div style="padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; font-size: 12.5px">
+              <label class="lbl" style="display: flex; flex-direction: column; gap: 4px; flex: 1 1 200px">User IDs (comma-separated)<input class="inp" value="ops-reviewer"></label>
+              <span class="sub2" style="flex: 1 1 160px">Currently shared with: <span class="mono">admin</span></span>
+              <button type="button" class="btn pri sm">Update Access</button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":1180}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      themes: defs.map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => { try { window.localStorage.setItem('autobot-theme', id); } catch (e) {} this.setState({ theme: id }); }
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

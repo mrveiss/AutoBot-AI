@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot two-factor</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.lbl{font-size:13px;font-weight:600;color:var(--text)}
+.inp{height:36px;width:100%;box-sizing:border-box;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-size:14px;padding:0 12px}
+.ibtn{width:32px;height:32px;border-radius:6px;border:0;background:transparent;display:inline-grid;place-items:center;cursor:pointer}
+.ibtn:hover{background:var(--surface2)}
+.fld{display:flex;flex-direction:column;gap:6px}
+.acard{width:100%;max-width:460px;box-sizing:border-box;padding:26px;display:flex;flex-direction:column;gap:18px}
+.step{display:flex;align-items:center;gap:8px;width:100%;max-width:460px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.step::after{content:"";flex:1;border-top:var(--bw) dashed var(--border)}
+.otp{display:grid;grid-template-columns:repeat(3,1fr) 14px repeat(3,1fr);gap:8px;align-items:center}
+.otp input{height:52px;width:100%;box-sizing:border-box;text-align:center;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:22px;font-weight:500;border-radius:8px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text)}
+.otp input.cur{border-color:var(--focus);outline:2px solid var(--focus);outline-offset:0}
+.otp span{text-align:center;color:var(--muted)}
+.chk{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--text2);line-height:1.45;cursor:pointer}
+.chk input{width:16px;height:16px;margin:2px 0 0;accent-color:var(--primary);flex:none}
+.note{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:6px;background:var(--surface2);border:var(--bw) solid var(--line);font-size:12.5px;color:var(--text2);line-height:1.45}
+.lnk{background:none;border:0;padding:0;font:inherit;font-size:13px;font-weight:500;color:var(--link);text-decoration:underline;cursor:pointer}
+.lnk:hover{color:var(--link-h)}
+.qr{width:180px;height:180px;padding:10px;box-sizing:border-box;border-radius:8px;background:var(--surface);border:var(--bw) solid var(--border);flex:none}
+.qr .m{fill:var(--stroke)}
+.qr .g{stroke:var(--line);stroke-width:.06}
+.key{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 12px;border-radius:6px;background:var(--surface2);border:var(--bw) solid var(--border);font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13.5px;letter-spacing:.06em}
+.codes{list-style:none;margin:0;padding:12px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px 16px;border-radius:6px;background:var(--surface2);border:var(--bw) solid var(--border);counter-reset:c}
+.codes li{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13.5px;display:flex;gap:8px;counter-increment:c}
+.codes li::before{content:counter(c,decimal-leading-zero);color:var(--muted);font-size:11.5px;padding-top:2px}
+.codes li.used{color:var(--muted);text-decoration:line-through}
+.num{width:22px;height:22px;border-radius:99px;display:inline-grid;place-items:center;font-size:12px;font-weight:600;background:var(--tile);border:var(--bw) solid var(--tile-b);flex:none}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <section aria-label="AutoBot" style="flex: 1 1 420px; min-width: 0; min-height: calc(100vh - 59px); box-sizing: border-box; padding: clamp(24px, 5vw, 56px); display: flex; flex-direction: column; justify-content: center; gap: 24px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 19px; letter-spacing: -.01em">AutoBot</span>
+    </div>
+
+    <svg class="ic" viewBox="0 0 400 290" aria-hidden="true" style="width: 100%; max-width: 200px; stroke-width: 3">
+      <path d="M150 20l100 38v68c0 68-44 108-100 128-56-20-100-60-100-128V58z" class="it1"/>
+      <rect x="110" y="110" width="80" height="64" rx="12" class="i2"/>
+      <path d="M124 110V92a26 26 0 0 1 52 0v18"/>
+      <circle cx="150" cy="140" r="8" class="ik"/><path d="M150 148v12"/>
+      <rect x="262" y="90" width="84" height="150" rx="16" class="iw"/>
+      <path d="M290 106h28"/>
+      <rect x="276" y="140" width="56" height="34" rx="6" class="i1"/>
+      <path d="M286 157h4M298 157h4M310 157h4M322 157h.5"/>
+      <circle cx="304" cy="220" r="7" class="i3"/>
+    </svg>
+
+    <div style="display: flex; flex-direction: column; gap: 8px; max-width: 460px">
+      <h2 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em; line-height: 1.2">One more step.</h2>
+      <p style="margin: 0; font-size: 14px; line-height: 1.55; color: var(--text2)">Two-factor authentication protects agents, secrets and fleet access on this instance. Codes are generated on your device and verified locally. Your data stays on this server.</p>
+    </div>
+
+    <div class="note" style="max-width: 460px">
+      <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="margin-top: 1px"><circle cx="12" cy="12" r="9" class="i1"/><path d="M12 11v6M12 7.5v.5"/></svg>
+      <span>Works with any TOTP app (Aegis, 2FAS, KeePassXC, 1Password, Google Authenticator). Lost your device and codes? An admin can reset 2FA from Admin › Users.</span>
+    </div>
+  </section>
+
+  <main style="flex: 1 1 420px; min-width: 0; box-sizing: border-box; padding: clamp(24px, 5vw, 56px); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px">
+
+    <div class="step">Sign-in · Verify code</div>
+    <div class="card acard">
+      <div style="display: flex; align-items: center; gap: 12px">
+        <span class="tile lg"><svg class="ic" width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><rect x="13" y="4" width="22" height="40" rx="5" class="i1"/><path d="M20 9h8"/><rect x="17" y="17" width="14" height="10" rx="2" class="iw"/><circle cx="24" cy="38" r="2" class="ik"/></svg></span>
+        <div style="display: flex; flex-direction: column; gap: 2px">
+          <span class="sub2">Signing in as <span class="mono">martins</span></span>
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">Two-factor authentication</h1>
+        </div>
+      </div>
+
+      <sc-if value="{{codeMode}}" hint-placeholder-val="{{ true }}">
+        <form style="display: flex; flex-direction: column; gap: 16px" action="#">
+          <fieldset style="border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+            <legend class="lbl" style="padding: 0; margin-bottom: 8px">Enter the 6-digit code from your authenticator app</legend>
+            <div class="otp">
+              <input type="text" inputmode="numeric" maxlength="1" autocomplete="one-time-code" aria-label="Digit 1 of 6" value="4">
+              <input type="text" inputmode="numeric" maxlength="1" aria-label="Digit 2 of 6" value="8">
+              <input type="text" inputmode="numeric" maxlength="1" aria-label="Digit 3 of 6" value="2">
+              <span aria-hidden="true">–</span>
+              <input type="text" inputmode="numeric" maxlength="1" aria-label="Digit 4 of 6" value="9">
+              <input type="text" inputmode="numeric" maxlength="1" aria-label="Digit 5 of 6" class="cur" value="">
+              <input type="text" inputmode="numeric" maxlength="1" aria-label="Digit 6 of 6" value="">
+            </div>
+            <span class="sub2">Paste works too. The code changes every 30 seconds.</span>
+          </fieldset>
+
+          <label class="chk" for="tf-remember">
+            <input id="tf-remember" type="checkbox" checked>
+            <span>Remember this device for 30 days<br><span class="sub2" data-tip="Detected from your browser and IP address">Firefox on Linux · Ķekava, LV</span></span>
+          </label>
+
+          <button type="submit" class="btn pri" style="height: 40px; justify-content: center; font-size: 14px">Verify<svg class="ic sonp" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
+        </form>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center">
+          <button type="button" class="lnk" onClick="{{toRecovery}}">Use a recovery code</button>
+          <span class="sub2" style="margin-left: auto" aria-live="polite">{{timerText}}</span>
+          <button type="button" class="btn sm" onClick="{{resend}}" aria-disabled="{{resendBlocked}}" data-tip="Emails a one-time code to your account address — available once the timer runs out" data-tip-pos="left">Send code by email</button>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{recMode}}" hint-placeholder-val="{{ false }}">
+        <form style="display: flex; flex-direction: column; gap: 16px" action="#">
+          <div class="fld">
+            <label class="lbl" for="tf-rec">Recovery code</label>
+            <input id="tf-rec" class="inp mono" type="text" autocomplete="off" placeholder="xxxx-xxxx-xxxx" value="7KQ2-M9TD-" style="letter-spacing: .08em">
+            <span class="sub2">Each recovery code works once. You'll be asked to set up 2FA again afterwards if you have fewer than 3 left.</span>
+          </div>
+          <button type="submit" class="btn pri" style="height: 40px; justify-content: center; font-size: 14px">Verify recovery code</button>
+        </form>
+        <button type="button" class="lnk" onClick="{{toCode}}" style="align-self: flex-start">Use authenticator code instead</button>
+      </sc-if>
+
+      <div role="alert" style="display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 6px; background: var(--bad-bg); color: var(--bad-fg); border: var(--bw) solid var(--border); font-size: 13px; line-height: 1.45">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="margin-top: 1px"><circle cx="12" cy="12" r="9" class="i3"/><path d="M12 7v6M12 16v.5"/></svg>
+        <span><strong style="font-weight: 600">Error: that code didn't work.</strong> Check your device clock is in sync. 3 attempts left before a 15-minute lock.</span>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 14px; border-top: var(--bw) solid var(--line)">
+        <span class="pill info" data-tip="Time-based one-time password; a new code every 30 seconds">TOTP · 30 s</span>
+        <span class="pill idle" data-tip="Single-use backup codes for when your device is unavailable">7 recovery codes left</span>
+        <a href="Login.dc.html" style="margin-left: auto; font-size: 13px; font-weight: 500">Sign in as someone else</a>
+      </div>
+    </div>
+
+    <div class="step">Account settings · Set up 2FA</div>
+    <div class="card" style="width: 100%; max-width: 460px; box-sizing: border-box">
+      <div class="ch">
+        <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" class="i1"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg></span>
+        <h2>Set up two-factor authentication</h2>
+        <span class="pill warn" data-tip="Your account signs in with password only until you finish setup" data-tip-pos="left">Not enabled</span>
+      </div>
+
+      <div style="padding: 18px 16px; display: flex; flex-direction: column; gap: 18px">
+        <div style="display: flex; gap: 10px; align-items: flex-start">
+          <span class="num">1</span>
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <span class="lbl">Scan this QR code with your authenticator app</span>
+            <span class="sub2"><span data-tip="Name your authenticator app shows for this entry">Issuer</span> <span class="mono">AutoBot (autobot.example)</span> · account <span class="mono">martins</span></span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap">
+          <svg class="qr" viewBox="0 0 21 21" role="img" aria-label="QR code for adding AutoBot to an authenticator app. Use the manual key if you can't scan it.">
+            <path class="g" d="M0 1h21M0 2h21M0 3h21M0 4h21M0 5h21M0 6h21M0 7h21M0 8h21M0 9h21M0 10h21M0 11h21M0 12h21M0 13h21M0 14h21M0 15h21M0 16h21M0 17h21M0 18h21M0 19h21M0 20h21M1 0v21M2 0v21M3 0v21M4 0v21M5 0v21M6 0v21M7 0v21M8 0v21M9 0v21M10 0v21M11 0v21M12 0v21M13 0v21M14 0v21M15 0v21M16 0v21M17 0v21M18 0v21M19 0v21M20 0v21"/>
+            <path class="m" fill-rule="evenodd" d="M0 0h7v7h-7zM1 1v5h5v-5zM2 2h3v3h-3zM14 0h7v7h-7zM15 1v5h5v-5zM16 2h3v3h-3zM0 14h7v7h-7zM1 15v5h5v-5zM2 16h3v3h-3z"/>
+            <path class="m" d="M8 0h1v1h-1zM10 0h2v1h-2zM9 1h1v1h-1zM11 1h1v2h-1zM8 2h2v1h-2zM8 4h1v2h-1zM10 3h1v1h-1zM12 4h1v1h-1zM9 5h2v1h-2zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM0 8h1v1h-1zM2 8h3v1h-3zM6 8h1v2h-1zM8 8h2v1h-2zM11 8h1v1h-1zM13 8h2v1h-2zM16 8h1v1h-1zM18 8h3v1h-3zM1 9h1v1h-1zM4 9h1v1h-1zM9 9h1v2h-1zM12 9h2v1h-2zM15 9h1v1h-1zM17 9h1v2h-1zM20 9h1v1h-1zM0 10h1v2h-1zM2 10h2v1h-2zM7 10h1v1h-1zM11 10h1v1h-1zM14 10h2v1h-2zM19 10h1v1h-1zM3 11h1v1h-1zM5 11h2v1h-2zM8 11h1v1h-1zM10 11h3v1h-3zM15 11h1v2h-1zM18 11h1v1h-1zM20 11h1v2h-1zM1 12h2v1h-2zM6 12h1v1h-1zM9 12h1v1h-1zM12 12h2v1h-2zM17 12h2v1h-2zM8 13h1v1h-1zM10 13h1v1h-1zM13 13h1v1h-1zM16 13h1v1h-1zM19 13h1v1h-1zM8 14h3v1h-3zM12 14h1v2h-1zM14 14h2v1h-2zM17 14h1v1h-1zM20 14h1v1h-1zM9 15h1v1h-1zM11 15h1v1h-1zM14 15h1v1h-1zM18 15h2v1h-2zM8 16h1v2h-1zM10 16h1v1h-1zM13 16h1v1h-1zM15 16h2v1h-2zM19 16h1v2h-1zM9 17h2v1h-2zM12 17h1v1h-1zM14 17h1v2h-1zM16 17h2v1h-2zM8 18h1v1h-1zM11 18h2v1h-2zM17 18h1v1h-1zM20 18h1v1h-1zM9 19h1v1h-1zM12 19h1v2h-1zM15 19h2v1h-2zM18 19h1v1h-1zM8 20h2v1h-2zM10 20h1v1h-1zM14 20h1v1h-1zM16 20h1v1h-1zM19 20h2v1h-2z"/>
+            <rect x="8.5" y="8.5" width="4" height="4" rx=".8" class="i3" style="stroke: var(--stroke); stroke-width: .15"/>
+          </svg>
+          <div style="flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+            <span class="lbl">Can't scan? Enter this key</span>
+            <div class="key">
+              <span style="flex: 1; min-width: 0; overflow-wrap: anywhere">JBSW Y3DP EHPK 3PXP Q7RT</span>
+              <button type="button" class="ibtn" aria-label="Copy setup key" data-tip="Copy setup key" data-tip-pos="left"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" class="i1"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg></button>
+            </div>
+            <span class="sub2">Type: time-based (TOTP) · <span data-tip="Hash algorithm — the default most authenticator apps expect">SHA-1</span> · 6 digits · 30 s</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; align-items: flex-start">
+          <span class="num">2</span>
+          <div class="fld" style="flex: 1">
+            <label class="lbl" for="tf-confirm">Enter the 6-digit code to confirm</label>
+            <input id="tf-confirm" class="inp mono" type="text" inputmode="numeric" maxlength="6" placeholder="000000" value="610 482" style="max-width: 160px; letter-spacing: .12em">
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; align-items: flex-start">
+          <span class="num">3</span>
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+            <div style="display: flex; flex-direction: column; gap: 4px">
+              <span class="lbl">Save your recovery codes</span>
+              <span class="sub2">Use one if you lose your device. Each works once. Store them offline, e.g. in your password manager.</span>
+            </div>
+            <ul class="codes" aria-label="Recovery codes">
+              <li>7KQ2-M9TD-4XWA</li>
+              <li>P3LN-8VCE-R2HJ</li>
+              <li>Z6BF-T1QK-9MSU</li>
+              <li>H4WY-D7NP-3CGE</li>
+              <li>N8RA-X5JM-6TLB</li>
+              <li>E2VU-K9FS-7QDW</li>
+              <li>C5GT-Y3HB-8NRP</li>
+              <li class="used">M1XD-4QPA-2KVF<span style="position: absolute; left: -9999px"> (used)</span></li>
+            </ul>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center">
+              <button type="button" class="btn sm" onClick="{{copyCodes}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" class="i1"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg>{{copyLabel}}</button>
+              <button type="button" class="btn sm"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18h14v3H5z" class="i2"/><path d="M12 3v11M7 9l5 5 5-5"/></svg>Download .txt</button>
+              <button type="button" class="btn sm" data-tip="Create 8 new codes — all current codes stop working">Regenerate</button>
+              <span class="sub2" role="status" aria-live="polite">{{copyNote}}</span>
+            </div>
+            <label class="chk" for="tf-saved">
+              <input id="tf-saved" type="checkbox">
+              <span>I've stored my recovery codes somewhere safe</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 8px; align-items: center; padding: 14px 16px; border-top: var(--bw) solid var(--line)">
+        <span class="sub2">Required by your admin for Owner and Admin roles</span>
+        <button type="button" class="btn sm" style="margin-left: auto">Cancel</button>
+        <button type="button" class="btn sm pri" data-tip="Confirm the code and tick the recovery-codes box first" data-tip-pos="left">Enable 2FA</button>
+      </div>
+    </div>
+
+    <p class="sub2" style="margin: 6px 0 0">© 2026 AutoBot. All rights reserved.</p>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"$preview":{"width":1440,"height":1640}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    this.setState({ left: 42 });
+    this._tick = setInterval(() => {
+      const s = this.state || {};
+      const l = typeof s.left === 'number' ? s.left : 42;
+      if (l > 0) this.setState({ left: l - 1 });
+    }, 1000);
+  }
+  componentWillUnmount() {
+    if (this._tick) clearInterval(this._tick);
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const rec = !!st.recovery;
+    const left = typeof st.left === 'number' ? st.left : 42;
+    const copied = !!st.copied;
+    const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    return {
+      theme: cur,
+      codeMode: !rec,
+      recMode: rec,
+      toRecovery: () => { this.setState({ recovery: true }); },
+      toCode: () => { this.setState({ recovery: false }); },
+      timerText: left > 0 ? ('Email fallback in 0:' + String(left).padStart(2, '0')) : 'Email fallback available',
+      resendBlocked: left > 0 ? 'true' : 'false',
+      resend: () => { const s = this.state || {}; if ((s.left || 0) <= 0) this.setState({ left: 60 }); },
+      copyLabel: copied ? 'Copied' : 'Copy all',
+      copyNote: copied ? '7 codes copied to clipboard' : '',
+      copyCodes: () => { this.setState({ copied: true }); },
+      themes: defs.map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => { try { window.localStorage.setItem('autobot-theme', id); } catch (e) {} this.setState({ theme: id }); }
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

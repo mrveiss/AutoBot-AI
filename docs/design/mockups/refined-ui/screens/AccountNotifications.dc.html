@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot notification settings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.segs{display:inline-flex;flex-wrap:wrap;gap:2px;padding:3px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.segs .seg{display:inline-flex;align-items:center;gap:6px;height:32px}
+legend{font-size:12.5px;font-weight:600;color:var(--text2);padding:0;margin-bottom:8px}
+fieldset{border:0;margin:0;padding:0}
+.hid{display:none}
+.prof{display:flex;align-items:center;gap:10px;padding:4px 10px 12px;margin-bottom:4px;border-bottom:var(--bw) solid var(--line)}
+.av{width:34px;height:34px;border-radius:99px;background:var(--brand-bg);color:var(--brand-fg);display:grid;place-items:center;font-weight:600;font-size:12.5px;flex:none}
+.th .nav a.avlink{width:34px;height:34px;padding:0;margin-left:8px;border-radius:99px;background:var(--brand-bg);color:var(--brand-fg);justify-content:center;font-size:12.5px;font-weight:600}
+.th .nav a.avlink.on{outline:var(--nav-on-bw) solid var(--accent);outline-offset:2px;border-bottom:0;padding-top:0}
+.inp{height:36px;box-sizing:border-box;padding:0 10px;background:var(--surface);border:var(--bw) solid var(--border);color:var(--text);border-radius:6px;font:inherit;font-size:13.5px}
+.fld{display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:600;color:var(--text2)}
+.tg{min-width:64px;height:28px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--muted);font:inherit;font-size:12px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 8px;cursor:pointer;box-sizing:border-box}
+.tg i{width:8px;height:8px;border-radius:99px;border:1.5px solid currentColor;box-sizing:border-box}
+.th .tg.on{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.tg.on i{background:currentColor}
+.tg.lock{cursor:not-allowed;border-style:dashed}
+.th .tg.on.lock{background:var(--surface2);color:var(--text);border-color:var(--border)}
+.mx td{white-space:normal;vertical-align:middle}
+.mx td.c{text-align:center}
+.mx th.c{text-align:center}
+.day{min-width:40px;height:30px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.th .day.on{background:var(--primary);border-color:var(--primary);color:var(--on-primary);font-weight:600}
+.note{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:12px 14px;border-radius:8px;border:var(--pill-b);font-size:13px}
+.note.i{background:var(--info-bg);color:var(--info-fg)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html" class="adv">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="ThemeManager.dc.html" class="adv" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px" data-tip="Small language model administration — opens separate console" data-tip-pos="bottom">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon adv" aria-label="Plugins" data-tip="Plugins" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Admin panel" data-tip="Admin panel" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="Preferences.dc.html" class="avlink on" aria-current="page" aria-label="Profile settings, Mārtiņš Veiss" data-tip="Profile settings" data-tip-pos="left">MV</a>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+
+    <aside class="sub" aria-label="Profile settings sections" style="flex: 1 1 220px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+      <div class="prof">
+        <span class="av" aria-hidden="true">MV</span>
+        <div style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+          <strong style="font-size: 14px; font-weight: 600">Mārtiņš Veiss</strong>
+          <span class="sub2">Profile settings</span>
+        </div>
+      </div>
+      <p class="sect">Personal</p>
+      <a href="Preferences.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20c0-3 2-4 4-4l8-11 3 3-11 8c0 2-1 4-4 4z" class="i3"/></svg>Appearance</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16"/></svg>Language</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" class="it3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Voice</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>Web Research</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v16l-6-4-6 4z" class="i2"/></svg>Slash Presets</a>
+      <p class="sect">Account</p>
+      <a href="AccountSecurity.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2" class="i2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v2"/></svg>Security</a>
+      <a href="AccountApiKeys.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" class="it1"/><path d="M8 10l-2 2 2 2M16 10l2 2-2 2M13 9l-2 6"/></svg>API Tokens</a>
+      <a href="AccountIntegrations.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2" class="i1"/><rect x="13" y="13" width="8" height="8" rx="2" class="i3"/><path d="M11 7h4a2 2 0 0 1 2 2v4"/></svg>Integrations</a>
+      <p class="sect">Connections</p>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i2"/><path d="M12 12h9M18 12v3M21 12v2"/></svg>API Keys</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v5M15 3v5M6 8h12v4a6 6 0 0 1-12 0z" class="it1"/><path d="M12 18v3"/></svg>Connection</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l18-7-7 18-3-8z" class="i1"/></svg>Telegram</a>
+      <a href="AccountNotifications.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z" class="i2"/><path d="M10 20h4"/></svg>Notifications</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="2" class="it3"/><path d="M11 18h2"/></svg>Mobile Devices</a>
+      <p class="sect">Control</p>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6z" class="it1"/><path d="M9 12l2 2 4-4"/></svg>Privacy</a>
+      <a href="#" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4M5 4h12l-3 4 3 4H5" class="i3"/></svg>Feature Flags <span class="pill idle" style="margin-left: auto" data-tip="Requires admin role" data-tip-pos="right">admin</span></a>
+      <a href="LlmConfig.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" class="it2"/><rect x="9" y="9" width="6" height="6" class="i3"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg>LLM Configuration <span class="pill idle" style="margin-left: auto" data-tip="Opens in the SLM Admin console" data-tip-pos="right">SLM ↗</span></a>
+      <div class="only-min minnote" style="margin: 16px 10px 0; padding-top: 12px; border-top: var(--bw) solid var(--line)"><span>Showing essentials</span><button type="button" class="linkbtn" onClick="{{showAll}}">Show all features</button></div>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 20px">
+
+      <header style="display: flex; flex-wrap: wrap; gap: 14px; align-items: center">
+        <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1">
+          <span class="sub2">Profile / Settings / Notifications</span>
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">Notifications</h1>
+          <span class="sub2">Choose which events reach you, and where. Changes save automatically.</span>
+        </div>
+        <span class="pill ok" role="status" tabindex="0" data-tip="All changes are saved automatically">Saved</span>
+        <button type="button" class="btn sm" onClick="{{reset}}" data-tip="Restore default routes, quiet hours and digest settings" data-tip-pos="left"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v5h5"/></svg>Reset to defaults</button>
+      </header>
+
+      <section aria-label="Delivery channels" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px">
+        <div class="card row" style="border-bottom: var(--bw) solid var(--border)"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z" class="i2"/><path d="M10 20h4"/></svg></span><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><strong style="font-size: 13.5px">In-app</strong><span class="sub2">Bell menu and toasts</span></div><span class="pill ok" tabindex="0" data-tip="Always on — in-app notifications can't be disabled as a channel">Active</span></div>
+        <div class="card row" style="border-bottom: var(--bw) solid var(--border)"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" class="it1"/><path d="M3 7l9 6 9-6"/></svg></span><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><strong style="font-size: 13.5px">Email</strong><span class="sub2">Via org <span tabindex="0" data-tip="Organization's shared outgoing mail server">SMTP relay</span></span></div><span class="pill ok" tabindex="0" data-tip="Address confirmed via verification email">Verified</span></div>
+        <div class="card row" style="border-bottom: var(--bw) solid var(--border)"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l18-7-7 18-3-8z" class="i1"/></svg></span><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><strong style="font-size: 13.5px">Telegram</strong><span class="sub2">AutoBot bot chat</span></div><span class="pill ok" tabindex="0" data-tip="Telegram chat linked to the AutoBot bot">Linked</span></div>
+        <div class="card row" style="border-bottom: var(--bw) solid var(--border)"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="2" class="it3"/><path d="M11 18h2"/></svg></span><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><strong style="font-size: 13.5px">Mobile push</strong><span class="sub2">1 of 2 devices registered</span></div><span class="pill warn" tabindex="0" data-tip="Only 1 of 2 devices registered — the other won't receive push" data-tip-pos="left">Partial</span></div>
+      </section>
+
+      <section class="card" aria-labelledby="mx">
+        <div class="ch">
+          <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="iw"/><path d="M3 9h18M9 4v16M15 4v16"/><rect x="10" y="10" width="4" height="4" class="i2"/></svg></span>
+          <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px">
+            <h2 id="mx" style="margin: 0; font-size: 15px; font-weight: 600">Notification preferences</h2>
+            <span class="sub2">{{onCount}} of 28 <span tabindex="0" data-tip="A route is one event type delivered on one channel">routes</span> on · <span tabindex="0" data-tip="Locked on by an administrator policy — can't be turned off here">dashed buttons are required by your administrator</span></span>
+          </div>
+        </div>
+        <div style="overflow-x: auto">
+          <table class="mx" style="width: 100%; border-collapse: collapse">
+            <caption class="hid">Event types by delivery channel</caption>
+            <thead><tr><th scope="col">Event</th><th scope="col" class="c">In-app</th><th scope="col" class="c">Email</th><th scope="col" class="c">Telegram</th><th scope="col" class="c">Mobile push</th></tr></thead>
+            <tbody>
+              <sc-for list="{{rows}}" as="r" hint-placeholder-count="7">
+                <tr>
+                  <th scope="row" style="background: transparent; text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--text); border-bottom: var(--bw) solid var(--line); padding: 10px 16px">
+                    <span style="display: flex; flex-direction: column; gap: 2px"><strong style="font-weight: 600">{{r.name}}</strong><span class="sub2" style="font-weight: 400">{{r.desc}}</span></span>
+                  </th>
+                  <sc-for list="{{r.cells}}" as="c" hint-placeholder-count="4">
+                    <td class="c"><button type="button" role="switch" class="tg {{c.cls}}" aria-checked="{{c.on}}" aria-disabled="{{c.dis}}" aria-label="{{c.label}}" data-tip="{{c.label}}" onClick="{{c.toggle}}"><i aria-hidden="true"></i>{{c.txt}}</button></td>
+                  </sc-for>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+        <div class="adv" style="padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+          <span class="sub2" style="flex-grow: 1">Send a test to check a channel is reachable</span>
+          <button type="button" class="btn sm" data-tip="Send a test message to your verified address">Test email</button>
+          <button type="button" class="btn sm" data-tip="Send a test message to the linked Telegram chat">Test Telegram</button>
+          <button type="button" class="btn sm" data-tip="Send a test push to registered devices" data-tip-pos="left">Test push</button>
+        </div>
+      </section>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 20px; align-items: start">
+        <section class="card" aria-labelledby="qh">
+          <div class="ch">
+            <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14A8 8 0 1 1 10 4a6 6 0 0 0 10 10z" class="i1"/></svg></span>
+            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px">
+              <h2 id="qh" style="margin: 0; font-size: 15px; font-weight: 600">Quiet hours</h2>
+              <span class="sub2">Hold Email, Telegram and push; in-app still collects</span>
+            </div>
+            <button type="button" role="switch" class="tg {{qCls}}" aria-checked="{{qOn}}" aria-label="Quiet hours" data-tip="Quiet hours on/off" data-tip-pos="left" onClick="{{toggleQuiet}}"><i aria-hidden="true"></i>{{qTxt}}</button>
+          </div>
+          <div style="padding: 16px; display: flex; flex-direction: column; gap: 16px">
+            <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end">
+              <label class="fld">From<input class="inp mono" type="time" value="22:00" style="width: 120px"></label>
+              <label class="fld">Until<input class="inp mono" type="time" value="07:00" style="width: 120px"></label>
+              <label class="fld adv">Time zone<select class="inp" style="width: 210px"><option>Europe/Riga (UTC+3)</option><option>UTC</option></select></label>
+            </div>
+            <fieldset>
+              <legend>Active on</legend>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px">
+                <sc-for list="{{days}}" as="d" hint-placeholder-count="7"><button type="button" class="day {{d.cls}}" aria-pressed="{{d.pressed}}" onClick="{{d.pick}}">{{d.label}}</button></sc-for>
+              </div>
+            </fieldset>
+            <div class="row" style="padding: 10px 0; border-top: var(--bw) solid var(--line); border-bottom: 0">
+              <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><strong style="font-size: 13.5px">Critical alerts break through</strong><span class="sub2">Heartbeat failures and budget <span tabindex="0" data-tip="Hard-stop: spending blocked because a budget reached 100%">hard-stops</span> still notify</span></div>
+              <button type="button" role="switch" class="tg {{bCls}}" aria-checked="{{bOn}}" aria-label="Critical alerts break through quiet hours" data-tip="Critical alerts break through quiet hours" data-tip-pos="left" onClick="{{toggleBreak}}"><i aria-hidden="true"></i>{{bTxt}}</button>
+            </div>
+            <div class="note i" role="status">{{qStatus}}</div>
+          </div>
+        </section>
+
+        <section class="card" aria-labelledby="dg">
+          <div class="ch">
+            <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2" class="it2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span>
+            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px">
+              <h2 id="dg" style="margin: 0; font-size: 15px; font-weight: 600">Digest</h2>
+              <span class="sub2">Bundle non-urgent notifications into one summary</span>
+            </div>
+          </div>
+          <div style="padding: 16px; display: flex; flex-direction: column; gap: 16px">
+            <fieldset>
+              <legend><span tabindex="0" data-tip="How often the bundled summary is sent; Off delivers each notification immediately">Frequency</span></legend>
+              <div class="segs" role="radiogroup" aria-label="Digest frequency">
+                <sc-for list="{{freqs}}" as="f" hint-placeholder-count="4"><button type="button" class="seg {{f.cls}}" role="radio" aria-checked="{{f.pressed}}" onClick="{{f.pick}}">{{f.label}}</button></sc-for>
+              </div>
+            </fieldset>
+            <div style="display: flex; flex-wrap: wrap; gap: 12px">
+              <label class="fld">Deliver at<input class="inp mono" type="time" value="08:30" style="width: 120px"></label>
+              <label class="fld">Deliver via<select class="inp" style="width: 160px"><option>Email</option><option>Telegram</option><option>In-app only</option></select></label>
+            </div>
+            <div class="adv" style="border: var(--bw) solid var(--line); border-radius: 8px; overflow: hidden">
+              <div class="row" style="background: var(--surface2)"><strong style="font-size: 13px; flex-grow: 1">Preview · {{freqLabel}} digest</strong><span class="sub2">Last 24 h</span></div>
+              <div class="row"><span class="pill info">7</span><span style="font-size: 13px; flex-grow: 1">Workflows finished</span><span class="sub2" tabindex="0" data-tip="nightly-kb-sync, invoice-triage and 5 more workflows" data-tip-pos="left">nightly-kb-sync, invoice-triage …</span></div>
+              <div class="row"><span class="pill info">3</span><span style="font-size: 13px; flex-grow: 1">Knowledge indexing jobs done</span><span class="sub2">412 documents</span></div>
+              <div class="row"><span class="pill warn" tabindex="0" data-tip="Errors that retried successfully — no action needed">2</span><span style="font-size: 13px; flex-grow: 1">Agent errors (recovered)</span><span class="sub2">research-agent</span></div>
+              <div class="row"><span class="pill idle">1</span><span style="font-size: 13px; flex-grow: 1">Mentions</span><span class="sub2">#ops-review</span></div>
+            </div>
+            <span class="sub2">Approvals and critical alerts are never held for the digest.</span>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":1720}}'>
+const CH = ['In-app', 'Email', 'Telegram', 'Mobile push'];
+const EVENTS = [
+  { id: 'appr', name: 'Approvals requested', desc: 'An agent or workflow waits for your sign-off', def: [1, 1, 1, 1], lock: [1, 0, 0, 0] },
+  { id: 'err', name: 'Agent errors', desc: 'Run failed, tool call rejected or model timeout', def: [1, 1, 1, 0], lock: [0, 0, 0, 0] },
+  { id: 'hb', name: 'Heartbeat failures', desc: 'Fleet node or agent missed its heartbeat', def: [1, 0, 1, 1], lock: [1, 0, 0, 0] },
+  { id: 'bud', name: 'Budget alerts', desc: 'Spend reached 80% or 100% of a Company OS budget', def: [1, 1, 0, 0], lock: [0, 1, 0, 0] },
+  { id: 'men', name: 'Mentions', desc: 'Someone mentioned you in chat or a work item', def: [1, 0, 1, 1], lock: [0, 0, 0, 0] },
+  { id: 'wf', name: 'Workflow finished', desc: 'A workflow you started completed or was cancelled', def: [1, 0, 0, 0], lock: [0, 0, 0, 0] },
+  { id: 'kb', name: 'Knowledge indexing done', desc: 'Upload or connector sync finished indexing', def: [1, 0, 0, 0], lock: [0, 0, 0, 0] }
+];
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const FREQ = [['off', 'Off'], ['hourly', 'Hourly'], ['daily', 'Daily'], ['weekly', 'Weekly']];
+
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    const m = st.m || {};
+    const quiet = st.quiet !== false;
+    const brk = st.brk !== false;
+    const days = st.days || { Mon: 1, Tue: 1, Wed: 1, Thu: 1, Fri: 1, Sat: 1, Sun: 1 };
+    const freq = st.freq || 'daily';
+    let count = 0;
+    const rows = EVENTS.map((ev) => ({
+      name: ev.name, desc: ev.desc,
+      cells: CH.map((ch, i) => {
+        const key = ev.id + i;
+        const locked = !!ev.lock[i];
+        const on = locked ? true : (key in m ? m[key] : !!ev.def[i]);
+        if (on) count++;
+        return {
+          cls: (on ? 'on' : '') + (locked ? ' lock' : ''),
+          on: on ? 'true' : 'false',
+          dis: locked ? 'true' : 'false',
+          txt: locked ? 'Required' : (on ? 'On' : 'Off'),
+          label: ev.name + ' via ' + ch + (locked ? ', required by administrator' : ''),
+          toggle: () => { if (locked) return; const n = Object.assign({}, (this.state || {}).m || {}); n[key] = !on; this.setState({ m: n }); }
+        };
+      })
+    }));
+    const fl = FREQ.find((f) => f[0] === freq) || FREQ[2];
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      rows: rows,
+      onCount: String(count),
+      reset: () => { this.setState({ m: {}, quiet: true, brk: true, days: null, freq: 'daily' }); },
+      qCls: quiet ? 'on' : '', qOn: quiet ? 'true' : 'false', qTxt: quiet ? 'On' : 'Off',
+      toggleQuiet: () => { this.setState({ quiet: !quiet }); },
+      bCls: brk ? 'on' : '', bOn: brk ? 'true' : 'false', bTxt: brk ? 'On' : 'Off',
+      toggleBreak: () => { this.setState({ brk: !brk }); },
+      qStatus: quiet ? 'Quiet hours on: 22:00 to 07:00, Europe/Riga.' + (brk ? ' Critical alerts still break through.' : ' All external alerts are held, including critical ones.') : 'Quiet hours off: notifications are delivered immediately.',
+      days: DAYS.map((d) => ({
+        label: d, cls: days[d] ? 'on' : '', pressed: days[d] ? 'true' : 'false',
+        pick: () => { const n = Object.assign({}, days); n[d] = n[d] ? 0 : 1; this.setState({ days: n }); }
+      })),
+      freqs: FREQ.map(([id, label]) => ({
+        label: label, cls: id === freq ? 'on' : '', pressed: id === freq ? 'true' : 'false',
+        pick: () => { this.setState({ freq: id }); }
+      })),
+      freqLabel: fl[1]
+    };
+  }
+}
+</script>
+</body>
+</html>

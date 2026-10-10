@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot help centre</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.segs{display:inline-flex;flex-wrap:wrap;gap:2px;padding:3px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.segs .seg{display:inline-flex;align-items:center;gap:6px;height:32px}
+.hid{display:none}
+.th .nav a.avlink{width:34px;height:34px;padding:0;margin-left:8px;border-radius:99px;background:var(--brand-bg);color:var(--brand-fg);justify-content:center;font-size:12.5px;font-weight:600}
+.srch{display:flex;align-items:center;gap:10px;height:48px;padding:0 8px 0 14px;border-radius:8px;background:var(--surface);border:var(--bw) solid var(--border);max-width:680px;box-sizing:border-box}
+.srch input{flex-grow:1;border:0;background:transparent;color:var(--text);font:inherit;font-size:15px;height:44px;min-width:0}
+.srch input:focus{outline:0}
+.srch:focus-within{outline:3px solid var(--focus);outline-offset:2px}
+.cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.cat{display:flex;gap:12px;align-items:flex-start;padding:14px;text-decoration:none;color:var(--text)}
+.th a.cat{color:var(--text)}
+.cat:hover{background:var(--surface2)}
+.cat b{display:block;font-size:14px;font-weight:600;margin-bottom:3px}
+.cat span{font-size:12.5px;color:var(--muted);line-height:1.4}
+.art{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line);text-decoration:none}
+.art:last-child{border-bottom:0}
+.th a.art{color:var(--text)}
+.art:hover{background:var(--surface2)}
+kbd{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;min-width:22px;height:24px;padding:0 6px;border-radius:5px;border:var(--bw) solid var(--border);border-bottom-width:2px;background:var(--surface2);color:var(--text);display:inline-grid;place-items:center;box-sizing:border-box}
+.kgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0 24px;padding:4px 16px 12px}
+.krow{display:flex;align-items:center;gap:6px;padding:8px 0;border-bottom:var(--bw) solid var(--line);font-size:13px}
+.krow span:first-child{flex-grow:1;color:var(--text2)}
+mark{background:var(--i2t);color:var(--text);border-radius:3px;padding:0 2px;outline:var(--pill-b)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html" class="adv">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="ThemeManager.dc.html" class="adv" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon adv" aria-label="Plugins" data-tip="Plugins" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Admin panel" data-tip="Admin panel" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="Preferences.dc.html" class="avlink" aria-label="Profile settings, Mārtiņš Veiss" data-tip="Profile settings" data-tip-pos="left">MV</a>
+  </nav>
+
+  <main style="flex: 1 1 100%; min-width: 0; box-sizing: border-box; padding: 28px clamp(16px, 4vw, 64px) 48px; display: flex; flex-direction: column; gap: 24px; max-width: 1280px; margin: 0 auto">
+
+    <header style="display: flex; flex-wrap: wrap; gap: 24px; align-items: center; padding: 28px; border-radius: 12px; background: var(--surface); border: var(--bw) solid var(--border)">
+      <div style="flex: 1 1 520px; display: flex; flex-direction: column; gap: 10px">
+        <span class="sub2">Help</span>
+        <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -.01em">How can we help?</h1>
+        <span class="sub2" style="font-size: 13.5px">Guides for your AutoBot instance. Answers come from the bundled docs, not the web.</span>
+        <form role="search" aria-label="Search help articles" class="srch">
+          <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>
+          <input type="search" aria-label="Search help" placeholder="Search articles, e.g. approvals, re-index, passkey" value="{{q}}" onInput="{{onQ}}">
+          <kbd class="adv" aria-hidden="true" data-tip="Press / to focus search">/</kbd>
+          <a href="SearchResults.dc.html" class="btn sm pri" data-tip="Search · Enter">Search</a>
+        </form>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center">
+          <span class="sub2">Try:</span>
+          <sc-for list="{{tries}}" as="t" hint-placeholder-count="4"><button type="button" class="btn sm" onClick="{{t.pick}}">{{t.label}}</button></sc-for>
+        </div>
+      </div>
+      <svg class="ic" width="180" height="140" viewBox="0 0 180 140" aria-hidden="true" style="flex: none">
+        <rect x="20" y="22" width="110" height="88" rx="10" class="iw"/>
+        <path d="M36 44h60M36 58h76M36 72h52"/>
+        <rect x="36" y="84" width="30" height="12" rx="3" class="i2"/>
+        <circle cx="128" cy="92" r="26" class="it1"/>
+        <path d="M147 111l18 18" style="stroke-width: 4"/>
+        <path d="M120 86a8 8 0 1 1 10 8v5M130 104v1"/>
+        <circle cx="150" cy="30" r="8" class="i3"/>
+      </svg>
+    </header>
+
+    <sc-if value="{{hasQ}}" hint-placeholder-val="{{ false }}">
+      <section class="card" aria-labelledby="qr" aria-live="polite">
+        <div class="ch"><h2 id="qr">{{qCount}} matching articles</h2><a href="SearchResults.dc.html" class="btn sm">See all results</a></div>
+        <sc-for list="{{matches}}" as="m" hint-placeholder-count="3">
+          <a href="#" class="art"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2" class="iw"/><path d="M9 8h6M9 12h6M9 16h4"/></svg><span style="flex-grow: 1; font-size: 13.5px">{{m.title}}</span><span class="pill idle">{{m.cat}}</span></a>
+        </sc-for>
+        <sc-if value="{{noMatch}}" hint-placeholder-val="{{ false }}">
+          <div class="row"><span class="sub2">No articles match. Try fewer words or ask your administrator.</span></div>
+        </sc-if>
+      </section>
+    </sc-if>
+
+    <section aria-labelledby="cats" style="display: flex; flex-direction: column; gap: 12px">
+      <h2 id="cats" style="margin: 0; font-size: 16px; font-weight: 600">Browse by topic</h2>
+      <div class="cgrid">
+        <a href="#" class="card cat"><span class="tile lg"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19c2-6 6-11 14-14-1 8-6 12-12 14z" class="i3"/><path d="M9 15l-4 4M14 7l3 3"/></svg></span><div><b>Getting started</b><span>First sign-in, choosing a model, your first agent. 12 articles</span></div></a>
+        <a href="#" class="card cat"><span class="tile lg"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" class="i1"/><path d="M8 9h8M8 12h5"/></svg></span><div><b>Chat</b><span>Slash presets, attachments, sharing, voice input. 18 articles</span></div></a>
+        <a href="#" class="card cat"><span class="tile lg"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5c3-1 6-1 8 1v14c-2-2-5-2-8-1z" class="i2"/><path d="M20 5c-3-1-6-1-8 1v14c2-2 5-2 8-1z" class="it2"/></svg></span><div><b>Knowledge</b><span>Uploading, connectors, re-indexing, citations. 21 articles</span></div></a>
+        <a href="#" class="card cat"><span class="tile lg"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V9l8-5 8 5v11z" class="it1"/><rect x="9" y="13" width="6" height="7" class="i2"/></svg></span><div><b>Company OS</b><span>Work items, budgets, approvals, org chart of agents. 16 articles</span></div></a>
+        <a href="#" class="card cat adv"><span class="tile lg"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="3" class="i1"/><circle cx="18" cy="12" r="3" class="i2"/><circle cx="6" cy="18" r="3" class="i3"/><path d="M9 6h3l3 5M9 18h3l3-5"/></svg></span><div><b>Automation</b><span>Workflows, schedules, heartbeats, webhooks. 14 articles</span></div></a>
+        <a href="#" class="card cat adv"><span class="tile lg"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="6" rx="2" class="it3"/><rect x="3" y="14" width="18" height="6" rx="2" class="it1"/><circle cx="7" cy="7" r="1" class="ik"/><circle cx="7" cy="17" r="1" class="ik"/></svg></span><div><b data-tip="SLM: Service Lifecycle Manager — fleet and node administration">SLM</b><span>Fleet nodes, deploying roles, themes, updates. 19 articles</span></div></a>
+        <a href="#" class="card cat"><span class="tile lg"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="i3"/><path d="M9 12l2 2 4-4"/></svg></span><div><b>Security</b><span>2FA, passkeys, API tokens, secrets, audit log. 11 articles</span></div></a>
+      </div>
+    </section>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 20px; align-items: start">
+      <section class="card" aria-labelledby="pop">
+        <div class="ch"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.200 6L12 16.400 6.700 19.400l1.200-6L3.400 9.300l6-.7z" class="i2"/></svg></span><h2 id="pop">Popular articles</h2><span class="sub2">Last 30 days</span></div>
+        <a href="#" class="art"><span class="mono sub2" style="width: 18px">1</span><span style="flex-grow: 1; font-size: 13.5px">Approve or reject an agent request from Telegram</span><span class="pill idle">Company OS</span></a>
+        <a href="#" class="art"><span class="mono sub2" style="width: 18px">2</span><span style="flex-grow: 1; font-size: 13.5px">Why is my document stuck in “Indexing”?</span><span class="pill idle">Knowledge</span></a>
+        <a href="#" class="art"><span class="mono sub2" style="width: 18px">3</span><span style="flex-grow: 1; font-size: 13.5px">Set a monthly budget and hard-stop for an agent</span><span class="pill idle">Company OS</span></a>
+        <a href="#" class="art"><span class="mono sub2" style="width: 18px">4</span><span style="flex-grow: 1; font-size: 13.5px">Fix “Redis connection timeout” on a fleet node</span><span class="pill idle">SLM</span></a>
+        <a href="#" class="art"><span class="mono sub2" style="width: 18px">5</span><span style="flex-grow: 1; font-size: 13.5px">Create a personal API token for the CLI</span><span class="pill idle">Security</span></a>
+        <a href="#" class="art"><span class="mono sub2" style="width: 18px">6</span><span style="flex-grow: 1; font-size: 13.5px">Schedule a workflow with a heartbeat check</span><span class="pill idle">Automation</span></a>
+        <a href="#" class="art"><span class="mono sub2" style="width: 18px">7</span><span style="flex-grow: 1; font-size: 13.5px">Connect a user-level MCP server</span><span class="pill idle">Chat</span></a>
+      </section>
+
+      <section class="card adv" aria-labelledby="ks">
+        <div class="ch"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2" class="it1"/><path d="M6 10h1M10 10h1M14 10h1M18 10h1M7 14h10"/></svg></span><h2 id="ks">Keyboard shortcuts</h2><span class="sub2">Press <kbd data-tip="Opens the shortcut overlay on any screen" data-tip-pos="left">?</kbd> anywhere</span></div>
+        <div class="kgrid">
+          <div class="krow"><span>Global search</span><kbd>Ctrl</kbd><kbd>K</kbd></div>
+          <div class="krow"><span>Focus help search</span><kbd>/</kbd></div>
+          <div class="krow"><span>New chat</span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>O</kbd></div>
+          <div class="krow"><span>Send message</span><kbd>Enter</kbd></div>
+          <div class="krow"><span>New line in message</span><kbd>Shift</kbd><kbd>Enter</kbd></div>
+          <div class="krow"><span data-tip="Saved prompt templates you can insert by typing /">Slash preset menu</span><kbd>/</kbd><span class="sub2">in chat</span></div>
+          <div class="krow"><span>Go to Knowledge</span><kbd>G</kbd><kbd>K</kbd></div>
+          <div class="krow"><span>Go to Company OS</span><kbd>G</kbd><kbd>C</kbd></div>
+          <div class="krow"><span>Open approvals</span><kbd>G</kbd><kbd>A</kbd></div>
+          <div class="krow"><span>Close dialog or panel</span><kbd>Esc</kbd></div>
+          <div class="krow"><span>Toggle sidebar</span><kbd>Ctrl</kbd><kbd>B</kbd></div>
+          <div class="krow"><span>Show all shortcuts</span><kbd>?</kbd></div>
+        </div>
+      </section>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; align-items: stretch">
+      <section class="card" aria-labelledby="ca" style="display: flex; gap: 16px; padding: 18px; align-items: flex-start">
+        <span class="tile lg"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" class="i1"/><path d="M4 20c1-4 4-6 8-6s7 2 8 6z" class="it1"/></svg></span>
+        <div style="display: flex; flex-direction: column; gap: 8px; flex-grow: 1">
+          <h2 id="ca" style="margin: 0; font-size: 15px; font-weight: 600">Contact your administrator</h2>
+          <span class="sub2" style="font-size: 13px; line-height: 1.45">For access, quotas, model availability or a broken connector, your instance administrator can help. AutoBot is self-hosted: there is no external support desk for your data.</span>
+          <div class="row" style="padding: 8px 0; border-top: var(--bw) solid var(--line); border-bottom: 0"><span class="sub2" style="width: 90px">Admin</span><span style="font-size: 13.5px">IT operations team</span></div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap"><a href="Chat.dc.html" class="btn sm pri">Message admins</a><button type="button" class="btn sm adv" data-tip="Copy version, build and browser details to paste into your message">Copy diagnostics</button></div>
+        </div>
+      </section>
+      <section class="card" aria-labelledby="ab" style="display: flex; gap: 16px; padding: 18px; align-items: flex-start">
+        <span class="tile lg"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2" class="it2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg></span>
+        <div style="display: flex; flex-direction: column; gap: 8px; flex-grow: 1">
+          <h2 id="ab" style="margin: 0; font-size: 15px; font-weight: 600">Version and documentation</h2>
+          <div class="row" style="padding: 6px 0"><span class="sub2" style="width: 90px">Version</span><span class="mono" style="font-size: 13px">AutoBot 2.8.1</span><span class="pill ok" data-tip="No newer release found at the last update check">Up to date</span></div>
+          <div class="row adv" style="padding: 6px 0"><span class="sub2" style="width: 90px">Build</span><span class="mono" style="font-size: 13px" data-tip="Git commit a41c9e2, built 2 Oct 2026">a41c9e2 · 2026-10-02</span></div>
+          <div class="row" style="padding: 6px 0; border-bottom: 0"><span class="sub2" style="width: 90px">Edition</span><span style="font-size: 13px" data-tip="Open core: the base platform is open source; some modules are licensed separately">Self-hosted, open core</span></div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap"><a href="#" class="btn sm">Full documentation ↗</a><a href="#" class="btn sm">Release notes</a><a href="About.dc.html" class="btn sm">About</a></div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":1560}}'>
+const ARTICLES = [
+  ['Approve or reject an agent request from Telegram', 'Company OS'],
+  ['Why is my document stuck in “Indexing”?', 'Knowledge'],
+  ['Set a monthly budget and hard-stop for an agent', 'Company OS'],
+  ['Fix “Redis connection timeout” on a fleet node', 'SLM'],
+  ['Create a personal API token for the CLI', 'Security'],
+  ['Register a passkey or hardware security key', 'Security'],
+  ['Re-index a knowledge base after changing embeddings', 'Knowledge'],
+  ['Schedule a workflow with a heartbeat check', 'Automation'],
+  ['Connect a user-level MCP server', 'Chat'],
+  ['Deploy a role to a new fleet node', 'SLM']
+];
+const TRIES = ['approvals', 're-index', 'passkey', 'redis'];
+
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    const q = st.q || '';
+    const ql = q.trim().toLowerCase();
+    const matches = ql ? ARTICLES.filter((a) => (a[0] + ' ' + a[1]).toLowerCase().indexOf(ql) >= 0 || (ql === 'approvals' && a[0].toLowerCase().indexOf('approve') >= 0)) : [];
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      q: q,
+      onQ: (e) => { this.setState({ q: e && e.target ? e.target.value : '' }); },
+      tries: TRIES.map((t) => ({ label: t, pick: () => { this.setState({ q: t }); } })),
+      hasQ: !!ql,
+      matches: matches.map((a) => ({ title: a[0], cat: a[1] })),
+      qCount: String(matches.length),
+      noMatch: !!ql && matches.length === 0
+    };
+  }
+}
+</script>
+</body>
+</html>

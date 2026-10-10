@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot browser automation</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.btn{white-space:nowrap}
+.btn.dng{color:var(--alert-text)}
+.tab{height:40px;padding:0 14px;border:0;border-bottom:var(--nav-on-bw) solid transparent;background:transparent;font:inherit;font-size:13.5px;font-weight:500;color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.tab:hover{color:var(--text)}
+.tab.on{color:var(--text);font-weight:600;border-bottom-color:var(--accent)}
+.inp{height:36px;box-sizing:border-box;flex:1 1 220px;min-width:0;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;font-size:13.5px;padding:0 10px;color:var(--text)}
+textarea.inp{height:auto;padding:8px 10px}
+.cb{padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.rowi{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.shot{width:100%;border-radius:8px;border:var(--bw) solid var(--border);background:var(--surface2)}
+.shot .sk{fill:var(--surface);stroke:var(--border)}
+.shot .ln{fill:var(--line)}
+.shot .hd{fill:var(--brand-bg)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html" class="on" aria-current="page">Company OS</a>
+    <a href="Analytics.dc.html" class="adv">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="ThemeManager.dc.html" class="adv" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon adv" aria-label="Plugins" data-tip="Plugins" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Admin panel" data-tip="Admin panel" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="Preferences.dc.html" aria-label="Profile settings" data-tip="Profile settings" data-tip-pos="left" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer; display: grid; place-items: center; text-decoration: none">MV</a>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+
+    <aside class="sub" aria-label="Workflow Builder" style="flex: 1 1 220px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+      <a href="CompanyOS.dc.html" style="font-size: 12.5px; font-weight: 500; color: var(--muted)">← Company OS · AutoBot Labs</a>
+      <h2 style="margin: 8px 10px 4px; font-size: 15px; font-weight: 600">Workflow Builder</h2>
+      <a href="AutomationOverview.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5" class="i2"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5" class="i1"/></svg>Overview</a>
+      <p class="sect">Build</p>
+      <a href="Automation.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="6" rx="1.5" class="i3"/><rect x="14" y="15" width="7" height="6" rx="1.5" class="i1"/><path d="M6.5 9v4h11v2"/></svg>Visual Builder</a>
+      <a href="AutomationTemplates.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2" class="it2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Templates<span class="pill idle" style="margin-left: auto" data-tip="18 templates available" data-tip-pos="right">18</span></a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="it1"/></svg>Natural Language</a>
+      <p class="sect">Execute</p>
+      <a href="AutomationRunner.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l12 8-12 8z" class="i2"/></svg>Runner<span class="pill warn" style="margin-left: auto" data-tip="2 runs waiting for input or approval" data-tip-pos="right">2</span></a>
+      <a href="AutomationHistory.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>History</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z" class="it3"/><path d="M10 20h4"/></svg>Notifications</a>
+      <a href="BrowserAutomation.dc.html" class="on adv" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>Browser</a>
+      <p class="sect adv" style="display: flex; align-items: center; gap: 8px">Vision<span class="pill ok" style="padding: 1px 6px; font-size: 10.5px; letter-spacing: 0; text-transform: none" data-tip="Vision service is reachable and processing requests" data-tip-pos="right">healthy</span></p>
+      <a href="VisionAutomation.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3" class="i1"/></svg>Screen Analysis</a>
+      <a href="VisionAutomation.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3" class="it3"/></svg>Video Processing</a>
+      <a href="VisionAutomation.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 17l5-5 4 4 3-3 6 6" class="it2"/><circle cx="16" cy="9" r="1.6"/></svg>Media Gallery</a>
+      <p class="sect adv">Orchestration</p>
+      <a href="#" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-6 4 3 7-9"/></svg>Live Dashboard</a>
+      <a href="Agents.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" class="i1"/><path d="M12 8V4"/></svg>Agents</a>
+      <div class="only-min minnote" style="margin: 16px 10px 0; padding-top: 12px; border-top: var(--bw) solid var(--line)"><span>Showing essentials</span><button type="button" class="linkbtn" onClick="{{showAll}}">Show all features</button></div>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 18px">
+      <section class="card only-min" role="note" aria-labelledby="advn-h" style="padding: 14px 16px; gap: 12px; align-items: center; flex-wrap: wrap">
+        <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg></span>
+        <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 240px; min-width: 0">
+          <h2 id="advn-h" style="margin: 0; font-size: 14px; font-weight: 600">This is an advanced area</h2>
+          <span class="sub2">It's hidden from navigation while Minimal interface is on.</span>
+        </div>
+        <button type="button" class="btn sm" onClick="{{showAll}}">Show all features</button>
+        <a href="Main.dc.html" class="btn sm">Go to Home</a>
+      </section>
+      <header style="display: flex; flex-wrap: wrap; gap: 14px; align-items: center">
+        <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1">
+          <span class="sub2"><a href="AutomationOverview.dc.html" style="color: var(--muted); text-decoration: none">Workflow Builder</a> / Browser</span>
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">Browser Automation</h1>
+          <p style="margin: 0; font-size: 13.5px; color: var(--text2)">Control and automate browser sessions with the Playwright worker</p>
+        </div>
+        <div class="card" style="padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 150px">
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted)">Worker Status</span>
+          <span style="font-weight: 600; font-size: 15px; color: var(--ok-fg); display: flex; align-items: center; gap: 6px" data-tip="Playwright worker is responding to health checks" data-tip-pos="left"><span class="dot d-ok"></span>HEALTHY</span>
+          <span class="sub2" data-tip="2 sessions open of a maximum of 5" data-tip-pos="left"><span class="mono">2 / 5</span> sessions</span>
+        </div>
+      </header>
+
+      <div role="tablist" aria-label="Browser automation" style="display: flex; flex-wrap: wrap; gap: 4px; border-bottom: var(--bw) solid var(--border)">
+        <button type="button" role="tab" aria-selected="true" class="tab on"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="11" rx="5" class="it3"/><path d="M8 11v3M6.5 12.5h3"/><circle cx="15.5" cy="12" r="1" class="ik"/><circle cx="17.5" cy="14" r="1" class="ik"/></svg>Control Panel</button>
+        <button type="button" role="tab" aria-selected="false" class="tab"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="4" width="14" height="11" rx="2"/><rect x="3" y="9" width="14" height="11" rx="2" class="it1"/></svg>Sessions (2)</button>
+        <button type="button" role="tab" aria-selected="false" class="tab adv"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg>Automation Scripts</button>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: start">
+
+        <div style="display: flex; flex-direction: column; gap: 16px; min-width: 0">
+          <section class="card" aria-labelledby="as" style="border: 2px solid var(--primary)">
+            <div class="ch" style="border-bottom: 0">
+              <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" class="i1"/><path d="M3.5 12h17M12 3.5c-3 3-3 14 0 17M12 3.5c3 3 3 14 0 17"/></svg></span>
+              <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+                <h2 id="as">Active Session</h2>
+                <span class="mono sub2" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-tip="http://node-02.example:3000/grafana/d/fleet" data-tip-pos="bottom" tabindex="0">http://node-02.example:3000/grafana/d/fleet</span>
+              </div>
+              <button type="button" class="btn sm dng" data-tip="Closes the browser and ends this session" data-tip-pos="left">Close Session</button>
+            </div>
+          </section>
+
+          <section class="card" aria-labelledby="nv">
+            <div class="ch"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l3 7 7 2-7 2-3 7-3-7-7-2 7-2z" class="i2"/></svg></span><h2 id="nv">Navigation</h2></div>
+            <div class="cb">
+              <div class="rowi"><label class="vh" for="nav-url">URL</label><input id="nav-url" class="inp mono" type="url" value="http://node-02.example:3000/grafana/d/fleet" style="font-size: 12.5px"><button type="button" class="btn pri sm">Navigate</button></div>
+            </div>
+          </section>
+
+          <section class="card" aria-labelledby="ei">
+            <div class="ch"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l12 6-5 2-2 5z" class="it3"/><path d="M13 13l6 6"/></svg></span><h2 id="ei">Element Interaction</h2></div>
+            <div class="cb">
+              <div class="rowi"><label class="vh" for="sel">CSS selector</label><input id="sel" class="inp mono" type="text" value="button[data-testid='refresh-picker']" style="font-size: 12.5px"><button type="button" class="btn sm" data-tip="Click the element matching this CSS selector">Click</button></div>
+              <div class="rowi"><label class="vh" for="txt">Text to type</label><input id="txt" class="inp" type="text" placeholder="Text to type"><button type="button" class="btn sm">Type Text</button></div>
+            </div>
+          </section>
+
+          <section class="card" aria-labelledby="ac">
+            <div class="ch"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L5 14h6l-1 8 8-12h-6z" class="i2"/></svg></span><h2 id="ac">Actions</h2></div>
+            <div class="cb">
+              <button type="button" class="btn sm" style="align-self: flex-start"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" class="it1"/><circle cx="12" cy="13" r="3.5"/></svg>Take Screenshot</button>
+              <label class="vh adv" for="js">JavaScript</label>
+              <textarea id="js" class="inp mono adv" rows="4" style="font-size: 12.5px; resize: vertical; flex: none; width: 100%">document.querySelectorAll('.panel-title').length</textarea>
+              <button type="button" class="btn sm adv" style="align-self: flex-start" data-tip="Runs in the page context of the active session">Execute Script</button>
+              <div class="mono adv" style="padding: 10px 12px; border-radius: 6px; background: var(--surface2); border: var(--bw) solid var(--border); color: var(--text); font-size: 12.5px"><span style="color: var(--muted)" data-tip="Return value of the last script">=&gt;</span> 12</div>
+            </div>
+          </section>
+        </div>
+
+        <section class="card" aria-labelledby="rs" style="min-width: 0">
+          <div class="ch"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h4l1.5-2.5h7L17 7h4v13H3z" class="iw"/><circle cx="12" cy="13" r="4" class="i3"/><circle cx="12" cy="13" r="1.5" class="iw"/></svg></span><h2 id="rs">Recent Screenshots</h2></div>
+          <div class="cb">
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px">
+              <figure style="margin: 0; display: flex; flex-direction: column; gap: 6px">
+                <svg class="shot" role="img" aria-label="Screenshot of a Grafana fleet dashboard with line charts" viewBox="0 0 160 100">
+                  <rect class="hd" x="0" y="0" width="160" height="12"/><rect class="sk" x="8" y="20" width="68" height="34" rx="3"/><path d="M12 48l12-10 10 6 14-14 12 8 12-10" style="stroke: var(--bar-alert)" stroke-width="2" fill="none"/><rect class="sk" x="84" y="20" width="68" height="34" rx="3"/><path d="M88 46l10-4 10 2 14-10 10 6 14-6" style="stroke: var(--bar)" stroke-width="2" fill="none"/><rect class="sk" x="8" y="62" width="144" height="30" rx="3"/><g style="stroke: var(--stroke)" stroke-width="1"><rect x="14" y="70" width="20" height="16" style="fill: var(--i2)"/><rect x="40" y="74" width="20" height="12" style="fill: var(--i1)"/><rect x="66" y="66" width="20" height="20" style="fill: var(--i3)"/></g>
+                </svg>
+                <figcaption class="mono sub2" style="font-size: 12px">10:52:18</figcaption>
+              </figure>
+              <figure style="margin: 0; display: flex; flex-direction: column; gap: 6px">
+                <svg class="shot" role="img" aria-label="Screenshot of a login form" viewBox="0 0 160 100">
+                  <rect class="hd" x="0" y="0" width="160" height="12"/><rect x="45" y="24" width="70" height="64" rx="6" style="fill: var(--surface); stroke: var(--stroke)"/><rect class="ln" x="54" y="40" width="52" height="8" rx="2"/><rect class="ln" x="54" y="54" width="52" height="8" rx="2"/><rect x="54" y="70" width="52" height="10" rx="3" style="fill: var(--primary)"/><circle cx="80" cy="32" r="3" style="fill: var(--i1); stroke: var(--stroke)" stroke-width="1"/>
+                </svg>
+                <figcaption class="mono sub2" style="font-size: 12px">10:50:03</figcaption>
+              </figure>
+              <figure style="margin: 0; display: flex; flex-direction: column; gap: 6px">
+                <svg class="shot" role="img" aria-label="Screenshot of a table listing nodes, one marked with an alert" viewBox="0 0 160 100">
+                  <rect class="hd" x="0" y="0" width="160" height="12"/><rect x="8" y="20" width="144" height="10" style="fill: var(--i1t)"/><g class="ln"><rect x="8" y="36" width="144" height="8"/><rect x="8" y="50" width="144" height="8"/><rect x="8" y="64" width="144" height="8"/><rect x="8" y="78" width="144" height="8"/></g><g style="fill: var(--dot-ok); stroke: var(--stroke)" stroke-width="1"><circle cx="146" cy="40" r="3"/><circle cx="146" cy="54" r="3"/><circle cx="146" cy="82" r="3"/></g><circle cx="146" cy="68" r="3" style="fill: var(--dot-bad); stroke: var(--stroke)" stroke-width="1"/>
+                </svg>
+                <figcaption class="mono sub2" style="font-size: 12px">10:47:41</figcaption>
+              </figure>
+              <figure style="margin: 0; display: flex; flex-direction: column; gap: 6px">
+                <svg class="shot" role="img" aria-label="Screenshot of a documentation page" viewBox="0 0 160 100">
+                  <rect class="hd" x="0" y="0" width="160" height="12"/><rect class="ln" x="8" y="20" width="36" height="72"/><rect x="54" y="20" width="70" height="8" style="fill: var(--text)"/><g class="ln"><rect x="54" y="36" width="96" height="5"/><rect x="54" y="46" width="90" height="5"/><rect x="54" y="56" width="96" height="5"/></g><rect class="hd" x="54" y="68" width="96" height="22" rx="3"/>
+                </svg>
+                <figcaption class="mono sub2" style="font-size: 12px">10:44:09</figcaption>
+              </figure>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Sessions table preview -->
+      <section class="card" aria-labelledby="ss">
+        <div class="ch"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="4" width="14" height="11" rx="2"/><rect x="3" y="9" width="14" height="11" rx="2" class="it1"/></svg></span><h2 id="ss">Sessions (2)</h2></div>
+        <div style="overflow-x: auto">
+          <table style="border-collapse: collapse; width: 100%; min-width: 640px">
+            <thead><tr><th scope="col" class="adv">Session ID</th><th scope="col">URL</th><th scope="col">Status</th><th scope="col">Created</th><th scope="col">Actions</th></tr></thead>
+            <tbody>
+              <tr><td class="mono adv"><span data-tip="7f3a9c21-4e8b-4d2a-9f61-0c3e5b7a8d14" data-tip-pos="right" tabindex="0">7f3a9c21...</span></td><td class="mono" style="font-size: 12.5px">http://node-02.example:3000/grafana/d/fleet</td><td><span class="pill ok" data-tip="Active — currently controlled from this panel" data-tip-pos="right">active</span></td><td class="mono">10/10/2026, 10:43:55</td><td><button type="button" class="btn sm">Control</button> <button type="button" class="btn sm dng">Delete</button></td></tr>
+              <tr><td class="mono adv" style="border-bottom: 0"><span data-tip="b20e44d8-91c7-4f03-a6e2-5d8b3c1f7a90" data-tip-pos="right" tabindex="0">b20e44d8...</span></td><td class="mono" style="font-size: 12.5px; border-bottom: 0">https://docs.openvino.ai/2025/</td><td style="border-bottom: 0"><span class="pill idle" data-tip="Idle — open but no commands recently; closes after inactivity" data-tip-pos="right">idle</span></td><td class="mono" style="border-bottom: 0">10/10/2026, 09:18:02</td><td style="border-bottom: 0"><button type="button" class="btn sm">Control</button> <button type="button" class="btn sm dng">Delete</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":1180}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      themes: defs.map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => { try { window.localStorage.setItem('autobot-theme', id); } catch (e) {} this.setState({ theme: id }); }
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

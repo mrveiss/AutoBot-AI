@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot Design System: Introduction</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.segg{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.segg .seg{height:26px;padding:0 8px}
+.sub2{font-size:12.5px;color:var(--muted)}
+/* ---- Design system intro classes ---- */
+.specbar{flex:1 1 100%;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:14px clamp(16px,2.5vw,28px);background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+.specbar h1{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.lbl{font-size:11.5px;color:var(--muted);font-weight:500}
+.rules{margin:0;padding:11px 16px;border-top:var(--bw) solid var(--line);font-size:12.5px;color:var(--text2);background:var(--surface2);border-radius:0 0 10px 10px;line-height:1.5}
+.rules b{color:var(--text)}
+.ch .use{font-size:12.5px;color:var(--muted);font-weight:400}
+.prin{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0}
+.prin>div{padding:16px;display:flex;gap:12px;align-items:flex-start;border-bottom:var(--bw) solid var(--line);border-right:var(--bw) solid var(--line)}
+.prin>div:nth-child(3n){border-right:0}
+.prin>div:nth-last-child(-n+3){border-bottom:0}
+.prin h3{margin:0 0 4px;font-size:14px;font-weight:600}
+.prin p{margin:0;font-size:13px;line-height:1.5;color:var(--text2)}
+.tprev{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;padding:16px}
+.mini{border:var(--bw) solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;font-size:12px}
+.mini .mn{display:flex;align-items:center;gap:6px;padding:8px 10px;background:var(--surface);border-bottom:var(--bw) solid var(--border)}
+.mini .mn i{font-style:normal;color:var(--text2);font-weight:500;font-size:11px;padding:2px 4px}
+.mini .mn i.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent)}
+.mini .mb{padding:10px;display:flex;flex-direction:column;gap:8px}
+.mini .mc{background:var(--surface);border:var(--bw) solid var(--border);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:7px}
+.mini .pill{font-size:10.5px;padding:2px 6px}
+.mini .btn{height:26px;padding:0 9px;font-size:11.5px;border-radius:5px}
+.qgrp{padding:16px;display:flex;flex-direction:column;gap:10px;border-bottom:var(--bw) solid var(--line)}
+.qgrp:last-of-type{border-bottom:0}
+.qg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.th a.ql{display:flex;gap:12px;align-items:flex-start;padding:14px;border:var(--bw) solid var(--border);border-radius:10px;background:var(--surface);text-decoration:none;color:var(--text);min-width:0}
+.th a.ql:hover{background:var(--surface2);border-color:var(--muted);color:var(--text)}
+.ql b{display:block;font-size:13.5px;font-weight:600}
+.ql span{display:block;font-size:12.5px;color:var(--text2);line-height:1.45;margin-top:2px}
+.ql em{display:block;font-style:normal;font-size:12px;color:var(--link);margin-top:6px;font-weight:500}
+.code{margin:0;padding:12px 14px;background:var(--surface2);border:var(--bw) solid var(--line);border-radius:8px;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;line-height:1.6;color:var(--text);white-space:pre-wrap;overflow-x:auto}
+.steps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding:16px}
+.step{display:flex;flex-direction:column;gap:8px;min-width:0}
+.step h3{margin:0;font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.step p{margin:0;font-size:13px;line-height:1.5;color:var(--text2)}
+.num{width:22px;height:22px;border-radius:99px;border:var(--bw) solid var(--stroke);display:inline-grid;place-items:center;font-size:11.5px;font-weight:600;flex:none;box-sizing:border-box}
+.notes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.ul{margin:0;padding:14px 16px 16px 34px;font-size:13px;line-height:1.6;color:var(--text2)}
+.ul li{margin-bottom:4px}
+.ul b{color:var(--text)}
+.cl{display:grid;grid-template-columns:120px minmax(0,1fr);gap:0}
+.cl>div{padding:11px 16px;border-bottom:var(--bw) solid var(--line);font-size:13px;line-height:1.5}
+.cl>div:nth-last-child(-n+2){border-bottom:0}
+@media (max-width:1100px){.qg,.prin{grid-template-columns:repeat(2,minmax(0,1fr))}.tprev{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.qg,.prin,.tprev,.steps,.notes{grid-template-columns:minmax(0,1fr)}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <a href="ThemeManager.dc.html" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon" aria-label="Plugins" title="Plugins"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon" aria-label="Secrets" title="Secrets"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" title="Preferences"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <a href="AdminUsers.dc.html" class="icon" aria-label="Admin panel" title="Admin panel"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <button type="button" aria-label="Profile menu" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer">MV</button>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+  <aside class="sub" aria-label="Design system" style="flex: 1 1 230px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+    <a href="DesignSystem.dc.html" style="font-weight: 600; color: var(--text)">AutoBot Design System</a>
+    <span class="sub2" style="padding: 0 13px 4px">v1 · 4 themes</span>
+    <p class="sect">Overview</p>
+    <a href="DesignSystem.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z" class="i1"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z" class="it1"/></svg>Introduction</a>
+    <p class="sect">Foundations</p>
+    <a href="ComponentsStates.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4" class="i3"/><circle cx="16" cy="9" r="4" class="i2"/><circle cx="12" cy="16" r="4" class="i1"/></svg>Tokens &amp; states</a>
+    <a href="ComponentsGrid.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5" class="i1"/><rect x="13" y="4" width="7" height="7" rx="1.5" class="iw"/><rect x="4" y="13" width="7" height="7" rx="1.5" class="iw"/><rect x="13" y="13" width="7" height="7" rx="1.5" class="i2"/></svg>Grid, tables &amp; forms</a>
+    <a href="ComponentsCharts.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><rect x="5.5" y="11" width="3.5" height="7" class="i1"/><rect x="10.5" y="6" width="3.5" height="12" class="i2"/><rect x="15.5" y="13" width="3.5" height="5" class="i3"/></svg>Charts &amp; data viz</a>
+    <p class="sect">Components</p>
+    <a href="ComponentsForms.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4" class="i1"/><circle cx="16.5" cy="12" r="2.5" class="iw"/></svg>Form controls</a>
+    <a href="ComponentsTable.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="iw"/><path d="M4 10h16M4 14.5h16M10 10v9"/></svg>Data table</a>
+    <a href="ComponentsDialogs.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="it1"/><rect x="6" y="8" width="12" height="9" rx="1.5" class="iw"/></svg>Dialogs</a>
+    <a href="ComponentsOverlays.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" class="i2"/><path d="M10 21h4"/></svg>Overlays &amp; feedback</a>
+    <a href="ComponentsTooltips.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10h-7l-4 4v-4H4z" class="it1"/><path d="M8 10h8"/></svg>Tooltips</a>
+    <a href="ComponentsCommand.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" class="iw"/><path d="M7 10l3 2-3 2M12 15h5"/></svg>Command menu</a>
+    <a href="ComponentsNavigation.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M15 9l-2 4-4 2 2-4z" class="i3"/></svg>Navigation</a>
+    <a href="ComponentsLayout.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="iw"/><path d="M9 4v16M9 10h12"/></svg>Layout &amp; utility</a>
+    <a href="ComponentsChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h12v9H8l-3 3v-3H3z" class="i1"/><path d="M15 9h6v8h-2v3l-3-3h-5v-3"/></svg>Chat &amp; agent</a>
+    <p class="sect">Patterns</p>
+    <a href="FileBrowser.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="i2"/></svg>File browser</a>
+    <a href="Mailbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" class="iw"/><path d="M3 7l9 6 9-6"/></svg>Mailbox</a>
+    <a href="ComponentsUiModes.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5" class="it1"/><rect x="4.5" y="8.5" width="8" height="7" rx="3.5" class="i2"/></svg>Interface modes</a>
+    <a href="SignUp.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" class="i2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Auth pages</a>
+    <a href="AccountSecurity.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4" class="i1"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>Account settings</a>
+    <a href="SearchResults.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>Global search</a>
+    <a href="HelpCenter.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="i2"/><path d="M10 10a2 2 0 1 1 3 1.7c-.7.4-1 1-1 1.8M12 16.5v.5"/></svg>Help centre</a>
+    <span style="flex-grow: 1; min-height: 16px" aria-hidden="true"></span>
+    <a href="Main.dc.html" style="border-top: var(--bw) solid var(--line); border-radius: 0; padding-top: 12px"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg>← Back to app</a>
+  </aside>
+  <div style="flex: 999 1 520px; min-width: 0; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <div class="specbar">
+    <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1">
+      <h1>AutoBot Design System · Introduction</h1>
+      <span class="sub2">What the system is for, the principles behind it, every board in one place, and how to use it in the Vue app.</span>
+    </div>
+    <span class="lbl">Preview theme</span>
+    <div role="group" aria-label="Preview theme" class="segg">
+      <sc-for list="{{themes}}" as="t" hint-placeholder-count="4"><button type="button" class="seg {{t.cls}}" aria-pressed="{{t.pressed}}" onClick="{{t.pick}}">{{t.label}}</button></sc-for>
+    </div>
+  </div>
+
+  <main style="flex: 1 1 100%; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 48px; display: flex; flex-direction: column; gap: 20px">
+
+    <!-- Hero -->
+    <section class="card" aria-labelledby="h-intro" style="padding: 24px; display: flex; flex-wrap: wrap; gap: 24px; align-items: center">
+      <span class="tile lg" style="width: 64px; height: 64px; border-radius: 14px"><svg class="ic" width="40" height="40" viewBox="0 0 48 48" aria-hidden="true" style="stroke-width: 2"><rect x="6" y="10" width="22" height="16" rx="3" class="i1"/><rect x="20" y="22" width="22" height="16" rx="3" class="i2"/><circle cx="14" cy="34" r="6" class="i3"/><path d="M12 18h8M28 30h8"/></svg></span>
+      <div style="flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+        <h2 id="h-intro" style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">One calm, accessible system for every AutoBot screen</h2>
+        <p style="margin: 0; font-size: 14px; line-height: 1.6; color: var(--text2); max-width: 760px">The AutoBot Design System is the shared language of the self-hosted AI platform: chat, knowledge, Company OS, analytics and the admin console. It defines the tokens, components and page patterns that keep agents, approvals and fleet data readable in four themes, from a bright office to a dark ops room or a screen reader.</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px">
+          <span class="pill info">v1.0 · 10 Oct 2026</span>
+          <span class="pill idle">4 themes + SLM scheme</span>
+          <span class="pill idle">IBM Plex Sans / Mono</span>
+          <span class="pill ok"><span aria-hidden="true">✓ </span>WCAG 2.2 AA · AAA in High contrast</span>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <a href="ComponentsStates.dc.html" class="btn pri">Start with tokens &amp; states</a>
+        <a href="ComponentsForms.dc.html" class="btn">Browse components</a>
+      </div>
+    </section>
+
+    <!-- Principles -->
+    <section class="card" aria-labelledby="h-prin">
+      <div class="ch"><h2 id="h-prin">Principles</h2><span class="use">Six rules every board and every Vue component follows.</span></div>
+      <div class="prin">
+        <div>
+          <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="2" class="i1"/><path d="M9 7V5h6v2M4 12h16"/></svg></span>
+          <div><h3>Calm and corporate</h3><p>Quiet navy and neutral surfaces, one accent, generous spacing. Data and decisions stand out; chrome stays out of the way.</p></div>
+        </div>
+        <div>
+          <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19l3-1 10-10-2-2L6 16z" class="i2"/><path d="M14 6l2 2"/></svg></span>
+          <div><h3>Illustrated line icons</h3><p>1.5px strokes in --stroke with flat token fills (i1 / i2 / i3) on a soft tile. No emoji, no photo icons, no brand logos inside UI.</p></div>
+        </div>
+        <div>
+          <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="iw"/><rect x="7" y="8" width="10" height="8" rx="1.5" class="it1"/></svg></span>
+          <div><h3>No shadows</h3><p>Layers separate with 1px borders (2px in High contrast) and surface steps bg → surface → surface2. No box-shadow, glow or gradient.</p></div>
+        </div>
+        <div>
+          <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4" class="i3"/><circle cx="16" cy="9" r="4" class="i2"/><circle cx="12" cy="16" r="4" class="i1"/></svg></span>
+          <div><h3>Token-only colour</h3><p>Markup uses var(--token) and nothing else. A literal hex value in a component is a bug, because it breaks the other three themes.</p></div>
+        </div>
+        <div>
+          <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z" class="i2"/><path d="M12 10v4M12 17v.5"/></svg></span>
+          <div><h3>Status never by colour alone</h3><p>Every status carries a word, and high-priority ones add a glyph (✓ ! ✕). Charts use outlined marks, patterns and direct labels.</p></div>
+        </div>
+        <div>
+          <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><circle cx="12" cy="8" r="1.5" class="ik"/><path d="M8 11h8M12 11v6M10 20l2-3 2 3"/></svg></span>
+          <div><h3>Accessible by default</h3><p>AA contrast in Light, Dark and Monochrome; AAA (7:1) text in High contrast. Visible 3px focus ring, full keyboard paths, 44px touch targets.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Theme previews -->
+    <section class="card" aria-labelledby="h-themes">
+      <div class="ch"><h2 id="h-themes">Themes</h2><span class="use">Four complete token sets. Each preview below is locked to its own theme, whatever the switch above says.</span></div>
+      <div class="tprev">
+        <sc-for list="{{previews}}" as="p" hint-placeholder-count="4">
+          <div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+            <div class="th mini" data-theme="{{p.id}}">
+              <div class="mn">
+                <span class="tile" style="width: 20px; height: 20px; border-radius: 5px; background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="13" height="13" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 4"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><path d="M24 16v-6"/></svg></span>
+                <i class="on">Home</i><i>Chat</i><i>Company OS</i>
+              </div>
+              <div class="mb">
+                <div class="mc">
+                  <div style="display: flex; align-items: center; gap: 8px">
+                    <span class="tile" style="width: 24px; height: 24px; border-radius: 6px"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" class="i1"/><path d="M12 8V5"/></svg></span>
+                    <b style="font-size: 12px; font-weight: 600; flex-grow: 1">research-agent</b>
+                    <span class="pill ok">active</span>
+                  </div>
+                  <div class="bar"><div class="bf" style="width: 62%"></div></div>
+                  <span style="color: var(--muted); font-size: 11px">Budget 62% · €31 of €50</span>
+                </div>
+                <div class="mc" style="flex-direction: row; align-items: center; gap: 6px">
+                  <span class="pill warn">! approval</span>
+                  <span style="flex-grow: 1"></span>
+                  <span class="btn">Review</span>
+                  <span class="btn pri">Approve</span>
+                </div>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 1px">
+              <b style="font-size: 13.5px; font-weight: 600">{{p.name}}</b>
+              <span class="sub2">{{p.desc}}</span>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <p class="rules"><b>SLM scheme:</b> the Service Lifecycle Manager admin console (SLM Admin ↗) uses the same tokens under a <span class="mono">.th.slm</span> scope: denser rows, an ops-blue accent and a fixed left rail. It inherits whichever of the four themes the user picked, so it is a scheme, not a fifth theme.</p>
+    </section>
+
+    <!-- Quick links -->
+    <section class="card" aria-labelledby="h-links">
+      <div class="ch"><h2 id="h-links">Every board</h2><span class="use">Grouped exactly as in the sidebar. Each card opens the board.</span></div>
+      <sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+        <div class="qgrp">
+          <p class="sect" style="margin: 0">{{g.name}}</p>
+          <div class="qg">
+            <sc-for list="{{g.items}}" as="q" hint-placeholder-count="6">
+              <a class="ql" href="{{q.href}}">
+                <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="{{q.d1}}" class="{{q.f1}}"/><path d="{{q.d2}}"/></svg></span>
+                <span style="min-width: 0; margin: 0"><b>{{q.name}}</b><span>{{q.desc}}</span><em>Open board →</em></span>
+              </a>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </section>
+
+    <!-- Vue usage -->
+    <section class="card" aria-labelledby="h-vue">
+      <div class="ch"><h2 id="h-vue">How to use in the Vue app</h2><span class="use">The boards are the spec; the Vue 3 frontend consumes the same CSS.</span></div>
+      <div class="steps">
+        <div class="step">
+          <h3><span class="num">1</span>Import the shared stylesheet once</h3>
+          <p>All four token blocks and every class on these boards (.card, .btn, .pill, .tile, .ic …) ship as one stylesheet. Import it in the app entry; components never redeclare tokens.</p>
+          <pre class="code">// src/main.ts
+import '@autobot/design-system/autobot-ds.css'
+createApp(App).use(router).mount('#app')</pre>
+        </div>
+        <div class="step">
+          <h3><span class="num">2</span>Set [data-theme] on &lt;html&gt;</h3>
+          <p>The theme is a single attribute on the document root: light, dark, contrast or mono. The .th scope on these boards maps to :root in the app.</p>
+          <pre class="code">&lt;html lang="en" data-theme="dark"&gt;
+/* autobot-ds.css */
+:root, .th { --bg: #F5F6F8; … }
+:root[data-theme="dark"] { --bg: #0E1420; … }</pre>
+        </div>
+        <div class="step">
+          <h3><span class="num">3</span>Read the theme from profile settings</h3>
+          <p>The user's choice lives in Preferences → Appearance and is stored on the profile, so it follows them across devices. Apply it before first paint; fall back to prefers-color-scheme only when unset.</p>
+          <pre class="code">// src/composables/useTheme.ts
+const theme = computed(() =&gt; profile.value?.settings.theme ?? 'light')
+watchEffect(() =&gt; {
+  document.documentElement.dataset.theme = theme.value
+})</pre>
+        </div>
+        <div class="step">
+          <h3><span class="num">4</span>SLM console uses .th.slm</h3>
+          <p>The SLM admin app mounts inside a wrapper with both classes. Only density and accent tokens change; the theme attribute on &lt;html&gt; still decides light, dark, contrast or mono.</p>
+          <pre class="code">&lt;div id="slm" class="th slm"&gt;
+  &lt;RouterView /&gt;
+&lt;/div&gt;
+.th.slm { --row-h: 32px; --accent: var(--info-fg); }</pre>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> no scoped colours in .vue files: use var(--token) or an existing class. New visual needs start as a token or class in the shared stylesheet, shown on a board, then used in the app.</p>
+    </section>
+
+    <!-- Contribution + versioning -->
+    <div class="notes">
+      <section class="card" aria-labelledby="h-contrib">
+        <div class="ch"><h2 id="h-contrib">Contributing</h2><span class="use">How a change gets in.</span></div>
+        <ol class="ul">
+          <li><b>Check the boards first.</b> Most needs are already a variant or state of an existing component.</li>
+          <li><b>Propose on a board.</b> Add the specimen with all states (default, hover, focus-visible, active, disabled, loading, error) and a Rules note.</li>
+          <li><b>Verify in all four themes</b> with the Preview switch, then keyboard-only and with a screen reader.</li>
+          <li><b>Open a PR</b> that changes the board and autobot-ds.css together; the reviewer approves both or neither.</li>
+          <li><b>Log it</b> in the changelog below with the date and the boards touched.</li>
+        </ol>
+      </section>
+      <section class="card" aria-labelledby="h-ver">
+        <div class="ch"><h2 id="h-ver">Versioning</h2><span class="use">Semantic versions for the stylesheet and boards.</span></div>
+        <ul class="ul">
+          <li><b>Major (2.0)</b> renames or removes a token or class, or changes a component's markup contract. Ships with a migration note.</li>
+          <li><b>Minor (1.1)</b> adds a component, variant, token or board without breaking existing markup.</li>
+          <li><b>Patch (1.0.1)</b> fixes contrast, spacing or a bug; no API change.</li>
+          <li><b>Deprecations</b> stay for one minor release, marked "Deprecated" on the board with the replacement named.</li>
+          <li>The sidebar line "v1 · 4 themes" always shows the current major version.</li>
+        </ul>
+      </section>
+    </div>
+
+    <!-- Changelog -->
+    <section class="card" aria-labelledby="h-log">
+      <div class="ch"><h2 id="h-log">Changelog</h2><span class="pill info">v1.0</span></div>
+      <div class="cl">
+        <div class="mono sub2">10 Oct 2026</div>
+        <div><b>v1.0 · first release.</b> Four themes (Light, Dark, High contrast, Monochrome) and the SLM scheme; full token set with spacing, radius and type scales.</div>
+        <div class="mono sub2"></div>
+        <div>Foundations: Tokens &amp; states, Grid, tables &amp; forms, Charts &amp; data viz.</div>
+        <div class="mono sub2"></div>
+        <div>Components: Form controls, Data table, Dialogs, Overlays &amp; feedback, Tooltips, Command menu, Navigation, Layout &amp; utility, Chat &amp; agent.</div>
+        <div class="mono sub2"></div>
+        <div>Patterns: File browser, Mailbox, Auth pages, Account settings, Global search, Help centre.</div>
+        <div class="mono sub2"></div>
+        <div>Design-system sidebar and prev / next pager added to every board; this Introduction page added.</div>
+      </div>
+    </section>
+
+    <nav aria-label="Design system pages" class="card" style="display: flex; flex-wrap: wrap; gap: 12px; padding: 12px">
+      <a href="Main.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">← Previous</span><span style="font-weight: 600; color: var(--text)">Back to app</span></a>
+      <a href="ComponentsStates.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">Next →</span><span style="font-weight: 600; color: var(--text)">Tokens &amp; states</span></a>
+    </nav>
+
+  </main>
+  </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"$preview":{"width":1440,"height":3400}}'>
+const THEMES = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+const PREVIEWS = [
+  ['light', 'Light', 'Default. Navy on cool grey, coral accent.'],
+  ['dark', 'Dark', 'Low-glare ops rooms and night shifts.'],
+  ['contrast', 'High contrast', 'Black on white, 2px borders, AAA text.'],
+  ['mono', 'Monochrome', 'Greyscale only; status by word and glyph.']
+];
+const ICONS = {
+  states: ['M8 5a4 4 0 1 0 0 8a4 4 0 1 0 0-8z', 'i3', 'M16 5a4 4 0 1 1 0 8M12 12a4 4 0 1 1 0 8a4 4 0 1 1 0-8'],
+  grid: ['M4 4h7v7H4z', 'i1', 'M13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z'],
+  charts: ['M10.5 6h3.5v12h-3.5z', 'i2', 'M4 20h16M5.5 11h3.5v7M15.5 13h3.5v5'],
+  forms: ['M7 8h10a4 4 0 0 1 0 8H7a4 4 0 0 1 0-8z', 'i1', 'M16.5 9.5a2.5 2.5 0 1 1 0 5'],
+  table: ['M4 5h16v5H4z', 'it1', 'M4 5h16v14H4zM4 14.5h16M10 10v9'],
+  dialogs: ['M6 8h12v9H6z', 'i1', 'M3 4h18v16H3z'],
+  overlays: ['M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z', 'i2', 'M10 21h4'],
+  tooltips: ['M4 5h16v10h-7l-4 4v-4H4z', 'it1', 'M8 10h8'],
+  command: ['M3 5h18v14H3z', 'iw', 'M7 10l3 2-3 2M12 15h5'],
+  navigation: ['M15 9l-2 4-4 2 2-4z', 'i3', 'M12 4a8 8 0 1 0 0 16a8 8 0 1 0 0-16'],
+  layout: ['M3 4h6v16H3z', 'i1', 'M3 4h18v16H3zM9 10h12'],
+  chat: ['M3 5h12v9H8l-3 3v-3H3z', 'i1', 'M15 9h6v8h-2v3l-3-3h-5v-3'],
+  files: ['M3 6h6l2 2h10v11H3z', 'i2', 'M3 11h18'],
+  mail: ['M3 6h18v12H3z', 'iw', 'M3 7l9 6 9-6'],
+  uimodes: ['M8.5 8.5h4a3.5 3.5 0 0 1 0 7h-4a3.5 3.5 0 0 1 0-7z', 'i2', 'M8 7h8a5 5 0 0 1 0 10H8a5 5 0 0 1 0-10z'],
+  auth: ['M5 11h14v9H5z', 'i2', 'M8 11V8a4 4 0 0 1 8 0v3M12 15v2'],
+  account: ['M12 5a4 4 0 1 0 0 8a4 4 0 1 0 0-8z', 'i1', 'M4 20a8 8 0 0 1 16 0'],
+  search: ['M11 5a6 6 0 1 0 0 12a6 6 0 1 0 0-12z', 'it1', 'M16 16l4 4'],
+  help: ['M12 4a8 8 0 1 0 0 16a8 8 0 1 0 0-16z', 'i2', 'M10 10a2 2 0 1 1 3 1.7c-.7.4-1 1-1 1.8M12 16.5v.5']
+};
+const GROUPS = [
+  ['Foundations', [
+    ['ComponentsStates.dc.html', 'states', 'Tokens & states', 'Every token in four themes, button and input state matrices, spacing, radius and type scales.'],
+    ['ComponentsGrid.dc.html', 'grid', 'Grid, tables & forms', 'The 12-column page grid, table density and form layout tokens.'],
+    ['ComponentsCharts.dc.html', 'charts', 'Charts & data viz', 'Outlined marks, patterned series and direct labels for usage, cost and fleet data.']
+  ]],
+  ['Components', [
+    ['ComponentsForms.dc.html', 'forms', 'Form controls', 'Text fields, selects, toggles, checkboxes, sliders and validation states.'],
+    ['ComponentsTable.dc.html', 'table', 'Data table', 'Sortable, selectable work-item and agent-run tables with a narrow card fallback.'],
+    ['ComponentsDialogs.dc.html', 'dialogs', 'Dialogs', 'Confirm, destructive and form dialogs with focus trap and Esc to close.'],
+    ['ComponentsOverlays.dc.html', 'overlays', 'Overlays & feedback', 'Toasts, banners, drawers, menus, empty and loading states.'],
+    ['ComponentsTooltips.dc.html', 'tooltips', 'Tooltips', 'Hover and focus hints, info toggletips and disabled-reason tooltips.'],
+    ['ComponentsCommand.dc.html', 'command', 'Command menu', 'The ⌘K palette: grouped results, recent items and keyboard navigation.'],
+    ['ComponentsNavigation.dc.html', 'navigation', 'Navigation', 'Top nav, sub-sidebars, tabs, breadcrumbs, pagination and the shortcuts sheet.'],
+    ['ComponentsLayout.dc.html', 'layout', 'Layout & utility', 'Page shells, split panes, dividers, avatars, kbd and copy helpers.'],
+    ['ComponentsChat.dc.html', 'chat', 'Chat & agent', 'Messages, streaming, tool calls, agent cards, approvals and the composer.']
+  ]],
+  ['Patterns', [
+    ['FileBrowser.dc.html', 'files', 'File browser', 'Knowledge files and sandbox workspaces: tree, list, preview and upload.'],
+    ['Mailbox.dc.html', 'mail', 'Mailbox', 'Agent inbox for messages, reviews and approval requests.'],
+    ['ComponentsUiModes.dc.html', 'uimodes', 'Interface modes', 'Minimal and Full interface: what each area hides, the top-bar toggle and Preferred mode setting.'],
+    ['SignUp.dc.html', 'auth', 'Auth pages', 'Sign up, log in, forgotten password, two-factor and invite acceptance.'],
+    ['AccountSecurity.dc.html', 'account', 'Account settings', 'Security, API keys, integrations and notification preferences.'],
+    ['SearchResults.dc.html', 'search', 'Global search', 'Cross-app results for agents, knowledge, work items and settings.'],
+    ['HelpCenter.dc.html', 'help', 'Help centre', 'Guides, FAQs and contact paths inside the app.']
+  ]]
+];
+
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    return {
+      theme: cur,
+      themes: THEMES.map(([id, label]) => ({ label: label, cls: id === cur ? 'on' : '', pressed: id === cur ? 'true' : 'false', pick: () => this.setState({ theme: id }) })),
+      previews: PREVIEWS.map(([id, name, desc]) => ({ id: id, name: name, desc: desc })),
+      groups: GROUPS.map(([name, items]) => ({
+        name: name,
+        items: items.map(([href, ic, title, desc]) => ({
+          href: href, name: title, desc: desc,
+          d1: ICONS[ic][0], f1: ICONS[ic][1], d2: ICONS[ic][2]
+        }))
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

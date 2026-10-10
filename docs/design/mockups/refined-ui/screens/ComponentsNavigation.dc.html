@@ -1,0 +1,965 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot Components: Navigation and structure</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.wgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:start}
+.wgrid>.card{min-width:0;position:relative;display:flex;flex-direction:column}
+.card.editing{outline:1.5px dashed var(--muted);outline-offset:3px}
+.card.editing[draggable="true"]{cursor:grab}
+.grip{display:inline-grid;place-items:center;width:18px;height:28px;cursor:grab;flex:none}
+.wtools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto}
+.mbtn{width:30px;height:30px;padding:0;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);display:inline-grid;place-items:center;cursor:pointer;flex:none}
+.mbtn:hover{background:var(--surface2)}
+.mbtn[aria-disabled="true"]{opacity:.45;cursor:default}
+.segg{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.segg .seg{height:26px;padding:0 8px}
+.hint{margin:0;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;border:var(--bw) dashed var(--border);background:var(--surface2);font-size:13px;color:var(--text2)}
+.rsz{position:absolute;right:5px;bottom:5px;fill:none;stroke:var(--muted);stroke-width:1.5;stroke-linecap:round;pointer-events:none}
+@media (max-width:760px){.wgrid>.card{grid-column:1 / -1 !important}}
+.sub2{font-size:12.5px;color:var(--muted)}
+/* ---- Components specimen classes ---- */
+.specbar{flex:1 1 100%;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:14px clamp(16px,2.5vw,28px);background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+.specbar h1{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.spec{flex:1 1 100%;box-sizing:border-box;padding:24px clamp(16px,2.5vw,32px) 48px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
+.spec>.full{grid-column:1 / -1}
+@media (max-width:900px){.spec{grid-template-columns:minmax(0,1fr)}}
+.ch .use{font-size:12.5px;color:var(--muted);font-weight:400}
+.cb{padding:16px;display:flex;flex-direction:column;gap:16px}
+.lbl{font-size:11.5px;color:var(--muted);font-weight:500}
+.rules{margin:0;padding:11px 16px;border-top:var(--bw) solid var(--line);font-size:12.5px;color:var(--text2);background:var(--surface2);border-radius:0 0 10px 10px;line-height:1.5}
+.rules b{color:var(--text)}
+.fx{outline:3px solid var(--focus);outline-offset:2px}
+.st{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.strip{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.rel{position:relative}
+.kbd{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;box-sizing:border-box;border-radius:4px;border:var(--bw) solid var(--border);border-bottom-width:2px;background:var(--surface2);font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;font-weight:500;color:var(--text2);line-height:1}
+.cnt{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:99px;font-size:11px;font-weight:600;background:var(--idle-bg);color:var(--idle-fg);border:var(--pill-b);line-height:1}
+.cnt.hot{background:var(--primary);color:var(--on-primary)}
+.badge{position:absolute;top:2px;right:0;min-width:17px;height:17px;padding:0 4px;box-sizing:border-box;border-radius:99px;background:var(--primary);color:var(--on-primary);font-size:10.5px;font-weight:700;display:grid;place-items:center;outline:2px solid var(--surface);line-height:1}
+.badge.alert{background:var(--bad-bg);color:var(--bad-fg);border:var(--pill-b)}
+.bdot{position:absolute;top:7px;right:7px;width:9px;height:9px;border-radius:99px;background:var(--dot-bad);border:1px solid var(--stroke);box-sizing:border-box;outline:2px solid var(--surface)}
+.ibtn{width:40px;height:40px;border-radius:8px;border:0;background:transparent;display:inline-grid;place-items:center;cursor:pointer;color:var(--text);position:relative;flex:none}
+.ibtn:hover{background:var(--surface2)}
+.tabs{display:flex;gap:2px;border-bottom:var(--bw) solid var(--border);overflow-x:auto}
+.tabs a,.tabs button{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 12px;border:0;border-bottom:var(--nav-on-bw) solid transparent;background:none;font:inherit;font-size:13.5px;font-weight:500;color:var(--text2);text-decoration:none;cursor:pointer;white-space:nowrap;box-sizing:border-box}
+.tabs a:hover,.tabs button:hover{color:var(--text);background:var(--surface2)}
+.tabs .on{color:var(--text);font-weight:600;border-bottom-color:var(--accent)}
+.th .menu{position:absolute;z-index:20;min-width:210px;padding:4px;background:var(--surface);border:var(--bw) solid var(--border);border-radius:8px;display:flex;flex-direction:column;gap:1px;box-sizing:border-box}
+.th .menu a,.th .menu button{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:5px;border:0;background:none;font:inherit;font-size:13.5px;font-weight:400;color:var(--text);text-decoration:none;cursor:pointer;text-align:left;width:100%;box-sizing:border-box}
+.th .menu a:hover,.th .menu button:hover{background:var(--surface2)}
+.msep{height:var(--bw);background:var(--line);margin:4px 0}
+.mh{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:6px 10px 4px}
+.crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);list-style:none;margin:0;padding:0}
+.crumbs li{display:flex;align-items:center;gap:6px}
+.th .crumbs a{color:var(--muted);text-decoration:none}.th .crumbs a:hover{color:var(--link-h);text-decoration:underline}
+.crumbs [aria-current="page"]{color:var(--text);font-weight:600}
+.cbtn{height:22px;padding:0 7px;border-radius:4px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text2);font:inherit;font-size:12px;cursor:pointer;line-height:1}
+.mk{width:26px;height:26px;border-radius:99px;display:grid;place-items:center;font-size:12px;font-weight:600;box-sizing:border-box;border:var(--bw) solid var(--border);background:var(--surface);color:var(--muted);flex:none}
+.mk.done{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.mk.cur{border:2px solid var(--accent);color:var(--text)}
+.mk.err{background:var(--bad-bg);color:var(--bad-fg);border:var(--bw) solid var(--bad-fg)}
+.sline{flex:1 1 20px;height:2px;background:var(--line);min-width:14px;margin-top:12px}
+.sline.done{background:var(--primary)}
+.hs{display:flex;align-items:flex-start;gap:8px}
+.hs .sp{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;width:104px;flex:none}
+.hs .sp b{font-size:13px;font-weight:600}.hs .sp span{font-size:11.5px;color:var(--muted)}
+.vs{display:flex;flex-direction:column}
+.vs .sp{display:flex;gap:12px}
+.vs .rail{display:flex;flex-direction:column;align-items:center}
+.vs .vl{width:2px;flex-grow:1;min-height:18px;background:var(--line);margin:4px 0}
+.vs .vl.done{background:var(--primary)}
+.vs .tx{padding-bottom:16px;display:flex;flex-direction:column;gap:2px}
+.vs .tx b{font-size:13.5px;font-weight:600}.vs .tx span{font-size:12.5px;color:var(--muted)}
+.acc{border:var(--bw) solid var(--border);border-top:0;border-radius:8px;overflow:hidden}
+.ai{border-top:var(--bw) solid var(--border)}
+.ah{width:100%;display:flex;align-items:center;gap:10px;padding:12px 14px;border:0;background:var(--surface);font:inherit;font-size:13.5px;font-weight:600;color:var(--text);cursor:pointer;text-align:left}
+.ah:hover{background:var(--surface2)}
+.chev{transition:transform .15s}.chev.open{transform:rotate(180deg)}
+.ab{margin:0;padding:0 14px 14px 40px;font-size:13px;color:var(--text2);line-height:1.5}
+.tb{display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:4px;border:var(--bw) solid var(--border);border-radius:8px;background:var(--surface)}
+.tbb{width:32px;height:32px;display:inline-grid;place-items:center;border-radius:6px;border:0;background:transparent;color:var(--text);cursor:pointer;font:inherit;font-size:13px;flex:none}
+.tbb:hover{background:var(--surface2)}
+.tbb[aria-pressed="true"]{background:var(--surface2);outline:var(--bw) solid var(--border)}
+.tbb:disabled{opacity:.4;cursor:default}
+.tbb.txt{width:auto;padding:0 10px;display:inline-flex;gap:6px;font-weight:500}
+.vsep{width:var(--bw);height:22px;background:var(--border);margin:0 5px;flex:none}
+.hsep{height:var(--bw);background:var(--line);border:0;margin:0}
+.pg{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.pgb{min-width:34px;height:34px;padding:0 8px;border-radius:6px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;box-sizing:border-box}
+.pgb:hover{background:var(--surface2);color:var(--text)}
+.th .pgb.on{background:var(--primary);color:var(--on-primary);border-color:var(--primary);font-weight:600}
+.pgb[aria-disabled="true"]{opacity:.45;cursor:default}
+.pgb.bd{border-color:var(--border);background:var(--surface);color:var(--text)}
+.av{width:32px;height:32px;border-radius:99px;display:inline-grid;place-items:center;font-size:12px;font-weight:600;background:var(--i2t);color:var(--text);border:var(--bw) solid var(--tile-b);box-sizing:border-box;position:relative;flex:none}
+.av.h2{background:var(--i3t)}.av.h3{background:var(--i1t)}
+.av.ag{border-radius:8px;background:var(--tile)}
+.av.s24{width:24px;height:24px;font-size:10px}.av.s24.ag{border-radius:6px}
+.av.s40{width:40px;height:40px;font-size:14px}.av.s48{width:48px;height:48px;font-size:16px}.av.s48.ag{border-radius:11px}
+.av .sd{position:absolute;right:-2px;bottom:-2px;width:10px;height:10px;border-radius:99px;border:1px solid var(--stroke);outline:2px solid var(--surface);box-sizing:border-box}
+.av .am{position:absolute;right:-5px;bottom:-5px;width:16px;height:16px;border-radius:4px;background:var(--primary);display:grid;place-items:center;outline:2px solid var(--surface)}
+.avg{display:flex;align-items:center}
+.avg .av{margin-left:-8px;outline:2px solid var(--surface)}.avg .av:first-child{margin-left:0}
+.avg .more{background:var(--surface2);color:var(--text2);font-size:11.5px}
+.frame{border:var(--bw) solid var(--border);border-radius:14px;overflow:hidden;background:var(--bg);position:relative;flex:none;box-sizing:border-box}
+.mbar{display:flex;align-items:center;gap:10px;height:52px;padding:0 10px 0 12px;background:var(--surface);border-bottom:var(--bw) solid var(--border);box-sizing:border-box}
+.sheet{position:absolute;left:0;right:0;top:52px;bottom:0;background:var(--surface);overflow:auto;padding:8px 12px 16px;z-index:10;display:flex;flex-direction:column;gap:1px;box-sizing:border-box}
+.th .sheet a{display:flex;align-items:center;gap:12px;min-height:44px;padding:0 10px;border-radius:6px;color:var(--text);text-decoration:none;font-size:15px;font-weight:500;border-left:3px solid transparent}
+.th .sheet a:hover{background:var(--surface2)}
+.th .sheet a.on{background:var(--surface2);font-weight:600;border-left-color:var(--accent)}
+.skel{background:var(--surface);border:var(--bw) solid var(--border);border-radius:8px}
+.sk{height:8px;border-radius:99px;background:var(--line)}
+.scrim{position:fixed;inset:0;background:var(--text);opacity:.35;z-index:50}
+.dlg{position:fixed;z-index:51;top:50%;left:50%;transform:translate(-50%,-50%);width:min(680px,calc(100vw - 32px));max-height:80vh;overflow:auto;background:var(--surface);border:var(--bw) solid var(--border);border-radius:12px;box-sizing:border-box}
+.kgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:4px 28px;padding:8px 18px 18px}
+.kr{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:var(--bw) solid var(--line);font-size:13px}
+.kr span:last-child{display:flex;gap:4px;align-items:center;font-size:11.5px;color:var(--muted)}
+.lk{color:var(--link);text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:1px}
+.th .lk:hover{color:var(--link-h);text-decoration-thickness:2px}
+.lsep{display:flex;align-items:center;gap:10px;font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.lsep::before,.lsep::after{content:"";flex:1;height:var(--bw);background:var(--line)}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <a href="ThemeManager.dc.html" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon" aria-label="Plugins" title="Plugins"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon" aria-label="Secrets" title="Secrets"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" title="Preferences"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <a href="AdminUsers.dc.html" class="icon" aria-label="Admin panel" title="Admin panel"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <button type="button" aria-label="Profile menu" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer">MV</button>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+  <aside class="sub" aria-label="Design system" style="flex: 1 1 230px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+    <a href="DesignSystem.dc.html" style="font-weight: 600; color: var(--text)">AutoBot Design System</a>
+    <span class="sub2" style="padding: 0 13px 4px">v1 · 4 themes</span>
+    <p class="sect">Overview</p>
+    <a href="DesignSystem.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z" class="i1"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z" class="it1"/></svg>Introduction</a>
+    <p class="sect">Foundations</p>
+    <a href="ComponentsStates.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4" class="i3"/><circle cx="16" cy="9" r="4" class="i2"/><circle cx="12" cy="16" r="4" class="i1"/></svg>Tokens &amp; states</a>
+    <a href="ComponentsGrid.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5" class="i1"/><rect x="13" y="4" width="7" height="7" rx="1.5" class="iw"/><rect x="4" y="13" width="7" height="7" rx="1.5" class="iw"/><rect x="13" y="13" width="7" height="7" rx="1.5" class="i2"/></svg>Grid, tables &amp; forms</a>
+    <a href="ComponentsCharts.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><rect x="5.5" y="11" width="3.5" height="7" class="i1"/><rect x="10.5" y="6" width="3.5" height="12" class="i2"/><rect x="15.5" y="13" width="3.5" height="5" class="i3"/></svg>Charts &amp; data viz</a>
+    <p class="sect">Components</p>
+    <a href="ComponentsForms.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4" class="i1"/><circle cx="16.5" cy="12" r="2.5" class="iw"/></svg>Form controls</a>
+    <a href="ComponentsTable.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="iw"/><path d="M4 10h16M4 14.5h16M10 10v9"/></svg>Data table</a>
+    <a href="ComponentsDialogs.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="it1"/><rect x="6" y="8" width="12" height="9" rx="1.5" class="iw"/></svg>Dialogs</a>
+    <a href="ComponentsOverlays.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" class="i2"/><path d="M10 21h4"/></svg>Overlays &amp; feedback</a>
+    <a href="ComponentsTooltips.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10h-7l-4 4v-4H4z" class="it1"/><path d="M8 10h8"/></svg>Tooltips</a>
+    <a href="ComponentsCommand.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" class="iw"/><path d="M7 10l3 2-3 2M12 15h5"/></svg>Command menu</a>
+    <a href="ComponentsNavigation.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M15 9l-2 4-4 2 2-4z" class="i3"/></svg>Navigation</a>
+    <a href="ComponentsLayout.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="iw"/><path d="M9 4v16M9 10h12"/></svg>Layout &amp; utility</a>
+    <a href="ComponentsChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h12v9H8l-3 3v-3H3z" class="i1"/><path d="M15 9h6v8h-2v3l-3-3h-5v-3"/></svg>Chat &amp; agent</a>
+    <p class="sect">Patterns</p>
+    <a href="FileBrowser.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="i2"/></svg>File browser</a>
+    <a href="Mailbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" class="iw"/><path d="M3 7l9 6 9-6"/></svg>Mailbox</a>
+    <a href="ComponentsUiModes.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5" class="it1"/><rect x="4.5" y="8.5" width="8" height="7" rx="3.5" class="i2"/></svg>Interface modes</a>
+    <a href="SignUp.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" class="i2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Auth pages</a>
+    <a href="AccountSecurity.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4" class="i1"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>Account settings</a>
+    <a href="SearchResults.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>Global search</a>
+    <a href="HelpCenter.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="i2"/><path d="M10 10a2 2 0 1 1 3 1.7c-.7.4-1 1-1 1.8M12 16.5v.5"/></svg>Help centre</a>
+    <span style="flex-grow: 1; min-height: 16px" aria-hidden="true"></span>
+    <a href="Main.dc.html" style="border-top: var(--bw) solid var(--line); border-radius: 0; padding-top: 12px"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg>← Back to app</a>
+  </aside>
+  <div style="flex: 999 1 520px; min-width: 0; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <div class="specbar">
+    <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1">
+      <h1>Components · Navigation &amp; structure</h1>
+      <span class="sub2">How people move through AutoBot: top nav, section sidebars, tabs, breadcrumbs, steppers, disclosure, toolbars, paging, shortcuts and identity.</span>
+    </div>
+    <span class="lbl">Preview theme</span>
+    <div role="group" aria-label="Preview theme" class="segg">
+      <sc-for list="{{themes}}" as="t" hint-placeholder-count="4"><button type="button" class="seg {{t.cls}}" aria-pressed="{{t.pressed}}" onClick="{{t.pick}}">{{t.label}}</button></sc-for>
+    </div>
+  </div>
+
+  <main class="spec">
+
+    <!-- 1. Top nav anatomy -->
+    <section class="card full" aria-labelledby="h-topnav">
+      <div class="ch"><h2 id="h-topnav">Top navigation · anatomy</h2><span class="use">Use for: the 5 primary sections plus global tools. One per page, always first landmark.</span></div>
+      <div class="cb">
+        <nav class="nav" aria-label="Top navigation specimen" style="display: flex; align-items: center; gap: 2px; padding: 0 16px; background: var(--surface); border: var(--bw) solid var(--border); border-radius: 8px; overflow-x: auto">
+          <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 18px 0 0; gap: 10px"><span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span><span style="font-weight: 600; font-size: 17px; color: var(--text)">AutoBot</span></a>
+          <a href="Main.dc.html">Home</a>
+          <a href="Chat.dc.html" class="on" aria-current="page">Chat</a>
+          <a href="Knowledge.dc.html">Knowledge</a>
+          <a href="CompanyOS.dc.html">Company OS <span class="pill warn">3<span class="sr"> approvals waiting</span></span></a>
+          <a href="Analytics.dc.html">Analytics</a>
+          <span style="flex-grow: 1" aria-hidden="true"></span>
+          <a href="ThemeManager.dc.html" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+          <a href="ReviewInbox.dc.html" class="icon rel" aria-label="Notifications, 4 unread" title="Notifications"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" class="it2"/><path d="M10 21h4"/></svg><span class="badge alert" aria-hidden="true">4</span></a>
+          <a href="Plugins.dc.html" class="icon rel" aria-label="Plugins, 2 updates available" title="Plugins"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg><span class="badge" aria-hidden="true">2</span></a>
+          <a href="Secrets.dc.html" class="icon rel" aria-label="Secrets, 1 expiring soon" title="Secrets"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg><span class="bdot" aria-hidden="true"></span></a>
+          <a href="Preferences.dc.html" class="icon" aria-label="Preferences" title="Preferences"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+          <a href="AdminUsers.dc.html" class="icon" aria-label="Admin panel" title="Admin panel"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+          <span class="rel" style="margin-left: 8px; display: inline-flex"><button type="button" aria-label="Profile menu, Mārtiņš Veiss, online" aria-haspopup="menu" style="width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer">MV</button><span class="dot d-ok" style="position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; outline: 2px solid var(--surface)" aria-hidden="true"></span></span>
+        </nav>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 20px; font-size: 12.5px; color: var(--text2)">
+          <div><b style="color: var(--text)">1 · Brand</b><br>Tile + wordmark, links to Home. aria-label "AutoBot home".</div>
+          <div><b style="color: var(--text)">2 · Sections</b><br>Home, Chat, Knowledge, Company OS, Analytics. Fixed order, never more than 5.</div>
+          <div><b style="color: var(--text)">3 · Active item</b><br>600 weight + 2px accent underline (4px in High contrast) + aria-current="page".</div>
+          <div><b style="color: var(--text)">4 · Count on a section</b><br>Warn pill only for items needing action; screen readers get the words.</div>
+          <div><b style="color: var(--text)">5 · Tools</b><br>Bordered external link (↗ = new app), 40px icon links with aria-label + title.</div>
+          <div><b style="color: var(--text)">6 · Badges</b><br>Number badge (neutral or alert) or a dot; the count lives in the aria-label.</div>
+          <div><b style="color: var(--text)">7 · Profile</b><br>Initials button opens the account menu; status dot is decorative, status in label.</div>
+        </div>
+        <div class="strip" aria-label="Nav item states">
+          <div class="st"><span class="lbl">Default</span><div class="nav" style="display: flex; background: var(--surface); border: var(--bw) solid var(--line); border-radius: 6px"><a href="Knowledge.dc.html" style="height: 44px">Knowledge</a></div></div>
+          <div class="st"><span class="lbl">Hover</span><div class="nav" style="display: flex; background: var(--surface); border: var(--bw) solid var(--line); border-radius: 6px"><a href="Knowledge.dc.html" style="height: 44px; background: var(--surface2); color: var(--text)">Knowledge</a></div></div>
+          <div class="st"><span class="lbl">Focus-visible</span><div class="nav" style="display: flex; background: var(--surface); border: var(--bw) solid var(--line); border-radius: 6px; padding: 4px"><a href="Knowledge.dc.html" class="fx" style="height: 36px">Knowledge</a></div></div>
+          <div class="st"><span class="lbl">Active (current page)</span><div class="nav" style="display: flex; background: var(--surface); border: var(--bw) solid var(--line); border-radius: 6px"><a href="Chat.dc.html" class="on" style="height: 44px">Chat</a></div></div>
+          <div class="st"><span class="lbl">Icon · hover</span><div class="nav" style="display: flex; background: var(--surface); border: var(--bw) solid var(--line); border-radius: 6px; padding: 2px"><a href="Plugins.dc.html" class="icon" aria-label="Plugins" style="background: var(--surface2)"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a></div></div>
+          <div class="st"><span class="lbl">Icon · badge 99+</span><div class="nav" style="display: flex; background: var(--surface); border: var(--bw) solid var(--line); border-radius: 6px; padding: 2px"><a href="Activity.dc.html" class="icon rel" aria-label="Activity, more than 99 new events"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-6 4 3 7-9"/></svg><span class="badge" aria-hidden="true" style="right: -6px">99+</span></a></div></div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> nav is a &lt;nav aria-label="Main"&gt; landmark; exactly one item has aria-current. Badges never carry meaning by color alone: numbers or words are always present, and the full sentence goes in the link's accessible name. No section items beyond 5; extra destinations go under Settings &amp; Tools.</p>
+    </section>
+
+    <!-- 2. Responsive top nav -->
+    <section class="card full" aria-labelledby="h-resp">
+      <div class="ch"><h2 id="h-resp">Responsive top nav</h2><span class="use">Use for: widths below 1200px. Both frames work in Play mode.</span></div>
+      <div class="cb" style="flex-direction: row; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+        <div class="st">
+          <span class="lbl">Below 760px · hamburger opens a full sheet</span>
+          <div class="frame" style="width: 390px; height: 660px">
+            <div class="mbar">
+              <a href="Main.dc.html" aria-label="AutoBot home" style="display: flex; align-items: center; gap: 8px; text-decoration: none; flex-grow: 1"><span class="tile" style="width: 30px; height: 30px; background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.8"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span><span style="font-weight: 600; font-size: 16px; color: var(--text)">AutoBot</span></a>
+              <a href="ReviewInbox.dc.html" class="ibtn" aria-label="Notifications, 4 unread"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" class="it2"/><path d="M10 21h4"/></svg><span class="badge alert" aria-hidden="true">4</span></a>
+              <button type="button" class="ibtn" aria-label="{{sheetLabel}}" aria-expanded="{{sheetExpanded}}" aria-controls="m-sheet" onClick="{{toggleSheet}}" style="border: var(--bw) solid var(--border)">
+                <sc-if value="{{sheetClosed}}" hint-placeholder-val="{{ true }}"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></sc-if>
+                <sc-if value="{{sheetOpen}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></sc-if>
+              </button>
+            </div>
+            <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px">
+              <span class="sub2">Companies / AutoBot Labs</span>
+              <b style="font-size: 20px; font-weight: 600">Company Dashboard</b>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
+                <div class="skel kpi" style="padding: 12px"><div><span>Pending approvals</span><b style="font-size: 20px">3</b></div></div>
+                <div class="skel kpi" style="padding: 12px"><div><span>Active agents</span><b style="font-size: 20px">2 / 6</b></div></div>
+              </div>
+              <div class="skel" style="padding: 14px; display: flex; flex-direction: column; gap: 10px"><b style="font-size: 14px">Pending Approvals</b><div class="sk" style="width: 80%"></div><div class="sk" style="width: 62%"></div><div class="sk" style="width: 70%"></div></div>
+              <div class="skel" style="padding: 14px; display: flex; flex-direction: column; gap: 10px"><b style="font-size: 14px">Budget</b><div class="bar"><div class="bf" style="width: 63%"></div></div><div class="sk" style="width: 40%"></div></div>
+            </div>
+            <sc-if value="{{sheetOpen}}" hint-placeholder-val="{{ false }}">
+              <div class="sheet" id="m-sheet" role="dialog" aria-modal="true" aria-label="Main menu">
+                <nav aria-label="Main" style="display: flex; flex-direction: column; gap: 1px">
+                  <a href="Main.dc.html"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9H4z" class="it1"/><path d="M10 20v-5h4v5"/></svg>Home</a>
+                  <a href="Chat.dc.html"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="it3"/></svg>Chat</a>
+                  <a href="Knowledge.dc.html"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6a2 2 0 0 1 2 2v13a2 2 0 0 0-2-2H4zM20 5h-6a2 2 0 0 0-2 2v13a2 2 0 0 1 2-2h6z" class="it2"/></svg>Knowledge</a>
+                  <a href="CompanyOS.dc.html" class="on" aria-current="page"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5" class="i3"/><rect x="13" y="3" width="8" height="5" rx="1.5" class="i1"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5" class="i2"/></svg>Company OS<span class="pill warn" style="margin-left: auto">3 approvals</span></a>
+                  <a href="Analytics.dc.html"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/></svg>Analytics</a>
+                </nav>
+                <div class="msep" style="margin: 8px 0"></div>
+                <p class="sect" style="margin: 6px 10px">Settings &amp; Tools</p>
+                <nav aria-label="Settings and tools" style="display: flex; flex-direction: column; gap: 1px">
+                  <a href="ThemeManager.dc.html"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></svg>SLM Admin ↗</a>
+                  <a href="Plugins.dc.html"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg>Plugins<span class="cnt hot" style="margin-left: auto">2</span></a>
+                  <a href="Secrets.dc.html"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg>Secrets</a>
+                  <a href="Preferences.dc.html"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>Preferences</a>
+                  <a href="AdminUsers.dc.html"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg>Admin panel</a>
+                </nav>
+                <div class="msep" style="margin: 8px 0"></div>
+                <div style="display: flex; align-items: center; gap: 12px; padding: 8px 10px"><span class="av s40" style="background: var(--brand-bg); color: var(--brand-fg); border-color: var(--brand-bg)">MV<span class="sd d-ok" aria-hidden="true"></span></span><span style="display: flex; flex-direction: column; flex-grow: 1"><b style="font-size: 14px">Mārtiņš Veiss</b><span class="sub2">Owner · online</span></span><a href="Login.dc.html" class="btn sm" style="min-height: 32px; font-size: 13px; border-left: var(--bw) solid var(--border)">Sign out</a></div>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+        <div class="st">
+          <span class="lbl">760–1199px · sections that don't fit move into "More"</span>
+          <div class="frame" style="width: 900px; height: 340px">
+            <nav class="nav" aria-label="Main (900px)" style="display: flex; align-items: center; gap: 2px; padding: 0 16px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+              <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 14px 0 0; gap: 10px"><span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="22" height="22" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span><span style="font-weight: 600; font-size: 17px; color: var(--text)">AutoBot</span></a>
+              <a href="Main.dc.html">Home</a>
+              <a href="Chat.dc.html">Chat</a>
+              <a href="Knowledge.dc.html" class="on" aria-current="page">Knowledge</a>
+              <span class="rel" style="display: inline-flex">
+                <button type="button" class="tbb txt" style="height: 40px; font-size: 14px; color: var(--text2)" aria-haspopup="menu" aria-expanded="{{moreExpanded}}" onClick="{{toggleMore}}">More <svg class="ic chev {{moreChev}}" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+                <sc-if value="{{moreOpen}}" hint-placeholder-val="{{ false }}">
+                  <div class="menu" role="menu" aria-label="More sections" style="top: 46px; left: 0">
+                    <a href="CompanyOS.dc.html" role="menuitem"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5" class="i3"/><rect x="13" y="3" width="8" height="5" rx="1.5" class="i1"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5" class="i2"/></svg>Company OS<span class="pill warn" style="margin-left: auto">3</span></a>
+                    <a href="Analytics.dc.html" role="menuitem"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/></svg>Analytics</a>
+                    <div class="msep" role="separator"></div>
+                    <div class="mh">Settings &amp; Tools</div>
+                    <a href="ThemeManager.dc.html" role="menuitem">SLM Admin ↗</a>
+                    <a href="Plugins.dc.html" role="menuitem">Plugins<span class="cnt hot" style="margin-left: auto">2</span></a>
+                    <a href="Secrets.dc.html" role="menuitem">Secrets</a>
+                    <a href="AdminUsers.dc.html" role="menuitem">Admin panel</a>
+                  </div>
+                </sc-if>
+              </span>
+              <span style="flex-grow: 1" aria-hidden="true"></span>
+              <a href="ReviewInbox.dc.html" class="icon rel" aria-label="Notifications, 4 unread"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" class="it2"/><path d="M10 21h4"/></svg><span class="badge alert" aria-hidden="true">4</span></a>
+              <a href="Preferences.dc.html" class="icon" aria-label="Preferences"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+              <button type="button" aria-label="Profile menu" style="margin-left: 6px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer">MV</button>
+            </nav>
+            <div style="display: flex; height: calc(100% - 57px)">
+              <div style="width: 200px; background: var(--surface); border-right: var(--bw) solid var(--border); padding: 14px; display: flex; flex-direction: column; gap: 10px"><div class="sk" style="width: 70%"></div><div class="sk" style="width: 85%"></div><div class="sk" style="width: 60%"></div><div class="sk" style="width: 75%"></div></div>
+              <div style="flex-grow: 1; padding: 18px; display: flex; flex-direction: column; gap: 12px"><span class="sub2">Knowledge / Collections</span><b style="font-size: 20px; font-weight: 600">Fleet runbooks</b><div class="skel" style="padding: 14px; display: flex; flex-direction: column; gap: 10px"><div class="sk" style="width: 60%"></div><div class="sk" style="width: 80%"></div><div class="sk" style="width: 45%"></div></div></div>
+            </div>
+          </div>
+          <span class="lbl" style="max-width: 900px">Overflow order: rightmost sections move first; the active section never hides (if it would, it swaps with the last visible one). Secrets, Plugins and Admin icons collapse into "Settings &amp; Tools".</span>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> hamburger and More are real buttons with aria-expanded and aria-controls/aria-haspopup. The sheet is modal: focus moves to the first link, Tab is trapped, Esc or the × closes and returns focus to the hamburger. Touch targets in the sheet are at least 44px tall.</p>
+    </section>
+
+    <!-- 3. Sub-sidebar -->
+    <section class="card" aria-labelledby="h-sub">
+      <div class="ch"><h2 id="h-sub">Sub-sidebar · anatomy</h2><span class="use">Use for: sections with 6+ destinations.</span></div>
+      <div class="cb" style="flex-direction: row; gap: 20px; align-items: flex-start; flex-wrap: wrap">
+        <div class="st">
+          <span class="lbl">Expanded · 240px</span>
+          <aside class="sub" aria-label="Company OS specimen" style="width: 240px; box-sizing: border-box; padding: 8px 8px 10px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border: var(--bw) solid var(--border); border-radius: 8px">
+            <p class="sect" style="margin-top: 8px">Overview</p>
+            <a href="CompanyOS.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5" class="i3"/><rect x="13" y="3" width="8" height="5" rx="1.5" class="i1"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5" class="i2"/></svg>Dashboard</a>
+            <a href="ReviewInbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>My Reviews<span class="cnt" style="margin-left: auto">5</span></a>
+            <a href="Approvals.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Approvals<span class="pill warn" style="margin-left: auto">3<span class="sr"> waiting</span></span></a>
+            <p class="sect">Work</p>
+            <a href="Backlog.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Backlog<span class="cnt" style="margin-left: auto">24</span></a>
+            <a href="Boards.dc.html" style="background: var(--surface2); color: var(--text)"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1" class="it1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1" class="it2"/></svg>Boards<span class="lbl" style="margin-left: auto">hover</span></a>
+            <a href="Goals.dc.html" class="fx"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4" class="it3"/></svg>Goals<span class="lbl" style="margin-left: auto">focus</span></a>
+            <p class="sect">Organization</p>
+            <a href="Members.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/></svg>Members<span class="cnt" style="margin-left: auto">8</span></a>
+            <a href="HeartbeatMonitor.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-4 4 8 2-4h6"/></svg>Heartbeat<span class="pill bad" style="margin-left: auto">1 failing</span></a>
+            <a aria-disabled="true" style="opacity: .45; cursor: default"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3"/></svg>Secrets<span class="lbl" style="margin-left: auto">no access</span></a>
+            <div class="hsep" style="margin: 8px 0 6px"></div>
+            <button type="button" class="tbb txt" aria-label="Collapse sidebar" style="justify-content: flex-start; color: var(--text2)"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6l-6 6 6 6M19 6l-6 6 6 6"/></svg>Collapse</button>
+          </aside>
+        </div>
+        <div class="st">
+          <span class="lbl">Collapsed · 60px</span>
+          <aside class="sub" aria-label="Company OS collapsed specimen" style="width: 60px; box-sizing: border-box; padding: 8px 6px; display: flex; flex-direction: column; gap: 2px; background: var(--surface); border: var(--bw) solid var(--border); border-radius: 8px">
+            <a href="CompanyOS.dc.html" class="on" aria-current="page" aria-label="Dashboard" title="Dashboard" style="justify-content: center; padding: 8px 6px"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5" class="i3"/><rect x="13" y="3" width="8" height="5" rx="1.5" class="i1"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5" class="i2"/></svg></a>
+            <a href="ReviewInbox.dc.html" aria-label="My Reviews, 5" title="My Reviews" style="justify-content: center; padding: 8px 6px"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 13h5l1 2h4l1-2h5"/></svg></a>
+            <a href="Approvals.dc.html" class="rel" aria-label="Approvals, 3 waiting" title="Approvals" style="justify-content: center; padding: 8px 6px"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg><span class="badge alert" aria-hidden="true" style="top: -2px; right: -2px">3</span></a>
+            <div class="hsep" style="margin: 6px 4px"></div>
+            <a href="Backlog.dc.html" aria-label="Backlog" title="Backlog" style="justify-content: center; padding: 8px 6px"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg></a>
+            <a href="Boards.dc.html" aria-label="Boards" title="Boards" style="justify-content: center; padding: 8px 6px"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1" class="it1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1" class="it2"/></svg></a>
+            <a href="Goals.dc.html" aria-label="Goals" title="Goals" style="justify-content: center; padding: 8px 6px"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4" class="it3"/></svg></a>
+            <div class="hsep" style="margin: 6px 4px"></div>
+            <a href="Members.dc.html" aria-label="Members" title="Members" style="justify-content: center; padding: 8px 6px"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/></svg></a>
+            <a href="HeartbeatMonitor.dc.html" class="rel" aria-label="Heartbeat, 1 failing" title="Heartbeat: 1 failing" style="justify-content: center; padding: 8px 6px"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-4 4 8 2-4h6"/></svg><span class="bdot" aria-hidden="true" style="top: 4px; right: 6px"></span></a>
+            <div class="hsep" style="margin: 6px 4px"></div>
+            <button type="button" class="tbb" aria-label="Expand sidebar" title="Expand sidebar" style="margin: 0 auto"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 6l6 6-6 6M5 6l6 6-6 6"/></svg></button>
+          </aside>
+        </div>
+        <div style="flex: 1 1 160px; display: flex; flex-direction: column; gap: 10px; font-size: 12.5px; color: var(--text2)">
+          <div><b style="color: var(--text)">Group heading</b><br>11px caps, muted. Becomes a 1px separator when collapsed.</div>
+          <div><b style="color: var(--text)">Current</b><br>surface2 fill + 3px primary left bar + 600 weight + aria-current.</div>
+          <div><b style="color: var(--text)">Counts</b><br>Neutral count for totals; warn/bad pill with words for things that need action.</div>
+          <div><b style="color: var(--text)">Collapsed</b><br>Icons keep aria-label + title tooltip; counts become badges or dots.</div>
+          <div><b style="color: var(--text)">Disabled</b><br>45% opacity plus a reason ("no access"); not focusable.</div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> &lt;aside class="sub" aria-label="Section name"&gt;, links not buttons. Collapse state is per-user and remembered; the toggle states what it will do ("Collapse sidebar"). Never hide the current item.</p>
+    </section>
+
+    <!-- 4. Tabs -->
+    <section class="card" aria-labelledby="h-tabs">
+      <div class="ch"><h2 id="h-tabs">Tabs</h2><span class="use">Use for: switching views of the same object.</span></div>
+      <div class="cb">
+        <div class="st" style="align-items: stretch">
+          <span class="lbl">Link tabs with counts · agent detail (working)</span>
+          <nav class="tabs" aria-label="research-agent views">
+            <sc-for list="{{linkTabs}}" as="lt" hint-placeholder-count="5"><a href="Agents.dc.html" class="{{lt.cls}}" aria-current="{{lt.current}}" onClick="{{lt.pick}}">{{lt.label}}<sc-if value="{{lt.hasCount}}" hint-placeholder-val="{{ false }}"><span class="cnt">{{lt.count}}</span></sc-if></a></sc-for>
+          </nav>
+          <span class="sub2">Showing: {{tabLabel}}</span>
+        </div>
+        <div class="st">
+          <span class="lbl">Segmented · range picker (working)</span>
+          <div class="segg" role="group" aria-label="Time range">
+            <sc-for list="{{ranges}}" as="r" hint-placeholder-count="4"><button type="button" class="seg {{r.cls}}" aria-pressed="{{r.pressed}}" onClick="{{r.pick}}">{{r.label}}</button></sc-for>
+          </div>
+        </div>
+        <div class="st" style="align-items: stretch">
+          <span class="lbl">Overflow · Admin panel at narrow width</span>
+          <div class="tabs" role="tablist" aria-label="Admin panel">
+            <button type="button" role="tab" aria-selected="false">Users <span class="cnt">14</span></button>
+            <button type="button" role="tab" aria-selected="true" class="on">Fleet nodes <span class="cnt">6</span></button>
+            <button type="button" role="tab" aria-selected="false">Roles</button>
+            <button type="button" role="tab" aria-selected="false">Audit log</button>
+            <button type="button" aria-haspopup="menu" aria-expanded="false" style="margin-left: auto">More <span class="cnt">3</span><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+          </div>
+        </div>
+        <div class="strip">
+          <div class="st"><span class="lbl">Default</span><div class="tabs" style="border: 0"><button type="button">Runs</button></div></div>
+          <div class="st"><span class="lbl">Hover</span><div class="tabs" style="border: 0"><button type="button" style="background: var(--surface2); color: var(--text)">Runs</button></div></div>
+          <div class="st"><span class="lbl">Focus-visible</span><div class="tabs" style="border: 0; padding: 4px"><button type="button" class="fx">Runs</button></div></div>
+          <div class="st"><span class="lbl">Selected</span><div class="tabs" style="border: 0"><button type="button" class="on">Runs</button></div></div>
+          <div class="st"><span class="lbl">Disabled</span><div class="tabs" style="border: 0"><button type="button" disabled style="opacity: .45; cursor: default">Logs</button></div></div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> tabs that change the URL are links with aria-current; in-page tabs use role="tablist"/"tab" with aria-selected and arrow-key movement. Segmented controls (2–5 options) use aria-pressed. Overflow goes into a "More" menu showing how many are hidden.</p>
+    </section>
+
+    <!-- 5. Breadcrumbs -->
+    <section class="card" aria-labelledby="h-crumbs">
+      <div class="ch"><h2 id="h-crumbs">Breadcrumbs</h2><span class="use">Use for: pages 2+ levels deep, above the h1.</span></div>
+      <div class="cb">
+        <div class="st"><span class="lbl">Standard</span>
+          <nav aria-label="Breadcrumb"><ol class="crumbs"><li><a href="CompanySelector.dc.html">Companies</a><span aria-hidden="true">/</span></li><li><a href="CompanyOS.dc.html">AutoBot Labs</a><span aria-hidden="true">/</span></li><li><span aria-current="page">Approvals</span></li></ol></nav>
+        </div>
+        <div class="st"><span class="lbl">Truncated · middle levels in a "…" menu (working)</span>
+          <nav aria-label="Breadcrumb"><ol class="crumbs">
+            <li><a href="Knowledge.dc.html">Knowledge</a><span aria-hidden="true">/</span></li>
+            <li class="rel"><button type="button" class="cbtn" aria-label="Show 3 hidden levels" aria-haspopup="menu" aria-expanded="{{crumbExpanded}}" onClick="{{toggleCrumb}}">…</button><span aria-hidden="true">/</span>
+              <sc-if value="{{crumbOpen}}" hint-placeholder-val="{{ false }}">
+                <div class="menu" role="menu" aria-label="Hidden levels" style="top: 28px; left: 0">
+                  <a href="Knowledge.dc.html" role="menuitem">Collections</a>
+                  <a href="Knowledge.dc.html" role="menuitem">Infrastructure</a>
+                  <a href="Knowledge.dc.html" role="menuitem">Fleet runbooks</a>
+                </div>
+              </sc-if>
+            </li>
+            <li><a href="Knowledge.dc.html">Node recovery</a><span aria-hidden="true">/</span></li>
+            <li><span aria-current="page">node-04 unreachable: restart sequence</span></li>
+          </ol></nav>
+        </div>
+        <div class="strip">
+          <div class="st"><span class="lbl">Link · default</span><ol class="crumbs"><li><a href="Knowledge.dc.html">Collections</a></li></ol></div>
+          <div class="st"><span class="lbl">Hover</span><ol class="crumbs"><li><a href="Knowledge.dc.html" style="color: var(--link-h); text-decoration: underline">Collections</a></li></ol></div>
+          <div class="st"><span class="lbl">Focus-visible</span><ol class="crumbs"><li><a href="Knowledge.dc.html" class="fx">Collections</a></li></ol></div>
+          <div class="st"><span class="lbl">Current</span><ol class="crumbs"><li><span aria-current="page">Fleet runbooks</span></li></ol></div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> &lt;nav aria-label="Breadcrumb"&gt; + &lt;ol&gt;; the last item is plain text with aria-current="page". Truncate when more than 4 levels: keep first and last two, the "…" button says how many are hidden.</p>
+    </section>
+
+    <!-- 6. Toolbar -->
+    <section class="card" aria-labelledby="h-tb">
+      <div class="ch"><h2 id="h-tb">Toolbar</h2><span class="use">Use for: dense action sets on editors and tables.</span></div>
+      <div class="cb">
+        <div class="st" style="align-items: stretch"><span class="lbl">Knowledge editor · grouped, toggles, overflow (working)</span>
+          <div class="tb" role="toolbar" aria-label="Formatting">
+            <button type="button" class="tbb" aria-label="Bold" aria-pressed="true" style="font-weight: 700">B</button>
+            <button type="button" class="tbb" aria-label="Italic" aria-pressed="false" style="font-style: italic">I</button>
+            <button type="button" class="tbb mono" aria-label="Inline code" aria-pressed="false">&lt;/&gt;</button>
+            <span class="vsep" role="separator" aria-orientation="vertical"></span>
+            <button type="button" class="tbb" aria-label="Bulleted list"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="7" r="1.2" class="ik"/><circle cx="5" cy="12" r="1.2" class="ik"/><circle cx="5" cy="17" r="1.2" class="ik"/><path d="M9 7h11M9 12h11M9 17h11"/></svg></button>
+            <button type="button" class="tbb" aria-label="Insert link"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"/></svg></button>
+            <button type="button" class="tbb" aria-label="Cite knowledge source"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6a2 2 0 0 1 2 2v13a2 2 0 0 0-2-2H4zM20 5h-6a2 2 0 0 0-2 2v13a2 2 0 0 1 2-2h6z" class="it2"/></svg></button>
+            <span class="vsep" role="separator" aria-orientation="vertical"></span>
+            <button type="button" class="tbb" aria-label="Undo"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
+            <button type="button" class="tbb" aria-label="Redo" disabled><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"/></svg></button>
+            <span style="flex-grow: 1"></span>
+            <span class="rel" style="display: inline-flex">
+              <button type="button" class="tbb" aria-label="More formatting" aria-haspopup="menu" aria-expanded="{{tbExpanded}}" onClick="{{toggleTb}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.4" class="ik"/><circle cx="12" cy="12" r="1.4" class="ik"/><circle cx="19" cy="12" r="1.4" class="ik"/></svg></button>
+              <sc-if value="{{tbOpen}}" hint-placeholder-val="{{ false }}">
+                <div class="menu" role="menu" aria-label="More formatting" style="top: 38px; right: 0">
+                  <button type="button" role="menuitem">Heading 2<span class="kbd" style="margin-left: auto">⌘⌥2</span></button>
+                  <button type="button" role="menuitem">Code block<span class="kbd" style="margin-left: auto">⌘⌥C</span></button>
+                  <button type="button" role="menuitem">Table</button>
+                  <div class="msep" role="separator"></div>
+                  <button type="button" role="menuitem">Clear formatting</button>
+                </div>
+              </sc-if>
+            </span>
+          </div>
+        </div>
+        <div class="st" style="align-items: stretch"><span class="lbl">Table toolbar · Fleet nodes</span>
+          <div class="tb" role="toolbar" aria-label="Fleet nodes table" style="border: 0; padding: 0; gap: 8px">
+            <button type="button" class="btn sm"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 8v6l-4-2v-4z" class="it1"/></svg>Filter<span class="cnt hot">2</span></button>
+            <button type="button" class="btn sm">Sort: last heartbeat</button>
+            <span class="vsep" role="separator" aria-orientation="vertical"></span>
+            <div class="segg" role="group" aria-label="View"><button type="button" class="seg on" aria-pressed="true">Table</button><button type="button" class="seg" aria-pressed="false">Cards</button></div>
+            <span style="flex-grow: 1"></span>
+            <button type="button" class="btn sm">Export CSV</button>
+            <button type="button" class="btn sm pri">Add node</button>
+          </div>
+        </div>
+        <div class="strip">
+          <div class="st"><span class="lbl">Default</span><button type="button" class="tbb" aria-label="Italic" style="font-style: italic">I</button></div>
+          <div class="st"><span class="lbl">Hover</span><button type="button" class="tbb" aria-label="Italic" style="font-style: italic; background: var(--surface2)">I</button></div>
+          <div class="st"><span class="lbl">Focus-visible</span><button type="button" class="tbb fx" aria-label="Italic" style="font-style: italic">I</button></div>
+          <div class="st"><span class="lbl">Pressed</span><button type="button" class="tbb" aria-label="Bold" aria-pressed="true" style="font-weight: 700">B</button></div>
+          <div class="st"><span class="lbl">Disabled</span><button type="button" class="tbb" aria-label="Italic" disabled style="font-style: italic">I</button></div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> role="toolbar" with one tab stop; arrow keys move between buttons. Every icon button has aria-label; toggles use aria-pressed. Lowest-priority actions overflow into "⋯" first; primary action stays visible.</p>
+    </section>
+
+    <!-- 7. Stepper -->
+    <section class="card full" aria-labelledby="h-step">
+      <div class="ch"><h2 id="h-step">Stepper</h2><span class="use">Use for: linear flows of 3–6 steps (knowledge import, agent onboarding, company setup).</span></div>
+      <div class="cb" style="flex-direction: row; flex-wrap: wrap; gap: 32px; align-items: flex-start">
+        <div style="flex: 1 1 560px; display: flex; flex-direction: column; gap: 22px">
+          <div class="st" style="align-items: stretch"><span class="lbl">Horizontal · Knowledge import</span>
+            <ol class="hs" aria-label="Knowledge import progress" style="list-style: none; margin: 0; padding: 0">
+              <li class="sp"><span class="mk done" aria-hidden="true"><svg class="ic sonp" width="14" height="14" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10" stroke-width="2.4"/></svg></span><b>Connect source</b><span>Done</span></li>
+              <li class="sline done" aria-hidden="true"></li>
+              <li class="sp"><span class="mk done" aria-hidden="true"><svg class="ic sonp" width="14" height="14" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10" stroke-width="2.4"/></svg></span><b>Map fields</b><span>Done</span></li>
+              <li class="sline done" aria-hidden="true"></li>
+              <li class="sp" aria-current="step"><span class="mk cur" aria-hidden="true">3</span><b>Chunk &amp; embed</b><span>Current · 412 / 980</span></li>
+              <li class="sline" aria-hidden="true"></li>
+              <li class="sp"><span class="mk" aria-hidden="true">4</span><b style="color: var(--text2)">Review</b><span>Upcoming</span></li>
+              <li class="sline" aria-hidden="true"></li>
+              <li class="sp"><span class="mk" aria-hidden="true">5</span><b style="color: var(--text2)">Publish</b><span>Upcoming</span></li>
+            </ol>
+          </div>
+          <div class="st" style="align-items: stretch"><span class="lbl">Horizontal · error state</span>
+            <ol class="hs" aria-label="Knowledge import progress, failed" style="list-style: none; margin: 0; padding: 0">
+              <li class="sp"><span class="mk done" aria-hidden="true"><svg class="ic sonp" width="14" height="14" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10" stroke-width="2.4"/></svg></span><b>Connect source</b><span>Done</span></li>
+              <li class="sline done" aria-hidden="true"></li>
+              <li class="sp"><span class="mk done" aria-hidden="true"><svg class="ic sonp" width="14" height="14" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10" stroke-width="2.4"/></svg></span><b>Map fields</b><span>Done</span></li>
+              <li class="sline done" aria-hidden="true"></li>
+              <li class="sp" aria-current="step"><span class="mk err" aria-hidden="true">!</span><b style="color: var(--alert-text)">Chunk &amp; embed</b><span style="color: var(--alert-text)">Error · embedding model offline</span></li>
+              <li class="sline" aria-hidden="true"></li>
+              <li class="sp"><span class="mk" aria-hidden="true">4</span><b style="color: var(--text2)">Review</b><span>Upcoming</span></li>
+              <li class="sline" aria-hidden="true"></li>
+              <li class="sp"><span class="mk" aria-hidden="true">5</span><b style="color: var(--text2)">Publish</b><span>Upcoming</span></li>
+            </ol>
+            <div style="display: flex; gap: 8px; align-items: center"><span class="pill bad">Failed</span><span class="sub2">nomic-embed on node-02 did not respond.</span><button type="button" class="btn sm">Retry step</button></div>
+          </div>
+          <div class="strip">
+            <div class="st"><span class="lbl">Done</span><span class="mk done" aria-hidden="true"><svg class="ic sonp" width="14" height="14" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10" stroke-width="2.4"/></svg></span></div>
+            <div class="st"><span class="lbl">Current</span><span class="mk cur">3</span></div>
+            <div class="st"><span class="lbl">Upcoming</span><span class="mk">4</span></div>
+            <div class="st"><span class="lbl">Error</span><span class="mk err">!</span></div>
+            <div class="st"><span class="lbl">Focus (clickable done step)</span><a href="Knowledge.dc.html" class="mk done fx" aria-label="Step 1, Connect source, done. Edit" style="text-decoration: none"><svg class="ic sonp" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10" stroke-width="2.4"/></svg></a></div>
+          </div>
+        </div>
+        <div style="flex: 1 1 320px" class="st"><span class="lbl">Vertical · Agent onboarding (with descriptions)</span>
+          <ol class="vs" aria-label="Agent onboarding progress" style="list-style: none; margin: 0; padding: 0">
+            <li class="sp"><div class="rail"><span class="mk done" aria-hidden="true"><svg class="ic sonp" width="14" height="14" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10" stroke-width="2.4"/></svg></span><span class="vl done"></span></div><div class="tx"><b>Choose model</b><span>Done · ollama / qwen2.5:14b on node-03</span></div></li>
+            <li class="sp"><div class="rail"><span class="mk err" aria-hidden="true">!</span><span class="vl done"></span></div><div class="tx"><b style="color: var(--alert-text)">Grant permissions</b><span style="color: var(--alert-text)">Error · secrets scope "github-token" missing</span><a href="Secrets.dc.html" style="font-size: 12.5px">Add secret</a></div></li>
+            <li class="sp" aria-current="step"><div class="rail"><span class="mk cur" aria-hidden="true">3</span><span class="vl"></span></div><div class="tx"><b>Set budget</b><span>Current · monthly cap and 80% alert</span></div></li>
+            <li class="sp"><div class="rail"><span class="mk" aria-hidden="true">4</span><span class="vl"></span></div><div class="tx"><b style="color: var(--text2)">Assign to org chart</b><span>Upcoming</span></div></li>
+            <li class="sp"><div class="rail"><span class="mk" aria-hidden="true">5</span></div><div class="tx" style="padding-bottom: 0"><b style="color: var(--text2)">First heartbeat</b><span>Upcoming</span></div></li>
+          </ol>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> &lt;ol&gt; with aria-current="step" on the active step; every marker has a text state (Done / Current / Upcoming / Error) next to it, not just color or icon. Done steps may be links back; upcoming steps are not interactive. Switch to vertical below 720px.</p>
+    </section>
+
+    <!-- 8. Accordion -->
+    <section class="card" aria-labelledby="h-acc">
+      <div class="ch"><h2 id="h-acc">Accordion / Disclosure</h2><span class="use">Use for: optional detail, FAQs, grouped settings.</span></div>
+      <div class="cb">
+        <div class="st" style="align-items: stretch"><span class="lbl">Single-open · Company OS help (working)</span>
+          <div class="acc">
+            <sc-for list="{{accOne}}" as="a" hint-placeholder-count="3">
+              <div class="ai">
+                <button type="button" class="ah" aria-expanded="{{a.expanded}}" aria-controls="{{a.pid}}" onClick="{{a.toggle}}"><svg class="ic chev {{a.cls}}" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>{{a.title}}</button>
+                <sc-if value="{{a.open}}" hint-placeholder-val="{{ false }}"><p class="ab" id="{{a.pid}}">{{a.body}}</p></sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div class="st" style="align-items: stretch"><span class="lbl">Multi-open · agent settings (working)</span>
+          <div class="acc">
+            <sc-for list="{{accMany}}" as="m" hint-placeholder-count="3">
+              <div class="ai">
+                <button type="button" class="ah" aria-expanded="{{m.expanded}}" aria-controls="{{m.pid}}" onClick="{{m.toggle}}"><svg class="ic chev {{m.cls}}" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg><span style="flex-grow: 1">{{m.title}}</span><span class="pill {{m.pcls}}">{{m.ptext}}</span></button>
+                <sc-if value="{{m.open}}" hint-placeholder-val="{{ false }}"><p class="ab" id="{{m.pid}}">{{m.body}}</p></sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div class="strip">
+          <div class="st"><span class="lbl">Header · hover</span><div class="acc" style="width: 200px"><div class="ai"><button type="button" class="ah" style="background: var(--surface2)"><svg class="ic chev" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>Budget</button></div></div></div>
+          <div class="st"><span class="lbl">Header · focus-visible</span><div style="width: 200px; padding: 3px"><button type="button" class="ah fx" style="border-radius: 6px"><svg class="ic chev" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>Budget</button></div></div>
+          <div class="st"><span class="lbl">Header · disabled</span><div class="acc" style="width: 200px"><div class="ai"><button type="button" class="ah" disabled style="opacity: .45; cursor: default"><svg class="ic chev" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>Billing (owner only)</button></div></div></div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> header is a &lt;button&gt; with aria-expanded + aria-controls; chevron rotates, text never changes. Single-open for FAQs, multi-open for settings. Don't hide required form fields or errors inside a closed panel; open it when it contains an error.</p>
+    </section>
+
+    <!-- 9. Pagination -->
+    <section class="card" aria-labelledby="h-pg">
+      <div class="ch"><h2 id="h-pg">Pagination</h2><span class="use">Use for: tables and lists over 50 rows.</span></div>
+      <div class="cb">
+        <div class="st"><span class="lbl">Numbered · Activity log, 12 pages (working)</span>
+          <nav class="pg" aria-label="Activity log pages">
+            <button type="button" class="pgb bd" aria-disabled="{{prevDisabled}}" onClick="{{prev}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>Previous</button>
+            <sc-for list="{{pages}}" as="p" hint-placeholder-count="7">
+              <sc-if value="{{p.isNum}}" hint-placeholder-val="{{ true }}"><button type="button" class="pgb {{p.cls}}" aria-current="{{p.current}}" aria-label="{{p.aria}}" onClick="{{p.pick}}">{{p.label}}</button></sc-if>
+              <sc-if value="{{p.isGap}}" hint-placeholder-val="{{ false }}"><span class="pgb" aria-hidden="true" style="cursor: default">…</span></sc-if>
+            </sc-for>
+            <button type="button" class="pgb bd" aria-disabled="{{nextDisabled}}" onClick="{{next}}">Next<svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          </nav>
+        </div>
+        <div class="st" style="align-items: stretch"><span class="lbl">Range + page size · table footer</span>
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 12px; border: var(--bw) solid var(--border); border-radius: 8px">
+            <span class="sub2" role="status">Showing <b class="mono" style="color: var(--text)">{{rangeFrom}}–{{rangeTo}}</b> of 236 events</span>
+            <span style="flex-grow: 1"></span>
+            <label class="sub2" style="display: flex; align-items: center; gap: 8px">Rows per page <select style="height: 32px; border-radius: 6px; border: var(--bw) solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 13px; padding: 0 6px"><option>20</option><option>50</option><option>100</option></select></label>
+            <nav class="pg" aria-label="Activity log pages, compact"><button type="button" class="pgb bd" aria-label="Previous page" aria-disabled="{{prevDisabled}}" onClick="{{prev}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button><span class="sub2" style="padding: 0 6px">Page {{page}} of 12</span><button type="button" class="pgb bd" aria-label="Next page" aria-disabled="{{nextDisabled}}" onClick="{{next}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></nav>
+          </div>
+        </div>
+        <div class="st" style="align-items: stretch"><span class="lbl">Load more · chat history, live feeds</span>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px; border: var(--bw) dashed var(--border); border-radius: 8px"><button type="button" class="btn sm">Load 20 older messages</button><span class="sub2">40 of 312 loaded</span></div>
+        </div>
+        <div class="strip">
+          <div class="st"><span class="lbl">Default</span><button type="button" class="pgb">4</button></div>
+          <div class="st"><span class="lbl">Hover</span><button type="button" class="pgb" style="background: var(--surface2); color: var(--text)">4</button></div>
+          <div class="st"><span class="lbl">Focus-visible</span><button type="button" class="pgb fx">4</button></div>
+          <div class="st"><span class="lbl">Current</span><button type="button" class="pgb on" aria-current="page">3</button></div>
+          <div class="st"><span class="lbl">Disabled</span><button type="button" class="pgb bd" aria-disabled="true">Next</button></div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> &lt;nav aria-label&gt; around the controls; current page has aria-current="page" and the filled style. Always show first, last and neighbours of current. Announce the new range via role="status". Use "Load more" for feeds, not for tables people compare across pages.</p>
+    </section>
+
+    <!-- 10. Avatar -->
+    <section class="card" aria-labelledby="h-av">
+      <div class="ch"><h2 id="h-av">Avatar &amp; avatar group</h2><span class="use">Use for: owners, reviewers, assignees, participants.</span></div>
+      <div class="cb">
+        <div class="strip">
+          <div class="st"><span class="lbl">Human · 24 / 32 / 40 / 48</span><div style="display: flex; gap: 10px; align-items: center"><span class="av s24" role="img" aria-label="Mārtiņš Veiss">MV</span><span class="av" role="img" aria-label="Mārtiņš Veiss">MV</span><span class="av s40 h2" role="img" aria-label="Mārtiņš Veiss">MV</span><span class="av s48 h3" role="img" aria-label="Mārtiņš Veiss">MV</span></div></div>
+          <div class="st"><span class="lbl">Agent · rounded square + bot marker</span><div style="display: flex; gap: 14px; align-items: center">
+            <span class="av ag s24" role="img" aria-label="code-agent (agent)"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" class="i1"/><path d="M12 8V5"/></svg></span>
+            <span class="av ag" role="img" aria-label="research-agent (agent)">RA<span class="am" aria-hidden="true"><svg class="ic sonp" width="10" height="10" viewBox="0 0 24 24"><rect x="5" y="9" width="14" height="10" rx="3" stroke-width="2.4"/><path d="M12 9V5" stroke-width="2.4"/></svg></span></span>
+            <span class="av ag s40" role="img" aria-label="devops-engineer (agent)">DE<span class="am" aria-hidden="true"><svg class="ic sonp" width="10" height="10" viewBox="0 0 24 24"><rect x="5" y="9" width="14" height="10" rx="3" stroke-width="2.4"/><path d="M12 9V5" stroke-width="2.4"/></svg></span></span>
+            <span class="av ag s48" role="img" aria-label="performance-engineer (agent)"><svg class="ic" width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" class="iw"/><circle cx="29" cy="27" r="3" class="iw"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+          </div></div>
+        </div>
+        <div class="st"><span class="lbl">Status dot + text (dot is decorative)</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 18px">
+            <span style="display: flex; align-items: center; gap: 8px; font-size: 13px"><span class="av" aria-hidden="true">MV<span class="sd d-ok"></span></span>Online</span>
+            <span style="display: flex; align-items: center; gap: 8px; font-size: 13px"><span class="av ag" aria-hidden="true">CA<span class="sd d-warn"></span></span>Busy · running</span>
+            <span style="display: flex; align-items: center; gap: 8px; font-size: 13px"><span class="av ag" aria-hidden="true">DE<span class="sd d-bad"></span></span>Error</span>
+            <span style="display: flex; align-items: center; gap: 8px; font-size: 13px"><span class="av ag" aria-hidden="true">DW<span class="sd d-idle"></span></span>Idle</span>
+          </div>
+        </div>
+        <div class="strip">
+          <div class="st"><span class="lbl">Group · approvers, +N overflow</span>
+            <div class="avg" role="group" aria-label="Approvers: Mārtiņš Veiss, code-reviewer, research-agent and 4 more">
+              <span class="av" aria-hidden="true">MV</span><span class="av ag" aria-hidden="true">CR</span><span class="av ag h3" aria-hidden="true">RA</span><span class="av h2" aria-hidden="true">LK</span><button type="button" class="av more" aria-label="Show 4 more approvers" style="cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 600">+4</button>
+            </div>
+          </div>
+          <div class="st"><span class="lbl">Group · focus on +N</span>
+            <div class="avg"><span class="av s24" aria-hidden="true">MV</span><span class="av ag s24" aria-hidden="true">CA</span><button type="button" class="av s24 more fx" aria-label="Show 9 more participants" style="font: inherit; font-size: 10px; font-weight: 600">+9</button></div>
+          </div>
+          <div class="st"><span class="lbl">With name</span>
+            <span style="display: flex; align-items: center; gap: 10px"><span class="av ag" aria-hidden="true">CR</span><span style="display: flex; flex-direction: column"><b style="font-size: 13.5px">code-reviewer</b><span class="sub2">Agent · reviews PRs</span></span></span>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> humans are circles, agents are rounded squares with a bot marker, so the difference survives Monochrome and High contrast. Status is always written next to or in the accessible name. Groups show max 4 then a focusable "+N" button.</p>
+    </section>
+
+    <!-- 11. Badges on icons -->
+    <section class="card" aria-labelledby="h-bdg">
+      <div class="ch"><h2 id="h-bdg">Badges &amp; counters on icons</h2><span class="use">Use for: unread, pending, updates on nav and tool icons.</span></div>
+      <div class="cb">
+        <div class="strip">
+          <div class="st"><span class="lbl">Neutral count</span><a href="Plugins.dc.html" class="ibtn" aria-label="Plugins, 2 updates available"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg><span class="badge" aria-hidden="true">2</span></a></div>
+          <div class="st"><span class="lbl">Alert count</span><a href="ReviewInbox.dc.html" class="ibtn" aria-label="Notifications, 4 unread"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" class="it2"/><path d="M10 21h4"/></svg><span class="badge alert" aria-hidden="true">4</span></a></div>
+          <div class="st"><span class="lbl">Capped 99+</span><a href="Activity.dc.html" class="ibtn" aria-label="Activity, more than 99 new"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-6 4 3 7-9"/></svg><span class="badge" aria-hidden="true" style="right: -6px">99+</span></a></div>
+          <div class="st"><span class="lbl">Dot only</span><a href="Secrets.dc.html" class="ibtn" aria-label="Secrets, 1 expiring soon"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg><span class="bdot" aria-hidden="true"></span></a></div>
+          <div class="st"><span class="lbl">On avatar</span><span class="rel" style="display: inline-flex"><span class="av ag" role="img" aria-label="devops-engineer, 2 failed runs">DE</span><span class="badge alert" aria-hidden="true" style="top: -6px; right: -8px">2</span></span></div>
+          <div class="st"><span class="lbl">Focus-visible</span><a href="ReviewInbox.dc.html" class="ibtn fx" aria-label="Notifications, 4 unread"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" class="it2"/><path d="M10 21h4"/></svg><span class="badge alert" aria-hidden="true">4</span></a></div>
+        </div>
+        <div class="strip">
+          <div class="st"><span class="lbl">Inline counters</span><div style="display: flex; gap: 10px; align-items: center"><span class="cnt">24</span><span class="cnt hot">2</span><span class="pill warn">3 waiting</span><span class="pill bad">1 failing</span><span class="pill info">new</span></div></div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> badges are aria-hidden; the parent's aria-label carries the full sentence ("Notifications, 4 unread"). Alert style only when someone must act. Dot-only badges need a tooltip with the reason. Cap at 99+. Update counts politely, never with aria-live="assertive".</p>
+    </section>
+
+    <!-- 12. Keyboard shortcuts -->
+    <section class="card full" aria-labelledby="h-kbd">
+      <div class="ch"><h2 id="h-kbd">Keyboard shortcut hints &amp; help sheet</h2><span class="use">Use for: power-user paths. Press ? anywhere on this board (outside inputs) to open the sheet.</span></div>
+      <div class="cb">
+        <div class="strip" style="gap: 28px">
+          <div class="st"><span class="lbl">In a search field</span>
+            <label style="display: flex; align-items: center; gap: 8px; height: 36px; width: 280px; padding: 0 10px; box-sizing: border-box; border: var(--bw) solid var(--border); border-radius: 6px; background: var(--surface)"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg><input type="search" placeholder="Search agents, knowledge…" aria-label="Search" aria-keyshortcuts="Control+K Meta+K" style="border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 13.5px; flex-grow: 1; min-width: 0"><span class="kbd">⌘</span><span class="kbd">K</span></label>
+          </div>
+          <div class="st"><span class="lbl">In a menu item</span>
+            <div style="display: flex; align-items: center; gap: 24px; height: 34px; padding: 0 10px; border: var(--bw) solid var(--border); border-radius: 6px; font-size: 13.5px">New chat<span style="display: flex; gap: 4px"><span class="kbd">⌘</span><span class="kbd">⇧</span><span class="kbd">O</span></span></div>
+          </div>
+          <div class="st"><span class="lbl">Sequence (g then h)</span>
+            <span style="display: flex; gap: 4px; align-items: center; font-size: 12.5px; color: var(--muted)"><span class="kbd">G</span>then<span class="kbd">H</span>Home</span>
+          </div>
+          <div class="st"><span class="lbl">In a tooltip</span>
+            <span style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; background: var(--primary); color: var(--on-primary); font-size: 12.5px">Approve selected <span class="kbd" style="background: transparent; color: var(--on-primary); border-color: var(--on-primary)">A</span></span>
+          </div>
+          <div class="st"><span class="lbl">Trigger</span>
+            <button type="button" class="btn" aria-haspopup="dialog" aria-keyshortcuts="Shift+?" onClick="{{openHelp}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" class="it1"/><path d="M7 10h1M11 10h2M16 10h1M8 14h8"/></svg>Keyboard shortcuts<span class="kbd">?</span></button>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> show the platform's modifier (⌘ on macOS, Ctrl elsewhere) and expose it via aria-keyshortcuts. Single-key shortcuts never fire while typing in a field and can be turned off in Preferences. The help sheet is a modal dialog: focus trapped, Esc closes, focus returns to the trigger.</p>
+    </section>
+
+    <!-- 13. Separator -->
+    <section class="card" aria-labelledby="h-sep">
+      <div class="ch"><h2 id="h-sep">Separator</h2><span class="use">Use for: dividing groups when spacing alone isn't enough.</span></div>
+      <div class="cb">
+        <div class="st" style="align-items: stretch"><span class="lbl">Horizontal · 1px var(--line) (2px in High contrast)</span><div class="hsep" role="separator"></div></div>
+        <div class="st"><span class="lbl">Vertical · inside toolbars and inline metadata</span><div style="display: flex; align-items: center; font-size: 13px; color: var(--text2)">research-agent<span class="vsep" role="separator" aria-orientation="vertical"></span>ollama<span class="vsep" role="separator" aria-orientation="vertical"></span><span class="mono">node-03</span></div></div>
+        <div class="st" style="align-items: stretch"><span class="lbl">Labelled · grouping a feed by day</span><div class="lsep" role="separator" aria-label="Yesterday">Yesterday</div></div>
+        <div class="st"><span class="lbl">Between list rows · inherent in .row</span><div style="width: 100%; border: var(--bw) solid var(--border); border-radius: 8px"><div class="row" style="font-size: 13px"><span class="dot d-ok"></span>node-01 · healthy</div><div class="row" style="font-size: 13px"><span class="dot d-bad"></span>node-04 · unreachable</div></div></div>
+      </div>
+      <p class="rules"><b>Rules:</b> prefer whitespace and surface steps first. Decorative dividers are aria-hidden; use role="separator" only between real groups (menus, toolbars). Never stack a separator directly against a card border.</p>
+    </section>
+
+    <!-- 14. Links -->
+    <section class="card" aria-labelledby="h-lk">
+      <div class="ch"><h2 id="h-lk">Link styles</h2><span class="use">Use for: navigation inside text and next to content.</span></div>
+      <div class="cb">
+        <div class="st"><span class="lbl">Inline in body text · underlined</span><p style="margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--text2)">The agent cites <a href="Knowledge.dc.html" class="lk">Fleet runbooks</a> before restarting a node; see the <a href="HeartbeatMonitor.dc.html" class="lk">Heartbeat monitor</a> for history.</p></div>
+        <div class="strip">
+          <div class="st"><span class="lbl">Standalone · card header</span><a href="Approvals.dc.html" style="font-size: 13px; font-weight: 500">View all</a></div>
+          <div class="st"><span class="lbl">With arrow</span><a href="Agents.dc.html" style="font-size: 13px; font-weight: 500; text-decoration: none">Open agent registry →</a></div>
+          <div class="st"><span class="lbl">External / other app</span><a href="ThemeManager.dc.html" style="font-size: 13px; font-weight: 500">SLM Admin ↗<span class="sr"> (opens in new tab)</span></a></div>
+          <div class="st"><span class="lbl">Muted · meta lines</span><a href="CompanySelector.dc.html" class="sub2" style="text-decoration: none">Companies</a></div>
+          <div class="st"><span class="lbl">Link as button</span><a href="CeoChat.dc.html" class="btn sm">CEO Chat</a></div>
+        </div>
+        <div class="strip">
+          <div class="st"><span class="lbl">Default</span><a href="Knowledge.dc.html" class="lk" style="font-size: 13.5px">Fleet runbooks</a></div>
+          <div class="st"><span class="lbl">Hover</span><a href="Knowledge.dc.html" class="lk" style="font-size: 13.5px; color: var(--link-h); text-decoration-thickness: 2px">Fleet runbooks</a></div>
+          <div class="st"><span class="lbl">Focus-visible</span><a href="Knowledge.dc.html" class="lk fx" style="font-size: 13.5px">Fleet runbooks</a></div>
+          <div class="st"><span class="lbl">Unavailable (not a link)</span><span style="font-size: 13.5px; color: var(--muted)">Fleet runbooks · archived</span></div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> links inside prose are always underlined (color alone is not enough). Link text names the destination, never "click here". Links go somewhere; actions are buttons. ↗ marks a different app and is announced.</p>
+    </section>
+
+    <nav aria-label="Design system pages" class="card" style="grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px; padding: 12px">
+      <a href="ComponentsCommand.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">← Previous</span><span style="font-weight: 600; color: var(--text)">Command menu</span></a>
+      <a href="ComponentsLayout.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">Next →</span><span style="font-weight: 600; color: var(--text)">Layout &amp; utility</span></a>
+    </nav>
+  </main>
+  </div>
+  </div>
+
+  <sc-if value="{{helpOpen}}" hint-placeholder-val="{{ false }}">
+    <div class="scrim" onClick="{{closeHelp}}" aria-hidden="true"></div>
+    <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="kh-title">
+      <div class="ch"><h2 id="kh-title">Keyboard shortcuts</h2><span class="sub2">Esc to close</span><button type="button" class="tbb" aria-label="Close keyboard shortcuts" onClick="{{closeHelp}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+      <div class="kgrid">
+        <div>
+          <p class="sect" style="margin: 10px 0 2px">General</p>
+          <div class="kr"><span>Command palette</span><span><span class="kbd">⌘</span><span class="kbd">K</span></span></div>
+          <div class="kr"><span>Focus search</span><span><span class="kbd">/</span></span></div>
+          <div class="kr"><span>Show this sheet</span><span><span class="kbd">?</span></span></div>
+          <div class="kr"><span>Close dialog or menu</span><span><span class="kbd">Esc</span></span></div>
+          <p class="sect" style="margin: 14px 0 2px">Chat</p>
+          <div class="kr"><span>Send message</span><span><span class="kbd">Enter</span></span></div>
+          <div class="kr"><span>New line</span><span><span class="kbd">⇧</span><span class="kbd">Enter</span></span></div>
+          <div class="kr"><span>New chat</span><span><span class="kbd">⌘</span><span class="kbd">⇧</span><span class="kbd">O</span></span></div>
+        </div>
+        <div>
+          <p class="sect" style="margin: 10px 0 2px">Go to</p>
+          <div class="kr"><span>Home</span><span><span class="kbd">G</span>then<span class="kbd">H</span></span></div>
+          <div class="kr"><span>Chat</span><span><span class="kbd">G</span>then<span class="kbd">C</span></span></div>
+          <div class="kr"><span>Knowledge</span><span><span class="kbd">G</span>then<span class="kbd">K</span></span></div>
+          <div class="kr"><span>Company OS</span><span><span class="kbd">G</span>then<span class="kbd">O</span></span></div>
+          <div class="kr"><span>Analytics</span><span><span class="kbd">G</span>then<span class="kbd">A</span></span></div>
+          <p class="sect" style="margin: 14px 0 2px">Lists &amp; approvals</p>
+          <div class="kr"><span>Next / previous row</span><span><span class="kbd">J</span><span class="kbd">K</span></span></div>
+          <div class="kr"><span>Approve selected (asks to confirm)</span><span><span class="kbd">A</span></span></div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"$preview":{"width":1440,"height":4700}}'>
+const THEMES = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+const LINK_TABS = [['overview', 'Overview', ''], ['runs', 'Runs', '18'], ['knowledge', 'Knowledge', '42'], ['perms', 'Permissions', ''], ['logs', 'Logs', '']];
+const RANGES = [['24h', 'Day'], ['7d', 'Week'], ['30d', 'Month'], ['90d', 'Quarter']];
+const ACC_ONE = [
+  ['hb', 'What does a heartbeat run do?', 'Each agent wakes on its schedule, checks its assigned work, and reports status. A failed heartbeat marks the agent "error" and notifies its manager in the org chart.'],
+  ['budget', 'What happens when an agent hits its budget?', 'At 80% the owner is alerted. At 100% the agent pauses and opens a budget_increase approval; nothing runs until it is approved or the month resets.'],
+  ['deploy', 'Who can approve a code_deploy request?', 'Members with the Owner or Engineering Lead role. Agents can request but never approve their own deploys.']
+];
+const ACC_MANY = [
+  ['model', 'Model & runtime', 'ollama / qwen2.5:14b on node-03 · context 32k · temperature 0.2', 'ok', 'Set'],
+  ['perms', 'Permissions', 'Knowledge: read all collections. Secrets: github-token missing. Tools: shell (sandboxed), web fetch.', 'bad', '1 issue'],
+  ['limits', 'Budget & limits', 'Monthly cap €30 · alert at 80% · max 6 heartbeat runs per hour.', 'idle', 'Default']
+];
+const N_PAGES = 12;
+
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    this._onKey = (e) => {
+      const tg = e.target || {};
+      const tag = (tg.tagName || '').toLowerCase();
+      if (e.key === 'Escape') { this.setState({ help: false, sheet: false, more: false, crumb: false, tb: false }); return; }
+      if (e.key === '?' && tag !== 'input' && tag !== 'textarea' && tag !== 'select' && !tg.isContentEditable) { this.setState({ help: true }); }
+    };
+    try { window.addEventListener('keydown', this._onKey); } catch (e) {}
+  }
+  componentWillUnmount() {
+    try { window.removeEventListener('keydown', this._onKey); } catch (e) {}
+  }
+  pageList(p) {
+    const keep = [1, N_PAGES, p - 1, p, p + 1].filter((x) => x >= 1 && x <= N_PAGES);
+    const uniq = keep.filter((x, i) => keep.indexOf(x) === i).sort((a, b) => a - b);
+    const out = [];
+    uniq.forEach((n, i) => {
+      if (i > 0 && n - uniq[i - 1] > 1) out.push({ isGap: true, isNum: false, label: '', cls: '', current: 'false', aria: '', pick: () => {} });
+      out.push({ isGap: false, isNum: true, label: String(n), cls: n === p ? 'on' : '', current: n === p ? 'page' : 'false', aria: 'Page ' + n, pick: () => this.setState({ page: n }) });
+    });
+    return out;
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const tab = st.tab || 'runs';
+    const range = st.range || '7d';
+    const one = st.accOne === undefined ? 'hb' : st.accOne;
+    const many = st.accMany || { model: true };
+    const page = st.page || 3;
+    const tabDef = LINK_TABS.filter((t) => t[0] === tab)[0] || LINK_TABS[0];
+    return {
+      theme: cur,
+      themes: THEMES.map(([id, label]) => ({ label: label, cls: id === cur ? 'on' : '', pressed: id === cur ? 'true' : 'false', pick: () => this.setState({ theme: id }) })),
+      sheetOpen: !!st.sheet,
+      sheetClosed: !st.sheet,
+      sheetExpanded: st.sheet ? 'true' : 'false',
+      sheetLabel: st.sheet ? 'Close menu' : 'Open menu',
+      toggleSheet: () => this.setState({ sheet: !st.sheet }),
+      moreOpen: !!st.more,
+      moreExpanded: st.more ? 'true' : 'false',
+      moreChev: st.more ? 'open' : '',
+      toggleMore: () => this.setState({ more: !st.more }),
+      crumbOpen: !!st.crumb,
+      crumbExpanded: st.crumb ? 'true' : 'false',
+      toggleCrumb: () => this.setState({ crumb: !st.crumb }),
+      tbOpen: !!st.tb,
+      tbExpanded: st.tb ? 'true' : 'false',
+      toggleTb: () => this.setState({ tb: !st.tb }),
+      helpOpen: !!st.help,
+      openHelp: () => this.setState({ help: true }),
+      closeHelp: () => this.setState({ help: false }),
+      tabLabel: tabDef[1],
+      linkTabs: LINK_TABS.map(([id, label, count]) => ({
+        label: label, count: count, hasCount: !!count,
+        cls: id === tab ? 'on' : '', current: id === tab ? 'page' : 'false',
+        pick: (e) => { try { e.preventDefault(); } catch (err) {} this.setState({ tab: id }); }
+      })),
+      ranges: RANGES.map(([id, label]) => ({ label: label, cls: id === range ? 'on' : '', pressed: id === range ? 'true' : 'false', pick: () => this.setState({ range: id }) })),
+      accOne: ACC_ONE.map(([id, title, body]) => ({
+        title: title, body: body, pid: 'acc1-' + id, open: one === id,
+        expanded: one === id ? 'true' : 'false', cls: one === id ? 'open' : '',
+        toggle: () => this.setState({ accOne: one === id ? null : id })
+      })),
+      accMany: ACC_MANY.map(([id, title, body, pcls, ptext]) => ({
+        title: title, body: body, pcls: pcls, ptext: ptext, pid: 'accm-' + id, open: !!many[id],
+        expanded: many[id] ? 'true' : 'false', cls: many[id] ? 'open' : '',
+        toggle: () => this.setState({ accMany: Object.assign({}, many, { [id]: !many[id] }) })
+      })),
+      page: page,
+      pages: this.pageList(page),
+      prevDisabled: page <= 1 ? 'true' : 'false',
+      nextDisabled: page >= N_PAGES ? 'true' : 'false',
+      prev: () => { if (page > 1) this.setState({ page: page - 1 }); },
+      next: () => { if (page < N_PAGES) this.setState({ page: page + 1 }); },
+      rangeFrom: (page - 1) * 20 + 1,
+      rangeTo: Math.min(page * 20, 236)
+    };
+  }
+}
+</script>
+</body>
+</html>

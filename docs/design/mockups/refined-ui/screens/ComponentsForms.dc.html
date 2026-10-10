@@ -1,0 +1,1087 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot Components: Form controls</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.wgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:start}
+.wgrid>.card{min-width:0;position:relative;display:flex;flex-direction:column}
+.card.editing{outline:1.5px dashed var(--muted);outline-offset:3px}
+.card.editing[draggable="true"]{cursor:grab}
+.grip{display:inline-grid;place-items:center;width:18px;height:28px;cursor:grab;flex:none}
+.wtools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto}
+.mbtn{width:30px;height:30px;padding:0;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);display:inline-grid;place-items:center;cursor:pointer;flex:none}
+.mbtn:hover{background:var(--surface2)}
+.mbtn[aria-disabled="true"]{opacity:.45;cursor:default}
+.segg{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.segg .seg{height:26px;padding:0 8px}
+.hint{margin:0;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;border:var(--bw) dashed var(--border);background:var(--surface2);font-size:13px;color:var(--text2)}
+.rsz{position:absolute;right:5px;bottom:5px;fill:none;stroke:var(--muted);stroke-width:1.5;stroke-linecap:round;pointer-events:none}
+@media (max-width:760px){.wgrid>.card{grid-column:1 / -1 !important}}
+.sub2{font-size:12.5px;color:var(--muted)}
+/* ---- Form controls specimen ---- */
+.use{font-size:12.5px;color:var(--muted)}
+.spec{padding:16px;display:flex;flex-direction:column;gap:18px}
+.st{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.states{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px 16px}
+.rules{margin:0;padding:11px 16px;border-top:var(--bw) solid var(--line);background:var(--surface2);border-radius:0 0 10px 10px;font-size:12.5px;color:var(--text2);line-height:1.5}
+.fld{display:flex;flex-direction:column;gap:6px;min-width:0}
+.lbl{font-size:13px;font-weight:500;color:var(--text)}
+.req{color:var(--alert-text);margin-left:2px}
+.help{font-size:12px;color:var(--muted);line-height:1.4}
+.err{font-size:12px;color:var(--alert-text);font-weight:500;display:flex;align-items:center;gap:6px;line-height:1.4}
+.cnt{font-size:12px;color:var(--muted);margin-left:auto}
+.mkr{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:99px;background:var(--primary);color:var(--on-primary);font-size:10.5px;font-weight:600;flex:none}
+.inp{width:100%;height:36px;box-sizing:border-box;padding:0 10px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-size:13.5px;display:flex;align-items:center}
+.inp::placeholder{color:var(--muted)}
+.inp:hover,.grp:hover{border-color:var(--muted)}
+.th .inp:focus-visible,.th .inp.fx,.th .grp:focus-within,.th .grp.fx,.th .tagbox:focus-within,.th .tagbox.fx{outline:3px solid var(--focus);outline-offset:1px;border-color:var(--focus)}
+.th .grp .inp:focus-visible,.th .tagbox input:focus-visible{outline:0}
+.inp[readonly],.inp.ro,.grp.ro{background:var(--surface2);border-style:dashed}
+.inp:disabled,.inp.dis,.grp.dis,.tagbox.dis{background:var(--surface2);color:var(--muted);opacity:.6;cursor:not-allowed}
+.inp.inv,.grp.inv,.tagbox.inv{border-color:var(--bar-alert);border-width:calc(var(--bw) + 1px)}
+textarea.inp{height:auto;min-height:96px;padding:8px 10px;resize:vertical;line-height:1.5;display:block}
+textarea.inp.sm{min-height:60px}
+select.inp{appearance:none;-webkit-appearance:none;padding-right:32px}
+.selw{position:relative}.selw>svg{position:absolute;right:10px;top:50%;margin-top:-7px;pointer-events:none}
+input[type="search"]::-webkit-search-cancel-button{display:none}
+.grp{display:flex;align-items:stretch;height:36px;box-sizing:border-box;border:var(--bw) solid var(--border);border-radius:6px;background:var(--surface);overflow:hidden}
+.grp .inp{border:0;height:100%;border-radius:0;min-width:0;flex:1;background:transparent}
+.ad{display:flex;align-items:center;padding:0 10px;background:var(--surface2);color:var(--text2);font-size:13px;white-space:nowrap}
+.ad.l{border-right:var(--bw) solid var(--border)}.ad.r{border-left:var(--bw) solid var(--border)}
+.ad.ia{background:transparent;padding:0 0 0 10px}
+.ibtn{width:28px;height:28px;align-self:center;margin-right:4px;border:0;background:transparent;border-radius:5px;display:grid;place-items:center;cursor:pointer;padding:0;flex:none}
+.ibtn:hover{background:var(--surface2)}
+.chk{display:flex;align-items:flex-start;gap:10px;padding:5px 0;border:0;background:transparent;font:inherit;font-size:13.5px;color:var(--text);text-align:left;cursor:pointer}
+.chk:disabled{opacity:.5;cursor:not-allowed}
+.box{width:18px;height:18px;margin-top:1px;flex:none;box-sizing:border-box;border-radius:4px;border:calc(var(--bw) + .5px) solid var(--text2);background:var(--surface);display:grid;place-items:center}
+.box svg{display:none;fill:none;stroke:var(--on-primary);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.chk[aria-checked="true"] .box,.chk[aria-checked="mixed"] .box{background:var(--primary);border-color:var(--primary)}
+.chk[aria-checked="true"] .ck,.chk[aria-checked="mixed"] .mx{display:block}
+.chk.inv .box{border-color:var(--bar-alert);border-width:2px}
+.rd .box,.rc .box{border-radius:99px}
+.dotin{width:8px;height:8px;border-radius:99px;background:var(--primary);display:none}
+.rd[aria-checked="true"] .box,.rc[aria-checked="true"] .box{background:var(--surface);border-color:var(--primary);border-width:2px}
+.rd[aria-checked="true"] .dotin,.rc[aria-checked="true"] .dotin{display:block}
+.rc{display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:8px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;color:var(--text);text-align:left;cursor:pointer;width:100%;box-sizing:border-box}
+.rc:hover{border-color:var(--muted)}
+.rc[aria-checked="true"]{border-color:var(--primary);outline:1px solid var(--primary)}
+.rc:disabled{opacity:.5;cursor:not-allowed}
+.sw{position:relative;width:36px;height:20px;flex:none;box-sizing:border-box;padding:0;border-radius:99px;border:var(--bw) solid var(--text2);background:var(--bar-track);cursor:pointer}
+.sw .k{position:absolute;top:50%;left:2px;width:14px;height:14px;margin-top:-7px;border-radius:99px;background:var(--surface);border:1px solid var(--stroke);box-sizing:border-box;transition:left .15s}
+.sw[aria-checked="true"]{background:var(--primary);border-color:var(--primary)}
+.sw[aria-checked="true"] .k{left:calc(100% - 16px)}
+.sw.sm{width:28px;height:16px}.sw.sm .k{width:10px;height:10px;margin-top:-5px}.sw.sm[aria-checked="true"] .k{left:calc(100% - 12px)}
+.sw.lg{width:44px;height:24px}.sw.lg .k{width:18px;height:18px;margin-top:-9px}.sw.lg[aria-checked="true"] .k{left:calc(100% - 20px)}
+.sw:disabled{opacity:.5;cursor:not-allowed}
+.sw.ro{border-style:dashed;cursor:default}
+.th .fx{outline:3px solid var(--focus);outline-offset:2px}
+.swrow{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:var(--bw) solid var(--line)}
+.swrow:last-child{border-bottom:0}
+.onoff{font-size:12px;font-weight:600;color:var(--text2);min-width:24px}
+.sl{position:relative;height:24px}
+.sl .tr{position:absolute;left:0;right:0;top:9px;height:6px;border-radius:99px;background:var(--bar-track);outline:var(--pill-b)}
+.sl .fl{position:absolute;left:0;top:9px;height:6px;border-radius:99px;background:var(--bar)}
+.sl .fl.alert{background:var(--bar-alert)}
+.sl input{position:absolute;left:0;top:0;width:100%;height:24px;margin:0;-webkit-appearance:none;appearance:none;background:transparent;pointer-events:none}
+.sl input::-webkit-slider-runnable-track{background:transparent;height:24px}
+.sl input::-moz-range-track{background:transparent}
+.sl input::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:18px;height:18px;margin-top:3px;border-radius:99px;background:var(--surface);border:2px solid var(--primary);cursor:pointer}
+.sl input::-moz-range-thumb{pointer-events:auto;width:14px;height:14px;border-radius:99px;background:var(--surface);border:2px solid var(--primary);cursor:pointer}
+.th .sl input:focus-visible{outline:0}
+.sl input:focus-visible::-webkit-slider-thumb{outline:3px solid var(--focus);outline-offset:2px}
+.sl input:focus-visible::-moz-range-thumb{outline:3px solid var(--focus);outline-offset:2px}
+.sl.dis{opacity:.5}
+.sl .tick{position:absolute;top:3px;width:2px;height:18px;background:var(--text2)}
+.ticks{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted)}
+.val{font-size:13px;font-weight:600;padding:2px 8px;border-radius:5px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.stp{display:inline-flex;height:36px;box-sizing:border-box;border:var(--bw) solid var(--border);border-radius:6px;background:var(--surface);overflow:hidden}
+.stp button{width:36px;border:0;background:var(--surface2);color:var(--text);cursor:pointer;display:grid;place-items:center;padding:0}
+.stp button[aria-disabled="true"],.stp button:disabled{opacity:.4;cursor:not-allowed}
+.stp input{width:76px;border:0;border-left:var(--bw) solid var(--border);border-right:var(--bw) solid var(--border);text-align:center;font-family:'IBM Plex Mono',monospace;font-size:13.5px;background:var(--surface);color:var(--text);padding:0}
+.th .stp:focus-within,.th .stp.fx{outline:3px solid var(--focus);outline-offset:1px}
+.th .stp input:focus-visible{outline:0}
+.stp.inv{border-color:var(--bar-alert);border-width:calc(var(--bw) + 1px)}
+.stp.ro{border-style:dashed}.stp.dis{opacity:.55}
+.cal{border:var(--bw) solid var(--border);border-radius:10px;background:var(--surface);padding:12px;width:286px;box-sizing:border-box}
+.calh{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-size:13.5px;font-weight:600}
+.calg{display:grid;grid-template-columns:repeat(7,1fr);gap:2px 0;text-align:center}
+.wd{font-size:11px;color:var(--muted);font-weight:600;padding:4px 0}
+.day{height:34px;border:0;border-radius:6px;background:transparent;color:var(--text);font:inherit;font-size:13px;cursor:pointer;padding:0;box-sizing:border-box}
+.day:hover{background:var(--surface2)}
+.day.out{color:var(--muted)}
+.day.today{font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.th .day.sel,.th .day.end{background:var(--primary);color:var(--on-primary);font-weight:600}
+.day.inr{background:var(--info-bg);color:var(--info-fg);border-radius:0;border-top:var(--pill-b);border-bottom:var(--pill-b)}
+.pre{display:block;width:100%;text-align:left;height:32px;padding:0 10px;border:0;border-left:3px solid transparent;border-radius:6px;background:transparent;color:var(--text2);font:inherit;font-size:13px;cursor:pointer}
+.pre:hover{background:var(--surface2)}
+.pre.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.otp{display:flex;gap:8px}
+.otp input{width:44px;height:52px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:500;border-radius:8px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);box-sizing:border-box;padding:0}
+.otp input:nth-child(4){margin-left:12px}
+.th .otp input:focus-visible,.th .otp input.fx{outline:3px solid var(--focus);outline-offset:1px;border-color:var(--focus)}
+.otp.sm{gap:5px}.otp.sm input{width:30px;height:38px;font-size:16px}.otp.sm input:nth-child(4){margin-left:8px}
+.otp.inv input{border-color:var(--bar-alert);border-width:2px}
+.otp.dis input{opacity:.55;background:var(--surface2)}
+.chip{display:inline-flex;align-items:center;gap:2px;height:26px;padding:0 2px 0 8px;border-radius:5px;background:var(--tile);border:var(--bw) solid var(--tile-b);font-size:12.5px;box-sizing:border-box}
+.chip button{width:22px;height:22px;border:0;background:transparent;border-radius:4px;display:grid;place-items:center;cursor:pointer;padding:0}
+.chip button:hover{background:var(--surface)}
+.tagbox{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:36px;padding:4px 6px;box-sizing:border-box;border:var(--bw) solid var(--border);border-radius:6px;background:var(--surface)}
+.tagbox input{flex:1;min-width:120px;border:0;background:transparent;font:inherit;font-size:13.5px;color:var(--text);height:26px;padding:0 4px}
+.sugg{display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 8px;border-radius:5px;border:var(--bw) dashed var(--border);background:transparent;color:var(--text2);font:inherit;font-size:12.5px;cursor:pointer}
+.sugg:hover{color:var(--text);border-color:var(--muted)}
+.lb{border:var(--bw) solid var(--border);border-radius:8px;background:var(--surface);padding:4px;margin-top:4px;max-height:300px;overflow:auto}
+.lbg{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:8px 8px 4px}
+.opt{display:flex;align-items:center;gap:10px;width:100%;padding:7px 8px;border:0;border-radius:6px;background:transparent;color:var(--text);font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.opt:hover{background:var(--surface2)}
+.opt[aria-selected="true"]{font-weight:600;background:var(--surface2)}
+.opt .ckm{visibility:hidden}.opt[aria-selected="true"] .ckm{visibility:visible}
+.dz{border:calc(var(--bw) + 1px) dashed var(--border);border-radius:10px;background:var(--surface2);padding:22px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+.dz.over{border-color:var(--accent);border-style:solid;background:var(--surface)}
+.dz.dis{opacity:.55}
+.dz.sm{padding:14px;gap:4px}
+.star{fill:var(--surface);stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round}
+.star.on{fill:var(--i2)}
+.th[data-theme="contrast"] .star.on,.th[data-theme="mono"] .star.on{fill:var(--stroke)}
+.rate{display:flex;gap:2px}
+.rate button{border:0;background:transparent;padding:3px;cursor:pointer;border-radius:5px;line-height:0}
+.swt{width:30px;height:30px;border-radius:6px;border:var(--bw) solid var(--border);cursor:pointer;padding:0;display:grid;place-items:center;box-sizing:border-box}
+.th .swt[aria-pressed="true"]{outline:2px solid var(--text);outline-offset:2px}
+.fs{border:0;margin:0;padding:20px 0;display:grid;grid-template-columns:240px minmax(0,1fr);gap:24px;border-bottom:var(--bw) solid var(--line);min-width:0}
+.fs legend{float:left;padding:0;font-size:14.5px;font-weight:600;width:100%}
+.fs legend span{display:block;font-size:12.5px;font-weight:400;color:var(--muted);margin-top:4px;line-height:1.45}
+.fgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 20px}
+.span2{grid-column:1 / -1}
+.vsum{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:8px;background:var(--bad-bg);color:var(--bad-fg);border:var(--pill-b);font-size:13px}
+.th .vsum a{color:inherit;text-decoration:underline}
+.vsum ul{margin:4px 0 0;padding-left:18px}
+.anat{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:28px;align-items:start}
+.anat ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--text2)}
+.anat li{display:flex;gap:8px;align-items:flex-start;line-height:1.4}
+.frow{display:flex;align-items:center;gap:6px}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <a href="ThemeManager.dc.html" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon" aria-label="Plugins" title="Plugins"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon" aria-label="Secrets" title="Secrets"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" title="Preferences"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <a href="AdminUsers.dc.html" class="icon" aria-label="Admin panel" title="Admin panel"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <button type="button" aria-label="Profile menu" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer">MV</button>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+  <aside class="sub" aria-label="Design system" style="flex: 1 1 230px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+    <a href="DesignSystem.dc.html" style="font-weight: 600; color: var(--text)">AutoBot Design System</a>
+    <span class="sub2" style="padding: 0 13px 4px">v1 · 4 themes</span>
+    <p class="sect">Overview</p>
+    <a href="DesignSystem.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z" class="i1"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z" class="it1"/></svg>Introduction</a>
+    <p class="sect">Foundations</p>
+    <a href="ComponentsStates.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4" class="i3"/><circle cx="16" cy="9" r="4" class="i2"/><circle cx="12" cy="16" r="4" class="i1"/></svg>Tokens &amp; states</a>
+    <a href="ComponentsGrid.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5" class="i1"/><rect x="13" y="4" width="7" height="7" rx="1.5" class="iw"/><rect x="4" y="13" width="7" height="7" rx="1.5" class="iw"/><rect x="13" y="13" width="7" height="7" rx="1.5" class="i2"/></svg>Grid, tables &amp; forms</a>
+    <a href="ComponentsCharts.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><rect x="5.5" y="11" width="3.5" height="7" class="i1"/><rect x="10.5" y="6" width="3.5" height="12" class="i2"/><rect x="15.5" y="13" width="3.5" height="5" class="i3"/></svg>Charts &amp; data viz</a>
+    <p class="sect">Components</p>
+    <a href="ComponentsForms.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4" class="i1"/><circle cx="16.5" cy="12" r="2.5" class="iw"/></svg>Form controls</a>
+    <a href="ComponentsTable.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="iw"/><path d="M4 10h16M4 14.5h16M10 10v9"/></svg>Data table</a>
+    <a href="ComponentsDialogs.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="it1"/><rect x="6" y="8" width="12" height="9" rx="1.5" class="iw"/></svg>Dialogs</a>
+    <a href="ComponentsOverlays.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" class="i2"/><path d="M10 21h4"/></svg>Overlays &amp; feedback</a>
+    <a href="ComponentsTooltips.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10h-7l-4 4v-4H4z" class="it1"/><path d="M8 10h8"/></svg>Tooltips</a>
+    <a href="ComponentsCommand.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" class="iw"/><path d="M7 10l3 2-3 2M12 15h5"/></svg>Command menu</a>
+    <a href="ComponentsNavigation.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M15 9l-2 4-4 2 2-4z" class="i3"/></svg>Navigation</a>
+    <a href="ComponentsLayout.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="iw"/><path d="M9 4v16M9 10h12"/></svg>Layout &amp; utility</a>
+    <a href="ComponentsChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h12v9H8l-3 3v-3H3z" class="i1"/><path d="M15 9h6v8h-2v3l-3-3h-5v-3"/></svg>Chat &amp; agent</a>
+    <p class="sect">Patterns</p>
+    <a href="FileBrowser.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="i2"/></svg>File browser</a>
+    <a href="Mailbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" class="iw"/><path d="M3 7l9 6 9-6"/></svg>Mailbox</a>
+    <a href="ComponentsUiModes.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5" class="it1"/><rect x="4.5" y="8.5" width="8" height="7" rx="3.5" class="i2"/></svg>Interface modes</a>
+    <a href="SignUp.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" class="i2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Auth pages</a>
+    <a href="AccountSecurity.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4" class="i1"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>Account settings</a>
+    <a href="SearchResults.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>Global search</a>
+    <a href="HelpCenter.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="i2"/><path d="M10 10a2 2 0 1 1 3 1.7c-.7.4-1 1-1 1.8M12 16.5v.5"/></svg>Help centre</a>
+    <span style="flex-grow: 1; min-height: 16px" aria-hidden="true"></span>
+    <a href="Main.dc.html" style="border-top: var(--bw) solid var(--line); border-radius: 0; padding-top: 12px"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg>← Back to app</a>
+  </aside>
+  <div style="flex: 999 1 520px; min-width: 0; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <div style="flex: 1 1 100%; box-sizing: border-box; padding: 14px clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px">
+      <span class="sub2">Design system / Components</span>
+      <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.01em">Components · Form controls</h1>
+      <span class="sub2">Every input AutoBot uses to collect settings: anatomy, states (default, focus, filled, disabled, read-only, error) and usage rules.</span>
+    </div>
+    <div class="segg" role="group" aria-label="Preview theme"><sc-for list="{{themes}}" as="t" hint-placeholder-count="4"><button type="button" class="seg {{t.cls}}" aria-pressed="{{t.pressed}}" onClick="{{t.pick}}">{{t.label}}</button></sc-for></div>
+  </div>
+
+  <main style="flex: 1 1 100%; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 48px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start">
+
+    <!-- TEXT FIELD -->
+    <section class="card" style="grid-column: 1 / -1" aria-labelledby="h-text">
+      <div class="ch"><h2 id="h-text">Text field</h2><span class="use">Use for: single-line values such as names, URLs, amounts and IDs</span></div>
+      <div class="spec">
+        <span class="st">Anatomy</span>
+        <div class="anat">
+          <div class="fld" style="max-width: 460px">
+            <div class="frow"><label class="lbl" for="tf-name">Agent name<span class="req" aria-hidden="true">*</span></label><span class="mkr" aria-hidden="true">1</span><span class="mkr" aria-hidden="true">2</span><span class="cnt" id="tf-cnt">14 / 40</span><span class="mkr" aria-hidden="true">5</span></div>
+            <div class="frow"><input id="tf-name" class="inp mono" value="research-agent" aria-required="true" aria-describedby="tf-help tf-cnt" /><span class="mkr" aria-hidden="true">3</span></div>
+            <div class="frow"><span class="help" id="tf-help">Lowercase letters, digits and hyphens. Shown in logs, approvals and the org chart.</span><span class="mkr" aria-hidden="true">4</span></div>
+            <div class="frow"><span class="err"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="stroke: currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg>Error: another agent in AutoBot Labs already uses this name.</span><span class="mkr" aria-hidden="true">6</span></div>
+          </div>
+          <ol>
+            <li><span class="mkr" aria-hidden="true">1</span><span><strong>Label</strong> · always visible, sentence case, bound with for/id. Never placeholder-only.</span></li>
+            <li><span class="mkr" aria-hidden="true">2</span><span><strong>Required marker</strong> · asterisk is decorative; the input carries aria-required and the form explains "* required".</span></li>
+            <li><span class="mkr" aria-hidden="true">3</span><span><strong>Input</strong> · 36px high, 6px radius, 1px border (2px in High contrast).</span></li>
+            <li><span class="mkr" aria-hidden="true">4</span><span><strong>Help text</strong> · linked through aria-describedby.</span></li>
+            <li><span class="mkr" aria-hidden="true">5</span><span><strong>Character counter</strong> · announced politely once 80% of the limit is used.</span></li>
+            <li><span class="mkr" aria-hidden="true">6</span><span><strong>Error text</strong> · replaces help text, starts with an icon and the word "Error", sets aria-invalid.</span></li>
+          </ol>
+        </div>
+
+        <span class="st">States</span>
+        <div class="states">
+          <div class="fld"><span class="st">Default</span><label class="lbl" for="ts1">Agent name</label><input id="ts1" class="inp" placeholder="e.g. research-agent" /></div>
+          <div class="fld"><span class="st">Focus</span><label class="lbl" for="ts2">Agent name</label><input id="ts2" class="inp fx" placeholder="e.g. research-agent" /></div>
+          <div class="fld"><span class="st">Filled</span><label class="lbl" for="ts3">Agent name</label><input id="ts3" class="inp mono" value="code-agent" /></div>
+          <div class="fld"><span class="st">Disabled</span><label class="lbl" for="ts4">Agent name</label><input id="ts4" class="inp mono" value="system-agent" disabled="disabled" /><span class="help">Managed by the platform</span></div>
+          <div class="fld"><span class="st">Read-only</span><label class="lbl" for="ts5">Agent ID</label><input id="ts5" class="inp mono" value="agt_7f3a9c21" readonly="readonly" /><span class="help">Generated · copy only</span></div>
+          <div class="fld"><span class="st">Error</span><label class="lbl" for="ts6">Agent name</label><input id="ts6" class="inp inv" value="Research Agent" aria-invalid="true" aria-describedby="ts6e" /><span class="err" id="ts6e"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="stroke: currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg>Error: use lowercase and hyphens</span></div>
+        </div>
+
+        <span class="st">Prefix / suffix input groups</span>
+        <div class="states" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr))">
+          <div class="fld"><label class="lbl" for="ig1">Monthly budget</label><div class="grp"><span class="ad l">€</span><input id="ig1" class="inp mono" value="30.00" inputmode="decimal" /><span class="ad r">/ month</span></div><span class="help">Agent pauses when reached</span></div>
+          <div class="fld"><label class="lbl" for="ig2">Request timeout</label><div class="grp fx"><input id="ig2" class="inp mono" value="1500" inputmode="numeric" /><span class="ad r">ms</span></div><span class="help">Focus ring wraps the whole group</span></div>
+          <div class="fld"><label class="lbl" for="ig3">Approval webhook</label><div class="grp"><span class="ad l mono">https://</span><input id="ig3" class="inp mono" value="hooks.autobot.example/approvals" /></div><span class="help">Scheme is fixed</span></div>
+          <div class="fld"><label class="lbl" for="ig4">Embedding timeout</label><div class="grp inv"><input id="ig4" class="inp mono" value="90000" aria-invalid="true" aria-describedby="ig4e" /><span class="ad r">ms</span></div><span class="err" id="ig4e"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="stroke: currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg>Error: maximum is 60000 ms</span></div>
+          <div class="fld"><label class="lbl" for="ig5">Hourly rate cap</label><div class="grp dis"><span class="ad l">€</span><input id="ig5" class="inp mono" value="2.00" disabled="disabled" /><span class="ad r">/ hour</span></div><span class="help">Disabled: local models are free</span></div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules</strong> · Units and fixed fragments go in adornments, not in the value. Validate on blur, re-validate on input once an error is shown. Disabled = not applicable (lower opacity); read-only = applies but cannot change here (dashed border, still focusable and copyable).</p>
+    </section>
+
+    <!-- SEARCH -->
+    <section class="card" aria-labelledby="h-search">
+      <div class="ch"><h2 id="h-search">Search field with clear</h2><span class="use">Use for: filtering a list in place</span></div>
+      <div class="spec">
+        <div class="fld">
+          <label class="lbl" for="sq">Search fleet nodes</label>
+          <div class="grp"><span class="ad ia"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg></span><input id="sq" type="search" class="inp" placeholder="Name, role or IP" value="{{sq}}" onInput="{{onSq}}" onChange="{{onSq}}" aria-describedby="sqc" /><sc-if value="{{sqHas}}" hint-placeholder-val="{{ true }}"><button type="button" class="ibtn" aria-label="Clear search" onClick="{{sqClear}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></sc-if></div>
+          <span class="help" id="sqc" aria-live="polite">{{sqCount}}</span>
+        </div>
+        <div style="border: var(--bw) solid var(--line); border-radius: 8px">
+          <sc-for list="{{nodes}}" as="n" hint-placeholder-count="2"><div class="row" style="padding: 8px 12px"><span class="dot d-ok"></span><span class="mono" style="font-size: 13px; font-weight: 500">{{n.name}}</span><span class="sub2" style="flex-grow: 1">{{n.role}}</span><span class="mono sub2">{{n.ip}}</span></div></sc-for>
+          <sc-if value="{{sqNone}}" hint-placeholder-val="{{ false }}"><div class="row" style="padding: 10px 12px"><span class="sub2">No nodes match. Check the spelling or search by IP.</span></div></sc-if>
+        </div>
+        <div class="states">
+          <div class="fld"><span class="st">Focus</span><div class="grp fx"><span class="ad ia"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg></span><input class="inp" aria-label="Search (focus example)" placeholder="Name, role or IP" /></div></div>
+          <div class="fld"><span class="st">Disabled</span><div class="grp dis"><span class="ad ia"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg></span><input class="inp" aria-label="Search (disabled example)" placeholder="Fleet offline" disabled="disabled" /></div></div>
+          <div class="fld"><span class="st">Error</span><div class="grp inv"><span class="ad ia"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg></span><input class="inp" aria-label="Search (error example)" value="203.0.113." aria-invalid="true" /></div><span class="err">Error: incomplete IP address</span></div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules</strong> · Clear button appears only with a value, has aria-label "Clear search" and returns focus to the input. Esc also clears. Announce result counts with aria-live="polite".</p>
+    </section>
+
+    <!-- TEXTAREA -->
+    <section class="card" aria-labelledby="h-ta">
+      <div class="ch"><h2 id="h-ta">Textarea</h2><span class="use">Use for: multi-line text such as prompts and descriptions</span></div>
+      <div class="spec">
+        <div class="fld">
+          <div class="frow"><label class="lbl" for="ta">System prompt</label><span class="cnt" id="tac" aria-live="polite">{{taCount}}</span></div>
+          <textarea id="ta" class="inp {{taCls}}" rows="4" value="{{ta}}" onInput="{{onTa}}" onChange="{{onTa}}" aria-describedby="tah tac"></textarea>
+          <span class="help" id="tah">Sent before every heartbeat run of research-agent. Resizes vertically.</span>
+          <sc-if value="{{taOver}}" hint-placeholder-val="{{ false }}"><span class="err">Error: shorten the prompt to 400 characters or fewer.</span></sc-if>
+        </div>
+        <div class="states">
+          <div class="fld"><span class="st">Focus</span><textarea class="inp sm fx" aria-label="Notes (focus example)" placeholder="Notes for reviewers"></textarea></div>
+          <div class="fld"><span class="st">Disabled</span><textarea class="inp sm" aria-label="Notes (disabled example)" disabled="disabled">Locked while run is active</textarea></div>
+          <div class="fld"><span class="st">Read-only</span><textarea class="inp sm" aria-label="Run log (read-only example)" readonly="readonly">Heartbeat 10:41 · 3 sources opened</textarea></div>
+          <div class="fld"><span class="st">Error</span><textarea class="inp sm inv" aria-label="Rejection reason (error example)" aria-invalid="true"></textarea><span class="err">Error: give a reason</span></div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules</strong> · Minimum 3 visible lines. Show the counter only when a limit exists; let users type past it and flag the error rather than truncating silently.</p>
+    </section>
+
+    <!-- SELECT -->
+    <section class="card" aria-labelledby="h-sel">
+      <div class="ch"><h2 id="h-sel">Select</h2><span class="use">Use for: one choice from up to ~10 known options</span></div>
+      <div class="spec">
+        <div class="states">
+          <div class="fld"><span class="st">Default</span><label class="lbl" for="se1">Execution node</label><div class="selw"><select id="se1" class="inp"><option>Choose a node</option><option>node-01 · main</option><option>node-02 · ollama</option><option>node-03 · npu-worker</option></select><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></div></div>
+          <div class="fld"><span class="st">Focus</span><label class="lbl" for="se2">Execution node</label><div class="selw"><select id="se2" class="inp fx"><option>Choose a node</option></select><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></div></div>
+          <div class="fld"><span class="st">Filled</span><label class="lbl" for="se3">Execution node</label><div class="selw"><select id="se3" class="inp"><option>node-02 · ollama</option></select><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></div></div>
+          <div class="fld"><span class="st">Disabled</span><label class="lbl" for="se4">Execution node</label><div class="selw"><select id="se4" class="inp" disabled="disabled"><option>node-04 · redis</option></select><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></div></div>
+          <div class="fld"><span class="st">Read-only</span><span class="lbl" id="se5l">Execution node</span><div class="inp ro mono" role="textbox" aria-readonly="true" aria-labelledby="se5l" tabindex="0">node-01 · main</div></div>
+          <div class="fld"><span class="st">Error</span><label class="lbl" for="se6">Execution node</label><div class="selw"><select id="se6" class="inp inv" aria-invalid="true"><option>Choose a node</option></select><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></div><span class="err">Error: choose a node</span></div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules</strong> · Native select for short static lists (best on mobile and with screen readers). Over ~10 options or when search helps, use the combobox. Read-only renders as text, never as a disabled select.</p>
+    </section>
+
+    <!-- COMBOBOX -->
+    <section class="card" aria-labelledby="h-cb">
+      <div class="ch"><h2 id="h-cb">Combobox / autocomplete</h2><span class="use">Use for: long, grouped or searchable option lists</span></div>
+      <div class="spec">
+        <div class="fld">
+          <label class="lbl" for="cbx">Model</label>
+          <div class="grp"><input id="cbx" class="inp mono" role="combobox" aria-expanded="{{cbExp}}" aria-controls="cblb" aria-autocomplete="list" value="{{cbVal}}" onInput="{{onCb}}" onChange="{{onCb}}" /><button type="button" class="ibtn" aria-label="Show models" aria-expanded="{{cbExp}}" onClick="{{cbToggle}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button></div>
+          <sc-if value="{{cbOpen}}" hint-placeholder-val="{{ true }}">
+            <div class="lb" id="cblb" role="listbox" aria-label="Models">
+              <sc-for list="{{cbGroups}}" as="g" hint-placeholder-count="2">
+                <div role="group" aria-label="{{g.label}}"><div class="lbg">{{g.label}}</div>
+                  <sc-for list="{{g.items}}" as="o" hint-placeholder-count="2"><button type="button" class="opt" role="option" aria-selected="{{o.sel}}" onClick="{{o.pick}}"><svg class="ic ckm" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg><span class="mono" style="flex-grow: 1">{{o.id}}</span><span class="sub2" style="font-size: 12px">{{o.meta}}</span></button></sc-for>
+                </div>
+              </sc-for>
+              <sc-if value="{{cbNone}}" hint-placeholder-val="{{ false }}"><div style="padding: 12px 10px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start"><span style="font-size: 13px">No model matches <span class="mono">{{cbQ}}</span>.</span><button type="button" class="btn sm">Pull from Ollama library</button></div></sc-if>
+            </div>
+          </sc-if>
+          <span class="help" aria-live="polite">Selected: <span class="mono">{{model}}</span> · type to filter, try "llama4" for no match</span>
+        </div>
+        <div class="states">
+          <div class="fld"><span class="st">No match (static)</span><div class="grp fx"><input class="inp mono" aria-label="Model (no match example)" value="llama4" /></div><div class="lb" style="padding: 10px; font-size: 13px">No model matches <span class="mono">llama4</span>.</div></div>
+          <div class="fld"><span class="st">Disabled</span><div class="grp dis"><input class="inp mono" aria-label="Model (disabled example)" value="ollama/llama3.1:8b" disabled="disabled" /></div></div>
+          <div class="fld"><span class="st">Error</span><div class="grp inv"><input class="inp mono" aria-label="Model (error example)" value="ollama/qwen3:32b" aria-invalid="true" /></div><span class="err">Error: not installed on any node</span></div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules</strong> · ↑/↓ moves the active option (aria-activedescendant), Enter selects, Esc closes and restores the value. Group headings are not selectable. Always offer a next step on "no match".</p>
+    </section>
+
+    <!-- TAG INPUT -->
+    <section class="card" aria-labelledby="h-tag">
+      <div class="ch"><h2 id="h-tag">Multi-select / tag input</h2><span class="use">Use for: an open set of values such as agent tools</span></div>
+      <div class="spec">
+        <div class="fld">
+          <label class="lbl" for="tagin">Agent tools · research-agent</label>
+          <div class="tagbox">
+            <sc-for list="{{tags}}" as="tg" hint-placeholder-count="3"><span class="chip mono">{{tg.name}}<button type="button" aria-label="{{tg.rmLabel}}" onClick="{{tg.rm}}"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span></sc-for>
+            <input id="tagin" placeholder="Add tool, press Enter" onKeyDown="{{onTagKey}}" aria-describedby="tagh" />
+          </div>
+          <span class="help" id="tagh" aria-live="polite">{{tagCount}}</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center"><span class="sub2">Suggested:</span><sc-for list="{{tagSugg}}" as="sg" hint-placeholder-count="3"><button type="button" class="sugg mono" onClick="{{sg.add}}">+ {{sg.name}}</button></sc-for></div>
+        </div>
+        <div class="states">
+          <div class="fld"><span class="st">Focus</span><div class="tagbox fx"><span class="chip mono">kb_query</span><input aria-label="Add tool (focus example)" /></div></div>
+          <div class="fld"><span class="st">Disabled</span><div class="tagbox dis"><span class="chip mono">web_search</span><input aria-label="Add tool (disabled example)" disabled="disabled" /></div></div>
+          <div class="fld"><span class="st">Error</span><div class="tagbox inv"><span class="chip mono">shell_exec</span><input aria-label="Add tool (error example)" aria-invalid="true" /></div><span class="err">Error: shell_exec needs an approval policy</span></div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules</strong> · Each chip's remove button names the item ("Remove web_search"). Backspace in an empty input removes the last chip. Use a checkbox group instead when the full set is small and fixed.</p>
+    </section>
+
+    <!-- CHECKBOX -->
+    <section class="card" aria-labelledby="h-chk">
+      <div class="ch"><h2 id="h-chk">Checkbox and group</h2><span class="use">Use for: independent on/off choices, or many-of-many</span></div>
+      <div class="spec">
+        <div role="group" aria-labelledby="perm-l" style="display: flex; flex-direction: column">
+          <span class="lbl" id="perm-l" style="margin-bottom: 4px">Permissions · code-agent</span>
+          <button type="button" class="chk" role="checkbox" aria-checked="{{permAll}}" onClick="{{permToggleAll}}"><span class="box"><svg class="ck" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg><svg class="mx" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></span><span style="font-weight: 600">All permissions <span class="sub2" style="font-weight: 400">· {{permSummary}}</span></span></button>
+          <div style="padding-left: 28px; display: flex; flex-direction: column">
+            <sc-for list="{{perms}}" as="p" hint-placeholder-count="4"><button type="button" class="chk" role="checkbox" aria-checked="{{p.checked}}" onClick="{{p.toggle}}"><span class="box"><svg class="ck" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span><span style="display: flex; flex-direction: column; gap: 1px">{{p.label}}<span class="help">{{p.desc}}</span></span></button></sc-for>
+          </div>
+        </div>
+        <div class="states">
+          <div class="fld"><span class="st">Focus</span><button type="button" class="chk" role="checkbox" aria-checked="false"><span class="box fx"></span>Notify on failure</button></div>
+          <div class="fld"><span class="st">Disabled · checked</span><button type="button" class="chk" role="checkbox" aria-checked="true" disabled="disabled"><span class="box"><svg class="ck" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span>Audit logging</button></div>
+          <div class="fld"><span class="st">Read-only</span><span class="chk" role="checkbox" aria-checked="true" aria-readonly="true" style="cursor: default"><span class="box" style="border-style: dashed"><svg class="ck" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="display: block"><path d="M5 12l5 5 9-10"/></svg></span>Policy: encrypt secrets</span></div>
+          <div class="fld"><span class="st">Error</span><button type="button" class="chk inv" role="checkbox" aria-checked="false" aria-invalid="true"><span class="box"></span>I accept shell access risks</button><span class="err">Error: required to enable shell</span></div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules</strong> · Parent shows "mixed" (dash) when some children are checked; clicking it selects all, then none. Space toggles. Changes apply on Save, not instantly; use a switch for instant effect.</p>
+    </section>
+
+    <!-- RADIO -->
+    <section class="card" aria-labelledby="h-rad">
+      <div class="ch"><h2 id="h-rad">Radio group and radio cards</h2><span class="use">Use for: exactly one of 2–5 visible options</span></div>
+      <div class="spec">
+        <div role="radiogroup" aria-labelledby="mode-l" style="display: flex; flex-direction: column">
+          <span class="lbl" id="mode-l" style="margin-bottom: 4px">Execution mode</span>
+          <sc-for list="{{modes}}" as="m" hint-placeholder-count="3"><button type="button" class="chk rd" role="radio" aria-checked="{{m.checked}}" onClick="{{m.pick}}"><span class="box"><span class="dotin"></span></span><span style="display: flex; flex-direction: column; gap: 1px">{{m.label}}<span class="help">{{m.desc}}</span></span></button></sc-for>
+        </div>
+        <div role="radiogroup" aria-labelledby="tgt-l" style="display: flex; flex-direction: column; gap: 8px">
+          <span class="lbl" id="tgt-l">Deployment target · radio cards</span>
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+            <sc-for list="{{targets}}" as="r" hint-placeholder-count="3"><button type="button" class="rc" role="radio" aria-checked="{{r.checked}}" onClick="{{r.pick}}"><span class="box"><span class="dotin"></span></span><span style="display: flex; flex-direction: column; gap: 3px; min-width: 0"><strong style="font-size: 13.5px; font-weight: 600">{{r.label}}</strong><span class="help">{{r.desc}}</span><span class="mono" style="font-size: 12px">{{r.cost}}</span></span></button></sc-for>
+          </div>
+        </div>
+        <div class="states">
+          <div class="fld"><span class="st">Focus</span><span class="chk rd" aria-hidden="true"><span class="box fx"></span>Manual only</span></div>
+          <div class="fld"><span class="st">Disabled</span><button type="button" class="chk rd" role="radio" aria-checked="false" disabled="disabled"><span class="box"><span class="dotin"></span></span>GPU node (none in fleet)</button></div>
+          <div class="fld"><span class="st">Error</span><span class="chk rd inv" aria-hidden="true"><span class="box"></span>Choose a mode</span><span class="err">Error: select one option</span></div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules</strong> · One tab stop per group; arrow keys move and select. Pre-select the safest sensible default ("Ask before side effects"). Cards carry the same role="radio" semantics; the whole card is the hit area.</p>
+    </section>
+
+    <!-- SWITCH -->
+    <section class="card" aria-labelledby="h-sw">
+      <div class="ch"><h2 id="h-sw">Switch</h2><span class="use">Use for: settings that take effect immediately</span></div>
+      <div class="spec">
+        <div>
+          <sc-for list="{{switches}}" as="s" hint-placeholder-count="3"><div class="swrow"><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><span class="lbl" id="{{s.id}}">{{s.label}}</span><span class="help">{{s.desc}}</span></div><span class="onoff" aria-hidden="true">{{s.word}}</span><button type="button" class="sw" role="switch" aria-checked="{{s.on}}" aria-labelledby="{{s.id}}" onClick="{{s.toggle}}"><span class="k"></span></button></div></sc-for>
+        </div>
+        <span class="st">Sizes</span>
+        <div style="display: flex; gap: 28px; align-items: center; flex-wrap: wrap">
+          <sc-for list="{{swSizes}}" as="z" hint-placeholder-count="3"><span style="display: flex; align-items: center; gap: 8px; font-size: 13px"><button type="button" class="sw {{z.cls}}" role="switch" aria-checked="{{z.on}}" aria-label="{{z.label}}" onClick="{{z.toggle}}"><span class="k"></span></button>{{z.label}} · {{z.word}}</span></sc-for>
+        </div>
+        <div class="states">
+          <div class="fld"><span class="st">Focus</span><span style="display: flex; gap: 8px; align-items: center; font-size: 13px"><span class="sw fx" aria-hidden="true"><span class="k"></span></span>Off</span></div>
+          <div class="fld"><span class="st">Disabled on / off</span><span style="display: flex; gap: 10px; align-items: center; font-size: 13px"><button type="button" class="sw" role="switch" aria-checked="true" aria-label="Encryption (disabled)" disabled="disabled"><span class="k"></span></button><button type="button" class="sw" role="switch" aria-checked="false" aria-label="Telemetry (disabled)" disabled="disabled"><span class="k"></span></button></span></div>
+          <div class="fld"><span class="st">Read-only</span><span style="display: flex; gap: 8px; align-items: center; font-size: 13px"><span class="sw ro" role="switch" aria-checked="true" aria-readonly="true" aria-label="Audit log (set by admin)" tabindex="0"><span class="k"></span></span>On · set by admin</span></div>
+          <div class="fld"><span class="st">Error</span><span style="display: flex; gap: 8px; align-items: center; font-size: 13px"><span class="sw" style="border-color: var(--bar-alert); border-width: 2px" aria-hidden="true"><span class="k"></span></span>Off</span><span class="err">Error: couldn't reach node-03, try again</span></div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules</strong> · Label says what is on, never "Enable/Disable". The knob position plus On/Off text carry state, not color. If the change fails, revert the switch and show the error inline.</p>
+    </section>
+
+    <!-- SLIDER -->
+    <section class="card" aria-labelledby="h-sl">
+      <div class="ch"><h2 id="h-sl">Slider and range</h2><span class="use">Use for: approximate values on a bounded scale</span></div>
+      <div class="spec">
+        <div class="fld">
+          <div class="frow"><label class="lbl" for="thr">Budget alert threshold</label><span class="val mono" style="margin-left: auto" aria-hidden="true">{{thr}}%</span></div>
+          <div class="sl"><span class="tr"></span><span class="fl {{thrCls}}" style="width: {{thr}}%"></span><input id="thr" type="range" min="0" max="100" step="5" value="{{thr}}" aria-valuetext="{{thrText}}" onInput="{{onThr}}" onChange="{{onThr}}" /></div>
+          <div class="ticks"><span>0%</span><span>50%</span><span>100%</span></div>
+          <span class="help" aria-live="polite">{{thrText}}</span>
+        </div>
+        <div class="fld">
+          <div class="frow"><span class="lbl" id="bud-l">Monthly budget range · per agent</span><span class="val mono" style="margin-left: auto" aria-hidden="true">€{{lo}} – €{{hi}}</span></div>
+          <div class="sl" role="group" aria-labelledby="bud-l"><span class="tr"></span><span class="fl" style="left: {{loPct}}%; width: {{spanPct}}%"></span><input type="range" min="0" max="200" step="5" value="{{lo}}" aria-label="Minimum budget, euro" onInput="{{onLo}}" onChange="{{onLo}}" /><input type="range" min="0" max="200" step="5" value="{{hi}}" aria-label="Maximum budget, euro" onInput="{{onHi}}" onChange="{{onHi}}" /></div>
+          <div class="ticks"><span>€0</span><span>€100</span><span>€200</span></div>
+        </div>
+        <div class="states">
+          <div class="fld"><span class="st">Disabled</span><div class="sl dis"><span class="tr"></span><span class="fl" style="width: 40%"></span><input type="range" min="0" max="100" value="40" aria-label="Temperature (disabled)" disabled="disabled" /></div><span class="help">Temperature locked by policy</span></div>
+          <div class="fld"><span class="st">Read-only</span><div class="frow"><span class="sub2">CPU limit</span><span class="val mono">75% · fixed</span></div></div>
+          <div class="fld"><span class="st">Error</span><div class="sl"><span class="tr" style="outline: 2px solid var(--bar-alert)"></span><span class="fl alert" style="width: 98%"></span></div><span class="err">Error: 98% leaves no headroom</span></div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules</strong> · Always show the value as text next to the track and in aria-valuetext. Arrow = 1 step, PgUp/PgDn = 10. Pair with a number field when exact input matters. Range thumbs can't cross (min gap €5).</p>
+    </section>
+
+    <!-- STEPPER -->
+    <section class="card" aria-labelledby="h-stp">
+      <div class="ch"><h2 id="h-stp">Number stepper</h2><span class="use">Use for: exact small integers with a sensible step</span></div>
+      <div class="spec">
+        <div class="fld">
+          <label class="lbl" for="hb">Heartbeat interval</label>
+          <div style="display: flex; align-items: center; gap: 10px"><div class="stp {{hbCls}}"><button type="button" aria-label="Decrease by 30 seconds" aria-disabled="{{hbDecDis}}" onClick="{{hbDec}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button><input id="hb" role="spinbutton" inputmode="numeric" aria-valuemin="30" aria-valuemax="3600" aria-valuenow="{{hb}}" value="{{hb}}" onChange="{{onHb}}" onInput="{{onHb}}" aria-describedby="hbh" /><button type="button" aria-label="Increase by 30 seconds" aria-disabled="{{hbIncDis}}" onClick="{{hbInc}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12M12 6v12"/></svg></button></div><span class="sub2">seconds · {{hbHuman}}</span></div>
+          <span class="help" id="hbh">30–3600 s in steps of 30. Shorter intervals cost more tokens.</span>
+          <sc-if value="{{hbBad}}" hint-placeholder-val="{{ false }}"><span class="err">Error: enter a value between 30 and 3600.</span></sc-if>
+        </div>
+        <div class="states">
+          <div class="fld"><span class="st">Focus</span><div class="stp fx"><button type="button" aria-label="Decrease"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button><input aria-label="Retries (focus example)" value="3" /><button type="button" aria-label="Increase"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12M12 6v12"/></svg></button></div></div>
+          <div class="fld"><span class="st">At minimum</span><div class="stp"><button type="button" aria-label="Decrease" aria-disabled="true"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button><input aria-label="Workers (minimum example)" value="1" /><button type="button" aria-label="Increase"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12M12 6v12"/></svg></button></div></div>
+          <div class="fld"><span class="st">Disabled</span><div class="stp dis"><button type="button" aria-label="Decrease" disabled="disabled"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button><input aria-label="Replicas (disabled)" value="2" disabled="disabled" /><button type="button" aria-label="Increase" disabled="disabled"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12M12 6v12"/></svg></button></div></div>
+          <div class="fld"><span class="st">Read-only</span><div class="stp ro"><input aria-label="Max context (read-only)" value="32768" readonly="readonly" style="width: 110px; border: 0" /></div></div>
+          <div class="fld"><span class="st">Error</span><div class="stp inv"><button type="button" aria-label="Decrease"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button><input aria-label="Interval (error example)" value="5" aria-invalid="true" /><button type="button" aria-label="Increase"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12M12 6v12"/></svg></button></div><span class="err">Error: minimum 30 s</span></div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules</strong> · Buttons are never the only way in: the field accepts typing and ↑/↓. At a bound, mark the button aria-disabled (stays focusable). Show the unit beside the field, plus a human reading for durations.</p>
+    </section>
+
+    <!-- DATE PICKER -->
+    <section class="card" aria-labelledby="h-dp">
+      <div class="ch"><h2 id="h-dp">Date picker</h2><span class="use">Use for: a single date such as a scheduled run</span></div>
+      <div class="spec">
+        <div class="fld" style="max-width: 286px">
+          <label class="lbl" for="dp">Run on</label>
+          <div class="grp {{dpCls}}"><input id="dp" class="inp mono" value="{{dpTxt}}" onInput="{{onDp}}" onChange="{{onDp}}" placeholder="YYYY-MM-DD" aria-describedby="dph" /><button type="button" class="ibtn" aria-label="Choose date" aria-haspopup="dialog" aria-expanded="{{dpExp}}" onClick="{{dpToggle}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2" class="it2"/><path d="M4 10h16M8 3v4M16 3v4"/></svg></button></div>
+          <sc-if value="{{dpBad}}" hint-placeholder-val="{{ false }}"><span class="err">Error: use YYYY-MM-DD, e.g. 2026-10-14</span></sc-if>
+          <span class="help" id="dph">Type or pick · Europe/Riga</span>
+          <sc-if value="{{dpOpen}}" hint-placeholder-val="{{ true }}">
+            <div class="cal" role="dialog" aria-label="Choose run date">
+              <div class="calh"><button type="button" class="ibtn" aria-label="Previous month"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>October 2026<button type="button" class="ibtn" aria-label="Next month"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div>
+              <div class="calg"><span class="wd">Mo</span><span class="wd">Tu</span><span class="wd">We</span><span class="wd">Th</span><span class="wd">Fr</span><span class="wd">Sa</span><span class="wd">Su</span>
+                <sc-for list="{{dpCells}}" as="c" hint-placeholder-count="35"><button type="button" class="day {{c.cls}}" aria-label="{{c.aria}}" aria-pressed="{{c.pressed}}" aria-current="{{c.cur}}" onClick="{{c.pick}}">{{c.day}}</button></sc-for>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-top: 8px"><button type="button" class="btn sm" onClick="{{dpToday}}">Today</button><button type="button" class="btn sm pri" onClick="{{dpToggle}}">Done</button></div>
+            </div>
+          </sc-if>
+        </div>
+        <div class="states">
+          <div class="fld"><span class="st">Disabled</span><div class="grp dis"><input class="inp mono" aria-label="Start date (disabled)" value="2026-10-01" disabled="disabled" /></div></div>
+          <div class="fld"><span class="st">Read-only</span><div class="grp ro"><input class="inp mono" aria-label="Created (read-only)" value="2026-09-02" readonly="readonly" /></div></div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules</strong> · Typing must always work; the calendar is an aid. Weeks start Monday. Today is underlined, the selection filled. Esc closes the panel and returns focus to the button; arrow keys move by day, PgUp/PgDn by month.</p>
+    </section>
+
+    <!-- DATE RANGE -->
+    <section class="card" aria-labelledby="h-dr">
+      <div class="ch"><h2 id="h-dr">Date-range picker with presets</h2><span class="use">Use for: report and log periods</span></div>
+      <div class="spec">
+        <div class="fld">
+          <span class="lbl" id="dr-l">Cost report period</span>
+          <div class="grp fx" style="max-width: 420px"><span class="ad ia"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2" class="it2"/><path d="M4 10h16M8 3v4M16 3v4"/></svg></span><span class="inp mono" aria-labelledby="dr-l" aria-live="polite">{{drText}}</span><span class="ad r">{{drDays}}</span></div>
+          <div style="display: flex; gap: 12px; align-items: flex-start; border: var(--bw) solid var(--border); border-radius: 10px; padding: 8px; background: var(--surface); width: max-content; max-width: 100%; box-sizing: border-box">
+            <div role="group" aria-label="Presets" style="width: 150px; display: flex; flex-direction: column; gap: 2px; padding-top: 4px">
+              <sc-for list="{{presets}}" as="p" hint-placeholder-count="6"><button type="button" class="pre {{p.cls}}" aria-pressed="{{p.pressed}}" onClick="{{p.pick}}">{{p.label}}</button></sc-for>
+            </div>
+            <div class="cal" style="border: 0; border-left: var(--bw) solid var(--line); border-radius: 0">
+              <div class="calh"><button type="button" class="ibtn" aria-label="Previous month"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>October 2026<button type="button" class="ibtn" aria-label="Next month"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div>
+              <div class="calg"><span class="wd">Mo</span><span class="wd">Tu</span><span class="wd">We</span><span class="wd">Th</span><span class="wd">Fr</span><span class="wd">Sa</span><span class="wd">Su</span>
+                <sc-for list="{{drCells}}" as="c" hint-placeholder-count="35"><button type="button" class="day {{c.cls}}" aria-label="{{c.aria}}" aria-pressed="{{c.pressed}}" onClick="{{c.pick}}">{{c.day}}</button></sc-for>
+              </div>
+              <span class="help" style="display: block; margin-top: 6px">{{drHint}}</span>
+            </div>
+          </div>
+        </div>
+        <div class="states">
+          <div class="fld"><span class="st">Error</span><div class="grp inv"><span class="inp mono">12 Oct – 4 Oct 2026</span></div><span class="err">Error: end date is before start</span></div>
+          <div class="fld"><span class="st">Disabled</span><div class="grp dis"><span class="inp mono">Last 30 days</span></div></div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules</strong> · Presets first, custom second: picking two days sets a custom range (first click = start). Show the resolved dates and day count, not just the preset name. Ranges are inclusive and use the company time zone.</p>
+    </section>
+
+    <!-- TIME -->
+    <section class="card" aria-labelledby="h-time">
+      <div class="ch"><h2 id="h-time">Time field</h2><span class="use">Use for: a time of day such as a daily routine</span></div>
+      <div class="spec">
+        <div class="states" style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr))">
+          <div class="fld"><span class="st">Default</span><label class="lbl" for="tm1">Daily digest at</label><div class="grp"><span class="ad ia"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M12 8v4l3 2"/></svg></span><input id="tm1" class="inp mono" placeholder="HH:MM" inputmode="numeric" /><span class="ad r">Europe/Riga</span></div></div>
+          <div class="fld"><span class="st">Focus · filled</span><label class="lbl" for="tm2">Daily digest at</label><div class="grp fx"><span class="ad ia"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M12 8v4l3 2"/></svg></span><input id="tm2" class="inp mono" value="09:30" /><span class="ad r">Europe/Riga</span></div><span class="help">Next run tomorrow 09:30 (UTC+3)</span></div>
+          <div class="fld"><span class="st">Disabled</span><label class="lbl" for="tm3">Backup window</label><div class="grp dis"><input id="tm3" class="inp mono" value="02:00" disabled="disabled" /><span class="ad r">UTC</span></div></div>
+          <div class="fld"><span class="st">Read-only</span><label class="lbl" for="tm4">Maintenance</label><div class="grp ro"><input id="tm4" class="inp mono" value="Sun 03:00" readonly="readonly" /></div></div>
+          <div class="fld"><span class="st">Error</span><label class="lbl" for="tm5">Daily digest at</label><div class="grp inv"><input id="tm5" class="inp mono" value="25:00" aria-invalid="true" /><span class="ad r">Europe/Riga</span></div><span class="err">Error: use 24-hour time, 00:00–23:59</span></div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules</strong> · 24-hour format, typed as HH:MM; accept "930" and normalise to 09:30 on blur. Always show the time zone the schedule runs in.</p>
+    </section>
+
+    <!-- OTP -->
+    <section class="card" aria-labelledby="h-otp">
+      <div class="ch"><h2 id="h-otp">Verification code (OTP)</h2><span class="use">Use for: 2FA and device sign-in codes</span></div>
+      <div class="spec">
+        <div class="fld">
+          <span class="lbl" id="otp-l">Enter the 6-digit code from your authenticator app</span>
+          <div class="otp" role="group" aria-labelledby="otp-l">
+            <sc-for list="{{otp}}" as="d" hint-placeholder-count="6"><input inputmode="numeric" autocomplete="one-time-code" maxlength="1" aria-label="{{d.label}}" value="{{d.v}}" onInput="{{d.onIn}}" onKeyDown="{{d.onKey}}" /></sc-for>
+          </div>
+          <span class="help" aria-live="polite">{{otpStatus}}</span>
+          <div style="display: flex; gap: 8px"><button type="button" class="btn sm pri">Verify</button><button type="button" class="btn sm" onClick="{{otpClear}}">Clear</button><button type="button" class="btn sm">Use a recovery code</button></div>
+        </div>
+        <div class="states" style="grid-template-columns: repeat(auto-fill, minmax(230px, 1fr))">
+          <div class="fld"><span class="st">Focus</span><div class="otp sm" aria-hidden="true"><input tabindex="-1" value="4" /><input tabindex="-1" value="8" /><input tabindex="-1" class="fx" /><input tabindex="-1" /><input tabindex="-1" /><input tabindex="-1" /></div></div>
+          <div class="fld"><span class="st">Disabled · verifying</span><div class="otp sm dis" aria-hidden="true"><input tabindex="-1" value="4" disabled="disabled" /><input tabindex="-1" value="8" disabled="disabled" /><input tabindex="-1" value="1" disabled="disabled" /><input tabindex="-1" value="9" disabled="disabled" /><input tabindex="-1" value="0" disabled="disabled" /><input tabindex="-1" value="2" disabled="disabled" /></div></div>
+          <div class="fld"><span class="st">Error</span><div class="otp sm inv" aria-hidden="true"><input tabindex="-1" value="4" /><input tabindex="-1" value="8" /><input tabindex="-1" value="1" /><input tabindex="-1" value="9" /><input tabindex="-1" value="0" /><input tabindex="-1" value="7" /></div><span class="err">Error: code expired, 2 attempts left</span></div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules</strong> · Typing advances focus, Backspace on an empty box goes back, paste fills all six. Use autocomplete="one-time-code". Never auto-submit on error; keep the digits so the user can correct one.</p>
+    </section>
+
+    <!-- COLOR -->
+    <section class="card" aria-labelledby="h-col">
+      <div class="ch"><h2 id="h-col">Color picker</h2><span class="use">Use for: company brand color in Company OS</span></div>
+      <div class="spec">
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 20px; align-items: start">
+          <div class="fld">
+            <span class="lbl" id="sw-l">Brand color · AutoBot Labs</span>
+            <div role="group" aria-labelledby="sw-l" style="display: flex; flex-wrap: wrap; gap: 8px">
+              <sc-for list="{{swatches}}" as="s" hint-placeholder-count="8"><button type="button" class="swt" style="background: {{s.hex}}" aria-label="{{s.label}}" aria-pressed="{{s.pressed}}" onClick="{{s.pick}}"><sc-if value="{{s.sel}}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: {{s.fg}}; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12l5 5 9-10"/></svg></sc-if></button></sc-for>
+            </div>
+            <label class="lbl" for="hex" style="margin-top: 6px">Hex value</label>
+            <div class="grp {{hexCls}}" style="max-width: 200px"><span class="ad l" style="padding: 0 8px"><span style="width: 18px; height: 18px; border-radius: 4px; border: 1px solid var(--stroke); background: {{brand}}"></span></span><input id="hex" class="inp mono" value="{{hexDraft}}" onInput="{{onHex}}" onChange="{{onHex}}" aria-describedby="hexh" /></div>
+            <sc-if value="{{hexBad}}" hint-placeholder-val="{{ false }}"><span class="err">Error: enter 6 hex digits, e.g. #1E2A44</span></sc-if>
+            <span class="help" id="hexh" aria-live="polite">{{contrastText}}</span>
+          </div>
+          <div class="fld">
+            <span class="st">Preview</span>
+            <div style="border: var(--bw) solid var(--border); border-radius: 8px; overflow: hidden">
+              <div style="height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: {{brand}}; color: {{brandFg}}; font-size: 13px; font-weight: 600">AL · AutoBot Labs</div>
+              <div style="padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--surface)"><span style="font-size: 12.5px; color: var(--text2)">Approvals waiting: 3</span><span style="height: 32px; border-radius: 6px; display: grid; place-items: center; font-size: 13px; font-weight: 600; background: {{brand}}; color: {{brandFg}}">Approve</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="states">
+          <div class="fld"><span class="st">Disabled</span><div class="grp dis" style="max-width: 200px"><input class="inp mono" aria-label="Accent (disabled)" value="#D9603F" disabled="disabled" /></div><span class="help">Inherited from theme</span></div>
+          <div class="fld"><span class="st">Error</span><div class="grp inv" style="max-width: 200px"><input class="inp mono" aria-label="Brand color (error example)" value="#1E2A4" aria-invalid="true" /></div><span class="err">Error: 5 digits, need 6</span></div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules</strong> · Swatches are toggle buttons with names, not bare colors. Always pair with a hex field and a live contrast check; brand color applies only to the company badge and primary actions, never to status.</p>
+    </section>
+
+    <!-- RATING -->
+    <section class="card" aria-labelledby="h-rate">
+      <div class="ch"><h2 id="h-rate">Rating</h2><span class="use">Use for: plugin marketplace reviews</span></div>
+      <div class="spec">
+        <div class="fld">
+          <span class="st">Read-only</span>
+          <div style="display: flex; align-items: center; gap: 10px"><span class="rate" role="img" aria-label="Rated 4.6 out of 5"><svg class="star on" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg><svg class="star on" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg><svg class="star on" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg><svg class="star on" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg><svg class="star" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></span><strong style="font-size: 14px">4.6</strong><span class="sub2">Knowledge Graph plugin · 128 reviews</span></div>
+        </div>
+        <div class="fld">
+          <span class="st">Interactive</span>
+          <span class="lbl" id="rate-l">Rate the Fleet Monitor plugin</span>
+          <div style="display: flex; align-items: center; gap: 12px"><div class="rate" role="radiogroup" aria-labelledby="rate-l"><sc-for list="{{stars}}" as="s" hint-placeholder-count="5"><button type="button" role="radio" aria-checked="{{s.checked}}" aria-label="{{s.label}}" onClick="{{s.pick}}"><svg class="{{s.cls}}" width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></button></sc-for></div><span style="font-size: 13px; font-weight: 600" aria-live="polite">{{rateText}}</span></div>
+        </div>
+        <div class="states">
+          <div class="fld"><span class="st">Focus</span><span class="rate" aria-hidden="true"><span class="fx" style="line-height: 0; border-radius: 4px"><svg class="star on" width="22" height="22" viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></span><svg class="star" width="22" height="22" viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></span></div>
+          <div class="fld"><span class="st">Disabled</span><span class="rate" style="opacity: .5" aria-label="Rating disabled: install the plugin first" role="img"><svg class="star" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg><svg class="star" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></span><span class="help">Install to rate</span></div>
+          <div class="fld"><span class="st">Error</span><span class="err">Error: choose 1–5 stars before posting</span></div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules</strong> · Read-only shows the number next to the stars. Interactive rating is a radio group (arrows change value) with a word label; filled stars are dark in High contrast and Monochrome.</p>
+    </section>
+
+    <!-- FILE UPLOAD -->
+    <section class="card" style="grid-column: 1 / -1" aria-labelledby="h-file">
+      <div class="ch"><h2 id="h-file">File upload</h2><span class="use">Use for: adding documents to a knowledge base collection</span></div>
+      <div class="spec">
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 20px; align-items: start">
+          <div class="dz {{dzCls}}" onDragOver="{{dzOver}}" onDragLeave="{{dzLeave}}" onDrop="{{dzDrop}}">
+            <span class="tile lg"><svg class="ic" width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><path d="M13 35a8 8 0 0 1 0-16 11 11 0 0 1 21 1 7.5 7.5 0 0 1 1 15z" class="it1"/><path d="M24 39V25M18 30l6-6 6 6"/></svg></span>
+            <strong style="font-size: 14px; font-weight: 600">{{dzTitle}}</strong>
+            <span class="sub2">PDF, Markdown, DOCX or TXT · up to 50 MB each · into "Fleet operations"</span>
+            <label class="btn sm" style="margin-top: 4px">Browse files<input type="file" multiple="multiple" style="position: absolute; width: 1px; height: 1px; opacity: 0" onChange="{{dzPick}}" /></label>
+          </div>
+          <div style="border: var(--bw) solid var(--line); border-radius: 8px" aria-live="polite">
+            <sc-for list="{{files}}" as="f" hint-placeholder-count="3">
+              <div class="row">
+                <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="iw"/><path d="M14 3v4h4M9 13h6M9 17h4"/></svg></span>
+                <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+                  <div style="display: flex; gap: 8px; align-items: center"><span class="mono" style="font-size: 13px; font-weight: 500">{{f.name}}</span><span class="sub2">{{f.size}}</span></div>
+                  <sc-if value="{{f.up}}" hint-placeholder-val="{{ true }}"><div style="display: flex; gap: 10px; align-items: center"><div class="bar" style="flex-grow: 1" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{f.pct}}" aria-label="{{f.progLabel}}"><div class="bf" style="width: {{f.pct}}%"></div></div><span class="mono sub2">{{f.pct}}%</span></div></sc-if>
+                  <sc-if value="{{f.err}}" hint-placeholder-val="{{ false }}"><span class="err">Error: {{f.msg}}</span></sc-if>
+                </div>
+                <sc-if value="{{f.up}}" hint-placeholder-val="{{ true }}"><span class="pill info">Uploading</span></sc-if>
+                <sc-if value="{{f.ok}}" hint-placeholder-val="{{ false }}"><span class="pill ok">Indexed · {{f.msg}}</span></sc-if>
+                <sc-if value="{{f.err}}" hint-placeholder-val="{{ false }}"><span class="pill bad">Failed</span><button type="button" class="btn sm" onClick="{{f.retry}}">Retry</button></sc-if>
+                <button type="button" class="mbtn" aria-label="{{f.rmLabel}}" onClick="{{f.rm}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+              </div>
+            </sc-for>
+            <sc-if value="{{noFiles}}" hint-placeholder-val="{{ false }}"><div class="row"><span class="sub2">No files yet. Drop files on the left or browse.</span></div></sc-if>
+          </div>
+        </div>
+        <div class="states">
+          <div class="fld"><span class="st">Drag-over</span><div class="dz sm over"><strong style="font-size: 13px">Release to upload 2 files</strong></div></div>
+          <div class="fld"><span class="st">Focus</span><div class="dz sm"><span class="btn sm fx">Browse files</span></div></div>
+          <div class="fld"><span class="st">Disabled</span><div class="dz sm dis"><strong style="font-size: 13px">Collection is read-only</strong><span class="sub2">Ask an admin for write access</span></div></div>
+          <div class="fld"><span class="st">Error</span><div class="dz sm" style="border-color: var(--bar-alert); border-style: solid"><span class="err">Error: .exe files are not allowed</span></div></div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules</strong> · The dropzone always contains a real "Browse files" button (drag-and-drop is never the only way). Each row shows status in words plus a pill; errors say what to do. Remove buttons name the file. Announce progress milestones, not every percent.</p>
+    </section>
+
+    <!-- FORM LAYOUT -->
+    <section class="card" style="grid-column: 1 / -1" aria-labelledby="h-form">
+      <div class="ch"><h2 id="h-form">Fieldset and form layout</h2><span class="use">Use for: settings pages, two-column with section headings</span></div>
+      <div class="spec" style="gap: 0">
+        <div style="display: flex; align-items: flex-end; gap: 12px; padding-bottom: 12px">
+          <div style="flex-grow: 1"><span class="sub2">Company OS / Agents / research-agent</span><h3 style="margin: 2px 0 0; font-size: 20px; font-weight: 600">Agent settings</h3></div>
+          <span class="sub2"><span class="req" aria-hidden="true">*</span> required</span>
+        </div>
+        <sc-if value="{{formErr}}" hint-placeholder-val="{{ true }}">
+          <div class="vsum" role="alert" tabindex="-1">
+            <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="stroke: currentColor; margin-top: 1px"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg>
+            <div><strong>2 fields need attention before saving</strong><ul><li><a href="#f-name">Name: enter a name</a></li><li><a href="#f-budget">Monthly budget: must be at least €1</a></li></ul></div>
+          </div>
+        </sc-if>
+        <form onSubmit="{{formSubmit}}" novalidate="novalidate">
+          <fieldset class="fs">
+            <legend>Identity<span>How this agent appears in approvals, logs and the org chart.</span></legend>
+            <div class="fgrid">
+              <div class="fld"><label class="lbl" for="f-name">Name<span class="req" aria-hidden="true">*</span></label><input id="f-name" class="inp mono {{fNameCls}}" aria-required="true" aria-invalid="{{formErr}}" placeholder="e.g. research-agent" /><sc-if value="{{formErr}}" hint-placeholder-val="{{ true }}"><span class="err">Error: enter a name</span></sc-if></div>
+              <div class="fld"><label class="lbl" for="f-role">Role title</label><input id="f-role" class="inp" value="Head of Research" /></div>
+              <div class="fld span2"><label class="lbl" for="f-desc">Description</label><textarea id="f-desc" class="inp sm">Scans sources on vector stores and LLM serving, writes weekly briefs to the knowledge base.</textarea><span class="help">Optional · shown on the agent card</span></div>
+            </div>
+          </fieldset>
+          <fieldset class="fs">
+            <legend>Model and runtime<span>Where the agent runs and how it reasons.</span></legend>
+            <div class="fgrid">
+              <div class="fld"><label class="lbl" for="f-model">Model</label><div class="selw"><select id="f-model" class="inp mono"><option>ollama/qwen2.5:14b</option><option>ollama/llama3.1:8b</option><option>openvino/phi-3-mini-int4</option></select><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></div></div>
+              <div class="fld"><label class="lbl" for="f-node">Execution node</label><input id="f-node" class="inp mono" value="node-02 · ollama" readonly="readonly" /><span class="help">Read-only: set by fleet scheduler</span></div>
+              <div class="fld"><label class="lbl" for="f-temp">Temperature</label><input id="f-temp" class="inp mono" value="0.3" inputmode="decimal" /><span class="help">0 = deterministic, 1 = creative</span></div>
+              <div class="fld"><label class="lbl" for="f-ctx">Context window</label><div class="grp"><input id="f-ctx" class="inp mono" value="32768" /><span class="ad r">tokens</span></div></div>
+            </div>
+          </fieldset>
+          <fieldset class="fs" style="border-bottom: 0">
+            <legend>Budget and schedule<span>Limits that pause the agent automatically.</span></legend>
+            <div class="fgrid">
+              <div class="fld"><label class="lbl" for="f-budget">Monthly budget<span class="req" aria-hidden="true">*</span></label><div class="grp {{fBudCls}}"><span class="ad l">€</span><input id="f-budget" class="inp mono" value="0" aria-required="true" aria-invalid="{{formErr}}" /><span class="ad r">/ month</span></div><sc-if value="{{formErr}}" hint-placeholder-val="{{ true }}"><span class="err">Error: must be at least €1</span></sc-if></div>
+              <div class="fld"><label class="lbl" for="f-hb">Heartbeat interval</label><div class="grp"><input id="f-hb" class="inp mono" value="300" /><span class="ad r">s</span></div></div>
+              <div class="fld span2"><div class="swrow" style="padding: 4px 0"><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><span class="lbl" id="f-pause-l">Pause when budget is reached</span><span class="help">Otherwise an approval request is raised.</span></div><span class="onoff" aria-hidden="true">On</span><button type="button" class="sw" role="switch" aria-checked="true" aria-labelledby="f-pause-l"><span class="k"></span></button></div></div>
+            </div>
+          </fieldset>
+          <div style="display: flex; align-items: center; gap: 10px; padding-top: 16px; border-top: var(--bw) solid var(--line)">
+            <span class="sub2" style="flex-grow: 1">{{formNote}}</span>
+            <button type="button" class="btn" onClick="{{formCancel}}">Cancel</button>
+            <button type="submit" class="btn pri">Save changes</button>
+          </div>
+        </form>
+      </div>
+      <p class="rules"><strong>Rules</strong> · Section heading and purpose on the left, fields on the right in up to two columns; long fields span both. On submit, show the summary (role="alert", links jump to fields) and inline errors together; footer is in flow, not sticky. Cancel discards and confirms only if there are unsaved changes.</p>
+    </section>
+
+    <nav aria-label="Design system pages" class="card" style="grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px; padding: 12px">
+      <a href="ComponentsCharts.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">← Previous</span><span style="font-weight: 600; color: var(--text)">Charts &amp; data viz</span></a>
+      <a href="ComponentsTable.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">Next →</span><span style="font-weight: 600; color: var(--text)">Data table</span></a>
+    </nav>
+  </main>
+  </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"$preview":{"width":1440,"height":5600}}'>
+const THEMES = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+const NODES = [['node-01', 'main', '203.0.113.11'], ['node-02', 'ollama', '203.0.113.12'], ['node-03', 'npu-worker', '203.0.113.13'], ['node-04', 'redis', '203.0.113.14'], ['node-05', 'browser', '203.0.113.15']];
+const MODELS = [
+  { g: 'Local · Ollama', items: [['ollama/qwen2.5:14b', '14.8B · Q4_K_M'], ['ollama/llama3.1:8b', '8B · Q4_K_M'], ['ollama/mistral-nemo:12b', '12B · Q4_0'], ['ollama/nomic-embed-text', 'embeddings']] },
+  { g: 'Local · OpenVINO NPU', items: [['openvino/phi-3-mini-int4', '3.8B · INT4']] },
+  { g: 'Cloud providers', items: [['anthropic/claude-sonnet-4', 'key in Secrets'], ['openai/gpt-4o-mini', 'key in Secrets']] }
+];
+const TOOLS = ['web_search', 'kb_query', 'file_read', 'file_write', 'http_request', 'code_interpreter', 'shell_exec'];
+const PERMS = [['kb', 'Read knowledge base', 'Query collections assigned to this agent'], ['web', 'Browse the web', 'Uses the browser worker on node-05'], ['shell', 'Run shell commands', 'Always routed to Approvals first'], ['mail', 'Send email', 'Outbound mail via the company SMTP secret']];
+const MODES = [['auto', 'Autonomous', 'Acts within budget; every step is logged'], ['ask', 'Ask before side effects', 'Writes, deploys and spend go to Approvals'], ['manual', 'Manual only', 'Proposes actions, never executes']];
+const TARGETS = [['local', 'Local Ollama', 'node-02 · about 38 tok/s', '€0 per 1M tokens'], ['npu', 'NPU worker', 'node-03 · OpenVINO INT4', '€0 per 1M tokens'], ['cloud', 'Cloud API', 'Anthropic or OpenAI via Secrets', 'metered']];
+const SWITCHES = [['hb', 'Heartbeat runs', 'Wake research-agent on its interval'], ['auto', 'Auto-approve read-only tools', 'kb_query and file_read skip Approvals'], ['digest', 'Daily digest email', 'Summary of runs and spend at 09:30']];
+const SWATCHES = [['#1E2A44', 'Navy'], ['#D9603F', 'Coral'], ['#2E7D4F', 'Green'], ['#155A70', 'Teal'], ['#7A5300', 'Ochre'], ['#6D28D9', 'Violet'], ['#B00020', 'Crimson'], ['#F0C674', 'Mustard']];
+const PRESETS = [['today', 'Today', 9, 9], ['7d', 'Last 7 days', 3, 9], ['30d', 'Last 30 days', -20, 9], ['month', 'This month', 0, 30], ['last', 'Last month', -30, -1]];
+const RATE_WORDS = ['No rating', 'Poor', 'Fair', 'Good', 'Very good', 'Excellent'];
+const DEFAULT_FILES = [
+  { id: 1, name: 'fleet-runbook.pdf', size: '2.4 MB', st: 'up', pct: 64 },
+  { id: 2, name: 'agent-policies.md', size: '18 KB', st: 'ok', msg: '212 chunks' },
+  { id: 3, name: 'q3-board-deck.pptx', size: '61 MB', st: 'err', msg: 'larger than the 50 MB limit. Export as PDF or split it.' }
+];
+
+function lum(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => { v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+function cell(o) {
+  const day = o < 0 ? 31 + o : (o > 30 ? o - 30 : o + 1);
+  const mon = o < 0 ? 'Sep' : (o > 30 ? 'Nov' : 'Oct');
+  const mm = o < 0 ? '09' : (o > 30 ? '11' : '10');
+  return { day: day, mon: mon, out: o < 0 || o > 30, iso: '2026-' + mm + '-' + (day < 10 ? '0' + day : '' + day) };
+}
+function fmt(o) { const c = cell(o); return c.day + ' ' + c.mon; }
+
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+  }
+  s() { return this.state || {}; }
+  get(k, d) { const st = this.s(); return st[k] !== undefined ? st[k] : d; }
+  otpDigits() { return this.get('otp', ['4', '8', '1', '', '', '']); }
+  otpBox(e, j) {
+    try { const w = e.target.closest('.otp'); const all = w.querySelectorAll('input'); return j >= 0 && j < all.length ? all[j] : null; } catch (err) { return null; }
+  }
+  addFiles(list) {
+    const files = this.get('files', DEFAULT_FILES).slice();
+    let id = Date.now();
+    for (let i = 0; i < list.length; i++) {
+      const f = list[i];
+      const mb = (f.size || 0) / 1048576;
+      const big = mb > 50;
+      files.push({ id: id++, name: f.name, size: mb >= 1 ? mb.toFixed(1) + ' MB' : Math.max(1, Math.round((f.size || 0) / 1024)) + ' KB', st: big ? 'err' : 'up', pct: 5, msg: big ? 'larger than the 50 MB limit.' : '' });
+    }
+    this.setState({ files: files, dzOver: false });
+  }
+  renderVals() {
+    const st = this.s();
+    const cur = st.theme || this.props.theme || 'light';
+
+    // search
+    const sq = this.get('sq', 'node-0');
+    const q1 = sq.trim().toLowerCase();
+    const nodes = NODES.filter((n) => !q1 || (n[0] + ' ' + n[1] + ' ' + n[2]).toLowerCase().indexOf(q1) >= 0).map((n) => ({ name: n[0], role: n[1], ip: n[2] }));
+
+    // textarea
+    const ta = this.get('ta', 'You are research-agent for AutoBot Labs. Cite every source, prefer primary documentation, and write findings to the Research collection.');
+
+    // combobox
+    const model = this.get('model', 'ollama/qwen2.5:14b');
+    const cq = st.cq;
+    const q2 = cq != null ? String(cq).trim().toLowerCase() : '';
+    const cbOpen = this.get('cbOpen', true);
+    const cbGroups = MODELS.map((g) => ({
+      label: g.g,
+      items: g.items.filter((it) => !q2 || it[0].toLowerCase().indexOf(q2) >= 0).map((it) => ({ id: it[0], meta: it[1], sel: it[0] === model ? 'true' : 'false', pick: () => this.setState({ model: it[0], cq: null }) }))
+    })).filter((g) => g.items.length);
+
+    // tags
+    const tags = this.get('tags', ['web_search', 'kb_query', 'file_read']);
+    const addTag = (t) => { const v = String(t || '').trim(); if (v && tags.indexOf(v) < 0) this.setState({ tags: tags.concat([v]) }); };
+
+    // perms
+    const perms = this.get('perms', { kb: true, web: true, shell: false, mail: false });
+    const nOn = PERMS.filter((p) => perms[p[0]]).length;
+
+    // radios / switches
+    const mode = this.get('mode', 'ask');
+    const target = this.get('target', 'local');
+    const sw = this.get('sw', { hb: true, auto: false, digest: true, s: false, m: true, l: true });
+    const togSw = (k) => () => { const n = Object.assign({}, sw); n[k] = !n[k]; this.setState({ sw: n }); };
+
+    // sliders
+    const thr = this.get('thr', 80);
+    const lo = this.get('lo', 40);
+    const hi = this.get('hi', 120);
+
+    // stepper
+    const hb = this.get('hb', 300);
+    const hbBad = !(hb >= 30 && hb <= 3600);
+    const hbHuman = hb >= 60 ? Math.floor(hb / 60) + ' min' + (hb % 60 ? ' ' + (hb % 60) + ' s' : '') : hb + ' s';
+
+    // date picker
+    const dpSel = this.get('dpSel', 13);
+    const dpTxt = st.dpTxt != null ? st.dpTxt : cell(dpSel).iso;
+    const dpBad = st.dpTxt != null && !/^2026-10-(0[1-9]|[12][0-9]|3[01])$/.test(st.dpTxt);
+    const dpOpen = this.get('dpOpen', true);
+    const dpCells = [];
+    for (let o = -3; o <= 31; o++) {
+      const c = cell(o);
+      const sel = o === dpSel;
+      dpCells.push({ day: c.day, cls: [c.out ? 'out' : '', o === 9 ? 'today' : '', sel ? 'sel' : ''].join(' '), aria: c.day + ' ' + c.mon + ' 2026' + (o === 9 ? ', today' : ''), pressed: sel ? 'true' : 'false', cur: o === 9 ? 'date' : 'false', pick: ((oo) => () => this.setState({ dpSel: oo, dpTxt: null }))(o) });
+    }
+
+    // range picker
+    const preset = this.get('preset', '7d');
+    const pr = PRESETS.filter((p) => p[0] === preset)[0];
+    const ra = pr ? pr[2] : this.get('rA', 3);
+    const rb = pr ? pr[3] : this.get('rB', 9);
+    const drCells = [];
+    for (let o = -3; o <= 31; o++) {
+      const c = cell(o);
+      const end = o === ra || o === rb;
+      const inr = o > ra && o < rb;
+      drCells.push({ day: c.day, cls: [c.out ? 'out' : '', o === 9 ? 'today' : '', end ? 'end' : (inr ? 'inr' : '')].join(' '), aria: c.day + ' ' + c.mon + ' 2026' + (end ? ', range end' : (inr ? ', in range' : '')), pressed: end || inr ? 'true' : 'false', pick: ((oo) => () => {
+        const s2 = this.s();
+        if (!s2.rPick) this.setState({ preset: 'custom', rA: oo, rB: oo, rPick: true });
+        else { const a = Math.min(s2.rA, oo), b = Math.max(s2.rA, oo); this.setState({ preset: 'custom', rA: a, rB: b, rPick: false }); }
+      })(o) });
+    }
+    const presets = PRESETS.map((p) => ({ label: p[1], cls: p[0] === preset ? 'on' : '', pressed: p[0] === preset ? 'true' : 'false', pick: () => this.setState({ preset: p[0], rPick: false }) }));
+    presets.push({ label: 'Custom', cls: preset === 'custom' ? 'on' : '', pressed: preset === 'custom' ? 'true' : 'false', pick: () => this.setState({ preset: 'custom', rA: ra, rB: rb, rPick: false }) });
+
+    // otp
+    const digits = this.otpDigits();
+    const filled = digits.filter((d) => d).length;
+    const otp = digits.map((v, i) => ({
+      v: v, label: 'Digit ' + (i + 1) + ' of 6',
+      onIn: (e) => {
+        const val = String(e.target.value || '').replace(/\D/g, '').slice(-1);
+        const d = this.otpDigits().slice(); d[i] = val; this.setState({ otp: d });
+        if (val) { const n = this.otpBox(e, i + 1); if (n) n.focus(); }
+      },
+      onKey: (e) => {
+        if (e.key === 'Backspace' && !e.target.value) { const p = this.otpBox(e, i - 1); if (p) p.focus(); }
+        else if (e.key === 'ArrowLeft') { const p = this.otpBox(e, i - 1); if (p) p.focus(); }
+        else if (e.key === 'ArrowRight') { const n = this.otpBox(e, i + 1); if (n) n.focus(); }
+      }
+    }));
+
+    // color
+    const brand = this.get('brand', '#1E2A44');
+    const hexDraft = st.hexDraft != null ? st.hexDraft : brand;
+    const hexBad = !/^#[0-9a-fA-F]{6}$/.test(hexDraft);
+    const L = lum(brand);
+    const cw = 1.05 / (L + 0.05), cb = (L + 0.05) / 0.05;
+    const useWhite = cw >= cb;
+    const ratio = Math.max(cw, cb);
+    const brandFg = useWhite ? '#FFFFFF' : '#000000';
+
+    // rating
+    const rate = this.get('rate', 4);
+
+    // files
+    const files = this.get('files', DEFAULT_FILES);
+    const dzOver = !!st.dzOver;
+
+    // form
+    const formErr = st.formErr !== false;
+
+    return {
+      theme: cur,
+      themes: THEMES.map(([id, label]) => ({ label: label, cls: id === cur ? 'on' : '', pressed: id === cur ? 'true' : 'false', pick: () => this.setState({ theme: id }) })),
+
+      sq: sq, sqHas: sq.length > 0, nodes: nodes, sqNone: nodes.length === 0,
+      sqCount: nodes.length + (nodes.length === 1 ? ' node' : ' nodes') + ' shown of ' + NODES.length,
+      onSq: (e) => this.setState({ sq: e.target.value }),
+      sqClear: (e) => { this.setState({ sq: '' }); try { e.currentTarget.parentNode.querySelector('input').focus(); } catch (err) {} },
+
+      ta: ta, taCount: ta.length + ' / 400', taOver: ta.length > 400, taCls: ta.length > 400 ? 'inv' : '',
+      onTa: (e) => this.setState({ ta: e.target.value }),
+
+      model: model, cbOpen: cbOpen, cbExp: cbOpen ? 'true' : 'false', cbVal: cq != null ? cq : model, cbQ: cq || '',
+      cbGroups: cbGroups, cbNone: cbGroups.length === 0,
+      onCb: (e) => this.setState({ cq: e.target.value, cbOpen: true }),
+      cbToggle: () => this.setState({ cbOpen: !cbOpen }),
+
+      tags: tags.map((t) => ({ name: t, rmLabel: 'Remove ' + t, rm: () => this.setState({ tags: tags.filter((x) => x !== t) }) })),
+      tagSugg: TOOLS.filter((t) => tags.indexOf(t) < 0).slice(0, 4).map((t) => ({ name: t, add: () => addTag(t) })),
+      tagCount: tags.length + ' of 8 tools · Enter adds, Backspace removes the last',
+      onTagKey: (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); addTag(e.target.value); e.target.value = ''; }
+        else if (e.key === 'Backspace' && !e.target.value && tags.length) this.setState({ tags: tags.slice(0, -1) });
+      },
+
+      perms: PERMS.map((p) => ({ label: p[1], desc: p[2], checked: perms[p[0]] ? 'true' : 'false', toggle: () => { const n = Object.assign({}, perms); n[p[0]] = !n[p[0]]; this.setState({ perms: n }); } })),
+      permAll: nOn === PERMS.length ? 'true' : (nOn === 0 ? 'false' : 'mixed'),
+      permSummary: nOn + ' of ' + PERMS.length + ' granted',
+      permToggleAll: () => { const all = nOn !== PERMS.length; const n = {}; PERMS.forEach((p) => { n[p[0]] = all; }); this.setState({ perms: n }); },
+
+      modes: MODES.map((m) => ({ label: m[1], desc: m[2], checked: m[0] === mode ? 'true' : 'false', pick: () => this.setState({ mode: m[0] }) })),
+      targets: TARGETS.map((t) => ({ label: t[1], desc: t[2], cost: t[3], checked: t[0] === target ? 'true' : 'false', pick: () => this.setState({ target: t[0] }) })),
+
+      switches: SWITCHES.map((w) => ({ id: 'sw-' + w[0], label: w[1], desc: w[2], on: sw[w[0]] ? 'true' : 'false', word: sw[w[0]] ? 'On' : 'Off', toggle: togSw(w[0]) })),
+      swSizes: [['s', 'sm', 'Small'], ['m', '', 'Medium'], ['l', 'lg', 'Large']].map((z) => ({ cls: z[1], label: z[2], on: sw[z[0]] ? 'true' : 'false', word: sw[z[0]] ? 'On' : 'Off', toggle: togSw(z[0]) })),
+
+      thr: thr, thrCls: thr >= 95 ? 'alert' : '',
+      thrText: 'Alert when an agent has used ' + thr + '% of its monthly budget' + (thr >= 95 ? ' (warning: very late alert)' : ''),
+      onThr: (e) => this.setState({ thr: +e.target.value }),
+      lo: lo, hi: hi, loPct: lo / 2, spanPct: (hi - lo) / 2,
+      onLo: (e) => this.setState({ lo: Math.min(+e.target.value, hi - 5) }),
+      onHi: (e) => this.setState({ hi: Math.max(+e.target.value, lo + 5) }),
+
+      hb: hb, hbHuman: hbHuman, hbBad: hbBad, hbCls: hbBad ? 'inv' : '',
+      hbDecDis: hb <= 30 ? 'true' : 'false', hbIncDis: hb >= 3600 ? 'true' : 'false',
+      hbDec: () => { if (hb > 30) this.setState({ hb: Math.max(30, Math.min(3600, hb - 30)) }); },
+      hbInc: () => { if (hb < 3600) this.setState({ hb: Math.min(3600, Math.max(30, hb + 30)) }); },
+      onHb: (e) => { const n = parseInt(String(e.target.value).replace(/\D/g, ''), 10); this.setState({ hb: isNaN(n) ? 0 : n }); },
+
+      dpTxt: dpTxt, dpBad: dpBad, dpCls: dpBad ? 'inv' : '', dpOpen: dpOpen, dpExp: dpOpen ? 'true' : 'false', dpCells: dpCells,
+      dpToggle: () => this.setState({ dpOpen: !dpOpen }),
+      dpToday: () => this.setState({ dpSel: 9, dpTxt: null }),
+      onDp: (e) => { const v = e.target.value; const m = /^2026-10-(\d{2})$/.exec(v); const n = { dpTxt: v }; if (m && +m[1] >= 1 && +m[1] <= 31) n.dpSel = +m[1] - 1; this.setState(n); },
+
+      presets: presets, drCells: drCells,
+      drText: ra === rb ? fmt(ra) + ' 2026' : fmt(ra) + ' – ' + fmt(rb) + ' 2026',
+      drDays: (rb - ra + 1) + (rb === ra ? ' day' : ' days'),
+      drHint: st.rPick ? 'Now pick the end date' : 'Click two days for a custom range',
+
+      otp: otp,
+      otpStatus: filled === 6 ? 'Code complete. Press Verify.' : (6 - filled) + ' digits remaining · code refreshes every 30 s',
+      otpClear: () => this.setState({ otp: ['', '', '', '', '', ''] }),
+
+      swatches: SWATCHES.map((s) => { const sel = s[0].toLowerCase() === brand.toLowerCase(); return { hex: s[0], label: s[1] + ' ' + s[0], sel: sel, pressed: sel ? 'true' : 'false', fg: lum(s[0]) > 0.18 ? '#000000' : '#FFFFFF', pick: () => this.setState({ brand: s[0], hexDraft: null }) }; }),
+      brand: brand, brandFg: brandFg, hexDraft: hexDraft, hexBad: hexBad, hexCls: hexBad ? 'inv' : '',
+      contrastText: 'Contrast with ' + (useWhite ? 'white' : 'black') + ' text: ' + ratio.toFixed(1) + ':1 · ' + (ratio >= 4.5 ? 'passes AA' : 'fails AA, use for accents only'),
+      onHex: (e) => { let v = String(e.target.value).trim(); if (v && v[0] !== '#') v = '#' + v; const n = { hexDraft: v }; if (/^#[0-9a-fA-F]{6}$/.test(v)) n.brand = v.toUpperCase(); this.setState(n); },
+
+      stars: [1, 2, 3, 4, 5].map((n) => ({ cls: n <= rate ? 'star on' : 'star', checked: n === rate ? 'true' : 'false', label: n + (n === 1 ? ' star, ' : ' stars, ') + RATE_WORDS[n], pick: () => this.setState({ rate: n }) })),
+      rateText: rate + ' of 5 · ' + RATE_WORDS[rate],
+
+      files: files.map((f) => ({
+        name: f.name, size: f.size, pct: f.pct || 0, msg: f.msg || '',
+        up: f.st === 'up', ok: f.st === 'ok', err: f.st === 'err',
+        progLabel: 'Uploading ' + f.name, rmLabel: 'Remove ' + f.name,
+        rm: () => this.setState({ files: files.filter((x) => x.id !== f.id) }),
+        retry: () => this.setState({ files: files.map((x) => x.id === f.id ? Object.assign({}, x, { st: 'up', pct: 10 }) : x) })
+      })),
+      noFiles: files.length === 0,
+      dzCls: dzOver ? 'over' : '', dzTitle: dzOver ? 'Release to upload' : 'Drop files to add them to the knowledge base',
+      dzOver: (e) => { e.preventDefault(); if (!this.s().dzOver) this.setState({ dzOver: true }); },
+      dzLeave: () => this.setState({ dzOver: false }),
+      dzDrop: (e) => { e.preventDefault(); let l = []; try { l = e.dataTransfer.files || []; } catch (err) {} this.addFiles(l); },
+      dzPick: (e) => { this.addFiles(e.target.files || []); },
+
+      formErr: formErr, fNameCls: formErr ? 'inv' : '', fBudCls: formErr ? 'inv' : '',
+      formNote: formErr ? 'Not saved · fix 2 fields' : 'Unsaved changes',
+      formSubmit: (e) => { e.preventDefault(); this.setState({ formErr: true }); },
+      formCancel: () => this.setState({ formErr: false })
+    };
+  }
+}
+</script>
+</body>
+</html>
