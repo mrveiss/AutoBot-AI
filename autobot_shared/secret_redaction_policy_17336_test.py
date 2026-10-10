@@ -118,8 +118,11 @@ def test_redact_mapping_and_text_moved_without_changing_output() -> None:
         "password_length",
     ],
 )
-def test_a_count_or_limit_of_a_credential_noun_is_not_a_credential(name: str, policy: MatchPolicy) -> None:
-    assert is_credential_field(name, policy) is False
+def test_a_count_of_a_credential_noun_is_exempt_only_on_the_export_path(name: str, policy: MatchPolicy) -> None:
+    # Default: the vocabulary alone, i.e. what every retired matcher masked (#17337 AC2).
+    assert is_credential_entry(name, 4096, policy) is is_credential_field(name, policy)
+    # Export path (portability): a real number is a count, not a credential.
+    assert is_credential_entry(name, 4096, policy, exempt_counts=True) is False
 
 
 @pytest.mark.parametrize("policy", list(MatchPolicy))
@@ -137,6 +140,7 @@ def test_a_count_or_limit_of_a_credential_noun_is_not_a_credential(name: str, po
 )
 def test_the_quantity_rule_never_exempts_a_secret_looking_name(name: str, policy: MatchPolicy) -> None:
     assert is_credential_field(name, policy) is True
+    assert is_credential_entry(name, 42, policy, exempt_counts=True) is True
 
 
 # ---------------------------------------------------------------------------
@@ -183,10 +187,18 @@ _JWT = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop"  # pr
         ("max_tokens", 1.5, False),
     ],
 )
-def test_a_quantity_name_is_exempt_only_when_its_value_is_a_number(name, value, masked, policy) -> None:
+def test_on_the_export_path_a_quantity_name_is_exempt_only_when_its_value_is_a_number(
+    name, value, masked, policy
+) -> None:
     if masked is None:  # ``secret_sizes``: not a quantity name; BROAD masks it, PRECISE has no noun suffix
         masked = policy is MatchPolicy.BROAD
-    assert is_credential_entry(name, value, policy) is masked
+    assert is_credential_entry(name, value, policy, exempt_counts=True) is masked
+    # Everywhere else a number is judged by the vocabulary alone; a non-number is masked as above.
+    is_number = isinstance(value, (int, float)) and not isinstance(value, bool)
+    default = is_credential_field(name, policy) if is_number else True
+    if not is_number and not is_credential_field(name, policy):
+        default = masked  # a name outside the vocabulary and the quantity shape (``secret_sizes`` PRECISE)
+    assert is_credential_entry(name, value, policy) is default
 
 
 @pytest.mark.parametrize("policy", list(MatchPolicy))
@@ -201,16 +213,19 @@ def test_a_name_outside_the_vocabulary_is_never_a_credential_for_any_value(polic
 def test_secret_size_and_secret_sizes_differ_by_policy_and_value() -> None:
     # ``secret_size`` is a quantity name; ``secret_sizes`` is not (suffix list is singular)
     # so PRECISE never classifies it (no noun suffix) and BROAD masks it for any value.
-    assert is_credential_entry("secret_size", 32, MatchPolicy.BROAD) is False
+    assert is_credential_entry("secret_size", 32, MatchPolicy.BROAD, exempt_counts=True) is False
+    assert is_credential_entry("secret_size", 32, MatchPolicy.BROAD) is True
     assert is_credential_entry("secret_sizes", 32, MatchPolicy.BROAD) is True
     assert is_credential_entry("secret_sizes", [1, 2], MatchPolicy.BROAD) is True
     assert is_credential_field("secret_sizes", MatchPolicy.PRECISE) is False
 
 
-def test_every_value_bearing_surface_masks_a_non_numeric_value_under_a_quantity_name() -> None:
-    assert redact_mapping({"token_count": _JWT, "max_tokens": 4096}) == {"token_count": "***", "max_tokens": 4096}
+def test_every_value_bearing_surface_still_masks_max_tokens_as_its_retired_matcher_did() -> None:
+    """``max_tokens=4096`` is masked at every surface except the template export (#17337 AC2)."""
+    assert redact_mapping({"token_count": _JWT, "max_tokens": 4096}) == {"token_count": "***", "max_tokens": "***"}
     assert redact_value("token_count", _JWT) == "**********"
-    assert redact_value("max_tokens", 4096) == 4096
+    assert redact_value("max_tokens", 4096) == "**********"
+    assert redact_value("max_tokens", "4096") == "**********"
     assert redact_value("api_keys", ["sk-" + "c" * 24]) == "**********"
 
 
@@ -255,15 +270,20 @@ def _old_normalized(n: str) -> bool:
     return any(x in flat for x in (*_RETIRED_CREDENTIAL_SUFFIXES, "bearer", "auth", "authorization"))
 
 
-# caller -> (old predicate rebuilt from frozen literals, new policy)
+# caller -> (old predicate, new policy, exempt_counts). The old predicates are FROZEN copies of
+# what origin/main's implementation at that caller masked (the literals above were read from
+# `git show origin/main:<file>` for cot_events.py, config_revision_service.py, security/redaction.py,
+# llm_shared/credential_redaction.py and llc/services/portability.py). Only the template-export
+# caller passes ``exempt_counts=True``; the contrast tests in the backend suites pin each real caller.
 _CALLERS = {
-    "is_credential_field": (_old_precise, MatchPolicy.PRECISE),
-    "redact_mapping": (_old_substring(_RETIRED_SECURITY_REDACTION), MatchPolicy.BROAD),
-    "credential_redaction.redact_dict": (_old_normalized, MatchPolicy.BROAD),
-    "cot_events": (_old_substring(_RETIRED_COT_EVENTS), MatchPolicy.BROAD),
-    "portability": (lambda n: n.lower() in _RETIRED_PORTABILITY, MatchPolicy.PRECISE),
-    "config_revision": (_old_substring(_RETIRED_CONFIG_REVISION), MatchPolicy.BROAD),
+    "redact_value / RedactedReprMixin / url query": (_old_precise, MatchPolicy.PRECISE, False),
+    "redact_mapping": (_old_substring(_RETIRED_SECURITY_REDACTION), MatchPolicy.BROAD, False),
+    "credential_redaction.redact_dict": (_old_normalized, MatchPolicy.BROAD, False),
+    "cot_events": (_old_substring(_RETIRED_COT_EVENTS), MatchPolicy.BROAD, False),
+    "portability export": (lambda n: n.lower() in _RETIRED_PORTABILITY, MatchPolicy.PRECISE, True),
+    "config_revision": (_old_substring(_RETIRED_CONFIG_REVISION), MatchPolicy.BROAD, False),
 }
+_VALUES = {"int": 1, "float": 4.5, "digit-string": "4821", "JWT": _JWT, "True": True}
 
 
 def _corpus():
@@ -272,17 +292,32 @@ def _corpus():
     return names
 
 
+def _removed(caller: str, value) -> set:
+    """Names masked by the retired implementation at ``caller`` and unmasked here."""
+    old, policy, exempt = _CALLERS[caller]
+    return {n for n in _corpus() if old(n) and not is_credential_entry(n, value, policy, exempt_counts=exempt)}
+
+
+@pytest.mark.parametrize("label", sorted(_VALUES))
 @pytest.mark.parametrize("caller", sorted(_CALLERS))
-def test_the_only_names_that_leave_the_mask_set_are_numbers_under_a_closed_quantity_shape(caller) -> None:
-    old, policy = _CALLERS[caller]
-    names = _corpus()
-    expected_removed = {n for n in names if old(n) and _is_quantity_shape(n)}
-    removed_for_a_number = {n for n in names if old(n) and not is_credential_entry(n, 1, policy)}
-    removed_for_a_string = {n for n in names if old(n) and not is_credential_entry(n, _JWT, policy)}
-    removed_for_a_pin = {n for n in names if old(n) and not is_credential_entry(n, "4821", policy)}
-    assert removed_for_a_number == expected_removed
-    assert removed_for_a_string == set(), "a non-numeric value must never leave the masked set"
-    assert removed_for_a_pin == set(), "a digit string is a PIN-shaped secret and must never leave the masked set"
+def test_no_name_leaves_the_masked_set_at_any_caller(caller, label) -> None:
+    """#17336 owner decision / #17337 AC2: REMOVED (masked on main, unmasked here) is empty."""
+    removed = _removed(caller, _VALUES[label])
+    assert removed == set(), f"{caller} with {label} value unmasks {sorted(removed)[:20]}"
+
+
+def test_the_portability_export_path_removes_nothing_the_old_exact_match_masked() -> None:
+    # The old 12-name exact match masked no quantity-shaped name, so the export-only exemption
+    # is a pure addition of unmasked counts, never a removal.
+    assert not any(_is_quantity_shape(n) for n in _RETIRED_PORTABILITY)
+
+
+def test_only_the_export_path_unmasks_a_number_under_a_credential_noun() -> None:
+    names = [n for n in _corpus() if _is_quantity_shape(n) and is_credential_field(n, MatchPolicy.BROAD)]
+    assert names, "the corpus must exercise quantity names"
+    for policy in MatchPolicy:
+        assert all(is_credential_entry(n, 1, policy) == is_credential_field(n, policy) for n in names)
+        assert not any(is_credential_entry(n, 1, policy, exempt_counts=True) for n in names)
 
 
 def test_the_corpus_exercises_the_rule_in_both_directions() -> None:

@@ -9,10 +9,11 @@ quantity-shaped name (`token_count`) on the name alone -- and then a JWT stored 
 shows in clear. `is_credential_entry(name, value, policy)` is the value-aware form, and every
 caller that decides whether to mask a value uses it.
 
-The detector reads the syntax tree: a CALL of `is_credential_field` (or an import of it, which
-is how an alias would hide one). The guard is an explicit allowlist of the value-free sites with a
+The detector reads the syntax tree: ANY reference to `is_credential_field` -- a call, a bare
+name passed to `filter`/`partial`/`getattr`, an assignment to an alias, or an aliased import. The guard is an explicit allowlist of the value-free sites with a
 reason each, so a NEW call anywhere fails until someone has reviewed which question it is asking.
-Zero production sites exist today; the three below are tests of the name-only classification.
+Zero production sites exist today -- including inside `secret_redaction.py` itself, which is
+held to an allowlist of 0 like everyone else; the two below are tests of the name-only classification.
 """
 
 from __future__ import annotations
@@ -27,7 +28,6 @@ from repo_tests._reach import declare
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _NAME = "is_credential_field"
-_CANONICAL = "autobot_shared/secret_redaction.py"
 
 #: Every tree that holds tracked Python. Written out, not globbed, so a tree dropped from the
 #: sweep is a visible edit to this constant AND to `reach_scope_claim_17844_test`.
@@ -50,7 +50,7 @@ SCAN_ROOTS = (
 #: path -> (number of sites, why a name-only classification is right there). Value-free only.
 _VALUE_FREE: dict[str, tuple[int, str]] = {
     "autobot_shared/secret_redaction_policy_17336_test.py": (
-        16,
+        20,
         "tests the name-only API itself over field names; no value exists",
     ),
     "autobot_shared/tests/test_config_repr_redaction_13325.py": (
@@ -83,15 +83,19 @@ REACH = declare(
 
 
 def _sites(source: str) -> int:
-    """How many places in `source` call or import the name-only classifier."""
+    """How many references to the name-only classifier `source` makes.
+
+    Counts every Name load and Attribute access (a call is one such load, so it is not counted
+    twice), plus an aliased import. The `def` itself is a FunctionDef and not a reference.
+    """
     count = 0
     for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.Call):
-            fn = node.func
-            if (isinstance(fn, ast.Name) and fn.id == _NAME) or (isinstance(fn, ast.Attribute) and fn.attr == _NAME):
-                count += 1
+        if isinstance(node, ast.Name) and node.id == _NAME and isinstance(node.ctx, ast.Load):
+            count += 1
+        elif isinstance(node, ast.Attribute) and node.attr == _NAME:
+            count += 1
         elif isinstance(node, ast.ImportFrom) and any(a.name == _NAME and a.asname for a in node.names):
-            count += 1  # an alias would hide every later call
+            count += 1  # an alias would hide every later reference
     return count
 
 
@@ -99,7 +103,7 @@ def _unreviewed(sources: dict[str, str]) -> list[str]:
     """Sites outside the allowlist, or a different count than the allowlist recorded."""
     bad = []
     for rel, source in sorted(sources.items()):
-        if rel == _CANONICAL or _NAME not in source:
+        if _NAME not in source:
             continue
         found, allowed = _sites(source), _VALUE_FREE.get(rel, (0, ""))[0]
         if found != allowed:
@@ -126,6 +130,10 @@ _VALUE_AWARE = (
         ("the value-aware call", _VALUE_AWARE, 0),
         ("a module-qualified call", "import m\nm.secret_redaction.is_credential_field('k')\n", 1),
         ("an aliased import", "from x import is_credential_field as f\n", 1),
+        ("a bare name passed to filter", "list(filter(is_credential_field, names))\n", 1),
+        ("a bare name through partial", "g = functools.partial(is_credential_field, policy=p)\n", 1),
+        ("an alias assignment", "f = is_credential_field\n", 1),
+        ("the definition itself", "def is_credential_field(name):\n    return True\n", 0),
         ("a comment naming it", "# is_credential_field(k)\nx = 1\n", 0),
         ("a string naming it", "s = 'is_credential_field(k)'\n", 0),
     ],
@@ -143,6 +151,16 @@ def test_a_planted_value_bearing_call_fails_and_the_value_aware_twin_passes(tmp_
     assert _unreviewed({rel: planted.read_text(encoding="utf-8")}) == [f"{rel}: 1 site(s), reviewed 0"]
     planted.write_text(_VALUE_AWARE, encoding="utf-8")
     assert _unreviewed({rel: planted.read_text(encoding="utf-8")}) == []
+    planted.write_text("from m import is_credential_field\nscrub = is_credential_field\n", encoding="utf-8")
+    assert _unreviewed({rel: planted.read_text(encoding="utf-8")}) == [f"{rel}: 1 site(s), reviewed 0"]
+
+
+def test_the_canonical_module_is_held_to_zero_references() -> None:
+    """secret_redaction.py defines the classifier and may not call, alias or pass it around."""
+    rel = "autobot_shared/secret_redaction.py"
+    assert rel not in _VALUE_FREE
+    assert _sites((repo_root() / rel).read_text(encoding="utf-8")) == 0
+    assert _unreviewed({rel: "x = is_credential_field\n"}) == [f"{rel}: 1 site(s), reviewed 0"]
 
 
 def test_a_second_call_in_an_allowlisted_file_is_also_unreviewed() -> None:

@@ -471,12 +471,13 @@ class TestSessionScopedPublishing:
 
 
 class TestQuantityNamesAreValueAware:
-    """A count of a credential noun stays visible only as a real number (#17336)."""
+    """Only the template export unmasks a count; this caller masks it as it did on main (#17336)."""
 
     _JWT = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop"  # pragma: allowlist secret
 
-    def test_a_real_number_under_a_quantity_name_is_visible(self):
-        assert cot_events._is_sensitive("max_tokens", 4096) is False
+    def test_a_real_number_under_a_credential_noun_is_still_masked(self):
+        # origin/main masked max_tokens here (substring match); #17337 AC2: nothing leaves the masked set.
+        assert cot_events._is_sensitive("max_tokens", 4096) is True
 
     def test_a_credential_or_a_digit_string_under_a_quantity_name_is_masked(self):
         for value in (self._JWT, "4821", True, ["sk-abc"]):

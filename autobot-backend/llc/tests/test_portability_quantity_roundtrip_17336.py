@@ -54,3 +54,12 @@ def test_a_digit_string_or_bool_under_a_quantity_name_is_a_placeholder(value) ->
     out = _scrub_adapter_config({"password_limit": value, "max_tokens": 4096}, {})
     assert out["password_limit"] == "{{PASSWORD_LIMIT}}"
     assert out["max_tokens"] == 4096
+
+
+def test_max_tokens_is_unmasked_only_via_the_export_path_and_masked_at_every_other_caller() -> None:
+    """The contrast pair (#17337 AC2): one caller exempts a count, all the others mask it."""
+    from autobot_shared.secret_redaction import redact_mapping, redact_value
+
+    assert _scrub_adapter_config({"max_tokens": 4096}, {}) == {"max_tokens": 4096}
+    assert redact_mapping({"max_tokens": 4096}) == {"max_tokens": "***"}
+    assert redact_value("max_tokens", 4096) == "**********"

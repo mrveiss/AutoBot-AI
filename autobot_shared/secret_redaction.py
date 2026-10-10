@@ -126,19 +126,15 @@ BROAD_ONLY_STEMS: Tuple[str, ...] = ("private",)
 BROAD_FRAGMENTS: Tuple[str, ...] = tuple(dict.fromkeys(CREDENTIAL_SUFFIXES + AUTHORIZATION_TERMS + BROAD_ONLY_STEMS))
 
 
-# A COUNT or LIMIT of a credential noun is a number, not a credential
-# (``max_tokens=4096``, ``token_count``, ``key_length``). Masking it breaks
-# exported templates and hides the diagnostic, and no secret hides in it.
-# Deliberately tight so nothing secret-looking is excluded:
-#   * a prefix form needs the REMAINDER to be a PLURAL noun
-#     (``max_tokens``, ``num_api_keys``) -- ``max_token_secret`` and
-#     ``max_password`` do not qualify and stay masked;
+# A COUNT or LIMIT of a credential noun (``max_tokens``, ``token_count``,
+# ``key_length``) is a number, not a credential -- but ONLY the template-export
+# path acts on that (``is_credential_entry(..., exempt_counts=True)``); every
+# other caller keeps masking it, as its retired matcher did. Deliberately tight:
+#   * a prefix form needs the REMAINDER to be a PLURAL noun (``max_tokens``,
+#     ``num_api_keys``); ``max_token_secret`` and ``max_password`` stay masked;
 #   * a suffix form needs the remainder to END in a noun and the name to END in
-#     the quantity word (``token_count``, ``api_key_limit``) --
-#     ``token_count_secret`` does not qualify.
-# Applied by BOTH policies, to the whole name only (#17336). It is a NAME
-# classification; value-bearing callers use ``is_credential_entry``, which keeps
-# the value masked unless it is a real int/float (never bool, never a digit string).
+#     the quantity word; ``token_count_secret`` stays masked.
+# Under such a name any NON-number value is masked by every caller (#17336).
 QUANTITY_PREFIXES: Tuple[str, ...] = (
     "max_",
     "min_",
@@ -177,8 +173,6 @@ class MatchPolicy(Enum):
     suffixes are exempt.  Over-masking destroys a diagnostic (SSOT config
     ``__repr__``), so false positives are the cost to avoid.
 
-    Both policies first exempt :func:`is_quantity_field` names (``max_tokens``).
-
     ``BROAD`` -- a noun appears anywhere in the lowercased name with ``_``/``-``
     stripped; no location exemption.  Over-masking a log line, extra-vars
     mapping, event payload or stored snapshot is free, a leaked secret is not.
@@ -205,33 +199,39 @@ def _is_plain_number(value: Any) -> bool:
 def is_credential_field(name: str, policy: MatchPolicy = MatchPolicy.PRECISE) -> bool:
     """NAME-ONLY classification: does this name denote a credential under ``policy``?
 
-    Use this only where no value exists (a schema, a header name). It exempts
-    :func:`is_quantity_field` names on the strength of the name alone, which
-    cannot know that ``token_count`` holds a JWT. Every caller that has a value
-    must use :func:`is_credential_entry` instead.
+    Use this only where no value exists (a schema, a header name). It applies the
+    vocabulary and nothing else -- no count exemption -- so it never reports a
+    name as harmless that the retired matchers masked. Every caller that has a
+    value must use :func:`is_credential_entry` instead.
 
     ``policy`` is validated, never defaulted by a fallthrough: an unknown value
     raises rather than silently selecting the weaker rule.
     """
-    return _matches_vocabulary(name, policy) and not is_quantity_field(name)
+    return _matches_vocabulary(name, policy)
 
 
-def is_credential_entry(name: str, value: Any, policy: MatchPolicy = MatchPolicy.PRECISE) -> bool:
+def is_credential_entry(
+    name: str, value: Any, policy: MatchPolicy = MatchPolicy.PRECISE, *, exempt_counts: bool = False
+) -> bool:
     """VALUE-AWARE: should the value stored under ``name`` be masked (#17336)?
 
-    A quantity-shaped name (``max_tokens``, ``token_count``) is left unmasked
-    only when its value is a real int/float (never bool); under any other value
-    it is masked by BOTH policies (PRECISE included). A JWT, an ``sk-...``
-    string, a digit string (a PIN), a list or a dict under such a name stays
-    masked: the name is a claim, the value is the evidence.
+    The default is the vocabulary alone, so every caller masks exactly what its
+    retired matcher masked (``max_tokens=4096`` included): no key leaves the
+    masked set (#17336 owner decision, #17337 AC2).
+
+    Under a quantity-shaped name (``max_tokens``, ``token_count``) a value that
+    is NOT a real int/float -- a JWT, ``sk-...``, a digit string (a PIN), a bool,
+    a list, a dict -- is masked by both policies. Only ``exempt_counts=True``,
+    which the template-export path passes because it must round-trip
+    ``max_tokens`` as a number, leaves a real int/float unmasked.
     """
     if not isinstance(policy, MatchPolicy):
         raise TypeError(f"policy must be a MatchPolicy, got {policy!r}")
     if name and is_quantity_field(name):
-        # Under BOTH policies a quantity name is a credential candidate whose
-        # exemption is the value: ``token_count`` carries no noun suffix, so
-        # PRECISE would otherwise keep a JWT stored under it.
-        return not _is_plain_number(value)
+        if not _is_plain_number(value):
+            return True
+        if exempt_counts:
+            return False
     return _matches_vocabulary(name, policy)
 
 

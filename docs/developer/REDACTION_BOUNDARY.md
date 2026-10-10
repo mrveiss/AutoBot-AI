@@ -48,21 +48,27 @@ Why two: `tokenizers_parallelism` and `tls_key_path` must stay readable in
 SSOT config's `__repr__`; a secret under an unanticipated key name must still
 be masked in a log line. Both are right at their own call sites.
 
-Both policies first exempt a **count or limit of a credential noun**
-(`secret_redaction.is_quantity_field`): `max_`/`min_`/`num_`/`total_`/`input_`/
-`output_`/`prompt_`/`completion_`/`cached_` + a *plural* noun (`max_tokens`,
-`num_api_keys`), or a name ending `_count`/`_limit`/`_len`/`_length`/`_size` whose
-stem ends in a noun (`token_count`, `key_length`). Without it `max_tokens=4096`
-became `{{MAX_TOKENS}}` in exported templates. The exemption is **value-aware**: `is_credential_entry(name, value, policy)` keeps a
-quantity name unmasked only when its value is a real int/float (not bool, and never a digit
-string, which is a PIN-shaped secret); a JWT, `sk-...`, digit string, list or dict under
-`token_count` stays masked, by both policies. `is_credential_field(name)` is the name-only classification, for callers
-with no value. Every value-bearing caller uses `is_credential_entry`;
-`repo_tests/credential_field_name_only_17336_test.py` fails on any new `is_credential_field` call
-not on its reviewed value-free allowlist. The mask-set
-delta is reproducible from the repo: `autobot_shared/redaction_corpus_17336.txt`
-plus `secret_redaction_policy_17336_test.py`. The rule is deliberately tight:
-`max_token_secret`, `max_password` and `token_count_secret` stay masked.
+A **count or limit of a credential noun** (`secret_redaction.is_quantity_field`:
+`max_`/`min_`/`num_`/`total_`/`input_`/`output_`/`prompt_`/`completion_`/`cached_` +
+a *plural* noun, or a name ending `_count`/`_limit`/`_len`/`_length`/`_size` whose
+stem ends in a noun) is a number, not a credential -- but **only the template
+export** acts on that. `portability._scrub_adapter_config` passes
+`exempt_counts=True` to `is_credential_entry`, because without it `max_tokens=4096`
+became `{{MAX_TOKENS}}` and no longer imported as a number. Every other caller keeps
+masking it exactly as its retired matcher did (`max_tokens=4096` is masked by
+`cot_events`, `config_revision`, `redact_mapping`, `redact_dict`, `redact_value`):
+the owner decision on `#17336` and `#17337` AC2 say no key leaves the masked set.
+
+The value check applies everywhere: under a quantity-shaped name, a value that is
+not a real int/float (a JWT, `sk-...`, a **digit string** -- PIN-shaped --, a bool,
+a list, a dict) is masked by both policies. `is_credential_field(name)` is the
+name-only vocabulary check, for callers with no value; every value-bearing caller
+uses `is_credential_entry`, and
+`repo_tests/credential_field_name_only_17336_test.py` fails on any new
+`is_credential_field` reference outside its reviewed value-free allowlist.
+`max_token_secret`, `max_password` and `token_count_secret` are not quantity names
+and stay masked.
+
 
 `BROAD` is a superset of `PRECISE` by construction (same nouns, plus
 `AUTHORIZATION_TERMS` and `BROAD_ONLY_STEMS`, which would over-mask as
@@ -83,15 +89,27 @@ Recorded at `#17336` / `#17337` so that no site silently changed policy.
 | `portability._scrub_adapter_config` | own 12-name exact match | `PRECISE` |
 | `config_revision_service._is_secret_key` | own 5-fragment substring | `BROAD` |
 
-Every migration only **widened** the masked set; the before/after comparison
-over a corpus of ~1,950 field names (both modules' literals, every string passed
-to a redactor in tests, the 10-name sample from `#17336`) found 0 removals.
+Every migration only **widened** the masked set. Measured per caller over
+`autobot_shared/redaction_corpus_17336.txt` (3,384 names) against a frozen copy of
+what `origin/main` masked at that caller
+(`secret_redaction_policy_17336_test.py::test_no_name_leaves_the_masked_set_at_any_caller`,
+values int, float, digit string, JWT and `True`):
+
+| caller | masked on main | here: int | digit string | JWT | `True` | removed |
+|---|---|---|---|---|---|---|
+| `redact_value` / `RedactedReprMixin` / URL query (`PRECISE`) | 1131 | 1131 | 1392 | 1392 | 1392 | 0 |
+| `redact_mapping` (`BROAD`) | 1983 | 2437 | 2437 | 2437 | 2437 | 0 |
+| `credential_redaction.redact_dict` (`BROAD`) | 2382 | 2437 | 2437 | 2437 | 2437 | 0 |
+| `cot_events` (`BROAD`) | 1831 | 2437 | 2437 | 2437 | 2437 | 0 |
+| `config_revision_service` (`BROAD`) | 1590 | 2437 | 2437 | 2437 | 2437 | 0 |
+| `portability` export (`PRECISE`, `exempt_counts`) | 14 | 1040 | 1392 | 1392 | 1392 | 0 |
+
 
 ## Which one do I call?
 
 | I have... | call | not |
 |---|---|---|
-| a field name, and want to know if its value is a credential | `secret_redaction.is_credential_field(name, MatchPolicy.X)` | a new noun list |
+| a field name AND its value, and want to know if the value is a credential | `secret_redaction.is_credential_entry(name, value, MatchPolicy.X)` | a new noun list; the name-only `is_credential_field` |
 | an object whose `__repr__` must not leak config | `secret_redaction.RedactedReprMixin` | hand-written `__repr__` |
 | free text that may contain a credential | `secret_redaction.redact_content` | a new regex |
 | a raw log line, or an extra-vars mapping | `secret_redaction.redact_text` / `.redact_mapping` | `redact_content` (it does not mask `Authorization:` headers) |

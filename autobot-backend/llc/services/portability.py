@@ -890,7 +890,7 @@ def _scrub_adapter_config(config: Dict[str, Any], secret_map: Dict[str, str]) ->
     """
     scrubbed: Dict[str, Any] = {}
     for k, v in config.items():
-        if is_credential_entry(k, v, MatchPolicy.PRECISE) and v:
+        if is_credential_entry(k, v, MatchPolicy.PRECISE, exempt_counts=True) and v:
             bound = secret_map.get(str(v)) or secret_map.get(k)
             placeholder_name = bound if bound else k.upper()
             scrubbed[k] = f"{{{{{placeholder_name}}}}}"
