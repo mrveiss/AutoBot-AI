@@ -21,6 +21,7 @@ from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 from config import get_config_section
 from llm_shared.torch_loader import lazy_torch
+from media.audio.decode import decode_audio_bytes
 from media.audio.pipeline import get_whisper_pipeline, transcribe_array
 from voice_processing.hallucination_filter import is_silence_hallucination, peak_window_rms
 
@@ -285,7 +286,9 @@ class VoiceProcessor(BaseModalProcessor):
         sampling_rate = STT_SAMPLE_RATE  # Standard sampling rate for speech models
 
         if isinstance(input_data.data, bytes):
-            audio_array = np.frombuffer(input_data.data, dtype=np.float32)
+            # #17778: these are a FILE's bytes (WAV/webm from the upload route),
+            # not raw samples; reinterpreting them as float32 transcribed noise.
+            audio_array = decode_audio_bytes(input_data.data)
         elif isinstance(input_data.data, str):
             audio_array, sampling_rate = librosa.load(input_data.data, sr=STT_SAMPLE_RATE)
         elif isinstance(input_data.data, np.ndarray):

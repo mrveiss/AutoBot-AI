@@ -83,12 +83,27 @@ def test_no_pipeline_means_empty_text(processor) -> None:
         assert processor._transcribe_with_whisper(np.zeros(4, dtype=np.float32), 16000) == ""
 
 
-def test_raw_bytes_are_read_as_float32_at_16khz(processor) -> None:
-    samples = np.linspace(-1, 1, 8, dtype=np.float32)
-    data = _audio_input(samples.tobytes())
-    audio, rate = processor._prepare_audio_data(data)
+def test_container_bytes_are_decoded_not_read_as_float32(processor) -> None:
+    """DELIBERATELY CHANGED PIN (#17778, user-visible fix).
+
+    This used to assert that upload bytes were reinterpreted as float32 at 16 kHz.
+    That was the defect: the upload route passes a WAV/webm FILE's bytes, so the old
+    behaviour transcribed the container header as noise. The rate (16000) and dtype
+    (float32) pins stand; the content is now the decoded waveform. The full decode
+    contract lives in media/audio/decode_17778_test.py.
+    """
+    import io
+    import wave
+
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(16000)
+        wav.writeframes(np.array([0, 16384, -16384, 0], dtype="<i2").tobytes())
+    audio, rate = processor._prepare_audio_data(_audio_input(buf.getvalue()))
     assert (rate, audio.dtype) == (16000, np.float32)
-    np.testing.assert_array_equal(audio, samples)
+    np.testing.assert_allclose(audio, [0.0, 0.5, -0.5, 0.0])
 
 
 def test_a_two_channel_array_is_reduced_to_mono_by_mean(processor) -> None:
