@@ -51,6 +51,9 @@ from repo_tests.model_pricing_tables_agree_15912_test import discover_pricing_ta
 #: it is the record of that decision -- an entry added without one has skipped
 #: the only step this guard is.
 _PERMITTED = {
+    # Redaction-policy fixture: credential/quantity field names with sample values,
+    # not prices (#17336).
+    "autobot_shared/secret_redaction_policy_17336_test.py::_SAMPLE",
     # The canonical table. Every derived view is a comprehension over it
     # (#15912), so this is the one place a real model price is written.
     "autobot_shared/model_pricing.py::MODEL_PRICING_PER_1M_TOKENS",
