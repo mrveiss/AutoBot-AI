@@ -35,6 +35,7 @@ from .bedrock_credentials import (
     scrub_credentials,
     validate_credential_pair,
 )
+from .message_formatting import anthropic_tool_schemas, split_system_messages
 
 logger = get_logger(__name__)
 
@@ -188,14 +189,7 @@ class BedrockProvider(BaseProvider):
 
     def _build_claude_request(self, request: LLMRequest) -> Dict[str, Any]:
         """Build request body for Claude models on Bedrock."""
-        # Separate system message from chat messages
-        system_content = ""
-        chat_messages = []
-        for msg in request.messages:
-            if msg.get("role") == "system":
-                system_content = msg.get("content", "")
-            else:
-                chat_messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
+        system_content, chat_messages = split_system_messages(request.messages)
 
         body: Dict[str, Any] = {
             "anthropic_version": "bedrock-2023-05-31",
@@ -209,9 +203,7 @@ class BedrockProvider(BaseProvider):
 
         # Tool use support for Claude
         if request.tools:
-            body["tools"] = [
-                {"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in request.tools
-            ]
+            body["tools"] = anthropic_tool_schemas(request.tools)
             if request.tool_choice:
                 body["tool_choice"] = {"type": request.tool_choice}
 

@@ -187,6 +187,11 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "One frontend tree's source, against all tracked `.vue`/`.ts`/`.js` including the other frontend.",
     ),
+    "provider-inlined-formatter-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test source under one provider directory; the test-file share of that directory drifts.",
+    ),
     "post-commit-seed-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

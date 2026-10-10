@@ -109,6 +109,7 @@ from .anthropic_request import (  # noqa: F401
     _thinking_budget_to_effort,
 )
 from .cache_utils import sorted_for_cache
+from .message_formatting import anthropic_tool_schemas, split_system_messages
 
 logger = get_logger(__name__)
 
@@ -239,17 +240,6 @@ class AnthropicProvider(BaseProvider):
         self._client = anthropic.AsyncAnthropic(api_key=api_key)
         return self._client
 
-    def _split_messages(self, messages: list) -> tuple[str, list]:
-        """Separate the optional system message from conversational messages."""
-        system_content = ""
-        chat_messages = []
-        for msg in messages:
-            if msg.get("role") == "system":
-                system_content = msg.get("content", "")
-            else:
-                chat_messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
-        return system_content, chat_messages
-
     def _apply_system_content(self, kwargs: Dict[str, Any], request: LLMRequest, system_content: str) -> None:
         """Set ``kwargs["system"]``, in place. Prompt caching (#8171, #10597):
 
@@ -270,15 +260,13 @@ class AnthropicProvider(BaseProvider):
         """Set ``kwargs["tools"]``/``["tool_choice"]`` from *request*, in place."""
         if not request.tools:
             return
-        kwargs["tools"] = [
-            {"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in request.tools
-        ]
+        kwargs["tools"] = anthropic_tool_schemas(request.tools)
         if request.tool_choice:
             kwargs["tool_choice"] = {"type": request.tool_choice}
 
     def _build_request_kwargs(self, model: str, request: LLMRequest) -> tuple[Dict[str, Any], Dict[str, Any], bool]:
         """Build kwargs and extra_headers for an Anthropic SDK call."""
-        system_content, chat_messages = self._split_messages(request.messages)
+        system_content, chat_messages = split_system_messages(request.messages)
         kwargs: Dict[str, Any] = {
             "model": model,
             "max_tokens": request.max_tokens or 4096,

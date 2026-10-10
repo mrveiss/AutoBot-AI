@@ -37,6 +37,7 @@ from llm_shared.types import ProviderType
 from ..base_provider import BaseProvider
 from .anthropic import _route_sampling_kwargs
 from .cache_utils import sorted_for_cache
+from .message_formatting import split_system_messages
 
 logger = get_logger(__name__)
 
@@ -297,16 +298,24 @@ class VertexAIProvider(BaseProvider):
     # Claude-on-Vertex completion helpers
     # ------------------------------------------------------------------
 
-    def _split_messages_for_anthropic(self, messages: list) -> tuple[str, list]:
-        """Separate system message from conversational messages."""
-        system_content = ""
-        chat_messages = []
-        for msg in messages:
-            if msg.get("role") == "system":
-                system_content = msg.get("content", "")
-            else:
-                chat_messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
-        return system_content, chat_messages
+    def _claude_request_kwargs(self, request: LLMRequest, model_name: str) -> Dict[str, Any]:
+        """Messages-API kwargs shared by the Claude-on-Vertex create and stream calls."""
+        system_content, chat_messages = split_system_messages(request.messages)
+        kwargs: Dict[str, Any] = {
+            "model": model_name,
+            "max_tokens": request.max_tokens or 4096,
+            "messages": chat_messages,
+            "temperature": request.temperature,
+        }
+        if system_content:
+            kwargs["system"] = system_content
+        api_kwargs: Dict[str, Any] = request.metadata.get("api_kwargs") or {}
+        for key, value in api_kwargs.items():
+            if key not in {"preserve_reasoning", "extra_headers", "betas"}:
+                kwargs[key] = value
+        # #15016: anthropic>=1.0 dropped temperature/top_p/top_k from
+        # messages.create()/.stream() -- route them through extra_body instead.
+        return _route_sampling_kwargs(kwargs)
 
     async def _claude_chat_completion(self, request: LLMRequest) -> LLMResponse:
         """Non-streaming Claude-on-Vertex completion via AnthropicVertex."""
@@ -314,26 +323,7 @@ class VertexAIProvider(BaseProvider):
         start = time.time()
         try:
             client = self._ensure_anthropic_vertex_client()
-            system_content, chat_messages = self._split_messages_for_anthropic(request.messages)
-
-            kwargs: Dict[str, Any] = {
-                "model": model_name,
-                "max_tokens": request.max_tokens or 4096,
-                "messages": chat_messages,
-                "temperature": request.temperature,
-            }
-            if system_content:
-                kwargs["system"] = system_content
-
-            api_kwargs: Dict[str, Any] = request.metadata.get("api_kwargs") or {}
-            for key, value in api_kwargs.items():
-                if key not in {"preserve_reasoning", "extra_headers", "betas"}:
-                    kwargs[key] = value
-            # #15016: anthropic>=1.0 dropped temperature/top_p/top_k from
-            # messages.create() -- route them through extra_body instead.
-            kwargs = _route_sampling_kwargs(kwargs)
-
-            call_kwargs = sorted_for_cache(kwargs)
+            call_kwargs = sorted_for_cache(self._claude_request_kwargs(request, model_name))
             response = await client.messages.create(**call_kwargs)
 
             content = ""
@@ -389,26 +379,7 @@ class VertexAIProvider(BaseProvider):
         """Streaming Claude-on-Vertex completion via AnthropicVertex."""
         model_name = request.model_name or self._get_setting("default_model", _DEFAULT_MODEL)
         client = self._ensure_anthropic_vertex_client()
-        system_content, chat_messages = self._split_messages_for_anthropic(request.messages)
-
-        kwargs: Dict[str, Any] = {
-            "model": model_name,
-            "max_tokens": request.max_tokens or 4096,
-            "messages": chat_messages,
-            "temperature": request.temperature,
-        }
-        if system_content:
-            kwargs["system"] = system_content
-
-        api_kwargs: Dict[str, Any] = request.metadata.get("api_kwargs") or {}
-        for key, value in api_kwargs.items():
-            if key not in {"preserve_reasoning", "extra_headers", "betas"}:
-                kwargs[key] = value
-        # #15016: anthropic>=1.0 dropped temperature/top_p/top_k from
-        # messages.stream() -- route them through extra_body instead.
-        kwargs = _route_sampling_kwargs(kwargs)
-
-        call_kwargs = sorted_for_cache(kwargs)
+        call_kwargs = sorted_for_cache(self._claude_request_kwargs(request, model_name))
         async with client.messages.stream(**call_kwargs) as stream:
             async for text in stream.text_stream:
                 yield text
