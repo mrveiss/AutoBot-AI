@@ -49,7 +49,7 @@ from user_management.services import TenantContext
 from ..services.authz import NotAuthorisedError
 from ..services.contact import ContactService
 from ..services.contact_directory import ContactDirectoryService, ContactInUseError
-from ._common import actor_id
+from ._common import actor_id, bad_request, forbidden
 
 router = APIRouter(prefix="/contacts", tags=["llc-contacts"])
 
@@ -181,9 +181,9 @@ async def merge_contacts(
             actor_user_id=actor_id(current_user),
         )
     except NotAuthorisedError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        raise forbidden(exc) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise bad_request(exc) from exc
     await session.commit()
     return ContactResponse.model_validate(survivor)
 
@@ -215,7 +215,7 @@ async def _delete_via_directory(
             detail={"message": str(exc), "company_ids": [str(c) for c in exc.company_ids]},
         ) from exc
     except NotAuthorisedError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        raise forbidden(exc) from exc
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
     await session.commit()

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""One LLC ``actor_id`` helper (#15754).
+"""One LLC ``actor_id`` and one set of error translators (#15754).
 
 ``_actor_id`` was written three times (roles, contacts, workflows) and the security
 rationale -- the acting user comes from the session, never the body -- drifted between the
@@ -25,7 +25,17 @@ from repo_tests._reach import declare
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CANONICAL = "autobot-backend/llc/api/_common.py"
-_NAMES = {"actor_id", "_actor_id"}
+_NAMES = {
+    "actor_id",
+    "_actor_id",
+    "_bad_request",
+    "_forbidden",
+    "_unavailable",
+    "bad_request",
+    "forbidden",
+    "registry_unavailable",
+}
+_TRANSLATED = {"HTTP_400_BAD_REQUEST", "HTTP_403_FORBIDDEN", "HTTP_503_SERVICE_UNAVAILABLE"}
 
 
 def _is_session_id_pick(node: ast.AST) -> bool:
@@ -45,9 +55,28 @@ def _is_uuid_call(node: ast.AST) -> bool:
     return isinstance(f, ast.Attribute) and f.attr == "UUID" and isinstance(f.value, ast.Name) and f.value.id == "uuid"
 
 
+def _inlines_translator(tree: ast.AST) -> bool:
+    """`HTTPException(status_code=status.HTTP_<400|403|503>_*, detail=str(<name>))`."""
+    for n in ast.walk(tree):
+        if not (isinstance(n, ast.Call) and getattr(n.func, "id", None) == "HTTPException"):
+            continue
+        kw = {k.arg: k.value for k in n.keywords}
+        code, detail = kw.get("status_code"), kw.get("detail")
+        if isinstance(code, ast.Attribute) and code.attr in _TRANSLATED and isinstance(detail, ast.Call):
+            if (
+                getattr(detail.func, "id", None) == "str"
+                and len(detail.args) == 1
+                and isinstance(detail.args[0], ast.Name)
+            ):
+                return True
+    return False
+
+
 def _copies_actor_id(source: str) -> bool:
-    """True when `source` defines an actor-id helper or inlines the session-id-to-UUID pick."""
+    """True when `source` defines a shared helper, inlines a translator, or inlines the session-id pick."""
     tree = ast.parse(source)
+    if _inlines_translator(tree):
+        return True
     if any(isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name in _NAMES for n in ast.walk(tree)):
         return True
     for node in ast.walk(tree):
@@ -77,6 +106,26 @@ def _copies_actor_id(source: str) -> bool:
         ),
         ("an inline pick", 'a = uuid.UUID(str(u.get("id") or u.get("user_id")))\n', True),
         ("a renamed two-step copy", 'r = u.get("id") or u.get("user_id")\nreturn uuid.UUID(str(r))\n', True),
+        (
+            "a local translator",
+            "def _forbidden(exc):\n    return HTTPException(status_code=403, detail=str(exc))\n",
+            True,
+        ),
+        (
+            "an inline 403 translation",
+            "raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc\n",
+            True,
+        ),
+        (
+            "a 404 with a fixed message",
+            'raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="x")\n',
+            False,
+        ),
+        (
+            "a 400 with a fixed message",
+            'raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="x")\n',
+            False,
+        ),
         ("a caller of the shared helper", "from ._common import actor_id\nx = actor_id(u)\n", False),
         ("a pick that is not made a UUID", 'uid = u.get("id") or u.get("user_id")\nif not uid:\n    pass\n', False),
         ("a docstring naming it", 'def f():\n    """_actor_id: uuid.UUID(str(x))"""\n', False),
@@ -118,4 +167,6 @@ def _copies() -> tuple[str, ...]:
 def test_the_canonical_helper_is_the_only_actor_id() -> None:
     assert (repo_root() / _CANONICAL).is_file()
     assert _copies_actor_id((repo_root() / _CANONICAL).read_text(encoding="utf-8")), "canonical lost its helper"
-    assert not _copies(), f"#15754: {list(_copies())} copy actor_id; import it from llc.api._common instead."
+    assert (
+        not _copies()
+    ), f"#15754: {list(_copies())} copy a shared helper (actor_id or an error translator); import it from llc.api._common instead."
