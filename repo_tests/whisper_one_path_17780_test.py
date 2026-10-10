@@ -115,7 +115,10 @@ def test_the_whisper_loader_goes_through_load_verified() -> None:
 
     Scoped to this call site on purpose -- #17804 owns the general rule.
     """
-    loader = _function(_module(_PIPELINE), "get_whisper_pipeline")
+    # #17778: the load attempt lives in `_attempt_load`, called by `get_whisper_pipeline`.
+    mod = _module(_PIPELINE)
+    assert _mentions(_function(mod, "get_whisper_pipeline"), "_attempt_load"), "the loader no longer attempts a load"
+    loader = _function(mod, "_attempt_load")
     calls = [n for n in ast.walk(loader) if isinstance(n, ast.Call)]
 
     verified = [c for c in calls if isinstance(c.func, ast.Name) and c.func.id == "load_verified"]
@@ -126,7 +129,7 @@ def test_the_whisper_loader_goes_through_load_verified() -> None:
     )
 
     pipeline_calls = [c for c in calls if isinstance(c.func, ast.Name) and c.func.id == "hf_pipeline"]
-    assert pipeline_calls, "get_whisper_pipeline no longer calls hf_pipeline; this guard's premise moved"
+    assert pipeline_calls, "_attempt_load no longer calls hf_pipeline; this guard's premise moved"
     for call in pipeline_calls:
         assert "revision" in {kw.arg for kw in call.keywords}, (
             "the pipeline factory is called without revision=, so it resolves against whatever "
@@ -186,21 +189,37 @@ def _mentions(node: ast.AST, name: str) -> bool:
     )
 
 
+def _bound_pipeline_names(tree: ast.AST) -> set[str]:
+    """Source text of every name or attribute target bound from ``get_whisper_pipeline()``.
+
+    Covers `p = ...`, `p: T = ...`, `(p := ...)` and `self._p = ...`; a call on any of
+    them is a direct invocation, whatever the binding syntax.
+    """
+    bound: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            targets, value = node.targets, node.value
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            targets, value = [node.target], node.value
+        elif isinstance(node, ast.NamedExpr):
+            targets, value = [node.target], node.value
+        else:
+            continue
+        if _mentions(value, "get_whisper_pipeline"):
+            bound.update(ast.unparse(t) for t in targets if isinstance(t, (ast.Name, ast.Attribute)))
+    return bound
+
+
 def direct_whisper_invocations(source: str) -> list[int]:
     """Line numbers where *source* runs Whisper itself instead of via the shared entry points.
 
     Three shapes: building an ASR pipeline (`pipeline("automatic-speech-recognition", ...)`),
-    `<...whisper...>.generate(...)`, and calling a name that was bound from
-    `get_whisper_pipeline()` (`pipe = get_whisper_pipeline(); pipe(...)`).
+    `<...whisper...>.generate(...)`, and calling a name or attribute that was bound from
+    `get_whisper_pipeline()` (`pipe = get_whisper_pipeline(); pipe(...)`, also annotated,
+    walrus and `self._pipe` bindings).
     """
     tree = ast.parse(source)
-    bound = {
-        target.id
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Assign) and _mentions(node.value, "get_whisper_pipeline")
-        for target in node.targets
-        if isinstance(target, ast.Name)
-    }
+    bound = _bound_pipeline_names(tree)
     hits = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -214,7 +233,8 @@ def direct_whisper_invocations(source: str) -> list[int]:
         generate = (
             isinstance(func, ast.Attribute) and func.attr == "generate" and "whisper" in ast.unparse(func).lower()
         )
-        if asr or generate or (isinstance(func, ast.Name) and func.id in bound):
+        bound_call = isinstance(func, (ast.Name, ast.Attribute)) and ast.unparse(func) in bound
+        if asr or generate or bound_call:
             hits.append(node.lineno)
     return hits
 
@@ -225,6 +245,13 @@ def test_the_detector_fires_on_each_shape_and_not_on_the_shared_entry_points() -
     assert direct_whisper_invocations("ids = self.whisper_model.generate(x)\n") == [1]
     ok = "pipe = get_whisper_pipeline()\ntranscribe_path(pipe, path)\n"
     assert direct_whisper_invocations(ok) == []
+
+
+def test_the_detector_follows_annotated_walrus_and_attribute_bindings() -> None:
+    assert direct_whisper_invocations("pipe: Any = get_whisper_pipeline()\npipe(path)\n") == [2]
+    assert direct_whisper_invocations("if (pipe := get_whisper_pipeline()):\n    pipe(path)\n") == [2]
+    assert direct_whisper_invocations("self._pipe = get_whisper_pipeline()\nself._pipe(path)\n") == [2]
+    assert direct_whisper_invocations("self._pipe = get_whisper_pipeline()\nother(path)\n") == []
 
 
 def test_only_the_shared_module_runs_whisper_directly() -> None:

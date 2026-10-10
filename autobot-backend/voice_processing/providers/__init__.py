@@ -153,8 +153,7 @@ class ProviderRegistry:
         """Try every provider for *language* in priority order (Issue #17778).
 
         The ONE fallback loop: a provider that is unavailable, raises, or returns no
-        segments hands over to the next. The result distinguishes two very different
-        "no segments" outcomes:
+        segments hands over to the next. Two very different "no segments" outcomes:
 
         * every provider RAN and found no speech -> ``ProviderTranscription(None, [])``,
           a genuine empty transcript;

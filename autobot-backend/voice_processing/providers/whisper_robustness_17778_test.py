@@ -243,3 +243,28 @@ async def test_a_provider_failure_is_logged_with_its_traceback():
     with patch.object(registry_logger, "warning") as warn:
         await registry.transcribe_with_fallback("a.wav", "en")
     assert warn.call_args.kwargs.get("exc_info") is True
+
+
+# ── a failed first load is a failure, not "no speech" ─────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_a_loader_returning_none_raises_instead_of_yielding_an_empty_transcript(short_wav):
+    from voice_processing.providers.whisper_provider import WhisperUnavailableError
+
+    with patch("voice_processing.providers.whisper_provider.get_whisper_pipeline", return_value=None):
+        with pytest.raises(WhisperUnavailableError):
+            await WhisperProvider().transcribe(str(short_wav), "en")
+
+
+@pytest.mark.asyncio
+async def test_the_registry_records_the_whisper_load_failure_as_a_reason(short_wav):
+    registry = ProviderRegistry()
+    registry.register("en", WhisperProvider(), priority=1)
+    with (
+        patch("voice_processing.providers.whisper_provider.whisper_loadable", return_value=True),
+        patch("voice_processing.providers.whisper_provider.get_whisper_pipeline", return_value=None),
+    ):
+        with pytest.raises(TranscriptionUnavailableError) as caught:
+            await registry.transcribe_with_fallback(str(short_wav), "en")
+    assert caught.value.reasons == ["Whisper (local, pinned): WhisperUnavailableError"]

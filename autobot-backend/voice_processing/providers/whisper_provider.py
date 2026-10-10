@@ -28,6 +28,10 @@ logger = get_logger(__name__)
 WHISPER_TEXT_CONFIDENCE = 0.9
 
 
+class WhisperUnavailableError(RuntimeError):
+    """The pinned Whisper pipeline could not be loaded (a failure, not "no speech")."""
+
+
 def _chunk_times(chunk: dict) -> tuple[float, float]:
     """(start, end) of a pipeline chunk; the last chunk's end may be None -> its start."""
     start, end = chunk.get("timestamp") or (0.0, None)
@@ -57,7 +61,10 @@ class WhisperProvider(SpeechProvider):
         return whisper_loadable()
 
     async def transcribe(self, audio_path: str, language: Optional[str] = None) -> List[TranscriptSegment]:
-        """Transcribe *audio_path* with real chunk timestamps; [] lets the registry fall through.
+        """Transcribe *audio_path* with real chunk timestamps; [] means the audio had no speech.
+
+        Raises :class:`WhisperUnavailableError` when the model could not be loaded, so the
+        registry records a failure instead of a genuine empty transcript.
 
         The model load and the inference both run in a worker thread, so a caller's
         ``asyncio.wait_for`` can time out instead of being stuck behind them.
@@ -68,8 +75,7 @@ class WhisperProvider(SpeechProvider):
         """Load (first use) and run Whisper with ``return_timestamps=True`` (any length)."""
         pipe = get_whisper_pipeline()
         if pipe is None:
-            logger.warning("Whisper pipeline unavailable; provider yields no segments")
-            return []
+            raise WhisperUnavailableError("Whisper pipeline could not be loaded")
         result = transcribe_path(pipe, audio_path, language=language, timestamps=True)
         if not result.text or self._is_phantom(result.text, audio_path, language):
             return []

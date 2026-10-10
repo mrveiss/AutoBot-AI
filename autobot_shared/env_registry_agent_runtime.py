@@ -578,3 +578,18 @@ register_env_var(
         component="voice",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_FFMPEG_TIMEOUT_SECONDS",
+        type=float,
+        default=300.0,
+        description=(
+            "Wall-clock cap on one ffmpeg audio extraction. On expiry the process is "
+            "killed and reaped and the request fails with a sanitized error, so a "
+            "hostile or corrupt upload cannot hang a worker forever "
+            "(media/audio/ffmpeg_service.py)."
+        ),
+        component="voice",
+    )
+)

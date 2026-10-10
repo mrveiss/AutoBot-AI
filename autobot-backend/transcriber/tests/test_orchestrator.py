@@ -29,6 +29,7 @@ from voice_processing.providers import (
     TranscriptionUnavailableError,
     TranscriptSegment,
 )
+from voice_processing.providers.whisper_provider import WhisperProvider
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -250,16 +251,17 @@ async def test_process_recording_failure_sets_error_status(db, tmp_path):
 # ── provider failure vs genuine empty (#17778) ────────────────────────────────
 
 
-async def _run_with_registry_result(db, tmp_path, *, raises=None, outcome=None):
+async def _run_with_registry_result(db, tmp_path, *, raises=None, outcome=None, registry=None):
     rid = await _make_recording(db, tmp_path)
     mock_ffmpeg = MagicMock()
     mock_ffmpeg.extract_audio = AsyncMock(return_value=None)
     mock_ffmpeg.get_audio_duration = AsyncMock(return_value=3.0)
-    registry = create_autospec(ProviderRegistry, instance=True, spec_set=True)
-    if raises is not None:
-        registry.transcribe_with_fallback.side_effect = raises
-    else:
-        registry.transcribe_with_fallback.return_value = outcome
+    if registry is None:
+        registry = create_autospec(ProviderRegistry, instance=True, spec_set=True)
+        if raises is not None:
+            registry.transcribe_with_fallback.side_effect = raises
+        else:
+            registry.transcribe_with_fallback.return_value = outcome
     orch = TranscriberOrchestrator(db=db)
     orch.ffmpeg_service = mock_ffmpeg
     orch.provider_registry = registry
@@ -283,6 +285,21 @@ async def test_no_provider_could_run_marks_the_recording_error_with_the_reason(d
     assert rec["status"] == RecordingStatus.ERROR.value
     assert rec["failure_stage"] == "TranscriptionUnavailableError"
     assert "Whisper: unavailable" in rec["failure_reason"]
+
+
+@pytest.mark.asyncio
+async def test_a_whisper_load_failure_marks_the_recording_error_not_an_empty_complete(db, tmp_path):
+    """The loader returning None is a failure (#17778), not "ran and found no speech"."""
+    registry = ProviderRegistry()
+    registry.register("en", WhisperProvider(), priority=1)
+    with (
+        patch("voice_processing.providers.whisper_provider.whisper_loadable", return_value=True),
+        patch("voice_processing.providers.whisper_provider.get_whisper_pipeline", return_value=None),
+    ):
+        rec = await _run_with_registry_result(db, tmp_path, registry=registry)
+    assert rec["status"] == RecordingStatus.ERROR.value
+    assert rec["failure_stage"] == "TranscriptionUnavailableError"
+    assert "Whisper" in rec["failure_reason"]
 
 
 @pytest.mark.asyncio

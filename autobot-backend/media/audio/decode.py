@@ -90,7 +90,7 @@ async def _transcode_then_decode(data: bytes, target_rate: int) -> np.ndarray:
         with open(out_path, "rb") as fh:
             wav_bytes = fh.read()
         return await asyncio.to_thread(decode_audio_bytes, wav_bytes, target_rate)
-    except Exception as exc:
+    except (RuntimeError, OSError, ValueError, asyncio.TimeoutError) as exc:
         logger.warning("Audio transcode failed (%s): %s", suffix, exc, exc_info=True)
         raise ValueError(UNDECODABLE_MESSAGE) from None
     finally:

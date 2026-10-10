@@ -485,16 +485,23 @@ def _whisper_sync(pipe, audio_bytes: bytes, mime: str, language: str = "") -> di
     }
 
 
-async def _transcribe_with_whisper(audio_bytes: bytes, content_type: str, language: str = "") -> dict:
-    """Run Whisper transcription in a background thread (#1030)."""
+def _load_and_transcribe(audio_bytes: bytes, content_type: str, language: str) -> dict:
+    """Load Whisper (first use) and transcribe. BLOCKING -- worker thread only (#17778)."""
     from media.audio.pipeline import get_whisper_pipeline  # noqa: PLC0415 -- see _whisper_sync
 
     pipe = get_whisper_pipeline()
     if not pipe:
         return {"text": "", "language": "unknown", "confidence": 0.0}
+    return _whisper_sync(pipe, audio_bytes, content_type, language)
 
+
+async def _transcribe_with_whisper(audio_bytes: bytes, content_type: str, language: str = "") -> dict:
+    """Run Whisper load + transcription in a background thread (#1030, #17778).
+
+    The first call downloads and loads the model, so the load must not run on the loop.
+    """
     ct = content_type.split(";")[0].strip()
-    return await asyncio.to_thread(_whisper_sync, pipe, audio_bytes, ct, language)
+    return await asyncio.to_thread(_load_and_transcribe, audio_bytes, ct, language)
 
 
 @router.post("/transcribe", response_model=VoiceTranscribeResponse)

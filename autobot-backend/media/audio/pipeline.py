@@ -39,6 +39,10 @@ logger = get_logger(__name__)
 # degrade into "unavailable" (which callers answer by falling through to a cloud).
 _whisper_pipeline: Any | None = None
 _whisper_pipeline_lock = threading.Lock()
+# #17778: serialises the actual pipeline INVOCATION. The one HF pipeline is shared by
+# the provider, VoiceProcessor and /voice/transcribe threads, and generation mutates
+# the model's generation_config, so concurrent calls would race on it.
+_whisper_inference_lock = threading.Lock()
 _whisper_retry_at = 0.0
 _whisper_integrity_error: Exception | None = None
 WHISPER_MODEL = "openai/whisper-base"
@@ -144,7 +148,6 @@ def get_whisper_pipeline() -> Any | None:
         ModelIntegrityError: the cached model does not match its pin. Remembered, so
             every later call raises too.
     """
-    global _whisper_pipeline, _whisper_retry_at, _whisper_integrity_error  # noqa: PLW0603
     if not _TRANSFORMERS_AVAILABLE:
         return None
     if _whisper_pipeline is not None:
@@ -153,33 +156,39 @@ def get_whisper_pipeline() -> Any | None:
         if _whisper_integrity_error is not None:
             raise _whisper_integrity_error
         if _whisper_pipeline is None and time.monotonic() >= _whisper_retry_at:
-            try:
-                # #17780: pinned and integrity-verified through `load_verified`, the
-                # canonical path. #17124: assigning the model before
-                # `verify_cached_model` ran left a tampered model reachable when a
-                # broad `except` swallowed `ModelIntegrityError`.
-                from autobot_shared.pinned_model_registry import ModelIntegrityError, load_verified
-
-                device_kwargs = whisper_device_kwargs()
-                (_whisper_pipeline,) = load_verified(
-                    WHISPER_MODEL,
-                    lambda revision: hf_pipeline(
-                        "automatic-speech-recognition",
-                        model=WHISPER_MODEL,
-                        revision=revision,
-                        **device_kwargs,
-                    ),
-                )
-                logger.info("Whisper pipeline loaded: %s", WHISPER_MODEL)
-            except ModelIntegrityError as exc:
-                logger.error("SECURITY: Whisper model failed its integrity check; refusing to serve: %s", exc)
-                _whisper_integrity_error = exc
-                raise
-            except Exception as exc:
-                logger.warning("Failed to load Whisper pipeline (retry in %.0fs): %s", WHISPER_LOAD_RETRY_SECONDS, exc)
-                _whisper_pipeline = None
-                _whisper_retry_at = time.monotonic() + WHISPER_LOAD_RETRY_SECONDS
+            _attempt_load()
     return _whisper_pipeline
+
+
+def _attempt_load() -> None:
+    """One load attempt; the caller holds ``_whisper_pipeline_lock``. Records failure state."""
+    global _whisper_pipeline, _whisper_retry_at, _whisper_integrity_error  # noqa: PLW0603
+    try:
+        # #17780: pinned and integrity-verified through `load_verified`, the
+        # canonical path. #17124: assigning the model before
+        # `verify_cached_model` ran left a tampered model reachable when a
+        # broad `except` swallowed `ModelIntegrityError`.
+        from autobot_shared.pinned_model_registry import ModelIntegrityError, load_verified
+
+        device_kwargs = whisper_device_kwargs()
+        (_whisper_pipeline,) = load_verified(
+            WHISPER_MODEL,
+            lambda revision: hf_pipeline(
+                "automatic-speech-recognition",
+                model=WHISPER_MODEL,
+                revision=revision,
+                **device_kwargs,
+            ),
+        )
+        logger.info("Whisper pipeline loaded: %s", WHISPER_MODEL)
+    except ModelIntegrityError as exc:
+        logger.error("SECURITY: Whisper model failed its integrity check; refusing to serve: %s", exc)
+        _whisper_integrity_error = exc
+        raise
+    except Exception as exc:
+        logger.warning("Failed to load Whisper pipeline (retry in %.0fs): %s", WHISPER_LOAD_RETRY_SECONDS, exc)
+        _whisper_pipeline = None
+        _whisper_retry_at = time.monotonic() + WHISPER_LOAD_RETRY_SECONDS
 
 
 #: Whisper's feature extractor pads/truncates to 30 s; more than 3000 mel frames
@@ -190,7 +199,9 @@ SHORT_FORM_SECONDS = 30.0
 
 def _call_pipe(pipe: Any, inputs: Any, *, timestamps: bool, generate_kwargs: dict | None) -> WhisperTranscription:
     """One pipeline call; *timestamps* selects ``return_timestamps`` (True for long-form)."""
-    return _as_transcription(pipe(inputs, return_timestamps=timestamps, generate_kwargs=generate_kwargs))
+    with _whisper_inference_lock:
+        output = pipe(inputs, return_timestamps=timestamps, generate_kwargs=generate_kwargs)
+    return _as_transcription(output)
 
 
 def transcribe_path(pipe: Any, path: str, *, language: str = "", timestamps: bool = False) -> WhisperTranscription:

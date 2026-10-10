@@ -16,11 +16,16 @@ from pathlib import Path
 from typing import Optional
 
 from autobot_shared.audio_params import STT_CHANNELS, STT_SAMPLE_RATE
+from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_constants import SecurityConstants
 
 logger = get_logger(__name__)
+
+#: Wall-clock cap on one ffmpeg extraction (#17778): a hostile or corrupt upload can
+#: otherwise keep the process, and the request waiting on it, alive forever.
+FFMPEG_TIMEOUT_SECONDS = env_float("AUTOBOT_FFMPEG_TIMEOUT_SECONDS", 300.0)
 
 # Allowed audio extensions. The "must match upload_security.py" comment this
 # replaces was an invariant nothing enforced — it is now the same object (#13512).
@@ -48,6 +53,16 @@ EXTENSION_TO_FORMAT = {
     ".avi": "avi",
     ".mov": "mov",
 }
+
+
+async def _communicate_bounded(process: asyncio.subprocess.Process) -> tuple[bytes, bytes]:
+    """``communicate()`` under :data:`FFMPEG_TIMEOUT_SECONDS`; kill and reap on timeout."""
+    try:
+        return await asyncio.wait_for(process.communicate(), timeout=FFMPEG_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        process.kill()
+        await process.wait()
+        raise RuntimeError(f"FFmpeg extraction timed out after {FFMPEG_TIMEOUT_SECONDS:.0f}s") from None
 
 
 class FFmpegService:
@@ -168,7 +183,7 @@ class FFmpegService:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await process.communicate()
+            stdout, stderr = await _communicate_bounded(process)
 
             if process.returncode != 0:
                 error_msg = stderr.decode("utf-8", errors="replace")
