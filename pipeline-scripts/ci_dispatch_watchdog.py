@@ -126,15 +126,10 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
-import socket
 import sys
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Set, Tuple
@@ -162,6 +157,14 @@ from ci_run_supersession import (  # noqa: E402
     run_is_same_repo,
     superseded_report_lines,
     superseded_stuck_runs,
+)
+from github_api import (  # noqa: E402,F401  # #15411: re-exported for the callers still importing from here
+    DEFAULT_API_ROOT,
+    NO_RESPONSE_STATUS,
+    GitHubApi,
+    WatchdogApiError,
+    WatchdogConfigError,
+    WatchdogError,
 )
 from header_safe_secret import require_header_safe  # noqa: E402  # #15204
 from release_sync_pull import release_sync_pulls  # noqa: E402
@@ -191,10 +194,7 @@ MAX_STATUS_DESCRIPTION = 140
 # Run states that mean "created but no job has started yet".
 UNSTARTED_RUN_STATUSES = frozenset({"queued", "waiting", "pending", "requested"})
 
-# Transport failure — no HTTP status was ever received.
-NO_RESPONSE_STATUS = 0
 
-DEFAULT_API_ROOT = "https://api.github.com"
 DEFAULT_BASE_BRANCH = "main"
 DEFAULT_GRACE_MINUTES = 10
 DEFAULT_STALL_MINUTES = 45
@@ -229,28 +229,9 @@ DEFAULT_MAX_JOB_LOOKUPS = 25
 DEFAULT_JOB_OVERDUE_MINUTES = 45
 # 0 means "every open PR"; a PR number narrows the sweep to that one head.
 DEFAULT_ONLY_PR = 0
-DEFAULT_REQUEST_TIMEOUT_SECONDS = 30
 # GitHub's maximum page size. Listing runs is one call whatever the size, so the
 # full page is taken and the expensive per-run job lookups are budgeted instead.
 MAX_RUNS_PER_PAGE = 100
-
-
-class WatchdogError(RuntimeError):
-    """Base for every error this module raises deliberately."""
-
-
-class WatchdogConfigError(WatchdogError):
-    """Raised when required environment configuration is absent or unusable."""
-
-
-class WatchdogApiError(WatchdogError):
-    """
-    Raised when the API answered with something unusable.
-
-    This is deliberately distinct from "the API answered and said there are no
-    runs". Conflating the two is how a single rate-limit window turns into
-    "CI never dispatched" printed against every open pull request.
-    """
 
 
 class PullHead(NamedTuple):
@@ -562,113 +543,6 @@ def classify_dispatch(
         )
 
     return ("success", _truncate(f"{len(runs)} workflow run(s) dispatched for this commit"))
-
-
-class GitHubApi:
-    """Minimal GitHub REST client — stdlib only, no extra CI dependency."""
-
-    def __init__(
-        self,
-        token: str,
-        repository: str,
-        api_root: str = DEFAULT_API_ROOT,
-        timeout: int = DEFAULT_REQUEST_TIMEOUT_SECONDS,
-    ) -> None:
-        # #15204: validated here as well as in load_config, because this is the
-        # object that hands the value to the HTTP layer. Direct construction --
-        # a test, a future caller -- must not be the path that leaks.
-        self.token = require_header_safe(token, "GITHUB_TOKEN", WatchdogConfigError)
-        self.repository = repository
-        self.api_root = api_root.rstrip("/")
-        self.timeout = timeout
-
-    def request(self, method: str, path: str, payload: Optional[Dict[str, Any]] = None) -> Tuple[int, Any]:
-        """
-        Issue a request and return ``(status_code, decoded_body)``.
-
-        A transport failure (DNS, TLS, connection reset, timeout) returns status
-        ``NO_RESPONSE_STATUS`` rather than escaping as a traceback. An uncaught
-        ``URLError`` would exit the process with code 1, which this module
-        documents as "parked runs could not be approved" — a completely
-        different condition, reported with no remediation text.
-        """
-        url = path if path.startswith("http") else f"{self.api_root}/{path.lstrip('/')}"
-        data = json.dumps(payload).encode("utf-8") if payload is not None else None
-        request = urllib.request.Request(url=url, method=method, data=data)
-        request.add_header("Authorization", f"Bearer {self.token}")
-        request.add_header("Accept", "application/vnd.github+json")
-        request.add_header("X-GitHub-Api-Version", "2022-11-28")
-        if data is not None:
-            request.add_header("Content-Type", "application/json")
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310 - fixed api host
-                body = response.read().decode("utf-8")
-                return response.status, (json.loads(body) if body else None)
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")
-            try:
-                decoded: Any = json.loads(body) if body else None
-            except json.JSONDecodeError:
-                decoded = {"message": body}
-            return exc.code, decoded
-        except (urllib.error.URLError, socket.timeout, OSError) as exc:
-            return NO_RESPONSE_STATUS, {"message": f"transport failure: {exc}"}
-
-    def _list_runs(self, params: Dict[str, str], context: str) -> List[Dict[str, Any]]:
-        query = urllib.parse.urlencode(params)
-        status, body = self.request("GET", f"/repos/{self.repository}/actions/runs?{query}")
-        if status != 200 or not isinstance(body, dict):
-            raise WatchdogApiError(f"cannot list {context} (HTTP {status}): {body}")
-        return list(body.get("workflow_runs") or [])
-
-    def open_pull_requests(self, base: str) -> List[Dict[str, Any]]:
-        query = urllib.parse.urlencode({"state": "open", "base": base, "per_page": "100"})
-        status, body = self.request("GET", f"/repos/{self.repository}/pulls?{query}")
-        if status != 200 or not isinstance(body, list):
-            raise WatchdogApiError(f"cannot list open PRs (HTTP {status}): {body}")
-        return body
-
-    def runs_for_sha(self, sha: str) -> List[Dict[str, Any]]:
-        """
-        Runs attached to one head commit.
-
-        Raises rather than returning ``[]`` on an API error: an empty list is
-        interpreted downstream as "CI never dispatched", which is a specific and
-        alarming claim that must never be made on the strength of a rate-limit
-        response.
-        """
-        return self._list_runs({"head_sha": sha, "per_page": "100"}, f"runs for {sha[:12]}")
-
-    def recent_runs(self, per_page: int = 100, run_status: str = "") -> List[Dict[str, Any]]:
-        params = {"per_page": str(per_page)}
-        if run_status:
-            params["status"] = run_status
-        return self._list_runs(params, f"recent runs (status={run_status or 'any'})")
-
-    def run_jobs(self, run_id: int) -> List[Dict[str, Any]]:
-        query = urllib.parse.urlencode({"per_page": "100"})
-        status, body = self.request("GET", f"/repos/{self.repository}/actions/runs/{run_id}/jobs?{query}")
-        if status != 200 or not isinstance(body, dict):
-            raise WatchdogApiError(f"cannot list jobs for run {run_id} (HTTP {status}): {body}")
-        return list(body.get("jobs") or [])
-
-    def approve_run(self, run_id: int) -> Tuple[int, str]:
-        status, body = self.request("POST", f"/repos/{self.repository}/actions/runs/{run_id}/approve")
-        message = ""
-        if isinstance(body, dict):
-            message = str(body.get("message", ""))
-        return status, message
-
-    def set_status(self, sha: str, state: str, context: str, description: str, target_url: str) -> int:
-        payload: Dict[str, Any] = {
-            "state": state,
-            "context": context,
-            "description": description,
-        }
-        if target_url:
-            payload["target_url"] = target_url
-        status, _ = self.request("POST", f"/repos/{self.repository}/statuses/{sha}", payload)
-        return status
 
 
 def inspect_self_hosted_pool(

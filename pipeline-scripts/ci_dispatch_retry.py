@@ -62,9 +62,10 @@ from ci_dispatch_watchdog import (  # noqa: E402
 )
 from ci_red_cause import (  # noqa: E402
     INFRASTRUCTURE_CAUSES,
-    build_api,
     classify_commit,
+    request_timeout,
 )
+from github_api import build_api  # noqa: E402
 
 # Free-tier public repositories get roughly 20 concurrent jobs. Stopping a
 # little under it leaves room for the runs already on their way in, so a retry
@@ -234,7 +235,7 @@ def _sweep_limits() -> Dict[str, int]:
 
 
 def run(dry_run: bool, base_branch: str = DEFAULT_BASE_BRANCH) -> int:
-    api = build_api()
+    api = build_api(request_timeout())
     limits = _sweep_limits()
     _emit(f"ci-dispatch-retry: sweeping open PRs targeting {base_branch}")
     blocked = budget_blocked(api, limits["reserve"]) or capacity_blocked(api, limits["ceiling"])
