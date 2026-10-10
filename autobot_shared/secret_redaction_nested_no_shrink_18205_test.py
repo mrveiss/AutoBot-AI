@@ -29,7 +29,7 @@ _VALUES = {
 
 def _base_names(value_id: str) -> list:
     rows = [ln.split("\t") for ln in _BASE.read_text(encoding="utf-8").splitlines() if ln and ln[0] != "#"]
-    return [name for vid, name in rows if vid == value_id]
+    return [name for name, vids in rows if value_id in vids.split(",")]
 
 
 @pytest.mark.parametrize("value_id", list(_VALUES))
