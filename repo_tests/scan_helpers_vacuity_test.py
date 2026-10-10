@@ -69,7 +69,17 @@ _BOTH_MODES = (
 
 #: Checkers on the shared ``run_check`` harness (#14896): a vacuous scan exits 2,
 #: distinct from the 1 that means findings. The others still exit 1.
-_HARNESS_CHECKERS = frozenset({"check_no_kb_aioredis_access.py", "check_no_utcnow_isoformat.py"})
+_HARNESS_CHECKERS = frozenset(
+    {
+        "check_no_kb_aioredis_access.py",
+        "check_no_utcnow_isoformat.py",
+        "check_no_live_install_sys_path_default.py",
+        "check_no_hardcoded_ip_fallbacks.py",
+        "check_no_llm_response_dict_access.py",
+        "check_no_src_mock_path.py",
+        "check_no_local_schemas.py",
+    }
+)
 
 #: A file every checker in :data:`_BOTH_MODES` must rule clean, so the argv
 #: assertion measures the floor and not some unrelated finding.
@@ -235,7 +245,7 @@ def test_the_getenv_drift_checker_refuses_a_lost_sweep(thin_repo: Path, tmp_path
 
     result = _run(repo, "check_getenv_ssot_drift.py")
 
-    assert result.returncode == 1, result.stdout + result.stderr
+    assert result.returncode == 2, result.stdout + result.stderr
     assert _REFUSAL in result.stderr
 
 
@@ -252,7 +262,7 @@ def test_the_field_defaults_checker_refuses_a_sweep_that_matched_nothing(tmp_pat
 
     result = _run(repo, "check_field_defaults.py")
 
-    assert result.returncode == 1, result.stdout + result.stderr
+    assert result.returncode == 2, result.stdout + result.stderr
     assert _REFUSAL in result.stderr
 
 
@@ -288,15 +298,49 @@ def test_the_ansible_reference_checker_refuses_when_nothing_resolved(tmp_path: P
 
 # --- checkers on the shared run_check harness (#14896) -----------------------
 
-#: ``(checker, source that violates it, finding id the output must carry)``.
+#: ``(checker, source that violates it, finding text the output must carry, path to plant it at)``.
+#: Banned literals are assembled from fragments so this file does not trip the
+#: hooks it exercises.
 _PLANTED = (
-    ("check_no_kb_aioredis_access.py", "x = kb." + "_aioredis_client\n", "kb-private-aioredis-client"),
+    ("check_no_kb_aioredis_access.py", "x = kb." + "_aioredis_client\n", "kb-private-aioredis-client", "planted.py"),
     (
         "check_no_utcnow_isoformat.py",
         "from datetime import datetime\nts = datetime." + "utcnow().isoformat()\n",
         "isoformat",
+        "planted.py",
+    ),
+    (
+        "check_no_live_install_sys_path_default.py",
+        "import os, sys\nsys.path.insert(0, os.environ.get('X', '/opt/" + "autobot/code'))\n",
+        "defaults to the live deployed install",
+        "planted.py",
+    ),
+    (
+        "check_no_hardcoded_ip_fallbacks.py",
+        "import os\nh = os.getenv('H', '172.16." + "168.5')\n",
+        "hardcoded fallback",
+        "planted.py",
+    ),
+    (
+        "check_no_llm_response_dict_access.py",
+        "from m import LLMResponse\n\n\nasync def f(s):\n    r = await s.chat(1)\n    return r.get('content')\n",
+        "LLMResponse is a Pydantic model",
+        "planted.py",
+    ),
+    (
+        "check_no_src_mock_path.py",
+        "from unittest.mock import patch\n\npatch('sr" + "c.foo.bar')\n",
+        "has no `src/` package",
+        "planted_test.py",
+    ),
+    (
+        "check_no_local_schemas.py",
+        "from pydantic import BaseModel\n\n\nclass Foo(BaseModel):\n    x: int\n",
+        "Local BaseModel subclass",
+        "autobot-backend/api/planted.py",
     ),
 )
+_PLANTED_CHECKERS = [row[0] for row in _PLANTED]
 
 
 def _run_isolated(repo: Path, checker: str, *args: str) -> subprocess.CompletedProcess:
@@ -311,20 +355,24 @@ def _run_isolated(repo: Path, checker: str, *args: str) -> subprocess.CompletedP
     )
 
 
-@pytest.mark.parametrize(("checker", "source", "finding_id"), _PLANTED)
-def test_a_planted_violation_still_exits_one(thin_repo: Path, checker: str, source: str, finding_id: str) -> None:
-    (thin_repo / "planted.py").write_text(source, encoding="utf-8")
+@pytest.mark.parametrize(("checker", "source", "finding", "rel"), _PLANTED)
+def test_a_planted_violation_still_exits_one(
+    thin_repo: Path, checker: str, source: str, finding: str, rel: str
+) -> None:
+    planted = thin_repo / rel
+    planted.parent.mkdir(parents=True, exist_ok=True)
+    planted.write_text(source, encoding="utf-8")
     try:
-        result = _run(thin_repo, checker, "planted.py")
+        result = _run(thin_repo, checker, rel)
     finally:
-        (thin_repo / "planted.py").unlink()
+        planted.unlink()
 
     assert result.returncode == 1, result.stdout + result.stderr
-    assert "planted.py:" in result.stderr and finding_id in result.stderr
+    assert f"{rel}:" in result.stderr and finding in result.stderr
 
 
-@pytest.mark.parametrize(("checker", "_source", "_finding_id"), _PLANTED)
-def test_a_non_git_root_exits_two(tmp_path: Path, checker: str, _source: str, _finding_id: str) -> None:
+@pytest.mark.parametrize("checker", _PLANTED_CHECKERS)
+def test_a_non_git_root_exits_two(tmp_path: Path, checker: str) -> None:
     """Copied beside no repository, the checker has no root to scan: not a clean pass."""
     _seed(tmp_path)
 
@@ -334,10 +382,8 @@ def test_a_non_git_root_exits_two(tmp_path: Path, checker: str, _source: str, _f
     assert "cannot anchor the scan" in result.stderr
 
 
-@pytest.mark.parametrize(("checker", "_source", "_finding_id"), _PLANTED)
-def test_a_full_repo_sweep_that_enumerates_nothing_exits_two(
-    tmp_path: Path, checker: str, _source: str, _finding_id: str
-) -> None:
+@pytest.mark.parametrize("checker", _PLANTED_CHECKERS)
+def test_a_full_repo_sweep_that_enumerates_nothing_exits_two(tmp_path: Path, checker: str) -> None:
     """A repository tracking no Python at all: nothing was scanned, so nothing may read clean."""
     _git(tmp_path, "init", "-q")
     _seed(tmp_path)
@@ -349,10 +395,8 @@ def test_a_full_repo_sweep_that_enumerates_nothing_exits_two(
     assert result.returncode == 2, result.stdout + result.stderr
 
 
-@pytest.mark.parametrize(("checker", "_source", "_finding_id"), _PLANTED)
-def test_the_checker_answers_the_same_from_a_subdirectory(
-    thin_repo: Path, checker: str, _source: str, _finding_id: str
-) -> None:
+@pytest.mark.parametrize("checker", _PLANTED_CHECKERS)
+def test_the_checker_answers_the_same_from_a_subdirectory(thin_repo: Path, checker: str) -> None:
     """The root comes from the checker's own file (``resolve_root``), never the launch directory.
 
     A full-repo run below the floor prints how many files it reached, so equal

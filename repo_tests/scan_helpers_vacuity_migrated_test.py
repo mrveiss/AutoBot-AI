@@ -1,0 +1,156 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+"""The two single-target checkers on the shared harness: exit 2 on a vacuous scan (#14896).
+
+``check_field_defaults`` and ``check_getenv_ssot_drift`` always sweep the whole
+tree -- there is no argv mode, so they cannot join the per-file parametrised set
+in ``scan_helpers_vacuity_test``. Their three properties are asserted here against
+copies of the checker run in a throwaway repository, the same way:
+
+* **AC1** the launch directory changes nothing: identical rc, stdout and stderr
+  from the repository root and from ``tools/``.
+* **AC2** a root that is not a git toplevel, a repository without ``ssot_config``
+  and a population below its floor each exit 2, never 0 and never 1.
+* **AC3** a planted violation still exits 1 -- and the identical repository
+  without it exits 0, so the 1 is the violation and not the fixture.
+"""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+from repo_tests.scan_helpers_vacuity_test import _REPO_ROOT, _git, _run_isolated, _seed
+
+from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import PY_FLOOR
+
+_CHECKERS = ("check_field_defaults.py", "check_getenv_ssot_drift.py")
+#: Assembled from fragments: the ban is on the literal, not on this fixture.
+_LIVE = "/opt/" + "autobot"
+_FIELD_CALLS = 320  # above both FIELD_CALL_FLOOR (200) and FIELD_DEFAULT_FLOOR (300)
+
+
+def _ssot_source(live_default: bool, calls: int = _FIELD_CALLS) -> str:
+    """An ``ssot_config.py`` of *calls* literal-default ``Field`` calls (default: enough to clear both floors)."""
+    rows = [f'    f{i}: str = Field(default="v{i}", alias="AUTOBOT_PLANT_{i}")' for i in range(calls)]
+    if live_default:
+        rows.append(f'    live: str = Field(default="{_LIVE}/x", alias="AUTOBOT_PLANT_LIVE")')
+    return "from pydantic import BaseModel, Field\n\n\nclass Config(BaseModel):\n" + "\n".join(rows) + "\n"
+
+
+def _getenv_sites(drift: bool) -> str:
+    """Ten comparable call sites (the floor is 8); the last one disagrees when *drift*."""
+    other = "other" if drift else "v9"
+    lines = [f'os.getenv("AUTOBOT_PLANT_{i}", "v{i}")' for i in range(9)]
+    return "import os\n\n" + "\n".join(lines) + f'\nos.getenv("AUTOBOT_PLANT_9", "{other}")\n'
+
+
+def _repo(root: Path, ssot: str | None, *, fillers: int = 0, sites: str | None = None) -> Path:
+    """A tracked throwaway repository: the seeded checkers, *ssot*, and optional bulk."""
+    root.mkdir(parents=True, exist_ok=True)
+    _git(root, "init", "-q")
+    _seed(root)
+    if ssot is not None:
+        (root / "autobot_shared" / "ssot_config.py").write_text(ssot, encoding="utf-8")
+    if sites is not None:
+        (root / "autobot-backend").mkdir()
+        (root / "autobot-backend" / "plant.py").write_text(sites, encoding="utf-8")
+    bulk = root / "bulk"
+    bulk.mkdir()
+    for i in range(fillers):
+        (bulk / f"m{i}.py").write_text("X = 1\n", encoding="utf-8")
+    _git(root, "add", "-A")
+    return root
+
+
+def _verdict_repo(root: Path, checker: str, *, planted: bool) -> Path:
+    """A repository clearing every floor, so the checker reaches a real verdict: 1 planted, 0 clean."""
+    if checker == "check_field_defaults.py":
+        return _repo(root, _ssot_source(planted))
+    return _repo(root, _ssot_source(False), fillers=PY_FLOOR, sites=_getenv_sites(planted))
+
+
+@pytest.mark.parametrize(("planted", "expected"), [(True, 1), (False, 0)])
+@pytest.mark.parametrize("checker", _CHECKERS)
+def test_the_checker_answers_the_same_from_a_subdirectory(
+    tmp_path: Path, checker: str, planted: bool, expected: int
+) -> None:
+    """AC1 on a real verdict: a root taken from the cwd would name ``tools/``, not a toplevel, and exit 2."""
+    repo = _verdict_repo(tmp_path / "r", checker, planted=planted)
+    script = repo / "tools" / "lint" / checker
+    runs = [
+        subprocess.run(  # nosec B603  # fixed argv, no shell
+            [sys.executable, str(script)],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env={**scrubbed_git_env(), "PYTHONPATH": str(_REPO_ROOT)},
+        )
+        for cwd in (repo, repo / "tools")
+    ]
+
+    assert runs[0].returncode == runs[1].returncode == expected, runs[0].stderr + runs[1].stderr
+    assert (runs[0].stdout, runs[0].stderr) == (runs[1].stdout, runs[1].stderr)
+
+
+@pytest.mark.parametrize("checker", _CHECKERS)
+def test_a_non_git_root_exits_two(tmp_path: Path, checker: str) -> None:
+    _seed(tmp_path)
+
+    result = _run_isolated(tmp_path, checker)
+
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "cannot anchor the scan" in result.stderr
+
+
+@pytest.mark.parametrize("checker", _CHECKERS)
+def test_a_repository_without_ssot_config_exits_two(tmp_path: Path, checker: str) -> None:
+    repo = _repo(tmp_path / "r", None)
+
+    result = _run_isolated(repo, checker)
+
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "ssot_config.py is not in" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("checker", "calls", "fillers", "floor_text"),
+    [
+        # field_defaults: 5 Field calls against FIELD_CALL_FLOOR (200); it has no file floor.
+        ("check_field_defaults.py", 5, 0, "floor is 200"),
+        # getenv: PY_FLOOR files and 320 field defaults both clear, zero comparable
+        # pairs against GETENV_CALL_FLOOR (8) is what is left to refuse.
+        ("check_getenv_ssot_drift.py", _FIELD_CALLS, PY_FLOOR, "floor is 8"),
+    ],
+)
+def test_a_population_below_the_checkers_own_floor_exits_two(
+    tmp_path: Path, checker: str, calls: int, fillers: int, floor_text: str
+) -> None:
+    result = _run_isolated(_repo(tmp_path / "r", _ssot_source(False, calls), fillers=fillers), checker)
+
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert floor_text in result.stderr and "FIX THE SWEEP" in result.stderr, result.stderr
+
+
+@pytest.mark.parametrize(("live_default", "expected"), [(True, 1), (False, 0)])
+def test_a_planted_live_install_field_default_exits_one(tmp_path: Path, live_default: bool, expected: int) -> None:
+    repo = _repo(tmp_path / "r", _ssot_source(live_default))
+
+    result = _run_isolated(repo, "check_field_defaults.py")
+
+    assert result.returncode == expected, result.stdout + result.stderr
+    assert ("freeze the live install path" in result.stderr) is live_default
+
+
+@pytest.mark.parametrize(("drift", "expected"), [(True, 1), (False, 0)])
+def test_a_planted_getenv_drift_exits_one(tmp_path: Path, drift: bool, expected: int) -> None:
+    repo = _repo(tmp_path / "r", _ssot_source(False), fillers=PY_FLOOR, sites=_getenv_sites(drift))
+
+    result = _run_isolated(repo, "check_getenv_ssot_drift.py")
+
+    assert result.returncode == expected, result.stdout + result.stderr
+    assert ("disagrees with ssot_config" in result.stderr) is drift
