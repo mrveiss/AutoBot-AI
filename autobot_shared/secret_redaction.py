@@ -100,10 +100,9 @@ CREDENTIAL_SUFFIXES: Tuple[str, ...] = (
     "seed",
 )
 
-# Names ending in these are locations pointing *at* a credential, not the
-# credential itself.  ``tls_key_path`` and ``service_key_file`` must stay visible
-# so an operator can tell which file was loaded.  ``_url`` is deliberately NOT
-# here — see URL_SUFFIXES.
+# Names ending in these are locations pointing *at* a credential, not the credential itself.
+# ``tls_key_path``/``service_key_file`` must stay visible so an operator can tell which file
+# was loaded.  ``_url`` is deliberately NOT here — see URL_SUFFIXES.
 LOCATION_SUFFIXES: Tuple[str, ...] = ("_path", "_file", "_dir", "_id")
 
 # Names ending in these hold a connection string.  They are redacted in-place
@@ -352,10 +351,17 @@ class RedactedReprMixin:
 # Log-line / mapping redaction (moved from security/redaction.py, #17336)
 # ---------------------------------------------------------------------------
 
-#: Stand-in used by :func:`redact_text` / :func:`redact_mapping`. Distinct from
-#: :data:`REDACTED_PLACEHOLDER` because log and extra-vars consumers (and their
-#: tests) key on this exact value.
+#: Stand-in used by :func:`redact_text` / :func:`redact_mapping`; distinct from :data:`REDACTED_PLACEHOLDER`
+#: because log and extra-vars consumers (and their tests) key on this exact value.
 LOG_MASK = "***"
+
+#: The template export's pre-#17336 exact names: ``True`` under one stays a placeholder (#18196, #17337 AC2).
+LEGACY_EXPORT_KEY_NAMES = frozenset(
+    (
+        "api_key api_secret token access_token secret password credentials private_key "
+        "client_secret auth_token bearer_token key"
+    ).split()
+)
 
 # ``Authorization: <anything>`` / ``Authorization=<anything>`` -- masks the whole
 # credential (``Bearer <jwt>``, ``Basic <b64>``, raw tokens).
@@ -394,9 +400,8 @@ def redact_mapping(mapping: Mapping[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-#: One detected credential-shaped span in free text: which rule matched, where,
-#: and how confident the rule is. Structured so a caller can quarantine or log
-#: instead of only ever getting back a mangled string with no explanation.
+#: One detected credential-shaped span in free text: which rule matched, where, and how confident
+#: the rule is -- so a caller can quarantine or log instead of only getting back a mangled string.
 @dataclass(frozen=True)
 class ContentMatch:
     pattern: str
