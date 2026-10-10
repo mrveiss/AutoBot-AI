@@ -153,9 +153,11 @@ def test_the_route_confidence_floor_for_empty_text_is_zero(monkeypatch) -> None:
     assert _post(_client()).json() == {"text": "", "language": "unknown", "confidence": 0.0}
 
 
-def test_the_route_without_a_loaded_model_reports_unknown(monkeypatch) -> None:
+def test_the_route_without_a_loaded_model_is_a_503_with_the_reason(monkeypatch) -> None:
     monkeypatch.setattr(audio_pipeline, "get_whisper_pipeline", lambda: None)
-    assert _post(_client()).json() == {"text": "", "language": "unknown", "confidence": 0.0}
+    response = _post(_client())
+    assert response.status_code == 503
+    assert "could not be loaded" in response.json()["detail"]
 
 
 def test_the_route_strips_mime_parameters_before_choosing_the_suffix(monkeypatch) -> None:
@@ -165,8 +167,10 @@ def test_the_route_strips_mime_parameters_before_choosing_the_suffix(monkeypatch
     assert asr.seen[0]["suffix"] == ".webm"
 
 
-def test_an_inference_failure_degrades_to_the_empty_shape(monkeypatch) -> None:
+def test_an_inference_failure_is_a_500_with_the_reason_not_an_empty_200(monkeypatch) -> None:
     asr = RecordingAsr()
     asr.mock.side_effect = RuntimeError("model fell over")
     monkeypatch.setattr(audio_pipeline, "get_whisper_pipeline", lambda: asr.mock)
-    assert _post(_client()).json() == {"text": "", "language": "unknown", "confidence": 0.0}
+    response = _post(_client())
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Speech transcription failed"

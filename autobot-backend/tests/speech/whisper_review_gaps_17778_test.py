@@ -30,7 +30,7 @@ class _AsrPipeline:
 
 @pytest.mark.asyncio
 async def test_the_route_loads_the_model_in_a_worker_thread(monkeypatch) -> None:
-    from api.voice import _transcribe_with_whisper
+    from api.voice import TranscriptionFailed, _transcribe_with_whisper
 
     seen = {}
 
@@ -49,9 +49,9 @@ async def test_the_route_loads_the_model_in_a_worker_thread(monkeypatch) -> None
             ticks += 1
 
     task = asyncio.create_task(ticker())
-    result = await _transcribe_with_whisper(b"x", "audio/wav", "")
+    with pytest.raises(TranscriptionFailed):
+        await _transcribe_with_whisper(b"x", "audio/wav", "")
     task.cancel()
-    assert result == {"text": "", "language": "unknown", "confidence": 0.0}
     assert seen["thread"] != threading.get_ident()
     assert ticks >= 3, "the event loop was blocked while the model loaded"
 

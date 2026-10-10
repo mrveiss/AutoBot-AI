@@ -14,7 +14,7 @@ from collections.abc import AsyncIterator
 from contextlib import aclosing
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
@@ -446,6 +446,18 @@ def _drop_silence_hallucination(text: str, detected_lang: str, requested_lang: s
     return ""
 
 
+class TranscriptionFailed(RuntimeError):
+    """Whisper could not produce a transcript; ``status_code`` and the message reach the caller.
+
+    A failure is not silence: answering 200 with ``text: ""`` made a dead model look like
+    a user who said nothing (#17778).
+    """
+
+    def __init__(self, message: str, status_code: int):
+        super().__init__(message)
+        self.status_code = status_code
+
+
 def _whisper_sync(pipe, audio_bytes: bytes, mime: str, language: str = "") -> dict:
     """Blocking Whisper inference for this route — call via asyncio.to_thread (#1030).
 
@@ -475,7 +487,7 @@ def _whisper_sync(pipe, audio_bytes: bytes, mime: str, language: str = "") -> di
         result = transcribe_bytes(pipe, audio_bytes, mime=mime, language=language)
     except Exception as exc:
         logger.warning("Whisper transcription failed: %s", exc)
-        return {"text": "", "language": "unknown", "confidence": 0.0}
+        raise TranscriptionFailed("Speech transcription failed", 500) from exc
 
     text = _drop_silence_hallucination(result.text, result.language, language)
     return {
@@ -491,7 +503,7 @@ def _load_and_transcribe(audio_bytes: bytes, content_type: str, language: str) -
 
     pipe = get_whisper_pipeline()
     if not pipe:
-        return {"text": "", "language": "unknown", "confidence": 0.0}
+        raise TranscriptionFailed("Speech recognition is unavailable: the Whisper model could not be loaded", 503)
     return _whisper_sync(pipe, audio_bytes, content_type, language)
 
 
@@ -534,7 +546,11 @@ async def voice_transcribe_api(
             content={"text": "", "error": "Empty audio file."},
         )
 
-    result = await _transcribe_with_whisper(audio_bytes, audio.content_type or "audio/webm", language)
+    try:
+        result = await _transcribe_with_whisper(audio_bytes, audio.content_type or "audio/webm", language)
+    except TranscriptionFailed as exc:
+        security_layer.audit_log("voice_transcribe", "user", "failure", {"reason": str(exc)})
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     security_layer.audit_log(
         "voice_transcribe",
         "user",
