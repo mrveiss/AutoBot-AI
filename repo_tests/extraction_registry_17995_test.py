@@ -23,17 +23,21 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.extraction_registry import (
+    DEFAULT_ROOTS,
     GUARDED,
     GUARDED_ELSEWHERE,
     REGISTRY,
+    TOOLING_ROOTS,
+    defines_top_level,
     inlines_egress_decision,
     inlines_source_root,
     inlines_wav_duration,
+    seeds_post_commit_list,
 )
 
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
-_ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
+_ROOTS = DEFAULT_ROOTS + TOOLING_ROOTS
 
 
 def _is_source_python(rel: str) -> bool:
@@ -51,8 +55,8 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "extraction-registry-sweep",
     discover=_source_population,
-    # Mid-window, from REACH.window() = (2696, 2996, 2846) at the pin.
-    floor=2846,
+    # Mid-window, from REACH.window() = (2826, 3126, 2976) at the pin.
+    floor=2976,
     what="non-test python source",
     roots=_ROOTS,
     growth=300,
@@ -69,9 +73,19 @@ def _offenders() -> list[str]:
             continue
         for entry in (e for e in REGISTRY if e.status == GUARDED):
             allowed = {entry.canonical, *(p for p, _ in entry.allowed)}
+            if not rel.startswith(tuple(r + "/" for r in entry.roots)):
+                continue
             if rel not in allowed and entry.detector(tree):
                 found.append(f"{rel}: carries its own copy of '{entry.concept}' (canonical: {entry.canonical})")
     return found
+
+
+def test_every_entrys_roots_are_swept_and_non_trivially() -> None:
+    """A concept whose roots matched few files is "did not look", not "clean"."""
+    swept = REACH.examined(repo_root())
+    for e in (e for e in REGISTRY if e.status == GUARDED):
+        n = sum(1 for rel in swept if rel.startswith(tuple(r + "/" for r in e.roots)))
+        assert n > 100, f"'{e.concept}': only {n} files fall under {e.roots}"
 
 
 def test_no_module_outside_the_canonical_site_carries_a_registered_concept() -> None:
@@ -126,7 +140,54 @@ _SOURCE_ROOT_LOOKALIKE = "async def r(sid):\n    s = await get_source(sid)\n    
         (inlines_egress_decision, "async def s():\n    v = await egress_governor.evaluate(platform='x')\n", True),
         (inlines_egress_decision, "def s():\n    return {'error': 'egress_denied'}\n", True),
         (inlines_egress_decision, "async def s():\n    v = await egress_governor.gate(platform='x')\n", False),
+        (seeds_post_commit_list, 'session.info["_post_commit_cbs"] = []\n', True),
+        (seeds_post_commit_list, "session.info[POST_COMMIT_CALLBACKS] = []\n", True),
+        (seeds_post_commit_list, 'cbs = session.info.get("_post_commit_cbs")\ncbs.append(f)\n', False),
+        (seeds_post_commit_list, '# session.info["_post_commit_cbs"] = []\nx = 1\n', False),
+        (defines_top_level("configure_logging"), "def configure_logging():\n    pass\n", True),
+        (defines_top_level("configure_logging"), "def _configure_logging():\n    pass\n", True),
+        (defines_top_level("configure_logging"), "def summarise():\n    pass\n", False),
+        (defines_top_level("repo_root"), "def outer():\n    def repo_root():\n        pass\n", False),
+        (defines_top_level("tracked_paths"), "def _tracked_paths(r):\n    return tracked_paths(r)\n", False),
+        (defines_top_level("tracked_paths"), "def _tracked_paths(r):\n    x = 1\n    return tracked_paths(r)\n", True),
     ],
 )
 def test_detector_contrast_pair(detector, source: str, expected: bool) -> None:
     assert detector(ast.parse(source)) is expected
+
+
+#: Every provider that opens a session, per service. Checking the file for ANY call would let
+#: one provider keep a hand-rolled body while another satisfies the check (#15068).
+_PROVIDERS = {
+    "autobot-backend/user_management/database.py": ("get_async_session", "db_session_context"),
+    "autobot-slm-backend/user_management/database.py": ("get_slm_session", "get_autobot_session"),
+}
+
+
+def _providers_not_using_the_scope(source: str, names: tuple[str, ...]) -> list[str]:
+    """Names of `names` that are missing or do not call `async_session_scope`."""
+    funcs = {n.name: n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.AsyncFunctionDef)}
+    bad = []
+    for name in names:
+        fn = funcs.get(name)
+        calls = fn is not None and any(
+            isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "async_session_scope"
+            for n in ast.walk(fn)
+        )
+        if not calls:
+            bad.append(name)
+    return bad
+
+
+def test_the_provider_check_names_the_one_that_does_not_use_the_scope() -> None:
+    good = "async def a():\n    async with async_session_scope(m()) as s:\n        yield s\n"
+    bad = "async def b():\n    async with m() as s:\n        yield s\n"
+    assert _providers_not_using_the_scope(good + good.replace("def a", "def c"), ("a", "c")) == []
+    assert _providers_not_using_the_scope(good + bad, ("a", "b")) == ["b"]
+    assert _providers_not_using_the_scope(good, ("a", "gone")) == ["gone"]
+
+
+@pytest.mark.parametrize("rel", sorted(_PROVIDERS))
+def test_each_service_uses_the_shared_scope(rel: str) -> None:
+    bad = _providers_not_using_the_scope((repo_root() / rel).read_text(encoding="utf-8"), _PROVIDERS[rel])
+    assert not bad, f"#15068: {rel}: {bad} no longer open their sessions through async_session_scope"

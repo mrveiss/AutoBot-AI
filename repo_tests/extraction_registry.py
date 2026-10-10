@@ -33,6 +33,9 @@ GUARDED_ELSEWHERE = "guarded-elsewhere"
 DEFERRED = "deferred"
 WAITING = "waiting"
 
+DEFAULT_ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
+TOOLING_ROOTS = ("tools/lint", "pipeline-scripts", "scripts")
+
 #: ``(tree) -> bool``: does this module define or inline the concept?
 Detector = Callable[[ast.AST], bool]
 
@@ -89,6 +92,61 @@ def inlines_egress_decision(tree: ast.AST) -> bool:
     return False
 
 
+_POST_COMMIT_KEY = "_post_commit_cbs"
+_POST_COMMIT_CONSTANT = "POST_COMMIT_CALLBACKS"
+
+
+def _is_post_commit_key(node: ast.AST) -> bool:
+    if isinstance(node, ast.Constant):
+        return node.value == _POST_COMMIT_KEY
+    return isinstance(node, ast.Name) and node.id == _POST_COMMIT_CONSTANT
+
+
+def seeds_post_commit_list(tree: ast.AST) -> bool:
+    """Assigns to ``<x>.info[<post-commit key>]``: only a transaction scope does (#15068).
+
+    A reader that appends a callback does not seed the list and is not a copy.
+    """
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        for tgt in targets:
+            if isinstance(tgt, ast.Subscript) and isinstance(tgt.value, ast.Attribute) and tgt.value.attr == "info":
+                if _is_post_commit_key(tgt.slice):
+                    return True
+    return False
+
+
+def _delegates_to(fn: ast.AST, name: str) -> bool:
+    """A thin ``return name(...)`` wrapper has one implementation behind it: not a fork."""
+    body = [st for st in fn.body if not (isinstance(st, ast.Expr) and isinstance(st.value, ast.Constant))]
+    if len(body) != 1 or not isinstance(body[0], ast.Return) or not isinstance(body[0].value, ast.Call):
+        return False
+    callee = body[0].value.func
+    return (callee.attr if isinstance(callee, ast.Attribute) else getattr(callee, "id", None)) == name
+
+
+def defines_top_level(name: str) -> Detector:
+    """Detector: a module-level ``def name`` / ``def _name`` that is not a delegating wrapper.
+
+    Keyed on NAME, not body (a body comparison was vacuous: private copies took the logger
+    from a global where the canonical one takes a parameter). Nested functions are local
+    scope and ignored; the leading underscore is stripped because the thirteenth copy of
+    ``configure_logging`` was ``_configure_logging``.
+    """
+
+    def detect(tree: ast.AST) -> bool:
+        return any(
+            isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and n.name.lstrip("_") == name
+            and not _delegates_to(n, name)
+            for n in getattr(tree, "body", [])
+        )
+
+    return detect
+
+
 @dataclass(frozen=True)
 class Extraction:
     """One extracted concept: where it lives, who may spell it, how it is held."""
@@ -103,9 +161,50 @@ class Extraction:
     allowed: tuple[tuple[str, str], ...] = ()
     guard: str = ""
     reason: str = ""
+    #: Path prefixes swept for this concept; the default is the three packages.
+    roots: tuple[str, ...] = DEFAULT_ROOTS
 
 
 REGISTRY: tuple[Extraction, ...] = (
+    Extraction(
+        "post-commit transaction scope",
+        ("#15068",),
+        "autobot_shared/db_session.py",
+        "async_session_scope",
+        GUARDED,
+        seeds_post_commit_list,
+        reason="folded in from one_session_scope_15068_test; the per-provider check stays in the registry test",
+    ),
+    Extraction(
+        "lint helper configure_logging",
+        ("#13916",),
+        "tools/lint/_scan_helpers.py",
+        "configure_logging",
+        GUARDED,
+        defines_top_level("configure_logging"),
+        roots=TOOLING_ROOTS,
+        reason="folded in from no_private_copy_of_a_shared_helper_test; canonical owned by issue-14896-lint-harness",
+    ),
+    Extraction(
+        "lint helper tracked_paths",
+        ("#13916",),
+        "tools/lint/_scan_helpers.py",
+        "tracked_paths",
+        GUARDED,
+        defines_top_level("tracked_paths"),
+        roots=TOOLING_ROOTS,
+        reason="folded in from no_private_copy_of_a_shared_helper_test; canonical owned by issue-14896-lint-harness",
+    ),
+    Extraction(
+        "lint helper logical_lines",
+        ("#13916",),
+        "tools/lint/_scan_helpers.py",
+        "logical_lines",
+        GUARDED,
+        defines_top_level("logical_lines"),
+        roots=TOOLING_ROOTS,
+        reason="folded in from no_private_copy_of_a_shared_helper_test; canonical owned by issue-14896-lint-harness",
+    ),
     Extraction(
         "source-root resolution",
         ("#2760", "#17982"),
