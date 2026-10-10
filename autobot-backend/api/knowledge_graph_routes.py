@@ -9,10 +9,11 @@ Issue #759: ECL Pipeline endpoints for entity extraction, temporal events,
 hierarchical summarization, and document processing.
 """
 
+import asyncio
 import re
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.schemas_knowledge import (
     KnowledgeGraphDocumentOverviewResponse,
@@ -26,8 +27,11 @@ from api.schemas_knowledge import (
     PipelineRunResponse,
 )
 from auth_middleware import get_current_user
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from knowledge.search_filters import extract_user_context_from_request
+from knowledge_factory import get_or_create_knowledge_base
 
 logger = get_logger(__name__)
 
@@ -42,6 +46,34 @@ _SAFE_NAME_RE = re.compile(r"^[\w .'-]{1,200}$")
 # --- Pipeline Endpoints ---
 
 
+async def _load_document_text(http_request: Request, document_id: str, current_user: dict) -> str:
+    """Return text of a KB document the caller may read (#18184).
+
+    Uses the canonical KB read (``get_fact``) and the same ownership check as
+    the knowledge access endpoints: 404 if absent or empty, 403 if the caller
+    cannot read it.
+    """
+    kb = await get_or_create_knowledge_base(http_request.app, force_refresh=False)
+    if kb is None or not getattr(kb, "ownership_manager", None):
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
+    fact = await asyncio.to_thread(kb.get_fact, document_id)
+    if not fact or not (fact.get("content") or "").strip():
+        raise HTTPException(status_code=404, detail="Document not found")
+    metadata = fact.get("metadata") or {}
+    user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
+    has_access = await kb.ownership_manager.check_access(
+        fact_id=document_id,
+        user_id=user_id,
+        fact_metadata=metadata,
+        user_org_id=user_org_id,
+        user_group_ids=user_group_ids,
+        is_admin=is_admin_role(current_user.get("role")),
+    )
+    if not has_access:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return fact["content"]
+
+
 @router.post("/pipeline/run", response_model=PipelineRunResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -50,10 +82,17 @@ _SAFE_NAME_RE = re.compile(r"^[\w .'-]{1,200}$")
 )
 async def run_pipeline(
     request: PipelineRunRequest,
+    http_request: Request,
     current_user: dict = Depends(get_current_user),
 ):
-    """Run the Extract-Cognify-Load pipeline on a document."""
+    """Run the Extract-Cognify-Load pipeline on a document's text (#18184)."""
     try:
+        try:
+            document_uuid = UUID(request.document_id)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="document_id must be a UUID")
+        text = await _load_document_text(http_request, request.document_id, current_user)
+
         from knowledge.pipeline.base import PipelineContext
         from knowledge.pipeline.config import get_default_config, load_pipeline_config
         from knowledge.pipeline.runner import PipelineRunner
@@ -65,9 +104,10 @@ async def run_pipeline(
 
         runner = PipelineRunner(config)
         context = PipelineContext()
-        context.document_id = UUID(request.document_id)
+        context.document_id = document_uuid
+        context.metadata["document_id"] = request.document_id
 
-        result = await runner.run(request.document_id, context)
+        result = await runner.run(text, context)
 
         return PipelineRunResponse(
             document_id=request.document_id,
@@ -80,6 +120,8 @@ async def run_pipeline(
             errors=result.errors,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Pipeline execution failed: %s", e)
         raise HTTPException(
