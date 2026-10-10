@@ -171,3 +171,85 @@ def test_the_route_keeps_the_behaviour_the_pipeline_does_not_have() -> None:
         "the media pipeline has acquired the voice route's hallucination filter; it had no such "
         "filter before #17780 and gaining one is a behaviour change, not a consolidation"
     )
+
+
+# ── #17778: nothing outside the shared module runs Whisper itself ─────────────
+
+_PROVIDER = "autobot-backend/voice_processing/providers/whisper_provider.py"
+_MULTIMODAL_VOICE = "autobot-backend/multimodal_processor/processors/voice.py"
+
+
+def _mentions(node: ast.AST, name: str) -> bool:
+    return any(
+        (isinstance(n, ast.Name) and n.id == name) or (isinstance(n, ast.Attribute) and n.attr == name)
+        for n in ast.walk(node)
+    )
+
+
+def direct_whisper_invocations(source: str) -> list[int]:
+    """Line numbers where *source* runs Whisper itself instead of via the shared entry points.
+
+    Three shapes: building an ASR pipeline (`pipeline("automatic-speech-recognition", ...)`),
+    `<...whisper...>.generate(...)`, and calling a name that was bound from
+    `get_whisper_pipeline()` (`pipe = get_whisper_pipeline(); pipe(...)`).
+    """
+    tree = ast.parse(source)
+    bound = {
+        target.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign) and _mentions(node.value, "get_whisper_pipeline")
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+    hits = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        asr = (
+            bool(node.args)
+            and isinstance(node.args[0], ast.Constant)
+            and node.args[0].value == ("automatic-speech-recognition")
+        )
+        generate = (
+            isinstance(func, ast.Attribute) and func.attr == "generate" and "whisper" in ast.unparse(func).lower()
+        )
+        if asr or generate or (isinstance(func, ast.Name) and func.id in bound):
+            hits.append(node.lineno)
+    return hits
+
+
+def test_the_detector_fires_on_each_shape_and_not_on_the_shared_entry_points() -> None:
+    assert direct_whisper_invocations("pipe = get_whisper_pipeline()\npipe(path)\n") == [2]
+    assert direct_whisper_invocations("p = hf_pipeline('automatic-speech-recognition', model=m)\n") == [1]
+    assert direct_whisper_invocations("ids = self.whisper_model.generate(x)\n") == [1]
+    ok = "pipe = get_whisper_pipeline()\ntranscribe_path(pipe, path)\n"
+    assert direct_whisper_invocations(ok) == []
+
+
+def test_only_the_shared_module_runs_whisper_directly() -> None:
+    root = repo_root()
+    offenders = []
+    for tree in ("autobot-backend", "autobot_shared"):
+        for path in (root / tree).rglob("*.py"):
+            rel = path.relative_to(root).as_posix()
+            if rel == _PIPELINE or rel.endswith("_test.py") or "/tests/" in rel or "/test_" in rel:
+                continue
+            try:
+                lines = direct_whisper_invocations(path.read_text(encoding="utf-8", errors="replace"))
+            except SyntaxError:
+                continue
+            offenders += [f"{rel}:{ln}" for ln in lines]
+    assert not offenders, f"Whisper is run directly outside media/audio/pipeline.py: {offenders}"
+
+
+def test_provider_and_multimodal_voice_call_the_shared_entry_points() -> None:
+    def called(rel: str) -> set[str]:
+        return {
+            n.func.id if isinstance(n.func, ast.Name) else n.func.attr
+            for n in ast.walk(_module(rel))
+            if isinstance(n, ast.Call) and isinstance(n.func, (ast.Name, ast.Attribute))
+        }
+
+    assert {"transcribe_path", "get_whisper_pipeline"} <= called(_PROVIDER)
+    assert {"transcribe_array", "get_whisper_pipeline"} <= called(_MULTIMODAL_VOICE)
