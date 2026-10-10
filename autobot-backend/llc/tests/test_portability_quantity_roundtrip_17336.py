@@ -48,9 +48,9 @@ def test_a_quantity_name_holding_a_non_number_is_still_a_placeholder() -> None:
     assert out["max_tokens"] == 4096
 
 
-@pytest.mark.parametrize("value", ["123456", "4096", True])
-def test_a_digit_string_or_bool_under_a_quantity_name_is_a_placeholder(value) -> None:
-    # A digit string is PIN-shaped and a bool is not a count: only a real int/float is exempt.
+@pytest.mark.parametrize("value", ["123456", "4096"])
+def test_a_digit_string_under_a_quantity_name_is_a_placeholder(value) -> None:
+    # A digit string is PIN-shaped: only a real int/float is exempt.
     out = _scrub_adapter_config({"password_limit": value, "max_tokens": 4096}, {})
     assert out["password_limit"] == "{{PASSWORD_LIMIT}}"
     assert out["max_tokens"] == 4096
@@ -63,3 +63,33 @@ def test_max_tokens_is_unmasked_only_via_the_export_path_and_masked_at_every_oth
     assert _scrub_adapter_config({"max_tokens": 4096}, {}) == {"max_tokens": 4096}
     assert redact_mapping({"max_tokens": 4096}) == {"max_tokens": "***"}
     assert redact_value("max_tokens", 4096) == "**********"
+
+
+def test_bool_and_none_values_survive_the_round_trip_without_a_placeholder() -> None:
+    """`verify_cert: True` exported as `{{VERIFY_CERT}}` (cert is a credential noun) and imported as a string."""
+    config = {
+        "verify_cert": True,
+        "ssl_verify": False,
+        "refresh_token": None,
+        "client_secret": None,
+        "use_key": True,
+        "api_key": "sk-live-x",  # pragma: allowlist secret
+    }
+    exported = json.loads(json.dumps(_scrub_adapter_config(config, {})))
+    assert exported["api_key"] == "{{API_KEY}}"
+    assert "{{" not in json.dumps({k: v for k, v in exported.items() if k != "api_key"})
+    warnings: list = []
+    service = PortabilityService(session=MagicMock())
+    imported = service._resolve_secrets(exported, {"API_KEY": "sk-new"}, "agent", warnings)  # pragma: allowlist secret
+    assert warnings == []
+    assert imported == {**config, "api_key": "sk-new"}  # pragma: allowlist secret
+    assert imported["verify_cert"] is True and imported["ssl_verify"] is False
+    assert imported["refresh_token"] is None and imported["client_secret"] is None
+
+
+def test_the_bool_exemption_is_export_only() -> None:
+    from autobot_shared.secret_redaction import redact_mapping, redact_value
+
+    assert _scrub_adapter_config({"verify_cert": True}, {}) == {"verify_cert": True}
+    assert redact_mapping({"verify_cert": True}) == {"verify_cert": "***"}
+    assert redact_value("verify_cert", True) == "**********"

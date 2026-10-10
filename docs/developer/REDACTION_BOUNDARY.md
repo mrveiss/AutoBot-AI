@@ -86,7 +86,7 @@ Recorded at `#17336` / `#17337` so that no site silently changed policy.
 | `redact_text` (slm `monitoring`, bedrock errors) | text regex | same regex, moved into `secret_redaction` |
 | `credential_redaction.redact_dict` | normalized substring | `BROAD` |
 | `cot_events._is_sensitive` | own 13-fragment substring | `BROAD` |
-| `portability._scrub_adapter_config` | own 12-name exact match | `PRECISE` |
+| `portability._scrub_adapter_config` | own 12-name exact match | `PRECISE` (`exempt_counts`; bool/None kept) |
 | `config_revision_service._is_secret_key` | own 5-fragment substring | `BROAD` |
 
 Every migration only **widened** the masked set. Measured per caller over
@@ -102,7 +102,12 @@ values int, float, digit string, JWT and `True`):
 | `credential_redaction.redact_dict` (`BROAD`) | 2382 | 2437 | 2437 | 2437 | 2437 | 0 |
 | `cot_events` (`BROAD`) | 1831 | 2437 | 2437 | 2437 | 2437 | 0 |
 | `config_revision_service` (`BROAD`) | 1590 | 2437 | 2437 | 2437 | 2437 | 0 |
-| `portability` export (`PRECISE`, `exempt_counts`) | 14 | 1040 | 1392 | 1392 | 1392 | 0 |
+| `portability` export (`PRECISE`, `exempt_counts`) | 14 | 1040 | 1392 | 1392 | 0 | 0 for int/str; 14 for `True` |
+
+The one deliberate removal is export-only: with `exempt_counts=True` a `bool` or `None` is
+never masked (main masked a truthy `True` under its 12 exact names, e.g. `api_key: true`
+became `{{API_KEY}}` and imported as a string; `False`/`None` were already kept). Every other
+caller's row is unchanged.
 
 
 ## Which one do I call?

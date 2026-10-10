@@ -158,7 +158,7 @@ _JWT = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop"  # pr
         ("token_count", 42, False),
         ("token_count", "42", True),  # a digit STRING is a PIN-shaped secret, not a count (#17336 gate B)
         ("token_count", 4.5, False),
-        ("token_count", True, True),
+        ("token_count", True, False),  # export mode keeps a bool; the default line below still masks it
         ("api_keys", ["sk-" + "a" * 24], True),
         ("api_keys", {"k": "v"}, True),
         ("max_tokens", 4096, False),
@@ -172,8 +172,8 @@ _JWT = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop"  # pr
         # Gate (A): a credential-looking value stays masked under every quantity-shaped name.
         ("session_token_len", _JWT, True),
         ("session_token_len", 32, False),
-        ("max_tokens", False, True),
-        ("max_tokens", None, True),
+        ("max_tokens", False, False),
+        ("max_tokens", None, False),
         ("max_tokens", [1], True),
         ("token_count", {"n": 1}, True),
         ("secret_sizes", 32, None),  # BROAD masks, PRECISE does not classify it: asserted below
@@ -197,7 +197,9 @@ def test_on_the_export_path_a_quantity_name_is_exempt_only_when_its_value_is_a_n
     is_number = isinstance(value, (int, float)) and not isinstance(value, bool)
     default = is_credential_field(name, policy) if is_number else True
     if not is_number and not is_credential_field(name, policy):
-        default = masked  # a name outside the vocabulary and the quantity shape (``secret_sizes`` PRECISE)
+        default = masked  # outside the vocabulary and the quantity shape (``secret_sizes`` PRECISE)
+    if value is None or isinstance(value, bool):  # export mode keeps it; every other caller does not
+        default = sr.is_quantity_field(name) or sr.is_credential_entry(name, 1, policy)
     assert is_credential_entry(name, value, policy) is default
 
 
@@ -303,6 +305,11 @@ def _removed(caller: str, value) -> set:
 def test_no_name_leaves_the_masked_set_at_any_caller(caller, label) -> None:
     """#17336 owner decision / #17337 AC2: REMOVED (masked on main, unmasked here) is empty."""
     removed = _removed(caller, _VALUES[label])
+    if caller == "portability export" and label == "True":
+        # Export-only: a bool cannot hold a secret and `{{API_KEY}}` where `True` was breaks the
+        # round trip. The delta is exactly the retired exact names, enumerated below.
+        assert removed == {n for n in _corpus() if n.lower() in _RETIRED_PORTABILITY}
+        return
     assert removed == set(), f"{caller} with {label} value unmasks {sorted(removed)[:20]}"
 
 
@@ -324,3 +331,23 @@ def test_the_corpus_exercises_the_rule_in_both_directions() -> None:
     names = set(_corpus())
     assert {"max_tokens", "token_count", "max_token_secret", "api_key", "tokenizers_parallelism"} <= names
     assert any(_is_quantity_shape(n) for n in names) and any(not _is_quantity_shape(n) for n in names)
+
+
+_BOOL_NONE = (True, False, None)
+
+
+@pytest.mark.parametrize("value", _BOOL_NONE)
+@pytest.mark.parametrize("policy", list(MatchPolicy))
+def test_the_export_mode_never_masks_a_bool_or_none_under_any_name(policy, value) -> None:
+    names = [n for n in _corpus() if is_credential_entry(n, 1, policy)]
+    assert names, "the corpus must exercise credential names"
+    assert not any(is_credential_entry(n, value, policy, exempt_counts=True) for n in names)
+    assert is_credential_entry("verify_cert", value, policy, exempt_counts=True) is False
+
+
+def test_a_bool_under_a_credential_noun_is_still_masked_at_the_default_callers() -> None:
+    # The export-only exemption must not leak: the default (BROAD/PRECISE) callers keep today's rule.
+    assert is_credential_entry("verify_cert", True, MatchPolicy.PRECISE) is True
+    assert is_credential_entry("verify_cert", True, MatchPolicy.BROAD) is True
+    assert redact_value("verify_cert", True) == "**********"
+    assert redact_mapping({"verify_cert": True, "api_key": None}) == {"verify_cert": "***", "api_key": "***"}
