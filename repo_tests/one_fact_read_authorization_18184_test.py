@@ -29,10 +29,6 @@ from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 _ALLOWED = {
     "autobot-backend/knowledge/search_filters.py": "the canonical helper, and the bulk search-result filter",
     "autobot-backend/knowledge/ownership.py": "defines check_access; its own bulk reader calls it",
-    "autobot-backend/api/knowledge_ownership.py": (
-        "admin-only read behind check_admin_permission, takes a bare user id with no user dict; "
-        "a remaining fork recorded on #18184"
-    ),
 }
 
 
@@ -60,8 +56,8 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "fact-read-authorization-scan",
     discover=_source_population,
-    # Mid-window, from REACH.window(): same population as post-commit-seed-scan.
-    floor=2846,
+    # Mid-window from REACH.window(): population 2997, skips 0, growth 300 -> (2697, 2997, 2847).
+    floor=2847,
     what="non-test python source",
     roots=("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     growth=300,

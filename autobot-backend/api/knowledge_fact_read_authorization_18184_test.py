@@ -60,3 +60,47 @@ async def test_an_admin_reads_any_fact():
     kb = _kb(META)
     await _call(kb, {**USER, "role": "admin"})
     assert kb.ownership_manager.check_access.await_args.kwargs["is_admin"] is True
+
+
+# --- knowledge_ownership._get_fact_with_ownership (admin-only routes, bare user id) ---
+
+
+async def _owned(fact, allowed=True, manager=True):
+    from api import knowledge_ownership as own
+
+    kb = MagicMock()
+    kb.get_fact = MagicMock(return_value=fact)
+    kb.ownership_manager = MagicMock() if manager else None
+    if manager:
+        kb.ownership_manager.check_access = AsyncMock(return_value=allowed)
+    return kb, await own._get_fact_with_ownership(kb, "f1", "admin-1")
+
+
+@pytest.mark.asyncio
+async def test_ownership_route_allowed_returns_fact_and_passes_admin_read_through():
+    fact = {"metadata": META}
+    kb, got = await _owned(fact)
+    assert got == fact
+    assert kb.ownership_manager.check_access.await_args.kwargs == {
+        "fact_id": "f1",
+        "user_id": "admin-1",
+        "fact_metadata": META,
+        "user_org_id": None,
+        "user_group_ids": [],
+        "is_admin": True,
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("fact", "allowed", "manager", "status", "detail"),
+    [
+        (None, True, True, 404, "Fact not found"),
+        ({"metadata": META}, True, False, 503, "Ownership management not available"),
+        ({"metadata": META}, False, True, 403, "You do not have access to this fact"),
+    ],
+)
+async def test_ownership_route_errors_are_unchanged(fact, allowed, manager, status, detail):
+    with pytest.raises(HTTPException) as exc:
+        await _owned(fact, allowed, manager)
+    assert (exc.value.status_code, exc.value.detail) == (status, detail)

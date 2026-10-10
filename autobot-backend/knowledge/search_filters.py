@@ -225,20 +225,35 @@ def extract_user_context_from_request(current_user) -> tuple:
     return user_id, user_org_id, user_group_ids
 
 
-async def can_read_fact(ownership_manager, fact_id: str, metadata: Dict, current_user) -> bool:
-    """Whether ``current_user`` may read a fact: the one per-fact read decision (#18184).
+async def can_read_fact(
+    ownership_manager,
+    fact_id: str,
+    metadata: Dict,
+    current_user=None,
+    *,
+    user_id: str | None = None,
+    is_admin: bool | None = None,
+) -> bool:
+    """Whether a caller may read a fact: the one per-fact read decision (#18184).
 
-    Resolves the caller's user, org, groups and admin role, then asks the ownership
-    manager. An admin reads any fact here (#16662); only explicit read APIs call this.
+    Two call shapes. With ``current_user`` the user, org, groups and admin role are
+    resolved from it (``is_admin`` may still override). With a bare ``user_id`` -- for
+    routes already behind an admin dependency, which carry no user dict -- the id and
+    ``is_admin`` pass through and the caller has no org or groups. An admin reads any
+    fact here (#16662); only explicit read APIs call this.
     """
-    user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
+    org_id, group_ids = None, []
+    if current_user is not None:
+        user_id, org_id, group_ids = extract_user_context_from_request(current_user)
+        if is_admin is None:
+            is_admin = is_admin_role(current_user.get("role"))
     return await ownership_manager.check_access(
         fact_id=fact_id,
         user_id=user_id,
         fact_metadata=metadata,
-        user_org_id=user_org_id,
-        user_group_ids=user_group_ids,
-        is_admin=is_admin_role(current_user.get("role")),
+        user_org_id=org_id,
+        user_group_ids=group_ids,
+        is_admin=bool(is_admin),
     )
 
 
