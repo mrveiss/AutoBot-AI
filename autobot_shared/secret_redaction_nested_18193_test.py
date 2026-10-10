@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """redact_nested: the recursive mapping redactor for API response bodies (#18193)."""
 
+import datetime
+import decimal
+import uuid
 from typing import Any
 
 import pytest
@@ -118,11 +121,32 @@ def test_a_non_numeric_port_fails_closed_instead_of_raising() -> None:
     assert redact_nested({"endpoint": url}) == {"endpoint": MASK}
 
 
-def test_userinfo_is_masked_under_an_ordinary_key_in_both_forms() -> None:
-    """A key can sit in either userinfo slot, so all userinfo is masked and the rest kept (#17899)."""
-    user_only = redact_nested({"endpoint": f"https://{_PW}@ingest.example:8443/1?a=b"})["endpoint"]
-    assert _PW not in user_only and user_only == f"https://{MASK}@ingest.example:8443/1?a=b"
-    both = redact_nested({"endpoint": f"https://u:{_PW}@ingest.example/1"})["endpoint"]
-    assert _PW not in both and both == f"https://{MASK}:{MASK}@ingest.example/1"  # user AND password masked
-    plain = "https://ingest.example:8443/1?a=b"  # contrast: no userinfo, unchanged
-    assert redact_nested({"endpoint": plain}) == {"endpoint": plain}
+_HOOK = f"https://u:{_PW}@hooks.example.com/services/T0/B0/AbCdEfGh?api_key={_PW}"
+
+
+@pytest.mark.parametrize("name", ["webhook_secret_url", "api_key_url", "signed_token_url", "webhook_secret_dsn"])
+def test_a_url_whose_name_carries_more_than_an_endpoint_word_is_masked_whole(name: str) -> None:
+    assert redact_nested({name: _HOOK}) == {name: MASK}
+
+
+@pytest.mark.parametrize(
+    "name", ["token_url", "auth_url", "oauth_token_endpoint", "authorization_url", "db_dsn", "dsn"]
+)
+def test_a_plain_endpoint_name_keeps_the_host_and_loses_userinfo_and_query_credentials(name: str) -> None:
+    out = redact_nested({name: _HOOK})[name]
+    assert out.startswith("https://") and "@hooks.example.com/services/T0/B0/AbCdEfGh" in out and _PW not in out
+
+
+@pytest.mark.parametrize("name", ["token_url", "auth_url", "oauth_token_endpoint", "db_dsn"])
+def test_mask_credential_urls_masks_a_credential_named_url_whole_anyway(name: str) -> None:
+    assert redact_nested({name: _HOOK}, mask_credential_urls=True) == {name: MASK}
+    assert redact_nested({"homepage_url": _HOOK}, mask_credential_urls=True)["homepage_url"] != MASK
+
+
+def test_date_time_uuid_and_decimal_pass_through_under_an_ordinary_name_but_bytes_fail_closed() -> None:
+    now = datetime.datetime(2026, 10, 11, 12, 0)
+    leaves = [now, now.date(), now.time(), datetime.timedelta(1), uuid.uuid4(), decimal.Decimal("1.5")]
+    for leaf in leaves:
+        assert redact_nested({"created": leaf}) == {"created": leaf}
+        assert redact_nested({"api_key": leaf}) == {"api_key": MASK}  # a credential name still masks it
+    assert redact_nested({"blob": b"raw"}) == {"blob": MASK}

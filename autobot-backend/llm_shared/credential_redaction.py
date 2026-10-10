@@ -101,7 +101,9 @@ def redact_dict(data: Dict[str, Any]) -> Dict[str, Any]:
 
     A credential value is masked with the canonical fixed-width placeholder, never a fragment of it.
     """
-    return redact_nested(data, MatchPolicy.BROAD, exempt_counts=False, extra_scan=redact_string)
+    return redact_nested(
+        data, MatchPolicy.BROAD, exempt_counts=False, extra_scan=redact_string, mask_credential_urls=True
+    )
 
 
 def safe_repr(obj: Any, max_depth: int = 3) -> str:

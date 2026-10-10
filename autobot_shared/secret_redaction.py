@@ -47,8 +47,11 @@ the problem, and add a new detector there rather than starting another (#16688).
 
 from __future__ import annotations
 
+import datetime as dt
+import decimal
 import math
 import re
+import uuid
 from dataclasses import dataclass
 from typing import Any, Callable, ClassVar, Dict, FrozenSet, Iterable, Mapping, Optional, Tuple
 from urllib.parse import quote, unquote_plus, urlsplit, urlunsplit
@@ -63,6 +66,7 @@ from autobot_shared.secret_redaction_vocabulary import (
     QUANTITY_SUFFIXES,
     WHOLE_TOKEN_NOUNS,
     MatchPolicy,
+    is_endpoint_name,
     is_quantity_field,
     matches_vocabulary,
 )
@@ -332,7 +336,8 @@ def redact_mapping(mapping: Mapping[str, Any]) -> Dict[str, Any]:
     return {k: (LOG_MASK if is_credential_entry(k, v, MatchPolicy.BROAD) else v) for k, v in mapping.items()}
 
 
-_SCALARS = (bool, int, float)
+# Leaf types that pass through under an ordinary name; anything else (``bytes`` included) fails closed.
+_SCALARS = (bool, int, float, dt.datetime, dt.date, dt.time, dt.timedelta, uuid.UUID, decimal.Decimal)
 
 
 @dataclass(frozen=True)
@@ -342,14 +347,15 @@ class _NestedOptions:
     policy: MatchPolicy
     exempt_counts: bool
     extra_scan: Optional[Callable[[str], str]]
+    mask_credential_urls: bool = False
 
 
 def _redact_string_leaf(name: str, value: str, opts: _NestedOptions) -> str:
     """A non-empty string leaf of :func:`redact_nested`: URL scrub, credential mask, or content scan."""
     cred = is_credential_entry(name, value, opts.policy, exempt_counts=opts.exempt_counts)
     url = "://" in value and not any(c.isspace() for c in value)
-    if cred and not (url and is_url_field(name)):
-        return REDACTED_PLACEHOLDER  # a URL-shaped value under a credential name (webhook secret) is masked whole
+    if cred and (not url or opts.mask_credential_urls or not is_endpoint_name(name, opts.policy)):
+        return REDACTED_PLACEHOLDER  # a URL under a credential name that is not an endpoint is masked whole
     if url:
         out = redact_url_credentials(redact_url_userinfo(value, mask_username=cred), opts.policy)
     else:
@@ -385,6 +391,7 @@ def redact_nested(
     *,
     exempt_counts: bool = True,
     extra_scan: Optional[Callable[[str], str]] = None,
+    mask_credential_urls: bool = False,
 ) -> Any:
     """Copy of ``value`` with credentials masked at any depth: THE recursive mapping redactor (#18193, #18205).
 
@@ -394,16 +401,20 @@ def redact_nested(
     except under a URL-shaped name (``db_url``), where a URL keeps its host and loses userinfo and
     credential query params.  A URL string under any other name is scrubbed the same way; other strings go
     through :func:`redact_content`, so ``sk-...``, JWTs and inline ``user:pass@`` are masked and ordinary
-    text is byte-identical.  Keys, order, bool and numbers are unchanged; an unknown non-scalar type fails
-    closed.  List items inherit their parent's name.  ``BROAD`` (also for query params): a response is read
-    by any caller, so over-masking costs a field and a leak costs a secret.
+    text is byte-identical.  Keys, order, bool, numbers, date/time values, ``UUID`` and ``Decimal`` are
+    unchanged; any other type (``bytes``) fails closed.
+    List items inherit their parent's name.  ``BROAD`` (also for query params): a
+    response is read by any caller, so over-masking costs a field and a leak costs a secret.
 
     ``exempt_counts=True`` (default) keeps ``max_tokens=4096`` a number: GET /config and /current returned
     it before, so no existing caller's masked set shrinks.  A caller that always masked counts passes
     ``False`` (``credential_redaction.redact_dict``).  ``extra_scan`` runs over every string left
     unmasked, for a caller with its own content patterns on top of :func:`redact_content`.
+    ``mask_credential_urls=True`` masks EVERY credential-named string whole, a URL included
+    (``credential_redaction.redact_dict``, whose masked set never shrinks); by default a URL under an
+    endpoint-shaped name (``token_url``, ``auth_url``, ``oauth_token_endpoint``) keeps its host.
     """
-    return _walk_nested(value, name, _NestedOptions(policy, exempt_counts, extra_scan))
+    return _walk_nested(value, name, _NestedOptions(policy, exempt_counts, extra_scan, mask_credential_urls))
 
 
 # ---------------------------------------------------------------------------

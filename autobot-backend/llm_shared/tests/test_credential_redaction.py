@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER, MatchPolicy, is_credential_entry, redact_nested
+from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER, redact_nested
 from llm_shared.credential_redaction import (
     SENSITIVE_KEYS,
     redact_api_key,
@@ -258,32 +258,37 @@ def test_redact_nested_count_rule_is_an_explicit_keyword() -> None:
     assert redact_nested({"api_key": plain}, extra_scan=str.upper) == {"api_key": REDACTED_PLACEHOLDER}
 
 
-def _main_redact_dict(data):
-    """FROZEN copy of origin/main's name-keyed branch of ``redact_dict`` (before #18205): the 'before' half.
-
-    The content-scan branch is pinned separately above, so this half measures which NAMES are masked.
-    """
-
-    def _api(value: str) -> str:
-        return "***" if not value or len(value) < 8 else f"{value[:4]}...{value[-4:]}"
-
-    out = {}
-    for key, value in data.items():
-        if is_credential_entry(key, value, MatchPolicy.BROAD):
-            out[key] = _api(value) if isinstance(value, str) else "***"
-        elif isinstance(value, dict):
-            out[key] = _main_redact_dict(value)
-        else:
-            out[key] = value
-    return out
+@pytest.mark.parametrize("name", ["webhook_secret_url", "api_key_url", "token_url", "auth_url", "oauth_token_endpoint"])
+def test_redact_dict_masks_every_credential_named_url_whole_where_redact_nested_scrubs_an_endpoint(name) -> None:
+    """The no-shrink layer: base masked these whole, so the URL (a webhook path IS the secret) never comes back."""
+    url = "https://hooks.example.com/services/T0/B0/AbCdEfGh"
+    assert redact_dict({name: url}) == {name: REDACTED_PLACEHOLDER}
+    assert redact_nested({"token_url": url}) == {"token_url": url}
 
 
-@pytest.mark.parametrize("value", [1, 4.5, "4821", _JWT, True, _SECRET], ids=lambda v: type(v).__name__)
+_BASE_MASKED = Path(__file__).with_name("redact_dict_base_masked_names_f0c9745f32.txt")
+_HOOK_URL = "https://hooks.example.com/services/T0/B0/AbCdEfGh"  # a webhook whose path IS the secret
+_ENDPOINT_URL = "https://auth.example.com/oauth/token"
+
+
+def _base_masked_names() -> list:
+    """Names base (f0c9745f32, before #18205) masked: pinned DATA, so vocabulary drift cannot move the 'before'."""
+    lines = _BASE_MASKED.read_text(encoding="utf-8").splitlines()
+    return [ln for ln in lines if ln and not ln.startswith("#")]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [1, 4.5, "4821", _JWT, True, _SECRET, _HOOK_URL, _ENDPOINT_URL],
+    ids=lambda v: type(v).__name__ + str(v)[:12],
+)
 def test_no_name_leaves_redact_dicts_masked_set(value) -> None:
     """#17336 per-caller method, end to end: masked on main (value changed) and unmasked now is empty."""
     names = _CORPUS.read_text(encoding="utf-8").split()
     assert len(names) > 3000
-    gone = [n for n in names if _main_redact_dict({n: value})[n] != value and redact_dict({n: value})[n] == value]
+    base_masked = _base_masked_names()
+    assert len(base_masked) > 2000 and set(base_masked) <= set(names)
+    gone = [n for n in base_masked if redact_dict({n: value})[n] == value]
     assert gone == [], gone[:20]
     leaked = [
         n

@@ -85,6 +85,17 @@ returns the same placeholder, so no `llm_shared` path reveals any part of a key.
 changed: tuples and sets are now walked (the old walk skipped them), and `None`/`""` under a credential name
 is returned as-is (nothing to hide) instead of `***`.
 
+**Behaviour that changed in `redact_nested` / `redact_dict` (#18205).**
+- A URL under a credential name is masked whole by `redact_dict` (`mask_credential_urls=True`, so its masked set
+  never shrinks against base: `webhook_secret_url`, `token_url`, `auth_url` all `**********`). `redact_nested`'s
+  default masks whole too, except under a plain endpoint name (`token_url`, `auth_url`, `oauth_token_endpoint`,
+  `authorization_url`, `db_dsn`): every name part is one of `ENDPOINT_NAME_WORDS`, so the URL keeps its host and
+  loses userinfo and credential query params. `webhook_secret_url`, `api_key_url` and `signed_token_url` are
+  masked whole.
+- Leaves of type `datetime`, `date`, `time`, `timedelta`, `UUID` and `Decimal` pass through under an ordinary
+  name (replay snapshots carry them; base passed them). Under a credential name they are masked. Any other
+  type, `bytes` included, still fails closed.
+
 **Whole-token nouns (#18194).** `pin` and `passcode` are credentials too, but `pin` is also a verb and
 a prefix (`pin_memory`, `pinned_revision`, `spinner`, `opinion`), so they are not suffix or substring
 nouns. `secret_redaction_vocabulary.WHOLE_TOKEN_NOUNS` is consulted by BOTH policies: the name is split

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import re
 from enum import Enum
-from typing import Tuple
+from typing import FrozenSet, Tuple
 
 # A field is credential-shaped when its name equals one of these nouns or ends
 # with ``_<noun>``.  Suffix matching avoids false positives on names that merely
@@ -177,3 +177,23 @@ def matches_vocabulary(name: str, policy: MatchPolicy) -> bool:
         return True
     return any(lowered == suffix or lowered.endswith(f"_{suffix}") for suffix in CREDENTIAL_SUFFIXES)
 
+
+# Name parts of a URL field that merely say WHERE a credential is obtained (``token_url``, ``auth_url``,
+# ``oauth_token_endpoint``, ``authorization_url``): such a URL is an address and keeps its host.
+# Any other part (``webhook_secret_url``, ``api_key_url``, ``signed_token_url``) makes the URL the secret.
+ENDPOINT_NAME_WORDS: FrozenSet[str] = frozenset(
+    {"token", "auth", "oauth", "oauth2", "authorization", "authorize", "access", "refresh", "login", "openid"}
+)
+_ENDPOINT_NAME_SUFFIXES: Tuple[str, ...] = ("_url", "_uri", "_dsn", "_endpoint")
+
+
+def is_endpoint_name(name: str, policy: MatchPolicy) -> bool:
+    """True when a credential-named URL field only names an endpoint, so its URL is scrubbed, not masked whole."""
+    lowered = name.lower().replace("-", "_")
+    suffix = next((s for s in _ENDPOINT_NAME_SUFFIXES if lowered.endswith(s)), None)
+    if suffix is None:
+        return lowered in ("url", "uri", "dsn")
+    stem = name[: -len(suffix)]
+    if not matches_vocabulary(stem, policy):
+        return True  # the credential match came from the suffix alone (``db_dsn``)
+    return all(token in ENDPOINT_NAME_WORDS for token in name_tokens(stem))
