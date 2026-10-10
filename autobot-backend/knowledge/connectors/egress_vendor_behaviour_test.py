@@ -31,6 +31,8 @@ _FORBIDDEN_BASES = [
     "http://169.254.169.254/latest",  # cloud metadata
     "http://127.0.0.1:8080",  # loopback
     "http://10.0.0.5/api",  # RFC-1918, and the opt-in is off
+    "http://[::1]/",  # IPv6 loopback
+    "http://[::ffff:169.254.169.254]/",  # v4-mapped cloud metadata
 ]
 
 
