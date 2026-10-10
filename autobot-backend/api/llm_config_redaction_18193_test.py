@@ -4,11 +4,11 @@
 
 import copy
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from api import llm as llm_api
-from auth_middleware import get_current_user
+from auth_middleware import check_admin_permission, get_current_user
 from config import unified_config_manager
 
 _PW = "SENTINEL-PW"  # f-string below: no literal user:pass@ in the source
@@ -38,7 +38,18 @@ _BACKEND_LLM = {
 }
 
 
-def _client(monkeypatch, tree) -> TestClient:
+def _admin_gate(role: str):
+    """Stand-in for check_admin_permission (the suite stubs auth_middleware, #14982): 403 unless admin."""
+
+    def gate() -> bool:
+        if role != "admin":
+            raise HTTPException(status_code=403, detail="Admin permission required")
+        return True
+
+    return gate
+
+
+def _client(monkeypatch, tree, role: str = "admin") -> TestClient:
     def fake_get_nested(path, default=None):
         node = {"backend": {"llm": copy.deepcopy(tree)}}
         for key in path.split("."):
@@ -50,7 +61,8 @@ def _client(monkeypatch, tree) -> TestClient:
     monkeypatch.setattr(unified_config_manager, "get_nested", fake_get_nested)
     app = FastAPI()
     app.include_router(llm_api.router, prefix="/api/llm")
-    app.dependency_overrides[get_current_user] = lambda: {"username": "plain-user"}
+    app.dependency_overrides[get_current_user] = lambda: {"username": f"{role}-user", "role": role}
+    app.dependency_overrides[check_admin_permission] = _admin_gate(role)
     return TestClient(app)
 
 
@@ -88,3 +100,16 @@ def test_current_response_is_redacted_too_and_keeps_its_controls(monkeypatch) ->
     body = r.json()
     assert body["config"]["ollama"]["selected_model"] == _MODEL
     assert body["config"]["unified"]["cloud"]["providers"]["openai"]["model"] == "gpt-x"
+
+
+def test_config_is_admin_only(monkeypatch) -> None:
+    client = _client(monkeypatch, _BACKEND_LLM, role="user")
+    r = client.get("/api/llm/config")
+    assert r.status_code == 403, r.text
+    assert "SENTINEL" not in r.text and _MODEL not in r.text
+
+
+def test_an_admin_gets_the_redacted_body(monkeypatch) -> None:
+    r = _client(monkeypatch, _BACKEND_LLM, role="admin").get("/api/llm/config")
+    assert r.status_code == 200 and "SENTINEL" not in r.text
+    assert r.json()["ollama"]["selected_model"] == _MODEL

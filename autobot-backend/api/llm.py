@@ -69,11 +69,11 @@ TEXT_MODEL_SIZE_INDICATORS = {"small", "large", "medium"}
     error_code_prefix="LLM",
 )
 async def get_llm_config(
-    current_user: dict = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """Get current LLM configuration.
 
-    Issue #744: authenticated user. Issue #18193: nested credentials are redacted."""
+    Issue #18193: admin-only, and nested credentials are redacted (defence in depth)."""
     try:
         return redact_nested(ConfigService.get_llm_config())
     except Exception as e:
