@@ -117,3 +117,13 @@ def test_can_write_fact_is_the_owner_or_an_admin_for_dict_and_orm_users():
         assert not can_write_fact({}, user)
     for user in ({"user_id": "root", "role": "admin"}, _OrmUser("root", "admin")):
         assert can_write_fact({"owner_id": "bob"}, user) and can_write_fact({}, user)
+
+
+def test_an_int_owner_id_is_writable_by_an_admin_only():
+    """An ORM caller's id is stringified, so a stored int owner id never equals it: only an admin writes (#18184)."""
+    from knowledge.search_filters import can_write_fact
+
+    fact = {"owner_id": 7}
+    assert not can_write_fact(fact, _OrmUser(7, "user"))
+    assert can_write_fact(fact, _OrmUser(7, "admin"))
+    assert can_write_fact(fact, {"user_id": "root", "role": "admin"})

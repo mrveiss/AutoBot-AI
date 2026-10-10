@@ -33,7 +33,12 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from knowledge.ownership import VisibilityLevel
-from knowledge.search_filters import can_read_fact, extract_user_context_from_request
+from knowledge.search_filters import (
+    can_read_fact,
+    extract_user_context_from_request,
+    fact_not_found,
+    object_metadata,
+)
 from knowledge_factory import get_or_create_knowledge_base
 
 logger = get_logger(__name__)
@@ -142,10 +147,14 @@ async def _fetch_fact_metadata(fact_id: str, redis) -> Dict:
     """Fetch and decode a fact's metadata hash from Redis. Ref: #1088."""
     fact_data = await redis.hget(f"fact:{fact_id}", "metadata")
     if not fact_data:
-        raise HTTPException(status_code=404, detail="Fact not found")
+        raise fact_not_found()
     if isinstance(fact_data, bytes):
         fact_data = fact_data.decode("utf-8")
-    return json.loads(fact_data)
+    try:
+        parsed = json.loads(fact_data)
+    except ValueError:  # malformed JSON is unreadable metadata, not a server error (#18220)
+        parsed = fact_data
+    return object_metadata(fact_id, parsed)
 
 
 def _build_access_response(fact_id: str, metadata: Dict, user_id: str) -> Dict:
@@ -556,7 +565,7 @@ async def get_knowledge_access_info(fact_id: str, request: Request, current_user
 
         has_access = await can_read_fact(kb.ownership_manager, fact_id, metadata, current_user)  # #16662, #18184
         if not has_access:
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise fact_not_found()  # #18220: a non-reader cannot tell this from a missing fact
 
         return _build_access_response(fact_id, metadata, user_id)
 

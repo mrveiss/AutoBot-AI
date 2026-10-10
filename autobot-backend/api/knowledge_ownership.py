@@ -26,7 +26,7 @@ from api.schemas_knowledge import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from knowledge.search_filters import can_read_fact
+from knowledge.search_filters import can_read_fact, fact_not_found, object_metadata
 from knowledge_factory import get_or_create_knowledge_base
 
 logger = get_logger(__name__)
@@ -62,26 +62,23 @@ async def _get_fact_with_ownership(kb, fact_id: str, user_id: str):
         Fact dict if accessible
 
     Raises:
-        HTTPException: 404 if not found, 403 if no access
+        HTTPException: 404 if not found or not readable (#18220)
     """
     fact = await asyncio.to_thread(kb.get_fact, fact_id)  # #16670: get_fact is synchronous
     if not fact:
-        raise HTTPException(status_code=404, detail="Fact not found")
+        raise fact_not_found()
 
     # Check access
     if not kb.ownership_manager:
         # #16662: without the ownership manager no access decision can be made -- deny.
         raise HTTPException(status_code=503, detail="Ownership management not available")
 
-    metadata = fact.get("metadata", {})
+    metadata = object_metadata(fact_id, fact.get("metadata"))  # #18220
     # #16662: every caller is behind check_admin_permission -- an explicit admin read (owner decision, #16654)
     has_access = await can_read_fact(kb.ownership_manager, fact_id, metadata, user_id=user_id, is_admin=True)
 
     if not has_access:
-        raise HTTPException(
-            status_code=403,
-            detail="You do not have access to this fact",
-        )
+        raise fact_not_found()  # #18220: indistinguishable from a missing fact
 
     return fact
 
@@ -133,7 +130,7 @@ async def share_fact(
             detail="Ownership management not available",
         )
 
-    metadata = fact.get("metadata", {})
+    metadata = object_metadata(fact_id, fact.get("metadata"))  # #18220
     updated_metadata = await kb.ownership_manager.share_fact(fact_id, request_body.user_ids, metadata)
 
     # Save updated metadata; a failed write is not a successful share (#16663)
@@ -196,7 +193,7 @@ async def unshare_fact(
             detail="Ownership management not available",
         )
 
-    metadata = fact.get("metadata", {})
+    metadata = object_metadata(fact_id, fact.get("metadata"))  # #18220
     updated_metadata = await kb.ownership_manager.unshare_fact(fact_id, [user_id_to_remove], metadata)
 
     # Save updated metadata; a failed write is not a successful share (#16663)
@@ -253,7 +250,7 @@ async def update_fact_visibility(
         )
 
     # Update visibility in metadata
-    metadata = fact.get("metadata", {})
+    metadata = object_metadata(fact_id, fact.get("metadata"))  # #18220
     metadata["visibility"] = request_body.visibility
 
     # Save updated metadata; update_fact also moves the fact between the ownership indexes (#16663)

@@ -263,23 +263,48 @@ async def can_read_fact(
     )
 
 
-async def _authorize_fact(kb, fact_id: str, current_user, *, write: bool) -> Dict:
-    """Load a fact and require the read (or write) decision to allow the caller (#18184).
+def fact_not_found() -> HTTPException:
+    """The one answer for a fact that is missing or that the caller may not read (#18220).
 
-    503 without an ownership manager (no decision can be made, #16662), 404 when the fact is
-    absent, 403 when the caller is not allowed. Returns the fact dict.
+    A non-reader must not be able to tell an existing fact from an absent one, so both
+    carry this exact status and detail.
+    """
+    return HTTPException(status_code=404, detail="Fact not found")
+
+
+def object_metadata(fact_id: str, metadata) -> Dict:
+    """A fact's metadata as a dict; anything that is not an object reads as ``{}`` (#18220).
+
+    ``{}`` has no owner and private visibility, so only an admin is let through. The warning
+    names the fact id and the JSON type, never the content.
+    """
+    if isinstance(metadata, dict):
+        return metadata
+    if metadata:  # an absent or empty value is an ordinary fact with no metadata
+        logger.warning(
+            "Fact %s has non-object metadata (%s); treating it as unreadable", fact_id, type(metadata).__name__
+        )
+    return {}
+
+
+async def _authorize_fact(kb, fact_id: str, current_user, *, write: bool) -> Dict:
+    """Load a fact and require the read (or write) decision to allow the caller (#18184, #18220).
+
+    503 without an ownership manager (no decision can be made, #16662). 404 when the fact is
+    absent *or the caller cannot read it* -- identical, so ids cannot be probed. 403 only for a
+    caller who can read the fact but may not write it. Returns the fact dict.
     """
     if not getattr(kb, "ownership_manager", None):
         raise HTTPException(status_code=503, detail="Knowledge base not available")
     fact = await asyncio.to_thread(kb.get_fact, fact_id)  # get_fact is synchronous
     if not fact:
-        raise HTTPException(status_code=404, detail="Fact not found")
-    metadata = fact.get("metadata") or {}
+        raise fact_not_found()
+    metadata = object_metadata(fact_id, fact.get("metadata"))
+    if write and can_write_fact(metadata, current_user):
+        return fact
+    if not await can_read_fact(kb.ownership_manager, fact_id, metadata, current_user):
+        raise fact_not_found()
     if write:
-        allowed = can_write_fact(metadata, current_user)
-    else:
-        allowed = await can_read_fact(kb.ownership_manager, fact_id, metadata, current_user)
-    if not allowed:
         raise HTTPException(status_code=403, detail="Access denied")
     return fact
 
