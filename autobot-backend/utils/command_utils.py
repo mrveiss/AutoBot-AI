@@ -18,6 +18,9 @@ from autobot_shared.logging_manager import get_logger
     # Simple exec-style (for specific commands like 'man')
     result = await execute_command(["man", "-w", "ls"], timeout=5.0)
 
+    # Same contract from synchronous code (never call it on the event loop)
+    result = execute_command_sync(["man", "-w", "ls"], timeout=5.0)
+
     # Shell command (for complex shell expressions)
     result = await execute_shell_command("ls -la | grep .py")
 
@@ -27,6 +30,7 @@ from autobot_shared.logging_manager import get_logger
 """
 
 import asyncio
+import subprocess
 from asyncio import Queue as AsyncQueue
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Callable, Dict, List
@@ -45,6 +49,7 @@ __all__ = [
     "get_timestamp",
     "execute_shell_command",
     "execute_command",
+    "execute_command_sync",
     "execute_shell_command_streaming",
     "CommandResult",
     "StreamChunk",
@@ -236,6 +241,16 @@ def _create_execution_error_result(args: List[str], error: Exception) -> Command
     )
 
 
+def _create_error_result(args: List[str], error: Exception) -> CommandResult:
+    """Map a launch failure to its CommandResult: 127 when not found, else a generic error.
+
+    The one place the async and sync entry points agree on what a failed launch looks like (#18180).
+    """
+    if isinstance(error, FileNotFoundError):
+        return _create_not_found_result(args)
+    return _create_execution_error_result(args, error)
+
+
 async def _communicate_with_process(
     process: asyncio.subprocess.Process,
     args: List[str],
@@ -294,10 +309,46 @@ async def execute_command(
         )
         return await _communicate_with_process(process, args, timeout)
 
-    except FileNotFoundError:
-        return _create_not_found_result(args)
     except Exception as e:
-        return _create_execution_error_result(args, e)
+        return _create_error_result(args, e)
+
+
+def execute_command_sync(
+    args: List[str],
+    timeout: float | None = None,
+    cwd: str | None = None,
+    env: Dict[str, str] | None = None,
+) -> CommandResult:
+    """
+    Synchronous twin of :func:`execute_command` (#18180).
+
+    Same arguments, same ``CommandResult``, and the same parse, timeout, not-found and
+    execution-error helpers as the async path -- only the process launch differs. Blocking:
+    call it from sync code or via ``asyncio.to_thread``, never directly on the event loop.
+
+    Args:
+        args: Command and arguments as a list (exec-style, never a shell)
+        timeout: Optional timeout in seconds (falsy means none, as in the async path)
+        cwd: Optional working directory
+        env: Optional environment variables (merged with current env)
+
+    Returns:
+        CommandResult with stdout, stderr, return_code, and status
+    """
+    try:
+        completed = subprocess.run(  # nosec B603  # exec-style argv, shell=False; callers own argv safety
+            args,
+            capture_output=True,
+            timeout=timeout or None,
+            cwd=cwd,
+            env=_prepare_process_env(env),
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return _create_timeout_result(args, timeout)
+    except Exception as e:
+        return _create_error_result(args, e)
+    return _parse_command_output(completed.stdout, completed.stderr, completed.returncode)
 
 
 def _create_stream_reader(
