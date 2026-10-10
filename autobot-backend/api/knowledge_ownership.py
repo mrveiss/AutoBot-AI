@@ -73,7 +73,9 @@ async def _get_fact_with_ownership(kb, fact_id: str, user_id: str):
     if not fact:
         raise fact_not_found()
 
-    metadata = object_metadata(fact_id, fact.get("metadata"))  # #18220
+    metadata = fact["metadata"] = object_metadata(
+        fact_id, fact.get("metadata")
+    )  # #18220: normalised once for the route
     # #16662: every caller is behind check_admin_permission -- an explicit admin read (owner decision, #16654)
     has_access = await can_read_fact(kb.ownership_manager, fact_id, metadata, user_id=user_id, is_admin=True)
 
@@ -116,7 +118,7 @@ async def share_fact(
     fact = await _get_fact_with_ownership(kb, fact_id, user_id)
 
     # Only owner can share facts
-    metadata = object_metadata(fact_id, fact.get("metadata"))  # #18220: before any owner read
+    metadata = fact["metadata"]  # normalised once by _get_fact_with_ownership (#18220)
     owner_id = metadata.get("owner_id")
     if owner_id and owner_id != user_id:
         raise HTTPException(
@@ -179,7 +181,7 @@ async def unshare_fact(
     fact = await _get_fact_with_ownership(kb, fact_id, user_id)
 
     # Only owner can unshare facts
-    metadata = object_metadata(fact_id, fact.get("metadata"))  # #18220: before any owner read
+    metadata = fact["metadata"]  # normalised once by _get_fact_with_ownership (#18220)
     owner_id = metadata.get("owner_id")
     if owner_id and owner_id != user_id:
         raise HTTPException(
@@ -242,7 +244,7 @@ async def update_fact_visibility(
     fact = await _get_fact_with_ownership(kb, fact_id, user_id)
 
     # Only owner can change visibility
-    metadata = object_metadata(fact_id, fact.get("metadata"))  # #18220: before any owner read
+    metadata = fact["metadata"]  # normalised once by _get_fact_with_ownership (#18220)
     owner_id = metadata.get("owner_id")
     if owner_id and owner_id != user_id:
         raise HTTPException(
@@ -402,13 +404,14 @@ async def get_shared_facts(
     for fact_id in shared_fact_ids:
         fact = await asyncio.to_thread(kb.get_fact, fact_id)
         if fact:
+            metadata = object_metadata(fact_id, fact.get("metadata"))
             facts.append(
                 {
                     "fact_id": fact_id,
                     "content": fact.get("content", ""),
-                    "metadata": object_metadata(fact_id, fact.get("metadata")),
+                    "metadata": metadata,
                     "timestamp": fact.get("timestamp", ""),
-                    "owner_id": object_metadata(fact_id, fact.get("metadata")).get("owner_id"),
+                    "owner_id": metadata.get("owner_id"),
                 }
             )
 

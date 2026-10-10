@@ -11,6 +11,12 @@ null, which a route turns into a 500 and a batch job into an aborted run. `knowl
 The detector reads the syntax tree: a `json.loads(...)` / `loads(...)` call in
 `autobot-backend/api/knowledge_*.py` whose argument names fact metadata -- an identifier,
 attribute or string containing "metadata" or "fact_data".
+
+Not covered: the population is `knowledge_*.py` only, so it excludes `autobot-backend/api/knowledge.py`,
+which still raw-parses fact metadata at line 2228 (`json.loads(metadata_str)`), line 2411
+(`json.loads(_decode_bytes(metadata_raw, "{}"))`) and line 2501 (inside `_extract_fact_metadata`,
+called at line 2578). That file is owned by the queued branch `issue-18129-doc-indexers`, so the
+conversion and the widening of this guard are deferred until #18129 lands (tracked in #18220).
 """
 
 from __future__ import annotations

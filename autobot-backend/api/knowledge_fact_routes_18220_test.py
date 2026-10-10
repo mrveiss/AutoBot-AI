@@ -147,3 +147,11 @@ async def test_the_ownership_admin_routes_give_503_for_missing_and_existing_alik
                 await own._get_fact_with_ownership(kb, "f1", "root")
         codes.append((exc.value.status_code, exc.value.detail))
     assert codes[0] == codes[1] == (503, "Ownership management not available")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["share", "unshare", "visibility"])
+async def test_a_bad_fact_logs_one_warning_per_ownership_route(name, caplog):
+    with caplog.at_level("WARNING"):
+        await _own_call(name, _own_kb(["a"]))
+    assert len([r for r in caplog.records if "non-object metadata" in r.getMessage()]) == 1
