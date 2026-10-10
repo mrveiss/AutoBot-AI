@@ -411,7 +411,7 @@ def redact_nested(
     unmasked, for a caller with its own content patterns on top of :func:`redact_content`.
     ``mask_credential_urls=True`` masks EVERY credential-named string whole, a URL included
     (``credential_redaction.redact_dict``, whose masked set never shrinks); by default a URL under an
-    endpoint-shaped name (``token_url``, ``auth_url``, ``oauth_token_endpoint``) keeps its host.
+    endpoint-shaped name (``token_url``, ``auth_url``, ``oauth_token_url``) keeps its host.
     """
     return _walk_nested(value, name, _NestedOptions(policy, exempt_counts, extra_scan, mask_credential_urls))
 

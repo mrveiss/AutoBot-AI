@@ -179,17 +179,17 @@ def matches_vocabulary(name: str, policy: MatchPolicy) -> bool:
 
 
 # Name parts of a URL field that merely say WHERE a credential is obtained (``token_url``, ``auth_url``,
-# ``oauth_token_endpoint``, ``authorization_url``): such a URL is an address and keeps its host.
+# ``oauth_token_url``, ``authorization_url``): such a URL is an address and keeps its host.
 # Any other part (``webhook_secret_url``, ``api_key_url``, ``signed_token_url``) makes the URL the secret.
 ENDPOINT_NAME_WORDS: FrozenSet[str] = frozenset(
     {"token", "auth", "oauth", "oauth2", "authorization", "authorize", "access", "refresh", "login", "openid"}
 )
-_ENDPOINT_NAME_SUFFIXES: Tuple[str, ...] = ("_url", "_uri", "_dsn", "_endpoint")
+_ENDPOINT_NAME_SUFFIXES: Tuple[str, ...] = ("_url", "_uri", "_dsn")
 
 
 def is_endpoint_name(name: str, policy: MatchPolicy) -> bool:
     """True when a credential-named URL field only names an endpoint, so its URL is scrubbed, not masked whole."""
-    lowered = name.lower().replace("-", "_")
+    lowered = name.lower()  # underscore only: ``x-dsn`` was masked whole on main
     suffix = next((s for s in _ENDPOINT_NAME_SUFFIXES if lowered.endswith(s)), None)
     if suffix is None:
         return lowered in ("url", "uri", "dsn")

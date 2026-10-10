@@ -3401,3 +3401,10 @@ pincode
 userPincode
 pin_hashing_rounds
 gpio_pin
+oauth_token_endpoint
+token_endpoint
+auth_endpoint
+refresh_token_endpoint
+authorization_endpoint
+login_endpoint
+webhook_secret_endpoint

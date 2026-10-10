@@ -129,15 +129,19 @@ def test_a_url_whose_name_carries_more_than_an_endpoint_word_is_masked_whole(nam
     assert redact_nested({name: _HOOK}) == {name: MASK}
 
 
-@pytest.mark.parametrize(
-    "name", ["token_url", "auth_url", "oauth_token_endpoint", "authorization_url", "db_dsn", "dsn"]
-)
+@pytest.mark.parametrize("name", ["oauth_token_endpoint", "token_endpoint", "auth_endpoint", "refresh_token_endpoint"])
+def test_an_endpoint_shaped_credential_name_is_masked_whole_as_on_main(name: str) -> None:
+    """``_endpoint`` is not a URL suffix: main masked these whole, and an exemption would shrink the set (#18205)."""
+    assert redact_nested({name: _HOOK}) == {name: MASK}
+
+
+@pytest.mark.parametrize("name", ["token_url", "auth_url", "oauth_token_url", "authorization_url", "db_dsn", "dsn"])
 def test_a_plain_endpoint_name_keeps_the_host_and_loses_userinfo_and_query_credentials(name: str) -> None:
     out = redact_nested({name: _HOOK})[name]
     assert out.startswith("https://") and "@hooks.example.com/services/T0/B0/AbCdEfGh" in out and _PW not in out
 
 
-@pytest.mark.parametrize("name", ["token_url", "auth_url", "oauth_token_endpoint", "db_dsn"])
+@pytest.mark.parametrize("name", ["token_url", "auth_url", "oauth_token_url", "db_dsn"])
 def test_mask_credential_urls_masks_a_credential_named_url_whole_anyway(name: str) -> None:
     assert redact_nested({name: _HOOK}, mask_credential_urls=True) == {name: MASK}
     assert redact_nested({"homepage_url": _HOOK}, mask_credential_urls=True)["homepage_url"] != MASK
