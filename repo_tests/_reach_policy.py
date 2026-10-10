@@ -187,6 +187,11 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "One frontend tree's source, against all tracked `.vue`/`.ts`/`.js` including the other frontend.",
     ),
+    "root-resolver-depth-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "All tracked Python under seven roots, against all tracked Python in the repository.",
+    ),
     "post-commit-seed-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

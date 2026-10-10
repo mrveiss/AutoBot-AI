@@ -59,6 +59,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root as _repo_root
 
 _SYMBOL = "is_accessible_by"
 
@@ -69,10 +70,6 @@ _DEFINING_MODULE = "autobot-backend/models/secret.py"
 #: Production trees. `repo_tests/` is absent on purpose: a reference from a guard is
 #: not a production caller, and counting one would let this test satisfy itself.
 _ROOTS = ("autobot-backend", "autobot_shared", "autobot-slm-backend")
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[1]
 
 
 def _is_test_path(rel: str) -> bool:
