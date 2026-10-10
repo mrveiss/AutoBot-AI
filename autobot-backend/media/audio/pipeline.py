@@ -121,6 +121,23 @@ def get_whisper_pipeline() -> Any | None:
     return _whisper_pipeline
 
 
+def transcribe_path(pipe: Any, path: str, *, language: str = "") -> WhisperTranscription:
+    """Run Whisper over the audio file at *path*. BLOCKING -- call via ``asyncio.to_thread``.
+
+    The file-taking half of :func:`transcribe_bytes`, for callers that already hold
+    a file (#17778). *language* is a BCP-47 hint; empty means auto-detect.
+    """
+    generate_kwargs = {"language": language} if language else None
+    output = pipe(path, return_timestamps=False, generate_kwargs=generate_kwargs)
+    if not isinstance(output, dict):
+        return WhisperTranscription(text="", language="unknown", chunks=[])
+    return WhisperTranscription(
+        text=output.get("text", "").strip(),
+        language=output.get("language", "unknown"),
+        chunks=output.get("chunks", []),
+    )
+
+
 def transcribe_bytes(pipe: Any, audio_bytes: bytes, *, mime: str = "", language: str = "") -> WhisperTranscription:
     """Run Whisper over *audio_bytes*. BLOCKING -- call via ``asyncio.to_thread``.
 
@@ -139,15 +156,7 @@ def transcribe_bytes(pipe: Any, audio_bytes: bytes, *, mime: str = "", language:
         tmp.write(audio_bytes)
         tmp_path = tmp.name
     try:
-        generate_kwargs = {"language": language} if language else None
-        output = pipe(tmp_path, return_timestamps=False, generate_kwargs=generate_kwargs)
-        if not isinstance(output, dict):
-            return WhisperTranscription(text="", language="unknown", chunks=[])
-        return WhisperTranscription(
-            text=output.get("text", "").strip(),
-            language=output.get("language", "unknown"),
-            chunks=output.get("chunks", []),
-        )
+        return transcribe_path(pipe, tmp_path, language=language)
     finally:
         try:
             os.unlink(tmp_path)

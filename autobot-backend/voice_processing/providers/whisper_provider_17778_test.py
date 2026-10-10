@@ -1,0 +1,138 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""Provider choice and fallback order (#17778).
+
+Assertions are about WHICH provider is chosen, never about transcript text.
+"""
+
+from unittest.mock import create_autospec, patch
+
+import pytest
+
+from voice_processing.providers import ProviderRegistry, SpeechProvider, TranscriptSegment
+from voice_processing.providers.generic_provider import GENERIC_LANGUAGES
+from voice_processing.providers.whisper_provider import WhisperProvider
+
+
+def _seg(text: str = "x") -> TranscriptSegment:
+    return TranscriptSegment(text=text, start_time=0.0, end_time=0.0, confidence=0.9)
+
+
+def _fake(name: str, segments=None, *, available=True, error=None):
+    provider = create_autospec(SpeechProvider, instance=True, spec_set=True)
+    type(provider).provider_name = name
+    provider.is_available.return_value = available
+    if error is not None:
+        provider.transcribe.side_effect = error
+    else:
+        provider.transcribe.return_value = segments if segments is not None else [_seg()]
+    return provider
+
+
+def _registry_with_defaults(monkeypatch, *, cloud_key: bool):
+    """The registry exactly as ``initialize_providers`` builds it."""
+    import voice_processing.providers as providers_pkg
+    import voice_processing.providers.registry_init as registry_init
+    from voice_processing.providers import selection
+
+    fresh = ProviderRegistry()
+    monkeypatch.setattr(providers_pkg, "_registry", fresh)
+    if not cloud_key:
+        monkeypatch.setattr(selection, "_PROVIDER_MAP", {})
+    registry_init.initialize_providers()
+    return fresh
+
+
+def test_english_without_cloud_key_chooses_whisper(monkeypatch):
+    registry = _registry_with_defaults(monkeypatch, cloud_key=False)
+    assert isinstance(registry.get_provider("en"), WhisperProvider)
+
+
+@pytest.mark.parametrize("lang", GENERIC_LANGUAGES)
+def test_whisper_sits_between_cloud_and_generic_for_every_generic_language(monkeypatch, lang):
+    registry = _registry_with_defaults(monkeypatch, cloud_key=False)
+    names = [type(p).__name__ for p in registry.get_all_providers(lang)]
+    assert names == ["WhisperProvider", "GenericProvider"]
+
+
+def test_latvian_keeps_late_then_tilde_first(monkeypatch):
+    registry = _registry_with_defaults(monkeypatch, cloud_key=False)
+    for lang in ("lv", "lat"):
+        names = [type(p).__name__ for p in registry.get_all_providers(lang)]
+        assert names[:2] == ["LateProvider", "TildeProvider"]
+        assert "WhisperProvider" not in names
+
+
+def test_cloud_provider_beats_whisper_for_english(monkeypatch):
+    registry = _registry_with_defaults(monkeypatch, cloud_key=False)
+    cloud = _fake("cloud")
+    registry.register("en", cloud, priority=15)
+    assert registry.get_provider("en") is cloud
+
+
+@pytest.mark.asyncio
+async def test_failing_top_provider_falls_through_to_the_next():
+    registry = ProviderRegistry()
+    top = _fake("top", error=RuntimeError("boom"))
+    second = _fake("second")
+    registry.register("en", top, priority=10)
+    registry.register("en", second, priority=0)
+    outcome = await registry.transcribe_with_fallback("a.wav", "en")
+    assert outcome.provider is second
+    top.transcribe.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_unavailable_and_empty_providers_are_skipped():
+    registry = ProviderRegistry()
+    unavailable = _fake("down", available=False)
+    empty = _fake("empty", segments=[])
+    last = _fake("last")
+    for prio, prov in ((10, unavailable), (5, empty), (0, last)):
+        registry.register("en", prov, priority=prio)
+    outcome = await registry.transcribe_with_fallback("a.wav", "en")
+    assert outcome.provider is last
+    unavailable.transcribe.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_whisper_unavailable_means_generic_is_used(monkeypatch):
+    registry = _registry_with_defaults(monkeypatch, cloud_key=False)
+    whisper, generic = registry.get_all_providers("en")
+    with patch("voice_processing.providers.whisper_provider.get_whisper_pipeline", return_value=None):
+        assert whisper.is_available() is False
+        generic_double = _fake("generic")
+        registry._providers["en"] = [(whisper, 5), (generic_double, 0)]
+        outcome = await registry.transcribe_with_fallback("a.wav", "en")
+    assert outcome.provider is generic_double
+
+
+@pytest.mark.asyncio
+async def test_no_provider_raises_and_all_raising_reraises():
+    registry = ProviderRegistry()
+    with pytest.raises(ValueError, match="No speech provider"):
+        await registry.transcribe_with_fallback("a.wav", "xx")
+    registry.register("en", _fake("a", error=RuntimeError("first")), priority=1)
+    registry.register("en", _fake("b", error=RuntimeError("last")), priority=0)
+    with pytest.raises(RuntimeError, match="last"):
+        await registry.transcribe_with_fallback("a.wav", "en")
+
+
+@pytest.mark.asyncio
+async def test_all_empty_returns_no_provider_not_an_error():
+    registry = ProviderRegistry()
+    registry.register("en", _fake("a", segments=[]), priority=0)
+    outcome = await registry.transcribe_with_fallback("a.wav", "en")
+    assert outcome.provider is None and outcome.segments == []
+
+
+@pytest.mark.asyncio
+async def test_whisper_provider_turns_pipeline_text_into_one_segment():
+    pipe = create_autospec(lambda path, **kw: None)
+    pipe.return_value = {"text": " hello there ", "language": "en"}
+    with patch("voice_processing.providers.whisper_provider.get_whisper_pipeline", return_value=pipe):
+        segments = await WhisperProvider().transcribe("a.wav", "en")
+    assert [s.language for s in segments] == ["en"] and len(segments) == 1
+    assert pipe.call_args.kwargs["generate_kwargs"] == {"language": "en"}

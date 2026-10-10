@@ -10,7 +10,7 @@ No real audio, ffmpeg, or ML runs.  All heavy dependencies are mocked.
 
 import io
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, create_autospec, patch
 
 import pytest
 import pytest_asyncio
@@ -23,7 +23,7 @@ from transcriber.models import RecordingStatus
 from transcriber.orchestrator import TranscriberOrchestrator, _assign_speaker
 from transcriber.routes.projects import router as projects_router
 from transcriber.routes.recordings import router as recordings_router
-from voice_processing.providers import TranscriptSegment
+from voice_processing.providers import ProviderRegistry, ProviderTranscription, TranscriptSegment
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -137,8 +137,8 @@ async def test_process_recording_happy_path(db, tmp_path):
     mock_provider.provider_name = "mock_provider"
     mock_provider.transcribe = AsyncMock(return_value=transcript_segments)
 
-    mock_registry = MagicMock()
-    mock_registry.get_provider = MagicMock(return_value=mock_provider)
+    mock_registry = create_autospec(ProviderRegistry, instance=True, spec_set=True)
+    mock_registry.transcribe_with_fallback.return_value = ProviderTranscription(mock_provider, transcript_segments)
 
     orch = TranscriberOrchestrator(db=db)
     orch.ffmpeg_service = mock_ffmpeg
@@ -195,8 +195,8 @@ async def test_process_recording_single_speaker_fallback(db, tmp_path):
     mock_provider.provider_name = "mock_provider"
     mock_provider.transcribe = AsyncMock(return_value=transcript_segments)
 
-    mock_registry = MagicMock()
-    mock_registry.get_provider = MagicMock(return_value=mock_provider)
+    mock_registry = create_autospec(ProviderRegistry, instance=True, spec_set=True)
+    mock_registry.transcribe_with_fallback.return_value = ProviderTranscription(mock_provider, transcript_segments)
 
     orch = TranscriberOrchestrator(db=db)
     orch.ffmpeg_service = mock_ffmpeg

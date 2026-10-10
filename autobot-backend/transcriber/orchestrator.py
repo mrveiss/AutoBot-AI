@@ -72,21 +72,12 @@ class TranscriberOrchestrator:
             language = await detect_language(audio_path=tmp_wav_path, filename_hint=recording["filename"])
             logger.info("Recording %d: detected language=%s", recording_id, language)
 
-            provider = self.provider_registry.get_provider(language)
-            transcript_segments = await self._transcribe_with_provider(tmp_wav_path, language, provider)
+            transcribed = await self.provider_registry.transcribe_with_fallback(tmp_wav_path, language)
+            provider, transcript_segments = transcribed.provider, transcribed.segments
 
-            if _provider_diarizes(provider, transcript_segments):
-                logger.info(
-                    "Recording %d: provider %r supplies diarization — skipping Pyannote",
-                    recording_id,
-                    getattr(provider, "provider_name", "?"),
-                )
-                speaker_ids = await self._persist_speakers_from_segments(recording_id, transcript_segments, language)
-                await self._persist_segments_diarized(recording_id, transcript_segments, speaker_ids)
-            else:
-                speaker_segments = await self._diarize(tmp_wav_path)
-                speaker_ids = await self._persist_speakers(recording_id, speaker_segments, language)
-                await self._persist_segments(recording_id, transcript_segments, speaker_segments, speaker_ids)
+            speaker_ids = await self._persist_transcript(
+                recording_id, tmp_wav_path, language, provider, transcript_segments
+            )
 
             speaker_count = len(speaker_ids)
             process_seconds = time.monotonic() - start_ts
@@ -153,17 +144,28 @@ class TranscriberOrchestrator:
             logger.warning("Diarization failed (%s) — using single-speaker fallback", exc)
             return []
 
-    async def _transcribe_with_provider(
-        self, wav_path: str, language: str, provider: Optional[object]
-    ) -> List[TranscriptSegment]:
-        """Transcribe using the given provider; raise when provider is None."""
-        if provider is None:
-            raise ValueError(f"No speech provider available for language: {language}")
-        logger.info("Transcribing with %s (lang=%s)", getattr(provider, "provider_name", "?"), language)
-        result = await provider.transcribe(wav_path, language)  # type: ignore[union-attr]
-        if result is None:
-            raise ValueError("Transcription returned None")
-        return result
+    async def _persist_transcript(
+        self,
+        recording_id: int,
+        wav_path: str,
+        language: str,
+        provider: Optional[object],
+        transcript_segments: List[TranscriptSegment],
+    ) -> Dict[str, int]:
+        """Persist speakers and segments, diarizing unless the provider already did (#17778)."""
+        if _provider_diarizes(provider, transcript_segments):
+            logger.info(
+                "Recording %d: provider %r supplies diarization — skipping Pyannote",
+                recording_id,
+                getattr(provider, "provider_name", "?"),
+            )
+            speaker_ids = await self._persist_speakers_from_segments(recording_id, transcript_segments, language)
+            await self._persist_segments_diarized(recording_id, transcript_segments, speaker_ids)
+            return speaker_ids
+        speaker_segments = await self._diarize(wav_path)
+        speaker_ids = await self._persist_speakers(recording_id, speaker_segments, language)
+        await self._persist_segments(recording_id, transcript_segments, speaker_segments, speaker_ids)
+        return speaker_ids
 
     async def _persist_speakers_from_segments(
         self,

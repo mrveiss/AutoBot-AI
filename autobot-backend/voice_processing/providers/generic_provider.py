@@ -19,6 +19,18 @@ from voice_processing.speech_recognition import SpeechRecognitionEngine
 
 logger = get_logger(__name__)
 
+#: Languages the generic provider (and the local Whisper provider, #17778) cover.
+GENERIC_LANGUAGES = (
+    "en",  # English
+    "de",  # German
+    "es",  # Spanish
+    "fr",  # French
+    "ru",  # Russian
+    "zh",  # Chinese
+    "ja",  # Japanese
+    "ko",  # Korean
+)
+
 
 class GenericProvider(SpeechProvider):
     """Generic speech provider using AutoBot's existing recognition engine."""
@@ -164,14 +176,4 @@ class GenericProvider(SpeechProvider):
 
         Generic provider supports many languages via Google Speech API.
         """
-        return [
-            "en",  # English
-            "de",  # German
-            "es",  # Spanish
-            "fr",  # French
-            "ru",  # Russian
-            "zh",  # Chinese
-            "ja",  # Japanese
-            "ko",  # Korean
-            # Add more as needed
-        ]
+        return list(GENERIC_LANGUAGES)

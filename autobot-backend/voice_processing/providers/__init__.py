@@ -45,6 +45,14 @@ class SpeechProvider(ABC):
             List of transcript segments with timing
         """
 
+    def is_available(self) -> bool:
+        """Whether the provider can transcribe right now (default: yes).
+
+        A provider that depends on something loadable (a model, a binary) overrides
+        this so :meth:`ProviderRegistry.transcribe_with_fallback` can skip it.
+        """
+        return True
+
     @property
     @abstractmethod
     def provider_name(self) -> str:
@@ -54,6 +62,14 @@ class SpeechProvider(ABC):
     @abstractmethod
     def supported_languages(self) -> List[str]:
         """Return list of supported language codes."""
+
+
+@dataclass
+class ProviderTranscription:
+    """The provider that produced *segments*; ``provider`` is None when none did."""
+
+    provider: Optional[SpeechProvider]
+    segments: List[TranscriptSegment]
 
 
 class ProviderRegistry:
@@ -116,6 +132,44 @@ class ProviderRegistry:
         """
         providers = self._providers.get(language, [])
         return [p for p, _ in providers]
+
+    async def transcribe_with_fallback(self, audio_path: str, language: str) -> ProviderTranscription:
+        """Try every provider for *language* in priority order (Issue #17778).
+
+        The ONE fallback loop: a provider that is unavailable, raises, or returns
+        no segments hands over to the next. ``get_provider`` alone returned only
+        the top entry, so a failing top provider meant no transcript at all.
+
+        Raises:
+            ValueError: no provider is registered for *language*.
+            Exception: the last provider's error, when every provider raised.
+        """
+        providers = self.get_all_providers(language)
+        if not providers:
+            raise ValueError(f"No speech provider available for language: {language}")
+        last_error: Optional[Exception] = None
+        raised = 0
+        for provider in providers:
+            try:
+                segments = await self._attempt(provider, audio_path, language)
+            except Exception as exc:
+                logger.warning("Provider %s failed for %r: %s", provider.provider_name, language, exc)
+                last_error, raised = exc, raised + 1
+                continue
+            if segments:
+                return ProviderTranscription(provider, segments)
+        if last_error is not None and raised == len(providers):
+            raise last_error
+        return ProviderTranscription(None, [])
+
+    @staticmethod
+    async def _attempt(provider: SpeechProvider, audio_path: str, language: str) -> List[TranscriptSegment]:
+        """One provider's attempt; [] when it is unavailable or has nothing."""
+        if not provider.is_available():
+            logger.info("Provider %s unavailable; falling through", provider.provider_name)
+            return []
+        logger.info("Transcribing with %s (lang=%s)", provider.provider_name, language)
+        return await provider.transcribe(audio_path, language) or []
 
     def languages(self) -> List[str]:
         """Return the language codes that have at least one registered provider."""
