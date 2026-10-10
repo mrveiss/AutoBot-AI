@@ -20,11 +20,13 @@ from __future__ import annotations
 
 import ast
 import functools
+from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
-from tools.lint._scan_helpers import tracked_paths
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CANONICAL = "autobot_shared/db_session.py"
 _KEY = "_post_commit_cbs"
@@ -74,6 +76,30 @@ def test_the_test_path_filter_skips_tests_and_keeps_source(rel: str, expected: b
     assert _is_source_python(rel) is expected
 
 
+def _source_population(root: Path) -> list[str]:
+    """Non-test Python source in both backends and autobot_shared: the scan's whole input.
+
+    `tracked_paths` refuses an empty enumeration; that refusal is relocated to REACH's
+    floor (see `declare`), which needs an empty result rather than an exception.
+    """
+    try:
+        tracked = tracked_paths(root, "autobot-backend", "autobot-slm-backend", "autobot_shared")
+    except EmptyEnumeration:
+        return []
+    return [rel for rel in tracked if _is_source_python(rel)]
+
+
+REACH = declare(
+    "post-commit-seed-scan",
+    discover=_source_population,
+    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
+    floor=2846,
+    what="non-test python source",
+    roots=("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    growth=300,
+)
+
+
 def _read(rel: str) -> str:
     return (repo_root() / rel).read_text(encoding="utf-8")
 
@@ -83,9 +109,7 @@ def _seeders() -> tuple[tuple[str, ...], int]:
     """Non-test Python files that seed the post-commit list, and how many were parsed."""
     found: list[str] = []
     parsed = 0
-    for rel in tracked_paths(repo_root(), "autobot-backend", "autobot-slm-backend", "autobot_shared"):
-        if not _is_source_python(rel):
-            continue
+    for rel in REACH.examined(repo_root()):
         source = _read(rel)
         if _KEY not in source and _KEY_CONSTANT not in source:
             continue
