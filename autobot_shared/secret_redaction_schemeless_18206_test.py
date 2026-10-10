@@ -108,3 +108,14 @@ def test_an_adversarial_value_is_linear_time(adversarial: str) -> None:
     start = time.perf_counter()
     redact_schemeless_userinfo(adversarial)
     assert time.perf_counter() - start < 0.05
+
+
+def test_a_whole_value_shaped_like_userinfo_is_masked_even_when_it_is_a_time_and_a_place() -> None:
+    """The documented OVER-MASK trade-off (#18206): ``12:30@site`` is indistinguishable from ``user:pw@host``.
+
+    Whole-value only keeps emails, ``host:port`` and prose intact, but a value that really is a time at a place
+    loses its second half; a leaked password is the costlier error, so the shape wins.
+    """
+    assert redact_schemeless_userinfo("12:30@site") == f"12:{_MASK}@site"
+    assert redact_nested({"when": "12:30@site"}) == {"when": f"12:{_MASK}@site"}
+    assert redact_nested({"when": "meet 12:30@site"}) == {"when": "meet 12:30@site"}  # contrast: prose is untouched
