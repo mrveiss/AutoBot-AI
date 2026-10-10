@@ -79,17 +79,20 @@ REACH = declare(
 
 
 @functools.lru_cache(maxsize=1)
-def _callers() -> tuple[tuple[str, ...], int]:
+def _callers() -> tuple[tuple[str, ...], int, int]:
     found: list[str] = []
     parsed = 0
+    read = 0
     for rel in REACH.examined(repo_root()):
         source = (repo_root() / rel).read_text(encoding="utf-8")
+        read += 1
         if "check_access" not in source:
             continue
         parsed += 1
         if _references_check_access(source):
             found.append(rel)
-    return tuple(sorted(found)), parsed
+    REACH.completed(read)
+    return tuple(sorted(found)), parsed, read
 
 
 @pytest.mark.parametrize(
@@ -112,12 +115,13 @@ def test_the_matcher_tells_a_reference_from_a_mention(label: str, source: str, e
 
 
 def test_the_scan_is_not_vacuous() -> None:
-    _, parsed = _callers()
+    _, parsed, read = _callers()
+    assert read >= REACH.floor, f"read {read} files, below the declared floor {REACH.floor}"
     assert parsed >= len(_ALLOWED), f"parsed {parsed} files mentioning check_access"
 
 
 def test_only_the_allowed_files_call_check_access() -> None:
-    callers, _ = _callers()
+    callers, _, _ = _callers()
     assert set(callers) == set(_ALLOWED), (
         f"#18184: {sorted(set(callers) ^ set(_ALLOWED))} differ from the allowed check_access callers. "
         "Call knowledge.search_filters.can_read_fact / authorize_fact_read instead of a second inline "

@@ -77,3 +77,30 @@ async def test_an_admin_read_is_not_narrowed_and_passes_the_admin_input_through(
     kept = await filter_search_results_by_permission(results, "admin-1", ownership_manager=mgr, is_admin=True)
     assert kept == results
     assert await filter_search_results_by_permission(results, "admin-1", ownership_manager=mgr) == []
+
+
+class _OrmUser:
+    """Attribute-only stand-in for the ORM User: no ``.get``."""
+
+    def __init__(self, user_id, role):
+        self.id = user_id
+        self.role = role
+        self.org_id = None
+        self.team_memberships = []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", ["admin", "user"])
+async def test_can_read_fact_gives_a_dict_user_and_an_orm_user_the_same_verdict(role):
+    from unittest.mock import AsyncMock, MagicMock
+
+    from knowledge.search_filters import can_read_fact
+
+    verdicts = []
+    for user in ({"user_id": "u1", "role": role}, _OrmUser("u1", role)):
+        mgr = MagicMock()
+        mgr.check_access = AsyncMock(return_value=True)
+        await can_read_fact(mgr, "f", {}, user)
+        kwargs = mgr.check_access.await_args.kwargs
+        verdicts.append((kwargs["user_id"], kwargs["is_admin"]))
+    assert verdicts[0] == verdicts[1] == ("u1", role == "admin")

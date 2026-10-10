@@ -63,7 +63,8 @@ async def run_pipeline(
         except ValueError:
             raise HTTPException(status_code=422, detail="document_id must be a UUID")
         kb = await get_or_create_knowledge_base(http_request.app, force_refresh=False)
-        fact = await authorize_fact_read(kb, request.document_id, current_user)
+        document_id = str(document_uuid)  # canonical form: UUID() also accepts upper-case and un-hyphenated input
+        fact = await authorize_fact_read(kb, document_id, current_user)
         text = fact.get("content") or ""
         if not text.strip():
             raise HTTPException(status_code=404, detail="Document has no text")
@@ -80,12 +81,12 @@ async def run_pipeline(
         runner = PipelineRunner(config)
         context = PipelineContext()
         context.document_id = document_uuid
-        context.metadata["document_id"] = request.document_id
+        context.metadata["document_id"] = document_id
 
         result = await runner.run(text, context)
 
         return PipelineRunResponse(
-            document_id=request.document_id,
+            document_id=document_id,
             entities_count=result.entities_count,
             relationships_count=result.relationships_count,
             events_count=result.events_count,

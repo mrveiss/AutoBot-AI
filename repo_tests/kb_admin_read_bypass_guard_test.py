@@ -146,10 +146,13 @@ def helper_forwards_admin(source: str, helper: str = "can_read_fact") -> bool:
 @lru_cache(maxsize=1)
 def _helper_scan() -> dict[str, list[int]]:
     found = {}
+    read = 0
     for rel in REACH.examined(REPO_ROOT):
         lines = canonical_helper_calls((REPO_ROOT / rel).read_text(encoding="utf-8"))
+        read += 1
         if lines:
             found[rel] = lines
+    REACH.completed(read)  # the helper sweep is held to the same declared floor as the bypass sweep
     return found
 
 

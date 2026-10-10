@@ -225,6 +225,12 @@ def extract_user_context_from_request(current_user) -> tuple:
     return user_id, user_org_id, user_group_ids
 
 
+def _user_field(user, name: str):
+    """Read *name* from a mapping user or an ORM/object user (``.get`` or attribute)."""
+    getter = getattr(user, "get", None)
+    return getter(name) if callable(getter) else getattr(user, name, None)
+
+
 async def can_read_fact(
     ownership_manager,
     fact_id: str,
@@ -246,7 +252,7 @@ async def can_read_fact(
     if current_user is not None:
         user_id, org_id, group_ids = extract_user_context_from_request(current_user)
         if is_admin is None:
-            is_admin = is_admin_role(current_user.get("role"))
+            is_admin = is_admin_role(_user_field(current_user, "role"))
     return await ownership_manager.check_access(
         fact_id=fact_id,
         user_id=user_id,

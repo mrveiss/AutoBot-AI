@@ -135,3 +135,13 @@ async def test_real_runner_hands_the_chunk_text_extractor_the_stored_text():
     assert seen[0] != doc_id and not UUID_RE.match(seen[0])
     assert resp.errors == []
     assert resp.chunks_count >= 1
+
+
+@pytest.mark.asyncio
+async def test_upper_case_document_id_resolves_the_same_fact_as_lower_case():
+    doc_id = str(uuid4())
+    kb = _kb({"fact_id": doc_id, "content": "Alice met Bob in Riga.", "metadata": {"owner_id": "alice"}})
+    resp, runner = await _call(kb, doc_id.upper())
+    kb.get_fact.assert_called_once_with(doc_id)  # the helper receives the canonical lower-case form
+    assert resp.document_id == doc_id
+    assert runner.run.await_args.args[1].metadata["document_id"] == doc_id
