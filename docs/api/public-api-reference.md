@@ -994,7 +994,7 @@ List available language models.
 
 ### GET /llm/current
 
-Get the currently active model configuration.
+Get the active model name and provider. Any authenticated user. The full LLM configuration is not returned here; it is available only through the admin-only `GET /llm/config` (#18193).
 
 **Headers:** `Authorization: Bearer <token>`
 
@@ -1002,17 +1002,15 @@ Get the currently active model configuration.
 
 ```json
 {
-  "success": true,
-  "model": "gpt-4-turbo",
-  "provider": "openai",
-  "temperature": 0.7,
-  "max_tokens": 4096
+  "model": "qwen3.5:9b",
+  "provider": "ollama",
+  "config": {}
 }
 ```
 
 ### GET /llm/config
 
-Get LLM configuration.
+Get the LLM configuration, with credentials and URL passwords redacted. **Admin only** (#18193): non-admin callers receive `403`.
 
 **Headers:** `Authorization: Bearer <token>`
 
