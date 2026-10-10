@@ -369,14 +369,6 @@ async def check_vectorization_status_batch(request: dict, req: Request, _user: d
     return await _perform_uncached_batch_check(kb_to_use, fact_ids, include_dimensions, cache_key, use_cache)
 
 
-def _extract_fact_content(fact_data: dict) -> str:
-    """Extract content from fact data, handling both bytes and string keys."""
-    content_raw = fact_data.get("content") or fact_data.get(b"content", b"")
-    if isinstance(content_raw, bytes):
-        return content_raw.decode("utf-8")
-    return str(content_raw) if content_raw else ""
-
-
 async def _fetch_batch_data(kb, batch: List[str], skip_existing: bool) -> tuple:
     """
     Fetch batch fact data and vector existence status.
