@@ -41,6 +41,9 @@ GENERIC_LANGUAGES = (
 class GenericProvider(SpeechProvider):
     """Generic speech provider using AutoBot's existing recognition engine."""
 
+    is_external = True  # recognize_google sends the audio to a third party
+    external_when_local_unavailable = True  # #17781 AC3: the owner-decided fallback for missing Whisper
+
     def __init__(self):
         """Initialize generic provider with speech recognition engine."""
         self.engine = SpeechRecognitionEngine()

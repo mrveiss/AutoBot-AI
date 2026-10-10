@@ -24,6 +24,8 @@ logger = get_logger(__name__)
 class TildeProvider(SpeechProvider):
     """Tilde cloud ASR provider for Latvian speech recognition."""
 
+    is_external = True  # audio is posted to the Tilde service
+
     def __init__(
         self,
         api_key: Optional[str] = None,

@@ -13,6 +13,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
+from autobot_shared.env_registry import env
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.pinned_model_registry import ModelIntegrityError
 
@@ -46,6 +47,17 @@ class SpeechProvider(ABC):
             List of transcript segments with timing
         """
 
+    #: True when the audio leaves this host (cloud ASR, Tilde, recognize_google). The
+    #: fallback loop never hands audio to a second external provider by default.
+    is_external: bool = False
+
+    #: True for the one owner-decided fallthrough (#17781 AC3): the provider may take
+    #: over, even though external, once the local default (Whisper) was UNAVAILABLE.
+    external_when_local_unavailable: bool = False
+
+    #: True for the local default whose UNAVAILABILITY unlocks that exception (Whisper).
+    is_default_local: bool = False
+
     def is_available(self) -> bool:
         """Whether the provider can transcribe right now (default: yes).
 
@@ -71,6 +83,18 @@ class SpeechProvider(ABC):
 _NEVER_FALL_THROUGH = (ModelIntegrityError, TypeError, AttributeError, NameError)
 
 
+_RAN, _UNAVAILABLE, _RAISED = "ran", "unavailable", "raised"
+
+
+def _may_fall_through(candidate: SpeechProvider, local_unavailable: bool) -> bool:
+    """Whether a later *candidate* may receive audio after an earlier provider could not run."""
+    if not candidate.is_external:
+        return True
+    if env("AUTOBOT_SPEECH_EXTERNAL_FALLTHROUGH"):
+        return True
+    return candidate.external_when_local_unavailable and local_unavailable
+
+
 class TranscriptionUnavailableError(RuntimeError):
     """No provider produced a transcript and at least one could not run or raised."""
 
@@ -82,7 +106,7 @@ class TranscriptionUnavailableError(RuntimeError):
 
 @dataclass
 class ProviderTranscription:
-    """The provider that produced *segments*; ``provider`` is None when none did."""
+    """The provider that RAN and produced *segments* (possibly none: no speech)."""
 
     provider: Optional[SpeechProvider]
     segments: List[TranscriptSegment]
@@ -150,56 +174,60 @@ class ProviderRegistry:
         return [p for p, _ in providers]
 
     async def transcribe_with_fallback(self, audio_path: str, language: str) -> ProviderTranscription:
-        """Try every provider for *language* in priority order (Issue #17778).
+        """Transcribe with the first provider that RUNS for *language* (Issues #17778, #17781).
 
-        The ONE fallback loop: a provider that is unavailable, raises, or returns no
-        segments hands over to the next. Two very different "no segments" outcomes:
+        Fall through ONLY when a provider is unavailable or raised; the first provider
+        that ran ends the chain, an empty result (no speech) included, so the same audio
+        is never replayed to another party. Beyond that, audio is never handed to a
+        non-selected EXTERNAL provider unless ``AUTOBOT_SPEECH_EXTERNAL_FALLTHROUGH`` is
+        on. A failed selected cloud therefore goes to local providers (Whisper) and
+        stops. The one owner-decided exception is Generic when Whisper is UNAVAILABLE
+        (:attr:`SpeechProvider.external_when_local_unavailable`, #17781 AC3).
 
-        * every provider RAN and found no speech -> ``ProviderTranscription(None, [])``,
-          a genuine empty transcript;
-        * a provider could not run or raised, and none produced segments ->
-          :class:`TranscriptionUnavailableError` carrying every reason.
+        Returns ``ProviderTranscription(provider, segments)``; ``provider`` is the one
+        that ran (segments may be empty: a genuine empty transcript).
 
         Raises:
             ValueError: no provider is registered for *language*.
-            TranscriptionUnavailableError: see above.
+            TranscriptionUnavailableError: nothing ran; carries every reason.
             ModelIntegrityError, TypeError, AttributeError, NameError: propagated at
-                once. An integrity failure must never fall through to an external
-                provider, and a programming error must not be disguised as "provider
-                failed".
+                once, never disguised as a provider failure.
         """
         providers = self.get_all_providers(language)
         if not providers:
             raise ValueError(f"No speech provider available for language: {language}")
         reasons: List[str] = []
-        for provider in providers:
-            segments = await self._attempt(provider, audio_path, language, reasons)
-            if segments:
+        local_unavailable = False
+        for index, provider in enumerate(providers):
+            if index and not _may_fall_through(provider, local_unavailable):
+                reasons.append(f"{provider.provider_name}: external fallthrough refused")
+                continue
+            status, segments = await self._attempt(provider, audio_path, language, reasons)
+            if status == _RAN:
                 return ProviderTranscription(provider, segments)
-        if reasons:
-            raise TranscriptionUnavailableError(language, reasons)
-        return ProviderTranscription(None, [])
+            local_unavailable = local_unavailable or (status == _UNAVAILABLE and provider.is_default_local)
+        raise TranscriptionUnavailableError(language, reasons)
 
     @staticmethod
     async def _attempt(
         provider: SpeechProvider, audio_path: str, language: str, reasons: List[str]
-    ) -> List[TranscriptSegment]:
-        """One provider's attempt; appends to *reasons* when it could not run or raised."""
+    ) -> tuple[str, List[TranscriptSegment]]:
+        """One attempt as ``(status, segments)``; appends to *reasons* when it could not run or raised."""
         name = provider.provider_name
         if not provider.is_available():
             logger.info("Provider %s unavailable; falling through", name)
             reasons.append(f"{name}: unavailable")
-            return []
+            return _UNAVAILABLE, []
         logger.info("Transcribing with %s (lang=%s)", name, language)
         try:
-            return await provider.transcribe(audio_path, language) or []
+            return _RAN, await provider.transcribe(audio_path, language) or []
         except _NEVER_FALL_THROUGH:
             logger.error("Provider %s failed with an error that must not fall through", name, exc_info=True)
             raise
         except Exception as exc:
             logger.warning("Provider %s failed for %r: %s", name, language, exc, exc_info=True)
             reasons.append(f"{name}: {type(exc).__name__}")
-            return []
+            return _RAISED, []
 
     def languages(self) -> List[str]:
         """Return the language codes that have at least one registered provider."""

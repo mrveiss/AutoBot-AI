@@ -37,6 +37,9 @@ class CloudSpeechProvider(SpeechProvider):
     #: env var name that holds the API key for this provider
     _api_key_env: str = ""
 
+    #: audio is sent to a third-party API
+    is_external: bool = True
+
     #: cloud providers always return speaker labels
     diarizes: bool = True
 

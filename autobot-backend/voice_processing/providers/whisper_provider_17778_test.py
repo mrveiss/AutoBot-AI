@@ -29,6 +29,9 @@ def _fake(name: str, segments=None, *, available=True, error=None):
     provider = create_autospec(SpeechProvider, instance=True, spec_set=True)
     type(provider).provider_name = name
     provider.is_available.return_value = available
+    provider.is_external = False
+    provider.external_when_local_unavailable = False
+    provider.is_default_local = False
     if error is not None:
         provider.transcribe.side_effect = error
     else:
@@ -90,16 +93,89 @@ async def test_failing_top_provider_falls_through_to_the_next():
 
 
 @pytest.mark.asyncio
-async def test_unavailable_and_empty_providers_are_skipped():
+async def test_unavailable_provider_is_skipped_to_the_next_local_one():
     registry = ProviderRegistry()
     unavailable = _fake("down", available=False)
-    empty = _fake("empty", segments=[])
     last = _fake("last")
-    for prio, prov in ((10, unavailable), (5, empty), (0, last)):
-        registry.register("en", prov, priority=prio)
+    registry.register("en", unavailable, priority=10)
+    registry.register("en", last, priority=0)
     outcome = await registry.transcribe_with_fallback("a.wav", "en")
     assert outcome.provider is last
     unavailable.transcribe.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_empty_result_ends_the_chain_and_never_reaches_a_second_provider():
+    registry = ProviderRegistry()
+    empty = _fake("empty", segments=[])
+    later = _fake("later")
+    registry.register("en", empty, priority=10)
+    registry.register("en", later, priority=0)
+    outcome = await registry.transcribe_with_fallback("a.wav", "en")
+    assert outcome.provider is empty and outcome.segments == []
+    later.transcribe.assert_not_called()
+
+
+def _external(name, **kwargs):
+    provider = _fake(name, **kwargs)
+    provider.is_external = True
+    return provider
+
+
+def _local(name, **kwargs):
+    provider = _fake(name, **kwargs)
+    provider.is_external = False
+    provider.is_default_local = True
+    return provider
+
+
+@pytest.mark.asyncio
+async def test_cloud_failure_never_reaches_another_cloud_and_goes_local():
+    registry = ProviderRegistry()
+    selected = _external("selected", error=RuntimeError("down"))
+    other = _external("other")
+    whisper = _local("whisper")
+    registry.register("en", selected, priority=20)
+    registry.register("en", other, priority=15)
+    registry.register("en", whisper, priority=5)
+    outcome = await registry.transcribe_with_fallback("a.wav", "en")
+    assert outcome.provider is whisper
+    other.transcribe.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_cloud_failure_without_local_does_not_reach_another_cloud():
+    registry = ProviderRegistry()
+    other = _external("other")
+    registry.register("en", _external("selected", error=RuntimeError("down")), priority=20)
+    registry.register("en", other, priority=15)
+    with pytest.raises(TranscriptionUnavailableError) as caught:
+        await registry.transcribe_with_fallback("a.wav", "en")
+    assert "other: external fallthrough refused" in caught.value.reasons
+    other.transcribe.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_opt_in_enables_external_fallthrough(monkeypatch):
+    monkeypatch.setenv("AUTOBOT_SPEECH_EXTERNAL_FALLTHROUGH", "true")
+    registry = ProviderRegistry()
+    other = _external("other")
+    registry.register("en", _external("selected", error=RuntimeError("down")), priority=20)
+    registry.register("en", other, priority=15)
+    outcome = await registry.transcribe_with_fallback("a.wav", "en")
+    assert outcome.provider is other
+
+
+@pytest.mark.asyncio
+async def test_whisper_raising_does_not_unlock_generic(monkeypatch):
+    registry = _registry_with_defaults(monkeypatch, cloud_key=False)
+    whisper, generic = registry.get_all_providers("en")
+    boom = _local("whisper", error=RuntimeError("boom"))
+    registry._providers["en"] = [(boom, 5), (generic, 0)]
+    with patch.object(type(generic), "transcribe") as generic_run:
+        with pytest.raises(TranscriptionUnavailableError):
+            await registry.transcribe_with_fallback("a.wav", "en")
+    generic_run.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -109,6 +185,8 @@ async def test_whisper_unavailable_means_generic_is_used(monkeypatch):
     with patch("voice_processing.providers.whisper_provider.whisper_loadable", return_value=False):
         assert whisper.is_available() is False
         generic_double = _fake("generic")
+        generic_double.is_external = True
+        generic_double.external_when_local_unavailable = True
         registry._providers["en"] = [(whisper, 5), (generic_double, 0)]
         outcome = await registry.transcribe_with_fallback("a.wav", "en")
     assert outcome.provider is generic_double
@@ -127,8 +205,8 @@ async def test_no_provider_raises_and_all_raising_is_a_failure_with_reasons():
 
 
 @pytest.mark.asyncio
-async def test_all_empty_returns_no_provider_not_an_error():
+async def test_a_provider_that_ran_with_no_speech_is_a_genuine_empty_not_an_error():
     registry = ProviderRegistry()
     registry.register("en", _fake("a", segments=[]), priority=0)
     outcome = await registry.transcribe_with_fallback("a.wav", "en")
-    assert outcome.provider is None and outcome.segments == []
+    assert outcome.provider is not None and outcome.segments == []

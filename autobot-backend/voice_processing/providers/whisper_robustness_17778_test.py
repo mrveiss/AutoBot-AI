@@ -182,6 +182,9 @@ def _fake(name, *, segments=None, available=True, error=None):
     provider = create_autospec(SpeechProvider, instance=True, spec_set=True)
     type(provider).provider_name = name
     provider.is_available.return_value = available
+    provider.is_external = False
+    provider.external_when_local_unavailable = False
+    provider.is_default_local = False
     if error is not None:
         provider.transcribe.side_effect = error
     else:
@@ -197,9 +200,11 @@ def _registry(*providers):
 
 
 @pytest.mark.asyncio
-async def test_every_provider_ran_and_found_nothing_is_a_genuine_empty():
-    outcome = await _registry(_fake("a"), _fake("b")).transcribe_with_fallback("a.wav", "en")
-    assert outcome.provider is None and outcome.segments == []
+async def test_a_provider_that_ran_and_found_nothing_is_a_genuine_empty_and_ends_the_chain():
+    first, second = _fake("a"), _fake("b")
+    outcome = await _registry(first, second).transcribe_with_fallback("a.wav", "en")
+    assert outcome.provider is first and outcome.segments == []
+    second.transcribe.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -207,11 +212,13 @@ async def test_every_provider_ran_and_found_nothing_is_a_genuine_empty():
     "providers, reasons",
     [
         ((_fake("a", available=False), _fake("b", available=False)), ["a: unavailable", "b: unavailable"]),
-        ((_fake("a", error=RuntimeError("boom")), _fake("b")), ["a: RuntimeError"]),  # mixed: raised + empty
-        ((_fake("a", available=False), _fake("b")), ["a: unavailable"]),  # mixed: unavailable + empty
+        (
+            (_fake("a", error=RuntimeError("boom")), _fake("b", error=RuntimeError("x"))),
+            ["a: RuntimeError", "b: RuntimeError"],
+        ),
     ],
 )
-async def test_nobody_could_run_or_one_raised_and_none_produced_is_a_failure(providers, reasons):
+async def test_nobody_could_run_is_a_failure(providers, reasons):
     with pytest.raises(TranscriptionUnavailableError) as caught:
         await _registry(*providers).transcribe_with_fallback("a.wav", "en")
     assert caught.value.reasons == reasons

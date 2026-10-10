@@ -56,6 +56,8 @@ def _segments_from(result: WhisperTranscription, language: str) -> List[Transcri
 class WhisperProvider(SpeechProvider):
     """Speech provider backed by the local pinned Whisper pipeline."""
 
+    is_default_local = True
+
     def is_available(self) -> bool:
         """Cheap probe (never loads the model, safe on the event loop)."""
         return whisper_loadable()
