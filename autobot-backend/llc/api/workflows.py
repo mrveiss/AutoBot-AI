@@ -47,6 +47,7 @@ from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 from ..services.workflow import WorkflowConflictError, WorkflowService
+from ._common import actor_id
 
 router = APIRouter(prefix="/workflows", tags=["llc-workflows"])
 
@@ -55,14 +56,6 @@ _get_svc = lazy_singleton(WorkflowService)
 
 def _svc() -> WorkflowService:
     return _get_svc()
-
-
-def _actor_id(current_user: dict) -> uuid.UUID:
-    """Derive the acting user's id from the authenticated session, never the
-    client-supplied body (mirrors ``llc/api/contacts.py``'s ``_actor_id``,
-    #13969 review M1)."""
-    raw = current_user.get("id") or current_user.get("user_id")
-    return uuid.UUID(str(raw))
 
 
 # ------------------------------------------------------------------ Schemas
@@ -127,7 +120,7 @@ async def create_workflow(
             name=body.name,
             status=body.status,
             definition=body.definition,
-            actor=_actor_id(_current_user),
+            actor=actor_id(_current_user),
         )
     except WorkflowConflictError:
         # The pre-check above is TOCTOU under concurrency (#14271): a
@@ -164,7 +157,7 @@ async def update_workflow_status(
     ctx: TenantContext = Depends(require_org_context),
 ) -> WorkflowResponse:
     assert_company_access(ctx, company_id)
-    workflow = await _svc().update_status(session, company_id, workflow_id, body.status, actor=_actor_id(_current_user))
+    workflow = await _svc().update_status(session, company_id, workflow_id, body.status, actor=actor_id(_current_user))
     if workflow is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
     await session.commit()
@@ -180,7 +173,7 @@ async def delete_workflow(
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
     assert_company_access(ctx, company_id)
-    deleted = await _svc().delete(session, company_id, workflow_id, actor=_actor_id(_current_user))
+    deleted = await _svc().delete(session, company_id, workflow_id, actor=actor_id(_current_user))
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
     await session.commit()

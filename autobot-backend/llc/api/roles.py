@@ -52,6 +52,7 @@ from ..services.role_rate import RoleRateService
 from ..services.role_tool import RoleToolService, ToolRegistryUnavailable
 from ..services.role_workflow import RoleWorkflowService
 from ..services.step_cost import derive_step_cost
+from ._common import actor_id
 
 router = APIRouter(prefix="/roles", tags=["llc-roles"])
 
@@ -65,12 +66,6 @@ _get_credentials = lazy_singleton(RoleCredentialService)
 
 _NAME_MAX = 100  # matches Role.name = String(100)
 _DESCRIPTION_MAX = 2000
-
-
-def _actor_id(current_user: dict) -> uuid.UUID:
-    """The acting user, from the session — never from the body or query."""
-    raw = current_user.get("id") or current_user.get("user_id")
-    return uuid.UUID(str(raw))
 
 
 class RoleCreate(BaseModel):
@@ -219,7 +214,7 @@ async def create_role(
             company_id=company_id,
             name=payload.name,
             description=payload.description,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except NotAuthorisedError as exc:
         raise _forbidden(exc) from exc
@@ -241,7 +236,7 @@ async def update_role(
     assert_company_access(ctx, company_id)
     fields = payload.model_dump(exclude_unset=True)
     try:
-        role = await _get_roles().update(session, company_id, role_id, actor_user_id=_actor_id(current_user), **fields)
+        role = await _get_roles().update(session, company_id, role_id, actor_user_id=actor_id(current_user), **fields)
     except NotAuthorisedError as exc:
         raise _forbidden(exc) from exc
     except ValueError as exc:
@@ -262,7 +257,7 @@ async def delete_role(
 ) -> None:
     assert_company_access(ctx, company_id)
     try:
-        deleted = await _get_roles().delete(session, company_id, role_id, actor_user_id=_actor_id(current_user))
+        deleted = await _get_roles().delete(session, company_id, role_id, actor_user_id=actor_id(current_user))
     except NotAuthorisedError as exc:
         raise _forbidden(exc) from exc
     except ValueError as exc:
@@ -313,7 +308,7 @@ async def assign_holder(
             role_id=role_id,
             holder_type=payload.holder_type,
             holder_id=payload.holder_id,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except NotAuthorisedError as exc:
         raise _forbidden(exc) from exc
@@ -334,7 +329,7 @@ async def end_tenure(
 ) -> None:
     """Ends the tenure. The row survives — a DELETE here is not a row deletion."""
     assert_company_access(ctx, company_id)
-    ended = await _get_holders().end_tenure(session, company_id, assignment_id, actor_user_id=_actor_id(current_user))
+    ended = await _get_holders().end_tenure(session, company_id, assignment_id, actor_user_id=actor_id(current_user))
     if ended is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Open tenure not found")
     await session.commit()
@@ -369,7 +364,7 @@ async def grant_permission(
             company_id=company_id,
             role_id=role_id,
             permission=payload.permission,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except NotAuthorisedError as exc:
         raise _forbidden(exc) from exc
@@ -394,7 +389,7 @@ async def revoke_permission(
             company_id=company_id,
             role_id=role_id,
             permission=permission,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except NotAuthorisedError as exc:
         raise _forbidden(exc) from exc
@@ -434,7 +429,7 @@ async def attach_workflow(
             company_id=company_id,
             role_id=role_id,
             workflow_id=payload.workflow_id,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except NotAuthorisedError as exc:
         raise _forbidden(exc) from exc
@@ -455,7 +450,7 @@ async def detach_workflow(
     assert_company_access(ctx, company_id)
     try:
         detached = await _get_workflows().detach(
-            session, company_id, role_id, workflow_id, actor_user_id=_actor_id(current_user)
+            session, company_id, role_id, workflow_id, actor_user_id=actor_id(current_user)
         )
     except NotAuthorisedError as exc:
         raise _forbidden(exc) from exc
@@ -509,7 +504,7 @@ async def attach_tool(
             company_id=company_id,
             role_id=role_id,
             tool_name=payload.tool_name,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except ToolRegistryUnavailable as exc:
         raise _unavailable(exc) from exc
@@ -532,7 +527,7 @@ async def detach_tool(
     assert_company_access(ctx, company_id)
     try:
         detached = await _get_tools().detach(
-            session, company_id, role_id, tool_name, actor_user_id=_actor_id(current_user)
+            session, company_id, role_id, tool_name, actor_user_id=actor_id(current_user)
         )
     except NotAuthorisedError as exc:
         raise _forbidden(exc) from exc
@@ -574,7 +569,7 @@ async def attach_credential(
             company_id=company_id,
             role_id=role_id,
             secret_id=payload.secret_id,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except NotAuthorisedError as exc:
         raise _forbidden(exc) from exc
@@ -595,7 +590,7 @@ async def detach_credential(
     assert_company_access(ctx, company_id)
     try:
         detached = await _get_credentials().detach(
-            session, company_id, role_id, secret_id, actor_user_id=_actor_id(current_user)
+            session, company_id, role_id, secret_id, actor_user_id=actor_id(current_user)
         )
     except NotAuthorisedError as exc:
         raise _forbidden(exc) from exc
@@ -663,7 +658,7 @@ async def set_step_cost_inputs(
             workflow_id=workflow_id,
             estimated_minutes=payload.estimated_minutes,
             runs_per_month=payload.runs_per_month,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except NotAuthorisedError as exc:
         raise _forbidden(exc) from exc
@@ -710,7 +705,7 @@ async def set_role_rate(
             role_id=role_id,
             hourly_rate=payload.hourly_rate,
             currency=payload.currency,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except NotAuthorisedError as exc:
         raise _forbidden(exc) from exc
@@ -732,7 +727,7 @@ async def clear_role_rate(
     assert_company_access(ctx, company_id)
     try:
         cleared = await _get_rates().clear(
-            session, company_id=company_id, role_id=role_id, actor_user_id=_actor_id(current_user)
+            session, company_id=company_id, role_id=role_id, actor_user_id=actor_id(current_user)
         )
     except NotAuthorisedError as exc:
         raise _forbidden(exc) from exc
