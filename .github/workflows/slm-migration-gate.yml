@@ -40,6 +40,7 @@ concurrency:
 
 permissions:
   contents: read
+  packages: read  # pull the ghcr CI image mirror (#18160)
 
 jobs:
   slm-migration-matrix:
@@ -50,7 +51,13 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        # Mirror of the upstream image (ci-image-mirror.yml, #18160): anonymous
+        # pulls hit the per-IP quota. The ghcr packages must be public or grant
+        # this repo read access so fork PRs can pull them.
+        image: ghcr.io/mrveiss/ci-postgres:16
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
         env:
           POSTGRES_USER: slmtest
           POSTGRES_PASSWORD: slmtest

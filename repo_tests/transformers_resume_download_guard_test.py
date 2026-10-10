@@ -141,6 +141,10 @@ SPLAT_ALLOWLIST: dict[tuple[str, int], str] = {
         "autobot-backend/llm_shared/optimization/layer_inference.py",
         565,
     ): "kwargs built two lines above from use_fast/cache_dir only (#15054)",
+    (
+        "autobot-backend/llm_shared/optimization/model_inspector.py",
+        264,
+    ): "`pin` is pinned_revision_kwargs(model_name), bound on the line above: revision only (#13034)",
 }
 
 

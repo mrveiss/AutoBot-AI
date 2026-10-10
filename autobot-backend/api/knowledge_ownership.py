@@ -26,6 +26,7 @@ from api.schemas_knowledge import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from knowledge.search_filters import can_read_fact
 from knowledge_factory import get_or_create_knowledge_base
 
 logger = get_logger(__name__)
@@ -74,7 +75,7 @@ async def _get_fact_with_ownership(kb, fact_id: str, user_id: str):
 
     metadata = fact.get("metadata", {})
     # #16662: every caller is behind check_admin_permission -- an explicit admin read (owner decision, #16654)
-    has_access = await kb.ownership_manager.check_access(fact_id, user_id, metadata, is_admin=True)
+    has_access = await can_read_fact(kb.ownership_manager, fact_id, metadata, user_id=user_id, is_admin=True)
 
     if not has_access:
         raise HTTPException(
