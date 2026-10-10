@@ -116,3 +116,13 @@ def test_a_non_numeric_port_fails_closed_instead_of_raising() -> None:
     assert redact_url_userinfo(url) == MASK
     assert redact_url_credentials(url) == MASK
     assert redact_nested({"endpoint": url}) == {"endpoint": MASK}
+
+
+def test_userinfo_is_masked_under_an_ordinary_key_in_both_forms() -> None:
+    """A username-only userinfo (``https://<key>@host``) carries the key; mask it, keep the rest (#17899)."""
+    user_only = redact_nested({"endpoint": f"https://{_PW}@ingest.example:8443/1?a=b"})["endpoint"]
+    assert _PW not in user_only and user_only == f"https://{MASK}@ingest.example:8443/1?a=b"
+    both = redact_nested({"endpoint": f"https://u:{_PW}@ingest.example/1"})["endpoint"]
+    assert _PW not in both and both == f"https://u:{MASK}@ingest.example/1"  # password masked, user kept
+    plain = "https://ingest.example:8443/1?a=b"  # contrast: no userinfo, unchanged
+    assert redact_nested({"endpoint": plain}) == {"endpoint": plain}

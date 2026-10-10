@@ -53,8 +53,7 @@ from enum import Enum
 from typing import Any, ClassVar, Dict, FrozenSet, Iterable, Mapping, Tuple
 from urllib.parse import quote, unquote_plus, urlsplit, urlunsplit
 
-# Masked stand-in for a populated credential value.  Fixed width so the mask
-# never discloses the length of the real secret.
+# Masked stand-in for a populated credential value; fixed width so it never discloses the secret's length.
 REDACTED_PLACEHOLDER = "**********"
 
 # A field is credential-shaped when its name equals one of these nouns or ends
@@ -93,11 +92,9 @@ LOCATION_SUFFIXES: Tuple[str, ...] = ("_path", "_file", "_dir", "_id")
 URL_SUFFIXES: Tuple[str, ...] = ("_url", "_uri", "_dsn")
 
 
-# Authorization terms: not field-name *suffixes* (``use_auth`` is a flag, not a
-# secret, so PRECISE must not mask it) but a substring of a header/key name under
-# BROAD (``x_auth``, ``Authorization``, ``bearer_token``).  Added to the shared
-# vocabulary so the log/event/snapshot redactors stop each carrying their own
-# copy (#17337).
+# Authorization terms: not field-name *suffixes* (``use_auth`` is a flag, so PRECISE must not mask it) but a
+# substring of a header/key name under BROAD (``x_auth``, ``Authorization``, ``bearer_token``). In the shared
+# vocabulary so the log/event/snapshot redactors stop carrying their own copy (#17337).
 AUTHORIZATION_TERMS: Tuple[str, ...] = ("auth", "authorization", "bearer")
 
 # Stems that only make sense as a substring (``private_key``, ``privatekey``);
@@ -108,15 +105,14 @@ BROAD_ONLY_STEMS: Tuple[str, ...] = ("private",)
 BROAD_FRAGMENTS: Tuple[str, ...] = tuple(dict.fromkeys(CREDENTIAL_SUFFIXES + AUTHORIZATION_TERMS + BROAD_ONLY_STEMS))
 
 
-# A COUNT or LIMIT of a credential noun (``max_tokens``, ``token_count``,
-# ``key_length``) is a number, not a credential -- but ONLY two callers act on that
-# (``is_credential_entry(..., exempt_counts=True)``): the template export and the API
-# config readout (``redact_nested`` for GET /config and /current, which returned it
-# unredacted before #18193); every other caller keeps masking it. Deliberately tight:
-#   * a prefix form needs the REMAINDER to be a PLURAL noun (``max_tokens``,
-#     ``num_api_keys``); ``max_token_secret`` and ``max_password`` stay masked;
-#   * a suffix form needs the remainder to END in a noun and the name to END in
-#     the quantity word; ``token_count_secret`` stays masked.
+# A COUNT or LIMIT of a credential noun (``max_tokens``, ``token_count``, ``key_length``) is a number,
+# not a credential -- but ONLY the template export and the API config readout (``redact_nested`` for
+# GET /config and /current, unredacted before #18193) act on that (``exempt_counts=True``); every other
+# caller keeps masking it. Deliberately tight:
+#   * a prefix form needs the REMAINDER to be a PLURAL noun (``max_tokens``, ``num_api_keys``);
+#     ``max_token_secret`` and ``max_password`` stay masked;
+#   * a suffix form needs the remainder to END in a noun and the name to END in the quantity word;
+#     ``token_count_secret`` stays masked.
 # Under such a name any NON-number value is masked by every caller (#17336).
 QUANTITY_PREFIXES: Tuple[str, ...] = (
     "max_",
@@ -241,8 +237,7 @@ def is_url_field(name: str) -> bool:
 def redact_url_userinfo(value: str, mask_username: bool = False) -> str:
     """Strip the password from a URL, preserving scheme/host/port/path.
 
-    ``mask_username`` additionally hides the user component, for schemes that
-    carry the credential there instead (a Sentry-style ``https://<key>@host/1``).
+    ``mask_username`` also hides the user part, where the credential sits (``https://<key>@host/1``).
     """
     try:
         parsed = urlsplit(value)
@@ -350,11 +345,9 @@ LEGACY_EXPORT_KEY_NAMES = frozenset(
 # credential (``Bearer <jwt>``, ``Basic <b64>``, raw tokens).
 _AUTH_HEADER_RE = re.compile(r"(?i)(authorization\s*[:=]\s*).+")
 
-# ``api_key=...`` / ``token: ...`` key/value pairs, with an optional
-# ``[a-z0-9_]*[_-]?`` prefix (``client_secret=``, ``db_password=``, #12333). The
-# word must sit immediately before the ``[:=]`` so prose and near-miss keys
-# (``password_hash_algorithm=``) never match. Every noun here is in the shared
-# vocabulary (asserted by test), so this is the text SHAPE of it, not a copy.
+# ``api_key=...`` / ``token: ...`` pairs with an optional ``[a-z0-9_]*[_-]?`` prefix (``db_password=``, #12333);
+# the word sits right before ``[:=]`` so near-miss keys (``password_hash_algorithm=``) never match. Every noun is
+# in the shared vocabulary (asserted by test): this is its text SHAPE, not a copy.
 _SECRET_KV_RE = re.compile(
     r"(?i)\b([a-z0-9_]*[_-]?(?:api[_-]?key|token|secret|password|passwd))\b(\s*[:=]\s*)([^\s,;\"']+)"
 )
@@ -381,6 +374,15 @@ def redact_mapping(mapping: Mapping[str, Any]) -> Dict[str, Any]:
 _SCALARS = (bool, int, float)
 
 
+def _user_only(url: str) -> bool:
+    """``https://<key>@host``: no password, so the credential is the user part (#17899)."""
+    try:
+        p = urlsplit(url)
+    except ValueError:
+        return False
+    return bool(p.username and not p.password)
+
+
 def _redact_nested_leaf(name: str, value: Any, policy: MatchPolicy) -> Any:
     """One non-container leaf of :func:`redact_nested` (#18193)."""
     if value is None or value == "":
@@ -392,24 +394,22 @@ def _redact_nested_leaf(name: str, value: Any, policy: MatchPolicy) -> Any:
     if cred and not (url and is_url_field(name)):
         return REDACTED_PLACEHOLDER  # a URL-shaped value under a credential name (webhook secret) is masked whole
     if url:
-        return redact_url_credentials(redact_url_userinfo(value, mask_username=cred), policy)
+        return redact_url_credentials(redact_url_userinfo(value, mask_username=cred or _user_only(value)), policy)
     return redact_content(value)
 
 
 def redact_nested(value: Any, policy: MatchPolicy = MatchPolicy.BROAD, name: str = "") -> Any:
     """Copy of ``value`` with credentials masked at any depth, for API response bodies (#18193).
 
-    Walks dicts, lists, tuples and sets (a set comes back as a list).  Masks like
-    :func:`redact_value` (``REDACTED_PLACEHOLDER``): a set value under a credential name, of any
-    type, and a non-empty container under one, is masked whole -- except under a URL-shaped name
-    (``db_url``), where a URL keeps its host and loses userinfo and credential query params.
-    A URL string under any other name is scrubbed the same way; other strings go through
-    :func:`redact_content`, so ``sk-...``, JWTs and inline ``user:pass@`` are masked and ordinary text is
-    byte-identical.  Keys, order, bool and numbers are unchanged; an unknown non-scalar type fails
-    closed.  List items inherit their parent's name.  ``BROAD`` (also for query params): a response
-    is read by any caller, so over-masking costs a field and a leak costs a secret.
-    ``exempt_counts=True`` keeps ``max_tokens=4096`` a number: GET /config and /current returned it
-    before, so no existing caller's masked set shrinks (the template export is the other such caller).
+    Walks dicts, lists, tuples and sets (a set comes back as a list), masking like :func:`redact_value`
+    (``REDACTED_PLACEHOLDER``): a set value, or a non-empty container, under a credential name is masked
+    whole -- except under a URL-shaped name (``db_url``), where a URL keeps its host and loses userinfo
+    and credential query params. A URL string under any other name is scrubbed the same way, including
+    a user-only ``https://<key>@host``; other strings go through :func:`redact_content` (``sk-...``,
+    JWTs, inline ``user:pass@``), so ordinary text is byte-identical. Keys, order, bool and numbers are
+    unchanged; an unknown non-scalar type fails closed. List items inherit their parent's name.
+    ``BROAD`` (also for query params): over-masking costs a field, a leak costs a secret.
+    ``exempt_counts=True`` keeps ``max_tokens=4096`` a number (GET /config and /current returned it before).
     """
     if isinstance(value, (Mapping, list, tuple, set, frozenset)):
         if value and is_credential_entry(name, value, policy, exempt_counts=True):

@@ -112,7 +112,7 @@ response, a log line, an issue, a PR comment — is already redacted.
 - Every `ConnectorCredentialStore` read takes `owner_id` and passes `_require_owner`; a new
   method that skips it grants cross-tenant credential read.
 - Nothing reaches a log, HTTP error body, or outward artifact without
-  [`secret_redaction.py`](../../autobot_shared/secret_redaction.py) (`redact_text` (:363) / `redact_mapping` (:373)) or
+  [`secret_redaction.py`](../../autobot_shared/secret_redaction.py) (`redact_text` (:356) / `redact_mapping` (:366)) or
   [`security/redaction.py`](../../autobot_shared/security/redaction.py) (`redact_cloud_identifiers` (:67) / `redact_provider_error` (:81)).
   Exception text counts; a boto3 `ClientError` carries the account number in an ARN (#15324).
 - Keys come from SSOT config, never a literal. A default value for an encryption key is a

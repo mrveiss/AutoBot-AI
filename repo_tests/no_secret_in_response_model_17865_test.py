@@ -166,6 +166,17 @@ def _model_names(expr: ast.expr) -> list[str]:
     return []
 
 
+_COLLECTIONS = frozenset("list set tuple frozenset dict sequence mapping".split())
+
+
+def _is_collection(expr: ast.expr | None) -> bool:
+    """True when the annotation holds a list/set/tuple/dict/Sequence/Mapping (Optional/Union unwrapped)."""
+    return expr is not None and any(
+        isinstance(n, ast.Subscript) and (_model_names(n.value) or [""])[0].lower() in _COLLECTIONS
+        for n in ast.walk(expr)
+    )
+
+
 def _annotation_names(expr: ast.expr | None) -> list[str]:
     """Class names a field annotation refers to — the nesting edge."""
     return _model_names(expr) if expr is not None else []
@@ -195,9 +206,7 @@ def excluded_field_names(expr: ast.expr | None, resolve: dict[str, ast.expr]) ->
         if isinstance(node, ast.Dict):
             for k, v in zip(node.keys, node.values):
                 if isinstance(k, ast.Constant) and isinstance(k.value, str):
-                    # `__all__` is the list-item segment, not a field name, so it
-                    # does not extend the path.
-                    walk(v, prefix if k.value == "__all__" else prefix + (k.value,))
+                    walk(v, prefix + (k.value,))  # `__all__` stays: it only counts under a collection
         elif isinstance(node, (ast.Set, ast.List, ast.Tuple)):
             for elt in node.elts:
                 walk(elt, prefix)
@@ -238,6 +247,8 @@ class Index:
     #: Per SITE, not per name: the merge above would otherwise let a same-named
     #: declared-field class hide a pass-through (#17899).
     passthrough: frozenset[tuple[str, str]] = frozenset()
+    #: `(class, field)` whose annotation is a collection: only there does `__all__` apply (#18219).
+    collections: frozenset[tuple[str, str]] = frozenset()
 
 
 def _build_index(root: Path) -> Index:
@@ -256,6 +267,7 @@ def _build_index(root: Path) -> Index:
     consts: dict[str, ast.expr] = {}  # rebound PER FILE in the loop below
     defined_in: dict[str, list[str]] = {}
     passthrough: set[tuple[str, str]] = set()
+    collections: set[tuple[str, str]] = set()
 
     for rel in _python_files(root):
         try:
@@ -284,6 +296,8 @@ def _build_index(root: Path) -> Index:
                         if _is_secret_field(stmt.target.id):
                             secrets.append(stmt.target.id)
                         refs += [(stmt.target.id, t) for t in _annotation_names(stmt.annotation)]
+                        if _is_collection(stmt.annotation):
+                            collections.add((node.name, stmt.target.id))
                 defined_in.setdefault(node.name, [])
                 if rel not in defined_in[node.name]:
                     defined_in[node.name].append(rel)
@@ -302,7 +316,8 @@ def _build_index(root: Path) -> Index:
                 excluded = frozenset(excluded_field_names(kws.get("response_model_exclude"), consts))
                 for name in _model_names(kws["response_model"]):
                     routes.append(Route(rel, node.lineno, method, path, name, excluded))
-    return Index(tuple(parsed), tuple(failures), own, bases, nested, tuple(routes), defined_in, frozenset(passthrough))
+    sets = (frozenset(passthrough), frozenset(collections))  # passthrough sites, collection-typed fields
+    return Index(tuple(parsed), tuple(failures), own, bases, nested, tuple(routes), defined_in, *sets)
 
 
 def _model_names_of_bases(node: ast.ClassDef) -> list[str]:
@@ -334,8 +349,14 @@ def _reached_paths(model: str, idx: Index, seen: frozenset[str] = frozenset()) -
     for base in idx.bases.get(model, []):
         paths |= _reached_paths(base, idx, seen)
     for field, other in idx.nested.get(model, []):
-        paths |= {(field,) + p for p in _reached_paths(other, idx, seen)}
+        seg = (field, "__all__") if (model, field) in idx.collections else (field,)
+        paths |= {seg + p for p in _reached_paths(other, idx, seen)}
     return paths
+
+
+def _is_excluded(path: tuple[str, ...], excluded: frozenset[tuple[str, ...]]) -> bool:
+    """An excluded path covers itself and every descendant (`{"providers"}` drops `providers.api_key`)."""
+    return any(path[:i] in excluded for i in range(1, len(path) + 1))
 
 
 def _reached_fields(model: str, idx: Index, seen: frozenset[str] = frozenset()) -> list[str]:
@@ -347,10 +368,8 @@ def _violations(idx: Index) -> list[tuple[str, int, str, str, str]]:
     out = []
     for route in idx.routes:
         for path in _reached_paths(route.model, idx):
-            # Matched as a PATH. Comparing the leaf name against a set of paths
-            # is always False, which silently disabled every exclusion -- the
-            # bug this line previously had.
-            if path in route.excluded:  # that exact path never reaches the wire
+            # Matched as a PATH: a leaf name against a set of paths is always False (the old bug).
+            if _is_excluded(path, route.excluded):  # that path, or an ancestor of it, never reaches the wire
                 continue
             field = path[-1]
             if (route.model, field, route.method, route.path) in _WAIVED:
@@ -514,7 +533,7 @@ def test_the_unaudited_baseline_only_shrinks():
         (r.file, f"{r.method} {r.path}".strip(), r.model, field)
         for r in idx.routes
         for path in _reached_paths(r.model, idx)
-        if path not in r.excluded
+        if not _is_excluded(path, r.excluded)
         for field in [path[-1]]
     }
     stale = sorted(set(_UNAUDITED_BASELINE) - live)
