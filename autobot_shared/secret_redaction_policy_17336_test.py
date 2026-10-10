@@ -203,11 +203,43 @@ def test_on_the_export_path_a_quantity_name_is_exempt_only_when_its_value_is_a_n
 
 @pytest.mark.parametrize("policy", list(MatchPolicy))
 def test_a_name_outside_the_vocabulary_is_never_a_credential_for_any_value(policy) -> None:
-    """``pin_length`` names no credential noun, so a value under it is out of scope here.
+    """A name that names no credential noun is out of scope here, whatever its value.
 
-    Adding ``pin`` to the vocabulary is a vocabulary decision, not a value rule (#17336).
+    ``pin_length`` was the example until the owner decision on #18194 added ``pin`` as a
+    WHOLE-TOKEN noun; ``pin_length`` still names no credential (it ends in ``length``), so it
+    stays outside the vocabulary and the value rule never reaches it.
     """
     assert is_credential_entry("pin_length", "4821", policy) is False
+    assert is_credential_entry("cache_ttl", "4821", policy) is False
+
+
+@pytest.mark.parametrize("policy", list(MatchPolicy))
+@pytest.mark.parametrize("name", ["pin", "user_pin", "pinCode", "card_pin", "passcode", "PIN", "userPIN", "card.pin"])
+def test_pin_and_passcode_are_credentials_as_whole_tokens_under_both_policies(name, policy) -> None:
+    """#18194 owner decision: a PIN is a credential. Mask direction."""
+    assert is_credential_entry(name, "0000", policy) is True
+    assert is_credential_entry(name, 1234, policy) is True
+
+
+@pytest.mark.parametrize("policy", list(MatchPolicy))
+@pytest.mark.parametrize(
+    "name", ["pin_memory", "pinned_revision", "pin_length", "spinner", "opinion", "pinyin", "pinning", "pin_count"]
+)
+def test_a_word_that_merely_contains_pin_is_not_a_credential(name, policy) -> None:
+    """#18194 owner decision: whole words only. Contrast direction."""
+    assert is_credential_entry(name, "4821", policy) is False
+
+
+def test_pin_and_passcode_stay_out_of_the_substring_vocabulary() -> None:
+    """``BROAD_FRAGMENTS`` is substring-matched and feeds ``SENSITIVE_KEYS``: ``pin`` there would mask ``spinner``."""
+    assert "pin" not in sr.BROAD_FRAGMENTS and "passcode" not in sr.BROAD_FRAGMENTS
+    assert ("pin",) in sr.WHOLE_TOKEN_NOUNS
+
+
+def test_a_pin_file_location_is_not_a_pin() -> None:
+    for policy in MatchPolicy:
+        assert is_credential_entry("pin_file", "x.pem", policy) is False  # ends in the token ``file``
+        assert is_credential_entry("user_pin", "x", policy) is True
 
 
 def test_secret_size_and_secret_sizes_differ_by_policy_and_value() -> None:

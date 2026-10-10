@@ -73,14 +73,16 @@ _CENSUS: Set[str] = {
     "autobot-backend/llm_shared/credential_redaction.py",  # API_KEY_PATTERNS (SENSITIVE_KEYS derived)
 }
 
-#: The one module allowed to define the credential-name matcher (#17336).
+#: The canonical matcher and its vocabulary sibling (#18194, split for the 600-line ceiling; the
+#: pair is ONE module -- `secret_redaction` re-exports every name). A THIRD file is a fork.
 CANONICAL_MATCHER = "autobot_shared/secret_redaction.py"
+CANONICAL_HOMES = [CANONICAL_MATCHER, "autobot_shared/secret_redaction_vocabulary.py"]
 
 #: Top-level names that ARE the credential-name matcher / log-line redactors. A
 #: second definition anywhere is a second implementation, whatever it is called.
 _MATCHER_ENTRY_POINTS = frozenset(
     {"is_credential_field", "redact_mapping", "redact_text", "redact_value", "redact_content", "MatchPolicy"}
-    | {"redact_nested"}  # #18193; #18205 is its convergence home with the LLM-layer redact_dict
+    | {"redact_nested", "matches_vocabulary", "is_quantity_field"}  # #18193 / #18205; #18194 helpers
 )
 
 # Verbs that make a module a redactor rather than a module that merely mentions
@@ -517,8 +519,8 @@ def test_credential_matcher_has_exactly_one_home() -> None:
         if defines_matcher_entry_point(source):
             homes.append(rel)
     REACH.completed(len(_SOURCES))
-    assert homes == [CANONICAL_MATCHER], (
-        f"credential-name matcher defined in {homes}, expected only {CANONICAL_MATCHER}. "
+    assert homes == CANONICAL_HOMES, (
+        f"credential-name matcher defined in {homes}, expected only {CANONICAL_HOMES}. "
         "A second implementation is the fork #17336 merged away: add a MatchPolicy "
         "or a vocabulary noun to secret_redaction.py instead."
     )
@@ -529,7 +531,7 @@ def test_no_new_private_key_name_vocabulary() -> None:
     found = {
         rel
         for rel in _SOURCES
-        if rel != CANONICAL_MATCHER and declares_key_name_vocabulary((REPO_ROOT / rel).read_text(encoding="utf-8"))
+        if rel not in CANONICAL_HOMES and declares_key_name_vocabulary((REPO_ROOT / rel).read_text(encoding="utf-8"))
     }
     new = sorted(found - _VOCABULARY_BASELINE)
     assert not new, (

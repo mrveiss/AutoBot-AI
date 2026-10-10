@@ -14,8 +14,8 @@ Redaction rules
 ---------------
 * Field **names are always preserved**; only *values* are masked.
 * Only names that *end with* a credential noun are masked (suffix, not
-  substring), so ``tokenizers_parallelism`` stays readable and ``jwt_secret``
-  is caught.
+  substring; ``pin``/``passcode`` as whole tokens, #18194), so ``tokenizers_parallelism``
+  stays readable and ``jwt_secret`` is caught.
 * URL-shaped fields keep scheme/host/port/path and lose only the **userinfo**
   password (``postgresql://user:pw@host/db``): exempting them would leak, masking
   them wholesale would destroy the diagnostic.
@@ -29,7 +29,8 @@ on -- a credential sitting in prose, not behind a named field.
 
 Canonical redactor (#17336, #17337)
 -----------------------------------
-This is THE module that decides whether a name is a credential: one shared
+This is THE module that decides whether a name is a credential (the vocabulary and matcher
+live in its sibling ``secret_redaction_vocabulary``, re-exported here): one shared
 vocabulary (:data:`CREDENTIAL_SUFFIXES` + :data:`AUTHORIZATION_TERMS` +
 :data:`BROAD_ONLY_STEMS`) and two explicitly named matching policies,
 :class:`MatchPolicy`.  ``PRECISE`` (suffix) keeps diagnostics readable and is for
@@ -49,120 +50,63 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any, ClassVar, Dict, FrozenSet, Iterable, Mapping, Tuple
 from urllib.parse import quote, unquote_plus, urlsplit, urlunsplit
 
-# Masked stand-in for a populated credential value; fixed width so it never discloses the secret's length.
-REDACTED_PLACEHOLDER = "**********"
-
-# A field is credential-shaped when its name equals one of these nouns or ends
-# with ``_<noun>``.  Suffix matching avoids false positives on names that merely
-# contain the noun (``tokenizers_parallelism``, ``llm_key_rotation_grace_secs``).
-# Plurals are listed explicitly: a future ``api_keys: dict`` must not fail open.
-CREDENTIAL_SUFFIXES: Tuple[str, ...] = (
-    "secret",
-    "secrets",
-    "key",
-    "keys",
-    "token",
-    "tokens",
-    "password",
-    "passwords",
-    "passwd",
-    "pass",
-    "passphrase",
-    "credential",
-    "credentials",
-    "salt",
-    "dsn",
-    "signature",
-    "pem",
-    "cert",
-    "seed",
+from autobot_shared.secret_redaction_vocabulary import (
+    AUTHORIZATION_TERMS,
+    BROAD_FRAGMENTS,
+    BROAD_ONLY_STEMS,
+    CREDENTIAL_SUFFIXES,
+    LOCATION_SUFFIXES,
+    QUANTITY_PREFIXES,
+    QUANTITY_SUFFIXES,
+    WHOLE_TOKEN_NOUNS,
+    MatchPolicy,
+    is_quantity_field,
+    matches_vocabulary,
 )
 
-# Names ending in these are locations pointing *at* a credential, not the credential itself.
-# ``tls_key_path``/``service_key_file`` must stay visible so an operator can tell which file
-# was loaded.  ``_url`` is deliberately NOT here — see URL_SUFFIXES.
-LOCATION_SUFFIXES: Tuple[str, ...] = ("_path", "_file", "_dir", "_id")
+# The vocabulary lives in ``secret_redaction_vocabulary`` (same canonical module, split for size);
+# every public name it defined here before is re-exported so no import breaks.
+__all__ = [
+    "AUTHORIZATION_TERMS",
+    "BROAD_FRAGMENTS",
+    "BROAD_ONLY_STEMS",
+    "CREDENTIAL_SUFFIXES",
+    "ContentMatch",
+    "LEGACY_EXPORT_KEY_NAMES",
+    "LOCATION_SUFFIXES",
+    "LOG_MASK",
+    "MatchPolicy",
+    "QUANTITY_PREFIXES",
+    "QUANTITY_SUFFIXES",
+    "REDACTED_PLACEHOLDER",
+    "RedactedReprMixin",
+    "URL_SUFFIXES",
+    "WHOLE_TOKEN_NOUNS",
+    "is_credential_entry",
+    "is_credential_field",
+    "is_quantity_field",
+    "is_url_field",
+    "redact_content",
+    "redact_mapping",
+    "redact_nested",
+    "redact_text",
+    "redact_url_credentials",
+    "redact_url_userinfo",
+    "redact_value",
+    "scan_content_for_credentials",
+]
+
+# Masked stand-in for a populated credential value.  Fixed width so the mask
+# never discloses the length of the real secret.
+REDACTED_PLACEHOLDER = "**********"
+
 
 # Names ending in these hold a connection string.  They are redacted in-place
 # (userinfo only) rather than exempted or fully masked.
 URL_SUFFIXES: Tuple[str, ...] = ("_url", "_uri", "_dsn")
-
-
-# Authorization terms: not field-name *suffixes* (``use_auth`` is a flag, so PRECISE must not mask it) but a
-# substring of a header/key name under BROAD (``x_auth``, ``Authorization``, ``bearer_token``). In the shared
-# vocabulary so the log/event/snapshot redactors stop carrying their own copy (#17337).
-AUTHORIZATION_TERMS: Tuple[str, ...] = ("auth", "authorization", "bearer")
-
-# Stems that only make sense as a substring (``private_key``, ``privatekey``);
-# as a suffix they would mask ``is_private`` style names PRECISE keeps readable.
-BROAD_ONLY_STEMS: Tuple[str, ...] = ("private",)
-
-#: Every noun BROAD matches.  Deduplicated, order-stable.
-BROAD_FRAGMENTS: Tuple[str, ...] = tuple(dict.fromkeys(CREDENTIAL_SUFFIXES + AUTHORIZATION_TERMS + BROAD_ONLY_STEMS))
-
-
-# A COUNT or LIMIT of a credential noun (``max_tokens``, ``token_count``, ``key_length``) is a number,
-# not a credential -- but ONLY the template export and the API config readout (``redact_nested`` for
-# GET /config and /current, unredacted before #18193) act on that (``exempt_counts=True``); every other
-# caller keeps masking it. Deliberately tight:
-#   * a prefix form needs the REMAINDER to be a PLURAL noun (``max_tokens``, ``num_api_keys``);
-#     ``max_token_secret`` and ``max_password`` stay masked;
-#   * a suffix form needs the remainder to END in a noun and the name to END in the quantity word;
-#     ``token_count_secret`` stays masked.
-# Under such a name any NON-number value is masked by every caller (#17336).
-QUANTITY_PREFIXES: Tuple[str, ...] = (
-    "max_",
-    "min_",
-    "num_",
-    "total_",
-    "input_",
-    "output_",
-    "prompt_",
-    "completion_",
-    "cached_",
-)
-QUANTITY_SUFFIXES: Tuple[str, ...] = ("_count", "_limit", "_len", "_length", "_size")
-_PLURAL_NOUNS: Tuple[str, ...] = ("secrets", "keys", "tokens", "passwords", "credentials")
-
-
-def _ends_with_noun(text: str, nouns: Tuple[str, ...]) -> bool:
-    return any(text == n or text.endswith(f"_{n}") for n in nouns)
-
-
-def is_quantity_field(name: str) -> bool:
-    """True when ``name`` is a count/limit of a credential noun, not a credential."""
-    lowered = (name or "").lower().replace("-", "_")
-    for prefix in QUANTITY_PREFIXES:
-        if lowered.startswith(prefix) and _ends_with_noun(lowered[len(prefix) :], _PLURAL_NOUNS):
-            return True
-    for suffix in QUANTITY_SUFFIXES:
-        if lowered.endswith(suffix) and _ends_with_noun(lowered[: -len(suffix)], CREDENTIAL_SUFFIXES):
-            return True
-    return False
-
-
-class MatchPolicy(Enum):
-    """How a name is compared against the shared credential vocabulary (#17336).
-
-    ``PRECISE`` -- the name equals a noun or ends with ``_<noun>``; location
-    suffixes are exempt.  Over-masking destroys a diagnostic (SSOT config
-    ``__repr__``), so false positives are the cost to avoid.
-
-    ``BROAD`` -- a noun appears anywhere in the lowercased name with ``_``/``-``
-    stripped; no location exemption.  Over-masking a log line, extra-vars
-    mapping, event payload or stored snapshot is free, a leaked secret is not.
-    """
-
-    PRECISE = "precise"
-    BROAD = "broad"
-
-
-def _normalized(name: str) -> str:
-    return name.lower().replace("_", "").replace("-", "")
 
 
 def _is_plain_number(value: Any) -> bool:
@@ -184,7 +128,7 @@ def is_credential_field(name: str, policy: MatchPolicy = MatchPolicy.PRECISE) ->
     ``policy`` is validated, never defaulted by a fallthrough: an unknown value
     raises rather than silently selecting the weaker rule.
     """
-    return _matches_vocabulary(name, policy)
+    return matches_vocabulary(name, policy)
 
 
 def is_credential_entry(
@@ -211,21 +155,7 @@ def is_credential_entry(
             return True
         if exempt_counts:
             return False
-    return _matches_vocabulary(name, policy)
-
-
-def _matches_vocabulary(name: str, policy: MatchPolicy) -> bool:
-    if not isinstance(policy, MatchPolicy):
-        raise TypeError(f"policy must be a MatchPolicy, got {policy!r}")
-    if not name:
-        return False
-    if policy is MatchPolicy.BROAD:
-        flat = _normalized(name)
-        return any(fragment in flat for fragment in BROAD_FRAGMENTS)
-    lowered = name.lower()
-    if lowered.endswith(LOCATION_SUFFIXES):
-        return False
-    return any(lowered == suffix or lowered.endswith(f"_{suffix}") for suffix in CREDENTIAL_SUFFIXES)
+    return matches_vocabulary(name, policy)
 
 
 def is_url_field(name: str) -> bool:

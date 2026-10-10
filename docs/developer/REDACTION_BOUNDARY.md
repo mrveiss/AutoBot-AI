@@ -21,7 +21,7 @@ secret/PII types. Calling someone else's redactor does not count.
 
 | module | own vocabulary | match | shape it owns | census |
 |---|---|---|---|---|
-| `autobot_shared/secret_redaction.py` | `CREDENTIAL_SUFFIXES` + `AUTHORIZATION_TERMS` + `BROAD_ONLY_STEMS` | `MatchPolicy.PRECISE` / `BROAD` | field names, mappings, log lines, free-text credentials | in |
+| `autobot_shared/secret_redaction.py` (+ its vocabulary sibling `secret_redaction_vocabulary.py`) | `CREDENTIAL_SUFFIXES` + `AUTHORIZATION_TERMS` + `BROAD_ONLY_STEMS` | `MatchPolicy.PRECISE` / `BROAD` | field names, mappings, log lines, free-text credentials | in |
 | `autobot-backend/a2a/pii_pipeline.py` | `PIIType` + regex detectors | regex | PII types and BLOCK/REDACT/HASH policy | in |
 | `autobot-backend/llm_shared/credential_redaction.py` | `API_KEY_PATTERNS` | regex | dict / log-record redaction (LLM layer); keys via `BROAD` | in |
 | `autobot_shared/security/redaction.py` | none | -- | AWS ARN identifiers, log-value neutralisation; re-exports `redact_text` / `redact_mapping` | out (#17336) |
@@ -72,6 +72,16 @@ uses `is_credential_entry`, and
 `max_token_secret`, `max_password` and `token_count_secret` are not quantity names
 and stay masked.
 
+
+**Whole-token nouns (#18194).** `pin` and `passcode` are credentials too, but `pin` is also a verb and
+a prefix (`pin_memory`, `pinned_revision`, `spinner`, `opinion`), so they are not suffix or substring
+nouns. `secret_redaction_vocabulary.WHOLE_TOKEN_NOUNS` is consulted by BOTH policies: the name is split
+on `_ - .` and camelCase, and it matches when its last tokens are `pin`, `pin code` or `passcode`
+(`pin`, `user_pin`, `pinCode`, `card.pin`, `passcode` masked; `pin_length`, `pin_memory`,
+`pinned_revision`, `spinner`, `opinion`, `pinyin` unmasked). Never add them to `BROAD_FRAGMENTS`: it is
+substring-matched and feeds `credential_redaction.SENSITIVE_KEYS`. The vocabulary and matcher live in
+`secret_redaction_vocabulary.py` (split from `secret_redaction.py` for the 600-line ceiling); it is the same
+canonical module, re-exported, and the census guard treats the pair as one home.
 
 `BROAD` is a superset of `PRECISE` by construction (same nouns, plus
 `AUTHORIZATION_TERMS` and `BROAD_ONLY_STEMS`, which would over-mask as

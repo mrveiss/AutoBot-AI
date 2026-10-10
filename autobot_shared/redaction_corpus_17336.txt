@@ -3382,3 +3382,14 @@ xoxb-
 xxhash
 xyz
 y
+pin
+user_pin
+pinCode
+card_pin
+passcode
+pin_memory
+pinned_revision
+pin_length
+spinner
+opinion
+pinyin
