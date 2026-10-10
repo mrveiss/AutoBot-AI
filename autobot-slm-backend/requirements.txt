@@ -51,7 +51,7 @@ sqlalchemy>=2.0.54,<2.1
 # saying not to. Restored. The cap is not stale: #17445 is OPEN and records the
 # 27 failures 2.1.0 causes in this service. Lifting it needs the SLM suite run
 # against 2.1.x, which is that issue's work, not a dependency bump's.
-asyncpg>=0.31.0  # Async PostgreSQL driver for SQLAlchemy
+asyncpg>=0.32.0  # Async PostgreSQL driver for SQLAlchemy
 # greenlet is declared explicitly, not left to SQLAlchemy (#17432). SQLAlchemy
 # ships it as an `[asyncio]` extra AND, in some releases, under a
 # `platform_machine == "x86_64" or ...` marker -- so whether it arrives depends
