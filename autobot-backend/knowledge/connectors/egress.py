@@ -17,6 +17,9 @@ call site.
 
 from __future__ import annotations
 
+import logging
+from urllib.parse import urlparse
+
 
 def instance_host_egress() -> bool:
     """Egress policy for an **operator-configured instance host** (#13625, Rule 8).
@@ -49,3 +52,22 @@ CONTENT_URL_EGRESS = False
 # what made this class read as a fixed endpoint and kept it out of #13625's audit
 # — the override key is one ``cfg.get`` away from invisible (#17576).
 VENDOR_API_EGRESS = False
+
+
+def next_link_on_base(link: object, base: str, logger: logging.Logger) -> str | None:
+    """A server-supplied next-page URL, only if it stays under *base* (#17576).
+
+    Such a link is requested with the connector's credentials, and the egress
+    guard only demands a *public* host, so an unchecked link lets a malicious or
+    compromised response send the bearer token to any public host. Anything that
+    is not ``base + "/"`` followed by a path (a lookalike prefix, a userinfo
+    trick, a scheme downgrade) ends paging: ``None`` is returned, and the host
+    alone (never the token or the query) is logged at WARNING.
+    """
+    if not link:
+        return None
+    if isinstance(link, str) and link.startswith(base.rstrip("/") + "/"):
+        return link
+    host = urlparse(link).hostname if isinstance(link, str) else None
+    logger.warning("Refusing a next-page link outside the configured API base (host: %s); paging stopped", host)
+    return None

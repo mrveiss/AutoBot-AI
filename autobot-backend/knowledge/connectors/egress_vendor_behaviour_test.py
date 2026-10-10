@@ -16,6 +16,7 @@ loopback address or a private address is refused, and the session is never touch
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
+from urllib.parse import urlparse
 
 import pytest
 
@@ -100,3 +101,93 @@ async def test_an_internal_or_metadata_base_is_refused_before_any_request(name, 
     session.request.assert_not_called()
     assert result["status_code"] != 200
     assert "disallowed address" in str(result)
+
+
+# --- a server-supplied next-page link must not take the bearer token elsewhere (#17576)
+
+_GRAPH = "https://graph.microsoft.com/v1.0"
+_PAGE_ONE = f"{_GRAPH}/me/drive/root/children"
+
+
+def _paging_session(first_body: dict, second_body: dict | None = None) -> MagicMock:
+    """A session answering the first listing with *first_body*, any later URL with *second_body*."""
+    session = MagicMock()
+    calls: list[tuple[str, dict]] = []
+
+    async def _request(method, url, **kwargs):
+        calls.append((url, kwargs.get("headers", {})))
+        resp = MagicMock()
+        resp.status = 200
+        resp.json = AsyncMock(return_value=first_body if len(calls) == 1 else (second_body or {}))
+        resp.release = MagicMock()
+        resp.__aenter__ = AsyncMock(return_value=resp)
+        resp.__aexit__ = AsyncMock(return_value=False)
+        return resp
+
+    session.request = AsyncMock(side_effect=_request)
+    session.calls = calls
+    return session
+
+
+async def _list_files(session: MagicMock, method: str = "_list_all_files"):
+    from autobot_shared.http_client import get_http_client
+
+    connector = OneDriveConnector(_config({}))
+    with (
+        patch.object(type(get_http_client()), "get_session", AsyncMock(return_value=session)),
+        patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=_PUBLIC_ADDRINFO),
+    ):
+        if method == "_list_all_files":
+            return await connector._list_all_files()
+        return await connector._list_folder_recursive("folder-1")
+
+
+def _file(name: str) -> dict:
+    return {"id": name, "name": f"{name}.md", "file": {}, "size": 1}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["_list_all_files", "_list_folder_recursive"])
+@pytest.mark.parametrize(
+    "evil",
+    [
+        "https://attacker.example.com/steal",  # public, so the egress guard alone would allow it
+        "https://graph.microsoft.com.attacker.example.com/v1.0/x",  # prefix lookalike
+        "https://graph.microsoft.com@attacker.example.com/v1.0/x",  # userinfo trick
+        "http://graph.microsoft.com/v1.0/x",  # scheme downgrade
+    ],
+)
+async def test_an_off_graph_next_link_is_never_requested(method, evil):
+    session = _paging_session({"value": [_file("a")], "@odata.nextLink": evil}, {"value": [_file("b")]})
+
+    files = await _list_files(session, method)
+
+    requested = [url for url, _ in session.calls]
+    assert len(requested) == 1, requested
+    assert all(urlparse(u).hostname == "graph.microsoft.com" for u in requested)
+    assert [f["id"] for f in files] == ["a"], "pages already read are kept"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["_list_all_files", "_list_folder_recursive"])
+async def test_an_on_graph_next_link_is_still_followed(method):
+    nxt = f"{_GRAPH}/me/drive/root/children?$skiptoken=abc"
+    session = _paging_session({"value": [_file("a")], "@odata.nextLink": nxt}, {"value": [_file("b")]})
+
+    files = await _list_files(session, method)
+
+    assert [url for url, _ in session.calls][1] == nxt
+    assert session.calls[1][1]["Authorization"].startswith("Bearer ")
+    assert [f["id"] for f in files] == ["a", "b"]
+
+
+@pytest.mark.asyncio
+async def test_contrast_the_unchecked_link_would_have_been_requested_with_the_token():
+    """Without the check the same off-host link passes the egress guard and is sent the token."""
+    evil = "https://attacker.example.com/steal"
+    session = _paging_session({"value": [], "@odata.nextLink": evil}, {"value": []})
+    with patch("knowledge.connectors.onedrive.next_link_on_base", lambda link, base, log: link):
+        await _list_files(session)
+
+    assert [url for url, _ in session.calls][1:] == [evil]
+    assert session.calls[1][1]["Authorization"].startswith("Bearer ")

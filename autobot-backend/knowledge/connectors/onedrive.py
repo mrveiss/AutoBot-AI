@@ -43,6 +43,7 @@ from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import VENDOR_API_EGRESS, AbstractConnector
 from knowledge.connectors.content_extraction import extract_pdf_document as _extract_pdf_document
 from knowledge.connectors.content_extraction import extract_text_from_docx as _extract_text_from_docx
+from knowledge.connectors.egress import next_link_on_base
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,
@@ -448,8 +449,7 @@ class OneDriveConnector(AbstractConnector):
                     subfolder_files = await self._list_folder_recursive(item.get("id", ""))
                     files.extend(subfolder_files)
 
-            # Handle pagination
-            next_url = body.get("@odata.nextLink")
+            next_url = next_link_on_base(body.get("@odata.nextLink"), self._graph_url, self.logger)
 
         return files
 
@@ -487,7 +487,7 @@ class OneDriveConnector(AbstractConnector):
                     subfolder_files = await self._list_folder_recursive(item.get("id", ""))
                     files.extend(subfolder_files)
 
-            next_url = body.get("@odata.nextLink")
+            next_url = next_link_on_base(body.get("@odata.nextLink"), self._graph_url, self.logger)
 
         return files
 
