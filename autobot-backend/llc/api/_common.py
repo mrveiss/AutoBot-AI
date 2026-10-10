@@ -4,10 +4,9 @@
 # Author: mrveiss
 """Shared route helpers for the LLC API surface.
 
-``_actor_id`` and the error translators were written three times over
-(``roles.py``, ``contacts.py``, ``workflows.py``) with identical bodies and
-three different docstrings. This is the single copy; the existing three are
-tracked for migration separately so that change stays reviewable on its own.
+``actor_id`` was written three times over (``roles.py``, ``contacts.py``,
+``workflows.py``) with identical bodies and three different docstrings. This is
+the single copy (#15754); ``repo_tests/one_actor_id_15754_test.py`` keeps it so.
 
 The actor rule is the one worth stating once and keeping stated: the acting
 user comes from the authenticated session and never from the request body or
@@ -28,9 +27,20 @@ logger = get_logger(__name__)
 
 
 def actor_id(current_user: dict) -> uuid.UUID:
-    """The acting user, from the session — never from the body or query."""
+    """The acting user, from the authenticated session -- never the body or query.
+
+    A client-supplied ``actor`` let the audit trail's actor identity and its
+    USER/SYSTEM discriminator be whatever the caller typed, and an unparseable
+    value was an unhandled 500 in ``ActivityLogService.record`` (#13969 review
+    M1). The same hazard applies to a session user with no usable id, so that
+    case is a 401 here, not a ``ValueError`` out of ``uuid.UUID("None")``
+    (#15754).
+    """
     raw = current_user.get("id") or current_user.get("user_id")
-    return uuid.UUID(str(raw))
+    try:
+        return uuid.UUID(str(raw))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated") from exc
 
 
 def bad_request(exc: Exception) -> HTTPException:
