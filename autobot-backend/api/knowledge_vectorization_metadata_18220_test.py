@@ -47,8 +47,3 @@ async def test_the_background_job_for_a_bad_fact_fails_without_raising_and_the_n
         await mod._vectorize_fact_background(good_kb, "f-good", "job-good")
     assert ("job-bad", "failed") in statuses
     assert good_kb.redis_client.hgetall.called
-
-
-def test_the_extractor_reads_non_object_metadata_as_empty():
-    assert mod._extract_fact_metadata({"metadata": "[1]"}) == {}
-    assert mod._extract_fact_metadata({b"metadata": b'{"k": 1}'}) == {"k": 1}

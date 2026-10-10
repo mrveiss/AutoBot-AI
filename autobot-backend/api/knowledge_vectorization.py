@@ -377,12 +377,6 @@ def _extract_fact_content(fact_data: dict) -> str:
     return str(content_raw) if content_raw else ""
 
 
-def _extract_fact_metadata(fact_data: dict) -> dict:
-    """Extract metadata from fact data, handling both bytes and string keys."""
-    metadata_str = fact_data.get("metadata") or fact_data.get(b"metadata", b"{}")
-    return parse_fact_metadata("", metadata_str)  # #18220: non-object metadata reads as {}
-
-
 async def _fetch_batch_data(kb, batch: List[str], skip_existing: bool) -> tuple:
     """
     Fetch batch fact data and vector existence status.
