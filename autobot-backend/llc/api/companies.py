@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import _parse_uuid_safe, get_current_user, require_org_context
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import QueryDefaults
 from autobot_shared.user_management.models.user import resolve_display_name
 from llc.deps import assert_company_access, get_session, service_dep
 from llc.kb.collections import KbCollectionManager
@@ -1600,12 +1601,7 @@ async def get_company_teams(
     )
 
 
-# Capability-search result bounds. These literals predate #13936; they were named
-# when the hardcoded-values gate flagged them on this PR. (#13950 has since made
-# that gate line-scoped, so the original file-scoped rationale no longer applies —
-# the constants are kept because naming them is right, not because a gate forces it.)
-_AGENT_SEARCH_DEFAULT_LIMIT = 10
-_AGENT_SEARCH_MAX_LIMIT = 100
+# Capability-search result bounds are the shared search defaults (#17888).
 
 
 @router.get("/{company_id}/agents/search")
@@ -1613,9 +1609,9 @@ async def search_agents(
     company_id: uuid.UUID,
     q: str = Query(..., min_length=1, description="Search query for agent capabilities"),
     limit: int = Query(
-        _AGENT_SEARCH_DEFAULT_LIMIT,
+        QueryDefaults.DEFAULT_TOP_K,
         ge=1,
-        le=_AGENT_SEARCH_MAX_LIMIT,
+        le=QueryDefaults.MAX_SEARCH_LIMIT,
         description="Max results",
     ),
     _current_user: dict = Depends(get_current_user),
