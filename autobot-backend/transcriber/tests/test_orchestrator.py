@@ -23,7 +23,12 @@ from transcriber.models import RecordingStatus
 from transcriber.orchestrator import TranscriberOrchestrator, _assign_speaker
 from transcriber.routes.projects import router as projects_router
 from transcriber.routes.recordings import router as recordings_router
-from voice_processing.providers import ProviderRegistry, ProviderTranscription, TranscriptSegment
+from voice_processing.providers import (
+    ProviderRegistry,
+    ProviderTranscription,
+    TranscriptionUnavailableError,
+    TranscriptSegment,
+)
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -240,6 +245,50 @@ async def test_process_recording_failure_sets_error_status(db, tmp_path):
     assert rec["status"] == RecordingStatus.ERROR.value
     assert rec["failure_stage"] == "RuntimeError"
     assert rec["failure_reason"] is not None
+
+
+# ── provider failure vs genuine empty (#17778) ────────────────────────────────
+
+
+async def _run_with_registry_result(db, tmp_path, *, raises=None, outcome=None):
+    rid = await _make_recording(db, tmp_path)
+    mock_ffmpeg = MagicMock()
+    mock_ffmpeg.extract_audio = AsyncMock(return_value=None)
+    mock_ffmpeg.get_audio_duration = AsyncMock(return_value=3.0)
+    registry = create_autospec(ProviderRegistry, instance=True, spec_set=True)
+    if raises is not None:
+        registry.transcribe_with_fallback.side_effect = raises
+    else:
+        registry.transcribe_with_fallback.return_value = outcome
+    orch = TranscriberOrchestrator(db=db)
+    orch.ffmpeg_service = mock_ffmpeg
+    orch.provider_registry = registry
+    with (
+        patch("transcriber.orchestrator.is_diarization_available", return_value=False),
+        patch("transcriber.orchestrator.detect_language", new=AsyncMock(return_value="en")),
+        patch("transcriber.orchestrator._validate_file_path"),
+    ):
+        try:
+            await orch.process_recording(rid)
+        except Exception:
+            pass
+    return await db.get_recording(rid)
+
+
+@pytest.mark.asyncio
+async def test_no_provider_could_run_marks_the_recording_error_with_the_reason(db, tmp_path):
+    rec = await _run_with_registry_result(
+        db, tmp_path, raises=TranscriptionUnavailableError("en", ["Whisper: unavailable", "Generic: RuntimeError"])
+    )
+    assert rec["status"] == RecordingStatus.ERROR.value
+    assert rec["failure_stage"] == "TranscriptionUnavailableError"
+    assert "Whisper: unavailable" in rec["failure_reason"]
+
+
+@pytest.mark.asyncio
+async def test_a_genuine_empty_transcript_is_complete(db, tmp_path):
+    rec = await _run_with_registry_result(db, tmp_path, outcome=ProviderTranscription(None, []))
+    assert rec["status"] == RecordingStatus.COMPLETE.value
 
 
 # ── upload route enqueues task ────────────────────────────────────────────────

@@ -78,9 +78,11 @@ def test_whisper_is_fed_the_given_rate_and_float32_and_generate_keywords(wired) 
     assert kwargs["generate_kwargs"] == {"max_length": 448, "num_beams": 5, "temperature": 0.8}
 
 
-def test_no_pipeline_means_empty_text(processor) -> None:
+def test_no_pipeline_is_an_error_not_empty_text(processor) -> None:
+    """A pipeline that cannot load must surface as a failed result, not as silence."""
     with patch.object(voice_module, "get_whisper_pipeline", return_value=None):
-        assert processor._transcribe_with_whisper(np.zeros(4, dtype=np.float32), 16000) == ""
+        with pytest.raises(RuntimeError, match="unavailable"):
+            processor._transcribe_with_whisper(np.zeros(4, dtype=np.float32), 16000)
 
 
 def test_container_bytes_are_decoded_not_read_as_float32(processor) -> None:

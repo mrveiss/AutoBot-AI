@@ -547,3 +547,18 @@ register_env_var(
         component="judges",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_WHISPER_LOAD_RETRY_SECONDS",
+        type=float,
+        default=60.0,
+        description=(
+            "How long the shared Whisper loader waits after a FAILED model load "
+            "before trying again. A transient failure no longer disables local "
+            "transcription for the life of the process; an integrity failure is "
+            "never retried (media/audio/pipeline.py)."
+        ),
+        component="voice",
+    )
+)

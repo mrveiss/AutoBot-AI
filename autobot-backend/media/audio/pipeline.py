@@ -12,9 +12,11 @@
 import os
 import tempfile
 import threading
+import time
 from dataclasses import dataclass
 from typing import Any
 
+from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 
 # Optional: transformers Whisper pipeline for transcription
@@ -31,11 +33,16 @@ logger = get_logger(__name__)
 # Lazy singleton for the Whisper pipeline (expensive to load).
 # Issue #10916: _whisper_pipeline_lock prevents two threads from both finding
 # _whisper_pipeline is None and each calling hf_pipeline() concurrently.
-# _WHISPER_LOADED sentinel distinguishes "not yet tried" from "tried but None".
+# #17778: a failed load no longer latches "unavailable" for the process lifetime --
+# it is retried after WHISPER_LOAD_RETRY_SECONDS. A ModelIntegrityError is the
+# exception: it is remembered and re-raised, because a tampered model must never
+# degrade into "unavailable" (which callers answer by falling through to a cloud).
 _whisper_pipeline: Any | None = None
 _whisper_pipeline_lock = threading.Lock()
-_WHISPER_LOADED = False
+_whisper_retry_at = 0.0
+_whisper_integrity_error: Exception | None = None
 WHISPER_MODEL = "openai/whisper-base"
+WHISPER_LOAD_RETRY_SECONDS = env_float("AUTOBOT_WHISPER_LOAD_RETRY_SECONDS", 60.0)
 
 #: MIME type -> temp-file suffix, for the one Whisper transcription path (#17780).
 #: There were two of these maps, already drifted: this one had 8 entries and
@@ -75,60 +82,106 @@ class WhisperTranscription:
     chunks: list
 
 
-def get_whisper_pipeline() -> Any | None:
-    """Lazy-load the Whisper pipeline; returns None if unavailable (thread-safe).
+def whisper_loadable() -> bool:
+    """Cheap, NON-loading probe: is the pinned Whisper loaded, or worth trying to load?
 
-    Public since #17780. ``api/voice.py`` previously imported this under its
-    private name from another module, which is how one loader came to serve two
-    features while only one of them was pinned.
+    Safe on the event loop: it never touches the model. False when transformers is
+    missing, the model is unpinned, or a recent load failure is still inside its
+    retry window. True after an integrity failure, deliberately -- the caller must
+    reach :func:`get_whisper_pipeline` and see the error rather than treat a
+    tampered model as merely absent.
     """
-    global _whisper_pipeline, _WHISPER_LOADED  # noqa: PLW0603
+    if _whisper_pipeline is not None or _whisper_integrity_error is not None:
+        return True
+    if not _TRANSFORMERS_AVAILABLE or time.monotonic() < _whisper_retry_at:
+        return False
+    from autobot_shared.pinned_model_registry import get_pinned_revision
+
+    try:
+        get_pinned_revision(WHISPER_MODEL)
+    except KeyError:
+        return False
+    return True
+
+
+def get_whisper_pipeline() -> Any | None:
+    """Lazy-load the Whisper pipeline; None if unavailable (thread-safe). BLOCKING on first use.
+
+    Public since #17780. Call it from a worker thread (``asyncio.to_thread``), never
+    on the event loop -- the first call downloads/loads the model. Use
+    :func:`whisper_loadable` for a cheap availability check.
+
+    Raises:
+        ModelIntegrityError: the cached model does not match its pin. Remembered, so
+            every later call raises too.
+    """
+    global _whisper_pipeline, _whisper_retry_at, _whisper_integrity_error  # noqa: PLW0603
     if not _TRANSFORMERS_AVAILABLE:
         return None
-    if not _WHISPER_LOADED:
-        with _whisper_pipeline_lock:
-            if not _WHISPER_LOADED:
-                try:
-                    # #17780: pinned and integrity-verified through
-                    # `load_verified`, which is the canonical path rather than
-                    # the three steps by hand. #17124 introduced it after a
-                    # FAIL-OPEN bug: assigning the model before
-                    # `verify_cached_model` ran left a tampered model reachable
-                    # when a caller's broad `except` swallowed
-                    # `ModelIntegrityError`. The `except Exception` below is
-                    # exactly such a caller, so writing the steps out here --
-                    # which is what my first version of this did -- would have
-                    # reproduced the bug the helper exists to prevent.
-                    #
-                    # The registry already pins this repo (the same one
-                    # `multimodal_processor/processors/voice.py` loads), so no
-                    # revision is obtained here and none is invented.
-                    from autobot_shared.pinned_model_registry import load_verified
+    if _whisper_pipeline is not None:
+        return _whisper_pipeline
+    with _whisper_pipeline_lock:
+        if _whisper_integrity_error is not None:
+            raise _whisper_integrity_error
+        if _whisper_pipeline is None and time.monotonic() >= _whisper_retry_at:
+            try:
+                # #17780: pinned and integrity-verified through `load_verified`, the
+                # canonical path. #17124: assigning the model before
+                # `verify_cached_model` ran left a tampered model reachable when a
+                # broad `except` swallowed `ModelIntegrityError`.
+                from autobot_shared.pinned_model_registry import ModelIntegrityError, load_verified
 
-                    (_whisper_pipeline,) = load_verified(
-                        WHISPER_MODEL,
-                        lambda revision: hf_pipeline(
-                            "automatic-speech-recognition",
-                            model=WHISPER_MODEL,
-                            revision=revision,
-                        ),
-                    )
-                    logger.info("Whisper pipeline loaded: %s", WHISPER_MODEL)
-                except Exception as exc:
-                    logger.warning("Failed to load Whisper pipeline: %s", exc)
-                    _whisper_pipeline = None
-                _WHISPER_LOADED = True
+                (_whisper_pipeline,) = load_verified(
+                    WHISPER_MODEL,
+                    lambda revision: hf_pipeline(
+                        "automatic-speech-recognition",
+                        model=WHISPER_MODEL,
+                        revision=revision,
+                    ),
+                )
+                logger.info("Whisper pipeline loaded: %s", WHISPER_MODEL)
+            except ModelIntegrityError as exc:
+                logger.error("SECURITY: Whisper model failed its integrity check; refusing to serve: %s", exc)
+                _whisper_integrity_error = exc
+                raise
+            except Exception as exc:
+                logger.warning("Failed to load Whisper pipeline (retry in %.0fs): %s", WHISPER_LOAD_RETRY_SECONDS, exc)
+                _whisper_pipeline = None
+                _whisper_retry_at = time.monotonic() + WHISPER_LOAD_RETRY_SECONDS
     return _whisper_pipeline
 
 
-def transcribe_path(pipe: Any, path: str, *, language: str = "") -> WhisperTranscription:
+#: Whisper's feature extractor pads/truncates to 30 s; more than 3000 mel frames
+#: switches transformers to long-form generation, which REQUIRES timestamp tokens
+#: (`_set_return_timestamps` in generation_whisper.py raises ValueError otherwise).
+SHORT_FORM_SECONDS = 30.0
+
+
+def _call_pipe(pipe: Any, inputs: Any, *, timestamps: bool, generate_kwargs: dict | None) -> WhisperTranscription:
+    """One pipeline call; *timestamps* selects ``return_timestamps`` (True for long-form)."""
+    return _as_transcription(pipe(inputs, return_timestamps=timestamps, generate_kwargs=generate_kwargs))
+
+
+def transcribe_path(pipe: Any, path: str, *, language: str = "", timestamps: bool = False) -> WhisperTranscription:
     """Run Whisper over the audio file at *path*. BLOCKING -- call via ``asyncio.to_thread``.
 
-    The file-taking half of :func:`transcribe_bytes`, for callers that already hold
-    a file (#17778). *language* is a BCP-47 hint; empty means auto-detect.
+    The file-taking half of :func:`transcribe_bytes`. *language* is a BCP-47 hint;
+    empty means auto-detect. ``timestamps=True`` returns ``chunks`` with real
+    ``timestamp`` pairs and handles any length. Without it the call keeps
+    ``return_timestamps=False`` (the short-form behaviour) and retries once with
+    timestamps when transformers refuses the audio as long-form (> 30 s), so the
+    text of a short clip is exactly what it was and a long one no longer fails.
     """
     generate_kwargs = {"language": language} if language else None
-    return _as_transcription(pipe(path, return_timestamps=False, generate_kwargs=generate_kwargs))
+    if timestamps:
+        return _call_pipe(pipe, path, timestamps=True, generate_kwargs=generate_kwargs)
+    try:
+        return _call_pipe(pipe, path, timestamps=False, generate_kwargs=generate_kwargs)
+    except ValueError as exc:
+        if "3000 mel" not in str(exc):
+            raise
+        logger.info("Audio is longer than %.0fs; retrying with long-form timestamps", SHORT_FORM_SECONDS)
+        return _call_pipe(pipe, path, timestamps=True, generate_kwargs=generate_kwargs)
 
 
 def transcribe_array(
@@ -136,15 +189,15 @@ def transcribe_array(
 ) -> WhisperTranscription:
     """Run Whisper over decoded *samples* (mono float array). BLOCKING (#17778).
 
-    The ndarray input the multimodal voice processor needs so it can stop loading a
-    second copy of ``openai/whisper-base``. The HF pipeline accepts
+    The ndarray input the multimodal voice processor needs. The HF pipeline accepts
     ``{"raw": array, "sampling_rate": sr}`` and resamples to the model's rate itself.
     *generate_kwargs* reach ``model.generate`` untouched (e.g. the beam settings).
+    Clips of at most 30 s keep ``return_timestamps=False``; longer ones use
+    long-form (``return_timestamps=True``) and the text is the joined result.
     """
-    output = pipe(
-        {"raw": samples, "sampling_rate": sampling_rate}, return_timestamps=False, generate_kwargs=generate_kwargs
-    )
-    return _as_transcription(output)
+    long_form = len(samples) / float(sampling_rate) > SHORT_FORM_SECONDS
+    inputs = {"raw": samples, "sampling_rate": sampling_rate}
+    return _call_pipe(pipe, inputs, timestamps=long_form, generate_kwargs=generate_kwargs)
 
 
 def _as_transcription(output: Any) -> WhisperTranscription:

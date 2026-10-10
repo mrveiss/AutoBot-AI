@@ -22,7 +22,7 @@ from autobot_shared.logging_manager import get_logger
 from config import get_config_section
 from llm_shared.torch_loader import lazy_torch
 from media.audio.decode import decode_audio_bytes
-from media.audio.pipeline import get_whisper_pipeline, transcribe_array
+from media.audio.pipeline import get_whisper_pipeline, transcribe_array, whisper_loadable
 from voice_processing.hallucination_filter import is_silence_hallucination, peak_window_rms
 
 from ..base import BaseModalProcessor
@@ -304,10 +304,13 @@ class VoiceProcessor(BaseModalProcessor):
         return audio_array, sampling_rate
 
     def _transcribe_with_whisper(self, audio_array: np.ndarray, sampling_rate: int) -> str:
-        """Transcribe via the ONE pinned Whisper pipeline (#17778), same decode settings."""
+        """Transcribe via the ONE pinned Whisper pipeline (#17778), same decode settings.
+
+        BLOCKING (first use loads the model): ``_process_audio`` runs it in a thread.
+        """
         pipe = get_whisper_pipeline()
         if pipe is None:
-            return ""
+            raise RuntimeError("Voice processing unavailable: the Whisper pipeline could not be loaded.")
         return transcribe_array(pipe, audio_array, sampling_rate, generate_kwargs=WHISPER_GENERATE_KWARGS).text
 
     def _process_wav2vec_embeddings(self, audio_array: np.ndarray, sampling_rate: int) -> Tuple[Any, str]:
@@ -350,7 +353,7 @@ class VoiceProcessor(BaseModalProcessor):
             audio_array, sampling_rate = self._prepare_audio_data(input_data)
 
             # Process with Whisper for transcription (Issue #315 - extracted method)
-            transcribed_text = self._transcribe_with_whisper(audio_array, sampling_rate)
+            transcribed_text = await asyncio.to_thread(self._transcribe_with_whisper, audio_array, sampling_rate)
 
             # Issue #13104: Whisper answers silence with a confident phantom
             # phrase; drop it here so it never becomes a user turn downstream.
@@ -411,8 +414,8 @@ class VoiceProcessor(BaseModalProcessor):
         return ""
 
     def whisper_available(self) -> bool:
-        """True when the one pinned Whisper pipeline is loadable (#17778)."""
-        return get_whisper_pipeline() is not None
+        """True when the one pinned Whisper pipeline is loaded or loadable; never loads it (#17778)."""
+        return whisper_loadable()
 
     def _validate_audio_models_available(self) -> None:
         """Validate that audio models are loaded and available. Issue #620."""

@@ -19,7 +19,7 @@ from media.audio.ffmpeg_service import get_ffmpeg_service
 from transcriber.database import Database, get_transcriber_db
 from transcriber.models import RecordingStatus
 from voice_processing.language_detection import detect_language
-from voice_processing.providers import TranscriptSegment, get_speech_provider_registry
+from voice_processing.providers import TranscriptionUnavailableError, TranscriptSegment, get_speech_provider_registry
 
 logger = get_logger(__name__)
 
@@ -114,7 +114,7 @@ class TranscriberOrchestrator:
                 RecordingStatus.ERROR.value,
                 process_seconds=process_seconds,
                 failure_stage=failure_stage,
-                failure_reason="Processing failed — see backend logs",
+                failure_reason=_failure_reason(exc),
             )
             raise
         finally:
@@ -238,6 +238,13 @@ class TranscriberOrchestrator:
                 end_time=seg.end_time,
                 text=seg.text,
             )
+
+
+def _failure_reason(exc: Exception) -> str:
+    """User-facing reason; provider outages are named (#17778), everything else stays generic."""
+    if isinstance(exc, TranscriptionUnavailableError):
+        return "No speech provider could transcribe this recording — " + "; ".join(exc.reasons)
+    return "Processing failed — see backend logs"
 
 
 def _provider_diarizes(provider: Optional[object], segments: List[TranscriptSegment]) -> bool:

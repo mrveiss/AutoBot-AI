@@ -13,9 +13,11 @@ integrity-verified Whisper pipeline (``media.audio.pipeline``) behind the
 import asyncio
 from typing import List, Optional
 
+from autobot_shared.audio_params import STT_SAMPLE_RATE
 from autobot_shared.logging_manager import get_logger
-from media.audio.pipeline import get_whisper_pipeline, transcribe_path
-from voice_processing.hallucination_filter import is_silence_hallucination
+from media.audio.decode import decode_audio_bytes
+from media.audio.pipeline import WhisperTranscription, get_whisper_pipeline, transcribe_path, whisper_loadable
+from voice_processing.hallucination_filter import is_silence_hallucination, peak_window_rms
 from voice_processing.providers import SpeechProvider, TranscriptSegment
 from voice_processing.providers.generic_provider import GENERIC_LANGUAGES
 
@@ -26,31 +28,60 @@ logger = get_logger(__name__)
 WHISPER_TEXT_CONFIDENCE = 0.9
 
 
+def _chunk_times(chunk: dict) -> tuple[float, float]:
+    """(start, end) of a pipeline chunk; the last chunk's end may be None -> its start."""
+    start, end = chunk.get("timestamp") or (0.0, None)
+    start = float(start or 0.0)
+    return start, float(end) if end is not None else start
+
+
+def _segments_from(result: WhisperTranscription, language: str) -> List[TranscriptSegment]:
+    """One TranscriptSegment per timestamped chunk; a single untimed one if there are none."""
+    lang = language or result.language
+    segments = []
+    for chunk in result.chunks:
+        text = (chunk.get("text") or "").strip()
+        if text:
+            start, end = _chunk_times(chunk)
+            segments.append(TranscriptSegment(text, start, end, WHISPER_TEXT_CONFIDENCE, language=lang))
+    if not segments:
+        segments.append(TranscriptSegment(result.text, 0.0, 0.0, WHISPER_TEXT_CONFIDENCE, language=lang))
+    return segments
+
+
 class WhisperProvider(SpeechProvider):
     """Speech provider backed by the local pinned Whisper pipeline."""
 
     def is_available(self) -> bool:
-        """True when the pinned pipeline can be (or already is) loaded."""
-        return get_whisper_pipeline() is not None
+        """Cheap probe (never loads the model, safe on the event loop)."""
+        return whisper_loadable()
 
     async def transcribe(self, audio_path: str, language: Optional[str] = None) -> List[TranscriptSegment]:
-        """Transcribe *audio_path*; an empty list lets the registry fall through."""
+        """Transcribe *audio_path* with real chunk timestamps; [] lets the registry fall through.
+
+        The model load and the inference both run in a worker thread, so a caller's
+        ``asyncio.wait_for`` can time out instead of being stuck behind them.
+        """
+        return await asyncio.to_thread(self._transcribe_blocking, audio_path, language or "")
+
+    def _transcribe_blocking(self, audio_path: str, language: str) -> List[TranscriptSegment]:
+        """Load (first use) and run Whisper with ``return_timestamps=True`` (any length)."""
         pipe = get_whisper_pipeline()
         if pipe is None:
             logger.warning("Whisper pipeline unavailable; provider yields no segments")
             return []
-        result = await asyncio.to_thread(transcribe_path, pipe, audio_path, language=language or "")
-        if not result.text or is_silence_hallucination(result.text, language or None):
+        result = transcribe_path(pipe, audio_path, language=language, timestamps=True)
+        if not result.text or self._is_phantom(result.text, audio_path, language):
             return []
-        return [
-            TranscriptSegment(
-                text=result.text,
-                start_time=0.0,
-                end_time=0.0,  # return_timestamps=False: duration unknown
-                confidence=WHISPER_TEXT_CONFIDENCE,
-                language=language or result.language,
-            )
-        ]
+        return _segments_from(result, language)
+
+    @staticmethod
+    def _is_phantom(text: str, audio_path: str, language: str) -> bool:
+        """Silence-hallucination gate, with the peak RMS of the audio like VoiceProcessor (#13104)."""
+        with open(audio_path, "rb") as fh:
+            samples = decode_audio_bytes(fh.read())
+        rms = peak_window_rms(samples, STT_SAMPLE_RATE)
+        return is_silence_hallucination(text, language or None, rms=rms)
 
     @property
     def provider_name(self) -> str:

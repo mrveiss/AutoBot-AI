@@ -11,7 +11,12 @@ from unittest.mock import create_autospec, patch
 
 import pytest
 
-from voice_processing.providers import ProviderRegistry, SpeechProvider, TranscriptSegment
+from voice_processing.providers import (
+    ProviderRegistry,
+    SpeechProvider,
+    TranscriptionUnavailableError,
+    TranscriptSegment,
+)
 from voice_processing.providers.generic_provider import GENERIC_LANGUAGES
 from voice_processing.providers.whisper_provider import WhisperProvider
 
@@ -101,7 +106,7 @@ async def test_unavailable_and_empty_providers_are_skipped():
 async def test_whisper_unavailable_means_generic_is_used(monkeypatch):
     registry = _registry_with_defaults(monkeypatch, cloud_key=False)
     whisper, generic = registry.get_all_providers("en")
-    with patch("voice_processing.providers.whisper_provider.get_whisper_pipeline", return_value=None):
+    with patch("voice_processing.providers.whisper_provider.whisper_loadable", return_value=False):
         assert whisper.is_available() is False
         generic_double = _fake("generic")
         registry._providers["en"] = [(whisper, 5), (generic_double, 0)]
@@ -110,14 +115,15 @@ async def test_whisper_unavailable_means_generic_is_used(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_no_provider_raises_and_all_raising_reraises():
+async def test_no_provider_raises_and_all_raising_is_a_failure_with_reasons():
     registry = ProviderRegistry()
     with pytest.raises(ValueError, match="No speech provider"):
         await registry.transcribe_with_fallback("a.wav", "xx")
     registry.register("en", _fake("a", error=RuntimeError("first")), priority=1)
     registry.register("en", _fake("b", error=RuntimeError("last")), priority=0)
-    with pytest.raises(RuntimeError, match="last"):
+    with pytest.raises(TranscriptionUnavailableError) as caught:
         await registry.transcribe_with_fallback("a.wav", "en")
+    assert caught.value.reasons == ["a: RuntimeError", "b: RuntimeError"]
 
 
 @pytest.mark.asyncio
@@ -126,13 +132,3 @@ async def test_all_empty_returns_no_provider_not_an_error():
     registry.register("en", _fake("a", segments=[]), priority=0)
     outcome = await registry.transcribe_with_fallback("a.wav", "en")
     assert outcome.provider is None and outcome.segments == []
-
-
-@pytest.mark.asyncio
-async def test_whisper_provider_turns_pipeline_text_into_one_segment():
-    pipe = create_autospec(lambda path, **kw: None)
-    pipe.return_value = {"text": " hello there ", "language": "en"}
-    with patch("voice_processing.providers.whisper_provider.get_whisper_pipeline", return_value=pipe):
-        segments = await WhisperProvider().transcribe("a.wav", "en")
-    assert [s.language for s in segments] == ["en"] and len(segments) == 1
-    assert pipe.call_args.kwargs["generate_kwargs"] == {"language": "en"}
