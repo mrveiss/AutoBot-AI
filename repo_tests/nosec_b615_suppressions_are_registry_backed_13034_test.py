@@ -65,6 +65,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+import pytest
 from repo_tests._nosec_b615_scan import MARKER
 from repo_tests._nosec_b615_scan import RESOLVER as _RESOLVER
 from repo_tests._nosec_b615_scan import calls_resolver as _calls_resolver
@@ -468,7 +469,7 @@ def go(name):
 
 
 def test_an_inline_resolver_call_in_the_load_passes() -> None:
-    """Exercises the `_holds_resolver_call(kw.value)` branch directly."""
+    """Exercises the `supplies_pin(kw.value)` branch directly."""
     assert unpinned_suppressed_calls(_INLINE_RESOLVER) == []
 
 
@@ -490,41 +491,42 @@ def test_revision_none_fails() -> None:
     assert unpinned_suppressed_calls(_REVISION_NONE) == [4]
 
 
-_PIN_REBOUND_TO_EMPTY = """
-from autobot_shared.pinned_model_registry import pinned_revision_kwargs
-from transformers import AutoConfig
-def go(name):
-    kwargs = pinned_revision_kwargs(name)
-    kwargs = {}
-    return AutoConfig.from_pretrained(name, **kwargs)  # nosec B615
-"""
+_PIN_HEADER = (
+    "from autobot_shared.pinned_model_registry import pinned_revision_kwargs\n"
+    "from transformers import AutoConfig\n"
+    "def go(m, c, e, items):\n"
+)
+_LOAD = "    return AutoConfig.from_pretrained(m, **kwargs)  # nosec B615\n"
+_PIN = "    kwargs = pinned_revision_kwargs(m)\n"
 
-_EMPTY_REBOUND_TO_PIN = """
-from autobot_shared.pinned_model_registry import pinned_revision_kwargs
-from transformers import AutoConfig
-def go(name):
-    kwargs = {}
-    kwargs = pinned_revision_kwargs(name)
-    return AutoConfig.from_pretrained(name, **kwargs)  # nosec B615
-"""
+#: (label, body lines before the load, unpinned?) -- any second binding of the
+#: splatted name, in any form, unpins it; a binding in a nested def never counts.
+_BINDING_CASES = [
+    ("single binding", _PIN, False),
+    ("another constant key set", _PIN + "    kwargs['cache_dir'] = c\n", False),
+    ("dict splatting the resolver", "    kwargs = {'use_fast': True, **pinned_revision_kwargs(m)}\n", False),
+    ("resolver nested as a value", "    kwargs = {'metadata': pinned_revision_kwargs(m)}\n", True),
+    ("resolver in one arm only", "    kwargs = pinned_revision_kwargs(m) if c else {}\n", True),
+    ("revision key popped by name", _PIN + "    kwargs.pop('revision', None)\n", True),
+    ("key from a variable", _PIN + "    kwargs[c] = None\n", True),
+    ("nested-def binding", "    kwargs = {}\n    def h():\n        kwargs = pinned_revision_kwargs(m)\n", True),
+    ("conditional second binding", "    kwargs = {}\n    if c:\n        kwargs = pinned_revision_kwargs(m)\n", True),
+    ("rebound to empty", _PIN + "    kwargs = {}\n", True),
+    ("tuple unpack", _PIN + "    kwargs, x = {}, 1\n", True),
+    ("augmented assignment", _PIN + "    kwargs |= {'revision': None}\n", True),
+    ("item assignment", _PIN + "    kwargs['revision'] = None\n", True),
+    ("del", _PIN + "    del kwargs\n    kwargs = {}\n", True),
+    ("except-as", _PIN + "    try:\n        pass\n    except e as kwargs:\n        pass\n", True),
+    ("for target", _PIN + "    for kwargs in items:\n        pass\n", True),
+    ("with-as", _PIN + "    with e as kwargs:\n        pass\n", True),
+    ("same-line rebind", "    kwargs = pinned_revision_kwargs(m); kwargs = {}\n", True),
+    ("binding after the load", _PIN + _LOAD + "    kwargs = {}\n", True),
+]
 
-_PIN_REBOUND_AFTER_THE_LOAD = """
-from autobot_shared.pinned_model_registry import pinned_revision_kwargs
-from transformers import AutoConfig
-def go(name):
-    kwargs = pinned_revision_kwargs(name)
-    model = AutoConfig.from_pretrained(name, **kwargs)  # nosec B615
-    kwargs = {}
-    return model
-"""
 
-
-def test_a_pin_rebound_to_an_unpinned_value_before_the_load_fails() -> None:
-    """Contrast pair, failing half: the last binding before the call wins, not any binding."""
-    assert unpinned_suppressed_calls(_PIN_REBOUND_TO_EMPTY) == [7]
-
-
-def test_the_last_binding_before_the_load_decides() -> None:
-    """Contrast pair, passing half: rebinding TO the resolver pins; rebinding after the load is irrelevant."""
-    assert unpinned_suppressed_calls(_EMPTY_REBOUND_TO_PIN) == []
-    assert unpinned_suppressed_calls(_PIN_REBOUND_AFTER_THE_LOAD) == []
+@pytest.mark.parametrize(("label", "body", "unpinned"), _BINDING_CASES, ids=[c[0] for c in _BINDING_CASES])
+def test_a_splatted_pin_counts_only_with_exactly_one_binding(label: str, body: str, unpinned: bool) -> None:
+    """Exactly one binding, from the resolver, before the load -- position cannot follow control flow."""
+    source = _PIN_HEADER + body + ("" if _LOAD in body else _LOAD)
+    load_line = source.splitlines().index(_LOAD.rstrip("\n")) + 1
+    assert unpinned_suppressed_calls(source) == ([load_line] if unpinned else []), label
