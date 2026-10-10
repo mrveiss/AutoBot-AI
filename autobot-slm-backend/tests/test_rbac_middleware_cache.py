@@ -36,6 +36,11 @@ import pytest
 # ---------------------------------------------------------------------------
 
 _SLM_ROOT = Path(__file__).parent.parent
+
+# #18088: the implementation is shared by both services now. These tests load it by
+# path with stubbed deps, so they follow the file rather than this service's copy --
+# which is a 29-line re-export shim and would make every assertion below vacuous.
+_SHARED_MIDDLEWARE = _SLM_ROOT.parent / "autobot_shared" / "user_management" / "middleware" / "rbac_middleware.py"
 _SHARED_ROOT = _SLM_ROOT.parent / "autobot_shared"
 
 for _p in (str(_SLM_ROOT), str(_SHARED_ROOT)):
@@ -68,7 +73,7 @@ _MOCK_NAMES = [
     "user_management.config",
     # audit model imported at module level by rbac_middleware (#11794)
     "user_management.models",
-    "user_management.models.audit",
+    "autobot_shared.user_management.models.audit",
     # The shared audit counter rbac_middleware imports at module level (#14750).
     # Same reason as autobot_shared.logging_manager above (#13312): the parent
     # `autobot_shared` here is a path-less MagicMock, so the import machinery
@@ -115,7 +120,7 @@ sys.modules["autobot_shared.ssot_constants"] = _ssot_constants_mod
 try:
     _SPEC = importlib.util.spec_from_file_location(
         "user_management.middleware.rbac_middleware",
-        _SLM_ROOT / "user_management" / "middleware" / "rbac_middleware.py",
+        _SHARED_MIDDLEWARE,
     )
     _rbac_mod: types.ModuleType = types.ModuleType(_SPEC.name)
     _SPEC.loader.exec_module(_rbac_mod)
@@ -132,6 +137,20 @@ finally:
         elif sys.modules[_k] is not _PRE_BOOTSTRAP_MODULES[_k]:
             sys.modules[_k] = _PRE_BOOTSTRAP_MODULES[_k]
     del _PRE_BOOTSTRAP_MODULES
+
+
+def _wired(db_session_context=None, user_service_cls=None):
+    """Inject fakes through the middleware's seam (#18088) -- it imports no service module."""
+    return patch.object(
+        _rbac_mod,
+        "_dependencies",
+        _rbac_mod.RBACDependencies(
+            db_session_context=db_session_context or MagicMock(),
+            user_service_cls=user_service_cls or MagicMock(),
+            tenant_context_cls=MagicMock(),
+            get_deployment_config=MagicMock(),
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -294,8 +313,7 @@ class TestDatabaseFallback:
         with (
             patch.object(_rbac_mod, "get_async_redis_client", AsyncMock(return_value=redis)),
             patch.object(_rbac_mod, "_ensure_listener_started", AsyncMock()),
-            patch.object(_rbac_mod, "UserService", FakeUserService),
-            patch.object(_rbac_mod, "db_session_context", return_value=ctx_mock),
+            _wired(db_session_context=MagicMock(return_value=ctx_mock), user_service_cls=FakeUserService),
         ):
             middleware = _rbac_mod.RBACMiddleware()
             middleware._config = SimpleNamespace(postgres_enabled=True)
@@ -317,6 +335,7 @@ class TestDatabaseFallback:
         with (
             patch.object(_rbac_mod, "get_async_redis_client", AsyncMock(return_value=redis)),
             patch.object(_rbac_mod, "_ensure_listener_started", AsyncMock()),
+            _wired(),
         ):
             middleware = _rbac_mod.RBACMiddleware()
             middleware._config = SimpleNamespace(postgres_enabled=False)
@@ -527,6 +546,6 @@ class TestStructuralInvariants:
 
     def test_middleware_uses_get_async_redis_client(self):
         """rbac_middleware.py must import from autobot_shared.redis_client."""
-        src = (_SLM_ROOT / "user_management" / "middleware" / "rbac_middleware.py").read_text(encoding="utf-8")
+        src = (_SHARED_MIDDLEWARE).read_text(encoding="utf-8")
         assert "get_async_redis_client" in src
         assert "autobot_shared.redis_client" in src

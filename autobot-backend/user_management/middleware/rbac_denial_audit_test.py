@@ -21,7 +21,23 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-_SRC = Path(__file__).resolve().parent / "rbac_middleware.py"
+# #18088: the implementation moved to autobot_shared; this test reads it by path for
+# AST assertions, so it follows the file rather than its own directory.
+_SRC = Path(__file__).resolve().parents[3] / "autobot_shared/user_management/middleware/rbac_decorators.py"
+
+
+def _wired(mod, **db_kwargs):
+    """Inject a fake session factory through the middleware's seam (#18088)."""
+    return patch.object(
+        mod,
+        "_dependencies",
+        mod.RBACDependencies(
+            db_session_context=MagicMock(**db_kwargs),
+            user_service_cls=MagicMock(),
+            tenant_context_cls=MagicMock(),
+            get_deployment_config=MagicMock(),
+        ),
+    )
 
 
 def _source() -> str:
@@ -85,7 +101,7 @@ class TestEveryDenialIsAudited:
         assert _source().count("await _emit_permission_denied_audit(") == 3
 
     def test_no_denial_path_raises_403_without_emitting(self):
-        """Every 403 in this module must be preceded by an audit call.
+        """Every 403 in the decorators module must be preceded by an audit call.
 
         Checked structurally: within each function, the index of the emit call
         must come before the HTTPException raise.
@@ -106,18 +122,18 @@ class TestFailureIsolation:
     @pytest.mark.asyncio
     async def test_db_failure_does_not_propagate(self):
         """A failing audit write must not convert a 403 into a 500."""
-        from user_management.middleware import rbac_middleware as mod
+        from autobot_shared.user_management.middleware import rbac_middleware as mod
 
-        with patch.object(mod, "db_session_context", side_effect=RuntimeError("db down")):
+        with _wired(mod, side_effect=RuntimeError("db down")):
             # Must return normally rather than raise.
             await mod._emit_permission_denied_audit(uuid.uuid4(), "users:read", "/api/users")
 
     @pytest.mark.asyncio
     async def test_denial_is_logged_even_when_the_write_fails(self, caplog):
         """The warning is emitted first, so a DB outage cannot hide the denial."""
-        from user_management.middleware import rbac_middleware as mod
+        from autobot_shared.user_management.middleware import rbac_middleware as mod
 
-        with patch.object(mod, "db_session_context", side_effect=RuntimeError("db down")):
+        with _wired(mod, side_effect=RuntimeError("db down")):
             with caplog.at_level("WARNING"):
                 await mod._emit_permission_denied_audit(uuid.uuid4(), "users:delete", "/api/users/1")
 
@@ -127,7 +143,7 @@ class TestFailureIsolation:
     @pytest.mark.asyncio
     async def test_entry_carries_the_forensic_fields(self):
         """user, permission, path, ip and user-agent — the point of the trail."""
-        from user_management.middleware import rbac_middleware as mod
+        from autobot_shared.user_management.middleware import rbac_middleware as mod
 
         session = MagicMock()
         ctx = MagicMock()
@@ -135,7 +151,7 @@ class TestFailureIsolation:
         ctx.__aexit__ = AsyncMock(return_value=False)
         user_id = uuid.uuid4()
 
-        with patch.object(mod, "db_session_context", return_value=ctx):
+        with _wired(mod, return_value=ctx):
             await mod._emit_permission_denied_audit(
                 user_id,
                 "users:delete",
@@ -155,7 +171,7 @@ class TestFailureIsolation:
 
 def test_request_context_survives_a_clientless_request():
     """Starlette leaves request.client None behind some proxies — must not crash."""
-    from user_management.middleware import rbac_middleware as mod
+    from autobot_shared.user_management.middleware import rbac_middleware as mod
 
     request = MagicMock()
     request.url.path = "/api/users"
