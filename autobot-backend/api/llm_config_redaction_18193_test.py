@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from api import llm as llm_api
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.ssot_config import config as ssot_config
 from config import unified_config_manager
 from constants.model_constants import ModelConstants
 
@@ -139,5 +140,16 @@ def test_current_reports_a_cloud_selection(monkeypatch) -> None:
 
 
 def test_current_falls_back_to_the_default_only_when_nothing_is_selected(monkeypatch) -> None:
+    # get_selected_model's only env input is AUTOBOT_DEFAULT_LLM_MODEL, read ONCE into the ssot
+    # singleton (config.default_llm_model -> config.llm.default_model).  Clear both the env var
+    # and the cached attribute so the expectation is the ModelConstants fallback, whatever the host sets.
+    monkeypatch.delenv("AUTOBOT_DEFAULT_LLM_MODEL", raising=False)
+    monkeypatch.setattr(ssot_config.llm, "default_model", "")
     body = _current(monkeypatch, {"provider_type": "local"})
     assert body == {"model": ModelConstants.DEFAULT_OLLAMA_MODEL, "provider": "ollama", "config": {}}
+
+
+def test_a_cloud_provider_with_no_model_reports_an_empty_model_not_an_ollama_default(monkeypatch) -> None:
+    # SettingsPanel.vue:373 shows "Not selected" for this case; the default Ollama model is not a cloud model.
+    tree = {"provider_type": "cloud", "cloud": {"provider": "openai", "providers": {"openai": {"timeout": 30}}}}
+    assert _current(monkeypatch, tree) == {"model": "", "provider": "openai", "config": {}}

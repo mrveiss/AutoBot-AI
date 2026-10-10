@@ -29,8 +29,9 @@ def resolve_active_llm(llm_config: Dict[str, Any]) -> Tuple[str, str]:
     ``cloud``; that side's ``provider`` (``ollama`` / ``openai`` by default) names the entry
     under ``providers``, whose ``selected_model`` (or ``model``) is the model.  Local ollama
     reuses ``llm_config["ollama"]["selected_model"]``, which ``get_selected_model`` already
-    resolved (config, then env, then the default constant).  The default constant is returned
-    only when nothing is selected.
+    resolved (config, then env, then the default constant), and the default constant stands in
+    only there.  Any other provider with no model yields "": SettingsPanel.vue:369/373 shows its
+    "Not selected" placeholder, never another provider's default.
     """
     from constants.model_constants import ModelConstants
 
@@ -39,10 +40,8 @@ def resolve_active_llm(llm_config: Dict[str, Any]) -> Tuple[str, str]:
     section = unified.get(side) or {}
     provider = section.get("provider") or ("openai" if side == "cloud" else "ollama")
     if side == "local" and provider == "ollama":
-        model = (llm_config.get("ollama") or {}).get("selected_model")
-    else:
-        model = _selected((section.get("providers") or {}).get(provider))
-    return provider, model or ModelConstants.DEFAULT_OLLAMA_MODEL
+        return provider, (llm_config.get("ollama") or {}).get("selected_model") or ModelConstants.DEFAULT_OLLAMA_MODEL
+    return provider, _selected((section.get("providers") or {}).get(provider))
 
 
 class ModelConfigMixin:
