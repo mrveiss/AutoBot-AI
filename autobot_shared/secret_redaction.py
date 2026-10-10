@@ -357,7 +357,7 @@ def _redact_string_leaf(name: str, value: str, opts: _NestedOptions) -> str:
     if cred and (not url or opts.mask_credential_urls or not is_endpoint_name(name, opts.policy)):
         return REDACTED_PLACEHOLDER  # a URL under a credential name that is not an endpoint is masked whole
     if url:
-        out = redact_url_credentials(redact_url_userinfo(value, mask_username=cred), opts.policy)
+        out = redact_url_credentials(redact_url_userinfo(value, mask_username=True), opts.policy)
     else:
         out = redact_content(redact_schemeless_userinfo(value))
     return opts.extra_scan(out) if opts.extra_scan else out
@@ -395,16 +395,15 @@ def redact_nested(
 ) -> Any:
     """Copy of ``value`` with credentials masked at any depth: THE recursive mapping redactor (#18193, #18205).
 
-    Walks dicts, lists, tuples and sets (a set comes back as a list).  Masks like
-    :func:`redact_value` (``REDACTED_PLACEHOLDER``, fixed width, never a fragment of the secret): a set
-    value under a credential name, of any type, and a non-empty container under one, is masked whole --
-    except under a URL-shaped name (``db_url``), where a URL keeps its host and loses userinfo and
-    credential query params.  A URL string under any other name is scrubbed the same way; other strings go
-    through :func:`redact_content`, so ``sk-...``, JWTs and inline ``user:pass@`` are masked and ordinary
-    text is byte-identical.  Keys, order, bool, numbers, date/time values, ``UUID`` and ``Decimal`` are
-    unchanged; any other type (``bytes``) fails closed.
-    List items inherit their parent's name.  ``BROAD`` (also for query params): a
-    response is read by any caller, so over-masking costs a field and a leak costs a secret.
+    Walks dicts, lists, tuples and sets (a set comes back as a list). Masks like :func:`redact_value`
+    (``REDACTED_PLACEHOLDER``, fixed width, never a fragment of the secret): a set value under a credential name, of
+    any type, and a non-empty container under one, is masked whole -- except under a URL-shaped name (``db_url``),
+    where a URL keeps its host and loses ALL userinfo (the user part too) and credential query params. A URL string
+    under any other name is scrubbed the same way; other strings go through :func:`redact_content`, so ``sk-...``,
+    JWTs and inline ``user:pass@`` are masked and ordinary text is byte-identical. Keys, order, bool, numbers,
+    date/time values, ``UUID`` and ``Decimal`` are unchanged; any other type (``bytes``) fails closed. List items
+    inherit their parent's name. ``BROAD`` (also for query params): a response is read by any caller, so
+    over-masking costs a field and a leak costs a secret.
 
     ``exempt_counts=True`` (default) keeps ``max_tokens=4096`` a number: GET /config and /current returned
     it before, so no existing caller's masked set shrinks.  A caller that always masked counts passes
