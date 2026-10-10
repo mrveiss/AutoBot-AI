@@ -25,7 +25,7 @@ from typing_extensions import Annotated
 
 from api.nodes_execution import _is_local_ip, _require_online_node, _run_command, _run_via_ssh
 from autobot_shared.auth.permissions import Permission
-from autobot_shared.security.redaction import redact_text
+from autobot_shared.secret_redaction import redact_text
 from config import settings
 from models.database import (
     Deployment,
@@ -849,7 +849,7 @@ _APP_LOG_LEVEL_RE = re.compile(r"\b(CRITICAL|ERROR|WARNING|WARN|INFO|DEBUG)\b")
 
 # Secret redaction applied to every returned line (Security — never leak secrets
 # from application logs through the viewer). Canonical implementation lives in
-# autobot_shared.security.redaction (#12242) — do not add a divergent copy here.
+# autobot_shared.secret_redaction (#12242, #17336) — do not add a divergent copy here.
 
 
 def _resolve_app_log_filename(service: str, mcp_instance: str | None) -> str:

@@ -22,9 +22,10 @@ Sensitive argument keys are redacted before emission so credentials and
 tokens never cross the WebSocket boundary.
 
 
-Boundary: this module is one of seven that own a secret detector — see
-``docs/developer/REDACTION_BOUNDARY.md`` for which redactor owns which shape of
-the problem, and add a new detector there rather than starting an eighth (#16688).
+Redaction (#17337): which keys are credentials is decided by the canonical
+``autobot_shared.secret_redaction`` (``MatchPolicy.BROAD`` -- event payloads
+leave the process, so recall wins); this module declares no vocabulary. See
+``docs/developer/REDACTION_BOUNDARY.md``.
 """
 
 import asyncio
@@ -33,6 +34,7 @@ from dataclasses import dataclass
 from typing import Any, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import MatchPolicy, is_credential_entry
 
 logger = get_logger(__name__)
 
@@ -43,29 +45,10 @@ logger = get_logger(__name__)
 
 _REDACTED = "<redacted>"
 
-_SENSITIVE_KEY_FRAGMENTS: frozenset[str] = frozenset(
-    {
-        "password",
-        "passwd",
-        "secret",
-        "token",
-        "api_key",
-        "apikey",
-        "auth",
-        "credential",
-        "private_key",
-        "privatekey",
-        "access_key",
-        "accesskey",
-        "bearer",
-    }
-)
 
-
-def _is_sensitive(key: str) -> bool:
-    """Return True if *key* (case-insensitive) matches any sensitive fragment."""
-    lower = key.lower()
-    return any(fragment in lower for fragment in _SENSITIVE_KEY_FRAGMENTS)
+def _is_sensitive(key: str, value: Any) -> bool:
+    """Return True if the value under *key* is credential-named under BROAD (value-aware)."""
+    return is_credential_entry(key, value, MatchPolicy.BROAD)
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +83,7 @@ class CausalLink:
             reason is replaced with the redaction placeholder when it contains
             any sensitive key fragment.
         """
-        safe_reason = _REDACTED if _is_sensitive(self.reason) else self.reason
+        safe_reason = _REDACTED if _is_sensitive(self.reason, self.reason) else self.reason
         return {
             "source_event_id": self.source_event_id,
             "target_event_id": self.target_event_id,
@@ -143,7 +126,7 @@ def sanitize_arguments(arguments: Any) -> Any:
         return arguments
     result: dict[str, Any] = {}
     for key, value in arguments.items():
-        if _is_sensitive(key):
+        if _is_sensitive(key, value):
             result[key] = _REDACTED
         elif isinstance(value, dict):
             result[key] = sanitize_arguments(value)
