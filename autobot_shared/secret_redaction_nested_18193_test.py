@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER as MASK
-from autobot_shared.secret_redaction import MatchPolicy, redact_nested
+from autobot_shared.secret_redaction import MatchPolicy, redact_nested, redact_url_credentials, redact_url_userinfo
 
 _X = "x" * 3
 _PW = "SENTINEL-PW"  # built into URLs by f-string so no literal user:pass@ sits in the source
@@ -57,3 +57,62 @@ def test_policy_is_a_parameter_and_unknown_policy_raises() -> None:
     unknown: Any = "broad"
     with pytest.raises(TypeError):
         redact_nested({"k": "v"}, unknown)
+
+
+# --- review round: credential URLs, query policy, content scan, containers, port (#18193) ---
+
+_SK = "sk-" + "a1B2c3D4e5F6g7H8i9J0k1L2"
+_JWT = ".".join(
+    "".join(p)
+    for p in (("eyJhbGciOiJ", "IUzI1NiJ9"), ("eyJzdWIiOiIx", "MjM0NTY3ODkwIn0"), ("dBjftJeZ4CVP", "mB92K27uhbUJU1p1r"))
+)
+
+
+def test_a_url_under_a_credential_name_is_masked_whole_unless_the_name_is_url_shaped() -> None:
+    hook = "https://hooks.example/T0/B0/" + _PW
+    out = redact_nested({"webhook_secret": hook, "db_url": f"postgres://u:{_PW}@db:5432/app"})
+    assert out["webhook_secret"] == MASK
+    assert out["db_url"] == f"postgres://u:{MASK}@db:5432/app"  # url-shaped name: userinfo only
+    assert redact_nested({"password": f"pa://{_PW}"}) == {"password": MASK}
+
+
+@pytest.mark.parametrize("param", ["apikey", "apiKey", "access-token", "auth", "X-Amz-Signature"])
+def test_broad_policy_masks_these_query_params(param) -> None:
+    url = f"https://h/p?a=1&{param}={_PW}&b=2"
+    out = redact_nested({"endpoint": url})["endpoint"]
+    assert _PW not in out and out.startswith("https://h/p?a=1&") and out.endswith("&b=2")
+    assert redact_url_credentials(url, MatchPolicy.BROAD) == out
+
+
+def test_the_precise_default_for_query_params_is_unchanged() -> None:
+    for param in ("apikey", "access-token", "auth", "X-Amz-Signature"):
+        url = f"https://h/p?{param}={_PW}"
+        assert redact_url_credentials(url) == url
+    assert _PW not in redact_url_credentials(f"https://h/p?api_key={_PW}")
+
+
+def test_a_credential_free_url_is_returned_byte_identical() -> None:
+    url = "https://h/p?name=a%20b&flag&x=1+2&empty="
+    assert redact_url_credentials(url) == url
+    assert redact_url_credentials(url + "&token=" + _PW).startswith(url + "&token=")
+    assert redact_nested({"endpoint": url}) == {"endpoint": url}
+
+
+def test_free_text_under_a_plain_key_is_content_scanned() -> None:
+    out = redact_nested({"note": f"key {_SK} ok", "jwt": _JWT, "msg": f"see http://u:{_PW}@h/x now"})
+    assert _SK not in out["note"] and _JWT not in out["jwt"] and _PW not in out["msg"]
+    text = "Hello world. qwen3.5:9b nomic-embed-text:latest http://ollama.example:11434/api"
+    assert redact_nested({"note": text}) == {"note": text}
+
+
+def test_tuples_and_sets_are_walked_and_unknown_types_fail_closed() -> None:
+    out = redact_nested({"hosts": ({"token": _X}, "n"), "ids": {1}, "bad": object(), "api_keys": (1, 2)})
+    assert out["hosts"] == ({"token": MASK}, "n") and out["ids"] == [1]
+    assert out["bad"] == MASK and out["api_keys"] == MASK
+
+
+def test_a_non_numeric_port_fails_closed_instead_of_raising() -> None:
+    url = f"http://u:{_PW}@h:x/"
+    assert redact_url_userinfo(url) == MASK
+    assert redact_url_credentials(url) == MASK
+    assert redact_nested({"endpoint": url}) == {"endpoint": MASK}

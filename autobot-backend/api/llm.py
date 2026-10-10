@@ -179,7 +179,7 @@ async def get_current_llm(
     Issue #744: Requires authenticated user.
     """
     try:
-        config = ConfigService.get_llm_config()
+        config = redact_nested(ConfigService.get_llm_config())  # #18193: same tree as /config
         current_model = config.get("model", ModelConstants.DEFAULT_OLLAMA_MODEL)
 
         return {

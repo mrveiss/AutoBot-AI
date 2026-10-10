@@ -79,3 +79,12 @@ def test_a_tree_without_credentials_is_returned_unchanged(monkeypatch) -> None:
     clean["local"]["providers"]["ollama"]["host"] = "http://host:1234"
     body = _client(monkeypatch, clean).get("/api/llm/config").json()
     assert body["unified"] == clean
+
+
+def test_current_response_is_redacted_too_and_keeps_its_controls(monkeypatch) -> None:
+    r = _client(monkeypatch, _BACKEND_LLM).get("/api/llm/current")
+    assert r.status_code == 200
+    assert "SENTINEL" not in r.text, r.text
+    body = r.json()
+    assert body["config"]["ollama"]["selected_model"] == _MODEL
+    assert body["config"]["unified"]["cloud"]["providers"]["openai"]["model"] == "gpt-x"

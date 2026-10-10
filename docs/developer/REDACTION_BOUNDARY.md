@@ -52,10 +52,13 @@ A **count or limit of a credential noun** (`secret_redaction.is_quantity_field`:
 `max_`/`min_`/`num_`/`total_`/`input_`/`output_`/`prompt_`/`completion_`/`cached_` +
 a *plural* noun, or a name ending `_count`/`_limit`/`_len`/`_length`/`_size` whose
 stem ends in a noun) is a number, not a credential -- but **only the template
-export** acts on that. `portability._scrub_adapter_config` passes
-`exempt_counts=True` to `is_credential_entry`, because without it `max_tokens=4096`
-became `{{MAX_TOKENS}}` and no longer imported as a number. Every other caller keeps
-masking it exactly as its retired matcher did (`max_tokens=4096` is masked by
+export and the API config readout** act on that. Both pass
+`exempt_counts=True` to `is_credential_entry`: `portability._scrub_adapter_config`,
+because without it `max_tokens=4096` became `{{MAX_TOKENS}}` and no longer imported as a
+number; and `redact_nested` for `GET /api/llm/config` and `GET /api/llm/current` (#18193),
+because main returned those trees unredacted, so masking `max_tokens` would be a new
+change for the settings UI that reads it (nothing leaves an existing caller's masked
+set). Every other caller keeps masking it exactly as its retired matcher did (`max_tokens=4096` is masked by
 `cot_events`, `config_revision`, `redact_mapping`, `redact_dict`, `redact_value`):
 the owner decision on `#17336` and `#17337` AC2 say no key leaves the masked set.
 
@@ -83,7 +86,7 @@ Recorded at `#17336` / `#17337` so that no site silently changed policy.
 | `RedactedReprMixin` (SSOT config, pki, slm config, tracing config) | suffix | `PRECISE` |
 | `redact_url_credentials` query params | suffix | `PRECISE` |
 | `redact_mapping` (slm `code_sync` extra-vars) | substring, 8 fragments | `BROAD` |
-| `redact_nested` (`GET /api/llm/config` response body, #18193) | none (new caller) | `BROAD`, `exempt_counts=True` |
+| `redact_nested` (`GET /api/llm/config` and `/current` response bodies, #18193) | none (new caller) | `BROAD`, `exempt_counts=True` |
 | `redact_text` (slm `monitoring`, bedrock errors) | text regex | same regex, moved into `secret_redaction` |
 | `credential_redaction.redact_dict` | normalized substring | `BROAD` |
 | `cot_events._is_sensitive` | own 13-fragment substring | `BROAD` |
