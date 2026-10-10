@@ -157,6 +157,15 @@ def _file(name: str) -> dict:
         "https://graph.microsoft.com.attacker.example.com/v1.0/x",  # prefix lookalike
         "https://graph.microsoft.com@attacker.example.com/v1.0/x",  # userinfo trick
         "http://graph.microsoft.com/v1.0/x",  # scheme downgrade
+        f"{_GRAPH}/../evil",  # parent segment
+        f"{_GRAPH}/%2e%2e/evil",  # encoded parent segment
+        f"{_GRAPH}/%2E%2e/evil",  # mixed-case encoded parent segment
+        f"{_GRAPH}/%252e%252e/evil",  # double-encoded parent segment
+        f"{_GRAPH}/..\\evil",  # backslash variant
+        f"{_GRAPH}/%2e%2e%5cevil",  # encoded backslash variant
+        "https://graph.microsoft.com:8443/v1.0/x",  # different port
+        "https://user@graph.microsoft.com/v1.0/x",  # userinfo host
+        "https://graph.microsoft.com:bad/v1.0/x",  # malformed port
     ],
 )
 async def test_an_off_graph_next_link_is_never_requested(method, evil):
@@ -174,6 +183,16 @@ async def test_an_off_graph_next_link_is_never_requested(method, evil):
 @pytest.mark.parametrize("method", ["_list_all_files", "_list_folder_recursive"])
 async def test_an_on_graph_next_link_is_still_followed(method):
     nxt = f"{_GRAPH}/me/drive/root/children?$skiptoken=abc"
+    await _assert_followed(method, nxt)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["_list_all_files", "_list_folder_recursive"])
+async def test_a_deeper_on_base_next_link_is_still_followed(method):
+    await _assert_followed(method, f"{_GRAPH}/drives/b!x/items/y/children?$skiptoken=a..b")
+
+
+async def _assert_followed(method, nxt):
     session = _paging_session({"value": [_file("a")], "@odata.nextLink": nxt}, {"value": [_file("b")]})
 
     files = await _list_files(session, method)
