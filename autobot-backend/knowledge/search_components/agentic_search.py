@@ -390,7 +390,13 @@ class AgenticSearchTool:
             if hasattr(r, "source_path") and r.source_path:
                 source = f" [{r.source_path}]"
             elif hasattr(r, "metadata") and isinstance(r.metadata, dict):
-                label = document_origin(r.metadata).reference or r.metadata.get("source_path", "")
+                # The writer's own `source` is the label users already see in citations;
+                # the accessor only fills the gap where a leg wrote none (a connector).
+                label = (
+                    r.metadata.get("source")
+                    or document_origin(r.metadata).reference
+                    or r.metadata.get("source_path", "")
+                )
                 source = f" [{label}]"
             content = r.content if hasattr(r, "content") else str(r)
             parts.append(f"[{i}]{source}\n{content}")

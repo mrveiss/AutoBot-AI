@@ -220,6 +220,24 @@ class TestKnowledgeSearch:
         assert "body text" in formatted
 
     @pytest.mark.asyncio
+    async def test_format_results_label_is_unchanged_where_source_is_written(self):
+        """#17618: an upload still cites `x.pdf`, not the accessor's `file:x.pdf` URN."""
+        tool = AgenticSearchTool(_make_rag_service())
+        result = _make_result("body", source="")
+        result.metadata = {"type": "file", "filename": "x.pdf", "source": "x.pdf"}
+
+        assert tool._format_results([result]).startswith("[1] [x.pdf]\n")
+
+    @pytest.mark.asyncio
+    async def test_format_results_names_a_connector_fact_that_wrote_no_source(self):
+        """A connector fact has no `source` key; the accessor fills the blank label."""
+        tool = AgenticSearchTool(_make_rag_service())
+        result = _make_result("body", source="")
+        result.metadata = {"source_type": "connector", "connector_type": "gdrive", "source_id": "42"}
+
+        assert tool._format_results([result]).startswith("[1] [connector:gdrive:42]\n")
+
+    @pytest.mark.asyncio
     async def test_format_results_empty_list(self):
         """_format_results([]) should return empty string."""
         svc = _make_rag_service()
