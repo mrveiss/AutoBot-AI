@@ -88,10 +88,12 @@ is returned as-is (nothing to hide) instead of `***`.
 **Whole-token nouns (#18194).** `pin` and `passcode` are credentials too, but `pin` is also a verb and
 a prefix (`pin_memory`, `pinned_revision`, `spinner`, `opinion`), so they are not suffix or substring
 nouns. `secret_redaction_vocabulary.WHOLE_TOKEN_NOUNS` is consulted by BOTH policies: the name is split
-on `_ - .` and camelCase, and it matches when its last tokens are `pin`, `pin code` or `passcode`
-(`pin`, `user_pin`, `pinCode`, `card.pin`, `passcode` masked; `pin_length`, `pin_memory`,
+on `_ - .` and camelCase, and it matches when its last tokens are `pin`, `pin code`, `pincode`, `pin hash|digest|salt` or `passcode`
+(`pin`, `user_pin`, `pinCode`, `card.pin`, `pin_hash`, `passcode` masked; `pin_length`, `pin_memory`,
 `pinned_revision`, `spinner`, `opinion`, `pinyin` unmasked). Never add them to `BROAD_FRAGMENTS`: it is
-substring-matched and feeds `credential_redaction.SENSITIVE_KEYS`. The vocabulary and matcher live in
+substring-matched and feeds `credential_redaction.SENSITIVE_KEYS`.
+**Consequence of the owner's whole-word ruling, not a bug:** `gpio_pin`, `led_pin` and `version_pin` ARE masked,
+because their last token is `pin` (pinned by `test_a_pin_in_any_other_sense_is_masked_too_by_the_whole_word_ruling`). The vocabulary and matcher live in
 `secret_redaction_vocabulary.py` (split from `secret_redaction.py` for the 600-line ceiling); it is the same
 canonical module, re-exported, and the census guard treats the pair as one home.
 
@@ -116,19 +118,19 @@ Recorded at `#17336` / `#17337` so that no site silently changed policy.
 | `config_revision_service._is_secret_key` | own 5-fragment substring | `BROAD` |
 
 Every migration only **widened** the masked set. Measured per caller over
-`autobot_shared/redaction_corpus_17336.txt` (3,384 names) against a frozen copy of
+`autobot_shared/redaction_corpus_17336.txt` (3,403 names) against a frozen copy of
 what `origin/main` masked at that caller
 (`secret_redaction_policy_17336_test.py::test_no_name_leaves_the_masked_set_at_any_caller`,
 values int, float, digit string, JWT and `True`):
 
 | caller | masked on main | here: int | digit string | JWT | `True` | removed |
 |---|---|---|---|---|---|---|
-| `redact_value` / `RedactedReprMixin` / URL query (`PRECISE`) | 1131 | 1131 | 1392 | 1392 | 1392 | 0 |
-| `redact_mapping` (`BROAD`) | 1983 | 2437 | 2437 | 2437 | 2437 | 0 |
-| `credential_redaction.redact_dict` (`BROAD`) | 2382 | 2437 | 2437 | 2437 | 2437 | 0 |
-| `cot_events` (`BROAD`) | 1831 | 2437 | 2437 | 2437 | 2437 | 0 |
-| `config_revision_service` (`BROAD`) | 1590 | 2437 | 2437 | 2437 | 2437 | 0 |
-| `portability` export (`PRECISE`, `exempt_counts`) | 14 | 1040 | 1392 | 1392 | 14 | 0 |
+| `redact_value` / `RedactedReprMixin` / URL query (`PRECISE`) | 1132 | 1143 | 1404 | 1404 | 1404 | 0 |
+| `redact_mapping` (`BROAD`) | 1984 | 2449 | 2449 | 2449 | 2449 | 0 |
+| `credential_redaction.redact_dict` (`BROAD`) | 2384 | 2449 | 2449 | 2449 | 2449 | 0 |
+| `cot_events` (`BROAD`) | 1831 | 2449 | 2449 | 2449 | 2449 | 0 |
+| `config_revision_service` (`BROAD`) | 1590 | 2449 | 2449 | 2449 | 2449 | 0 |
+| `portability` export (`PRECISE`, `exempt_counts`) | 14 | 1052 | 1404 | 1404 | 14 | 0 |
 
 The export layer (`llc/services/portability_export_names.py`, the one owner of the rule) keeps `False`/`None`
 and a `True` under any name outside main's 12 exact names (`verify_cert: true` round-trips). A `True`

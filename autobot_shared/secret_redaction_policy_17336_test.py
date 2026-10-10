@@ -214,7 +214,26 @@ def test_a_name_outside_the_vocabulary_is_never_a_credential_for_any_value(polic
 
 
 @pytest.mark.parametrize("policy", list(MatchPolicy))
-@pytest.mark.parametrize("name", ["pin", "user_pin", "pinCode", "card_pin", "passcode", "PIN", "userPIN", "card.pin"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "pin",
+        "user_pin",
+        "pinCode",
+        "card_pin",
+        "passcode",
+        "PIN",
+        "userPIN",
+        "card.pin",
+        "pin_hash",
+        "card_pin_hash",
+        "pinHash",
+        "pin_digest",
+        "pin_salt",
+        "pincode",
+        "userPincode",
+    ],
+)
 def test_pin_and_passcode_are_credentials_as_whole_tokens_under_both_policies(name, policy) -> None:
     """#18194 owner decision: a PIN is a credential. Mask direction."""
     assert is_credential_entry(name, "0000", policy) is True
@@ -223,11 +242,29 @@ def test_pin_and_passcode_are_credentials_as_whole_tokens_under_both_policies(na
 
 @pytest.mark.parametrize("policy", list(MatchPolicy))
 @pytest.mark.parametrize(
-    "name", ["pin_memory", "pinned_revision", "pin_length", "spinner", "opinion", "pinyin", "pinning", "pin_count"]
+    "name",
+    [
+        "pin_memory",
+        "pinned_revision",
+        "pin_length",
+        "spinner",
+        "opinion",
+        "pinyin",
+        "pinning",
+        "pin_count",
+        "pin_hashing_rounds",
+    ],
 )
 def test_a_word_that_merely_contains_pin_is_not_a_credential(name, policy) -> None:
     """#18194 owner decision: whole words only. Contrast direction."""
     assert is_credential_entry(name, "4821", policy) is False
+
+
+@pytest.mark.parametrize("policy", list(MatchPolicy))
+@pytest.mark.parametrize("name", ["gpio_pin", "led_pin", "version_pin"])
+def test_a_pin_in_any_other_sense_is_masked_too_by_the_whole_word_ruling(name, policy) -> None:
+    """#18194 consequence of the owner's whole-word ruling, recorded in REDACTION_BOUNDARY.md: not a bug."""
+    assert is_credential_entry(name, "17", policy) is True
 
 
 def test_pin_and_passcode_stay_out_of_the_substring_vocabulary() -> None:

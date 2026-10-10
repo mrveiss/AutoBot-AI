@@ -114,9 +114,17 @@ def is_quantity_field(name: str) -> bool:
 # CREDENTIAL_SUFFIXES entry (which BROAD matches as a substring and which also feeds
 # credential_redaction.SENSITIVE_KEYS) nor matched inside a word.  The name is split into tokens
 # on _ - . and camelCase boundaries, and it matches when its LAST tokens are one of these
-# sequences, under BOTH policies: pin, user_pin, pinCode, card.pin, passcode.
+# sequences, under BOTH policies: pin, user_pin, pinCode, pincode, card.pin, pin_hash, card_pin_digest, passcode.
 # pin_length/pin_memory end in a different token and stay unmasked.
-WHOLE_TOKEN_NOUNS: Tuple[Tuple[str, ...], ...] = (("pin",), ("pin", "code"), ("passcode",))
+WHOLE_TOKEN_NOUNS: Tuple[Tuple[str, ...], ...] = (
+    ("pin",),
+    ("pin", "code"),
+    ("pincode",),
+    ("pin", "hash"),
+    ("pin", "digest"),
+    ("pin", "salt"),
+    ("passcode",),
+)
 
 _TOKEN_SPLIT_RE = re.compile(r"[_.\-]+")
 _CAMEL_BOUNDARY_RE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
@@ -168,3 +176,4 @@ def matches_vocabulary(name: str, policy: MatchPolicy) -> bool:
     if _ends_with_whole_token_noun(name):
         return True
     return any(lowered == suffix or lowered.endswith(f"_{suffix}") for suffix in CREDENTIAL_SUFFIXES)
+

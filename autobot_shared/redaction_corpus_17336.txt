@@ -3393,3 +3393,11 @@ pin_length
 spinner
 opinion
 pinyin
+pin_hash
+card_pin_hash
+pin_digest
+pin_salt
+pincode
+userPincode
+pin_hashing_rounds
+gpio_pin
