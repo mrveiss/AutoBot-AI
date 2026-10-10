@@ -46,3 +46,11 @@ def test_a_quantity_name_holding_a_non_number_is_still_a_placeholder() -> None:
     out = _scrub_adapter_config({"token_count": _JWT, "max_tokens": 4096}, {})
     assert out["token_count"] == "{{TOKEN_COUNT}}"
     assert out["max_tokens"] == 4096
+
+
+@pytest.mark.parametrize("value", ["123456", "4096", True])
+def test_a_digit_string_or_bool_under_a_quantity_name_is_a_placeholder(value) -> None:
+    # A digit string is PIN-shaped and a bool is not a count: only a real int/float is exempt.
+    out = _scrub_adapter_config({"password_limit": value, "max_tokens": 4096}, {})
+    assert out["password_limit"] == "{{PASSWORD_LIMIT}}"
+    assert out["max_tokens"] == 4096

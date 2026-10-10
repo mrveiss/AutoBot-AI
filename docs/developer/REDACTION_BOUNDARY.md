@@ -54,10 +54,12 @@ Both policies first exempt a **count or limit of a credential noun**
 `num_api_keys`), or a name ending `_count`/`_limit`/`_len`/`_length`/`_size` whose
 stem ends in a noun (`token_count`, `key_length`). Without it `max_tokens=4096`
 became `{{MAX_TOKENS}}` in exported templates. The exemption is **value-aware**: `is_credential_entry(name, value, policy)` keeps a
-quantity name unmasked only when its value is a number (not bool) or a pure-digit
-string; a JWT, `sk-...`, list or dict under `token_count` stays masked, by both
-policies. `is_credential_field(name)` is the name-only classification, for callers
-with no value. Every value-bearing caller uses `is_credential_entry`. The mask-set
+quantity name unmasked only when its value is a real int/float (not bool, and never a digit
+string, which is a PIN-shaped secret); a JWT, `sk-...`, digit string, list or dict under
+`token_count` stays masked, by both policies. `is_credential_field(name)` is the name-only classification, for callers
+with no value. Every value-bearing caller uses `is_credential_entry`;
+`repo_tests/credential_field_name_only_17336_test.py` fails on any new `is_credential_field` call
+not on its reviewed value-free allowlist. The mask-set
 delta is reproducible from the repo: `autobot_shared/redaction_corpus_17336.txt`
 plus `secret_redaction_policy_17336_test.py`. The rule is deliberately tight:
 `max_token_secret`, `max_password` and `token_count_secret` stay masked.

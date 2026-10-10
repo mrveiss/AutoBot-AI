@@ -138,7 +138,7 @@ BROAD_FRAGMENTS: Tuple[str, ...] = tuple(dict.fromkeys(CREDENTIAL_SUFFIXES + AUT
 #     ``token_count_secret`` does not qualify.
 # Applied by BOTH policies, to the whole name only (#17336). It is a NAME
 # classification; value-bearing callers use ``is_credential_entry``, which keeps
-# the value masked unless it is a plain number.
+# the value masked unless it is a real int/float (never bool, never a digit string).
 QUANTITY_PREFIXES: Tuple[str, ...] = (
     "max_",
     "min_",
@@ -193,12 +193,13 @@ def _normalized(name: str) -> str:
 
 
 def _is_plain_number(value: Any) -> bool:
-    """An int/float (never bool) or a pure-ASCII-digit string."""
-    if isinstance(value, bool):
-        return False
-    if isinstance(value, (int, float)):
-        return True
-    return isinstance(value, str) and re.fullmatch(r"[0-9]+", value) is not None
+    """A real int/float (never bool).
+
+    A digit STRING is not a number here: ``password_limit="123456"`` or
+    ``pin_length="4821"`` is a PIN, and the type is the only thing telling it
+    apart from a count.
+    """
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def is_credential_field(name: str, policy: MatchPolicy = MatchPolicy.PRECISE) -> bool:
@@ -219,10 +220,10 @@ def is_credential_entry(name: str, value: Any, policy: MatchPolicy = MatchPolicy
     """VALUE-AWARE: should the value stored under ``name`` be masked (#17336)?
 
     A quantity-shaped name (``max_tokens``, ``token_count``) is left unmasked
-    only when its value is a plain number or a pure-digit string; under any other
-    value it is masked by BOTH policies (PRECISE included). A JWT, an
-    ``sk-...`` string, an opaque string, a list or a dict under such a name
-    stays masked: the name is a claim, the value is the evidence.
+    only when its value is a real int/float (never bool); under any other value
+    it is masked by BOTH policies (PRECISE included). A JWT, an ``sk-...``
+    string, a digit string (a PIN), a list or a dict under such a name stays
+    masked: the name is a claim, the value is the evidence.
     """
     if not isinstance(policy, MatchPolicy):
         raise TypeError(f"policy must be a MatchPolicy, got {policy!r}")

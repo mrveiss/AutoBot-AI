@@ -152,7 +152,7 @@ _JWT = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop"  # pr
     [
         ("token_count", _JWT, True),
         ("token_count", 42, False),
-        ("token_count", "42", False),
+        ("token_count", "42", True),  # a digit STRING is a PIN-shaped secret, not a count (#17336 gate B)
         ("token_count", 4.5, False),
         ("token_count", True, True),
         ("api_keys", ["sk-" + "a" * 24], True),
@@ -165,10 +165,37 @@ _JWT = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop"  # pr
         ("secret_size", "s3cr3tvalue", True),
         ("api_key", 42, True),
         ("max_token_secret", 42, True),
+        # Gate (A): a credential-looking value stays masked under every quantity-shaped name.
+        ("session_token_len", _JWT, True),
+        ("session_token_len", 32, False),
+        ("max_tokens", False, True),
+        ("max_tokens", None, True),
+        ("max_tokens", [1], True),
+        ("token_count", {"n": 1}, True),
+        ("secret_sizes", 32, None),  # BROAD masks, PRECISE does not classify it: asserted below
+        # Gate (B): digit STRINGS stay masked under any credential-noun name.
+        ("password_limit", "123456", True),
+        ("api_token_len", "123456", True),
+        ("max_tokens", "4096", True),
+        ("token_count", "12", True),
+        ("key_length", "4821", True),
+        ("password_limit", 123456, False),
+        ("max_tokens", 1.5, False),
     ],
 )
 def test_a_quantity_name_is_exempt_only_when_its_value_is_a_number(name, value, masked, policy) -> None:
+    if masked is None:  # ``secret_sizes``: not a quantity name; BROAD masks it, PRECISE has no noun suffix
+        masked = policy is MatchPolicy.BROAD
     assert is_credential_entry(name, value, policy) is masked
+
+
+@pytest.mark.parametrize("policy", list(MatchPolicy))
+def test_a_name_outside_the_vocabulary_is_never_a_credential_for_any_value(policy) -> None:
+    """``pin_length`` names no credential noun, so a value under it is out of scope here.
+
+    Adding ``pin`` to the vocabulary is a vocabulary decision, not a value rule (#17336).
+    """
+    assert is_credential_entry("pin_length", "4821", policy) is False
 
 
 def test_secret_size_and_secret_sizes_differ_by_policy_and_value() -> None:
@@ -252,8 +279,10 @@ def test_the_only_names_that_leave_the_mask_set_are_numbers_under_a_closed_quant
     expected_removed = {n for n in names if old(n) and _is_quantity_shape(n)}
     removed_for_a_number = {n for n in names if old(n) and not is_credential_entry(n, 1, policy)}
     removed_for_a_string = {n for n in names if old(n) and not is_credential_entry(n, _JWT, policy)}
+    removed_for_a_pin = {n for n in names if old(n) and not is_credential_entry(n, "4821", policy)}
     assert removed_for_a_number == expected_removed
     assert removed_for_a_string == set(), "a non-numeric value must never leave the masked set"
+    assert removed_for_a_pin == set(), "a digit string is a PIN-shaped secret and must never leave the masked set"
 
 
 def test_the_corpus_exercises_the_rule_in_both_directions() -> None:

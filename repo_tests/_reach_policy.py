@@ -187,6 +187,11 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "One frontend tree's source, against all tracked `.vue`/`.ts`/`.js` including the other frontend.",
     ),
+    "credential-field-name-only-callers": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked .py under thirteen declared trees; Python elsewhere (hidden dirs, root files) drifts alone.",
+    ),
     "post-commit-seed-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
