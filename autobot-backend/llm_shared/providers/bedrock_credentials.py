@@ -26,7 +26,8 @@ import json
 import re
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.redaction import redact_cloud_identifiers, redact_text
+from autobot_shared.secret_redaction import redact_text
+from autobot_shared.security.redaction import redact_cloud_identifiers
 from services.secrets_audit_store import (
     REASON_LOOKUP_ERROR,
     REASON_MALFORMED_VALUE,
