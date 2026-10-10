@@ -18,7 +18,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 
-from .channel_adapters.base import BaseChannelAdapter
+from .adapters.transport_base import BaseChannelAdapter
 from .config import GatewayConfig
 from .egress_governor import egress_governor
 from .ingest_governor import ingest_governor

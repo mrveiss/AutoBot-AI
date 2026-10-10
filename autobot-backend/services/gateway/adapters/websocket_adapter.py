@@ -18,7 +18,7 @@ from starlette.websockets import WebSocketState
 from autobot_shared.logging_manager import get_logger
 
 from ..types import ChannelMessage, ChannelType, GatewayMessageType, GatewaySession
-from .base import BaseChannelAdapter
+from .transport_base import BaseChannelAdapter
 
 logger = get_logger(__name__)
 
