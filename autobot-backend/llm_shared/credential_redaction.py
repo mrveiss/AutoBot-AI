@@ -17,15 +17,15 @@ coverage for free, including ``llc/services/replay_service.py``'s read-time
 redaction, which previously had no content scanner at all in that path.
 
 
-Boundary: this module is one of seven that own a secret detector — see
+Boundary: this module is one of three that own a secret detector — see
 ``docs/developer/REDACTION_BOUNDARY.md`` for which redactor owns which shape of
-the problem, and add a new detector there rather than starting an eighth (#16688).
+the problem, and add a new detector there rather than starting another (#16688).
 """
 
 import re
 from typing import Any, Dict
 
-from autobot_shared.secret_redaction import CREDENTIAL_SUFFIXES, redact_content
+from autobot_shared.secret_redaction import BROAD_FRAGMENTS, MatchPolicy, is_credential_entry, redact_content
 
 # Patterns for common API key formats
 API_KEY_PATTERNS = [
@@ -35,27 +35,16 @@ API_KEY_PATTERNS = [
     re.compile(r"(Bearer\s+[a-zA-Z0-9\-._~+/]+=*)"),  # Bearer tokens
 ]
 
-# Keys in dicts that should be redacted. Entries MUST be in the normalized
-# form redact_dict compares against (lowercase, "_" and "-" stripped) —
-# un-normalized entries like "api_key" can never match a normalized key (#11762).
-#
-# #16688: the credential nouns are no longer hand-copied. They come from
-# ``secret_redaction.CREDENTIAL_SUFFIXES``, the shared-tier vocabulary this
-# module already delegates free-text scanning to, so a noun added there (the
-# census names it the owner of "is this name a credential") reaches this
-# module's dict/log redaction without anyone remembering to type it twice.
-#
-# The extras below are a UNION, not a replacement, and that is load-bearing.
-# CREDENTIAL_SUFFIXES is a *field-name suffix* vocabulary and carries no
-# authorization terms; dropping to it alone would stop redacting
-# ``Authorization``, ``auth_header`` and ``x_auth`` in logs — a silent
-# under-redaction, which is exactly the failure mode a redaction merge has to
-# refuse. Every entry here must therefore only ever widen the set.
-# Already covered by CREDENTIAL_SUFFIXES and deliberately not repeated:
-# apikey (via "key"), token, password, secret, credential.
-_AUTHORIZATION_KEYS = frozenset({"bearer", "auth", "authorization"})
-
-SENSITIVE_KEYS = frozenset(CREDENTIAL_SUFFIXES) | _AUTHORIZATION_KEYS
+# Keys in dicts that should be redacted (#16688, #17336). The vocabulary and the
+# matching rule are the canonical ones: ``redact_dict`` calls
+# ``is_credential_entry(key, value, MatchPolicy.BROAD)``, which normalizes the key
+# (lowercase, "_" and "-" stripped) before substring-matching it against
+# ``secret_redaction.BROAD_FRAGMENTS`` -- the credential nouns PLUS the
+# authorization terms (``Authorization``, ``auth_header``, ``x_auth``). Nothing
+# is hand-copied here, so a noun added to the shared vocabulary reaches this
+# module's dict/log redaction automatically. ``SENSITIVE_KEYS`` is kept as the
+# public name for that vocabulary.
+SENSITIVE_KEYS = frozenset(BROAD_FRAGMENTS)
 
 
 def redact_api_key(value: str) -> str:
@@ -103,8 +92,7 @@ def redact_dict(data: Dict[str, Any]) -> Dict[str, Any]:
     """
     redacted = {}
     for key, value in data.items():
-        key_lower = key.lower().replace("_", "").replace("-", "")
-        if any(sensitive in key_lower for sensitive in SENSITIVE_KEYS):
+        if is_credential_entry(key, value, MatchPolicy.BROAD):
             # Redact this key's value
             if isinstance(value, str):
                 redacted[key] = redact_api_key(value)

@@ -40,9 +40,10 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import redact_content
 from autobot_shared.time_utils import now_utc, parse_utc_iso
-from knowledge.connectors.base import AbstractConnector
+from knowledge.connectors.base import VENDOR_API_EGRESS, AbstractConnector
 from knowledge.connectors.content_extraction import extract_pdf_document as _extract_pdf_document
 from knowledge.connectors.content_extraction import extract_text_from_docx as _extract_text_from_docx
+from knowledge.connectors.egress import next_link_on_base
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,
@@ -448,8 +449,7 @@ class OneDriveConnector(AbstractConnector):
                     subfolder_files = await self._list_folder_recursive(item.get("id", ""))
                     files.extend(subfolder_files)
 
-            # Handle pagination
-            next_url = body.get("@odata.nextLink")
+            next_url = next_link_on_base(body.get("@odata.nextLink"), self._graph_url, self.logger)
 
         return files
 
@@ -487,7 +487,7 @@ class OneDriveConnector(AbstractConnector):
                     subfolder_files = await self._list_folder_recursive(item.get("id", ""))
                     files.extend(subfolder_files)
 
-            next_url = body.get("@odata.nextLink")
+            next_url = next_link_on_base(body.get("@odata.nextLink"), self._graph_url, self.logger)
 
         return files
 
@@ -581,7 +581,6 @@ class OneDriveConnector(AbstractConnector):
         }
 
         try:
-            timeout = aiohttp.ClientTimeout(total=60.0)  # Longer timeout for file downloads
             client = get_http_client()
             async with client.tracked_request(
                 method,
@@ -589,8 +588,9 @@ class OneDriveConnector(AbstractConnector):
                 headers=headers,
                 json=json_data,
                 params=params,
-                timeout=timeout,
+                timeout=aiohttp.ClientTimeout(total=60.0),  # longer, for file downloads
                 suppress_error_log=True,
+                guard_egress=VENDOR_API_EGRESS,
             ) as resp:
                 status_code = resp.status
 

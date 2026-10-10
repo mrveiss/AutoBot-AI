@@ -44,9 +44,21 @@ for exactly the case a config-model redactor cannot reach: a credential
 sitting in prose ("your temporary password is X"), not behind a named field.
 
 
-Boundary: this module is one of seven that own a secret detector — see
+Canonical redactor (#17336, #17337)
+-----------------------------------
+This is THE module that decides whether a name is a credential: one shared
+vocabulary (:data:`CREDENTIAL_SUFFIXES` + :data:`AUTHORIZATION_TERMS` +
+:data:`BROAD_ONLY_STEMS`) and two explicitly named matching policies,
+:class:`MatchPolicy`.  ``PRECISE`` (suffix) keeps diagnostics readable and is for
+config ``__repr__``, URL query params and exported templates; ``BROAD``
+(substring over separator-stripped names) favours recall and is for log lines,
+extra-vars, event payloads and stored snapshots.  The split is a parameter of one
+implementation, not two modules.  ``security/redaction.py`` keeps only the
+cloud-identifier and log-injection shapes, which are not credential vocabulary.
+
+Boundary: this module is one of three that own a secret detector -- see
 ``docs/developer/REDACTION_BOUNDARY.md`` for which redactor owns which shape of
-the problem, and add a new detector there rather than starting an eighth (#16688).
+the problem, and add a new detector there rather than starting another (#16688).
 """
 
 from __future__ import annotations
@@ -54,7 +66,8 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass
-from typing import Any, ClassVar, FrozenSet, Iterable, Tuple
+from enum import Enum
+from typing import Any, ClassVar, Dict, FrozenSet, Iterable, Mapping, Tuple
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 # Masked stand-in for a populated credential value.  Fixed width so the mask
@@ -87,10 +100,9 @@ CREDENTIAL_SUFFIXES: Tuple[str, ...] = (
     "seed",
 )
 
-# Names ending in these are locations pointing *at* a credential, not the
-# credential itself.  ``tls_key_path`` and ``service_key_file`` must stay visible
-# so an operator can tell which file was loaded.  ``_url`` is deliberately NOT
-# here — see URL_SUFFIXES.
+# Names ending in these are locations pointing *at* a credential, not the credential itself.
+# ``tls_key_path``/``service_key_file`` must stay visible so an operator can tell which file
+# was loaded.  ``_url`` is deliberately NOT here — see URL_SUFFIXES.
 LOCATION_SUFFIXES: Tuple[str, ...] = ("_path", "_file", "_dir", "_id")
 
 # Names ending in these hold a connection string.  They are redacted in-place
@@ -98,10 +110,136 @@ LOCATION_SUFFIXES: Tuple[str, ...] = ("_path", "_file", "_dir", "_id")
 URL_SUFFIXES: Tuple[str, ...] = ("_url", "_uri", "_dsn")
 
 
-def is_credential_field(name: str) -> bool:
-    """Return True when a field name denotes a credential *value*."""
+# Authorization terms: not field-name *suffixes* (``use_auth`` is a flag, not a
+# secret, so PRECISE must not mask it) but a substring of a header/key name under
+# BROAD (``x_auth``, ``Authorization``, ``bearer_token``).  Added to the shared
+# vocabulary so the log/event/snapshot redactors stop each carrying their own
+# copy (#17337).
+AUTHORIZATION_TERMS: Tuple[str, ...] = ("auth", "authorization", "bearer")
+
+# Stems that only make sense as a substring (``private_key``, ``privatekey``);
+# as a suffix they would mask ``is_private`` style names PRECISE keeps readable.
+BROAD_ONLY_STEMS: Tuple[str, ...] = ("private",)
+
+#: Every noun BROAD matches.  Deduplicated, order-stable.
+BROAD_FRAGMENTS: Tuple[str, ...] = tuple(dict.fromkeys(CREDENTIAL_SUFFIXES + AUTHORIZATION_TERMS + BROAD_ONLY_STEMS))
+
+
+# A COUNT or LIMIT of a credential noun (``max_tokens``, ``token_count``,
+# ``key_length``) is a number, not a credential -- but ONLY the template-export
+# path acts on that (``is_credential_entry(..., exempt_counts=True)``); every
+# other caller keeps masking it, as its retired matcher did. Deliberately tight:
+#   * a prefix form needs the REMAINDER to be a PLURAL noun (``max_tokens``,
+#     ``num_api_keys``); ``max_token_secret`` and ``max_password`` stay masked;
+#   * a suffix form needs the remainder to END in a noun and the name to END in
+#     the quantity word; ``token_count_secret`` stays masked.
+# Under such a name any NON-number value is masked by every caller (#17336).
+QUANTITY_PREFIXES: Tuple[str, ...] = (
+    "max_",
+    "min_",
+    "num_",
+    "total_",
+    "input_",
+    "output_",
+    "prompt_",
+    "completion_",
+    "cached_",
+)
+QUANTITY_SUFFIXES: Tuple[str, ...] = ("_count", "_limit", "_len", "_length", "_size")
+_PLURAL_NOUNS: Tuple[str, ...] = ("secrets", "keys", "tokens", "passwords", "credentials")
+
+
+def _ends_with_noun(text: str, nouns: Tuple[str, ...]) -> bool:
+    return any(text == n or text.endswith(f"_{n}") for n in nouns)
+
+
+def is_quantity_field(name: str) -> bool:
+    """True when ``name`` is a count/limit of a credential noun, not a credential."""
+    lowered = (name or "").lower().replace("-", "_")
+    for prefix in QUANTITY_PREFIXES:
+        if lowered.startswith(prefix) and _ends_with_noun(lowered[len(prefix) :], _PLURAL_NOUNS):
+            return True
+    for suffix in QUANTITY_SUFFIXES:
+        if lowered.endswith(suffix) and _ends_with_noun(lowered[: -len(suffix)], CREDENTIAL_SUFFIXES):
+            return True
+    return False
+
+
+class MatchPolicy(Enum):
+    """How a name is compared against the shared credential vocabulary (#17336).
+
+    ``PRECISE`` -- the name equals a noun or ends with ``_<noun>``; location
+    suffixes are exempt.  Over-masking destroys a diagnostic (SSOT config
+    ``__repr__``), so false positives are the cost to avoid.
+
+    ``BROAD`` -- a noun appears anywhere in the lowercased name with ``_``/``-``
+    stripped; no location exemption.  Over-masking a log line, extra-vars
+    mapping, event payload or stored snapshot is free, a leaked secret is not.
+    """
+
+    PRECISE = "precise"
+    BROAD = "broad"
+
+
+def _normalized(name: str) -> str:
+    return name.lower().replace("_", "").replace("-", "")
+
+
+def _is_plain_number(value: Any) -> bool:
+    """A real int/float (never bool).
+
+    A digit STRING is not a number here: ``password_limit="123456"`` or
+    ``pin_length="4821"`` is a PIN, and the type is the only thing telling it
+    apart from a count.
+    """
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def is_credential_field(name: str, policy: MatchPolicy = MatchPolicy.PRECISE) -> bool:
+    """NAME-ONLY classification: does this name denote a credential under ``policy``?
+
+    Plain vocabulary, nothing else. Use only where no value exists (a schema, a
+    header name); a caller holding a value must use :func:`is_credential_entry`.
+
+    ``policy`` is validated, never defaulted by a fallthrough: an unknown value
+    raises rather than silently selecting the weaker rule.
+    """
+    return _matches_vocabulary(name, policy)
+
+
+def is_credential_entry(
+    name: str, value: Any, policy: MatchPolicy = MatchPolicy.PRECISE, *, exempt_counts: bool = False
+) -> bool:
+    """VALUE-AWARE: should the value stored under ``name`` be masked (#17336)?
+
+    The default is the vocabulary alone, so every caller masks exactly what its
+    retired matcher masked (``max_tokens=4096`` included): no key leaves the
+    masked set (#17336 owner decision, #17337 AC2).
+
+    Under a quantity-shaped name (``max_tokens``, ``token_count``) a value that
+    is NOT a real int/float -- a JWT, ``sk-...``, a digit string (a PIN), a bool,
+    a list, a dict -- is masked by both policies. Only ``exempt_counts=True``,
+    which the template-export path passes because it must round-trip
+    ``max_tokens`` as a number, leaves a real int/float unmasked.
+    """
+    if not isinstance(policy, MatchPolicy):
+        raise TypeError(f"policy must be a MatchPolicy, got {policy!r}")
+    if name and is_quantity_field(name):
+        if not _is_plain_number(value):
+            return True
+        if exempt_counts:
+            return False
+    return _matches_vocabulary(name, policy)
+
+
+def _matches_vocabulary(name: str, policy: MatchPolicy) -> bool:
+    if not isinstance(policy, MatchPolicy):
+        raise TypeError(f"policy must be a MatchPolicy, got {policy!r}")
     if not name:
         return False
+    if policy is MatchPolicy.BROAD:
+        flat = _normalized(name)
+        return any(fragment in flat for fragment in BROAD_FRAGMENTS)
     lowered = name.lower()
     if lowered.endswith(LOCATION_SUFFIXES):
         return False
@@ -138,7 +276,7 @@ def redact_url_userinfo(value: str, mask_username: bool = False) -> str:
 def _redact_credential_query_params(query: str) -> str:
     """Mask credential-shaped query-param values (``?api_key=X``, ``&token=Y``).
 
-    Reuses :func:`is_credential_field` on each param NAME -- the same rule
+    Reuses :func:`is_credential_entry` on each param NAME -- the same rule
     that already decides a config field is credential-shaped decides a query
     param is too, so ``api_key``/``token``/``secret``/... are caught without
     a second, drifting list of credential-ish names.
@@ -148,7 +286,7 @@ def _redact_credential_query_params(query: str) -> str:
     pairs = parse_qsl(query, keep_blank_values=True)
     if not pairs:
         return query
-    redacted = [(k, REDACTED_PLACEHOLDER if v and is_credential_field(k) else v) for k, v in pairs]
+    redacted = [(k, REDACTED_PLACEHOLDER if v and is_credential_entry(k, v) else v) for k, v in pairs]
     return urlencode(redacted)
 
 
@@ -181,8 +319,8 @@ def redact_value(name: str, value: Any) -> Any:
     # URL handling runs first: a ``*_dsn`` name matches both rule sets, and
     # in-place userinfo redaction is strictly more diagnosable than a full mask.
     if is_url_field(name) and isinstance(value, str):
-        return redact_url_userinfo(value, mask_username=is_credential_field(name))
-    if not is_credential_field(name):
+        return redact_url_userinfo(value, mask_username=is_credential_entry(name, value))
+    if not is_credential_entry(name, value):
         return value
     return REDACTED_PLACEHOLDER
 
@@ -210,13 +348,60 @@ class RedactedReprMixin:
 
 
 # ---------------------------------------------------------------------------
+# Log-line / mapping redaction (moved from security/redaction.py, #17336)
+# ---------------------------------------------------------------------------
+
+#: Stand-in used by :func:`redact_text` / :func:`redact_mapping`; distinct from :data:`REDACTED_PLACEHOLDER`
+#: because log and extra-vars consumers (and their tests) key on this exact value.
+LOG_MASK = "***"
+
+#: The template export's pre-#17336 exact names: ``True`` under one stays a placeholder (#18196, #17337 AC2).
+LEGACY_EXPORT_KEY_NAMES = frozenset(
+    (
+        "api_key api_secret token access_token secret password credentials private_key "
+        "client_secret auth_token bearer_token key"
+    ).split()
+)
+
+# ``Authorization: <anything>`` / ``Authorization=<anything>`` -- masks the whole
+# credential (``Bearer <jwt>``, ``Basic <b64>``, raw tokens).
+_AUTH_HEADER_RE = re.compile(r"(?i)(authorization\s*[:=]\s*).+")
+
+# ``api_key=...`` / ``token: ...`` key/value pairs, with an optional
+# ``[a-z0-9_]*[_-]?`` prefix (``client_secret=``, ``db_password=``, #12333). The
+# word must sit immediately before the ``[:=]`` so prose and near-miss keys
+# (``password_hash_algorithm=``) never match. Every noun here is in the shared
+# vocabulary (asserted by test), so this is the text SHAPE of it, not a copy.
+_SECRET_KV_RE = re.compile(
+    r"(?i)\b([a-z0-9_]*[_-]?(?:api[_-]?key|token|secret|password|passwd))\b(\s*[:=]\s*)([^\s,;\"']+)"
+)
+
+
+def redact_text(text: str) -> str:
+    """Redact common secret patterns from a line/blob of *text*.
+
+    Masks ``Authorization``/``Bearer`` headers and ``api_key/token/secret/password``
+    key/value pairs. Non-secret text is returned unchanged.
+    """
+    text = _AUTH_HEADER_RE.sub(r"\1" + LOG_MASK, text)
+    return _SECRET_KV_RE.sub(r"\1\2" + LOG_MASK, text)
+
+
+def redact_mapping(mapping: Mapping[str, Any]) -> Dict[str, Any]:
+    """Return a copy of *mapping* with credential-named values replaced by ``***``.
+
+    Uses :attr:`MatchPolicy.BROAD`: log lines and ansible extra-vars favour recall.
+    """
+    return {k: (LOG_MASK if is_credential_entry(k, v, MatchPolicy.BROAD) else v) for k, v in mapping.items()}
+
+
+# ---------------------------------------------------------------------------
 # Content-scanning companion (#13708)
 # ---------------------------------------------------------------------------
 
 
-#: One detected credential-shaped span in free text: which rule matched, where,
-#: and how confident the rule is. Structured so a caller can quarantine or log
-#: instead of only ever getting back a mangled string with no explanation.
+#: One detected credential-shaped span in free text: which rule matched, where, and how confident
+#: the rule is -- so a caller can quarantine or log instead of only getting back a mangled string.
 @dataclass(frozen=True)
 class ContentMatch:
     pattern: str
