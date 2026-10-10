@@ -249,3 +249,28 @@ def test_error_handler_no_longer_carries_its_own_retry_decorator() -> None:
 
 def test_the_shared_retry_policy_owns_the_on_retry_hook() -> None:
     assert "on_retry" in _class_fields(_read("autobot_shared/retry_mechanism.py"), "RetryPolicy")
+
+
+def _env_flag_modes(source: str) -> dict[str, str]:
+    """`{flag name: on_invalid keyword or "default"}` for every `env_flag("NAME", ...)` call."""
+    modes: dict[str, str] = {}
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Call) and _dotted(node.func).endswith("env_flag") and node.args:
+            first = node.args[0]
+            if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                kw = next((k.value for k in node.keywords if k.arg == "on_invalid"), None)
+                modes[first.value] = kw.value if isinstance(kw, ast.Constant) else "default"
+    return modes
+
+
+def test_the_flag_mode_matcher_reads_the_keyword() -> None:
+    assert _env_flag_modes('x = env_flag("A", True, on_invalid="false")\ny = env_flag("B")') == {
+        "A": "false",
+        "B": "default",
+    }
+
+
+def test_the_auto_approve_flag_reads_a_typo_as_false() -> None:
+    """Default True but its SAFE value is False: a typo must not widen what is auto-approved."""
+    modes = _env_flag_modes(_read("autobot-backend/chat_workflow/compose_tool_handler.py"))
+    assert modes.get("AUTOBOT_CODEEXEC_AUTOAPPROVE_READONLY") == "false"

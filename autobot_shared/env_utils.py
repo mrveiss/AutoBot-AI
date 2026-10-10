@@ -193,14 +193,35 @@ def truthy(raw: str | None) -> bool:
     return raw is not None and raw.strip().lower() in _TRUTHY_VALUES
 
 
-def env_flag(name: str, default: bool = False) -> bool:
-    """Read a boolean environment variable via the canonical truthy set.
+_FALSY_VALUES: frozenset[str] = frozenset({"0", "false", "no", "off"})
 
-    Returns *default* when the var is absent; otherwise ``truthy(value)``. Using
-    this everywhere guarantees ``on``/``yes``/``true``/``1`` behave identically
-    across all flags.
+#: What :func:`env_flag` does with a value that is neither truthy nor falsy (``ture``, ``enabled``).
+ON_INVALID_MODES = ("default", "false", "raise")
+
+
+def env_flag(name: str, default: bool = False, *, on_invalid: str = "default") -> bool:
+    """Read a boolean environment variable via the canonical truthy/falsy sets.
+
+    Absent or blank -> *default* (#12782). A recognised truthy value -> True; a recognised
+    falsy value (``0/false/no/off``) -> False. Anything else is a typo, and a typo must not
+    silently decide a flag, so *on_invalid* says what happens (a warning is always logged):
+
+    * ``"default"`` (the default) -- keep *default*. A protection that defaults on stays on.
+    * ``"false"`` -- read it as False. For a flag whose SAFE value is False although it
+      defaults True (an auto-approve switch): a typo must not widen what it permits.
+    * ``"raise"`` -- ``ValueError``, for flags where guessing is worse than refusing to start.
     """
-    # #12782: a blank export must yield the default, not truthy("") -> False.
-    # A flag defaulting to True would otherwise silently flip off.
+    if on_invalid not in ON_INVALID_MODES:
+        raise ValueError(f"on_invalid must be one of {ON_INVALID_MODES}, got {on_invalid!r}")
     raw = env_raw(name)
-    return default if raw is None else truthy(raw)
+    if raw is None:
+        return default
+    if truthy(raw):
+        return True
+    if raw.strip().lower() in _FALSY_VALUES:
+        return False
+    if on_invalid == "raise":
+        raise ValueError(f"{name}={raw!r} is not a boolean (use 1/true/yes/on or 0/false/no/off)")
+    fallback = default if on_invalid == "default" else False
+    logger.warning("Invalid %s=%r; using %s", name, raw, fallback)
+    return fallback

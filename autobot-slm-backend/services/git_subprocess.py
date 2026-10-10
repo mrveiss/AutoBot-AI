@@ -41,6 +41,11 @@ GIT_TIMEOUT_S = env_float("AUTOBOT_SYNC_GIT_TIMEOUT_S", 30.0)
 UNSHALLOW_TIMEOUT_S = env_float("AUTOBOT_SYNC_UNSHALLOW_TIMEOUT_S", 600.0)
 
 
+# `git fetch`/`pull` through the SLM git tracker: they download history, so they get a longer
+# bound than a local query, but still a bound -- the tracker used to have none (#17855).
+GIT_TRANSPORT_TIMEOUT_S = env_float("AUTOBOT_SYNC_GIT_TRANSPORT_TIMEOUT_S", 600.0)
+
+
 async def run_git(repo_root: str, *args: str, timeout: float = GIT_TIMEOUT_S) -> tuple[str, int]:
     """Run ``git -C repo_root <args>`` with a strict (no ``GIT_*``) env and bounded timeout.
 

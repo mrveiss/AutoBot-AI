@@ -374,6 +374,21 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_SYNC_GIT_TRANSPORT_TIMEOUT_S",
+        type=float,
+        default=600.0,
+        description=(
+            "Timeout, in seconds, for the SLM git tracker's `git fetch --prune` and "
+            "`git pull` against the code_source remote. Transport commands download "
+            "history, so they get a far longer bound than AUTOBOT_SYNC_GIT_TIMEOUT_S "
+            "(autobot-slm-backend/services/git_tracker.py, #17855)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_CONSTRAINTS_RSYNC_TIMEOUT_S",
         type=float,
         default=30.0,

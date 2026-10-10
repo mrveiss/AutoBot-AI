@@ -163,3 +163,22 @@ class TestGitTracker:
                     assert result["has_update"] is True
                     assert result["local_commit"] == "abc123"
                     assert result["remote_commit"] == "def456"
+
+
+@pytest.mark.asyncio
+async def test_fetch_and_pull_use_the_env_backed_transport_timeout():
+    """#17855: the transport bound is GIT_TRANSPORT_TIMEOUT_S; local queries keep GIT_TIMEOUT_S."""
+    from services.git_subprocess import GIT_TIMEOUT_S, GIT_TRANSPORT_TIMEOUT_S
+
+    tracker = GitTracker(repo_path="/path/to/repo")
+    with patch.object(git_tracker, "_is_git_repo", return_value=True):
+        with patch.object(git_tracker, "run_git", new_callable=AsyncMock, return_value=("", 0)) as run:
+            await tracker.fetch_remote()
+            await tracker.pull_updates()
+            await tracker.get_local_commit()
+
+    assert [c.kwargs["timeout"] for c in run.call_args_list] == [
+        GIT_TRANSPORT_TIMEOUT_S,
+        GIT_TRANSPORT_TIMEOUT_S,
+        GIT_TIMEOUT_S,
+    ]

@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import CodeSource, Setting
-from services.git_subprocess import GIT_TIMEOUT_S, UNSHALLOW_TIMEOUT_S, run_git
+from services.git_subprocess import GIT_TIMEOUT_S, GIT_TRANSPORT_TIMEOUT_S, run_git
 
 logger = logging.getLogger(__name__)
 
@@ -91,8 +91,8 @@ class GitTracker:
             return "", 1
 
         # Strict env + bounded timeout via the shared runner (#17855); fetch and
-        # pull download history, so they get the long (unshallow-sized) bound.
-        timeout = UNSHALLOW_TIMEOUT_S if args[0] in ("fetch", "pull") else GIT_TIMEOUT_S
+        # pull download history, so they get the transport bound.
+        timeout = GIT_TRANSPORT_TIMEOUT_S if args[0] in ("fetch", "pull") else GIT_TIMEOUT_S
         stdout, returncode = await run_git(self.repo_path, *args, timeout=timeout)
         return stdout.strip(), returncode
 
