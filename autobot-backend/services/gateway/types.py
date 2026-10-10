@@ -24,9 +24,15 @@ class ChannelType(str, Enum):
     WEBSOCKET = "websocket"
     REST_API = "rest_api"
     CLI = "cli"
-    TELEGRAM = "telegram"  # Future
-    DISCORD = "discord"  # Future
-    SLACK = "slack"  # Future
+    TELEGRAM = "telegram"
+    DISCORD = "discord"
+    SLACK = "slack"
+    WHATSAPP = "whatsapp"
+    TEAMS = "teams"
+    WEB = "web"
+    SIGNAL = "signal"
+    MATRIX = "matrix"
+    IMESSAGE = "imessage"
 
 
 class GatewayMessageType(str, Enum):
