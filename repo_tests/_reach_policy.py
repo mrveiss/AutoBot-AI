@@ -244,7 +244,7 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
     "extraction-registry-sweep": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
-        "Non-test source is a subset of tracked .py under six roots; the test-file share drifts.",
+        "Non-test source is a subset of tracked .py under six roots, tests included; the test-file share drifts.",
     ),
     "knowledge-metadata-parse-canonical": (
         ABSOLUTE,

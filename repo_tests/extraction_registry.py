@@ -163,6 +163,9 @@ class Extraction:
     reason: str = ""
     #: Path prefixes swept for this concept; the default is the three packages.
     roots: tuple[str, ...] = DEFAULT_ROOTS
+    #: Sweep test modules too. The lint-helper entries need it: a test file under ``tools/lint``
+    #: that re-declares a helper is as much a fork as a checker that does.
+    include_tests: bool = False
 
 
 REGISTRY: tuple[Extraction, ...] = (
@@ -183,6 +186,7 @@ REGISTRY: tuple[Extraction, ...] = (
         GUARDED,
         defines_top_level("configure_logging"),
         roots=TOOLING_ROOTS,
+        include_tests=True,
         reason="folded in from no_private_copy_of_a_shared_helper_test; canonical owned by issue-14896-lint-harness",
     ),
     Extraction(
@@ -193,6 +197,7 @@ REGISTRY: tuple[Extraction, ...] = (
         GUARDED,
         defines_top_level("tracked_paths"),
         roots=TOOLING_ROOTS,
+        include_tests=True,
         reason="folded in from no_private_copy_of_a_shared_helper_test; canonical owned by issue-14896-lint-harness",
     ),
     Extraction(
@@ -203,6 +208,7 @@ REGISTRY: tuple[Extraction, ...] = (
         GUARDED,
         defines_top_level("logical_lines"),
         roots=TOOLING_ROOTS,
+        include_tests=True,
         reason="folded in from no_private_copy_of_a_shared_helper_test; canonical owned by issue-14896-lint-harness",
     ),
     Extraction(
