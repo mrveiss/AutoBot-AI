@@ -61,6 +61,7 @@ async def test_stability_generation_call_carries_long_timeout():
     assert isinstance(timeout, aiohttp.ClientTimeout)
     assert timeout.total == gt.GENERATION_TIMEOUT_S
     assert timeout.sock_read == gt.GENERATION_TIMEOUT_S
+    assert timeout.connect == gt.CONNECT_TIMEOUT_S
 
 
 @pytest.mark.asyncio
@@ -76,4 +77,6 @@ async def test_flux_submit_and_poll_calls_carry_timeout():
     assert len(client.calls) == 2
     for _, _, kwargs in client.calls:
         assert isinstance(kwargs.get("timeout"), aiohttp.ClientTimeout)
-        assert kwargs["timeout"].sock_read >= 30
+        assert kwargs["timeout"].total == gt.POLL_TIMEOUT_S
+        assert kwargs["timeout"].sock_read == gt.POLL_TIMEOUT_S
+        assert kwargs["timeout"].connect == gt.CONNECT_TIMEOUT_S
