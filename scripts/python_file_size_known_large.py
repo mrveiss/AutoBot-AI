@@ -214,7 +214,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/integrations/microsoft365_integration.py": 633,
     "autobot-backend/integrations/project_management_integration.py": 746,
     "autobot-backend/integrations/slack_integration.py": 739,
-    "autobot-backend/integrations/whatsapp_integration.py": 754,
+    "autobot-backend/integrations/whatsapp_integration.py": 749,
     "autobot-backend/intelligence/goal_processor.py": 609,
     "autobot-backend/intelligence/intelligent_agent.py": 848,
     "autobot-backend/intelligence/streaming_executor.py": 650,
@@ -351,7 +351,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/llm_service.py": 1199,  # #16845: _track_usage delegated to llm_usage_recording
     "autobot-backend/services/load_balancer.py": 693,
     "autobot-backend/services/nl_database_service.py": 775,
-    "autobot-backend/services/notification_service.py": 634,
+    "autobot-backend/services/notification_service.py": 622,
     "autobot-backend/services/npu_worker_manager.py": 1419,
     "autobot-backend/services/rag_service.py": 1303,
     "autobot-backend/services/redis_service_manager.py": 623,
