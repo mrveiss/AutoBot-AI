@@ -58,6 +58,13 @@ from autobot_shared.paths import scrubbed_git_env  # noqa: E402
 # `scripts/check_python_file_size.py`.
 logger = logging.getLogger(__name__)
 
+# One module identity whether imported bare or as `tools.lint._scan_helpers`:
+# two copies mean two `EmptyEnumeration` classes, and an `except` written
+# against one never matches the other (#14896).
+_TWIN = {"_scan_helpers": "tools.lint._scan_helpers", "tools.lint._scan_helpers": "_scan_helpers"}
+if __name__ in _TWIN:
+    sys.modules.setdefault(_TWIN[__name__], sys.modules[__name__])
+
 # Directories skipped during full-repo scans. Kept as a frozenset so hooks
 # can reference the same constant without risk of per-hook mutation. Adding
 # a new entry here covers all current + future callers in one place.
@@ -85,6 +92,15 @@ PY_FLOOR = 4000
 def _looks_like_a_pattern(entry: str) -> bool:
     """Whether *entry* is already a pathspec rather than a bare directory name."""
     return any(ch in entry for ch in "*?[") or "/" in entry
+
+
+class GitEnumerationFailed(RuntimeError):
+    """`git ls-files` exited non-zero (or could not run).
+
+    A `RuntimeError` subclass so existing `except RuntimeError` callers keep
+    working, while a harness can catch THIS and let a checker's own bugs
+    propagate with their traceback (#14896).
+    """
 
 
 class EmptyEnumeration(RuntimeError):
@@ -184,8 +200,30 @@ def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) 
         else:
             rooted = [posixpath.join(pre, entry) if pre else entry for pre in positive_prefixes]
         excludes.extend(f":(exclude){spec}" for spec in rooted)
+    return _ls_files(repo_root, [*patterns, *excludes], " ".join(patterns) or "<all>")
+
+
+def tracked_modes(repo_root: Path, *patterns: str) -> List[Tuple[str, str]]:
+    """``(mode, path)`` for each tracked path matching *patterns* (``git ls-files -s``).
+
+    Same contract as :func:`tracked_paths`: anchored at *repo_root*, scrubbed
+    environment, raises :class:`GitEnumerationFailed` / :class:`EmptyEnumeration`
+    and never returns ``[]``.
+    """
+    rows = _ls_files(repo_root, ["-s", *patterns], "-s " + " ".join(patterns))
+    return [(meta.split()[0], path) for meta, _, path in (row.partition("\t") for row in rows)]
+
+
+def _ls_files(repo_root: Path, git_args: Sequence[str], described: str) -> List[str]:
+    """The one ``git ls-files`` call: cwd-anchored, scrubbed env, never empty.
+
+    Raises :class:`GitEnumerationFailed` on a non-zero exit and
+    :class:`EmptyEnumeration` on an empty listing. Lines come back with
+    backslashes normalised to ``/``; ``-s`` lines keep their ``mode sha stage\t``
+    prefix for the caller to split.
+    """
     result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", *patterns, *excludes],
+        ["git", "ls-files", *git_args],
         cwd=str(repo_root),
         capture_output=True,
         text=True,
@@ -193,16 +231,15 @@ def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) 
         check=False,
         env=scrubbed_git_env(),
     )
-    described = " ".join(patterns) or "<all>"
     if result.returncode != 0:
-        raise RuntimeError(f"git ls-files {described} failed in {repo_root}: {result.stderr.strip()}")
-    paths = [line.replace("\\", "/") for line in result.stdout.splitlines() if line.strip()]
-    if not paths:
+        raise GitEnumerationFailed(f"git ls-files {described} failed in {repo_root}: {result.stderr.strip()}")
+    lines = [line.replace("\\", "/") for line in result.stdout.splitlines() if line.strip()]
+    if not lines:
         raise EmptyEnumeration(
             f"git ls-files {described} listed nothing in {repo_root} — refusing to "
             "report an empty enumeration as a clean tree."
         )
-    return paths
+    return lines
 
 
 def enforce_reach(reached: int, floor: int, *, hook: str, full_repo: bool) -> int:

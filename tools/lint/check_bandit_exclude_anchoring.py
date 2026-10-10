@@ -89,8 +89,9 @@ import yaml
 # regardless of invocation mode (script / importlib from tests).
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
+import _exclude_anchoring as _shared
 import _scan_helpers
-from _scan_helpers import configure_logging, tracked_paths  # noqa: E402
+from _scan_helpers import configure_logging  # noqa: E402
 
 # Plain stdlib logging, deliberately (#1082) — see check_flake8_exclude_anchoring.py.
 logger = logging.getLogger(__name__)
@@ -156,23 +157,13 @@ def bare_entries(entries: list[str]) -> list[str]:
 
 
 def unanchored_source_entries(entries: list[str]) -> list[str]:
-    """Bare entries that are not a sanctioned artifact name.
-
-    The decision the guard turns on, kept separate so callers can put a
-    synthetic list through it instead of asserting on the config's text.
-    """
-    return [entry for entry in bare_entries(entries) if entry not in ARTIFACT_DIR_NAMES]
+    """Bare entries that are not a sanctioned artifact name (shared decision, #14896)."""
+    return _shared.unanchored_source_entries(entries, bare_entries, ARTIFACT_DIR_NAMES)
 
 
 def tracked_py_files(root: pathlib.Path | None = None) -> list[str]:
-    """Every tracked ``*.py`` path, enumerated by git rather than by bandit.
-
-    Through the shared enumerator (#14896) so the ``env=scrubbed_git_env()``
-    this needs -- an inherited ``GIT_DIR`` outranks ``cwd=`` and would list
-    another checkout's index -- is not a per-hook repeat, and so a failed or
-    empty listing raises instead of reading as "bandit excludes nothing".
-    """
-    return tracked_paths(root if root is not None else repo_root(), "*.py")
+    """Every tracked ``*.py`` path, enumerated by git rather than by bandit."""
+    return _shared.tracked_py_files(root if root is not None else repo_root())
 
 
 def entries_covering_tracked_python(entries: list[str], tracked: list[str]) -> dict[str, int]:

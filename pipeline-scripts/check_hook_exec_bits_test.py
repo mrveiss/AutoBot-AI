@@ -10,6 +10,7 @@ mutating the repository's own index.
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -150,7 +151,7 @@ def test_an_empty_git_listing_is_fatal_not_clean(guard, monkeypatch):
         stdout = ""
         stderr = ""
 
-    monkeypatch.setattr(guard.subprocess, "run", lambda *a, **k: _Result())
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Result())
 
     with pytest.raises(SystemExit) as excinfo:
         guard._tracked_modes(Path("."))
@@ -164,7 +165,7 @@ def test_a_failed_git_listing_is_fatal(guard, monkeypatch):
         stdout = ""
         stderr = "fatal: not a git repository"
 
-    monkeypatch.setattr(guard.subprocess, "run", lambda *a, **k: _Result())
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Result())
 
     with pytest.raises(SystemExit) as excinfo:
         guard._tracked_modes(Path("."))

@@ -39,7 +39,6 @@ reason on, and reasoning on it is what let #14162's five hooks through.
 from __future__ import annotations
 
 import argparse
-import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 import sys
 from pathlib import Path
 
@@ -54,8 +53,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from autobot_shared.paths import (  # noqa: E402
     GitRepoRootUnavailable,
     git_repo_root,
-    scrubbed_git_env,
 )
+
+# tools/lint/ is not a package; make the shared enumeration helpers importable
+# rather than growing another copy of `git ls-files` (#14896).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools" / "lint"))
+
+from _scan_helpers import EmptyEnumeration, GitEnumerationFailed, tracked_modes  # noqa: E402
 
 # Both copies, repo-relative. Resolved against the repo root at call time --
 # never against the process CWD, see _repo_root().
@@ -124,29 +128,15 @@ def _repo_root() -> Path:
 
 def _tracked_modes(root: Path) -> dict[str, str]:
     """Map every tracked path to its git mode, or die rather than report clean."""
-    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", "-s"],
-        cwd=str(root),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        # Same scrub as the root: an inherited GIT_DIR would enumerate one
-        # checkout's index while *root* names another (#15176).
-        env=scrubbed_git_env(),
-    )
-    if result.returncode != 0:
+    try:
+        return {path: mode for mode, path in tracked_modes(root)}
+    except EmptyEnumeration:
+        sys.exit("FATAL: git ls-files listed no files — refusing to report clean on an empty scope")
+    except GitEnumerationFailed as exc:
         # An empty listing and a failed listing look identical to every caller
         # below, and the failure mode of this whole family is reporting clean on
         # a scope that was never scanned.
-        sys.exit(f"FATAL: git ls-files failed (exit {result.returncode}): {result.stderr.strip()}")
-    modes: dict[str, str] = {}
-    for line in result.stdout.splitlines():
-        meta, _, path = line.partition("\t")
-        if path:
-            modes[path] = meta.split()[0]
-    if not modes:
-        sys.exit("FATAL: git ls-files listed no files — refusing to report clean on an empty scope")
-    return modes
+        sys.exit(f"FATAL: git ls-files failed: {exc}")
 
 
 def _local_hook_entries(config_path: Path) -> list[tuple[str, str]]:

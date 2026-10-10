@@ -338,6 +338,18 @@ def test_the_checker_needs_no_third_party_import():
         # SSOT for the git enumeration this checker needs (#14896), so
         # excluding it would mean re-pasting the scrubbed `git ls-files` call
         # here -- the duplication the helper exists to end.
-        not in {"argparse", "configparser", "logging", "pathlib", "re", "subprocess", "sys", "_scan_helpers"}
+        # `_exclude_anchoring` is the repo-local, stdlib-only home of the decision both
+        # exclude-anchoring guards shared byte-for-byte (#14896).
+        not in {
+            "argparse",
+            "configparser",
+            "logging",
+            "pathlib",
+            "re",
+            "subprocess",
+            "sys",
+            "_scan_helpers",
+            "_exclude_anchoring",
+        }
     ]
     assert third_party == [], f"the checker imports non-stdlib modules: {third_party}"
