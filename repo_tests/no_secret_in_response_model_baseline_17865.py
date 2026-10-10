@@ -47,14 +47,16 @@ _WAIVED: dict[tuple[str, str, str, str], str] = {
         "that nested subtree -- the only candidate, `_apply_embedding_config` at "
         "api/llm.py:333-337, calls `ConfigSyncOps.set` (config/sync_ops.py:60), which stores a "
         "FLAT top-level key, so `get_nested` never reaches it; the checked-in `backend.llm` "
-        'section is `{"ollama": {"endpoint": ...}}`. But the verdict is a CONDITIONAL LEAK, not '
-        "clean: `get_api_key()` (config/service_config.py:377-387) documents "
-        "`backend.llm.cloud.providers.<provider>.api_key` as a key location, so an operator who "
-        "sets a key there in config.yaml or settings.json has it returned IN FULL by this route "
-        "(any authenticated user), and endpoint URL userinfo passes unredacted too. The fix -- "
-        "nested redaction in the canonical autobot_shared/secret_redaction.py applied to "
-        "`unified` -- is #18193, blocked by #17336. The model still PERMITS any field, so the "
-        "route is recorded in no_secret_passthrough_routes_17899.py as unverifiable rather than "
+        'section is `{"ollama": {"endpoint": ...}}`. '
+        "The verdict WAS a conditional leak: `get_api_key()` "
+        "(config/service_config.py:377-387) documents "
+        "`backend.llm.cloud.providers.<provider>.api_key` as a key location, so an operator-set key there "
+        "was returned IN FULL to any authenticated user, and endpoint URL userinfo passed unredacted. "
+        "FIXED at #18193: the handler returns `redact_nested(ConfigService.get_llm_config())` "
+        "(canonical autobot_shared/secret_redaction.py), proven by "
+        "autobot-backend/api/llm_config_redaction_18193_test.py. The model still PERMITS any field, "
+        "so the route stays recorded in no_secret_passthrough_routes_17899.py as unverifiable by "
+        "schema -- redacted at the handler, not declared in the model -- rather "
         "read as clean."
     ),
     ("LLMConfigResponse", "anthropic_api_key", "GET", "/config"): (
@@ -65,9 +67,10 @@ _WAIVED: dict[tuple[str, str, str, str], str] = {
         "class, which does nest `LLMConfig` -- a real defect in the index, tracked at #17935 "
         "and not fixed here because it needs import resolution and would change the violation "
         "path too. Same route and same traced payload as the `api_key` entry above, including "
-        "its conditional leak of an operator-set key (fixed by #18193). The model "
-        "still PERMITS any field, so the route is recorded in "
-        "no_secret_passthrough_routes_17899.py as unverifiable rather than read as clean."
+        "its former conditional leak of an operator-set key, FIXED at #18193 (handler-level "
+        "`redact_nested`, tested in autobot-backend/api/llm_config_redaction_18193_test.py). The "
+        "model still PERMITS any field, so the route stays recorded in "
+        "no_secret_passthrough_routes_17899.py as unverifiable by schema rather than read as clean."
     ),
     ("LLMConfigResponse", "brave_search_api_key", "GET", "/config"): (
         "AUDITED (#17899). The field is NOT declared on this model at all: `LLMConfigResponse` "
@@ -77,9 +80,10 @@ _WAIVED: dict[tuple[str, str, str, str], str] = {
         "class, which does nest `LLMConfig` -- a real defect in the index, tracked at #17935 "
         "and not fixed here because it needs import resolution and would change the violation "
         "path too. Same route and same traced payload as the `api_key` entry above, including "
-        "its conditional leak of an operator-set key (fixed by #18193). The model "
-        "still PERMITS any field, so the route is recorded in "
-        "no_secret_passthrough_routes_17899.py as unverifiable rather than read as clean."
+        "its former conditional leak of an operator-set key, FIXED at #18193 (handler-level "
+        "`redact_nested`, tested in autobot-backend/api/llm_config_redaction_18193_test.py). The "
+        "model still PERMITS any field, so the route stays recorded in "
+        "no_secret_passthrough_routes_17899.py as unverifiable by schema rather than read as clean."
     ),
     ("LLMConfigResponse", "openai_api_key", "GET", "/config"): (
         "AUDITED (#17899). The field is NOT declared on this model at all: `LLMConfigResponse` "
@@ -89,9 +93,10 @@ _WAIVED: dict[tuple[str, str, str, str], str] = {
         "class, which does nest `LLMConfig` -- a real defect in the index, tracked at #17935 "
         "and not fixed here because it needs import resolution and would change the violation "
         "path too. Same route and same traced payload as the `api_key` entry above, including "
-        "its conditional leak of an operator-set key (fixed by #18193). The model "
-        "still PERMITS any field, so the route is recorded in "
-        "no_secret_passthrough_routes_17899.py as unverifiable rather than read as clean."
+        "its former conditional leak of an operator-set key, FIXED at #18193 (handler-level "
+        "`redact_nested`, tested in autobot-backend/api/llm_config_redaction_18193_test.py). The "
+        "model still PERMITS any field, so the route stays recorded in "
+        "no_secret_passthrough_routes_17899.py as unverifiable by schema rather than read as clean."
     ),
 }
 

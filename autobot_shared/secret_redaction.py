@@ -6,42 +6,25 @@
 """
 Credential-aware repr redaction for Pydantic settings models.
 
-Why this exists
----------------
-``repr()`` of a Pydantic model prints every field value.  Any code path that
-formats a settings object — most commonly ``unittest.mock.patch.object`` on a
-misspelled attribute, which raises
-``AttributeError("<repr of obj> does not have the attribute 'x'")`` — therefore
-dumps the whole configuration, secrets included, into pytest output and from
-there into CI logs.
+``repr()`` of a Pydantic model prints every field value, so any code path that
+formats a settings object (e.g. ``patch.object`` on a misspelled attribute)
+dumps the whole configuration, secrets included, into CI logs (#13325).
 
 Redaction rules
 ---------------
-* Field **names are always preserved**.  Only *values* are masked, so a
-  configuration dump stays diagnosable ("which fields exist, which are set").
-* Only fields whose name *ends with* a credential noun are masked.  Suffix
-  matching (not substring) keeps ``tokenizers_parallelism`` and
-  ``speculation_num_tokens`` readable while catching ``jwt_secret``.
+* Field **names are always preserved**; only *values* are masked.
+* Only names that *end with* a credential noun are masked (suffix, not
+  substring), so ``tokenizers_parallelism`` stays readable and ``jwt_secret``
+  is caught.
 * URL-shaped fields keep scheme/host/port/path and lose only the **userinfo**
-  password.  ``database_url`` and ``redis_url`` routinely embed credentials
-  (``postgresql://user:pw@host/db``), so exempting them wholesale would leak
-  through the very vector this module closes — but host and database name are
-  exactly what an operator needs to diagnose a connection problem.
-* Location-shaped fields (``*_path``, ``*_file``, ``*_dir``) are never masked —
-  a filename is not a credential and is needed for diagnosis.
-* Empty / unset values are shown verbatim.  ``jwt_secret=''`` leaks nothing and
-  answers the most common diagnostic question directly.
+  password (``postgresql://user:pw@host/db``): exempting them would leak, masking
+  them wholesale would destroy the diagnostic.
+* Location-shaped fields (``*_path``, ``*_file``, ``*_dir``) are never masked.
+* Empty / unset values are shown verbatim.
 
-Issue: #13325
-
-Content-scanning companion (#13708)
-------------------------------------
-Everything above is *name-keyed*: it only masks a value when the field name
-already says it holds a credential. ``scan_content_for_credentials`` and
-``redact_content`` are the opposite -- they look at the *content* of free
-text (a message body, a document, a log line) with no field name to go on,
-for exactly the case a config-model redactor cannot reach: a credential
-sitting in prose ("your temporary password is X"), not behind a named field.
+Content-scanning companion (#13708): ``scan_content_for_credentials`` and
+``redact_content`` look at the *content* of free text with no field name to go
+on -- a credential sitting in prose, not behind a named field.
 
 
 Canonical redactor (#17336, #17337)
@@ -395,6 +378,37 @@ def redact_mapping(mapping: Mapping[str, Any]) -> Dict[str, Any]:
     return {k: (LOG_MASK if is_credential_entry(k, v, MatchPolicy.BROAD) else v) for k, v in mapping.items()}
 
 
+def _redact_nested_entry(name: str, value: Any, policy: MatchPolicy) -> Any:
+    """One leaf: placeholder for a set credential, userinfo/query scrub for a URL string (#18193)."""
+    if value is None or value == "":
+        return value
+    cred = is_credential_entry(name, value, policy, exempt_counts=True)
+    if isinstance(value, str) and "://" in value:
+        return redact_url_credentials(redact_url_userinfo(value, mask_username=cred))
+    return REDACTED_PLACEHOLDER if cred else value
+
+
+def redact_nested(value: Any, policy: MatchPolicy = MatchPolicy.BROAD, name: str = "") -> Any:
+    """Copy of ``value`` with credentials masked at any depth (dicts and lists), for API responses.
+
+    ``redact_mapping`` is flat and masks with ``***``; this recurses and masks like
+    :func:`redact_value` (``REDACTED_PLACEHOLDER``).  A credential-named key is masked by
+    :func:`is_credential_entry` whatever the value's type; any string holding ``scheme://`` loses
+    its userinfo and credential query params.  Everything else -- keys, order, numbers, bools --
+    is returned unchanged; list items inherit their parent key's name, and a non-empty
+    container under a credential name is masked whole.  ``BROAD`` by default: a
+    response body is read by any caller, so over-masking costs a field and a leak costs a secret.
+    ``exempt_counts`` is on so ``max_tokens=4096`` stays a number in the response.
+    """
+    if isinstance(value, (Mapping, list)):
+        if value and is_credential_entry(name, value, policy, exempt_counts=True):
+            return REDACTED_PLACEHOLDER  # a container under a credential name is masked whole
+        if isinstance(value, list):
+            return [redact_nested(v, policy, name) for v in value]
+        return {k: redact_nested(v, policy, str(k)) for k, v in value.items()}
+    return _redact_nested_entry(name, value, policy)
+
+
 # ---------------------------------------------------------------------------
 # Content-scanning companion (#13708)
 # ---------------------------------------------------------------------------
@@ -410,17 +424,9 @@ class ContentMatch:
     confidence: str  # "high" | "medium"
 
 
-# Bounded, not the unbounded ``*``/``*?`` this replaced (CodeQL py/polynomial-redos):
-# an unanchored ``[\s\S]*?`` body scan is retried from *every* "-----BEGIN ... PRIVATE
-# KEY-----" occurrence in the input, and on a crafted string with many such markers and
-# no matching END, each retry walks to the end of the remaining text -- O(n^2) on
-# adversarial input. Real PEM key-type headers ("RSA ", "ENCRYPTED ", "OPENSSH ", ...)
-# are well under 12 characters, and real key bodies top out in the low KB (~3.2KB base64
-# for a 4096-bit RSA key, ~6.4KB for the much rarer 8192-bit) -- the bounds below give
-# both a multi-x safety margin over that, so no real PEM block is affected, while a
-# malicious restart now costs O(bound) instead of O(remaining input), making the whole
-# scan linear in input length again (verified: doubling adversarial input length roughly
-# doubles scan time, not quadruples it).
+# Bounded, not unbounded (CodeQL py/polynomial-redos): an unanchored ``[\s\S]*?`` body is retried
+# from every BEGIN marker, O(n^2) on crafted input.  Real PEM headers are well under 40 characters and
+# real key bodies top out in the low KB, so the bounds keep the scan linear and change no real block.
 _PEM_HEADER_MAX = 40
 _PEM_BODY_MAX = 16384
 _PEM_BLOCK_RE = re.compile(
@@ -428,20 +434,10 @@ _PEM_BLOCK_RE = re.compile(
     rf"[\s\S]{{0,{_PEM_BODY_MAX}}}?-----END [A-Z0-9 ]{{0,{_PEM_HEADER_MAX}}}PRIVATE KEY-----"
 )
 
-# A JWT is three base64url segments joined by dots. The HEADER always decodes
-# to a JSON object opening ``{"`` (``eyJ``) -- ``alg`` is mandatory, so it is
-# never the empty object. The PAYLOAD is only anchored on the dot structure.
-#
-# #16688: requiring ``eyJ`` on the payload too -- which this pattern did until
-# the redaction census -- makes this scanner strictly narrower than the one in
-# ``a2a/pii_pipeline.py`` (``jwt_re``), which anchors the header alone. A
-# payload only starts ``eyJ`` when its JSON begins exactly ``{"``. A serializer
-# emitting a space after the brace (``{ "sub": ...``) encodes to ``eyAi``, and
-# one padding before it gives ``IHsi``. Both are well-formed tokens that were
-# redacted on the A2A path and passed through untouched here -- and this is the
-# module ``llm_shared.credential_redaction`` delegates to, so the miss landed in
-# logs. Widened to match; deliberately a superset, never a narrowing
-# (see docs/developer/REDACTION_BOUNDARY.md).
+# A JWT is three base64url segments joined by dots.  The HEADER always opens ``eyJ`` (``alg`` is
+# mandatory); the PAYLOAD is anchored on the dot structure only, since a serializer emitting
+# ``{ "sub"`` encodes to ``eyAi`` (#16688).  Deliberately a superset of ``a2a/pii_pipeline.py``'s
+# ``jwt_re``, never a narrowing (see docs/developer/REDACTION_BOUNDARY.md).
 _JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b")
 
 # Provider-specific prefixes with a fixed, well-documented shape — the same

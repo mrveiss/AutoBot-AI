@@ -83,6 +83,7 @@ Recorded at `#17336` / `#17337` so that no site silently changed policy.
 | `RedactedReprMixin` (SSOT config, pki, slm config, tracing config) | suffix | `PRECISE` |
 | `redact_url_credentials` query params | suffix | `PRECISE` |
 | `redact_mapping` (slm `code_sync` extra-vars) | substring, 8 fragments | `BROAD` |
+| `redact_nested` (`GET /api/llm/config` response body, #18193) | none (new caller) | `BROAD`, `exempt_counts=True` |
 | `redact_text` (slm `monitoring`, bedrock errors) | text regex | same regex, moved into `secret_redaction` |
 | `credential_redaction.redact_dict` | normalized substring | `BROAD` |
 | `cot_events._is_sensitive` | own 13-fragment substring | `BROAD` |
@@ -117,6 +118,7 @@ no cell removes anything.
 | a field name AND its value, and want to know if the value is a credential | `secret_redaction.is_credential_entry(name, value, MatchPolicy.X)` | a new noun list; the name-only `is_credential_field` |
 | an object whose `__repr__` must not leak config | `secret_redaction.RedactedReprMixin` | hand-written `__repr__` |
 | free text that may contain a credential | `secret_redaction.redact_content` | a new regex |
+| a nested dict/list that leaves in an API response body (credentials at any depth, URL userinfo) | `secret_redaction.redact_nested` (`BROAD`; masks like `redact_value`, copies, keeps non-credential values and types) | `redact_mapping` (flat, `***`), a per-route key list |
 | a raw log line, or an extra-vars mapping | `secret_redaction.redact_text` / `.redact_mapping` | `redact_content` (it does not mask `Authorization:` headers) |
 | a provider exception that may name an AWS account | `security/redaction.redact_provider_error` | a new ARN regex |
 | text leaving the process to a peer or an LLM, needing a **policy** (block vs redact vs hash) | `a2a.pii_pipeline.scrub_outbound` | `redact_content` -- it has no policy and cannot block |

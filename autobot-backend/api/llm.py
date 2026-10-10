@@ -37,6 +37,7 @@ from api.schemas_workflows import (
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import redact_nested
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import now_utc
 from config.manager import get_config_manager
@@ -72,10 +73,9 @@ async def get_llm_config(
 ):
     """Get current LLM configuration.
 
-    Issue #744: Requires authenticated user.
-    """
+    Issue #744: authenticated user. Issue #18193: nested credentials are redacted."""
     try:
-        return ConfigService.get_llm_config()
+        return redact_nested(ConfigService.get_llm_config())
     except Exception as e:
         logger.error("Error getting LLM config: %s", str(e))
         raise HTTPException(status_code=500, detail="Error getting LLM config")
