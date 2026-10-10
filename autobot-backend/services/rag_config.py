@@ -13,6 +13,7 @@ All reranking parameters are configurable without code changes.
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from autobot_shared.graph_retrieval import GRAPH_WEIGHT_DEFAULT
 from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
 from knowledge.search_components.reranking import RerankWeights
@@ -49,6 +50,10 @@ class RAGConfig:
     rerank_weights: RerankWeights = field(default_factory=RerankWeights)
     # Issue #2090: MMR diversity pass lambda (0.0 = disabled, backward-compatible).
     mmr_lambda: float = model_config.RAG_MMR_LAMBDA
+
+    # Issue #18141: share of a candidate's blended score that comes from the graph signal.
+    # The ONE graph weight: graph-RAG and the mesh retriever both read it from here.
+    graph_weight: float = GRAPH_WEIGHT_DEFAULT
 
     # Issue #10600: route the hybrid keyword half through BM25 Okapi instead of
     # the substring TF scan.  Default False preserves legacy behaviour.
@@ -180,6 +185,9 @@ class RAGConfig:
         if not 0.0 <= self.mmr_lambda <= 1.0:
             raise ValueError(f"mmr_lambda must be in [0, 1], got {self.mmr_lambda}")
 
+        if not 0.0 <= self.graph_weight <= 1.0:
+            raise ValueError(f"graph_weight must be in [0, 1], got {self.graph_weight}")
+
         # Issue #10600: relevance floor must be non-negative.
         if self.min_score < 0.0:
             raise ValueError(f"min_score must be >= 0, got {self.min_score}")
@@ -241,6 +249,7 @@ class RAGConfig:
             },
             # Issue #2090: top-level MMR lambda (mirrors rerank_weights.mmr_lambda).
             "mmr_lambda": self.mmr_lambda,
+            "graph_weight": self.graph_weight,  # Issue #18141
             # Issue #10600: BM25 hybrid + relevance floor flags.
             "bm25_hybrid_enabled": self.bm25_hybrid_enabled,
             "min_score": self.min_score,
@@ -397,3 +406,15 @@ def reset_rag_config() -> None:
     global _rag_config_instance
     with _rag_config_lock:
         _rag_config_instance = None
+
+
+def resolve_graph_weight(rag_service: Any, explicit: float | None = None) -> float:
+    """The graph weight a graph-blending path should use (#18141).
+
+    An explicit caller override wins; otherwise the weight is the ``RAGConfig`` the given RAG
+    service runs on, or the shared config when that service carries none (tests, graph-only use).
+    """
+    if explicit is not None:
+        return explicit
+    config = getattr(rag_service, "config", None)
+    return (config if isinstance(config, RAGConfig) else get_rag_config()).graph_weight

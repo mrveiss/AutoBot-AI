@@ -1156,12 +1156,11 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
     logger.info("✅ [ 87%] Graph-RAG: Initializing graph-aware RAG service...")
     try:
         from services.graph_rag_service import GraphRAGService
-        from services.rag_config import RAGConfig
         from services.rag_service import RAGService, register_shared_mesh_components
 
         if app.state.knowledge_base:
-            rag_config = RAGConfig(enable_advanced_rag=True, timeout_seconds=10.0)
-            rag_service = RAGService(knowledge_base=app.state.knowledge_base, config=rag_config)
+            # #18141: the shared RAGConfig (timeout, rerank weights, graph weight), not a private one.
+            rag_service = RAGService(knowledge_base=app.state.knowledge_base)
             await rag_service.initialize()
 
             # Build mesh brain components and register them so every RAGService.initialize()
@@ -1172,7 +1171,6 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
             graph_rag_service = GraphRAGService(
                 rag_service=rag_service,
                 memory_graph=memory_graph,
-                graph_weight=0.3,
                 enable_entity_extraction=True,
             )
             app.state.graph_rag_service = graph_rag_service

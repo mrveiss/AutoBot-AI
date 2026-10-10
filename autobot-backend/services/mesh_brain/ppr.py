@@ -6,6 +6,7 @@
 
 from typing import Protocol
 
+from autobot_shared.graph_retrieval import MESH_PPR_MAX_HOPS
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -78,7 +79,7 @@ class PersonalizedPageRank:
         top_k: int = 20,
     ) -> list[tuple[str, float]]:
         """Run PPR from seed nodes. Returns [(node_id, ppr_score), ...] sorted desc."""
-        subgraph = await self._load_subgraph(seed_node_ids, max_hops=3, min_weight=min_weight)
+        subgraph = await self._load_subgraph(seed_node_ids, max_hops=MESH_PPR_MAX_HOPS, min_weight=min_weight)
         if not subgraph.nodes:
             return self._uniform_seed_scores(seed_node_ids)
         scores = self._init_scores(seed_node_ids, subgraph.nodes)

@@ -29,7 +29,7 @@ from services.context_sufficiency import (
     get_context_sufficiency_evaluator,
 )
 from services.knowledge_base_adapter import KnowledgeBaseAdapter
-from services.neural_mesh_retriever import NeuralMeshRetriever
+from services.neural_mesh_retriever import NeuralMeshRetriever, optimizer_search_callables, to_ranked_results
 from services.rag_config import RAGConfig, get_rag_config
 from services.semantic_query_cache import get_semantic_query_cache
 from services.session_adaptive_reranker import get_session_adaptive_reranker, session_adapted_weights
@@ -158,20 +158,12 @@ class RAGService:
             # to THIS instance's optimizer — not to the GraphRAGService optimizer singleton.
             if self._mesh_retriever is None and _shared_mesh_components is not None:
                 try:
-                    from advanced_rag_optimizer import RAGMetrics as _RAGMetrics
-
-                    _opt = self.optimizer
-
-                    async def _chroma(q: str, k: int) -> list:
-                        return await _opt._perform_semantic_search(q, limit=k)
-
-                    async def _hybrid(q: str, top_k: int = 5) -> list:
-                        results = await _opt._retrieve_hybrid_results(q, _RAGMetrics())
-                        return results[:top_k]
-
+                    _chroma, _hybrid = optimizer_search_callables(self.optimizer)
                     self._mesh_retriever = NeuralMeshRetriever(
                         chroma_search=_chroma,
                         hybrid_search=_hybrid,
+                        rerank_weights=self.config.rerank_weights,
+                        graph_weight=self.config.graph_weight,
                         **_shared_mesh_components,
                     )
                     self.config.mesh_retriever_enabled = True
@@ -641,12 +633,13 @@ class RAGService:
         """Delegate retrieval to NeuralMeshRetriever and emit feedback. Issue #2059.
 
         Called only when mesh_retriever_enabled=True and _mesh_retriever is set.
-        The mesh retriever returns RankedResult-compatible chunks directly; this
-        helper handles feedback emission so the caller stays clean.
+        The mesh chunks are normalised to RankedResult, diversified and stale-filtered
+        (#18141), then this helper emits feedback so the caller stays clean.
         """
         logger.info("Using NeuralMeshRetriever for query (mesh_retriever_enabled=True)")
         mesh_result = await self._mesh_retriever.retrieve(query, max_results)
-        results: List[RankedResult] = mesh_result.chunks
+        # #18141: same MMR and stale-chunk filter as every other retrieval branch.
+        results = await self._filter_stale_chunks(to_ranked_results(mesh_result.chunks, self.config.mmr_lambda))
         metrics = RAGMetrics()
         metrics.final_results_count = len(results)
 

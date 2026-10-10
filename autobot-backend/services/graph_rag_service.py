@@ -56,8 +56,10 @@ from typing import Any, Dict, List, Set, Tuple
 from advanced_rag_optimizer import RAGMetrics, RankedResult
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import error_boundary
+from autobot_shared.graph_retrieval import GRAPH_DEPTH_DEFAULT, GRAPH_PATH_DEFAULT, blend_graph_score
 from autobot_shared.logging_manager import get_llm_logger
 from knowledge.search_components.reranking import provenance_adjustment
+from services.rag_config import resolve_graph_weight
 from services.rag_service import RAGService
 
 logger = get_llm_logger("graph_rag_service")
@@ -162,7 +164,7 @@ class GraphRAGService:
         self,
         rag_service: RAGService,
         memory_graph: AutoBotMemoryGraph,
-        graph_weight: float = 0.3,
+        graph_weight: float | None = None,
         enable_entity_extraction: bool = True,
     ) -> None:
         """
@@ -171,7 +173,7 @@ class GraphRAGService:
         Args:
             rag_service: Existing RAG service instance (dependency injection)
             memory_graph: Existing memory graph instance (dependency injection)
-            graph_weight: Weight for graph proximity in hybrid scoring (0.0-1.0)
+            graph_weight: Override for RAGConfig.graph_weight (0.0-1.0); None uses the config
             enable_entity_extraction: Whether to extract entities from results
 
         Design Notes:
@@ -181,7 +183,7 @@ class GraphRAGService:
         """
         self.rag = rag_service
         self.graph = memory_graph
-        self.graph_weight = graph_weight
+        self.graph_weight = resolve_graph_weight(rag_service, graph_weight)
         self.enable_entity_extraction = enable_entity_extraction
 
         # Result deduplication cache
@@ -189,7 +191,7 @@ class GraphRAGService:
 
         logger.info(
             "GraphRAGService initialized (graph_weight=%s, entity_extraction=%s)",
-            graph_weight,
+            self.graph_weight,
             enable_entity_extraction,
         )
 
@@ -216,7 +218,7 @@ class GraphRAGService:
         self,
         query: str,
         start_entity: str | None = None,
-        max_depth: int = 2,
+        max_depth: int = GRAPH_DEPTH_DEFAULT,
         max_results: int = 5,
         enable_reranking: bool = True,
         timeout: float | None = None,
@@ -641,10 +643,8 @@ class GraphRAGService:
 
         content = "\n".join(observations)
 
-        relationship_strength = relation.get("metadata", {}).get("strength", 1.0)
-        proximity_score = base_score * relationship_strength
-
-        hybrid_score = (1.0 - self.graph_weight) * base_score + self.graph_weight * proximity_score
+        strength = relation.get("metadata", {}).get("strength", 1.0)
+        hybrid_score = blend_graph_score(base_score, base_score * strength, self.graph_weight)
 
         _origin = relation.get("metadata", {}).get("origin", "inferred")
         _provenance: str = _origin if _origin in ("extracted", "inferred", "ambiguous") else "inferred"
@@ -674,7 +674,7 @@ class GraphRAGService:
         from_entity: str,
         to_entity: str,
         relation: str | None = None,
-        max_depth: int = 6,
+        max_depth: int = GRAPH_PATH_DEFAULT,
         direction: str = "both",
         timeout: float | None = None,
     ) -> Dict[str, Any]:

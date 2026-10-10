@@ -30,9 +30,9 @@ from constants.threshold_constants import CategoryDefaults
 from constants.ttl_constants import TTL_5_MINUTES
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.search_components.bm25 import BM25Scorer
+from knowledge.search_components.ranked_diversity import diversify_ranked_results
 from knowledge.search_components.reranking import (
     RerankWeights,
-    apply_mmr_reorder_by_content,
     compute_blended_score,
     set_reranking_active,
 )
@@ -730,13 +730,7 @@ class AdvancedRAGOptimizer:
         # Issue #10600: MMR diversity pass on reranked results using content
         # redundancy (RankedResult carries no embedding).  No-op when
         # mmr_lambda is 0.0, so the legacy pure-relevance ordering is preserved.
-        if self._mmr_lambda > 0.0:
-            results = apply_mmr_reorder_by_content(
-                results,
-                self._mmr_lambda,
-                content_getter=lambda r: r.content,
-                score_getter=lambda r: r.rerank_score or 0.0,
-            )
+        results = diversify_ranked_results(results, self._mmr_lambda)
         for i, result in enumerate(results):
             result.relevance_rank = i + 1
         logger.debug("Reranking completed: top score = %.3f", results[0].rerank_score)

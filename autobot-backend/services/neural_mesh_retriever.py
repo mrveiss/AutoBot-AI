@@ -6,7 +6,7 @@
 
 Routes queries by complexity:
   SIMPLE     -> semantic search only (~50 ms fast path)
-  MODERATE   -> hybrid search + 1-hop PPR expansion
+  MODERATE   -> hybrid search + PPR expansion (subgraph depth: MESH_PPR_MAX_HOPS)
   COMPLEX    -> full pipeline: hybrid + anchor lookup + PPR + rerank
   MULTI_HOP  -> same as COMPLEX
 """
@@ -16,8 +16,12 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Coroutine, Protocol
 
+from advanced_rag_optimizer import RAGMetrics, RankedResult
 from autobot_shared.async_compat import fire_and_forget
+from autobot_shared.graph_retrieval import GRAPH_WEIGHT_DEFAULT, blend_graph_score
 from autobot_shared.logging_manager import get_logger
+from knowledge.search_components.ranked_diversity import diversify_ranked_results
+from knowledge.search_components.reranking import RerankWeights
 
 logger = get_logger(__name__)
 
@@ -98,6 +102,8 @@ class NeuralMeshRetriever:
         classifier: Any,
         mesh_db: Any,
         llm: Callable[..., Coroutine[Any, Any, str]] | None = None,
+        rerank_weights: RerankWeights | None = None,
+        graph_weight: float = GRAPH_WEIGHT_DEFAULT,
     ) -> None:
         """Inject all dependencies.
 
@@ -111,6 +117,8 @@ class NeuralMeshRetriever:
             mesh_db:        Object satisfying _AnchorDB protocol.
             llm:            Optional async callable(prompt) -> str for A-RAG
                             ReAct loop (#2136). When None, agentic path is off.
+            rerank_weights: RAGConfig.rerank_weights, forwarded to every rerank call (#18141).
+            graph_weight:   RAGConfig.graph_weight, the PPR share of a seed's blended score.
         """
         self.chroma_search = chroma_search
         self.hybrid_search = hybrid_search
@@ -120,6 +128,8 @@ class NeuralMeshRetriever:
         self.classifier = classifier
         self.mesh_db = mesh_db
         self.llm = llm
+        self.rerank_weights = rerank_weights
+        self.graph_weight = graph_weight
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -160,14 +170,14 @@ class NeuralMeshRetriever:
         return MeshRetrievalResult(chunks=results, expanded=False, complexity="simple")
 
     async def _moderate_retrieve(self, query: str, top_k: int) -> MeshRetrievalResult:
-        """Hybrid search + 1-hop PPR expansion. Issue #2058."""
+        """Hybrid search + PPR expansion over the MESH_PPR_MAX_HOPS subgraph. Issue #2058."""
         seeds = await self.hybrid_search(query, top_k * 2)
         seed_ids = [self._chunk_id(r) for r in seeds[:5]]
 
         expanded_scores = await self.ppr.rank(seed_ids, top_k=top_k * 3, max_iterations=5)
         merged = self._merge_with_expansion(seeds, expanded_scores)
 
-        ranked = await self.reranker.rerank(query, merged, top_k=top_k)
+        ranked = await self.reranker.rerank(query, merged, top_k=top_k, weights=self.rerank_weights)
         self._fire_learner(query, ranked)
         return MeshRetrievalResult(
             chunks=ranked,
@@ -189,7 +199,7 @@ class NeuralMeshRetriever:
         expanded_scores = await self.ppr.rank(seed_ids, top_k=top_k * 4)
         merged = self._merge_with_expansion(seeds, expanded_scores)
 
-        ranked = await self.reranker.rerank(query, merged, top_k=top_k)
+        ranked = await self.reranker.rerank(query, merged, top_k=top_k, weights=self.rerank_weights)
         self._fire_learner(query, ranked)
         return MeshRetrievalResult(
             chunks=ranked,
@@ -257,7 +267,7 @@ class NeuralMeshRetriever:
             if cid not in seen:
                 seen.add(cid)
                 unique.append(r)
-        return await self.reranker.rerank(query, unique, top_k=top_k)
+        return await self.reranker.rerank(query, unique, top_k=top_k, weights=self.rerank_weights)
 
     async def _select_next_action(self, query: str, context_so_far: list) -> dict:
         """Ask the LLM which tool to invoke next. Issue #2136.
@@ -397,7 +407,7 @@ class NeuralMeshRetriever:
         for r in seeds:
             cid = self._chunk_id(r)
             seen_ids.add(cid)
-            merged.append(self._as_dict(r, ppr_boost=score_map.get(cid, 0.0)))
+            merged.append(self._as_dict(r, score_map.get(cid, 0.0), self.graph_weight))
 
         for node_id, ppr_score in expanded_scores:
             if node_id not in seen_ids:
@@ -446,25 +456,78 @@ class NeuralMeshRetriever:
         return meta.get("chunk_id") or getattr(result, "source_path", "")
 
     @staticmethod
-    def _as_dict(result: Any, ppr_boost: float = 0.0) -> dict:
+    def _as_dict(result: Any, ppr_boost: float = 0.0, graph_weight: float = GRAPH_WEIGHT_DEFAULT) -> dict:
         """Normalise a result to a dict, optionally applying a PPR score boost.
 
         Args:
             result:    A dict or SearchResult-like object.
-            ppr_boost: PPR score from expansion; added to the base score.
+            ppr_boost: PPR score from expansion; blended into the base score (#18141).
+            graph_weight: Share of the blended score taken from ``base + ppr_boost``.
 
         Returns:
             A dict suitable for the reranker.
         """
         if isinstance(result, dict):
             out = dict(result)
-            out["score"] = out.get("score", 0.0) + ppr_boost
+            base = out.get("score", 0.0)
+            out["score"] = blend_graph_score(base, base + ppr_boost, graph_weight)
             return out
         base_score = getattr(result, "score", 0.0) or 0.0
         return {
             "chunk_id": getattr(result, "source_path", ""),
             "content": getattr(result, "content", ""),
-            "score": base_score + ppr_boost,
+            "score": blend_graph_score(base_score, base_score + ppr_boost, graph_weight),
             "metadata": getattr(result, "metadata", {}),
             "source_path": getattr(result, "source_path", ""),
         }
+
+
+def optimizer_search_callables(optimizer: Any) -> tuple[Callable[..., Any], Callable[..., Any]]:
+    """The ``(chroma_search, hybrid_search)`` pair a retriever needs, bound to ``optimizer``.
+
+    Each RAGService builds its own retriever from its own optimizer (#4765).
+    """
+
+    async def _chroma(q: str, k: int) -> list:
+        return await optimizer._perform_semantic_search(q, limit=k)
+
+    async def _hybrid(q: str, top_k: int = 5) -> list:
+        results = await optimizer._retrieve_hybrid_results(q, RAGMetrics())
+        return results[:top_k]
+
+    return _chroma, _hybrid
+
+
+def _to_ranked_result(chunk: Any, rank: int) -> RankedResult:
+    """One mesh chunk (RankedResult, result dict or SearchResult-like) as a RankedResult."""
+    if isinstance(chunk, RankedResult):
+        return chunk
+    d = NeuralMeshRetriever._as_dict(chunk)
+    score = d.get("score", 0.0)
+    meta = dict(d.get("metadata") or {})
+    cid = d.get("chunk_id") or d.get("source_path", "")
+    meta.setdefault("chunk_id", cid)
+    return RankedResult(
+        content=d.get("content", ""),
+        metadata=meta,
+        semantic_score=score,
+        keyword_score=0.0,
+        hybrid_score=score,
+        relevance_rank=rank,
+        source_path=d.get("source_path") or cid,
+        rerank_score=d.get("rerank_score", score),
+    )
+
+
+def to_ranked_results(chunks: list, mmr_lambda: float) -> list[RankedResult]:
+    """Mesh chunks as ``RankedResult`` s, MMR-diversified exactly as the optimizer path does.
+
+    The mesh path used to hand the caller raw dicts, skipping both the MMR pass and the
+    stale-chunk filter every other retrieval branch runs (#18141). This is the first half of
+    that fix; ``RAGService`` runs the stale filter on the result.
+    """
+    ranked = [_to_ranked_result(c, i + 1) for i, c in enumerate(chunks)]
+    ranked = diversify_ranked_results(ranked, mmr_lambda)
+    for i, result in enumerate(ranked):
+        result.relevance_rank = i + 1
+    return ranked

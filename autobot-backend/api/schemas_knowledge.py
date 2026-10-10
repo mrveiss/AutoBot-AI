@@ -20,6 +20,7 @@ from autobot_memory_graph.core import (
     canonical_relation_type,
 )
 from autobot_shared.env_utils import env_float
+from autobot_shared.graph_retrieval import GRAPH_DEPTH_DEFAULT, GRAPH_PATH_DEFAULT, GRAPH_RELATION_DEPTH_DEFAULT
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from knowledge.ownership import AccessLevel, VisibilityLevel
 from type_defs.common import Metadata
@@ -4386,7 +4387,7 @@ class TraverseRequest(BaseModel):
     """Request model for graph traversal."""
 
     start_fact_id: str = Field(..., description="Starting fact ID for traversal")
-    max_depth: int = Field(2, ge=1, le=5, description="Maximum traversal depth")
+    max_depth: int = Field(GRAPH_DEPTH_DEFAULT, ge=1, le=5, description="Maximum traversal depth")
     relation_types: List[str] | None = Field(None, description="Optional list of relation types to follow")
     include_fact_details: bool = Field(False, description="Include full fact content in results")
 
@@ -4397,7 +4398,7 @@ class HybridSearchRequest(BaseModel):
     query: str = Field(..., description="Search query text")
     top_k: int = Field(10, ge=1, le=100, description="Number of vector matches")
     expand_relations: bool = Field(True, description="Expand results with graph relations")
-    relation_depth: int = Field(1, ge=1, le=3, description="Relation traversal depth")
+    relation_depth: int = Field(GRAPH_RELATION_DEPTH_DEFAULT, ge=1, le=3, description="Relation traversal depth")
     relation_types: List[str] | None = Field(None, description="Filter by relation types")
 
 
@@ -4548,7 +4549,7 @@ class GraphRequest(BaseModel):
     """Request model for multi-source knowledge graph."""
 
     max_facts: int = Field(50, ge=1, le=200, description="Maximum facts to include")
-    max_depth: int = Field(2, ge=1, le=3, description="Maximum relation depth")
+    max_depth: int = Field(GRAPH_DEPTH_DEFAULT, ge=1, le=3, description="Maximum relation depth")
     include_categories: bool = Field(True, description="Include category nodes")
     include_relations: bool = Field(True, description="Include fact relations")
     category_filter: str | None = Field(None, description="Filter by category path")
@@ -4605,7 +4606,7 @@ class GraphRAGSearchRequest(BaseModel):
     start_entity: str | None = Field(
         None, max_length=200, description="Optional starting entity name for graph traversal"
     )
-    max_depth: int = Field(2, ge=1, le=3, description="Maximum graph traversal depth (1-3 hops)")
+    max_depth: int = Field(GRAPH_DEPTH_DEFAULT, ge=1, le=3, description="Maximum graph traversal depth (1-3 hops)")
     max_results: int = Field(5, ge=1, le=20, description="Maximum number of results to return")
     enable_reranking: bool = Field(True, description="Whether to apply cross-encoder reranking")
     timeout: float | None = Field(None, ge=1.0, le=30.0, description="Optional timeout in seconds (1-30s)")
@@ -4641,7 +4642,7 @@ class GraphRAGPathRequest(BaseModel):
     relation: str | None = Field(
         None, max_length=100, description="Restrict traversal to this relation type; omit for all types"
     )
-    max_depth: int = Field(6, ge=1, le=10, description="Maximum path length to search (1-10 hops)")
+    max_depth: int = Field(GRAPH_PATH_DEFAULT, ge=1, le=10, description="Maximum path length to search (1-10 hops)")
     direction: Literal["outgoing", "incoming", "both"] = Field(
         "both", description="Edge direction to follow; 'both' treats relations as undirected"
     )
@@ -4983,8 +4984,6 @@ class SeedRequest(BaseModel):
 # knowledge_rag_feedback.py schemas
 # ---------------------------------------------------------------------------
 
-from typing import Literal as _Literal
-
 
 class RagFeedbackRequest(BaseModel):
     """Annotation feedback submitted from the source card accept/reject UI."""
@@ -4992,7 +4991,7 @@ class RagFeedbackRequest(BaseModel):
     source_url: str
     title: str = ""
     query: str
-    decision: _Literal["accepted", "rejected"]  # noqa: F821  # Literal alias false-positive
+    decision: Literal["accepted", "rejected"]  # noqa: F821  # Literal alias false-positive
     user_id: str | None = None
 
 

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/a2a/a2a_test.py": 713,
-    "autobot-backend/advanced_rag_optimizer.py": 1180,
+    "autobot-backend/advanced_rag_optimizer.py": 1174,
     "autobot-backend/agent_loop/loop.py": 2046,
     "autobot-backend/agent_loop/types.py": 670,
     "autobot-backend/agents/agent_orchestration/distributed_management.py": 649,
@@ -132,7 +132,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_analytics.py": 3543,
     "autobot-backend/api/schemas_chat.py": 702,
     "autobot-backend/api/schemas_code.py": 3265,
-    "autobot-backend/api/schemas_knowledge.py": 5156,
+    "autobot-backend/api/schemas_knowledge.py": 5155,
     "autobot-backend/api/schemas_system.py": 4362,  # #13051: SecretModel ownership fields
     "autobot-backend/api/schemas_workflows.py": 3011,
     "autobot-backend/api/secrets.py": 1216,  # #16444 review: except HTTPException, ValueError handlers
@@ -207,7 +207,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/events/stream_manager.py": 654,
     "autobot-backend/events/types.py": 885,
     "autobot-backend/hardware_acceleration.py": 609,
-    "autobot-backend/initialization/lifespan.py": 2340,
+    "autobot-backend/initialization/lifespan.py": 2338,
     "autobot-backend/initialization/router_registry/feature_routers.py": 779,
     "autobot-backend/integrations/cloud_integration.py": 630,
     "autobot-backend/integrations/communication_integration.py": 605,
@@ -353,7 +353,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/nl_database_service.py": 775,
     "autobot-backend/services/notification_service.py": 634,
     "autobot-backend/services/npu_worker_manager.py": 1419,
-    "autobot-backend/services/rag_service.py": 1303,
+    "autobot-backend/services/rag_service.py": 1296,
     "autobot-backend/services/redis_service_manager.py": 623,
     "autobot-backend/services/redis_service_manager_test.py": 839,
     "autobot-backend/services/secrets_service.py": 688,
