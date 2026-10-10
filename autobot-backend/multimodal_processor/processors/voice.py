@@ -410,9 +410,13 @@ class VoiceProcessor(BaseModalProcessor):
         )
         return ""
 
+    def whisper_available(self) -> bool:
+        """True when the one pinned Whisper pipeline is loadable (#17778)."""
+        return get_whisper_pipeline() is not None
+
     def _validate_audio_models_available(self) -> None:
         """Validate that audio models are loaded and available. Issue #620."""
-        if not AUDIO_MODELS_AVAILABLE or get_whisper_pipeline() is None or self.wav2vec_model is None:
+        if not AUDIO_MODELS_AVAILABLE or not self.whisper_available() or self.wav2vec_model is None:
             self.logger.error("Audio models not available - cannot process voice")
             raise RuntimeError(
                 "Voice processing unavailable: Required models (Whisper, Wav2Vec2) "
