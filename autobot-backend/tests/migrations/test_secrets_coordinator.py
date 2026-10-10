@@ -214,7 +214,7 @@ async def test_system_visibility_secret_from_the_ui_path_is_readable_by_the_coor
         patch("api.envelope_secrets.get_coordinator", return_value=coord),
         patch("llc.deps.get_session", _one_session),
         patch(
-            "user_management.middleware.rbac_middleware.rbac_middleware.get_user_permissions",
+            "autobot_shared.user_management.middleware.rbac_middleware.rbac_middleware.get_user_permissions",
             AsyncMock(return_value={ADMIN_PERMISSION}),
         ),
     ):

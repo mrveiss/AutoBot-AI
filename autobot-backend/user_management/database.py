@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from autobot_shared.db_session import async_session_scope
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import database_pool_settings
 from config import config_manager
@@ -201,19 +202,8 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
         async def get_users(session: AsyncSession = Depends(get_async_session)):
             ...
     """
-    session_factory = get_async_session_factory()
-    async with session_factory() as session:
-        session.info["_post_commit_cbs"] = []
-        try:
-            yield session
-            await session.commit()
-            for cb in session.info.pop("_post_commit_cbs", []):
-                await cb()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+    async with async_session_scope(get_async_session_factory()) as session:
+        yield session
 
 
 @asynccontextmanager
@@ -225,19 +215,8 @@ async def db_session_context() -> AsyncGenerator[AsyncSession, None]:
         async with db_session_context() as session:
             result = await session.execute(query)
     """
-    session_factory = get_async_session_factory()
-    async with session_factory() as session:
-        session.info["_post_commit_cbs"] = []
-        try:
-            yield session
-            await session.commit()
-            for cb in session.info.pop("_post_commit_cbs", []):
-                await cb()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+    async with async_session_scope(get_async_session_factory()) as session:
+        yield session
 
 
 async def _verify_postgres_connection() -> None:
