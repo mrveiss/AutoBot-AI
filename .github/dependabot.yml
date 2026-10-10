@@ -452,6 +452,12 @@ updates:
         patterns:
           - "*"
     ignore:
+      - dependency-name: "huggingface-hub"
+        # #17847: both manifests hold huggingface-hub <2.0. ai-stack pins
+        # sentence-transformers 6.1.0, which declares huggingface-hub<2.0, so a 2.x
+        # floor cannot resolve; login()'s 2.x signature is unverified (#17847).
+        # #18151 and #18153 proposed >=2.1.1. Lift alongside #17847.
+        versions: [">=2.0"]
       - dependency-name: "tokenizers"
         # #14431: exclude >=0.23.1 — transformers 5.14.1 AND 5.15.0 both declare
         # tokenizers<=0.23.0, so 0.23.1 is the FIRST unsatisfiable version, not
@@ -491,6 +497,12 @@ updates:
         patterns:
           - "*"
     ignore:
+      - dependency-name: "huggingface-hub"
+        # #17847: both manifests hold huggingface-hub <2.0. ai-stack pins
+        # sentence-transformers 6.1.0, which declares huggingface-hub<2.0, so a 2.x
+        # floor cannot resolve; login()'s 2.x signature is unverified (#17847).
+        # #18151 and #18153 proposed >=2.1.1. Lift alongside #17847.
+        versions: [">=2.0"]
       - dependency-name: "tokenizers"
         # #14431: exclude >=0.23.1 — transformers 5.14.1 AND 5.15.0 both declare
         # tokenizers<=0.23.0, so 0.23.1 is the FIRST unsatisfiable version, not
