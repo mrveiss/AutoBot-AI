@@ -4,6 +4,7 @@
 """Environment variable helpers shared across AutoBot services."""
 
 import logging
+import math
 import os
 
 logger = logging.getLogger(__name__)
@@ -139,8 +140,16 @@ def env_float_clamped(
     default: float,
     min_v: float | None = None,
     max_v: float | None = None,
+    *,
+    positive_finite: bool = False,
 ) -> float:
     """Read a float environment variable with optional min/max clamping.
+
+    ``positive_finite=True`` rejects a value that is NaN, infinite or <= 0 and
+    falls back to *default* with a warning, rather than clamping it. Clamping is
+    wrong for a timeout: ``float("nan")`` and ``"inf"`` parse cleanly and slip
+    past min/max comparisons, and aiohttp treats 0 and NaN as "no timer" and a
+    negative as "already expired" (#12979).
 
     Mirrors :func:`env_int_clamped` for the float case (#14524): a bare
     :func:`env_float` accepts 0 and negatives, and for a value used as a
@@ -155,6 +164,9 @@ def env_float_clamped(
             value = float(raw)
         except ValueError:
             logger.warning("Invalid %s=%r; using %s", name, raw, default)
+            value = default
+        if positive_finite and not (math.isfinite(value) and value > 0):
+            logger.warning("%s=%r must be a positive finite number; using %s", name, raw, default)
             value = default
     return _clamped(name, value, min_v, max_v)
 
