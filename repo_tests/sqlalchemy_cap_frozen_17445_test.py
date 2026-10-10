@@ -167,11 +167,7 @@ def test_the_manifest_admits_no_21x(manifest: str, directory: str, shape: str) -
     assert _shape_ok(text, shape), f"{manifest} no longer has the expected `{shape}` constraint shape"
 
 
-@pytest.mark.parametrize(
-    ("manifest", "directory", "shape"),
-    [r for r in _ROWS if r[2] == "upper-bound"],  # storage.txt's exact pin carries no #17445 note today
-    ids=[r[0] for r in _ROWS if r[2] == "upper-bound"],
-)
+@pytest.mark.parametrize(("manifest", "directory", "shape"), _ROWS, ids=_IDS)
 def test_the_manifest_tells_the_reader_why(manifest: str, directory: str, shape: str) -> None:
     """A bare `<2.1` invites deletion by the next person who sees it as stale."""
     assert "#17445" in (repo_root() / manifest).read_text(
