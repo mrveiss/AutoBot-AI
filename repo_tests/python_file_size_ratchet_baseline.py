@@ -231,7 +231,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/knowledge/bulk.py": 2013,
     "autobot-backend/knowledge/categories.py": 965,
     "autobot-backend/knowledge/collections.py": 728,
-    "autobot-backend/knowledge/connectors/base.py": 676,
+    "autobot-backend/knowledge/connectors/base.py": 663,
     "autobot-backend/knowledge/connectors/credential_store.py": 778,  # #16444: rotate() validates the merged bundle
     "autobot-backend/knowledge/connectors/gdrive.py": 702,
     "autobot-backend/knowledge/connectors/gitlab.py": 873,
@@ -250,12 +250,12 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/knowledge/tags.py": 834,
     "autobot-backend/knowledge_sync_incremental.py": 884,
     "autobot-backend/llc/adapters/tests/test_claude_code_adapter.py": 602,
-    "autobot-backend/llc/api/companies.py": 1731,
+    "autobot-backend/llc/api/companies.py": 1727,
     "autobot-backend/llc/api/roles.py": 741,
     "autobot-backend/llc/api/sprints.py": 1223,
     "autobot-backend/llc/api/work_items.py": 1416,
     "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1028,  # #16818 onto #17726
-    "autobot-backend/llc/services/portability.py": 936,
+    "autobot-backend/llc/services/portability.py": 920,
     "autobot-backend/llc/services/template.py": 643,
     "autobot-backend/llc/services/work_item_service.py": 1100,
     "autobot-backend/llc/tests/conftest.py": 832,

@@ -397,6 +397,10 @@ A self-hosted Confluence/GitLab/Nextcloud instance legitimately lives on an RFC-
 
 **When adding a connector:** if you are typing `aiohttp.ClientSession(` and the URL contains a value read from config, stop. And if you are calling `tracked_request` without `guard_egress`, that is the same mistake with fewer characters.
 
+**What enforces this rule, and what does not (#17576).** `knowledge/connectors/egress_policy_test.py` enumerates the connectors directory and fails any `tracked_request` call whose arguments carry no `guard_egress`, per call rather than per file, plus any bare `aiohttp.ClientSession` outside the one exception the #12992 ceiling records. It carries two floors so a glob matching nothing fails instead of passing.
+
+Its population is that **one directory**. Repo-wide, about fifty non-test modules call `tracked_request` and nothing classifies the rest — whether each needs a policy is open (#17576 AC4, blocked on a decision about service-to-service calls whose host comes from SSOT). So outside `knowledge/connectors/`, this rule is a rule and not a gate: breaking it there costs nothing automatic. Four connectors sat unguarded for as long as the guard's population was a hand-written list of five filenames.
+
 **`urljoin` does not pin a host.** `urljoin(base, path)` returns `https://evil.example.com/x` for a path of `//evil.example.com/x`, and the caller's credentials go with it. If a path segment can come from stored data or a server response, assert the result still starts with the base.
 
 ---

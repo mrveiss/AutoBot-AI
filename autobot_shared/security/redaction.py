@@ -3,68 +3,30 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Canonical secret-redaction utilities (#12242).
+Cloud-identifier and log-injection neutralisation (#15324, #13602).
 
-A redactor is a security control, so there is exactly ONE implementation of it
-shared across all backends — previously the SLM backend carried two independent
-one-off copies (`_redact_app_log_line` in ``api/monitoring.py`` and
-`_mask_secret_extra_vars` in ``api/code_sync.py``) with divergent coverage.
+This module is NOT the secret redactor. The canonical credential vocabulary,
+both matching policies and the log-line / mapping redactors live in
+:mod:`autobot_shared.secret_redaction` (#17336 merged the two modules that each
+claimed that role). What stays here are two shapes that are not credential
+vocabulary at all:
 
-Two shapes are covered, sharing one canonical secret-key/pattern set:
+* :func:`redact_cloud_identifiers` / :func:`redact_provider_error` -- AWS account
+  numbers and ARN resource tails in provider error messages.
+* :func:`sanitize_log_value` -- control-character / length neutralisation.
 
-* :func:`redact_text` — line/text level. Masks ``Authorization``/``Bearer``
-  headers and ``api_key=/token=/secret=/password=`` style key/value pairs in raw
-  log-line text.
-* :func:`redact_mapping` — mapping/kv level. Masks dict values whose key matches
-  a known secret key fragment.
+``redact_text`` and ``redact_mapping`` are re-exported for existing importers;
+they are the canonical functions, not copies.
 
-
-Boundary: this module is one of seven that own a secret detector — see
-``docs/developer/REDACTION_BOUNDARY.md`` for which redactor owns which shape of
-the problem, and add a new detector there rather than starting an eighth (#16688).
+Boundary: see ``docs/developer/REDACTION_BOUNDARY.md``. This module declares no
+secret detector of its own and is not in the census.
 """
 
 import re
-from typing import Dict, Mapping
 
 from autobot_shared.env_utils import env_int
-
-# ---------------------------------------------------------------------------
-# Text / log-line redaction (union of the former monitoring._redact_app_log_line)
-# ---------------------------------------------------------------------------
-
-# ``Authorization: <anything>`` / ``Authorization=<anything>`` — masks the whole
-# credential (covers ``Bearer <jwt>``, ``Basic <b64>``, raw tokens, etc.).
-_AUTH_HEADER_RE = re.compile(r"(?i)(authorization\s*[:=]\s*).+")
-
-# ``api_key=…`` / ``token: …`` / ``secret=…`` / ``password=…`` key/value pairs.
-# The optional ``[a-z0-9_]*[_-]?`` prefix also matches prefixed keys such as
-# ``client_secret=``, ``access_token:``, ``db_password=`` (#12333) — anchored
-# so the secret word must sit immediately before the ``[:=]``, so ordinary
-# prose (``the password reset flow``) and near-miss keys
-# (``password_hash_algorithm=``) are never matched.
-_SECRET_KV_RE = re.compile(
-    r"(?i)\b([a-z0-9_]*[_-]?(?:api[_-]?key|token|secret|password|passwd))\b(\s*[:=]\s*)([^\s,;\"']+)"
-)
-
-# ---------------------------------------------------------------------------
-# Mapping redaction (union of the former code_sync._mask_secret_extra_vars)
-# ---------------------------------------------------------------------------
-
-# Secret key fragments — a mapping value is masked when any fragment is a prefix
-# of, or a substring of, the (lowercased) key.
-_SECRET_KEY_FRAGMENTS = (
-    "password",
-    "secret",
-    "token",
-    "key",
-    "pass",
-    "credential",
-    "cert",
-    "private",
-)
-
-_MASK = "***"
+from autobot_shared.secret_redaction import LOG_MASK as _MASK
+from autobot_shared.secret_redaction import redact_mapping, redact_text
 
 # ---------------------------------------------------------------------------
 # Cloud-provider identifiers (#15324)
@@ -81,12 +43,13 @@ _MASK = "***"
 # names a principal or resource. Both are disclosure when a provider error is
 # logged or returned to a caller.
 #
-# WHY THIS LIVES HERE rather than in a new module: this file's own header says a
-# redactor is a security control with exactly ONE implementation, because two
-# divergent one-off copies are what #12242 consolidated. A stashed draft of this
-# fix (#15324) added a separate ``autobot_shared/aws_error_sanitizer`` instead,
-# which would have reintroduced precisely that split — and it imported a module
-# that was never written, so it could not have run at all.
+# WHY THIS LIVES HERE rather than in a new module: a redactor is a security
+# control, and two divergent one-off copies are what #12242 consolidated. A
+# stashed draft of this fix (#15324) added a separate
+# ``autobot_shared/aws_error_sanitizer`` instead, which would have reintroduced
+# precisely that split -- and it imported a module that was never written, so it
+# could not have run at all. Cloud identifiers are not credential vocabulary, so
+# they stay out of ``secret_redaction``'s vocabulary and its census entry.
 #
 # DELIBERATELY NARROW: only the account field and the resource tail inside a
 # well-formed ARN are masked. The partition, service and region are kept, because
@@ -99,35 +62,6 @@ _ARN_RE = re.compile(
     r"\barn:(?P<partition>aws[a-z-]*):(?P<service>[a-z0-9-]*):(?P<region>[a-z0-9-]*):"
     r"(?P<account>\d{12}):(?P<tail>[^\s\"',;)]*)"
 )
-
-
-def redact_text(text: str) -> str:
-    """Redact common secret patterns from a line/blob of *text*.
-
-    Masks ``Authorization``/``Bearer`` headers and
-    ``api_key/token/secret/password`` key/value pairs. Non-secret text is
-    returned unchanged.
-    """
-    text = _AUTH_HEADER_RE.sub(r"\1" + _MASK, text)
-    text = _SECRET_KV_RE.sub(r"\1\2" + _MASK, text)
-    return text
-
-
-def redact_mapping(mapping: Mapping[str, str]) -> Dict[str, str]:
-    """Return a copy of *mapping* with secret values replaced by ``***``.
-
-    A value is masked when its key (lowercased) starts with, or contains, any
-    known secret key fragment (``password``, ``secret``, ``token``, ``key``,
-    ``pass``, ``credential``, ``cert``, ``private``).
-    """
-    redacted: Dict[str, str] = {}
-    for key, value in mapping.items():
-        lower_key = key.lower()
-        if any(lower_key.startswith(frag) or frag in lower_key for frag in _SECRET_KEY_FRAGMENTS):
-            redacted[key] = _MASK
-        else:
-            redacted[key] = value
-    return redacted
 
 
 def redact_cloud_identifiers(text: str) -> str:

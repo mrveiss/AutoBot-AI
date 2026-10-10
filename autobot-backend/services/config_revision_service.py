@@ -10,9 +10,10 @@ snapshots, computing diffs, redacting secrets, and rolling back to any
 prior revision.
 
 
-Boundary: this module is one of seven that own a secret detector — see
-``docs/developer/REDACTION_BOUNDARY.md`` for which redactor owns which shape of
-the problem, and add a new detector there rather than starting an eighth (#16688).
+Which keys are secrets is decided by the canonical
+``autobot_shared.secret_redaction`` (``MatchPolicy.BROAD`` -- stored snapshots
+favour recall); this module declares no vocabulary (#17337). See
+``docs/developer/REDACTION_BOUNDARY.md``.
 """
 
 import uuid
@@ -22,19 +23,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import MatchPolicy, is_credential_entry
 from models.config_revision import ConfigRevision
 
 logger = get_logger(__name__)
 
-# Keys whose values must be redacted in stored snapshots.
-_SECRET_SUBSTRINGS = frozenset(["password", "secret", "key", "token", "api_key"])
 _REDACTED = "***REDACTED***"
 
 
-def _is_secret_key(key: str) -> bool:
-    """Return True if key name suggests a sensitive value (#1404)."""
-    lower = key.lower()
-    return any(sub in lower for sub in _SECRET_SUBSTRINGS)
+def _is_secret_key(key: str, value: Any) -> bool:
+    """Return True if the value under *key* must be masked (#1404, value-aware #17336)."""
+    return is_credential_entry(key, value, MatchPolicy.BROAD)
 
 
 def redact_secrets(config_dict: Dict[str, Any] | None) -> Dict[str, Any] | None:
@@ -45,7 +44,7 @@ def redact_secrets(config_dict: Dict[str, Any] | None) -> Dict[str, Any] | None:
     """
     if config_dict is None:
         return None
-    return {k: (_REDACTED if _is_secret_key(k) else v) for k, v in config_dict.items()}
+    return {k: (_REDACTED if _is_secret_key(k, v) else v) for k, v in config_dict.items()}
 
 
 def compute_diff(
