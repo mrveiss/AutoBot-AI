@@ -3408,3 +3408,12 @@ refresh_token_endpoint
 authorization_endpoint
 login_endpoint
 webhook_secret_endpoint
+pin_number
+pinNumber
+pins
+pin_codes
+pinCodes
+user_pins
+pinned
+spinners
+pin_numbering

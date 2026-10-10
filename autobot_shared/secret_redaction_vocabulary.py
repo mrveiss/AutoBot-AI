@@ -114,7 +114,8 @@ def is_quantity_field(name: str) -> bool:
 # CREDENTIAL_SUFFIXES entry (which BROAD matches as a substring and which also feeds
 # credential_redaction.SENSITIVE_KEYS) nor matched inside a word.  The name is split into tokens
 # on _ - . and camelCase boundaries, and it matches when its LAST tokens are one of these
-# sequences, under BOTH policies: pin, user_pin, pinCode, pincode, card.pin, pin_hash, card_pin_digest, passcode.
+# sequences, under BOTH policies: pin, pins, user_pin, pinCode, pin_codes, pin_number, pincode, card.pin,
+# pin_hash, card_pin_digest, passcode.
 # pin_length/pin_memory end in a different token and stay unmasked.
 WHOLE_TOKEN_NOUNS: Tuple[Tuple[str, ...], ...] = (
     ("pin",),
@@ -123,6 +124,11 @@ WHOLE_TOKEN_NOUNS: Tuple[Tuple[str, ...], ...] = (
     ("pin", "hash"),
     ("pin", "digest"),
     ("pin", "salt"),
+    ("pin", "number"),
+    ("pin", "numbers"),
+    ("pin", "codes"),
+    ("pincodes",),
+    ("pins",),
     ("passcode",),
 )
 

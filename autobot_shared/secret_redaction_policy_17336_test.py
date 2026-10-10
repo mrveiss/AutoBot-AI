@@ -232,6 +232,12 @@ def test_a_name_outside_the_vocabulary_is_never_a_credential_for_any_value(polic
         "pin_salt",
         "pincode",
         "userPincode",
+        "pin_number",
+        "pinNumber",
+        "pins",
+        "pin_codes",
+        "pinCodes",
+        "user_pins",
     ],
 )
 def test_pin_and_passcode_are_credentials_as_whole_tokens_under_both_policies(name, policy) -> None:
@@ -253,6 +259,9 @@ def test_pin_and_passcode_are_credentials_as_whole_tokens_under_both_policies(na
         "pinning",
         "pin_count",
         "pin_hashing_rounds",
+        "pinned",
+        "spinners",
+        "pin_numbering",
     ],
 )
 def test_a_word_that_merely_contains_pin_is_not_a_credential(name, policy) -> None:
