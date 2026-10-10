@@ -28,6 +28,7 @@ import wave
 import numpy as np
 
 from autobot_shared.audio_params import STT_CHANNELS, STT_SAMPLE_RATE, AudioFormat, describe_wav
+from autobot_shared.env_registry import env
 from autobot_shared.logging_manager import get_logger
 from media.audio.ffmpeg_service import get_ffmpeg_service
 
@@ -45,6 +46,9 @@ _MAGIC = (
     (b"\xff\xfb", 0, ".mp3"),
     (b"ftyp", 4, ".m4a"),
 )
+
+#: ffmpeg writes ``pcm_s16le``: 2 bytes per sample.
+_DECODED_SAMPLE_BYTES = 2
 
 _INT_DTYPES = {1: (np.uint8, 128.0, 128.0), 2: (np.int16, 0.0, 32768.0), 4: (np.int32, 0.0, 2147483648.0)}
 
@@ -86,7 +90,15 @@ async def _transcode_then_decode(data: bytes, target_rate: int) -> np.ndarray:
     try:
         with os.fdopen(in_fd, "wb") as fh:
             fh.write(data)
-        await get_ffmpeg_service().extract_audio(in_path, out_path, sample_rate=target_rate, channels=STT_CHANNELS)
+        max_seconds = float(env("AUTOBOT_AUDIO_DECODE_MAX_SECONDS"))
+        await get_ffmpeg_service().extract_audio(
+            in_path,
+            out_path,
+            sample_rate=target_rate,
+            channels=STT_CHANNELS,
+            max_duration=max_seconds + 1.0,  # one second of slack: longer output means "too long", not "cut"
+        )
+        _check_output_bounds(out_path, target_rate, max_seconds)
         with open(out_path, "rb") as fh:
             wav_bytes = fh.read()
         return await asyncio.to_thread(decode_audio_bytes, wav_bytes, target_rate)
@@ -99,6 +111,17 @@ async def _transcode_then_decode(data: bytes, target_rate: int) -> np.ndarray:
                 os.unlink(path)
             except OSError:
                 pass
+
+
+def _check_output_bounds(out_path: str, target_rate: int, max_seconds: float) -> None:
+    """Refuse a transcoded WAV over the byte cap or longer than *max_seconds*, before reading it."""
+    size = os.stat(out_path).st_size
+    byte_cap = int(env("AUTOBOT_AUDIO_DECODE_MAX_OUTPUT_BYTES"))
+    if size > byte_cap:
+        raise ValueError(f"Decoded audio is {size} bytes, over the {byte_cap}-byte cap")
+    seconds = size / (target_rate * STT_CHANNELS * _DECODED_SAMPLE_BYTES)
+    if seconds > max_seconds:
+        raise ValueError(f"Decoded audio is {seconds:.0f}s, over the {max_seconds:.0f}s cap")
 
 
 def _sniff_suffix(data: bytes) -> str:

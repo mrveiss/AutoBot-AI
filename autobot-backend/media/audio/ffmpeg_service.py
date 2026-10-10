@@ -55,14 +55,30 @@ EXTENSION_TO_FORMAT = {
 }
 
 
+async def _kill_and_reap(process: asyncio.subprocess.Process) -> None:
+    """Kill *process* (already gone is fine) and wait for it so no zombie or runaway remains."""
+    try:
+        process.kill()
+    except ProcessLookupError:
+        pass
+    await process.wait()
+
+
 async def _communicate_bounded(process: asyncio.subprocess.Process) -> tuple[bytes, bytes]:
-    """``communicate()`` under :data:`FFMPEG_TIMEOUT_SECONDS`; kill and reap on timeout."""
+    """``communicate()`` under :data:`FFMPEG_TIMEOUT_SECONDS`; kill and reap on timeout OR cancel.
+
+    A caller's own ``asyncio.wait_for`` (``/voice/transcribe`` allows 30 s) cancels this
+    coroutine long before the 300 s cap; without the ``CancelledError`` branch ffmpeg
+    would keep running (#17778).
+    """
     try:
         return await asyncio.wait_for(process.communicate(), timeout=FFMPEG_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
-        process.kill()
-        await process.wait()
+        await _kill_and_reap(process)
         raise RuntimeError(f"FFmpeg extraction timed out after {FFMPEG_TIMEOUT_SECONDS:.0f}s") from None
+    except asyncio.CancelledError:
+        await _kill_and_reap(process)
+        raise
 
 
 class FFmpegService:
@@ -82,6 +98,7 @@ class FFmpegService:
         output_path: Optional[str] = None,
         sample_rate: int = STT_SAMPLE_RATE,
         channels: int = STT_CHANNELS,
+        max_duration: Optional[float] = None,
     ) -> str:
         """Extract and normalize audio to WAV format.
 
@@ -96,6 +113,8 @@ class FFmpegService:
             output_path: Optional output path (creates temp file if not provided)
             sample_rate: Target sample rate in Hz (default: STT_SAMPLE_RATE)
             channels: Number of audio channels (default: 1 for mono)
+            max_duration: Optional ``-t`` cap in seconds on the decoded output (bounds a
+                decompression bomb); ``None`` keeps the whole stream
 
         Returns:
             Path to normalized WAV file
@@ -169,6 +188,7 @@ class FFmpegService:
                 str(sample_rate),  # Sample rate
                 "-ac",
                 str(channels),  # Mono/stereo
+                *(["-t", f"{max_duration:g}"] if max_duration else []),
                 "-y",  # Overwrite output
                 output_path,
             ]
