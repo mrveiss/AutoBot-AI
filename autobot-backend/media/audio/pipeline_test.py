@@ -3,200 +3,56 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 #
-# Audio Pipeline Tests
+# Whisper pipeline tests
 # Issue #932: Implement actual audio transcription
+# Issue #17778: AudioPipeline was removed; its behavioural tests moved to the seams that survive
 
-"""Unit tests for AudioPipeline."""
+"""Unit tests for the one pinned Whisper inference path."""
 
-import base64
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
-
-from media.audio.pipeline import AudioPipeline
-from media.core.types import MediaInput, MediaType, ProcessingIntent
+from media.audio.pipeline import suffix_for_mime, transcribe_bytes
 
 
-def _make_input(data, mime_type="audio/wav"):
-    return MediaInput(
-        media_id="test-audio",
-        media_type=MediaType.AUDIO,
-        intent=ProcessingIntent.ANALYSIS,
-        data=data,
-        mime_type=mime_type,
-        metadata={"source": "test"},
-    )
-
-
-class TestAudioPipelineDecoding:
-    """Tests for _decode_input helper."""
-
-    def test_bytes_passthrough(self):
-        pipe = AudioPipeline()
-        raw = b"RIFF audio data"
-        assert pipe._decode_input(raw) == raw
-
-    def test_base64_string(self):
-        pipe = AudioPipeline()
-        raw = b"audio bytes"
-        encoded = base64.b64encode(raw).decode()
-        assert pipe._decode_input(encoded) == raw
-
-    def test_unsupported_type_raises(self):
-        pipe = AudioPipeline()
-        with pytest.raises(ValueError, match="Unsupported"):
-            pipe._decode_input(42)
-
-
-class TestAudioPipelineSuffixMapping:
-    """Tests for _suffix_from_mime."""
-
+class TestSuffixMapping:
     def test_known_mimes(self):
-        pipe = AudioPipeline()
-        assert pipe._suffix_from_mime("audio/mpeg") == ".mp3"
-        assert pipe._suffix_from_mime("audio/wav") == ".wav"
-        assert pipe._suffix_from_mime("audio/ogg") == ".ogg"
-        assert pipe._suffix_from_mime("audio/flac") == ".flac"
-        assert pipe._suffix_from_mime("audio/webm") == ".webm"
+        assert suffix_for_mime("audio/mpeg") == ".mp3"
+        assert suffix_for_mime("audio/wav") == ".wav"
+        assert suffix_for_mime("audio/ogg") == ".ogg"
+        assert suffix_for_mime("audio/flac") == ".flac"
+        assert suffix_for_mime("audio/webm") == ".webm"
 
     def test_unknown_mime_defaults_to_wav(self):
-        pipe = AudioPipeline()
-        assert pipe._suffix_from_mime("audio/unknown") == ".wav"
-        assert pipe._suffix_from_mime("") == ".wav"
+        assert suffix_for_mime("audio/unknown") == ".wav"
+        assert suffix_for_mime("") == ".wav"
 
 
-class TestAudioPipelineResults:
-    """Tests for result-building helpers."""
-
-    def test_transcription_result_with_text(self):
-        pipe = AudioPipeline()
-        result = pipe._transcription_result("Hello world", "en", [])
-        assert result["type"] == "audio_transcription"
-        assert result["transcribed_text"] == "Hello world"
-        assert result["word_count"] == 2
-        assert result["language"] == "en"
-        assert result["processing_method"] == "whisper"
-        assert result["confidence"] == 0.9
-
-    def test_transcription_result_empty_text(self):
-        pipe = AudioPipeline()
-        result = pipe._transcription_result("", "unknown", [])
-        assert result["word_count"] == 0
-        assert result["confidence"] == 0.5
-
-    def test_unavailable_result(self):
-        pipe = AudioPipeline()
-        result = pipe._unavailable_result({"source": "test"})
-        assert result["processing_status"] == "unavailable"
-        assert result["confidence"] == 0.0
-        assert "transformers" in result["unavailability_reason"]
-
-    def test_error_result(self):
-        pipe = AudioPipeline()
-        result = pipe._error_result("file not found", {"source": "test"})
-        assert result["processing_status"] == "error"
-        assert result["error"] == "file not found"
-        assert result["confidence"] == 0.0
-
-
-class TestAudioPipelineWhisper:
-    """Tests for Whisper transcription path."""
-
-    @pytest.mark.asyncio
-    async def test_returns_unavailable_when_transformers_missing(self):
-        pipe = AudioPipeline()
-        media_input = _make_input(b"fake audio")
-        with patch("media.audio.pipeline._TRANSFORMERS_AVAILABLE", False):
-            result = await pipe._process_audio(media_input)
-        assert result["processing_status"] == "unavailable"
-
-    def test_run_whisper_writes_temp_file_and_cleans_up(self):
-        """Asserts the temp file is GONE, not that `os.unlink` was called once.
-
-        #17780: this counted `os.unlink` calls, which is the mechanism rather
-        than the property its own name states. Moving the temp-file lifecycle
-        into the shared `transcribe_bytes` made the count 2 -- the explicit
-        removal plus the file wrapper's own close path, the second of which finds
-        the file already gone and is swallowed. The file is still removed, so the
-        guarantee held while the assertion failed.
-
-        Checking the path's absence is both stronger and refactor-proof: it
-        verifies the outcome instead of trusting a call count to imply it.
-        """
-        pipe = AudioPipeline()
+class TestTranscribeBytes:
+    def test_writes_temp_file_and_cleans_up(self):
+        """Asserts the temp file is GONE, not that `os.unlink` was called once (#17780)."""
         seen_paths = []
 
         def capture(path, **kwargs):
             seen_paths.append(path)
-            return {"text": "hello world", "language": "en", "chunks": []}
+            return {"text": " hello world ", "language": "en", "chunks": []}
 
-        result = pipe._run_whisper(MagicMock(side_effect=capture), b"fake audio bytes", "audio/wav")
+        result = transcribe_bytes(MagicMock(side_effect=capture), b"fake audio bytes", mime="audio/wav")
 
-        assert result["transcribed_text"] == "hello world"
-        assert result["language"] == "en"
+        assert result.text == "hello world"
+        assert result.language == "en"
         assert len(seen_paths) == 1, "Whisper was handed something other than exactly one temp path"
         assert seen_paths[0].endswith(".wav"), f"temp file got the wrong suffix: {seen_paths[0]}"
         assert not os.path.exists(seen_paths[0]), f"temp file was left behind: {seen_paths[0]}"
 
-    def test_run_whisper_handles_non_dict_output(self):
-        pipe = AudioPipeline()
-        mock_pipe = MagicMock(return_value="not a dict")
+    def test_non_dict_output_is_empty_unknown(self):
+        result = transcribe_bytes(MagicMock(return_value="not a dict"), b"bytes", mime="audio/wav")
+        assert result.text == ""
+        assert result.language == "unknown"
 
-        with patch("os.unlink"):
-            result = pipe._run_whisper(mock_pipe, b"bytes", "audio/wav")
-
-        assert result["transcribed_text"] == ""
-        assert result["language"] == "unknown"
-
-
-class TestAudioPipelineAsync:
-    """End-to-end async processing tests."""
-
-    @pytest.mark.asyncio
-    async def test_process_impl_unavailable(self):
-        """When transformers not installed, process_impl succeeds with unavailable status."""
-        pipe = AudioPipeline()
-        media_input = _make_input(b"fake audio data")
-
-        with patch("media.audio.pipeline._TRANSFORMERS_AVAILABLE", False):
-            result = await pipe._process_impl(media_input)
-
-        assert result.success is True
-        assert result.result_data["processing_status"] == "unavailable"
-        assert result.confidence == 0.0
-
-    @pytest.mark.asyncio
-    async def test_process_impl_with_mock_whisper(self):
-        """Mocked Whisper pipeline returns transcription result."""
-        pipe = AudioPipeline()
-        media_input = _make_input(b"fake audio data", "audio/wav")
-
-        mock_whisper = MagicMock(
-            return_value={
-                "text": "test transcription",
-                "language": "en",
-                "chunks": [],
-            }
-        )
-
-        # #13162: _whisper_pipeline alone is NOT the seam. _get_whisper_pipeline()
-        # only honours the module global once _WHISPER_LOADED marks the lazy load
-        # as already resolved; while it is False the loader calls hf_pipeline()
-        # and REBINDS _whisper_pipeline over the mock. On a machine with
-        # transformers installed (CI does) that downloaded and instantiated the
-        # real openai/whisper-base model mid-unit-test, which then failed on the
-        # fake bytes with "ffmpeg was not found" and returned the error result --
-        # so this asserted '' == 'test transcription'. Pin the sentinel too.
-        with (
-            patch("media.audio.pipeline._TRANSFORMERS_AVAILABLE", True),
-            patch("media.audio.pipeline._WHISPER_LOADED", True),
-            patch("media.audio.pipeline._whisper_pipeline", mock_whisper),
-            patch("os.unlink"),
-        ):
-            result = await pipe._process_impl(media_input)
-
-        assert result.success is True
-        assert result.result_data["transcribed_text"] == "test transcription"
-        assert result.result_data["language"] == "en"
-        assert result.confidence == 0.9
+    def test_language_hint_is_passed_only_when_set(self):
+        pipe = MagicMock(return_value={"text": "x"})
+        transcribe_bytes(pipe, b"b", language="lv")
+        assert pipe.call_args.kwargs["generate_kwargs"] == {"language": "lv"}
+        transcribe_bytes(pipe, b"b")
+        assert pipe.call_args.kwargs["generate_kwargs"] is None

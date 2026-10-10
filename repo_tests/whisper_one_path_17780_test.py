@@ -134,15 +134,21 @@ def test_the_whisper_loader_goes_through_load_verified() -> None:
         )
 
 
-def test_both_features_reach_the_same_inference_function() -> None:
-    """The point of the consolidation: one body, not two that look alike."""
-    for rel in (_PIPELINE, _VOICE):
-        names = {
-            node.func.id
-            for node in ast.walk(_module(rel))
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-        }
-        assert "transcribe_bytes" in names, f"{rel} does not call the shared transcribe_bytes"
+def test_every_caller_reaches_the_same_inference_function() -> None:
+    """One body, not two that look alike.
+
+    #17778 removed the media ``AudioPipeline`` wrapper, the second caller this guard
+    used to name: the pipeline module now only DEFINES ``transcribe_bytes``, and the
+    voice route is the caller that must reach it instead of carrying its own copy.
+    """
+    defined = {n.name for n in ast.walk(_module(_PIPELINE)) if isinstance(n, ast.FunctionDef)}
+    assert "transcribe_bytes" in defined, f"{_PIPELINE} no longer defines the shared transcribe_bytes"
+    names = {
+        node.func.id
+        for node in ast.walk(_module(_VOICE))
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+    assert "transcribe_bytes" in names, f"{_VOICE} does not call the shared transcribe_bytes"
 
 
 def test_the_route_keeps_the_behaviour_the_pipeline_does_not_have() -> None:
