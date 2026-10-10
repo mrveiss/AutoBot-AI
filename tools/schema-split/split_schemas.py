@@ -14,12 +14,17 @@ After running, also run update_imports.py to rewrite all API endpoint imports.
 See README.md for the full workflow including handling new domains.
 """
 
-import re
+import logging
 import os
+import re
+import sys
 from collections import defaultdict
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-API_DIR = os.path.join(REPO_ROOT, "autobot-backend", "api")
+from schema_rules import API_DIR, classify_class
+
+# Stdlib logging: a bare CLI has no logging_manager config.
+logger = logging.getLogger(__name__)
+
 SCHEMA_FILE = os.path.join(API_DIR, "schemas_common.py")
 
 COPYRIGHT = """# AutoBot - AI-Powered Automation Platform
@@ -52,36 +57,6 @@ DOMAIN_HEADERS = {
     "workflows": "Workflow, registry, RUM, elevation, advanced-control, state-tracking, and validation schemas.",
     "code": "Code review, git, skills, database, template, log, voice, access-control, MCP, and file-sandbox schemas.",
 }
-
-# ---------------------------------------------------------------------------
-# Classification rules — longest-match prefix wins
-# ---------------------------------------------------------------------------
-DOMAIN_RULES = [
-    # Longest prefixes first to avoid shorter-prefix false matches
-    (r"^(AgentTerminal)", "terminal"),
-    (r"^(AgentMessage|AgentCommand|AgentHealth|AgentConfig|AgentCommandApproval|AgentCommandExecute)", "agent"),
-    (r"^(Terminal|SSH|CommandAssess|AdminExecute|PackageManagers)", "terminal"),
-    (r"^(Analytics|Cost|Budget|UsageSummary|UsageBy|RecentUsage|ModelPricing|AllAgent|Metrics)", "analytics"),
-    (r"^Knowledge", "knowledge"),
-    (r"^(LLM|Memory)", "agent"),
-    (r"^(System|NPU|WakeWord|FeatureFlag|AdminFile)", "system"),
-    (
-        r"^(ValidationDashboard|ValidationJudge|ValidationJudgment|Workflow|Registry|RUM|Elevation|AdvancedControl|StateTracking|StructuredThinking)",
-        "workflows",
-    ),
-    (
-        r"^(CodeReview|Git|Skills|SkillsDraft|SkillsApproval|SkillsGovernance|SkillsGap|Database|Template|Templates|Log|Voice|AccessControl|FileSandbox|MCP|HTTP)",
-        "code",
-    ),
-    (r"^(Success|Data|UsageRecord)", "common"),
-]
-
-
-def classify_class(cls: str) -> str:
-    for pattern, domain in DOMAIN_RULES:
-        if re.match(pattern, cls):
-            return domain
-    return "common"  # fallback — stays in schemas_common
 
 
 def _find_base_classes(content: str) -> set[str]:
@@ -127,12 +102,12 @@ def split(dry_run: bool = False) -> None:
     for cls in ordered:
         domain_classes[classify_class(cls)].append(cls)
 
-    print("Classes per domain:")
+    logger.info("Classes per domain:")
     for d, classes in sorted(domain_classes.items(), key=lambda x: -len(x[1])):
-        print(f"  {d:12s}: {len(classes)}")
+        logger.info(f"  {d:12s}: {len(classes)}")
 
     if dry_run:
-        print("\nDry run — no files written.")
+        logger.info("\nDry run — no files written.")
         return
 
     # Write domain files
@@ -159,7 +134,7 @@ def split(dry_run: bool = False) -> None:
 
         with open(fpath, "w", encoding="utf-8") as f:
             f.write(file_content)
-        print(f"Wrote {fname} ({len(classes)} classes)")
+        logger.info(f"Wrote {fname} ({len(classes)} classes)")
 
     # Rewrite schemas_common.py with only the common classes
     common_classes = domain_classes["common"]
@@ -181,11 +156,13 @@ def split(dry_run: bool = False) -> None:
 
     with open(SCHEMA_FILE, "w", encoding="utf-8") as f:
         f.write(new_common)
-    print(f"Updated schemas_common.py ({len(common_classes)} classes)")
-    print("\nNext step: run tools/schema-split/update_imports.py")
+    logger.info(f"Updated schemas_common.py ({len(common_classes)} classes)")
+    logger.info("\nNext step: run tools/schema-split/update_imports.py")
 
 
 if __name__ == "__main__":
+    # Report text stays on stdout, where these scripts always wrote it.
+    logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
     import argparse
 
     parser = argparse.ArgumentParser(description="Split schemas_common.py into domain files")
