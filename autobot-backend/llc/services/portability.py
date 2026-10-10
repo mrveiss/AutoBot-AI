@@ -18,7 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.secret_redaction import MatchPolicy, is_credential_entry
 from llc.adapters import adapter_unavailable_reason, registered_adapter_types
 from llc.models.enums import ActivityEventType, LLCCompanyStatus
 from llc.models.export import LLCExportArtifact
@@ -27,6 +26,7 @@ from llc.models.routine import LLCRoutine
 from llc.models.secret import LLCSecret
 from llc.models.sprint import LLCPortfolio, LLCProject, LLCSprint
 from llc.models.work_item import LLCWorkItem
+from llc.services.portability_export_names import export_masks
 from user_management.models.organization import Organization
 
 from .activity_log import LLCActivityLogService
@@ -890,7 +890,7 @@ def _scrub_adapter_config(config: Dict[str, Any], secret_map: Dict[str, str]) ->
     """
     scrubbed: Dict[str, Any] = {}
     for k, v in config.items():
-        if is_credential_entry(k, v, MatchPolicy.PRECISE, exempt_counts=True) and v:
+        if export_masks(k, v):
             bound = secret_map.get(str(v)) or secret_map.get(k)
             placeholder_name = bound if bound else k.upper()
             scrubbed[k] = f"{{{{{placeholder_name}}}}}"

@@ -93,3 +93,20 @@ def test_the_bool_exemption_is_export_only() -> None:
     assert _scrub_adapter_config({"verify_cert": True}, {}) == {"verify_cert": True}
     assert redact_mapping({"verify_cert": True}) == {"verify_cert": "***"}
     assert redact_value("verify_cert", True) == "**********"
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["access_token", "api_key", "api_secret", "auth_token", "bearer_token", "client_secret", "credentials"]
+    + ["key", "password", "private_key", "secret", "token", "API_KEY", "Token"],
+)
+def test_true_under_main_s_twelve_export_names_is_still_a_placeholder(name: str) -> None:
+    # #18196 (owner decision: `api_key: True` does not round-trip) and #17337 AC2: no key leaves
+    # the masked set. Only these names; `verify_cert`/`use_key` above round-trip.
+    assert _scrub_adapter_config({name: True}, {}) == {name: f"{{{{{name.upper()}}}}}"}
+
+
+@pytest.mark.parametrize("name", ["api_key", "token", "verify_cert", "use_key"])
+def test_false_and_none_are_never_a_placeholder(name: str) -> None:
+    assert _scrub_adapter_config({name: False}, {}) == {name: False}
+    assert _scrub_adapter_config({name: None}, {}) == {name: None}

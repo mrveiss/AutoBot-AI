@@ -222,14 +222,9 @@ def is_credential_entry(
     a list, a dict -- is masked by both policies. Only ``exempt_counts=True``,
     which the template-export path passes because it must round-trip
     ``max_tokens`` as a number, leaves a real int/float unmasked.
-
-    In export mode (``exempt_counts=True``) a ``bool``/``None`` is never masked:
-    it holds no secret and ``{{VERIFY_CERT}}`` where ``True`` was breaks the import.
     """
     if not isinstance(policy, MatchPolicy):
         raise TypeError(f"policy must be a MatchPolicy, got {policy!r}")
-    if exempt_counts and (value is None or isinstance(value, bool)):
-        return False
     if name and is_quantity_field(name):
         if not _is_plain_number(value):
             return True
