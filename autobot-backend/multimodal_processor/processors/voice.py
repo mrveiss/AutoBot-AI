@@ -16,6 +16,7 @@ from typing import Any, Dict, Tuple
 
 import numpy as np
 
+from autobot_shared.audio_params import STT_SAMPLE_RATE
 from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 from config import get_config_section
@@ -298,12 +299,12 @@ class VoiceProcessor(BaseModalProcessor):
     def _prepare_audio_data(self, input_data: MultiModalInput) -> Tuple[np.ndarray, int]:
         """Prepare and normalize audio data (Issue #315 - extracted method)"""
         audio_array = None
-        sampling_rate = 16000  # Standard sampling rate for speech models
+        sampling_rate = STT_SAMPLE_RATE  # Standard sampling rate for speech models
 
         if isinstance(input_data.data, bytes):
             audio_array = np.frombuffer(input_data.data, dtype=np.float32)
         elif isinstance(input_data.data, str):
-            audio_array, sampling_rate = librosa.load(input_data.data, sr=16000)
+            audio_array, sampling_rate = librosa.load(input_data.data, sr=STT_SAMPLE_RATE)
         elif isinstance(input_data.data, np.ndarray):
             audio_array = input_data.data
         else:

@@ -15,6 +15,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
+from autobot_shared.audio_params import STT_CHANNELS, STT_SAMPLE_RATE
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_constants import SecurityConstants
@@ -64,8 +65,8 @@ class FFmpegService:
         self,
         input_path: str,
         output_path: Optional[str] = None,
-        sample_rate: int = 16000,
-        channels: int = 1,
+        sample_rate: int = STT_SAMPLE_RATE,
+        channels: int = STT_CHANNELS,
     ) -> str:
         """Extract and normalize audio to WAV format.
 
@@ -78,7 +79,7 @@ class FFmpegService:
         Args:
             input_path: Path to input audio/video file
             output_path: Optional output path (creates temp file if not provided)
-            sample_rate: Target sample rate in Hz (default: 16000)
+            sample_rate: Target sample rate in Hz (default: STT_SAMPLE_RATE)
             channels: Number of audio channels (default: 1 for mono)
 
         Returns:
