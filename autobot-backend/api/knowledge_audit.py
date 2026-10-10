@@ -130,11 +130,11 @@ async def get_fact_access_log(
 
     try:
         # Verify user is the owner; a non-reader sees the missing-fact 404 (#18220)
+        if not getattr(kb, "ownership_manager", None):  # before the lookup: a degraded KB must not leak existence
+            raise HTTPException(status_code=503, detail="Knowledge base not available")
         fact_data = await kb.redis().hget(f"fact:{fact_id}", "metadata")
         if not fact_data:
             raise fact_not_found()
-        if not getattr(kb, "ownership_manager", None):
-            raise HTTPException(status_code=503, detail="Knowledge base not available")
         metadata = parse_fact_metadata(fact_id, fact_data)
         await require_fact_owner(
             kb.ownership_manager, fact_id, metadata, current_user, "Only the owner can view access logs"

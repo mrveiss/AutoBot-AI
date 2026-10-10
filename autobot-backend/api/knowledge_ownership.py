@@ -64,14 +64,14 @@ async def _get_fact_with_ownership(kb, fact_id: str, user_id: str):
     Raises:
         HTTPException: 404 if not found or not readable (#18220)
     """
+    if not kb.ownership_manager:
+        # #16662: without the ownership manager no access decision can be made -- deny.
+        # Checked before the lookup so a degraded KB answers a missing and an existing fact alike (#18220).
+        raise HTTPException(status_code=503, detail="Ownership management not available")
+
     fact = await asyncio.to_thread(kb.get_fact, fact_id)  # #16670: get_fact is synchronous
     if not fact:
         raise fact_not_found()
-
-    # Check access
-    if not kb.ownership_manager:
-        # #16662: without the ownership manager no access decision can be made -- deny.
-        raise HTTPException(status_code=503, detail="Ownership management not available")
 
     metadata = object_metadata(fact_id, fact.get("metadata"))  # #18220
     # #16662: every caller is behind check_admin_permission -- an explicit admin read (owner decision, #16654)

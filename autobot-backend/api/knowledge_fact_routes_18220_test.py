@@ -122,3 +122,28 @@ async def _own_call(name, kb):
 async def test_ownership_routes_never_500_on_non_object_metadata(name, shape):
     result = await _own_call(name, _own_kb(shape))
     assert result  # reached the response: no AttributeError, no 500
+
+
+# --- a degraded KB (no ownership manager) answers a missing and an existing fact alike ---
+
+
+@pytest.mark.asyncio
+async def test_the_audit_access_log_gives_503_for_missing_and_existing_alike_without_a_manager():
+    missing, existing = _kb(None), _kb(PRIVATE)
+    missing.ownership_manager = existing.ownership_manager = None
+    a, b = await _err(_access_log, missing), await _err(_access_log, existing)
+    assert (a.status_code, a.detail) == (b.status_code, b.detail) == (503, "Knowledge base not available")
+
+
+@pytest.mark.asyncio
+async def test_the_ownership_admin_routes_give_503_for_missing_and_existing_alike_without_a_manager():
+    codes = []
+    for fact in (None, {"fact_id": "f1", "content": "c", "metadata": {"owner_id": "bob"}}):
+        kb = _own_kb({})
+        kb.get_fact = MagicMock(return_value=fact)
+        kb.ownership_manager = None
+        with patch.object(own, "get_or_create_knowledge_base", AsyncMock(return_value=kb)):
+            with pytest.raises(HTTPException) as exc:
+                await own._get_fact_with_ownership(kb, "f1", "root")
+        codes.append((exc.value.status_code, exc.value.detail))
+    assert codes[0] == codes[1] == (503, "Ownership management not available")
