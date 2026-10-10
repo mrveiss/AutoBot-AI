@@ -56,8 +56,20 @@ def _code(path: Path) -> str:
     return "\n".join(ln.split("#", 1)[0] for ln in path.read_text(encoding="utf-8").splitlines())
 
 
+#: Every request method of ``HTTPClientManager`` that takes ``guard_egress``:
+#: ``tracked_request`` and ``request`` directly, ``get``/``post`` and the
+#: ``get_json``/``post_json`` wrappers through ``**kwargs``. ``tracked_request``
+#: is unambiguous on any receiver; the others also name ``dict.get`` and friends,
+#: so they count only on a receiver that is the client (``get_http_client()``) or
+#: a name saying so, which keeps ``result.get("status_code")`` out (#17576).
+_OUTBOUND_CALL = re.compile(
+    r"(?:\btracked_request"
+    r"|(?:get_http_client\(\)|\b\w*(?:client|session|manager)\w*)\s*\.\s*(?:request|get|post|get_json|post_json))\("
+)
+
+
 def _call_slices(code: str) -> list[str]:
-    """The argument text of each ``tracked_request(`` call, by balanced parentheses.
+    """The argument text of each outbound manager call, by balanced parentheses.
 
     Counting ``tracked_request(`` and ``guard_egress=`` separately and comparing
     the totals is what the first version of this did, and it is wrong twice: a
@@ -68,7 +80,7 @@ def _call_slices(code: str) -> list[str]:
     call at a time.
     """
     slices = []
-    for match in re.finditer(r"tracked_request\(", code):
+    for match in _OUTBOUND_CALL.finditer(code):
         depth, i = 1, match.end()
         while i < len(code) and depth:
             depth += (code[i] == "(") - (code[i] == ")")
@@ -101,10 +113,36 @@ def test_every_outbound_call_declares_an_egress_policy():
     """Rule 8 at every call site in the directory, named or not."""
     offenders = []
     for path in _modules():
+        if path.name in _RAW_SESSION_EXCEPTIONS:
+            continue  # its policy is the pinned connector, not guard_egress; see _RAW_SESSION_EXCEPTIONS
         calls, unguarded = _outbound(path)
         if unguarded:
             offenders.append(f"{path.name}: call(s) {unguarded} of {calls} carry no guard_egress")
     assert not offenders, "outbound calls with no egress policy (Rule 8, #13625, #17576):\n  " + "\n  ".join(offenders)
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        'get_http_client().tracked_request("GET", url)',
+        'client.request("GET", url)',
+        "self._client.get(url)",
+        "get_http_client().post(url, data=x)",
+        "http_client.get_json(url)",
+        "client.post_json(url, {})",
+    ],
+)
+def test_contrast_the_detector_sees_every_manager_request_method(call):
+    """An unguarded call by any manager method is an offender; the guarded form is not."""
+    assert len(_call_slices(call)) == 1
+    assert "guard_egress" not in _call_slices(call)[0]
+    guarded = call[:-1] + ", guard_egress=False)"
+    assert "guard_egress" in _call_slices(guarded)[0]
+
+
+@pytest.mark.parametrize("call", ['result.get("status_code")', 'cfg.get("token", "")', "self._cache.get(key)"])
+def test_contrast_the_detector_ignores_dict_style_get(call):
+    assert _call_slices(call) == []
 
 
 def test_no_connector_builds_a_bare_client_session():
