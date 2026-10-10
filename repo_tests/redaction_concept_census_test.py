@@ -27,7 +27,7 @@ shape we want.
 ``llm_shared/credential_redaction.py`` IS in the census, because it still
 declares ``API_KEY_PATTERNS`` of its own on top of the shared vocabulary it now
 derives ``SENSITIVE_KEYS`` from (#16688). If those patterns are folded into
-``secret_redaction`` later, drop it from ``_CENSUS`` and the count falls to 3.
+``secret_redaction`` later, drop it from ``_CENSUS`` and the count falls to 2.
 
 WHAT TO DO WHEN THIS TEST FAILS
 --------------------------------
@@ -38,18 +38,21 @@ a genuinely new *shape* of the problem, and say so in that document in the same
 PR. Raising the count to make a red test green is the failure this guard is
 written against.
 
-THE TWO-CANONICALS QUESTION IS OPEN
-------------------------------------
-``autobot_shared/secret_redaction.py`` and ``autobot_shared/security/redaction.py``
-both answer "is this field name a credential" and disagree on 7 of 10 sampled
-names — suffix matching vs substring matching, each a recorded ruling in its own
-file. This guard pins that there are two and does not adjudicate which wins; see
-REDACTION_BOUNDARY.md.
+ONE CANONICAL CREDENTIAL MATCHER (#17336, #17337)
+--------------------------------------------------
+``autobot_shared/secret_redaction.py`` is the only module that decides whether a
+*name* is a credential: one shared vocabulary, two named policies
+(``MatchPolicy.PRECISE`` / ``BROAD``). ``security/redaction.py``, ``cot_events``,
+``portability`` and ``config_revision_service`` left the census by deriving from
+it. Two further guards below pin that: no other module may define the matcher's
+entry points, and no module outside a shrink-only baseline may declare its own
+key-name vocabulary. Each has a contrast pair that proves it fires.
 """
 
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 from typing import List, Set
 
@@ -61,24 +64,23 @@ from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
 
-# The census, as of #16688 — MEASURED by running the rule below over all 3,392
-# tracked production sources, not transcribed from the issue. #16688 and #17312
-# both say "four"; the rule finds SEVEN. The three nobody had counted are
-# cot_events, portability and config_revision_service, each carrying its own
-# key-name vocabulary. They are pinned here so the count cannot grow, and
-# collapsing them is tracked separately (see REDACTION_BOUNDARY.md).
+# The census. Seven at #16688, three after #17336 (the two "canonical" redactors
+# became one) and #17337 (the three private key-name vocabularies derived from it).
+# The count may fall, never grow.
 _CENSUS: Set[str] = {
-    # Named in #16688
-    "autobot_shared/secret_redaction.py",  # CREDENTIAL_SUFFIXES, 19 nouns, suffix match
+    "autobot_shared/secret_redaction.py",  # THE canonical module: CREDENTIAL_SUFFIXES + 2 MatchPolicy
     "autobot-backend/a2a/pii_pipeline.py",  # PIIType x14 + policy table, regex detectors
-    "autobot-backend/llm_shared/credential_redaction.py",  # API_KEY_PATTERNS (SENSITIVE_KEYS now derived)
-    # Found while implementing #16688 — also declares itself canonical (#12242)
-    "autobot_shared/security/redaction.py",  # _SECRET_KEY_FRAGMENTS, 8 nouns, substring match
-    # Found by this guard; not named in any issue before it ran
-    "autobot-backend/chat_workflow/cot_events.py",  # _SENSITIVE_KEY_FRAGMENTS, 13 nouns
-    "autobot-backend/llc/services/portability.py",  # _SECRET_LIKE_KEYS, 13 nouns
-    "autobot-backend/services/config_revision_service.py",  # _SECRET_SUBSTRINGS, 5 nouns
+    "autobot-backend/llm_shared/credential_redaction.py",  # API_KEY_PATTERNS (SENSITIVE_KEYS derived)
 }
+
+#: The one module allowed to define the credential-name matcher (#17336).
+CANONICAL_MATCHER = "autobot_shared/secret_redaction.py"
+
+#: Top-level names that ARE the credential-name matcher / log-line redactors. A
+#: second definition anywhere is a second implementation, whatever it is called.
+_MATCHER_ENTRY_POINTS = frozenset(
+    {"is_credential_field", "redact_mapping", "redact_text", "redact_value", "redact_content", "MatchPolicy"}
+)
 
 # Verbs that make a module a redactor rather than a module that merely mentions
 # one. Matched against top-level def/class names only.
@@ -426,3 +428,170 @@ def test_an_unparseable_file_is_a_failure_not_a_clean_report() -> None:
     """A census that cannot read a file must say so, never score it as empty."""
     with pytest.raises(SyntaxError):
         is_redaction_implementation("def broken(:\n")
+
+
+# ---------------------------------------------------------------------------
+# One matcher, no private key-name vocabularies (#17336, #17337).
+# ---------------------------------------------------------------------------
+
+
+def _top_level_names(source: str) -> Set[str]:
+    return {
+        node.name
+        for node in ast.parse(source).body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+    }
+
+
+def defines_matcher_entry_point(source: str) -> bool:
+    """True when the module defines a top-level name of the canonical matcher."""
+    return bool(_top_level_names(source) & _MATCHER_ENTRY_POINTS)
+
+
+def _vocabulary_nouns() -> Set[str]:
+    from autobot_shared.secret_redaction import BROAD_FRAGMENTS
+
+    return set(BROAD_FRAGMENTS) | {"apikey", "passwd", "pwd"}
+
+
+def _is_nounish(text: str, nouns: Set[str]) -> bool:
+    lowered = text.lower().replace("-", "_")
+    if not re.fullmatch(r"[a-z_]+", lowered):
+        return False
+    parts = lowered.split("_")
+    return lowered in nouns or parts[-1] in nouns or parts[0] in nouns
+
+
+def declares_key_name_vocabulary(source: str) -> bool:
+    """A collection literal (anywhere) that is mostly credential key names.
+
+    >=3 strings and >=60% of them equal a shared-vocabulary noun or start/end
+    with one after ``_`` splitting. Wider than ``_declares_secret_vocabulary``:
+    it needs no redact/scrub entry point, because ``cot_events`` and
+    ``config_revision_service`` carried private vocabularies behind
+    ``_is_sensitive`` / ``_is_secret_key``, which the census rule cannot see.
+    """
+    nouns = _vocabulary_nouns()
+    for coll in ast.walk(ast.parse(source)):
+        if not isinstance(coll, (ast.Tuple, ast.List, ast.Set)):
+            continue
+        strings = [e.value for e in coll.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
+        if len(strings) >= 3 and sum(_is_nounish(x, nouns) for x in strings) >= max(3, 0.6 * len(strings)):
+            return True
+    return False
+
+
+#: Modules OUTSIDE the canonical one that still declare a key-name vocabulary.
+#: Measured at #17336/#17337, and deliberately NOT fixed there: most are not
+#: redaction at all (env-var allow-lists, HTTP header deny-lists, permission
+#: seeds), and each needs its own judgement about policy. This set may only
+#: SHRINK -- a new private vocabulary fails the test below instead of joining it.
+_VOCABULARY_BASELINE: Set[str] = {
+    "autobot-backend/api/http_client_mcp.py",
+    "autobot-backend/api/log_forwarding.py",
+    "autobot-backend/autobot_memory_graph/secrets.py",
+    "autobot-backend/code_analysis/src/api_consistency_analyzer.py",
+    "autobot-backend/code_analysis/src/env_analyzer.py",
+    "autobot-backend/config/async_ops.py",
+    "autobot-backend/judges/security_risk_judge.py",
+    "autobot-backend/knowledge/search_quality.py",
+    "autobot-backend/llc/adapters/claude_code_subscription_adapter.py",
+    "autobot-backend/llc/api/costs.py",
+    "autobot-backend/llc/services/template.py",
+    "autobot-backend/llm_shared/run_credential_loader.py",
+    "autobot-backend/middleware/idempotency_middleware.py",
+    "autobot-backend/security/enterprise/threat_detection/types.py",
+    "autobot-backend/services/audit_logger.py",
+    "autobot-backend/services/provider_key_vault.py",
+    "autobot_shared/field_encryption.py",
+    "autobot_shared/security/ssrf_guard.py",
+}
+
+
+def test_credential_matcher_has_exactly_one_home() -> None:
+    """No module but the canonical one may define the matcher's entry points."""
+    homes: List[str] = []
+    for rel in _SOURCES:
+        source = (REPO_ROOT / rel).read_text(encoding="utf-8")
+        if defines_matcher_entry_point(source):
+            homes.append(rel)
+    REACH.completed(len(_SOURCES))
+    assert homes == [CANONICAL_MATCHER], (
+        f"credential-name matcher defined in {homes}, expected only {CANONICAL_MATCHER}. "
+        "A second implementation is the fork #17336 merged away: add a MatchPolicy "
+        "or a vocabulary noun to secret_redaction.py instead."
+    )
+
+
+def test_no_new_private_key_name_vocabulary() -> None:
+    """A vocabulary of credential key names outside the baseline fails (#17337)."""
+    found = {
+        rel
+        for rel in _SOURCES
+        if rel != CANONICAL_MATCHER and declares_key_name_vocabulary((REPO_ROOT / rel).read_text(encoding="utf-8"))
+    }
+    new = sorted(found - _VOCABULARY_BASELINE)
+    assert not new, (
+        f"{new} declare their own credential key-name vocabulary. Derive from "
+        "autobot_shared.secret_redaction (is_credential_field + MatchPolicy) "
+        "instead of listing nouns; see docs/developer/REDACTION_BOUNDARY.md."
+    )
+
+
+def test_vocabulary_baseline_is_not_stale() -> None:
+    """A baseline entry that no longer declares a vocabulary must be removed."""
+    stale = sorted(
+        rel
+        for rel in _VOCABULARY_BASELINE
+        if not declares_key_name_vocabulary((REPO_ROOT / rel).read_text(encoding="utf-8"))
+    )
+    assert not stale, f"vocabulary baseline names modules that no longer declare one: {stale}; shrink it."
+
+
+_PLANTED_PRIVATE_VOCABULARY = """
+_HIDE = frozenset(["password", "secret", "key", "token"])
+
+
+def _is_secret_key(name):
+    return any(h in name.lower() for h in _HIDE)
+"""
+
+_PLANTED_SECOND_MATCHER = """
+def is_credential_field(name):
+    return name.endswith("_key")
+"""
+
+_PLANTED_DERIVES_FROM_CANONICAL = """
+from autobot_shared.secret_redaction import MatchPolicy, is_credential_field
+
+
+def _is_secret_key(name):
+    return is_credential_field(name, MatchPolicy.BROAD)
+"""
+
+_PLANTED_UNRELATED_LIST = """
+_PHASES = ("plan", "build", "review", "ship")
+"""
+
+
+@pytest.mark.parametrize(
+    "label,source,expected",
+    [
+        ("private key-name vocabulary behind an innocuous predicate", _PLANTED_PRIVATE_VOCABULARY, True),
+        ("derives from the canonical matcher", _PLANTED_DERIVES_FROM_CANONICAL, False),
+        ("unrelated string list", _PLANTED_UNRELATED_LIST, False),
+    ],
+)
+def test_vocabulary_rule_fires_on_a_private_list_not_on_a_caller(label: str, source: str, expected: bool) -> None:
+    assert declares_key_name_vocabulary(source) is expected, label
+
+
+@pytest.mark.parametrize(
+    "label,source,expected",
+    [
+        ("a second is_credential_field", _PLANTED_SECOND_MATCHER, True),
+        ("a caller of the canonical matcher", _PLANTED_DERIVES_FROM_CANONICAL, False),
+    ],
+)
+def test_matcher_rule_fires_on_a_second_definition_not_on_a_caller(label: str, source: str, expected: bool) -> None:
+    assert defines_matcher_entry_point(source) is expected, label

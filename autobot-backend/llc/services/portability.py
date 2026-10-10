@@ -26,6 +26,7 @@ from llc.models.routine import LLCRoutine
 from llc.models.secret import LLCSecret
 from llc.models.sprint import LLCPortfolio, LLCProject, LLCSprint
 from llc.models.work_item import LLCWorkItem
+from llc.services.portability_export_names import export_masks
 from user_management.models.organization import Organization
 
 from .activity_log import LLCActivityLogService
@@ -39,22 +40,6 @@ _SCHEMA_VERSION = "1.0"
 _EXPORT_TTL_SECONDS = 7 * 24 * 3600  # 7 days
 _SEED_ITEM_TYPES = ("epic", "feature")
 _SEED_ITEM_LIMIT = 20
-_SECRET_LIKE_KEYS = frozenset(
-    {
-        "api_key",
-        "api_secret",
-        "token",
-        "access_token",
-        "secret",
-        "password",
-        "credentials",
-        "private_key",
-        "client_secret",
-        "auth_token",
-        "bearer_token",
-        "key",
-    }
-)
 
 
 # ---------------------------------------------------------------------------
@@ -905,8 +890,7 @@ def _scrub_adapter_config(config: Dict[str, Any], secret_map: Dict[str, str]) ->
     """
     scrubbed: Dict[str, Any] = {}
     for k, v in config.items():
-        key_lower = k.lower()
-        if key_lower in _SECRET_LIKE_KEYS and v:
+        if export_masks(k, v):
             bound = secret_map.get(str(v)) or secret_map.get(k)
             placeholder_name = bound if bound else k.upper()
             scrubbed[k] = f"{{{{{placeholder_name}}}}}"

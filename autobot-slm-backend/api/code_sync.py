@@ -63,7 +63,7 @@ from api.venv_reconcile import (
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.db_url import assemble_postgres_url
 from autobot_shared.env_utils import env_float, env_int, env_int_clamped
-from autobot_shared.security.redaction import redact_mapping
+from autobot_shared.secret_redaction import redact_mapping
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 from config import settings

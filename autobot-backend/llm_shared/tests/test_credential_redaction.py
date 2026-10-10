@@ -201,3 +201,9 @@ def test_a_sensitive_key_is_redacted(key: str) -> None:
 def test_an_ordinary_key_keeps_its_value(key: str) -> None:
     """The union widens the sensitive set, so guard the false-positive side too."""
     assert redact_dict({key: "plain-value"})[key] == "plain-value"
+
+
+def test_redact_dict_still_masks_a_count_of_a_credential_noun() -> None:
+    # origin/main masked max_tokens here (normalized substring match); only the template
+    # export unmasks a count (#17337 AC2: nothing leaves the masked set).
+    assert redact_dict({"max_tokens": 4096, "retries": 3}) == {"max_tokens": "***", "retries": 3}
