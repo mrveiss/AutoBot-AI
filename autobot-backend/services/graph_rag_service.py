@@ -59,7 +59,7 @@ from autobot_shared.error_boundaries import error_boundary
 from autobot_shared.graph_retrieval import GRAPH_DEPTH_DEFAULT, GRAPH_PATH_DEFAULT, blend_graph_score
 from autobot_shared.logging_manager import get_llm_logger
 from knowledge.search_components.reranking import provenance_adjustment
-from services.rag_config import resolve_graph_weight
+from services.rag_config import resolve_graph_timeout, resolve_graph_weight
 from services.rag_service import RAGService
 
 logger = get_llm_logger("graph_rag_service")
@@ -489,7 +489,7 @@ class GraphRAGService:
             query=query,
             max_results=max_results * 2,  # Get more for filtering
             enable_reranking=enable_reranking,
-            timeout=timeout,
+            timeout=resolve_graph_timeout(self.rag, timeout),
         )
 
         metrics.copy_from_rag_metrics(rag_metrics)

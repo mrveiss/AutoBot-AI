@@ -13,7 +13,7 @@ All reranking parameters are configurable without code changes.
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from autobot_shared.graph_retrieval import GRAPH_WEIGHT_DEFAULT
+from autobot_shared.graph_retrieval import GRAPH_RAG_TIMEOUT_SECONDS, GRAPH_WEIGHT_DEFAULT
 from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
 from knowledge.search_components.reranking import RerankWeights
@@ -54,6 +54,8 @@ class RAGConfig:
     # Issue #18141: share of a candidate's blended score that comes from the graph signal.
     # The ONE graph weight: graph-RAG and the mesh retriever both read it from here.
     graph_weight: float = GRAPH_WEIGHT_DEFAULT
+    # Issue #18141: graph-RAG's own search budget (named override of timeout_seconds).
+    graph_rag_timeout_seconds: float = GRAPH_RAG_TIMEOUT_SECONDS
 
     # Issue #10600: route the hybrid keyword half through BM25 Okapi instead of
     # the substring TF scan.  Default False preserves legacy behaviour.
@@ -188,6 +190,9 @@ class RAGConfig:
         if not 0.0 <= self.graph_weight <= 1.0:
             raise ValueError(f"graph_weight must be in [0, 1], got {self.graph_weight}")
 
+        if self.graph_rag_timeout_seconds <= 0:
+            raise ValueError(f"graph_rag_timeout_seconds must be > 0, got {self.graph_rag_timeout_seconds}")
+
         # Issue #10600: relevance floor must be non-negative.
         if self.min_score < 0.0:
             raise ValueError(f"min_score must be >= 0, got {self.min_score}")
@@ -250,6 +255,7 @@ class RAGConfig:
             # Issue #2090: top-level MMR lambda (mirrors rerank_weights.mmr_lambda).
             "mmr_lambda": self.mmr_lambda,
             "graph_weight": self.graph_weight,  # Issue #18141
+            "graph_rag_timeout_seconds": self.graph_rag_timeout_seconds,
             # Issue #10600: BM25 hybrid + relevance floor flags.
             "bm25_hybrid_enabled": self.bm25_hybrid_enabled,
             "min_score": self.min_score,
@@ -416,5 +422,20 @@ def resolve_graph_weight(rag_service: Any, explicit: float | None = None) -> flo
     """
     if explicit is not None:
         return explicit
+    return _graph_config(rag_service).graph_weight
+
+
+def _graph_config(rag_service: Any) -> RAGConfig:
     config = getattr(rag_service, "config", None)
-    return (config if isinstance(config, RAGConfig) else get_rag_config()).graph_weight
+    return config if isinstance(config, RAGConfig) else get_rag_config()
+
+
+def resolve_graph_timeout(rag_service: Any, explicit: float | None = None) -> float:
+    """The search budget graph-RAG uses: the caller's ``timeout`` or ``graph_rag_timeout_seconds``.
+
+    Graph-RAG keeps its tighter budget (10 s by default) instead of inheriting the 120 s general
+    RAG timeout; it is one setting on the shared config, not a second ``RAGConfig`` (#18141).
+    """
+    if explicit is not None:
+        return explicit
+    return _graph_config(rag_service).graph_rag_timeout_seconds

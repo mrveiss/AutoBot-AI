@@ -217,3 +217,54 @@ async def test_kag_branch_rides_the_shared_search_and_stale_filtered_rag_results
     svc = GraphRAGService(rag, graph, enable_entity_extraction=False)
     await svc.graph_aware_search("q")
     rag.advanced_search.assert_awaited_once()
+
+
+# --- graph-RAG keeps its own 10 s budget, as one named setting ---------------------------
+
+
+def _timeout_service(rag_config: RAGConfig | None = None):
+    rag = MagicMock()
+    rag.config = rag_config or RAGConfig()
+    rag.advanced_search = AsyncMock(return_value=([], MagicMock(total_time=0.0)))
+    graph = AsyncMock()
+    graph.initialized = True
+    return rag, GraphRAGService(rag, graph, enable_entity_extraction=False)
+
+
+@pytest.mark.asyncio
+async def test_graph_rag_search_budget_is_ten_seconds_by_default() -> None:
+    rag, svc = _timeout_service()
+    await svc.graph_aware_search("q")
+    assert rag.advanced_search.await_args.kwargs["timeout"] == 10.0
+    assert RAGConfig().timeout_seconds != 10.0  # the general RAG budget is untouched
+
+
+@pytest.mark.asyncio
+async def test_graph_rag_budget_follows_config_and_an_explicit_timeout_wins() -> None:
+    rag, svc = _timeout_service(RAGConfig(graph_rag_timeout_seconds=25.0))
+    await svc.graph_aware_search("q")
+    assert rag.advanced_search.await_args.kwargs["timeout"] == 25.0
+    await svc.graph_aware_search("q", timeout=3.0)
+    assert rag.advanced_search.await_args.kwargs["timeout"] == 3.0
+
+
+def test_graph_rag_budget_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    import importlib
+
+    import autobot_shared.graph_retrieval as gr
+
+    monkeypatch.setenv("AUTOBOT_GRAPH_RAG_TIMEOUT_SECONDS", "42")
+    try:
+        assert importlib.reload(gr).GRAPH_RAG_TIMEOUT_SECONDS == 42.0
+    finally:
+        monkeypatch.delenv("AUTOBOT_GRAPH_RAG_TIMEOUT_SECONDS")
+        assert importlib.reload(gr).GRAPH_RAG_TIMEOUT_SECONDS == 10.0
+
+
+def test_mesh_seed_blend_is_pinned_at_the_default_weight() -> None:
+    from autobot_shared.graph_retrieval import GRAPH_WEIGHT_DEFAULT, blend_graph_score
+
+    s, p = 0.6, 0.5
+    out = NeuralMeshRetriever._as_dict({"score": s}, p, GRAPH_WEIGHT_DEFAULT)["score"]
+    assert out == blend_graph_score(s, s + p, GRAPH_WEIGHT_DEFAULT)
+    assert out == pytest.approx(0.7 * 0.6 + 0.3 * 1.1)

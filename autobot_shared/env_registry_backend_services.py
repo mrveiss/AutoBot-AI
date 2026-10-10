@@ -168,6 +168,23 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_GRAPH_RAG_TIMEOUT_SECONDS",
+        type=float,
+        default=10.0,
+        description=(
+            "Search budget, in seconds, graph-RAG gives its underlying RAG "
+            "search when the caller passes no timeout (GH#18141). Kept "
+            "tighter than the general RAG timeout so a graph-augmented chat "
+            "turn cannot hang for minutes; raising it lets slow retrievals "
+            "finish, lowering it fails graph-RAG searches over to empty "
+            "results sooner (autobot_shared/graph_retrieval.py)."
+        ),
+        component="knowledge",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_VERBATIM_RECENCY_WEIGHT",
         type=float,
         default=0.2,

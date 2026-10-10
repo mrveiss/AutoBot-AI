@@ -13,8 +13,14 @@ defaults live here; `RAGConfig.graph_weight` is the runtime knob that reads
 
 from __future__ import annotations
 
+from autobot_shared.env_utils import env_float
+
 #: Share of a candidate's blended score that comes from the graph signal (0.0-1.0).
 GRAPH_WEIGHT_DEFAULT: float = 0.3
+
+#: Search budget, in seconds, graph-RAG gives its underlying RAG search. Deliberately tighter than
+#: the general RAG timeout: a graph-augmented chat turn must not hang for minutes.
+GRAPH_RAG_TIMEOUT_SECONDS: float = env_float("AUTOBOT_GRAPH_RAG_TIMEOUT_SECONDS", 10.0)
 
 #: Default hops for a graph-RAG neighbourhood expansion and for the knowledge-graph
 #: traverse / graph-view requests. One meaning, one number.
