@@ -11,6 +11,7 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import asyncio
+import dataclasses
 import time
 from typing import Any, Dict, Tuple
 
@@ -21,7 +22,7 @@ from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 from config import get_config_section
 from llm_shared.torch_loader import lazy_torch
-from media.audio.decode import decode_audio_bytes
+from media.audio.decode import decode_audio_bytes, decode_audio_bytes_async
 from media.audio.pipeline import get_whisper_pipeline, transcribe_array, whisper_loadable
 from voice_processing.hallucination_filter import is_silence_hallucination, peak_window_rms
 
@@ -349,7 +350,10 @@ class VoiceProcessor(BaseModalProcessor):
         self._validate_audio_models_available()
 
         try:
-            # Prepare audio data (Issue #315 - extracted method)
+            # Prepare audio data (Issue #315 - extracted method). #17778: an upload's
+            # bytes are a FILE (WAV/webm/ogg/...): decode it first, off the loop.
+            if isinstance(input_data.data, bytes):
+                input_data = dataclasses.replace(input_data, data=await decode_audio_bytes_async(input_data.data))
             audio_array, sampling_rate = self._prepare_audio_data(input_data)
 
             # Process with Whisper for transcription (Issue #315 - extracted method)

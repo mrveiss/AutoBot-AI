@@ -10,49 +10,122 @@ container header and compressed payload to Whisper as if it were a waveform, so
 the upload was transcribed as noise. This decodes to what the models expect:
 mono float32 at ``STT_SAMPLE_RATE``.
 
-PCM WAV is decoded here with the stdlib; every other container goes to librosa
-(the declared media dependency, already required by the path-input branch).
+PCM WAV (8/16/24/32-bit) is decoded here with the stdlib. Every other container --
+including the webm/matroska a browser ``MediaRecorder`` produces -- is first
+converted to a 16 kHz mono PCM WAV by the existing hardened
+:class:`~media.audio.ffmpeg_service.FFmpegService`, then takes the same WAV path.
 """
 
 from __future__ import annotations
 
+import asyncio
 import io
 import math
+import os
+import tempfile
 import wave
 
 import numpy as np
 
-from autobot_shared.audio_params import STT_SAMPLE_RATE, AudioFormat, describe_wav
+from autobot_shared.audio_params import STT_CHANNELS, STT_SAMPLE_RATE, AudioFormat, describe_wav
+from autobot_shared.logging_manager import get_logger
+from media.audio.ffmpeg_service import get_ffmpeg_service
 
-#: bytes-per-sample -> (numpy dtype, zero offset, full-scale divisor) for PCM WAV.
-_PCM = {
-    1: (np.uint8, 128.0, 128.0),
-    2: (np.int16, 0.0, 32768.0),
-    4: (np.int32, 0.0, 2147483648.0),
-}
+logger = get_logger(__name__)
+
+#: What the caller is told when bytes cannot be decoded -- never a raw library message.
+UNDECODABLE_MESSAGE = "Unsupported or unreadable audio format"
+
+#: Container magic -> temp-file suffix (must be in the ffmpeg service's allowlist).
+_MAGIC = (
+    (b"\x1a\x45\xdf\xa3", 0, ".webm"),
+    (b"OggS", 0, ".ogg"),
+    (b"fLaC", 0, ".flac"),
+    (b"ID3", 0, ".mp3"),
+    (b"\xff\xfb", 0, ".mp3"),
+    (b"ftyp", 4, ".m4a"),
+)
+
+_INT_DTYPES = {1: (np.uint8, 128.0, 128.0), 2: (np.int16, 0.0, 32768.0), 4: (np.int32, 0.0, 2147483648.0)}
+
+
+class NotPcmWavError(ValueError):
+    """The bytes are not a PCM WAV this module decodes itself; they need transcoding."""
 
 
 def decode_audio_bytes(data: bytes, target_rate: int = STT_SAMPLE_RATE) -> np.ndarray:
-    """Return *data* (a WAV/webm/ogg/... file's bytes) as mono float32 at *target_rate*.
+    """Decode PCM WAV *data* to mono float32 at *target_rate* (synchronous).
 
-    Raises ``ValueError`` when the bytes are not decodable audio.
+    Raises :class:`NotPcmWavError` for anything else; use
+    :func:`decode_audio_bytes_async` to accept any container.
     """
     try:
         fmt = describe_wav(data)
-    except ValueError:
-        return _decode_with_librosa(data, target_rate)
-    if fmt.sample_width not in _PCM:
-        return _decode_with_librosa(data, target_rate)
+    except ValueError as exc:
+        raise NotPcmWavError(UNDECODABLE_MESSAGE) from exc
+    if fmt.sample_rate <= 0 or fmt.channels <= 0 or fmt.sample_width not in (1, 2, 3, 4):
+        raise NotPcmWavError(UNDECODABLE_MESSAGE)
     return _decode_pcm_wav(data, fmt, target_rate)
+
+
+async def decode_audio_bytes_async(data: bytes, target_rate: int = STT_SAMPLE_RATE) -> np.ndarray:
+    """Decode any supported container to mono float32 at *target_rate*; ``ValueError`` otherwise."""
+    try:
+        return await asyncio.to_thread(decode_audio_bytes, data, target_rate)
+    except NotPcmWavError:
+        pass
+    return await _transcode_then_decode(data, target_rate)
+
+
+async def _transcode_then_decode(data: bytes, target_rate: int) -> np.ndarray:
+    """ffmpeg -> 16 kHz mono PCM WAV in a temp file -> the stdlib WAV path."""
+    suffix = _sniff_suffix(data)
+    in_fd, in_path = tempfile.mkstemp(suffix=suffix, prefix="upload_")
+    out_fd, out_path = tempfile.mkstemp(suffix=".wav", prefix="decoded_")
+    os.close(out_fd)
+    try:
+        with os.fdopen(in_fd, "wb") as fh:
+            fh.write(data)
+        await get_ffmpeg_service().extract_audio(in_path, out_path, sample_rate=target_rate, channels=STT_CHANNELS)
+        with open(out_path, "rb") as fh:
+            wav_bytes = fh.read()
+        return await asyncio.to_thread(decode_audio_bytes, wav_bytes, target_rate)
+    except Exception as exc:
+        logger.warning("Audio transcode failed (%s): %s", suffix, exc, exc_info=True)
+        raise ValueError(UNDECODABLE_MESSAGE) from None
+    finally:
+        for path in (in_path, out_path):
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
+
+def _sniff_suffix(data: bytes) -> str:
+    """Temp-file suffix for the container *data* appears to be; ``ValueError`` if unknown."""
+    for magic, offset, suffix in _MAGIC:
+        if data[offset : offset + len(magic)] == magic:
+            return suffix
+    raise ValueError(UNDECODABLE_MESSAGE)
+
+
+def _to_float(raw: bytes, width: int) -> np.ndarray:
+    """Interleaved PCM bytes -> float64 samples in [-1, 1)."""
+    if width == 3:  # no numpy 24-bit dtype: assemble little-endian, sign-extend
+        b = np.frombuffer(raw, dtype=np.uint8).reshape(-1, 3).astype(np.int32)
+        value = b[:, 0] | (b[:, 1] << 8) | (b[:, 2] << 16)
+        return ((value ^ 0x800000) - 0x800000) / 8388608.0
+    dtype, offset, scale = _INT_DTYPES[width]
+    return (np.frombuffer(raw, dtype=dtype).astype(np.float64) - offset) / scale
 
 
 def _decode_pcm_wav(data: bytes, fmt: AudioFormat, target_rate: int) -> np.ndarray:
     """PCM WAV -> mono float32 in [-1, 1], resampled to *target_rate*."""
-    dtype, offset, scale = _PCM[fmt.sample_width]
     with wave.open(io.BytesIO(data), "rb") as wav:
-        raw = np.frombuffer(wav.readframes(wav.getnframes()), dtype=dtype)
-    frames = raw[: len(raw) - len(raw) % fmt.channels].reshape(-1, fmt.channels)
-    mono = ((frames.astype(np.float64) - offset) / scale).mean(axis=1)
+        raw = wav.readframes(wav.getnframes())
+    frame_bytes = fmt.sample_width * fmt.channels
+    samples = _to_float(raw[: len(raw) - len(raw) % frame_bytes], fmt.sample_width)
+    mono = samples.reshape(-1, fmt.channels).mean(axis=1)
     return _resample(mono, fmt.sample_rate, target_rate).astype(np.float32)
 
 
@@ -64,16 +137,3 @@ def _resample(samples: np.ndarray, source_rate: int, target_rate: int) -> np.nda
 
     divisor = math.gcd(source_rate, target_rate)
     return resample_poly(samples, target_rate // divisor, source_rate // divisor)
-
-
-def _decode_with_librosa(data: bytes, target_rate: int) -> np.ndarray:
-    """Any other container via librosa; ``ValueError`` if it cannot be decoded."""
-    try:
-        import librosa
-    except ImportError as exc:
-        raise ValueError("cannot decode this audio container: librosa is not installed") from exc
-    try:
-        samples, _ = librosa.load(io.BytesIO(data), sr=target_rate, mono=True)
-    except Exception as exc:
-        raise ValueError(f"not decodable audio: {exc}") from exc
-    return samples.astype(np.float32)
