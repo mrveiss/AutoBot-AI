@@ -13,9 +13,11 @@ import os
 import tempfile
 import threading
 import time
+import wave
 from dataclasses import dataclass
 from typing import Any
 
+from autobot_shared.audio_wav import wav_duration_seconds
 from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 
@@ -213,17 +215,31 @@ def transcribe_path(pipe: Any, path: str, *, language: str = "", timestamps: boo
     ``return_timestamps=False`` (the short-form behaviour) and retries once with
     timestamps when transformers refuses the audio as long-form (> 30 s), so the
     text of a short clip is exactly what it was and a long one no longer fails.
+    The long-form choice is made from the WAV's duration, never from an error message.
     """
     generate_kwargs = {"language": language} if language else None
-    if timestamps:
+    seconds = _wav_seconds(path)
+    if timestamps or (seconds is not None and seconds > SHORT_FORM_SECONDS):
         return _call_pipe(pipe, path, timestamps=True, generate_kwargs=generate_kwargs)
+    if seconds is not None:
+        return _call_pipe(pipe, path, timestamps=False, generate_kwargs=generate_kwargs)
+    # A container (webm/ogg/mp3...) has no stdlib duration: try short-form, and on ANY
+    # ValueError retry once long-form. If the audio was fine the retry succeeds; if the
+    # error was something else the retry raises it again, so nothing is masked.
     try:
         return _call_pipe(pipe, path, timestamps=False, generate_kwargs=generate_kwargs)
-    except ValueError as exc:
-        if "3000 mel" not in str(exc):
-            raise
-        logger.info("Audio is longer than %.0fs; retrying with long-form timestamps", SHORT_FORM_SECONDS)
+    except ValueError:
+        logger.info("Short-form transcription of a container raised; retrying with long-form timestamps")
         return _call_pipe(pipe, path, timestamps=True, generate_kwargs=generate_kwargs)
+
+
+def _wav_seconds(path: str) -> float | None:
+    """Duration of the PCM WAV at *path*, or ``None`` when it is not one (a container, or unreadable)."""
+    try:
+        with wave.open(path, "rb") as wav:
+            return wav_duration_seconds(wav)
+    except (wave.Error, EOFError, OSError):
+        return None
 
 
 def transcribe_array(

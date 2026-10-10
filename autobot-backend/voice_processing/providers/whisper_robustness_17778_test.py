@@ -87,20 +87,38 @@ def test_array_over_30s_uses_long_form_and_short_keeps_return_timestamps_false()
     assert short.calls == [False]
 
 
-def test_path_over_30s_retries_with_timestamps_and_short_does_not(long_wav, short_wav):
+def test_wav_over_30s_goes_long_form_by_duration_and_short_does_not(long_wav, short_wav):
     pipe = LongFormEnforcingPipe()
     assert audio_pipeline.transcribe_path(pipe, str(long_wav)).text == "first second"
-    assert pipe.calls == [False, True]
+    assert pipe.calls == [True]  # decided from the duration: no failed short-form attempt first
     short = LongFormEnforcingPipe()
     audio_pipeline.transcribe_path(short, str(short_wav))
     assert short.calls == [False]
 
 
-def test_unrelated_value_errors_are_not_retried():
-    pipe = MagicMock(side_effect=ValueError("something else"))
-    with pytest.raises(ValueError, match="something else"):
-        audio_pipeline.transcribe_path(pipe, "x.wav")
+def test_the_long_form_decision_does_not_read_the_error_text(long_wav):
+    pipe = MagicMock(return_value={"text": "ok"})
+    audio_pipeline.transcribe_path(pipe, str(long_wav))
+    assert pipe.call_args.kwargs["return_timestamps"] is True
+
+
+def test_wav_value_errors_are_never_retried(short_wav):
+    pipe = MagicMock(side_effect=ValueError(LONG_FORM_ERROR))
+    with pytest.raises(ValueError):
+        audio_pipeline.transcribe_path(pipe, str(short_wav))
     assert pipe.call_count == 1
+
+
+def test_a_container_retries_long_form_once_whatever_the_message(tmp_path):
+    container = tmp_path / "clip.webm"
+    container.write_bytes(b"\x1a\x45\xdf\xa3")
+    pipe = MagicMock(side_effect=[ValueError("anything"), {"text": "ok"}])
+    assert audio_pipeline.transcribe_path(pipe, str(container)).text == "ok"
+    assert [c.kwargs["return_timestamps"] for c in pipe.call_args_list] == [False, True]
+    failing = MagicMock(side_effect=ValueError("something else"))
+    with pytest.raises(ValueError, match="something else"):
+        audio_pipeline.transcribe_path(failing, str(container))
+    assert failing.call_count == 2
 
 
 @pytest.mark.asyncio
