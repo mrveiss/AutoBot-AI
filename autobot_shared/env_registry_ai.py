@@ -480,3 +480,45 @@ register_env_var(
         component="ai",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_GENERATION_REQUEST_TIMEOUT_S",
+        type=float,
+        default=300.0,
+        description=(
+            "Seconds a synchronous image/video generation call may run, applied as both the total and "
+            "the read timeout. The pooled HTTP client's default (30s total, 10s read) is too short for a "
+            "provider that holds the connection silent while it renders; 300s matches the pre-pooling "
+            "behaviour (autobot_shared/generation_http_timeouts.py, #12979)."
+        ),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_GENERATION_POLL_TIMEOUT_S",
+        type=float,
+        default=30.0,
+        description=(
+            "Seconds a generation status poll or enqueue-only submit may take, as both total and read "
+            "timeout. Lowering it fails a wedged poll sooner (autobot_shared/generation_http_timeouts.py, "
+            "#12979)."
+        ),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_GENERATION_CONNECT_TIMEOUT_S",
+        type=float,
+        default=10.0,
+        description=(
+            "Seconds to establish the connection for an image/video generation call; the pooled default "
+            "is 5s (autobot_shared/generation_http_timeouts.py, #12979)."
+        ),
+        component="ai",
+    )
+)
