@@ -2805,7 +2805,7 @@ async def get_documentation_categories(
     # Count by category (detected from file path)
     from pathlib import Path
 
-    from scripts.utilities.index_documentation import CATEGORY_TAXONOMY, detect_category
+    from services.knowledge.doc_taxonomy import CATEGORY_TAXONOMY, detect_category
 
     category_counts: dict = {}
     for doc in all_docs:

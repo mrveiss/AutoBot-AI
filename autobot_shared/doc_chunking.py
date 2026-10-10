@@ -5,13 +5,10 @@
 """
 Markdown section-chunking helpers — single-sourced (Issue #12663).
 
-Previously duplicated verbatim across two entrypoints:
+Previously duplicated verbatim across two entrypoints; the standalone CLI was
+retired into a shim over the service (#18129), so the one consumer is:
   - autobot-backend/services/knowledge/doc_indexer.py (async service, #1385)
-  - autobot-infrastructure/shared/tools/index_documentation.py (standalone CLI, #250)
-
-Both entrypoints chunk markdown by H2/H3 section boundaries the same way; only
-the surrounding orchestration (async vs sync, ChromaDB client wiring, doc-type
-inference) legitimately differs between the service and the CLI. This module
+ This module
 has zero AutoBot-specific dependencies (stdlib only) so it can be imported by
 the standalone CLI without pulling in the full backend dependency graph.
 """

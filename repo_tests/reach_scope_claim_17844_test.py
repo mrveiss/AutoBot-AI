@@ -163,6 +163,14 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
 _DECLARED_SCOPES = {
     "post-commit-seed-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "fact-read-authorization-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "one-doc-indexer": (
+        "autobot-backend",
+        "autobot-slm-backend",
+        "autobot_shared",
+        "autobot-infrastructure",
+        "tools",
+        "scripts",
+    ),
     "direct-secrets-service-callers": ("autobot-backend", "autobot_shared"),
     "data-db-path-production-python": ("autobot-backend", "autobot_shared"),
     "jekyll-processed-docs": ("docs",),
@@ -197,6 +205,8 @@ def test_every_scoped_declaration_claims_the_roots_recorded_here() -> None:
     import repo_tests.kb_admin_read_bypass_guard_test  # noqa: F401, PLC0415
     import repo_tests.model_revision_pinning_enforced_17804_test  # noqa: F401, PLC0415
     import repo_tests.one_claim_registry_16653_test  # noqa: F401, PLC0415
+    import repo_tests.one_doc_indexer_18129_test  # noqa: F401, PLC0415
+    import repo_tests.one_session_scope_15068_test  # noqa: F401, PLC0415
     import repo_tests.store_fact_chokepoint_guard_test  # noqa: F401, PLC0415
     from repo_tests._reach import REGISTRY
 

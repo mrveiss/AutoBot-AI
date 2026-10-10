@@ -39,6 +39,7 @@ from autobot_shared.ssot_config import get_ollama_url
 from constants.path_constants import PATH
 from constants.threshold_constants import CategoryDefaults
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
+from services.knowledge.doc_taxonomy import detect_category
 from services.knowledge.synthesis_schema_loader import SynthesisSchema, load_synthesis_schema
 
 logger = get_logger(__name__)
@@ -483,6 +484,14 @@ def _filter_changed_files(
     return changed, new_hashes
 
 
+def _select_files(root_dir: Path, tier: int | None = None, category: str | None = None) -> List[Tuple[str, int]]:
+    """Discover files for ``tier`` (None = all), keeping only those in ``category`` when given (#18129)."""
+    files = _discover_files(root_dir, tier)
+    if category:
+        files = [(p, t) for p, t in files if detect_category(Path(p)) == category]
+    return files
+
+
 # ============================================================================
 # DocIndexerService
 # ============================================================================
@@ -913,8 +922,6 @@ class DocIndexerService:
 
     async def _index_file_chunks(self, file_str: str, content: str, rel_path: str, tier: int) -> tuple[int, int]:
         """Chunk content and index all chunks; return (success_count, chunk_count). Issue #2735."""
-        import asyncio
-
         body, fm_tags, fm_aliases = _parse_frontmatter(content)
         # Issue #5064: sanitize ingested content before chunking / embedding.
         body = _sanitize_document(body, source="doc_indexer").sanitized_text
@@ -982,29 +989,10 @@ class DocIndexerService:
                 result.skipped += 1
                 return
 
-            body, fm_tags, fm_aliases = _parse_frontmatter(content)
-            # Issue #5064: sanitize ingested content before chunking / embedding.
-            body = _sanitize_document(body, source="doc_indexer").sanitized_text
-            chunks = _chunk_markdown(body, file_path)
-            if not chunks:
+            indexed, total_chunks = await self._index_file_chunks(file_path, content, rel_path, tier)
+            if total_chunks == 0:
                 result.skipped += 1
                 return
-
-            file_tags = _extract_tags(body, file_path)
-            file_tags = list(dict.fromkeys(fm_tags + fm_aliases + file_tags))[:20]
-            indexed = 0
-            for i, chunk in enumerate(chunks):
-                ok = await asyncio.to_thread(
-                    self._index_chunk,
-                    chunk,
-                    i,
-                    len(chunks),
-                    rel_path,
-                    file_tags,
-                    tier,
-                )
-                if ok:
-                    indexed += 1
 
             if indexed > 0:
                 result.success += 1
@@ -1078,15 +1066,24 @@ class DocIndexerService:
         except Exception:
             logger.exception("DocIndexerService: KB synthesis failed (non-fatal)")
 
-    async def index_all(self, force: bool = False) -> IndexResult:
-        """Index every documentation file; force ignores the hash cache and re-indexes all of them."""
+    def plan(self, force: bool = False, tier: int | None = None, category: str | None = None) -> List[Tuple[str, int]]:
+        """Files index_all would embed (the dry-run view, #18129); touches no store."""
+        files = _select_files(self._root_dir, tier, category)
+        return files if force else _filter_changed_files(files, _load_hash_cache(), self._root_dir)[0]
+
+    def resolve_tier(self, file_path: Path) -> int:
+        """Tier of a discovered file; 3 when it is outside the discovery set (#18129)."""
+        return dict(_discover_files(self._root_dir)).get(str(file_path), 3)
+
+    async def index_all(self, force: bool = False, tier: int | None = None, category: str | None = None) -> IndexResult:
+        """Index every documentation file (or one ``tier`` / ``category``); force ignores the hash cache."""
         start_time = time.time()
 
         if not self._initialized:
             if not await self.initialize():
                 return IndexResult(errors=["Failed to initialize"])
 
-        files = _discover_files(self._root_dir)
+        files = _select_files(self._root_dir, tier, category)
         total_result = IndexResult(total_files=len(files))
 
         if not files:
