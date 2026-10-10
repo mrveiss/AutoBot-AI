@@ -79,9 +79,9 @@ and stay masked.
 string left unmasked; `replay_service._redact_sensitive` / `_redact_log_dict`, `safe_repr` and
 `CredentialRedactionFilter` all depend on that). **Disclosure fix:** `redact_dict` used to reveal
 `value[:4]...value[-4:]` of a credential string and `***` for other types; it now returns the fixed-width
-`REDACTED_PLACEHOLDER` for both, because eight characters of a key are a disclosure. `redact_api_key` keeps
-the partial form for exactly one caller, `redact_string`'s `API_KEY_PATTERNS` matches inside free text
-(`CredentialRedactionFilter`, `safe_repr`); that residual reveal is tracked, not justified. Behaviour that
+`REDACTED_PLACEHOLDER` for both, because eight characters of a key are a disclosure. `redact_api_key` (used by
+`redact_string`'s `API_KEY_PATTERNS` matches inside free text, so `CredentialRedactionFilter` and `safe_repr`)
+returns the same placeholder, so no `llm_shared` path reveals any part of a key. Behaviour that
 changed: tuples and sets are now walked (the old walk skipped them), and `None`/`""` under a credential name
 is returned as-is (nothing to hide) instead of `***`.
 

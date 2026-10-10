@@ -10,7 +10,7 @@ or audit records.
 
 #18205: ``redact_dict`` is a thin composition over ``secret_redaction.redact_nested`` and masks a
 credential value with the canonical fixed-width placeholder (it used to reveal ``value[:4]...value[-4:]``).
-``redact_api_key`` keeps the partial form only for ``redact_string``'s ``API_KEY_PATTERNS`` matches.
+``redact_api_key`` returns that placeholder too, so no path here reveals any part of a key.
 
 #13708: ``redact_string`` also runs the cross-service content scanner
 (``autobot_shared.secret_redaction``) after its own patterns, so a credential
@@ -29,7 +29,13 @@ the problem, and add a new detector there rather than starting another (#16688).
 import re
 from typing import Any, Dict
 
-from autobot_shared.secret_redaction import BROAD_FRAGMENTS, MatchPolicy, redact_content, redact_nested
+from autobot_shared.secret_redaction import (
+    BROAD_FRAGMENTS,
+    REDACTED_PLACEHOLDER,
+    MatchPolicy,
+    redact_content,
+    redact_nested,
+)
 
 # Patterns for common API key formats
 API_KEY_PATTERNS = [
@@ -58,11 +64,10 @@ def redact_api_key(value: str) -> str:
         value: The API key or token to redact.
 
     Returns:
-        Redacted string showing only first/last 4 chars.
+        The fixed-width placeholder. No part of the key is kept: eight
+        characters of a key are a disclosure (#18205).
     """
-    if not value or len(value) < 8:
-        return "***"
-    return f"{value[:4]}...{value[-4:]}"
+    return REDACTED_PLACEHOLDER
 
 
 def redact_string(text: str) -> str:

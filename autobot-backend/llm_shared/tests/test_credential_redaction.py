@@ -19,10 +19,10 @@ from llm_shared.credential_redaction import (
 
 
 def test_redact_api_key():
-    """Test API key redaction."""
-    assert redact_api_key("sk-1234567890abcdef") == "sk-1...cdef"
-    assert redact_api_key("short") == "***"
-    assert redact_api_key("") == "***"
+    """No part of a key survives, whatever its length (#18205)."""
+    assert redact_api_key("sk-1234567890abcdef") == REDACTED_PLACEHOLDER
+    assert redact_api_key("short") == REDACTED_PLACEHOLDER
+    assert redact_api_key("") == REDACTED_PLACEHOLDER
 
 
 def test_redact_string():
@@ -31,6 +31,9 @@ def test_redact_string():
     redacted = redact_string(text)
     assert "sk-1234567890abcdefghij" not in redacted
     assert "Using API key" in redacted
+    # #18205: neither end of the key is revealed.
+    assert "sk-1" not in redacted and "ghij" not in redacted
+    assert REDACTED_PLACEHOLDER in redacted
 
 
 def test_redact_dict_simple():
