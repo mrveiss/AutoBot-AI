@@ -126,12 +126,56 @@ BROAD_ONLY_STEMS: Tuple[str, ...] = ("private",)
 BROAD_FRAGMENTS: Tuple[str, ...] = tuple(dict.fromkeys(CREDENTIAL_SUFFIXES + AUTHORIZATION_TERMS + BROAD_ONLY_STEMS))
 
 
+# A COUNT or LIMIT of a credential noun is a number, not a credential
+# (``max_tokens=4096``, ``token_count``, ``key_length``). Masking it breaks
+# exported templates and hides the diagnostic, and no secret hides in it.
+# Deliberately tight so nothing secret-looking is excluded:
+#   * a prefix form needs the REMAINDER to be a PLURAL noun
+#     (``max_tokens``, ``num_api_keys``) -- ``max_token_secret`` and
+#     ``max_password`` do not qualify and stay masked;
+#   * a suffix form needs the remainder to END in a noun and the name to END in
+#     the quantity word (``token_count``, ``api_key_limit``) --
+#     ``token_count_secret`` does not qualify.
+# Applied by BOTH policies, to the whole name only (#17336).
+QUANTITY_PREFIXES: Tuple[str, ...] = (
+    "max_",
+    "min_",
+    "num_",
+    "total_",
+    "input_",
+    "output_",
+    "prompt_",
+    "completion_",
+    "cached_",
+)
+QUANTITY_SUFFIXES: Tuple[str, ...] = ("_count", "_limit", "_len", "_length", "_size")
+_PLURAL_NOUNS: Tuple[str, ...] = ("secrets", "keys", "tokens", "passwords", "credentials")
+
+
+def _ends_with_noun(text: str, nouns: Tuple[str, ...]) -> bool:
+    return any(text == n or text.endswith(f"_{n}") for n in nouns)
+
+
+def is_quantity_field(name: str) -> bool:
+    """True when ``name`` is a count/limit of a credential noun, not a credential."""
+    lowered = (name or "").lower().replace("-", "_")
+    for prefix in QUANTITY_PREFIXES:
+        if lowered.startswith(prefix) and _ends_with_noun(lowered[len(prefix) :], _PLURAL_NOUNS):
+            return True
+    for suffix in QUANTITY_SUFFIXES:
+        if lowered.endswith(suffix) and _ends_with_noun(lowered[: -len(suffix)], CREDENTIAL_SUFFIXES):
+            return True
+    return False
+
+
 class MatchPolicy(Enum):
     """How a name is compared against the shared credential vocabulary (#17336).
 
     ``PRECISE`` -- the name equals a noun or ends with ``_<noun>``; location
     suffixes are exempt.  Over-masking destroys a diagnostic (SSOT config
     ``__repr__``), so false positives are the cost to avoid.
+
+    Both policies first exempt :func:`is_quantity_field` names (``max_tokens``).
 
     ``BROAD`` -- a noun appears anywhere in the lowercased name with ``_``/``-``
     stripped; no location exemption.  Over-masking a log line, extra-vars
@@ -154,7 +198,7 @@ def is_credential_field(name: str, policy: MatchPolicy = MatchPolicy.PRECISE) ->
     """
     if not isinstance(policy, MatchPolicy):
         raise TypeError(f"policy must be a MatchPolicy, got {policy!r}")
-    if not name:
+    if not name or is_quantity_field(name):
         return False
     if policy is MatchPolicy.BROAD:
         flat = _normalized(name)

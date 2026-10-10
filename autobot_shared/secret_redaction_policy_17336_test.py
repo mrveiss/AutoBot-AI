@@ -93,3 +93,39 @@ def test_redact_mapping_and_text_moved_without_changing_output() -> None:
     }
     assert redact_text("Authorization: Bearer abc") == "Authorization: ***"
     assert redact_text("client_secret=abc") == "client_secret=***"
+
+
+@pytest.mark.parametrize("policy", list(MatchPolicy))
+@pytest.mark.parametrize(
+    "name",
+    [
+        "max_tokens",
+        "num_tokens",
+        "total_tokens",
+        "input_tokens",
+        "token_count",
+        "max_keys",
+        "key_count",
+        "api_key_limit",
+        "password_length",
+    ],
+)
+def test_a_count_or_limit_of_a_credential_noun_is_not_a_credential(name: str, policy: MatchPolicy) -> None:
+    assert is_credential_field(name, policy) is False
+
+
+@pytest.mark.parametrize("policy", list(MatchPolicy))
+@pytest.mark.parametrize(
+    "name",
+    [
+        "max_token_secret",
+        "max_password",
+        "max_secret",
+        "token_count_secret",
+        "total_tokens_secret",
+        "api_key",
+        "tokens",
+    ],
+)
+def test_the_quantity_rule_never_exempts_a_secret_looking_name(name: str, policy: MatchPolicy) -> None:
+    assert is_credential_field(name, policy) is True

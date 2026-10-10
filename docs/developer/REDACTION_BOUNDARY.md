@@ -48,6 +48,14 @@ Why two: `tokenizers_parallelism` and `tls_key_path` must stay readable in
 SSOT config's `__repr__`; a secret under an unanticipated key name must still
 be masked in a log line. Both are right at their own call sites.
 
+Both policies first exempt a **count or limit of a credential noun**
+(`secret_redaction.is_quantity_field`): `max_`/`min_`/`num_`/`total_`/`input_`/
+`output_`/`prompt_`/`completion_`/`cached_` + a *plural* noun (`max_tokens`,
+`num_api_keys`), or a name ending `_count`/`_limit`/`_len`/`_length`/`_size` whose
+stem ends in a noun (`token_count`, `key_length`). Without it `max_tokens=4096`
+became `{{MAX_TOKENS}}` in exported templates. The rule is deliberately tight:
+`max_token_secret`, `max_password` and `token_count_secret` stay masked.
+
 `BROAD` is a superset of `PRECISE` by construction (same nouns, plus
 `AUTHORIZATION_TERMS` and `BROAD_ONLY_STEMS`, which would over-mask as
 suffixes: `use_auth` is a flag, `is_private` is not a secret).
