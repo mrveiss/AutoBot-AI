@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict
+from typing import IO, Any, Callable, Dict
 
 import yaml
 
@@ -64,6 +64,7 @@ def load_config_file(
     config_path: str | Path,
     defaults_factory: Callable[[], Dict[str, Any]],
     description: str,
+    parser: Callable[[IO[str]], Any] = yaml.safe_load,
 ) -> LoadedConfig:
     """Read *config_path*, falling back to built-in defaults loudly and without writing.
 
@@ -71,6 +72,9 @@ def load_config_file(
         config_path: the YAML file to read.
         defaults_factory: builds the built-in defaults, called only on a miss.
         description: what the config governs, for the log line.
+        parser: reads an open text handle into the parsed document. Defaults to
+            YAML; pass ``json.load`` for a strict-JSON file so it is not read with
+            YAML's laxer grammar (#17855).
 
     Returns:
         The values plus the ``source`` they came from and the path searched.
@@ -79,7 +83,7 @@ def load_config_file(
     try:
         if path.is_file():
             with open(path, "r", encoding="utf-8") as handle:
-                values = yaml.safe_load(handle)
+                values = parser(handle)
             # An empty or all-comments YAML file parses to None. Treating that
             # as a loaded config hands every consumer an empty policy — and
             # every consumer that then calls ``.get()`` on it raises instead.
@@ -99,6 +103,6 @@ def load_config_file(
                 description,
                 path,
             )
-    except (OSError, yaml.YAMLError) as exc:
+    except (OSError, ValueError, yaml.YAMLError) as exc:  # ValueError covers json.JSONDecodeError
         logger.error("Failed to read %s config at %s: %s; using built-in defaults.", description, path, exc)
     return LoadedConfig(values=defaults_factory(), source=SOURCE_BUILTIN_DEFAULTS, searched_path=path)

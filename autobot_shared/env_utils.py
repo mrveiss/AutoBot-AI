@@ -59,20 +59,27 @@ def env_str(name: str, default: str) -> str:
     return env_raw(name) or default
 
 
-def env_float(name: str, default: float) -> float:
+def env_float(name: str, default: float, *, reject_nan: bool = False) -> float:
     """Read a float environment variable, falling back to *default* on absence or bad value.
 
     Returns *default* silently when the var is absent.
     Logs a warning and returns *default* when the var is set but not a valid float.
+    ``reject_nan=True`` also treats ``nan`` (which ``float()`` accepts) as invalid;
+    callers feeding the value into comparisons or decay maths need that, since a
+    NaN compares false against everything. Default False keeps prior behaviour.
     """
     raw = env_raw(name)
     if raw is None:
         return default
     try:
-        return float(raw)
+        value = float(raw)
     except ValueError:
         logger.warning("Invalid %s=%r; using default %s", name, raw, default)
         return default
+    if reject_nan and value != value:
+        logger.warning("Invalid %s=%r (NaN); using default %s", name, raw, default)
+        return default
+    return value
 
 
 def env_int(name: str, default: int) -> int:

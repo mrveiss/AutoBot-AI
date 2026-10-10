@@ -61,7 +61,6 @@ def env(name: str, default: Any = None) -> Any:
 # ---------------------------------------------------------------------------
 # Registered variables — grouped by component
 # ---------------------------------------------------------------------------
-
 # Split into per-component sibling modules as this file reaches its
 # grandfathered file-size ceiling (#14236) with no slack left inline: ai
 # (#14856), terminal/testing (#14961), slm (#15620), and agent_runtime /
@@ -78,6 +77,7 @@ from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_backend_services  # noqa: E402,F401
 from autobot_shared import env_registry_llc  # noqa: E402,F401
 from autobot_shared import env_registry_logging  # noqa: E402,F401
+from autobot_shared import env_registry_memory  # noqa: E402,F401
 from autobot_shared import env_registry_security  # noqa: E402,F401
 from autobot_shared import env_registry_slm  # noqa: E402,F401
 from autobot_shared import env_registry_terminal  # noqa: E402,F401

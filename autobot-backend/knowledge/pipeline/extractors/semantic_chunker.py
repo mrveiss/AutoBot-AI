@@ -12,6 +12,7 @@ import re
 from typing import Any, AsyncIterator, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.token_count import estimate_fast
 
 from ..base import BaseExtractor, PipelineContext
 from ..models import ProcessedChunk
@@ -129,13 +130,17 @@ class SemanticChunker(BaseExtractor):
         """
         Estimate token count. Helper for _chunk_text (Issue #665).
 
+        Delegates to the shared ``token_count`` authority (#17855): the former
+        ``len(text.split())`` returned 1 for CJK, so a segment counted as one
+        token and ``max_tokens`` was effectively never reached (#13694).
+
         Args:
             text: Text string
 
         Returns:
             Estimated token count
         """
-        return len(text.split())
+        return estimate_fast(text)
 
     def _calculate_offsets(self, full_text: str, chunk_text: str, chunk_index: int) -> tuple[int, int]:
         """

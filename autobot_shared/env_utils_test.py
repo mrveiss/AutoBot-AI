@@ -249,3 +249,28 @@ class TestEnvFloatClampedPositiveFinite:
         assert env_float_clamped("AUTOBOT_TEST_PF", 30.0, positive_finite=True) == 7.5
         monkeypatch.setenv("AUTOBOT_TEST_PF", "0")
         assert env_float_clamped("AUTOBOT_TEST_PF", 30.0) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# #17855 row 2: pins for the behaviour local copies used to lack
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("raw", ["", "   "])
+def test_blank_flag_keeps_a_default_false_flag_off(monkeypatch, raw):
+    """essential_story's local _env_bool flipped a default-False flag ON for a blank export."""
+    monkeypatch.setenv(_VAR, raw)
+    assert env_flag(_VAR, False) is False
+    assert env_flag(_VAR, True) is True
+
+
+def test_off_reads_as_false_not_true(monkeypatch):
+    """The local copy tested membership in a falsy set, so ``off`` read as True."""
+    monkeypatch.setenv(_VAR, "off")
+    assert env_flag(_VAR, True) is False
+
+
+def test_env_float_reject_nan_is_opt_in(monkeypatch):
+    monkeypatch.setenv(_FLOAT_VAR, "nan")
+    assert env_float(_FLOAT_VAR, 0.5, reject_nan=True) == 0.5
+    assert env_float(_FLOAT_VAR, 0.5) != env_float(_FLOAT_VAR, 0.5)  # NaN passes through by default

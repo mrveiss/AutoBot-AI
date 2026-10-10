@@ -193,3 +193,22 @@ async def test_subscribe_requires_authentication():
 
     assert exc_info.value.status_code == 401
     assert "Cannot identify user" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "https://100.64.1.1/push",  # CGNAT / Tailscale: the old local rule set let this through
+        "https://224.0.0.1/push",  # multicast
+        "https://[::ffff:169.254.169.254]/push",  # IPv4-mapped metadata endpoint
+        "https://printer.local/push",  # private TLD
+    ],
+)
+async def test_check_ssrf_uses_the_shared_rule_set(endpoint):
+    """#17855: _check_ssrf delegates to url_safety, so it inherits every range it blocks."""
+    from api.push import _check_ssrf
+
+    with pytest.raises(HTTPException) as exc:
+        await _check_ssrf(endpoint)
+    assert exc.value.status_code == 422

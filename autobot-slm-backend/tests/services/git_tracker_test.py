@@ -73,7 +73,37 @@ class TestGitTracker:
 
                 await tracker.fetch_remote()
 
-        assert mock_exec.call_args.args == ("git", "-C", "/path/to/repo", "fetch", "--prune", "origin")
+        assert mock_exec.call_args.args == (
+            "git",
+            "-c",
+            "core.quotePath=false",
+            "-C",
+            "/path/to/repo",
+            "fetch",
+            "--prune",
+            "origin",
+        )
+
+    @pytest.mark.asyncio
+    async def test_transport_commands_run_with_no_git_variables(self, monkeypatch):
+        """#17855: fetch/pull must not inherit GIT_CONFIG_* (core.sshCommand, CWE-15)."""
+        monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+        monkeypatch.setenv("GIT_SSH_COMMAND", "evil")
+        tracker = GitTracker(repo_path="/path/to/repo")
+
+        with patch.object(git_tracker, "_is_git_repo", return_value=True):
+            with patch("asyncio.create_subprocess_exec") as mock_exec:
+                mock_process = AsyncMock()
+                mock_process.communicate = AsyncMock(return_value=(b"", b""))
+                mock_process.returncode = 0
+                mock_exec.return_value = mock_process
+
+                await tracker.fetch_remote()
+                await tracker.pull_updates()
+
+        assert mock_exec.call_count == 2
+        for call in mock_exec.call_args_list:
+            assert not [k for k in call.kwargs["env"] if k.startswith("GIT_")]
 
     @pytest.mark.asyncio
     async def test_get_remote_commit_hash(self):

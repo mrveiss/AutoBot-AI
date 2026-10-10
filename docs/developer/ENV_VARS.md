@@ -97,8 +97,15 @@ conflict when their rows sort next to each other.
 | `AUTOBOT_DOCKER_USE_POOL` | execution | bool | false | Reuse a pool of warm containers for tool execution instead of starting one per call. Off by default — the pool trades isolation between calls for start-up latency. |
 | `AUTOBOT_ENV` | system | str | `'production'` | Short environment label used in logs and traces (e.g. 'development', 'production'). |
 | `AUTOBOT_ENVIRONMENT` | system | str | `'development'` | Full environment name for OTel deployment.environment attribute. Prefer AUTOBOT_ENV for new code. |
+| `AUTOBOT_ESSENTIAL_STORY_RECENCY_HALFLIFE_SECONDS` | memory | float | `2592000.0` | Half-life in seconds of the recency boost on a recalled fact (memory/essential_story.py). Default 30 days. |
+| `AUTOBOT_ESSENTIAL_STORY_REINFORCE` | memory | bool | true | Rank always-loaded facts by usage-aware effective score instead of static quality_score alone; off reproduces the pre-A2 ordering (memory/essential_story.py). |
+| `AUTOBOT_ESSENTIAL_STORY_REINFORCE_WEIGHT` | memory | float | `0.3` | Weight of recall frequency and recency in the effective fact score; 0 reproduces the static quality_score ordering (memory/essential_story.py). |
 | `AUTOBOT_EXTRACT_CHUNK_THRESHOLD` | llm | int | `8000` | Character-count threshold above which structured-extraction input is auto-chunked before an LLM call. Raising it sends larger inputs in a single call; lowering it chunks sooner, trading more calls for a smaller per-call context (llm_shared/structured_ops.py). |
 | `AUTOBOT_EXTRACT_MAX_RETRIES` | llm | int | `3` | Maximum LLM call attempts a structured-extraction request makes before raising ExtractionError. Raising it tolerates more transient failures before giving up; lowering it fails faster but is less tolerant of a flaky provider (llm_shared/structured_ops.py). |
+| `AUTOBOT_FACTS_PRUNE_MAX_AGE_DAYS` | knowledge | int | `180` | A fact is prunable only once older than this many days (knowledge/facts.py consolidation). |
+| `AUTOBOT_FACTS_PRUNE_MAX_PER_RUN` | knowledge | int | `100` | Circuit breaker: a consolidation run that would prune more facts than this refuses and logs loudly (knowledge/facts.py). |
+| `AUTOBOT_FACTS_PRUNE_QUALITY_FLOOR` | knowledge | float | `0.1` | A fact is prunable only below this quality score (knowledge/facts.py consolidation). |
+| `AUTOBOT_FACTS_PRUNE_SCAN_LIMIT` | knowledge | int | `5000` | Most facts examined in one consolidation pass (knowledge/facts.py). |
 | `AUTOBOT_FACT_FORCING` | ai | bool | false | Enable the fact-forcing gate, which requires an answer to cite retrieved facts. |
 | `AUTOBOT_GATEWAY_REQUIRE_OUTBOUND_APPROVAL` | gateway | bool | false | Require approval before the Gateway hands an agent-authored message to a channel adapter. Off means audit-only: every governed send is recorded, none is blocked. On fails closed — no registered approver, a denial, or an approver error all deny the send. |
 | `AUTOBOT_GENERATION_CONNECT_TIMEOUT_S` | ai | float | `10.0` | Seconds to establish the connection for an image/video generation call; the pooled default is 5s (autobot_shared/generation_http_timeouts.py, #12979). |
@@ -271,6 +278,11 @@ conflict when their rows sort next to each other.
 | `AUTOBOT_TLS_CERT_DIR` | tls | str | `'/etc/autobot/certs'` | Directory containing TLS certificate and key files. |
 | `AUTOBOT_TLS_CERT_PATH` | tls | str | *(none)* | Path to the TLS client/server certificate file. |
 | `AUTOBOT_TLS_KEY_PATH` | tls | str | *(none)* | Path to the TLS private key file. |
+| `AUTOBOT_TOOL_OUTPUT_SPILL` | agent_loop | bool | false | Master switch for spilling oversized tool output to disk and returning a short excerpt plus an anchor (agent_loop/tool_output_spill.py). |
+| `AUTOBOT_TOOL_OUTPUT_SPILL_EXCERPT` | agent_loop | int | `2000` | Characters of a spilled tool result kept inline as the excerpt; clamped below the spill threshold (agent_loop/tool_output_spill.py). |
+| `AUTOBOT_TOOL_OUTPUT_SPILL_MAX` | agent_loop | int | `5000000` | Largest payload written to a spill artifact; above this the stored copy is truncated and marked (agent_loop/tool_output_spill.py). |
+| `AUTOBOT_TOOL_OUTPUT_SPILL_MAX_WINDOW` | agent_loop | int | `8000` | Ceiling on one re-read of a spilled artifact, so a huge limit cannot hand the whole artifact back into context (agent_loop/tool_output_spill.py). |
+| `AUTOBOT_TOOL_OUTPUT_SPILL_THRESHOLD` | agent_loop | int | `8000` | Tool output longer than this many characters is spilled instead of inlined (agent_loop/tool_output_spill.py). |
 | `AUTOBOT_TRAJECTORY_CONSOLIDATE_SCAN_LIMIT` | ai | int | `50000` | Rows a consolidation pass may scan, keeping the pass bounded on a large trajectory store. |
 | `AUTOBOT_TRAJECTORY_OUTCOME_PARTIAL_MIN` | ai | float | `0.4` | Reward at or above which a trajectory outcome is 'partial'. Below it the outcome is a failure (#11280). |
 | `AUTOBOT_TRAJECTORY_OUTCOME_SUCCESS_MIN` | ai | float | `0.7` | Reward at or above which a trajectory outcome is 'success'. The canonical threshold, so callers stop re-deriving it inline (#11280). |

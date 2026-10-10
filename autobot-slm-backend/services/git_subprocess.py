@@ -18,7 +18,7 @@ import logging
 from pathlib import Path
 
 from autobot_shared.env_utils import env_float
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.git_probe import start_git
 
 # Plain stdlib logging, deliberately -- NOT autobot_shared.logging_manager.
 # This module is imported (via services/full_tree_drift.py, api/full_tree_drift.py)
@@ -42,7 +42,7 @@ UNSHALLOW_TIMEOUT_S = env_float("AUTOBOT_SYNC_UNSHALLOW_TIMEOUT_S", 600.0)
 
 
 async def run_git(repo_root: str, *args: str, timeout: float = GIT_TIMEOUT_S) -> tuple[str, int]:
-    """Run ``git -C repo_root <args>`` with a scrubbed env and bounded timeout.
+    """Run ``git -C repo_root <args>`` with a strict (no ``GIT_*``) env and bounded timeout.
 
     ``-c core.quotePath=false`` (#16310 review 3a): git C-style-quotes any
     path with a non-ASCII byte by default (``"fooe\\301.py"`` instead of the
@@ -55,18 +55,12 @@ async def run_git(repo_root: str, *args: str, timeout: float = GIT_TIMEOUT_S) ->
     ``("", 1)`` -- never raises, so a wedged git process degrades the caller
     to "nothing found" rather than crashing it.
     """
+    proc = None
     try:
-        proc = await asyncio.create_subprocess_exec(
-            "git",
-            "-c",
-            "core.quotePath=false",
-            "-C",
-            repo_root,
-            *args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=scrubbed_git_env(),
-        )
+        # start_git strips every GIT_* variable (strict env, CWE-15): this runs
+        # fetch/pull-class transport commands, where GIT_CONFIG_* could set
+        # core.sshCommand (#17855).
+        proc = await start_git("-c", "core.quotePath=false", "-C", repo_root, *args)
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         if proc.returncode != 0:
             logger.warning("git %s failed: %s", " ".join(args), stderr.decode("utf-8", errors="replace")[:300])
@@ -74,6 +68,8 @@ async def run_git(repo_root: str, *args: str, timeout: float = GIT_TIMEOUT_S) ->
         return stdout.decode("utf-8", errors="replace"), 0
     except (asyncio.TimeoutError, OSError) as exc:
         logger.warning("git %s error: %s", " ".join(args), exc)
+        if proc is not None and proc.returncode is None:
+            proc.kill()  # a timed-out git must not outlive its caller
         return "", 1
 
 
