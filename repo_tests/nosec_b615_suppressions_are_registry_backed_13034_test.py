@@ -218,9 +218,16 @@ def _resolver_bound_names(scope: ast.AST) -> set[str]:
 
 
 def _call_carries_pin(call: ast.Call, bound: set[str]) -> bool:
-    """True when this call itself passes ``revision=`` or ``**<resolver-bound name>``."""
+    """True when this call itself passes ``revision=`` or ``**<resolver-bound name>``.
+
+    ``revision=None`` / ``revision=""`` pin nothing and do not count. Known limit:
+    a resolver-bound name counts as pinned wherever in the function it was bound,
+    so a later reassignment to something unpinned is not tracked.
+    """
     for kw in call.keywords:
         if kw.arg == "revision":
+            if isinstance(kw.value, ast.Constant) and not kw.value.value:
+                continue
             return True
         if kw.arg is None and (
             _holds_resolver_call(kw.value) or (isinstance(kw.value, ast.Name) and kw.value.id in bound)
@@ -534,3 +541,59 @@ def test_a_load_passing_the_resolver_pin_passes() -> None:
 def test_a_pin_bound_in_a_different_function_does_not_count() -> None:
     """The name must be resolver-bound in the call's own function, not elsewhere in the file."""
     assert unpinned_suppressed_calls(_PIN_FROM_OTHER_FUNCTION) == [8]
+
+
+_INLINE_RESOLVER = """
+from autobot_shared.pinned_model_registry import pinned_revision_kwargs
+from transformers import AutoConfig
+def go(name):
+    return AutoConfig.from_pretrained(name, **pinned_revision_kwargs(name))  # nosec B615
+"""
+
+_EXPLICIT_REVISION = """
+from transformers import AutoConfig
+def go(name):
+    return AutoConfig.from_pretrained(name, revision="abc1234")  # nosec B615
+"""
+
+_BARE_PARAM_KWARGS = """
+from transformers import AutoConfig
+def go(name, kwargs):
+    return AutoConfig.from_pretrained(name, **kwargs)  # nosec B615
+"""
+
+_EMPTY_DICT_KWARGS = """
+from transformers import AutoConfig
+def go(name):
+    kwargs = {}
+    return AutoConfig.from_pretrained(name, **kwargs)  # nosec B615
+"""
+
+_REVISION_NONE = """
+from transformers import AutoConfig
+def go(name):
+    return AutoConfig.from_pretrained(name, revision=None)  # nosec B615
+"""
+
+
+def test_an_inline_resolver_call_in_the_load_passes() -> None:
+    """Exercises the `_holds_resolver_call(kw.value)` branch directly."""
+    assert unpinned_suppressed_calls(_INLINE_RESOLVER) == []
+
+
+def test_an_explicit_revision_passes() -> None:
+    assert unpinned_suppressed_calls(_EXPLICIT_REVISION) == []
+
+
+def test_a_bare_kwargs_parameter_fails() -> None:
+    """`**kwargs` that is a function parameter is not resolver-bound."""
+    assert unpinned_suppressed_calls(_BARE_PARAM_KWARGS) == [4]
+
+
+def test_an_empty_dict_kwargs_fails() -> None:
+    assert unpinned_suppressed_calls(_EMPTY_DICT_KWARGS) == [5]
+
+
+def test_revision_none_fails() -> None:
+    """`revision=None` is the default branch spelled out, not a pin."""
+    assert unpinned_suppressed_calls(_REVISION_NONE) == [4]
