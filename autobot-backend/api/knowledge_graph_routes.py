@@ -55,7 +55,8 @@ async def run_pipeline(
     http_request: Request,
     current_user: dict = Depends(get_current_user),
 ):
-    """Run the Extract-Cognify-Load pipeline on a document's text (#18184)."""
+    """Run the Extract-Cognify-Load pipeline on a document."""
+    # #18184: the pipeline runs on the document's text, read through the canonical fact-read check.
     try:
         try:
             document_uuid = UUID(request.document_id)
