@@ -50,7 +50,7 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass
-from typing import Any, ClassVar, Dict, FrozenSet, Iterable, Mapping, Tuple
+from typing import Any, Callable, ClassVar, Dict, FrozenSet, Iterable, Mapping, Optional, Tuple
 from urllib.parse import quote, unquote_plus, urlsplit, urlunsplit
 
 from autobot_shared.secret_redaction_vocabulary import (
@@ -328,42 +328,75 @@ def redact_mapping(mapping: Mapping[str, Any]) -> Dict[str, Any]:
 _SCALARS = (bool, int, float)
 
 
-def _redact_nested_leaf(name: str, value: Any, policy: MatchPolicy) -> Any:
-    """One non-container leaf of :func:`redact_nested` (#18193)."""
-    if value is None or value == "":
-        return value
-    cred = is_credential_entry(name, value, policy, exempt_counts=True)
-    if not isinstance(value, str):
-        return value if isinstance(value, _SCALARS) and not cred else REDACTED_PLACEHOLDER  # unknown type: closed
+@dataclass(frozen=True)
+class _NestedOptions:
+    """What one :func:`redact_nested` walk carries down: policy, count rule, extra string scan."""
+
+    policy: MatchPolicy
+    exempt_counts: bool
+    extra_scan: Optional[Callable[[str], str]]
+
+
+def _redact_string_leaf(name: str, value: str, opts: _NestedOptions) -> str:
+    """A non-empty string leaf of :func:`redact_nested`: URL scrub, credential mask, or content scan."""
+    cred = is_credential_entry(name, value, opts.policy, exempt_counts=opts.exempt_counts)
     url = "://" in value and not any(c.isspace() for c in value)
     if cred and not (url and is_url_field(name)):
         return REDACTED_PLACEHOLDER  # a URL-shaped value under a credential name (webhook secret) is masked whole
     if url:
-        return redact_url_credentials(redact_url_userinfo(value, mask_username=cred), policy)
-    return redact_content(redact_schemeless_userinfo(value))
+        out = redact_url_credentials(redact_url_userinfo(value, mask_username=cred), opts.policy)
+    else:
+        out = redact_content(redact_schemeless_userinfo(value))
+    return opts.extra_scan(out) if opts.extra_scan else out
 
 
-def redact_nested(value: Any, policy: MatchPolicy = MatchPolicy.BROAD, name: str = "") -> Any:
-    """Copy of ``value`` with credentials masked at any depth, for API response bodies (#18193).
+def _redact_nested_leaf(name: str, value: Any, opts: _NestedOptions) -> Any:
+    """One non-container leaf of :func:`redact_nested` (#18193)."""
+    if value is None or value == "":
+        return value
+    if isinstance(value, str):
+        return _redact_string_leaf(name, value, opts)
+    cred = is_credential_entry(name, value, opts.policy, exempt_counts=opts.exempt_counts)
+    return value if isinstance(value, _SCALARS) and not cred else REDACTED_PLACEHOLDER  # unknown type: closed
 
-    Walks dicts, lists, tuples and sets (a set comes back as a list), masking like :func:`redact_value`
-    (``REDACTED_PLACEHOLDER``): a set value, or a non-empty container, under a credential name is masked
-    whole -- except under a URL-shaped name (``db_url``), where a URL keeps its host and loses ALL userinfo
-    (the user part too: a key can sit there) and credential query params. A URL string under any other
-    name is scrubbed the same way; other strings go through :func:`redact_content` (``sk-...``, JWTs,
-    inline ``user:pass@``), so ordinary text is byte-identical. Keys, order, bool and numbers are
-    unchanged; an unknown non-scalar type fails closed. List items inherit their parent's name.
-    ``BROAD`` (also for query params): over-masking costs a field, a leak costs a secret.
-    ``exempt_counts=True`` keeps ``max_tokens=4096`` a number (GET /config and /current returned it before).
-    """
+
+def _walk_nested(value: Any, name: str, opts: _NestedOptions) -> Any:
     if isinstance(value, (Mapping, list, tuple, set, frozenset)):
-        if value and is_credential_entry(name, value, policy, exempt_counts=True):
+        if value and is_credential_entry(name, value, opts.policy, exempt_counts=opts.exempt_counts):
             return REDACTED_PLACEHOLDER
         if isinstance(value, Mapping):
-            return {k: redact_nested(v, policy, str(k)) for k, v in value.items()}
-        items = [redact_nested(v, policy, name) for v in value]
+            return {k: _walk_nested(v, str(k), opts) for k, v in value.items()}
+        items = [_walk_nested(v, name, opts) for v in value]
         return tuple(items) if isinstance(value, tuple) else items
-    return _redact_nested_leaf(name, value, policy)
+    return _redact_nested_leaf(name, value, opts)
+
+
+def redact_nested(
+    value: Any,
+    policy: MatchPolicy = MatchPolicy.BROAD,
+    name: str = "",
+    *,
+    exempt_counts: bool = True,
+    extra_scan: Optional[Callable[[str], str]] = None,
+) -> Any:
+    """Copy of ``value`` with credentials masked at any depth: THE recursive mapping redactor (#18193, #18205).
+
+    Walks dicts, lists, tuples and sets (a set comes back as a list).  Masks like
+    :func:`redact_value` (``REDACTED_PLACEHOLDER``, fixed width, never a fragment of the secret): a set
+    value under a credential name, of any type, and a non-empty container under one, is masked whole --
+    except under a URL-shaped name (``db_url``), where a URL keeps its host and loses userinfo and
+    credential query params.  A URL string under any other name is scrubbed the same way; other strings go
+    through :func:`redact_content`, so ``sk-...``, JWTs and inline ``user:pass@`` are masked and ordinary
+    text is byte-identical.  Keys, order, bool and numbers are unchanged; an unknown non-scalar type fails
+    closed.  List items inherit their parent's name.  ``BROAD`` (also for query params): a response is read
+    by any caller, so over-masking costs a field and a leak costs a secret.
+
+    ``exempt_counts=True`` (default) keeps ``max_tokens=4096`` a number: GET /config and /current returned
+    it before, so no existing caller's masked set shrinks.  A caller that always masked counts passes
+    ``False`` (``credential_redaction.redact_dict``).  ``extra_scan`` runs over every string left
+    unmasked, for a caller with its own content patterns on top of :func:`redact_content`.
+    """
+    return _walk_nested(value, name, _NestedOptions(policy, exempt_counts, extra_scan))
 
 
 # ---------------------------------------------------------------------------

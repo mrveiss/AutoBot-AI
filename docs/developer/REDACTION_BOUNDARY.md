@@ -73,6 +73,18 @@ uses `is_credential_entry`, and
 and stay masked.
 
 
+**One recursive mapping redactor (#18205).** `redact_nested` is the only one. `redact_dict` composes it with
+`exempt_counts=False` (it always masked `max_tokens`, so no name leaves its masked set) and
+`extra_scan=redact_string` (its own `API_KEY_PATTERNS`, including the 32+ character generic key, run over every
+string left unmasked; `replay_service._redact_sensitive` / `_redact_log_dict`, `safe_repr` and
+`CredentialRedactionFilter` all depend on that). **Disclosure fix:** `redact_dict` used to reveal
+`value[:4]...value[-4:]` of a credential string and `***` for other types; it now returns the fixed-width
+`REDACTED_PLACEHOLDER` for both, because eight characters of a key are a disclosure. `redact_api_key` keeps
+the partial form for exactly one caller, `redact_string`'s `API_KEY_PATTERNS` matches inside free text
+(`CredentialRedactionFilter`, `safe_repr`); that residual reveal is tracked, not justified. Behaviour that
+changed: tuples and sets are now walked (the old walk skipped them), and `None`/`""` under a credential name
+is returned as-is (nothing to hide) instead of `***`.
+
 **Whole-token nouns (#18194).** `pin` and `passcode` are credentials too, but `pin` is also a verb and
 a prefix (`pin_memory`, `pinned_revision`, `spinner`, `opinion`), so they are not suffix or substring
 nouns. `secret_redaction_vocabulary.WHOLE_TOKEN_NOUNS` is consulted by BOTH policies: the name is split
@@ -98,7 +110,7 @@ Recorded at `#17336` / `#17337` so that no site silently changed policy.
 | `redact_mapping` (slm `code_sync` extra-vars) | substring, 8 fragments | `BROAD` |
 | `redact_nested` (`GET /api/llm/config` and `/current` response bodies, #18193) | none (new caller) | `BROAD`, `exempt_counts=True` |
 | `redact_text` (slm `monitoring`, bedrock errors) | text regex | same regex, moved into `secret_redaction` |
-| `credential_redaction.redact_dict` | normalized substring | `BROAD` |
+| `credential_redaction.redact_dict` | normalized substring | `BROAD`, `exempt_counts=False`: a thin composition over `redact_nested` (#18205) |
 | `cot_events._is_sensitive` | own 13-fragment substring | `BROAD` |
 | `portability._scrub_adapter_config` | own 12-name exact match | `PRECISE` (`exempt_counts`; `False`/`None`/`True` kept except `True` under the 12 names) |
 | `config_revision_service._is_secret_key` | own 5-fragment substring | `BROAD` |
@@ -136,7 +148,7 @@ no cell removes anything.
 | a raw log line, or an extra-vars mapping | `secret_redaction.redact_text` / `.redact_mapping` | `redact_content` (it does not mask `Authorization:` headers) |
 | a provider exception that may name an AWS account | `security/redaction.redact_provider_error` | a new ARN regex |
 | text leaving the process to a peer or an LLM, needing a **policy** (block vs redact vs hash) | `a2a.pii_pipeline.scrub_outbound` | `redact_content` -- it has no policy and cannot block |
-| a dict or log record in the LLM layer | `llm_shared.credential_redaction.redact_dict` | `redact_mapping` |
+| a dict or log record in the LLM layer | `llm_shared.credential_redaction.redact_dict` (composes `redact_nested`; adds the `API_KEY_PATTERNS` content scan) | `redact_mapping` |
 | a raw chat message | `security.chat_message_safety.scan_chat_message` | any of the above directly |
 
 ## Adding a detector
