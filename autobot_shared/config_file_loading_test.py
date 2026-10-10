@@ -36,3 +36,11 @@ def test_json_parser_reads_json_and_falls_back_on_a_syntax_error(tmp_path):
     f.write_text("{not json", encoding="utf-8")
     loaded = load_config_file(f, lambda: {"safe": True}, "Test", parser=json.load)
     assert (loaded.source, loaded.values) == (SOURCE_BUILTIN_DEFAULTS, {"safe": True})
+
+
+def test_key_value_parser_skips_comments_and_non_assignments_and_splits_once():
+    from autobot_shared.config_file_loading import format_key_value, parse_key_value
+
+    lines = ["# c\n", "\n", "A = 1\n", "junk\n", "U=x=y\n"]
+    assert parse_key_value(lines) == {"A": "1", "U": "x=y"}
+    assert format_key_value({"A": "1", "U": "x=y"}) == "A=1\nU=x=y\n"

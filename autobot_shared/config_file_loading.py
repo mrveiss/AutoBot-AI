@@ -60,6 +60,26 @@ class LoadedConfig:
         return self.source == SOURCE_FILE
 
 
+def parse_key_value(handle: IO[str]) -> Dict[str, str]:
+    """Parse ``key=value`` lines (``#`` comments and lines without ``=`` skipped), for ``parser=``.
+
+    The one definition of this format; :func:`format_key_value` is its writer.
+    """
+    parsed: Dict[str, str] = {}
+    for line in handle:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        parsed[key.strip()] = value.strip()
+    return parsed
+
+
+def format_key_value(values: Dict[str, Any]) -> str:
+    """Render *values* as ``key=value`` lines, the inverse of :func:`parse_key_value`."""
+    return "".join(f"{key}={value}\n" for key, value in values.items())
+
+
 def load_config_file(
     config_path: str | Path,
     defaults_factory: Callable[[], Dict[str, Any]],

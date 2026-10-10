@@ -174,6 +174,8 @@ _CONSUMERS: tuple[tuple[str, str | None, frozenset[str], frozenset[str]], ...] =
     ("autobot-backend/context_window_manager.py", "_load_config", frozenset({"load_config_file"}), frozenset({"safe_load"})),
     ("autobot-backend/voice_interface.py", "_load_config", frozenset({"load_config_file"}), frozenset({"safe_load"})),
     ("autobot-backend/security/command_validator.py", "_load_config", frozenset({"load_config_file"}), frozenset({"load"})),
+    # row 8: key=value / JSON config reader now delegates, with the format parser from the shared module
+    ("autobot-backend/utils/common.py", "load_config", frozenset({"load_config_file"}), frozenset({"open", "yaml.safe_load"})),
 )  # fmt: skip
 
 
@@ -218,3 +220,32 @@ def test_each_caller_uses_the_shared_authority(rel: str, function: str | None, m
 )
 def test_no_env_parser_is_redefined_beside_env_utils(rel: str) -> None:
     assert _local_env_parsers(_read(rel)) == [], f"#17855: {rel} parses env vars itself; use autobot_shared.env_utils"
+
+
+# row 10: error_handler.retry was removed after its useful part (the on_retry hook) moved into
+# the shared RetryPolicy; it retried ValueError/TypeError, which the shared policy never does.
+def _defined_functions(source: str) -> set[str]:
+    return {n.name for n in ast.walk(ast.parse(source)) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+
+def _class_fields(source: str, cls: str) -> set[str]:
+    node = next(n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.ClassDef) and n.name == cls)
+    return {n.target.id for n in node.body if isinstance(n, ast.AnnAssign) and isinstance(n.target, ast.Name)}
+
+
+def test_the_definition_matchers_distinguish_present_from_absent() -> None:
+    assert _defined_functions("def retry(): pass\nclass A:\n    def m(self): pass") == {"retry", "m"}
+    assert _defined_functions("x = 'def retry'") == set()
+    assert _class_fields("class P:\n    on_retry: int = 1\n", "P") == {"on_retry"}
+    assert _class_fields("class P:\n    x = 1\n", "P") == set()
+
+
+def test_error_handler_no_longer_carries_its_own_retry_decorator() -> None:
+    funcs = _defined_functions(_read("autobot-backend/error_handler.py"))
+    assert (
+        not {"retry", "_create_sync_retry_wrapper", "_create_async_retry_wrapper"} & funcs
+    ), "#17855 row 10: retry lives once, in autobot_shared.retry_mechanism"
+
+
+def test_the_shared_retry_policy_owns_the_on_retry_hook() -> None:
+    assert "on_retry" in _class_fields(_read("autobot_shared/retry_mechanism.py"), "RetryPolicy")
