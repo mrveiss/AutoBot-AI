@@ -89,9 +89,9 @@ class WhisperTranscription:
 def whisper_device_kwargs() -> dict:
     """Extra ``pipeline()`` kwargs for ``AUTOBOT_WHISPER_DEVICE`` (#17778).
 
-    ``cpu`` (default, and any unrecognised value, with a warning): ``{}`` -- the
-    historical CPU fp32 call, byte-identical. ``auto``: CUDA with float16 when
-    ``torch.cuda.is_available()``, else ``{}``.
+    ``auto`` (default): CUDA with float16 when ``torch.cuda.is_available()``,
+    else ``{}``. ``cpu`` (and any unrecognised value, with a warning): ``{}`` --
+    the historical CPU fp32 call, byte-identical.
     """
     from autobot_shared.env_registry import env
 
@@ -180,7 +180,7 @@ def _attempt_load() -> None:
                 **device_kwargs,
             ),
         )
-        logger.info("Whisper pipeline loaded: %s", WHISPER_MODEL)
+        logger.info("Whisper pipeline loaded: %s on %s", WHISPER_MODEL, device_kwargs.get("device", "cpu"))
     except ModelIntegrityError as exc:
         logger.error("SECURITY: Whisper model failed its integrity check; refusing to serve: %s", exc)
         _whisper_integrity_error = exc

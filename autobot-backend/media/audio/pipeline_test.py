@@ -89,14 +89,26 @@ class TestWhisperDevice:
         fake = types.SimpleNamespace(cuda=types.SimpleNamespace(is_available=lambda: cuda), float16="FP16")
         monkeypatch.setitem(sys.modules, "torch", fake)
 
-    def test_default_adds_no_device_or_dtype_kwargs(self, monkeypatch):
+    def test_default_is_auto_cuda_fp16_when_available(self, monkeypatch):
         monkeypatch.delenv("AUTOBOT_WHISPER_DEVICE", raising=False)
+        self._torch(monkeypatch, cuda=True)
+        assert whisper_device_kwargs() == {"device": "cuda", "torch_dtype": "FP16"}
+
+    def test_default_without_cuda_adds_no_device_or_dtype_kwargs(self, monkeypatch):
+        monkeypatch.delenv("AUTOBOT_WHISPER_DEVICE", raising=False)
+        self._torch(monkeypatch, cuda=False)
         assert whisper_device_kwargs() == {}
 
-    def test_default_hf_pipeline_call_is_exactly_the_historical_one(self, monkeypatch):
+    def test_cpu_forces_the_historical_call_even_with_cuda(self, monkeypatch):
+        monkeypatch.setenv("AUTOBOT_WHISPER_DEVICE", "cpu")
+        self._torch(monkeypatch, cuda=True)
+        assert whisper_device_kwargs() == {}
+
+    def test_default_hf_pipeline_call_without_cuda_is_exactly_the_historical_one(self, monkeypatch):
         import media.audio.pipeline as module
 
         monkeypatch.delenv("AUTOBOT_WHISPER_DEVICE", raising=False)
+        self._torch(monkeypatch, cuda=False)
         hf = MagicMock(return_value="PIPE")
         monkeypatch.setattr(module, "hf_pipeline", hf, raising=False)
         monkeypatch.setattr(module, "_TRANSFORMERS_AVAILABLE", True)
