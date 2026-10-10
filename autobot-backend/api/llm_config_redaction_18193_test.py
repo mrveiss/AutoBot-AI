@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from api import llm as llm_api
 from auth_middleware import check_admin_permission, get_current_user
 from config import unified_config_manager
+from constants.model_constants import ModelConstants
 
 _PW = "SENTINEL-PW"  # f-string below: no literal user:pass@ in the source
 _OPENAI = "SENTINEL-OPENAI-" + "KEY"
@@ -93,13 +94,15 @@ def test_a_tree_without_credentials_is_returned_unchanged(monkeypatch) -> None:
     assert body["unified"] == clean
 
 
-def test_current_response_is_redacted_too_and_keeps_its_controls(monkeypatch) -> None:
-    r = _client(monkeypatch, _BACKEND_LLM).get("/api/llm/current")
+def test_current_returns_only_model_and_provider_to_a_non_admin(monkeypatch) -> None:
+    r = _client(monkeypatch, _BACKEND_LLM, role="user").get("/api/llm/current")
     assert r.status_code == 200
-    assert "SENTINEL" not in r.text, r.text
     body = r.json()
-    assert body["config"]["ollama"]["selected_model"] == _MODEL
-    assert body["config"]["unified"]["cloud"]["providers"]["openai"]["model"] == "gpt-x"
+    assert set(body) == {"model", "provider", "config"}  # LLMCurrentResponse fields: schema unchanged
+    # Exactly the active model and provider; `config` is the schema-required envelope, always empty.
+    assert body == {"model": ModelConstants.DEFAULT_OLLAMA_MODEL, "provider": "ollama", "config": {}}
+    for leaked in ("SENTINEL", "unified", "api_key", "endpoint", "ollama.example", _MODEL):
+        assert leaked not in r.text, leaked
 
 
 def test_config_is_admin_only(monkeypatch) -> None:

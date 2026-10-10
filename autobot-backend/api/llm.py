@@ -179,14 +179,12 @@ async def get_current_llm(
     Issue #744: Requires authenticated user.
     """
     try:
-        config = redact_nested(ConfigService.get_llm_config())  # #18193: same tree as /config
+        config = ConfigService.get_llm_config()
         current_model = config.get("model", ModelConstants.DEFAULT_OLLAMA_MODEL)
 
-        return {
-            "model": current_model,
-            "provider": config.get("provider", "ollama"),
-            "config": config,
-        }
+        # #18193: model and provider only. The tree is admin-only on GET /config;
+        # `config` stays in the schema (generated TS type) but is always empty.
+        return {"model": current_model, "provider": config.get("provider", "ollama"), "config": {}}
     except Exception as e:
         logger.error("Error getting current LLM: %s", str(e))
         raise HTTPException(status_code=500, detail="Error getting current LLM")
