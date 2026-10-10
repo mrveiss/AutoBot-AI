@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.pinned_model_registry import pinned_revision_kwargs
 
 from ..torch_loader import lazy_torch
 
@@ -185,16 +186,15 @@ class LayerInferenceEngine:
         try:
             from transformers import AutoConfig  # noqa: PLC0415
         except ImportError as exc:
-            raise ImportError(
-                "transformers is required for load_model_config. " "Install with: pip install transformers>=4.40.0"
-            ) from exc
+            msg = "transformers is required for load_model_config; pip install transformers>=4.40.0"
+            raise ImportError(msg) from exc
 
-        kwargs: Dict[str, Any] = {}
+        kwargs: Dict[str, Any] = pinned_revision_kwargs(model_name)
         if self._config.cache_dir:
             kwargs["cache_dir"] = self._config.cache_dir
 
         logger.debug("Loading model config for %s", model_name)
-        # HuggingFace model loaded by name; revision pinning managed operationally.
+        # Pinned when model_name is in the registry; an unregistered id or a local path is not (#13034).
         auto_cfg = AutoConfig.from_pretrained(model_name, **kwargs)  # nosec B615
         cfg_dict: Dict[str, Any] = auto_cfg.to_dict()
         logger.info(
@@ -558,10 +558,10 @@ class LayerInferenceEngine:
 
         Issue #1946: Extracted to keep generate() within the line budget.
         """
-        kwargs: Dict[str, Any] = {"use_fast": True}
+        kwargs: Dict[str, Any] = {"use_fast": True, **pinned_revision_kwargs(self._config.model_name)}
         if self._config.cache_dir:
             kwargs["cache_dir"] = self._config.cache_dir
-        # HuggingFace model loaded by name; revision pinning managed operationally.
+        # Pinned when model_name is in the registry; an unregistered id or a local path is not (#13034).
         return AutoTokenizer.from_pretrained(self._config.model_name, **kwargs)  # nosec B615
 
     def _resolve_checkpoint_path(self) -> str:

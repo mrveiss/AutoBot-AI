@@ -38,6 +38,7 @@ on:
 
 permissions:
   contents: read
+  packages: read  # pull the ghcr CI image mirror (#18160)
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -57,7 +58,13 @@ jobs:
 
     services:
       redis:
-        image: redis:7-alpine
+        # Mirror of the upstream image (ci-image-mirror.yml, #18160): anonymous
+        # pulls hit the per-IP quota. The ghcr packages must be public or grant
+        # this repo read access so fork PRs can pull them.
+        image: ghcr.io/mrveiss/ci-redis:7-alpine
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
         ports:
           - 6379:6379
         options: >-

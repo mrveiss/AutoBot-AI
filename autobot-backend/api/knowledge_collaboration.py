@@ -33,7 +33,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from knowledge.ownership import VisibilityLevel
-from knowledge.search_filters import extract_user_context_from_request
+from knowledge.search_filters import can_read_fact, extract_user_context_from_request
 from knowledge_factory import get_or_create_knowledge_base
 
 logger = get_logger(__name__)
@@ -146,26 +146,6 @@ async def _fetch_fact_metadata(fact_id: str, redis) -> Dict:
     if isinstance(fact_data, bytes):
         fact_data = fact_data.decode("utf-8")
     return json.loads(fact_data)
-
-
-async def _check_fact_access(
-    fact_id: str,
-    metadata: Dict,
-    user_id: str,
-    user_org_id: str | None,
-    user_group_ids: List[str],
-    ownership_manager,
-    is_admin: bool = False,
-) -> bool:
-    """Check whether a user has access to a fact (#1088); an admin reads any fact here (#16662)."""
-    return await ownership_manager.check_access(
-        fact_id=fact_id,
-        user_id=user_id,
-        fact_metadata=metadata,
-        user_org_id=user_org_id,
-        user_group_ids=user_group_ids,
-        is_admin=is_admin,
-    )
 
 
 def _build_access_response(fact_id: str, metadata: Dict, user_id: str) -> Dict:
@@ -574,15 +554,7 @@ async def get_knowledge_access_info(fact_id: str, request: Request, current_user
         metadata = await _fetch_fact_metadata(fact_id, kb.redis())
         user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
 
-        has_access = await _check_fact_access(
-            fact_id=fact_id,
-            metadata=metadata,
-            user_id=user_id,
-            user_org_id=user_org_id,
-            user_group_ids=user_group_ids,
-            ownership_manager=kb.ownership_manager,
-            is_admin=is_admin_role(current_user.get("role")),  # #16662: an explicit read API
-        )
+        has_access = await can_read_fact(kb.ownership_manager, fact_id, metadata, current_user)  # #16662, #18184
         if not has_access:
             raise HTTPException(status_code=403, detail="Access denied")
 

@@ -27,6 +27,15 @@ weight-loading call site:
 A `repo_id` not in the registry raises `KeyError` from `get_pinned_revision`
 — a new call site cannot silently load an unpinned model by omission.
 
+The one stated exception is the dynamic `model_name` sites (`layer_inference`,
+`model_inspector`), whose name arrives from a routing request. They call
+`pinned_revision_kwargs(model_name)` instead, which returns
+`{"revision": <pin>}` for a registered id and `{}` for any other name rather
+than raising, so an unregistered name still loads from the mutable default
+branch. That is the documented interim state, not a second rule; see
+[Scope: this does not yet cover every `from_pretrained` call
+site](#scope-this-does-not-yet-cover-every-from_pretrained-call-site).
+
 ## Bump procedure — who owns it, and how
 
 **Owner:** whoever adds or bumps an entry records their name and date in the
@@ -64,16 +73,60 @@ raw command output, verbatim.
 
 ## Scope: this does not yet cover every `from_pretrained` call site
 
-Two of the original 18 suppressions remain, on purpose:
-`llm_shared/optimization/layer_inference.py` and
-`llm_shared/optimization/model_inspector.py` accept an arbitrary,
-caller-supplied `model_name` at runtime (traced to `request.model_name` in
-`llm_shared/optimization/integration.py`) — a fixed, static registry entry
-doesn't fit an open-ended model set the same way it fits the five
-call sites this issue's fix does cover (`ai_hardware_accelerator.py`,
-`code_embedding_generator.py`, `multimodal_processor/processors/vision.py`,
-`multimodal_processor/processors/voice.py`). Pinning that dynamic path needs
-its own design — for example, trust-on-first-use pinning (resolve once,
-persist, and verify the *same* resolved revision on every later load of the
-same name) or requiring the caller to supply a revision alongside the model
-name — tracked on #13034 as remaining scope rather than solved here.
+Measured on `main` at `0a4cffce`: **4 bandit findings suppressed across 3
+files** — 5 `# nosec B615` comment occurrences, one of which is the explanation
+above the NPU worker's call rather than a suppression of its own. Not the 18
+this document opened with, and not the 16 the issue text still cites either.
+Every other occurrence of the string in the tree is prose: this file, the
+changelog, the research notes, two module docstrings and the guard's own
+fixtures. Counting those is the mistake `grep -rn "nosec B615"` makes, which is
+why the guard that holds the line
+(`repo_tests/nosec_b615_suppressions_are_registry_backed_13034_test.py`) builds
+its population from `tokenize` COMMENT tokens instead of from file text.
+
+| File | Live suppressions | Why no static pin fits |
+|---|---|---|
+| `llm_shared/optimization/layer_inference.py` | 2 (2 comments) | `model_name` arrives from a routing request; it may be a local path or a non-HuggingFace tag such as `llama3:8b`. |
+| `llm_shared/optimization/model_inspector.py` | 1 (1 comment) | `inspect_model(model_name)` is called by the complexity router and hardware sizing with whatever model the caller routed to. |
+| `autobot-npu-worker/.../app/model_manager.py` | 1 (2 comments) | `str(model_path)` is a **local directory** `ensure_model_downloaded()` already populated and verified against its pin (#17087). No Hub resolution happens, so `revision=` would be a no-op rather than a guarantee. The second comment is the explanation above the call, not a second suppression. |
+
+### What the dynamic sites do instead
+
+`pinned_revision_kwargs(model_ref)` returns `{"revision": <pin>}` when
+`model_ref` is registered and `{}` when it is not. The two optimization modules
+call it, so a registered model id is pinned **even on a dynamic path**, while an
+unregistered one resolves exactly as before.
+
+It is the deliberate soft counterpart to `get_pinned_revision`, which raises
+for an unregistered id precisely so a *fixed* call site cannot omit a pin by
+accident. The two must not be swapped: a fixed call site using
+`pinned_revision_kwargs` would lose that protection, and
+`model_revision_pinning_enforced_17804_test.py` is what keeps fixed sites on
+the raising path.
+
+**`{}` is not a pin, and the suppression stays because of it.** The three
+dynamic sites keep `# nosec B615` for the unregistered remainder rather than
+dropping it: bandit gives a non-literal `revision=` the benefit of the doubt
+(`bandit/plugins/huggingface_unsafe_download.py` returns early for any
+non-`ast.Constant` revision keyword), so passing one would silence the finding
+whether or not anything was actually resolved. A quiet scan over a load that
+still resolves against a mutable default branch is worse than a recorded
+suppression — it reads as safe. Each suppression's reason is recorded in the
+guard's `_SUPPRESSED` table and checked against the code.
+
+### The remainder, unsolved
+
+Pinning an arbitrary caller-supplied name needs its own design — for example
+trust-on-first-use pinning (resolve once, persist, and verify the *same*
+resolved revision on every later load of the same name) or requiring the caller
+to supply a revision alongside the model name. Both add a persistence and bump
+story this registry does not have. Tracked on #13034 as remaining scope rather
+than solved here.
+
+**#13034's AC1 as written — `grep -rn "nosec B615"` returning zero — is not
+reachable and should not be the criterion.** Satisfying it literally would mean
+deleting the sentences that explain the rule, including this one, while a
+single comment discussing the marker would break it again. The enforceable
+property is the one the guard asserts: the suppression set is enumerated,
+reasoned, cannot grow unnoticed, and every entry claiming to be registry-backed
+really calls the resolver.
