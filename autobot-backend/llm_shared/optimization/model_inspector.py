@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.pinned_model_registry import pinned_revision_kwargs
 from constants.ttl_constants import TTL_1_HOUR
 
 from .accelerate_loader import lazy_accelerate
@@ -256,8 +257,11 @@ def _inspect_via_config(model_name: str) -> ModelInfo | None:
         return None
 
     try:
-        # HuggingFace model loaded by name; revision pinning managed operationally.
-        cfg = transformers.AutoConfig.from_pretrained(model_name)  # nosec B615
+        # Pinned when model_name is in the registry; an unregistered id or a local path is not (#13034).
+        # Hoisted off the load line deliberately: a nested call there makes bandit warn
+        # "nosec encountered, but no failed test" for the inner node, which reads as a dead suppression.
+        pin = pinned_revision_kwargs(model_name)
+        cfg = transformers.AutoConfig.from_pretrained(model_name, **pin)  # nosec B615
         param_count = _count_params_via_skeleton(cfg, transformers, accelerate)
         if param_count is None:
             logger.debug("model_inspector: using formula fallback for %s", model_name)

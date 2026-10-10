@@ -9,8 +9,12 @@ Issue #679: Filters search results based on hierarchical access control.
 Integrates with ChromaDB metadata and ownership system.
 """
 
+import asyncio
 from typing import Dict, List
 
+from fastapi import HTTPException
+
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
@@ -219,6 +223,60 @@ def extract_user_context_from_request(current_user) -> tuple:
         user_group_ids = [str(m.team_id) for m in current_user.team_memberships if m.team and not m.team.is_deleted]
 
     return user_id, user_org_id, user_group_ids
+
+
+def _user_field(user, name: str):
+    """Read *name* from a mapping user or an ORM/object user (``.get`` or attribute)."""
+    getter = getattr(user, "get", None)
+    return getter(name) if callable(getter) else getattr(user, name, None)
+
+
+async def can_read_fact(
+    ownership_manager,
+    fact_id: str,
+    metadata: Dict,
+    current_user=None,
+    *,
+    user_id: str | None = None,
+    is_admin: bool | None = None,
+) -> bool:
+    """Whether a caller may read a fact: the one per-fact read decision (#18184).
+
+    Two call shapes. With ``current_user`` the user, org, groups and admin role are
+    resolved from it (``is_admin`` may still override). With a bare ``user_id`` -- for
+    routes already behind an admin dependency, which carry no user dict -- the id and
+    ``is_admin`` pass through and the caller has no org or groups. An admin reads any
+    fact here (#16662); only explicit read APIs call this.
+    """
+    org_id, group_ids = None, []
+    if current_user is not None:
+        user_id, org_id, group_ids = extract_user_context_from_request(current_user)
+        if is_admin is None:
+            is_admin = is_admin_role(_user_field(current_user, "role"))
+    return await ownership_manager.check_access(
+        fact_id=fact_id,
+        user_id=user_id,
+        fact_metadata=metadata,
+        user_org_id=org_id,
+        user_group_ids=group_ids,
+        is_admin=bool(is_admin),
+    )
+
+
+async def authorize_fact_read(kb, fact_id: str, current_user) -> Dict:
+    """Load a fact through the canonical KB read and require that the caller may read it (#18184).
+
+    Raises 503 without an ownership manager (no decision can be made, #16662), 404 when
+    the fact is absent, 403 when the caller cannot read it. Returns the fact dict.
+    """
+    if not getattr(kb, "ownership_manager", None):
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
+    fact = await asyncio.to_thread(kb.get_fact, fact_id)  # get_fact is synchronous
+    if not fact:
+        raise HTTPException(status_code=404, detail="Fact not found")
+    if not await can_read_fact(kb.ownership_manager, fact_id, fact.get("metadata") or {}, current_user):
+        raise HTTPException(status_code=403, detail="Access denied")
+    return fact
 
 
 def non_private_where(caller_where: Dict | None = None) -> Dict:

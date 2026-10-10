@@ -58,6 +58,14 @@ EXPLICIT_READ_APIS = frozenset(
 )
 #: The helper that forwards its own ``is_admin`` parameter to ``check_access``.
 PASS_THROUGH = frozenset({"autobot-backend/knowledge/search_filters.py"})
+#: The canonical per-fact read entries (#18184). They derive ``is_admin`` from ``current_user``
+#: (or take it explicitly) and forward it to ``check_access``, so calling one is an admin-aware read.
+#: Accepted only while the helper's own body in :data:`HELPER_HOME` passes ``is_admin`` (asserted).
+CANONICAL_READ_HELPERS = frozenset({"can_read_fact", "authorize_fact_read"})
+HELPER_HOME = "autobot-backend/knowledge/search_filters.py"
+#: Explicit read APIs plus the caller-driven pipeline route that reads one document by id (#18184).
+#: Adding a file needs the same owner decision as :data:`EXPLICIT_READ_APIS`.
+HELPER_CALLERS = EXPLICIT_READ_APIS | {"autobot-backend/api/knowledge_graph_routes.py"}
 
 
 def _is_production(rel: str) -> bool:
@@ -108,6 +116,46 @@ def admin_bypass_calls(source: str) -> list[int]:
     return lines
 
 
+def _call_name(node: ast.Call) -> str | None:
+    func = node.func
+    return func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+
+
+def canonical_helper_calls(source: str) -> list[int]:
+    """Line numbers of calls to the canonical admin-aware fact-read helpers in *source*."""
+    return [
+        n.lineno
+        for n in ast.walk(ast.parse(source))
+        if isinstance(n, ast.Call) and _call_name(n) in CANONICAL_READ_HELPERS
+    ]
+
+
+def helper_forwards_admin(source: str, helper: str = "can_read_fact") -> bool:
+    """Whether *helper*'s body in *source* passes ``is_admin=`` to ``check_access``."""
+    for fn in ast.walk(ast.parse(source)):
+        if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) and fn.name == helper:
+            return any(
+                isinstance(n, ast.Call)
+                and _call_name(n) == "check_access"
+                and any(k.arg == "is_admin" for k in n.keywords)
+                for n in ast.walk(fn)
+            )
+    return False
+
+
+@lru_cache(maxsize=1)
+def _helper_scan() -> dict[str, list[int]]:
+    found = {}
+    read = 0
+    for rel in REACH.examined(REPO_ROOT):
+        lines = canonical_helper_calls((REPO_ROOT / rel).read_text(encoding="utf-8"))
+        read += 1
+        if lines:
+            found[rel] = lines
+    REACH.completed(read)  # the helper sweep is held to the same declared floor as the bypass sweep
+    return found
+
+
 @lru_cache(maxsize=1)
 def _scan() -> dict[str, list[int]]:
     found: dict[str, list[int]] = {}
@@ -132,10 +180,31 @@ def test_only_explicit_read_apis_pass_the_admin_bypass():
 
 def test_every_explicit_read_api_passes_the_admin_input():
     """The owner decision is wired: each explicit read API reads as an admin."""
-    found = _scan()
-    assert EXPLICIT_READ_APIS <= set(
-        found
-    ), f"explicit read APIs not passing is_admin: {sorted(EXPLICIT_READ_APIS - set(found))}"
+    found = set(_scan())
+    if helper_forwards_admin((REPO_ROOT / HELPER_HOME).read_text(encoding="utf-8")):
+        found |= set(_helper_scan())  # a canonical helper call is an admin-aware read (#18184)
+    assert EXPLICIT_READ_APIS <= found, f"explicit read APIs not passing is_admin: {sorted(EXPLICIT_READ_APIS - found)}"
+
+
+def test_the_canonical_helpers_forward_is_admin_and_only_allowed_files_call_them():
+    """The allowance cannot rot: the helper passes is_admin to check_access, and chat paths do not call it."""
+    src = (REPO_ROOT / HELPER_HOME).read_text(encoding="utf-8")
+    for helper in ("can_read_fact",):
+        assert helper_forwards_admin(src, helper), f"{helper} no longer passes is_admin to check_access"
+    callers = set(_helper_scan()) - {HELPER_HOME}
+    assert (
+        callers <= HELPER_CALLERS
+    ), f"canonical admin-aware read helper called outside the explicit read APIs: {sorted(callers - HELPER_CALLERS)}"
+
+
+def test_helper_contrast_cases():
+    """Direct check_access without is_admin fails; a helper call passes; a helper dropping is_admin fails."""
+    direct = "async def r(m, f, u):\n    return await m.check_access(f, u, {})\n"
+    assert admin_bypass_calls(direct) == [] and canonical_helper_calls(direct) == []  # reads as non-admin: no credit
+    assert canonical_helper_calls("async def r(m, f, md, u):\n    return await can_read_fact(m, f, md, u)\n") == [2]
+    good = "async def can_read_fact(m, f, md, u):\n    return await m.check_access(f, is_admin=True)\n"
+    bad = "async def can_read_fact(m, f, md, u):\n    return await m.check_access(f, u)\n"
+    assert helper_forwards_admin(good) and not helper_forwards_admin(bad)
 
 
 def test_a_chat_path_passing_the_bypass_is_detected():
