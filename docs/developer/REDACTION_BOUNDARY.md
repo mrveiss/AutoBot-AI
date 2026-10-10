@@ -132,6 +132,7 @@ no cell removes anything.
 | an object whose `__repr__` must not leak config | `secret_redaction.RedactedReprMixin` | hand-written `__repr__` |
 | free text that may contain a credential | `secret_redaction.redact_content` | a new regex |
 | a nested dict/list that leaves in an API response body (credentials at any depth, URL userinfo) | `secret_redaction.redact_nested` (`BROAD`; masks like `redact_value`, copies, keeps non-credential values and types) | `redact_mapping` (flat, `***`), a per-route key list |
+| a bare `user:password@host[:port]` value (no `scheme://`) | applied by `redact_value` and `redact_nested` through `secret_redaction.redact_schemeless_userinfo` (#18206): whole-value only, so emails, `host:port`, `mailto:` and prose are unchanged. Not applied in `redact_text`/`redact_content`: free text has no value boundary, and `note:bob@example.com` would read as userinfo | a per-field regex |
 | a raw log line, or an extra-vars mapping | `secret_redaction.redact_text` / `.redact_mapping` | `redact_content` (it does not mask `Authorization:` headers) |
 | a provider exception that may name an AWS account | `security/redaction.redact_provider_error` | a new ARN regex |
 | text leaving the process to a peer or an LLM, needing a **policy** (block vs redact vs hash) | `a2a.pii_pipeline.scrub_outbound` | `redact_content` -- it has no policy and cannot block |

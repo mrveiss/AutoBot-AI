@@ -92,6 +92,7 @@ __all__ = [
     "redact_content",
     "redact_mapping",
     "redact_nested",
+    "redact_schemeless_userinfo",
     "redact_text",
     "redact_url_credentials",
     "redact_url_userinfo",
@@ -220,6 +221,29 @@ def redact_url_credentials(url: str, policy: MatchPolicy = MatchPolicy.PRECISE) 
     return urlunsplit(reparsed._replace(query=new_query))
 
 
+# A whole value shaped ``user:password@host[:port][/path]`` with NO ``scheme://`` (a bare DSN, proxy or
+# endpoint). Whole-value, never inside prose: ``note: a@b.com`` has whitespace and does not match.
+# ``name@host.com`` has no colon and ``host:port`` no ``@``, so neither matches (#18206).
+_SCHEMELESS_USERINFO_RE = re.compile(
+    r"(?P<user>[^\s:/@?#]+):(?P<pw>[^\s/@?#]+)@(?P<host>[^\s/@?#:]+(?::\d{1,5})?)(?P<rest>[/?#]\S*)?"
+)
+# URI schemes with no ``//`` authority whose ``scheme:addr@host`` is an address, not userinfo.
+_NO_AUTHORITY_SCHEMES = frozenset({"mailto", "sip", "sips", "xmpp", "tel", "urn", "news", "acct"})
+
+
+def redact_schemeless_userinfo(value: str) -> str:
+    """Mask the password of a bare ``user:password@host[:port]`` value, keeping user, host, port (#18206).
+
+    ``user:pw@host:<port>`` becomes ``user:**********@host:<port>``.  Ordinary emails, ``host:port`` pairs,
+    ``mailto:`` style addresses, scheme URLs (handled by :func:`redact_url_userinfo`) and any value with
+    whitespace come back unchanged.
+    """
+    m = _SCHEMELESS_USERINFO_RE.fullmatch(value)
+    if m is None or m["user"].lower() in _NO_AUTHORITY_SCHEMES:
+        return value
+    return f"{m['user']}:{REDACTED_PLACEHOLDER}@{m['host']}{m['rest'] or ''}"
+
+
 def redact_value(name: str, value: Any) -> Any:
     """Mask ``value`` when ``name`` is credential-shaped and the value is set."""
     if value is None or value == "":
@@ -227,9 +251,9 @@ def redact_value(name: str, value: Any) -> Any:
     # URL handling runs first: a ``*_dsn`` name matches both rule sets, and
     # in-place userinfo redaction is strictly more diagnosable than a full mask.
     if is_url_field(name) and isinstance(value, str):
-        return redact_url_userinfo(value, mask_username=is_credential_entry(name, value))
+        return redact_schemeless_userinfo(redact_url_userinfo(value, mask_username=is_credential_entry(name, value)))
     if not is_credential_entry(name, value):
-        return value
+        return redact_schemeless_userinfo(value) if isinstance(value, str) else value
     return REDACTED_PLACEHOLDER
 
 
@@ -315,8 +339,8 @@ def _redact_nested_leaf(name: str, value: Any, policy: MatchPolicy) -> Any:
     if cred and not (url and is_url_field(name)):
         return REDACTED_PLACEHOLDER  # a URL-shaped value under a credential name (webhook secret) is masked whole
     if url:
-        return redact_url_credentials(redact_url_userinfo(value, mask_username=True), policy)
-    return redact_content(value)
+        return redact_url_credentials(redact_url_userinfo(value, mask_username=cred), policy)
+    return redact_content(redact_schemeless_userinfo(value))
 
 
 def redact_nested(value: Any, policy: MatchPolicy = MatchPolicy.BROAD, name: str = "") -> Any:

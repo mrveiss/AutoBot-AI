@@ -1,0 +1,75 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+"""A bare ``user:password@host[:port]`` loses its password in the canonical module (#18206)."""
+
+from pathlib import Path
+
+import pytest
+
+from autobot_shared.secret_redaction import (
+    REDACTED_PLACEHOLDER,
+    MatchPolicy,
+    is_credential_entry,
+    redact_nested,
+    redact_schemeless_userinfo,
+    redact_value,
+)
+
+_MASK = REDACTED_PLACEHOLDER
+_PW = "pw"
+_CORPUS = Path(__file__).with_name("redaction_corpus_17336.txt")
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("user:pw@host:5432", f"user:{_MASK}@host:5432"),
+        ("user:pw@host", f"user:{_MASK}@host"),
+        ("svc:hunter2@10.0.0.9:3128/db?sslmode=require", f"svc:{_MASK}@10.0.0.9:3128/db?sslmode=require"),
+        ("a:b:c@h", f"a:{_MASK}@h"),
+    ],
+)
+def test_the_password_of_a_schemeless_userinfo_is_masked_and_the_rest_kept(raw: str, expected: str) -> None:
+    assert redact_schemeless_userinfo(raw) == expected
+    assert redact_value("proxy", raw) == expected
+    assert redact_value("db_dsn", raw) == expected
+    assert redact_nested({"proxy": raw, "deep": [{"endpoint": raw}]}) == {
+        "proxy": expected,
+        "deep": [{"endpoint": expected}],
+    }
+
+
+@pytest.mark.parametrize(
+    "benign",
+    [
+        "name@host.com",  # an ordinary email: no colon
+        "first.last+tag@sub.example.org",
+        "host:5432",  # a host:port pair: no @
+        "localhost:8080/path",
+        "mailto:bob@example.com",  # a scheme without // is an address, not userinfo
+        "note: bob@example.com",  # prose: whitespace
+        "see user:pw@host for details",
+        "https://example.com/a",
+    ],
+)
+def test_emails_host_port_pairs_and_prose_are_unchanged(benign: str) -> None:
+    assert redact_schemeless_userinfo(benign) == benign
+    assert redact_value("endpoint", benign) == benign
+    assert redact_nested({"endpoint": benign}) == {"endpoint": benign}
+
+
+def test_a_scheme_url_still_goes_through_the_url_path_not_this_one() -> None:
+    url = f"postgresql://u:{_PW}@h:5432/db"
+    assert redact_schemeless_userinfo(url) == url
+    assert redact_value("database_url", url) == f"postgresql://u:{_MASK}@h:5432/db"
+
+
+def test_no_name_leaves_the_masked_set_and_a_plain_value_is_untouched_for_every_corpus_name() -> None:
+    """The change is value-side only: the name-keyed decision is the same function it was."""
+    names = _CORPUS.read_text(encoding="utf-8").split()
+    for name in names:
+        for policy in MatchPolicy:
+            if is_credential_entry(name, "plain", policy):
+                assert redact_value(name, "plain") in ("plain", _MASK)
+        if not is_credential_entry(name, "plain", MatchPolicy.PRECISE):
+            assert redact_value(name, "plain") == "plain", name
