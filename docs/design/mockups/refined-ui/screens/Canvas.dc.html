@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Live Canvas</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.ibtn{width:34px;height:34px;border-radius:6px;border:var(--bw) solid transparent;background:transparent;display:inline-grid;place-items:center;cursor:pointer}
+.ibtn:hover{background:var(--surface2);border-color:var(--border)}
+.cell{position:relative;border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;background:var(--surface);border:var(--bw) solid var(--border)}
+.cell.agent{background:var(--surface);border-left:3px solid var(--i1)}
+.cell.on{border-color:var(--text2)}
+.ctb{position:absolute;top:8px;right:8px;display:flex;gap:2px;background:var(--surface);border:var(--bw) solid var(--border);border-radius:6px;padding:2px}
+.ctb button{width:28px;height:28px;border:0;background:transparent;border-radius:4px;cursor:pointer;display:grid;place-items:center}
+.ctb button:hover{background:var(--surface2)}
+.tag{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.vsep{width:var(--bw);height:22px;background:var(--border);margin:0 6px}
+.cm{stroke:var(--stroke);stroke-width:1}
+.cl{font-family:'IBM Plex Sans',sans-serif;font-size:10.5px;fill:var(--muted)}
+.kw{color:var(--accent);font-weight:500}.st{color:var(--ok-fg)}
+.lg{width:12px;height:12px;border:1px solid var(--stroke);box-sizing:border-box;display:inline-block}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html" class="adv">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="ThemeManager.dc.html" class="adv" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon adv" aria-label="Plugins" data-tip="Plugins" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Admin panel" data-tip="Admin panel" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="Preferences.dc.html" aria-label="Profile settings" data-tip="Profile settings" data-tip-pos="left" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer; display: grid; place-items: center; text-decoration: none">MV</a>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-direction: column">
+
+    <section class="card only-min" role="note" aria-labelledby="advn-h" style="margin: 16px clamp(16px, 2.5vw, 32px) 0; padding: 14px 16px; gap: 12px; align-items: center; flex-wrap: wrap">
+      <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg></span>
+      <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 240px; min-width: 0">
+        <h2 id="advn-h" style="margin: 0; font-size: 14px; font-weight: 600">This is an advanced area</h2>
+        <span class="sub2">It's hidden from navigation while Minimal interface is on.</span>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px">
+        <button type="button" class="btn sm" onClick="{{showAll}}">Show all features</button>
+        <a href="Main.dc.html" class="btn sm">Go to Home</a>
+      </div>
+    </section>
+
+    <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 14px clamp(16px, 2.5vw, 32px); background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+      <span class="tile lg"><svg class="ic" width="28" height="28" viewBox="0 0 48 48" aria-hidden="true"><rect x="5" y="5" width="16" height="16" rx="3" class="i2"/><rect x="27" y="5" width="16" height="16" rx="3" class="iw"/><rect x="5" y="27" width="16" height="16" rx="3" class="iw"/><rect x="27" y="27" width="16" height="16" rx="3" class="i1"/><path d="M31 37l3-4 3 2 3-5M9 33h8M9 37h5"/><path d="M33 11v4M31 13h4" class="sacc"/></svg></span>
+      <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 220px">
+        <span class="sub2">Workspace / Canvas</span>
+        <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">Canvas</h1>
+        <span class="sub2">Shared workspace where you and agents build notes, charts and code side by side with chat</span>
+      </div>
+      <div role="group" aria-label="Layout" class="adv" style="display: inline-flex; gap: 2px; padding: 3px; border-radius: 7px; background: var(--surface2); border: var(--bw) solid var(--border)">
+        <button type="button" class="seg" aria-pressed="false">Chat focus</button>
+        <button type="button" class="seg on" aria-pressed="true">Split</button>
+        <button type="button" class="seg" aria-pressed="false">Canvas focus</button>
+        <button type="button" class="seg" aria-pressed="false">Full canvas</button>
+      </div>
+    </header>
+
+    <div style="flex-grow: 1; display: flex; flex-wrap: wrap; align-items: stretch; min-width: 0">
+
+      <section aria-label="Chat panel" style="flex: 1 1 320px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; background: var(--surface); border-right: var(--bw) solid var(--border)">
+        <div class="ch">
+          <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="i1"/></svg>
+          <h2>NPU benchmark write-up</h2>
+          <span class="pill ok" data-tip="Live link to the canvas — agent edits appear as they happen" data-tip-pos="left">Connected</span>
+        </div>
+        <div style="flex-grow: 1; padding: 16px; display: flex; flex-direction: column; gap: 14px">
+          <div style="align-self: flex-end; max-width: 85%; background: var(--primary); color: var(--on-primary); padding: 10px 14px; border-radius: 10px 10px 2px 10px; font-size: 13.5px; line-height: 1.5">Put the INT4 vs FP16 throughput numbers on the canvas as a chart, plus the script that produced them.</div>
+          <div style="display: flex; gap: 10px; align-items: flex-start">
+            <span class="tile" style="width: 30px; height: 30px"><svg class="ic" width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" class="iw"/><circle cx="29" cy="27" r="3" class="iw"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+            <div style="background: var(--surface2); border: var(--bw) solid var(--border); padding: 10px 12px; border-radius: 2px 10px 10px 10px; font-size: 13.5px; line-height: 1.5">Added a chart cell and a code cell to the canvas. Accept them to keep, or edit before accepting. I'm drafting a summary paragraph now.</div>
+          </div>
+          <div style="align-self: flex-end; max-width: 85%; background: var(--primary); color: var(--on-primary); padding: 10px 14px; border-radius: 10px 10px 2px 10px; font-size: 13.5px; line-height: 1.5">Also note that node-03 was thermally throttled.</div>
+        </div>
+        <div style="padding: 12px 16px 16px; border-top: var(--bw) solid var(--line)">
+          <div style="background: var(--surface); border: var(--bw) solid var(--border); border-radius: 8px; padding: 4px 4px 4px 12px; display: flex; align-items: center; gap: 8px">
+            <label for="cmsg" class="sr">Message</label>
+            <input id="cmsg" type="text" placeholder="Ask AutoBot to add to the canvas…" style="border: 0; outline: 0; font: inherit; font-size: 13.5px; flex-grow: 1; min-width: 0; height: 32px; background: transparent; color: var(--text)">
+            <button type="button" class="btn sm pri" aria-label="Send" data-tip="Send · Enter" data-tip-pos="left" style="padding: 0 10px"><svg class="ic sonp" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
+          </div>
+        </div>
+      </section>
+
+      <div role="separator" aria-label="Resize panels" data-tip="Drag to resize panels" style="flex: 0 0 8px; background: var(--bg); display: grid; place-items: center; cursor: col-resize"><span style="width: 2px; height: 32px; background: var(--border); border-radius: 2px"></span></div>
+
+      <section aria-label="Canvas panel" style="flex: 2 1 460px; min-width: 0; display: flex; flex-direction: column">
+        <div role="toolbar" aria-label="Canvas toolbar" style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 8px 16px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+          <button type="button" class="ibtn" aria-label="Undo" data-tip="Undo · Ctrl Z" data-tip-pos="bottom"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h10a4 4 0 0 1 0 8H7M3 10l4-4M3 10l4 4"/></svg></button>
+          <span data-tip="Redo · Ctrl ⇧ Z — nothing to redo" data-tip-pos="bottom" tabindex="0" style="display: inline-flex"><button type="button" class="ibtn" aria-label="Redo" disabled style="opacity: .4"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 10H11a4 4 0 0 0 0 8h6M21 10l-4-4M21 10l-4 4"/></svg></button></span>
+          <span class="vsep" aria-hidden="true"></span>
+          <button type="button" class="btn sm"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add cell</button>
+          <span style="flex-grow: 1"></span>
+          <span aria-live="polite" data-tip="All changes saved automatically" data-tip-pos="bottom" style="font-size: 12.5px; color: var(--ok-fg); font-weight: 500; display: inline-flex; align-items: center; gap: 6px"><span class="dot d-ok"></span>Saved <span class="mono">11:04</span></span>
+          <span class="vsep adv" aria-hidden="true"></span>
+          <button type="button" class="btn sm adv" data-tip="Export canvas as Markdown or PDF" data-tip-pos="left"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M8 11l4 4 4-4M4 17v3h16v-3"/></svg>Export</button>
+        </div>
+
+        <div role="status" aria-live="polite" style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: var(--surface2); border-bottom: var(--bw) solid var(--line); font-size: 13px; color: var(--text2)">
+          <svg class="ic sacc" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 2.2"><path d="M20 12a8 8 0 1 1-2.3-5.7"/></svg>Agent is working…
+        </div>
+
+        <div role="list" aria-label="Canvas cells" style="flex-grow: 1; padding: 16px; display: flex; flex-direction: column; gap: 12px; background: var(--bg)">
+
+          <div role="listitem" tabindex="0" aria-label="User cell: complete" class="cell on">
+            <div class="ctb" role="toolbar" aria-label="Cell actions">
+              <button type="button" aria-label="Move cell up" data-tip="Move cell up · Alt ↑" data-tip-pos="bottom"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+              <button type="button" aria-label="Move cell down" data-tip="Move cell down · Alt ↓" data-tip-pos="bottom"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg></button>
+              <button type="button" class="adv" aria-label="Duplicate cell" data-tip="Duplicate cell" data-tip-pos="bottom"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" class="it1"/><path d="M16 8V4H4v12h4"/></svg></button>
+              <button type="button" class="adv" aria-label="Copy cell content" data-tip="Copy cell content" data-tip-pos="bottom"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 9h6M9 13h6"/></svg></button>
+              <button type="button" aria-label="Delete cell" data-tip="Delete cell" data-tip-pos="left"><svg class="ic sacc" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+            </div>
+            <span class="tag"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4" class="it3"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>You · Markdown</span>
+            <h2 style="margin: 0; font-size: 16px; font-weight: 600">NPU INT4 benchmark — October</h2>
+            <p style="margin: 0; font-size: 14px; line-height: 1.6; max-width: 640px">Goal: decide whether INT4 quantisation on the OpenVINO NPU path is good enough to move embedding jobs off the GPU nodes.</p>
+          </div>
+
+          <div role="listitem" tabindex="0" aria-label="Agent cell: complete" class="cell agent">
+            <span class="tag"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" class="i1"/><path d="M12 8V5"/><circle cx="12" cy="4" r="1.5" class="i3"/></svg>Agent draft · Chart</span>
+            <strong style="font-size: 14px; font-weight: 600">Tokens per second by node</strong>
+            <svg viewBox="0 0 420 170" width="100%" height="190" role="img" aria-label="Bar chart: FP16 versus INT4 throughput on node-01 to node-04; node-03 INT4 was throttled" style="max-width: 560px">
+              <path d="M40 100H410M40 60H410M40 20H410" style="stroke: var(--line); stroke-width: 1"/>
+              <path d="M40 140H410" style="stroke: var(--line); stroke-width: 1.5"/>
+              <text x="32" y="144" text-anchor="end" class="cl">0</text>
+              <text x="32" y="104" text-anchor="end" class="cl">40</text>
+              <text x="32" y="64" text-anchor="end" class="cl">80</text>
+              <text x="32" y="24" text-anchor="end" class="cl">120</text>
+              <rect x="60" y="92" width="26" height="48" class="cm" style="fill: var(--i1)"/><rect x="88" y="34" width="26" height="106" class="cm" style="fill: var(--i3)"/>
+              <rect x="150" y="96" width="26" height="44" class="cm" style="fill: var(--i1)"/><rect x="178" y="40" width="26" height="100" class="cm" style="fill: var(--i3)"/>
+              <rect x="240" y="104" width="26" height="36" class="cm" style="fill: var(--i1)"/><rect x="268" y="78" width="26" height="62" class="cm" style="fill: var(--i2)" stroke-dasharray="3 2"/>
+              <rect x="330" y="94" width="26" height="46" class="cm" style="fill: var(--i1)"/><rect x="358" y="38" width="26" height="102" class="cm" style="fill: var(--i3)"/>
+              <text x="87" y="158" text-anchor="middle" class="cl" style="font-size: 11px">node-01</text><text x="177" y="158" text-anchor="middle" class="cl" style="font-size: 11px">node-02</text><text x="267" y="158" text-anchor="middle" class="cl" style="font-size: 11px">node-03</text><text x="357" y="158" text-anchor="middle" class="cl" style="font-size: 11px">node-04</text>
+              <text x="281" y="72" text-anchor="middle" style="font-family: 'IBM Plex Sans', sans-serif; font-size: 10.5px; font-weight: 600; fill: var(--alert-text)">throttled</text>
+            </svg>
+            <div style="display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--text2)">
+              <span style="display: inline-flex; align-items: center; gap: 6px" data-tip="16-bit floating point weights — baseline precision"><span class="lg" style="background: var(--i1)"></span>FP16</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px" data-tip="4-bit integer quantised weights — smaller and faster, slight accuracy risk"><span class="lg" style="background: var(--i3)"></span>INT4</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px" data-tip="CPU/NPU clocked down due to heat — result understates real throughput"><span class="lg" style="background: var(--i2); border-style: dashed"></span>INT4 (throttled)</span>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px">
+              <button type="button" class="btn sm pri">Accept</button>
+              <button type="button" class="btn sm">Edit</button>
+              <button type="button" class="btn sm" style="color: var(--alert-text)">Discard</button>
+            </div>
+          </div>
+
+          <div role="listitem" tabindex="0" aria-label="Agent cell: complete" class="cell agent">
+            <span class="tag"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" class="iw"/><path d="M8 10l-2 2 2 2M16 10l2 2-2 2"/></svg>Agent draft · Code · Python</span>
+            <pre class="mono" style="margin: 0; background: var(--surface2); color: var(--text); border: var(--bw) solid var(--line); border-radius: 6px; padding: 12px 14px; font-size: 12.5px; line-height: 1.6; overflow-x: auto"><span class="kw">for</span> node <span class="kw">in</span> [<span class="st">"node-01"</span>, <span class="st">"node-02"</span>, <span class="st">"node-03"</span>, <span class="st">"node-04"</span>]:
+    <span class="kw">for</span> precision <span class="kw">in</span> (<span class="st">"FP16"</span>, <span class="st">"INT4"</span>):
+        tps = bench(node, model=<span class="st">"bge-m3"</span>, device=<span class="st">"NPU"</span>, precision=precision)
+        results.append((node, precision, tps))</pre>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px">
+              <button type="button" class="btn sm pri">Accept</button>
+              <button type="button" class="btn sm">Edit</button>
+              <button type="button" class="btn sm" style="color: var(--alert-text)">Discard</button>
+            </div>
+          </div>
+
+          <div role="listitem" tabindex="0" aria-label="Agent cell: partial" class="cell agent" style="border-left-color: var(--i2); background: var(--surface2)">
+            <span class="tag"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1-5L16 4l4 4L9 19z" class="i2"/></svg>Agent draft · Markdown<span class="pill warn" style="text-transform: none; letter-spacing: 0" data-tip="The agent is still writing this cell">Streaming</span></span>
+            <p style="margin: 0; font-size: 14px; line-height: 1.6">INT4 roughly doubles throughput on three of four nodes with no measurable drop in retrieval recall. node-03 is the exception: it was thermally throttled during the run, so its numbers<span aria-hidden="true" style="display: inline-block; width: 7px; height: 15px; background: var(--text); vertical-align: -3px; margin-left: 2px"></span></p>
+            <p aria-live="polite" class="sub2" style="margin: 0">Writing…</p>
+            <div><button type="button" class="btn sm">Cancel stream</button></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":1180}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      themes: defs.map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => { try { window.localStorage.setItem('autobot-theme', id); } catch (e) {} this.setState({ theme: id }); }
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

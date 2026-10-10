@@ -1,0 +1,959 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot Components · Dialogs</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+/* ---- Components · Dialogs ---- */
+.specbar{box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:14px clamp(16px,2.5vw,32px);background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+.specbar h1{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.use{font-size:12.5px;color:var(--muted);font-weight:400}
+.st{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.rules{margin:0;padding:12px 16px;border-top:var(--bw) solid var(--line);font-size:12.5px;color:var(--text2);line-height:1.55}
+.bd{padding:16px}
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:20px;align-items:start}
+.col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.stg{position:relative;border:var(--bw) solid var(--border);border-radius:10px;background:var(--bg);overflow:hidden;display:grid;place-items:center;padding:40px 20px 28px;box-sizing:border-box}
+.bgm{position:absolute;inset:0;padding:14px;display:grid;grid-template-columns:140px 1fr 1fr;grid-auto-rows:40px;gap:10px;pointer-events:none}
+.bgm i{background:var(--surface);border:var(--bw) solid var(--line);border-radius:6px}
+.bgm i:first-child{grid-row:span 14}
+.bgm::after{content:"";position:absolute;inset:0;background:color-mix(in srgb,var(--bg) 72%,transparent)}
+.stg>*{position:relative;z-index:1}
+.stg>.bgm{position:absolute;z-index:0}
+.stag{position:absolute;left:10px;top:9px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);border:var(--bw) dashed var(--border);border-radius:4px;padding:0 5px;background:var(--surface)}
+.stag.r{left:auto;right:10px}
+.dlg{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px;max-width:100%;box-sizing:border-box;display:flex;flex-direction:column;text-align:left}
+.th[data-theme="light"] .dlg,.th[data-theme="mono"] .dlg{border-color:var(--text2)}
+.dlg-h{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-bottom:var(--bw) solid var(--line)}
+.dlg-h h3{margin:0;font-size:16px;font-weight:600;color:var(--text)}
+.dlg-b{padding:16px 18px;font-size:13.5px;color:var(--text2);line-height:1.55;display:flex;flex-direction:column;gap:12px}
+.dlg-b p{margin:0}
+.dlg-f{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:8px;padding:12px 18px;border-top:var(--bw) solid var(--line);background:var(--surface2);border-radius:0 0 10px 10px}
+.dlg-f .fl{margin-right:auto}
+.ht{display:flex;flex-direction:column;gap:2px;min-width:0}
+.xbtn{width:30px;height:30px;border-radius:6px;border:0;background:transparent;display:grid;place-items:center;cursor:pointer;color:var(--text);margin-left:auto;flex:none;padding:0}
+.xbtn:hover{background:var(--surface2)}
+.th .btn.dng{background:var(--bar-alert);border-color:var(--bar-alert);color:var(--on-primary)}
+.th .btn.dng.ghost{background:var(--surface);color:var(--alert-text);border-color:var(--border)}
+.th .btn:disabled{opacity:.45;cursor:not-allowed}
+.inp{height:36px;box-sizing:border-box;padding:0 10px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-size:13.5px;width:100%}
+.inp[aria-invalid="true"]{border-color:var(--bar-alert);outline:1px solid var(--bar-alert)}
+textarea.inp{height:72px;padding:8px 10px;resize:vertical}
+.lb{font-size:12.5px;font-weight:600;color:var(--text)}
+.fld{display:flex;flex-direction:column;gap:6px;min-width:0}
+.f2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.err{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--alert-text);font-weight:500}
+.err .ic{stroke:var(--alert-text)}
+.lnk{border:0;background:transparent;padding:0;font:inherit;font-size:13px;font-weight:600;color:var(--link);text-decoration:underline;cursor:pointer}
+.lnk:hover{color:var(--link-h)}
+.kbd{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:1px 5px;border-radius:4px;border:var(--bw) solid var(--border);background:var(--surface2);color:var(--text2);line-height:1.4}
+.code{font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.6;background:var(--surface2);border:var(--bw) solid var(--line);border-radius:6px;padding:10px 12px;white-space:pre;overflow:auto;color:var(--text);margin:0}
+.jk{color:var(--text2)}.js{color:var(--info-fg)}
+.kv{display:grid;grid-template-columns:110px 1fr;gap:8px 12px;font-size:13px;margin:0}
+.kv dt{color:var(--muted)}.kv dd{margin:0;color:var(--text)}
+.closed{display:flex;flex-direction:column;align-items:center;gap:10px;padding:28px;border:var(--bw) dashed var(--border);border-radius:10px;background:var(--surface);font-size:13px;color:var(--text2)}
+.pad{position:absolute;background:color-mix(in srgb,var(--accent) 16%,transparent);outline:1px dashed var(--accent);font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--alert-text);display:grid;place-items:center;pointer-events:none}
+.ztag{position:absolute;right:-118px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--alert-text);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.ztag::before{content:"";width:22px;border-top:1px solid var(--accent)}
+.dim{display:flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--alert-text)}
+.dim::before,.dim::after{content:"";flex:1;border-top:1px solid var(--accent)}
+.szr{display:flex;align-items:center;gap:12px;font-size:12.5px}
+.szr .bx{height:22px;border:var(--bw) solid var(--text2);border-radius:5px;background:var(--surface);box-sizing:border-box}
+.steps{display:flex;gap:6px;list-style:none;margin:0;padding:0}
+.stp{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);flex:1;padding-bottom:8px;border-bottom:var(--nav-on-bw) solid var(--line)}
+.stp .n{width:22px;height:22px;border-radius:99px;border:var(--bw) solid var(--border);display:grid;place-items:center;font-size:11.5px;font-weight:600;box-sizing:border-box;flex:none;background:var(--surface)}
+.stp.cur{color:var(--text);font-weight:600;border-bottom-color:var(--accent)}
+.stp.cur .n{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+.stp.done{color:var(--text2);border-bottom-color:var(--text2)}
+.stp.done .n{background:var(--surface2);border-color:var(--text2)}
+.opt{border:var(--bw) solid var(--border);border-radius:8px;padding:10px 12px;display:flex;gap:10px;align-items:center;background:var(--surface);font:inherit;font-size:13px;color:var(--text);text-align:left;cursor:pointer;width:100%;box-sizing:border-box}
+.opt:hover{background:var(--surface2)}
+.opt.on{outline:2px solid var(--primary);outline-offset:-1px;background:var(--surface2)}
+.rdo{width:16px;height:16px;border-radius:99px;border:1.5px solid var(--text2);box-sizing:border-box;display:grid;place-items:center;flex:none}
+.rdo.on{border-color:var(--primary)}
+.rdo.on::after{content:"";width:8px;height:8px;border-radius:99px;background:var(--primary)}
+.lrow{display:flex;align-items:center;gap:12px;width:100%;box-sizing:border-box;padding:9px 12px;border:0;border-bottom:var(--bw) solid var(--line);background:var(--surface);font:inherit;color:var(--text);text-align:left;cursor:pointer}
+.lrow:hover{background:var(--surface2)}
+.lrow.on{background:var(--surface2)}
+.lbox{border:var(--bw) solid var(--border);border-radius:8px;overflow:hidden;max-height:232px;overflow-y:auto}
+.tabs{display:flex;gap:2px;border-bottom:var(--bw) solid var(--line);padding:0 14px}
+.tab{height:40px;border:0;background:transparent;font:inherit;font-size:13.5px;color:var(--text2);padding:0 10px;cursor:pointer;border-bottom:var(--nav-on-bw) solid transparent}
+.tab:hover{color:var(--text)}
+.tab.on{color:var(--text);font-weight:600;border-bottom-color:var(--accent)}
+.sw{width:34px;height:20px;border-radius:99px;border:var(--bw) solid var(--text2);background:var(--bar-track);position:relative;flex:none;box-sizing:border-box}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:99px;background:var(--surface);border:1px solid var(--stroke);box-sizing:border-box}
+.sw.on{background:var(--primary);border-color:var(--primary)}.sw.on::after{left:16px}
+.setr{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:var(--bw) solid var(--line)}
+.setr:last-child{border-bottom:0}
+.drop{border:var(--bw) dashed var(--text2);border-radius:8px;padding:16px;text-align:center;background:var(--surface2);display:flex;flex-direction:column;align-items:center;gap:6px;font-size:13px}
+.urow{display:grid;grid-template-columns:28px 1fr auto;gap:4px 10px;align-items:center;padding:10px 0;border-bottom:var(--bw) solid var(--line)}
+.urow .bar{grid-column:2 / 4}
+.av{width:28px;height:28px;border-radius:99px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;font-size:11px;font-weight:600;flex:none;box-sizing:border-box}
+.av.ag{border-radius:7px}
+.phone{width:390px;max-width:100%;height:744px;border:var(--bw) solid var(--text2);border-radius:28px;overflow:hidden;position:relative;background:var(--bg);display:flex;flex-direction:column;box-sizing:border-box}
+.sbar{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600;color:var(--text);flex:none;position:relative;z-index:1}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:2;background:var(--surface);border-top:var(--bw) solid var(--text2);border-radius:16px 16px 0 0;display:flex;flex-direction:column}
+.grab{width:40px;height:4px;border-radius:99px;background:var(--text2);margin:8px auto 2px}
+.side{position:absolute;top:0;right:0;bottom:0;width:480px;max-width:100%;box-sizing:border-box;background:var(--surface);border-left:var(--bw) solid var(--text2);display:flex;flex-direction:column;z-index:2}
+.ks{display:grid;grid-template-columns:1fr auto;gap:8px 16px;font-size:13px;align-items:center;margin:0}
+.ks dd{margin:0;display:flex;gap:4px}
+.fv{outline:3px solid var(--focus);outline-offset:2px}
+.mtx td{white-space:normal;vertical-align:top;line-height:1.5}
+@media (max-width:760px){.g2{grid-template-columns:1fr}.ztag{display:none}.f2{grid-template-columns:1fr}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <a href="ThemeManager.dc.html" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon" aria-label="Plugins" title="Plugins"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon" aria-label="Secrets" title="Secrets"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" title="Preferences"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <a href="AdminUsers.dc.html" class="icon" aria-label="Admin panel" title="Admin panel"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <button type="button" aria-label="Profile menu" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer">MV</button>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+  <aside class="sub" aria-label="Design system" style="flex: 1 1 230px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+    <a href="DesignSystem.dc.html" style="font-weight: 600; color: var(--text)"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5" class="i3"/><rect x="13" y="3" width="8" height="8" rx="1.5" class="i1"/><rect x="3" y="13" width="8" height="8" rx="1.5" class="i2"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>AutoBot Design System</a>
+    <span class="sub2" style="padding: 0 10px 0 40px; font-size: 11.5px">v1 · 4 themes</span>
+    <p class="sect">Overview</p>
+    <a href="DesignSystem.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M12 11v5M12 8v.5"/></svg>Introduction</a>
+    <p class="sect">Foundations</p>
+    <a href="ComponentsStates.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="4" class="i2"/><circle cx="16" cy="16" r="4" class="it1"/></svg>Tokens &amp; states</a>
+    <a href="ComponentsGrid.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 10v10"/></svg>Grid, tables &amp; forms</a>
+    <a href="ComponentsCharts.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="12" width="3" height="8" class="i1"/><rect x="10.5" y="7" width="3" height="13" class="i2"/><rect x="16" y="4" width="3" height="16" class="i3"/></svg>Charts &amp; data viz</a>
+    <p class="sect">Components</p>
+    <a href="ComponentsForms.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="5" rx="1.5"/><rect x="3" y="14" width="10" height="5" rx="1.5" class="it2"/></svg>Form controls</a>
+    <a href="ComponentsTable.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 10h18M3 14.5h18M9 10v9"/></svg>Data table</a>
+    <a href="ComponentsDialogs.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="it1"/><rect x="7" y="8" width="10" height="8" rx="1.5" class="iw"/></svg>Dialogs</a>
+    <a href="ComponentsOverlays.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="13" height="13" rx="2"/><rect x="8" y="8" width="13" height="13" rx="2" class="it3"/></svg>Overlays &amp; feedback</a>
+    <a href="ComponentsTooltips.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10h-6l-2 3-2-3H4z" class="it2"/></svg>Tooltips</a>
+    <a href="ComponentsCommand.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12 15h5"/></svg>Command menu</a>
+    <a href="ComponentsNavigation.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M15 9l-2 4-4 2 2-4z" class="i3"/></svg>Navigation</a>
+    <a href="ComponentsLayout.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M9 11h12"/></svg>Layout &amp; utility</a>
+    <a href="ComponentsChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="it3"/></svg>Chat &amp; agent</a>
+    <p class="sect">Patterns</p>
+    <a href="FileBrowser.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h7l2 2h9v11H3z" class="it2"/></svg>File browser</a>
+    <a href="Mailbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>Mailbox</a>
+    <a href="ComponentsUiModes.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5" class="it1"/><rect x="4.5" y="8.5" width="8" height="7" rx="3.5" class="i2"/></svg>Interface modes</a>
+    <a href="SignUp.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2" class="it1"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Auth pages</a>
+    <a href="AccountSecurity.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Account settings</a>
+    <a href="SearchResults.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>Global search</a>
+    <a href="HelpCenter.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it2"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5M12 16.5v.5"/></svg>Help centre</a>
+    <span style="flex-grow: 1; min-height: 20px" aria-hidden="true"></span>
+    <a href="Main.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>Back to app</a>
+  </aside>
+
+  <main style="flex: 999 1 520px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column">
+    <div class="specbar">
+      <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 280px">
+        <span class="sub2">Design system / Components</span>
+        <h1>Components · Dialogs</h1>
+        <span class="sub2">Every dialog is drawn open on its own scrimmed stage. In Play mode close them with ×, Cancel or Esc and reopen them from the stage.</span>
+      </div>
+      <div role="group" aria-label="Preview theme" style="display: flex; gap: 2px; padding: 3px; border-radius: 8px; background: var(--bg); border: var(--bw) solid var(--border)">
+        <sc-for list="{{themes}}" as="t" hint-placeholder-count="4"><button type="button" class="seg {{t.cls}}" aria-pressed="{{t.pressed}}" onClick="{{t.pick}}">{{t.label}}</button></sc-for>
+      </div>
+    </div>
+
+    <div style="padding: 24px clamp(16px, 2.5vw, 32px) 48px; display: flex; flex-direction: column; gap: 20px">
+
+    <!-- 1. ANATOMY -->
+    <section class="card" aria-labelledby="h-anat">
+      <div class="ch"><h2 id="h-anat">Dialog anatomy</h2><span class="use">Use for: the shared shell every dialog on this board is built from</span></div>
+      <div class="bd" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 24px; align-items: start">
+        <div class="col" style="gap: 12px">
+          <span class="st">Redlines · M 560px</span>
+          <div class="stg" style="padding: 56px 140px 40px 24px; place-items: start">
+            <div class="bgm" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <span class="stag">scrim · --bg 72%</span>
+            <div style="width: 560px; max-width: 100%; display: flex; flex-direction: column; gap: 6px">
+              <span class="dim">max-width 560 · radius 10 · border var(--bw)</span>
+              <div class="dlg" role="dialog" aria-modal="false" aria-labelledby="an-t" aria-describedby="an-d" style="width: 100%">
+                <div class="dlg-h" style="position: relative">
+                  <span class="pad" style="left: 0; top: 0; bottom: 0; width: 18px">18</span><span class="pad" style="left: 18px; right: 0; top: 0; height: 16px">16</span>
+                  <div class="ht"><h3 id="an-t">Rename agent</h3><span class="sub2" id="an-d">Title 16/600 · description 12.5 muted · 2px gap</span></div>
+                  <button type="button" class="xbtn" aria-label="Close dialog"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+                  <span class="ztag" style="top: 24px">header · close 30×30</span>
+                </div>
+                <div class="dlg-b" style="position: relative">
+                  <span class="pad" style="left: 0; top: 0; bottom: 0; width: 18px">18</span><span class="pad" style="left: 18px; right: 0; bottom: 0; height: 16px">16</span>
+                  <div class="fld"><label class="lb" for="an-n">Display name</label><input id="an-n" class="inp" type="text" value="research-agent"></div>
+                  <span class="sub2">Body: 13.5px text · 12px gap between blocks · scrolls when taller than 70vh</span>
+                  <span class="ztag" style="top: 40px">body</span>
+                </div>
+                <div class="dlg-f" style="position: relative">
+                  <span class="pad" style="right: 0; top: 0; bottom: 0; width: 18px">18</span>
+                  <button type="button" class="lnk fl">Learn about agent names</button>
+                  <button type="button" class="btn">Cancel</button>
+                  <span class="pad" style="position: static; width: 8px; height: 36px; margin: 0 -8px; z-index: 1" aria-hidden="true"></span>
+                  <button type="button" class="btn pri">Save</button>
+                  <span class="ztag" style="top: 18px">footer · 12/18 · gap 8</span>
+                </div>
+              </div>
+              <span class="sub2" style="font-size: 11.5px">Footer-left: optional link (help, secondary path). Right: Cancel then the primary action, right-aligned.</span>
+            </div>
+          </div>
+        </div>
+        <div class="col" style="gap: 14px">
+          <span class="st">Widths</span>
+          <div class="szr"><span class="mono" style="width: 22px">S</span><span class="bx" style="width: 41.7%"></span><span class="mono sub2">400 · confirm, alert</span></div>
+          <div class="szr"><span class="mono" style="width: 22px">M</span><span class="bx" style="width: 58.3%"></span><span class="mono sub2">560 · forms, share</span></div>
+          <div class="szr"><span class="mono" style="width: 22px">L</span><span class="bx" style="width: 75%"></span><span class="mono sub2">720 · wizard, settings</span></div>
+          <div class="szr"><span class="mono" style="width: 22px">XL</span><span class="bx" style="width: 100%"></span><span class="mono sub2">960</span></div>
+          <span class="sub2">XL is for payload/detail views only. Below 600px every size becomes full-screen or a bottom sheet.</span>
+          <span class="st" style="margin-top: 6px">Spec</span>
+          <div style="overflow-x: auto; border: var(--bw) solid var(--border); border-radius: 8px">
+            <table style="border-collapse: collapse; width: 100%">
+              <thead><tr><th scope="col">Part</th><th scope="col">Value</th></tr></thead>
+              <tbody>
+                <tr><td>Header padding</td><td class="mono">16 18 · gap 12</td></tr>
+                <tr><td>Body padding</td><td class="mono">16 18 · gap 12</td></tr>
+                <tr><td>Footer padding</td><td class="mono">12 18 · gap 8 · --surface2</td></tr>
+                <tr><td>Dividers</td><td class="mono">var(--bw) solid var(--line)</td></tr>
+                <tr><td>Separation</td><td class="mono">border only, no shadow</td></tr>
+                <tr><td>Scrim</td><td class="mono">--bg at 72% · click = Cancel</td></tr>
+                <tr><td>Viewport inset</td><td class="mono">min 24px · max-height 85vh</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <span class="st" style="margin-top: 6px">States · close button</span>
+          <div style="display: flex; gap: 18px; align-items: center">
+            <span class="sub2">Default</span><button type="button" class="xbtn" style="margin: 0" aria-label="Close (default)"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+            <span class="sub2">Hover</span><button type="button" class="xbtn" style="margin: 0; background: var(--surface2)" aria-label="Close (hover)"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+            <span class="sub2">Focus-visible</span><button type="button" class="xbtn fv" style="margin: 0" aria-label="Close (focus)"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules:</strong> role="dialog" (or "alertdialog" for interruptions) with aria-modal="true", aria-labelledby → the h3, aria-describedby → the description. Specimens on this board use aria-modal="false" so the page stays readable; production dialogs set "true" and make the page behind inert. One dialog at a time — never stack.</p>
+    </section>
+
+    <!-- 2. DECISION MATRIX -->
+    <section class="card" aria-labelledby="h-when">
+      <div class="ch"><h2 id="h-when">Dialog vs drawer vs inline</h2><span class="use">Use for: choosing the container before choosing the dialog type</span></div>
+      <div style="overflow-x: auto">
+        <table class="mtx" style="border-collapse: collapse; width: 100%">
+          <thead><tr><th scope="col">Container</th><th scope="col">Choose when</th><th scope="col">Avoid when</th><th scope="col">Example</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Modal dialog</strong></td><td>A short task or decision must finish before continuing; context behind does not need to be read.</td><td>The user must compare with the page, or the task has more than ~6 fields.</td><td>Approve agent command, delete company</td></tr>
+            <tr><td><strong>Side sheet (drawer)</strong></td><td>Inspecting or lightly editing one item from a list while keeping the list visible.</td><td>The action is destructive or blocking.</td><td>Work item detail from Backlog</td></tr>
+            <tr><td><strong>Inline / page</strong></td><td>Editing is the main job, long forms, anything needing a URL or browser back.</td><td>—</td><td>Agent configuration, routine editor</td></tr>
+            <tr><td><strong>Toast / banner</strong></td><td>Information that needs no decision.</td><td>The user must acknowledge — use an alert dialog.</td><td>“Agent deployed”</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="rules"><strong>Rules:</strong> If a dialog needs its own scroll and tabs and steps, it is probably a page. Never open a dialog from a dialog; replace the content (wizard) or close first.</p>
+    </section>
+
+    <div class="g2">
+      <!-- 3. CONFIRM -->
+      <section class="card" aria-labelledby="h-cf">
+        <div class="ch"><h2 id="h-cf">Confirm</h2><span class="use">Use for: a reversible-but-consequential yes/no</span></div>
+        <div class="bd col">
+          <div class="stg" style="min-height: 440px">
+            <div class="bgm" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <span class="stag">S · 400</span>
+            <sc-if value="{{d.confirm.open}}" hint-placeholder-val="{{ true }}">
+              <div class="dlg" role="dialog" aria-modal="false" aria-labelledby="cf-t" aria-describedby="cf-d" onKeyDown="{{d.confirm.key}}" style="width: 400px">
+                <div class="dlg-h"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="it1"/><path d="M7 9l3 3-3 3M12 15h5"/></svg></span><div class="ht"><h3 id="cf-t">Approve agent command?</h3><span class="sub2">devops-engineer · requested 10:43</span></div><button type="button" class="xbtn" aria-label="Close dialog" onClick="{{d.confirm.hide}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+                <div class="dlg-b">
+                  <p id="cf-d">The agent will run this on <strong>node-04</strong> with sudo. Output is logged to Activity.</p>
+                  <pre class="code">ansible-playbook restart-node.yml \
+  -l node-04 --tags heartbeat</pre>
+                  <div style="display: flex; gap: 8px; align-items: center"><span class="pill warn">Risk: Medium</span><span class="pill info">fleet_exec</span></div>
+                  <label style="display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text)"><input type="checkbox" style="accent-color: var(--primary); width: 16px; height: 16px">Allow this command for 24 h</label>
+                </div>
+                <div class="dlg-f"><button type="button" class="btn" onClick="{{d.confirm.hide}}">Cancel</button><button type="button" class="btn pri" onClick="{{d.confirm.hide}}">Approve &amp; run</button></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{d.confirm.closed}}" hint-placeholder-val="{{ false }}"><div class="closed">Dialog closed · focus returned to trigger<button type="button" class="btn sm pri" onClick="{{d.confirm.show}}">Reopen</button></div></sc-if>
+          </div>
+        </div>
+        <p class="rules"><strong>Rules:</strong> Title is a question naming the action; the primary button repeats the verb (“Approve &amp; run”, never “OK”). Initial focus on Cancel for risky actions, on the primary for routine ones. Enter = focused button.</p>
+      </section>
+
+      <!-- 4. DESTRUCTIVE -->
+      <section class="card" aria-labelledby="h-dz">
+        <div class="ch"><h2 id="h-dz">Destructive confirm · typed</h2><span class="use">Use for: irreversible deletes of high-value objects</span></div>
+        <div class="bd col">
+          <div class="stg" style="min-height: 440px">
+            <div class="bgm" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <span class="stag">S+ · 460 · alertdialog</span>
+            <sc-if value="{{d.dz.open}}" hint-placeholder-val="{{ true }}">
+              <div class="dlg" role="alertdialog" aria-modal="false" aria-labelledby="dz-t" aria-describedby="dz-d" onKeyDown="{{d.dz.key}}" style="width: 460px">
+                <div class="dlg-h"><span class="tile danger"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z" class="iw"/><path d="M12 10v4M12 17v.5"/></svg></span><div class="ht"><h3 id="dz-t">Delete company “AutoBot Labs”?</h3><span class="sub2">This cannot be undone.</span></div></div>
+                <div class="dlg-b">
+                  <p id="dz-d">Permanently deletes 6 agents, 1,284 knowledge documents, 42 routines and the full approvals history. Fleet nodes are released, not wiped.</p>
+                  <div class="fld"><label class="lb" for="dz-in">Type <span class="mono" style="padding: 1px 5px; border-radius: 4px; background: var(--surface2); border: var(--bw) solid var(--border)">AutoBot Labs</span> to confirm</label><input id="dz-in" class="inp" type="text" autocomplete="off" spellcheck="false" aria-describedby="dz-msg" onInput="{{dzInput}}"><span id="dz-msg" class="sub2">{{dzMsg}}</span></div>
+                </div>
+                <div class="dlg-f">
+                  <button type="button" class="btn" onClick="{{d.dz.hide}}">Cancel</button>
+                  <sc-if value="{{dzMatch}}" hint-placeholder-val="{{ false }}"><button type="button" class="btn dng" onClick="{{d.dz.hide}}">Delete company</button></sc-if>
+                  <sc-if value="{{dzNoMatch}}" hint-placeholder-val="{{ true }}"><button type="button" class="btn dng" disabled="disabled" aria-describedby="dz-msg">Delete company</button></sc-if>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{d.dz.closed}}" hint-placeholder-val="{{ false }}"><div class="closed">Dialog closed<button type="button" class="btn sm pri" onClick="{{d.dz.show}}">Reopen</button></div></sc-if>
+          </div>
+        </div>
+        <p class="rules"><strong>Rules:</strong> No × — the only exits are Cancel and Esc. Initial focus in the input, never on Delete. Delete sits rightmost in the danger style and stays disabled (reason announced via aria-describedby) until the case-sensitive name matches.</p>
+      </section>
+    </div>
+
+    <div class="g2">
+      <!-- 5. ALERT -->
+      <section class="card" aria-labelledby="h-al">
+        <div class="ch"><h2 id="h-al">Alert · acknowledge</h2><span class="use">Use for: an interruption the user must see, with one way out</span></div>
+        <div class="bd col">
+          <div class="stg" style="min-height: 360px">
+            <div class="bgm" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <span class="stag">S · 400 · alertdialog</span>
+            <sc-if value="{{d.alert.open}}" hint-placeholder-val="{{ true }}">
+              <div class="dlg" role="alertdialog" aria-modal="false" aria-labelledby="al-t" aria-describedby="al-d" onKeyDown="{{d.alert.key}}" style="width: 400px">
+                <div class="dlg-h"><span class="tile danger"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="6" rx="1.5" class="iw"/><rect x="4" y="13" width="16" height="6" rx="1.5"/><path d="M7 8h.5M7 16h.5M14 14l4 4M18 14l-4 4"/></svg></span><div class="ht"><h3 id="al-t">node-04 is unreachable</h3><span class="sub2"><span class="pill bad">Error</span> heartbeat failed · 10:43</span></div></div>
+                <div class="dlg-b"><p id="al-d">devops-engineer could not reach node-04 after 3 retries. 2 agents on this node are paused until it responds.</p></div>
+                <div class="dlg-f"><a href="HeartbeatMonitor.dc.html" class="lnk fl">Open heartbeat monitor</a><button type="button" class="btn pri" onClick="{{d.alert.hide}}">Acknowledge</button></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{d.alert.closed}}" hint-placeholder-val="{{ false }}"><div class="closed">Acknowledged<button type="button" class="btn sm pri" onClick="{{d.alert.show}}">Reopen</button></div></sc-if>
+          </div>
+        </div>
+        <p class="rules"><strong>Rules:</strong> One button; initial focus on it; Esc = Acknowledge. Status is stated in words (“Error”, “unreachable”), never by color alone. Prefer a toast if no acknowledgement is needed.</p>
+      </section>
+
+      <!-- 6. SESSION EXPIRED -->
+      <section class="card" aria-labelledby="h-se">
+        <div class="ch"><h2 id="h-se">Session expired</h2><span class="use">Use for: auth loss that blocks the whole app</span></div>
+        <div class="bd col">
+          <div class="stg" style="min-height: 360px">
+            <div class="bgm" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <span class="stag">S · 400 · not dismissible</span>
+            <div class="dlg" role="alertdialog" aria-modal="false" aria-labelledby="se-t" aria-describedby="se-d" style="width: 400px">
+              <div class="dlg-h"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7" class="it2"/><path d="M12 9v4l3 2M9 3h6"/></svg></span><div class="ht"><h3 id="se-t">Your session expired</h3><span class="sub2">Signed out after 8 h of inactivity</span></div></div>
+              <div class="dlg-b"><p id="se-d">Sign in again to continue. Your unsent chat message to research-agent is kept on this device.</p></div>
+              <div class="dlg-f"><button type="button" class="lnk fl">Copy unsent message</button><a href="Login.dc.html" class="btn pri">Sign in again</a></div>
+            </div>
+          </div>
+        </div>
+        <p class="rules"><strong>Rules:</strong> No ×, Esc and scrim do nothing — the app behind is unusable. Initial focus on “Sign in again”. Preserve drafts and return the user to the same URL after sign-in.</p>
+      </section>
+    </div>
+
+    <!-- 7. FORM -->
+    <section class="card" aria-labelledby="h-fm">
+      <div class="ch"><h2 id="h-fm">Form dialog</h2><span class="use">Use for: creating one object with up to ~6 fields</span></div>
+      <div class="bd col">
+        <div class="stg" style="min-height: 680px">
+          <div class="bgm" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <span class="stag">M · 560 · after submit with an empty title</span>
+          <sc-if value="{{d.form.open}}" hint-placeholder-val="{{ true }}">
+            <form class="dlg" role="dialog" aria-modal="false" aria-labelledby="fm-t" aria-describedby="fm-d" onKeyDown="{{d.form.key}}" onSubmit="{{fSubmit}}" style="width: 560px" novalidate="novalidate">
+              <div class="dlg-h"><div class="ht"><h3 id="fm-t">Create work item</h3><span class="sub2" id="fm-d">Adds to Backlog · AutoBot Labs</span></div><button type="button" class="xbtn" aria-label="Close dialog" onClick="{{d.form.hide}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+              <div class="dlg-b">
+                <sc-if value="{{fErr}}" hint-placeholder-val="{{ true }}"><div role="alert" class="err" style="padding: 8px 10px; border: var(--bw) solid var(--bar-alert); border-radius: 6px; background: var(--bad-bg); color: var(--bad-fg)">Error: 1 field needs attention before the item can be created.</div></sc-if>
+                <div class="fld"><label class="lb" for="fm-ti">Title <span aria-hidden="true">*</span></label><input id="fm-ti" class="inp" type="text" aria-required="true" aria-invalid="{{fInvalid}}" aria-describedby="fm-te" onInput="{{fInput}}" placeholder="e.g. Fix session lifecycle leak">
+                  <sc-if value="{{fErr}}" hint-placeholder-val="{{ true }}"><span id="fm-te" class="err"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg>Enter a title (3–120 characters).</span></sc-if>
+                </div>
+                <div class="f2">
+                  <div class="fld"><label class="lb" for="fm-ty">Type</label><select id="fm-ty" class="inp"><option>Bug</option><option>Task</option><option>Story</option><option>Research</option></select></div>
+                  <div class="fld"><label class="lb" for="fm-pr">Priority</label><select id="fm-pr" class="inp"><option>P1 · High</option><option selected="selected">P2 · Medium</option><option>P3 · Low</option></select></div>
+                  <div class="fld"><label class="lb" for="fm-as">Assignee</label><select id="fm-as" class="inp"><optgroup label="Agents"><option>code-agent</option><option>code-reviewer</option><option>devops-engineer</option></optgroup><optgroup label="Humans"><option>Mārtiņš Veiss</option></optgroup></select><span class="sub2">Agents start work automatically.</span></div>
+                  <div class="fld"><label class="lb" for="fm-sp">Sprint</label><select id="fm-sp" class="inp"><option>Sprint 42 · current</option><option>Sprint 43</option><option>No sprint</option></select></div>
+                </div>
+                <div class="fld"><label class="lb" for="fm-de">Description <span class="sub2" style="font-weight: 400">optional · Markdown</span></label><textarea id="fm-de" class="inp">Sessions are not closed when the browser tab is killed; heartbeat keeps them alive.</textarea></div>
+              </div>
+              <div class="dlg-f"><button type="button" class="btn" onClick="{{d.form.hide}}">Cancel</button><button type="submit" class="btn pri">Create item</button></div>
+            </form>
+          </sc-if>
+          <sc-if value="{{d.form.closed}}" hint-placeholder-val="{{ false }}"><div class="closed">Dialog closed<button type="button" class="btn sm pri" onClick="{{d.form.show}}">Reopen</button></div></sc-if>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules:</strong> Initial focus on the first field. Validate on submit, then live; on error, summary role="alert" at top + inline message linked with aria-describedby, focus moves to the first invalid field. Submit stays enabled. Scrim click and Esc ask the unsaved-changes guard if anything was typed.</p>
+    </section>
+
+    <!-- 8. WIZARD -->
+    <section class="card" aria-labelledby="h-wz">
+      <div class="ch"><h2 id="h-wz">Multi-step dialog · wizard</h2><span class="use">Use for: 3–4 dependent steps where later choices depend on earlier ones</span></div>
+      <div class="bd col">
+        <div class="stg" style="min-height: 560px">
+          <div class="bgm" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <span class="stag">L · 720 · {{wzCount}}</span>
+          <sc-if value="{{d.wiz.open}}" hint-placeholder-val="{{ true }}">
+            <div class="dlg" role="dialog" aria-modal="false" aria-labelledby="wz-t" aria-describedby="wz-c" onKeyDown="{{d.wiz.key}}" style="width: 720px">
+              <div class="dlg-h"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5" class="i1"/><path d="M6 8.5v7M8 6h4a4 4 0 0 1 4 4"/></svg></span><div class="ht"><h3 id="wz-t">Add code source</h3><span class="sub2" id="wz-c" aria-live="polite">{{wzCount}} · {{wzName}}</span></div><button type="button" class="xbtn" aria-label="Close dialog" onClick="{{d.wiz.hide}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+              <div class="dlg-b" style="gap: 16px">
+                <ol class="steps" aria-label="Progress"><sc-for list="{{steps}}" as="s" hint-placeholder-count="3"><li class="stp {{s.cls}}" aria-current="{{s.cur}}"><span class="n">{{s.mark}}</span>{{s.label}}<span class="sr" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">{{s.sr}}</span></li></sc-for></ol>
+                <sc-if value="{{wz1}}" hint-placeholder-val="{{ false }}">
+                  <div role="radiogroup" aria-label="Source type" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px">
+                    <sc-for list="{{srcs}}" as="o" hint-placeholder-count="3"><button type="button" role="radio" aria-checked="{{o.checked}}" class="opt {{o.cls}}" onClick="{{o.pick}}"><span class="rdo {{o.cls}}"></span><span style="display: flex; flex-direction: column"><strong style="font-weight: 600">{{o.label}}</strong><span class="sub2">{{o.hint}}</span></span></button></sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{wz2}}" hint-placeholder-val="{{ true }}">
+                  <div class="fld"><label class="lb" for="wz-url">Repository URL</label><input id="wz-url" class="inp mono" type="url" value="https://github.com/mrveiss/AutoBot-AI"></div>
+                  <div class="f2">
+                    <div class="fld"><label class="lb" for="wz-br">Default branch</label><select id="wz-br" class="inp"><option>Dev_new_gui</option><option>main</option></select></div>
+                    <div class="fld"><label class="lb" for="wz-pa">Index paths</label><input id="wz-pa" class="inp mono" type="text" value="autobot-backend/, autobot-frontend/"></div>
+                  </div>
+                  <span class="sub2">Found 2,941 files · ~38 MB · last push 2 h ago</span>
+                </sc-if>
+                <sc-if value="{{wz3}}" hint-placeholder-val="{{ false }}">
+                  <div class="fld"><label class="lb" for="wz-tk">Access token</label><input id="wz-tk" class="inp mono" type="password" value="ghp_xxxxxxxxxxxxxxxx"><span class="sub2">Stored in Secrets as <span class="mono">github-autobot-ro</span>; read-only scope is enough.</span></div>
+                  <div class="fld"><span class="lb">Agents allowed to read this source</span><div style="display: flex; gap: 8px; flex-wrap: wrap"><span class="pill info">code-agent</span><span class="pill info">code-reviewer</span><span class="pill idle">research-agent</span></div></div>
+                </sc-if>
+              </div>
+              <div class="dlg-f">
+                <button type="button" class="lnk fl" onClick="{{d.wiz.hide}}">Cancel</button>
+                <sc-if value="{{wzBackOff}}" hint-placeholder-val="{{ false }}"><button type="button" class="btn" disabled="disabled">Back</button></sc-if>
+                <sc-if value="{{wzBackOn}}" hint-placeholder-val="{{ true }}"><button type="button" class="btn" onClick="{{wzBack}}">Back</button></sc-if>
+                <button type="button" class="btn pri" onClick="{{wzNext}}">{{wzNextLabel}}</button>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{d.wiz.closed}}" hint-placeholder-val="{{ false }}"><div class="closed">Dialog closed<button type="button" class="btn sm pri" onClick="{{d.wiz.show}}">Reopen</button></div></sc-if>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules:</strong> Step indicator is an ordered list with aria-current="step"; the step name is announced via aria-live on change and focus moves to the step's first field. Back never loses input. Cancel moves to footer-left so Next stays in the primary spot; the last step names the outcome (“Add source”). More than 4 steps → use a page.</p>
+    </section>
+
+    <div class="g2">
+      <!-- 9. UPLOAD -->
+      <section class="card" aria-labelledby="h-up">
+        <div class="ch"><h2 id="h-up">Upload dialog</h2><span class="use">Use for: adding files with per-file progress</span></div>
+        <div class="bd col">
+          <div class="stg" style="min-height: 600px">
+            <div class="bgm" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <span class="stag">M · 560</span>
+            <sc-if value="{{d.upload.open}}" hint-placeholder-val="{{ true }}">
+              <div class="dlg" role="dialog" aria-modal="false" aria-labelledby="up-t" onKeyDown="{{d.upload.key}}" style="width: 520px">
+                <div class="dlg-h"><div class="ht"><h3 id="up-t">Upload to Knowledge</h3><span class="sub2">Collection: Runbooks · max 50 MB per file</span></div><button type="button" class="xbtn" aria-label="Close dialog" onClick="{{d.upload.hide}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+                <div class="dlg-b" style="gap: 6px">
+                  <div class="drop"><svg class="ic" width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18a4 4 0 0 1 0-8 6 6 0 0 1 11.5-1.5A4.5 4.5 0 0 1 18 18z" class="it1"/><path d="M12 11v6M9.5 13.5L12 11l2.5 2.5"/></svg><span>Drop files here or <button type="button" class="lnk">browse</button></span><span class="sub2">.md .pdf .txt .docx</span></div>
+                  <div aria-live="polite">
+                    <div class="urow"><span class="tile" style="width: 28px; height: 28px"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="iw"/></svg></span><span style="font-size: 13px">Fleet runbook – node recovery.md <span class="sub2">· 12 KB</span></span><span class="pill ok">Embedded</span><div class="bar"><div class="bf" style="width: 100%"></div></div></div>
+                    <div class="urow"><span class="tile" style="width: 28px; height: 28px"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="iw"/></svg></span><span style="font-size: 13px">Company OS onboarding.pdf <span class="sub2">· 1.4 MB</span></span><span class="sub2 mono">64% · 9 s</span><div class="bar" role="progressbar" aria-label="Company OS onboarding.pdf" aria-valuenow="64" aria-valuemin="0" aria-valuemax="100"><div class="bf" style="width: 64%"></div></div></div>
+                    <div class="urow"><span class="tile" style="width: 28px; height: 28px"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="iw"/></svg></span><span style="font-size: 13px">Vector store benchmarks 2026.md <span class="sub2">· 38 KB</span></span><span class="sub2">Queued</span><div class="bar"><div class="bf" style="width: 0%"></div></div></div>
+                    <div class="urow" style="border-bottom: 0"><span class="tile danger" style="width: 28px; height: 28px"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z" class="iw"/><path d="M12 10v4"/></svg></span><span style="font-size: 13px">scan_0412.tiff <span class="sub2">· 62 MB</span></span><span class="pill bad">Too large</span><span class="err" style="grid-column: 2 / 4">Error: over 50 MB. <button type="button" class="lnk" style="font-size: 12.5px">Remove</button></span></div>
+                  </div>
+                </div>
+                <div class="dlg-f"><span class="sub2 fl">1 of 4 done · 1 failed</span><button type="button" class="btn" onClick="{{d.upload.hide}}">Cancel uploads</button><button type="button" class="btn pri" onClick="{{d.upload.hide}}">Continue in background</button></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{d.upload.closed}}" hint-placeholder-val="{{ false }}"><div class="closed">Dialog closed · uploads continue in background<button type="button" class="btn sm pri" onClick="{{d.upload.show}}">Reopen</button></div></sc-if>
+          </div>
+        </div>
+        <p class="rules"><strong>Rules:</strong> Each row has a text status, not only a bar; progressbars carry aria-valuenow and completions are announced politely. Closing never cancels silently — offer “Continue in background” and a toast on completion.</p>
+      </section>
+
+      <!-- 10. SHARE -->
+      <section class="card" aria-labelledby="h-sh">
+        <div class="ch"><h2 id="h-sh">Share dialog</h2><span class="use">Use for: sharing a chat or knowledge source with people and links</span></div>
+        <div class="bd col">
+          <div class="stg" style="min-height: 600px">
+            <div class="bgm" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <span class="stag">M · 560</span>
+            <sc-if value="{{d.share.open}}" hint-placeholder-val="{{ true }}">
+              <div class="dlg" role="dialog" aria-modal="false" aria-labelledby="sh-t" onKeyDown="{{d.share.key}}" style="width: 520px">
+                <div class="dlg-h"><div class="ht"><h3 id="sh-t">Share chat “Vector store benchmarks”</h3><span class="sub2">research-agent · 24 messages</span></div><button type="button" class="xbtn" aria-label="Close dialog" onClick="{{d.share.hide}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+                <div class="dlg-b">
+                  <div style="display: flex; gap: 8px"><label class="sr" for="sh-add" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Add people</label><input id="sh-add" class="inp" type="text" placeholder="Add people or agents by name"><button type="button" class="btn">Invite</button></div>
+                  <div>
+                    <div class="row" style="padding: 8px 0"><span class="av">MV</span><span style="flex-grow: 1; font-size: 13px">Mārtiņš Veiss <span class="sub2">· you</span></span><span class="sub2">Owner</span></div>
+                    <div class="row" style="padding: 8px 0"><span class="av ag">CR</span><span style="flex-grow: 1; font-size: 13px">code-reviewer <span class="sub2">· agent</span></span><label class="sr" for="sh-r1" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Role for code-reviewer</label><select id="sh-r1" class="inp" style="width: 120px; height: 32px"><option>Can view</option><option selected="selected">Can comment</option><option>Can edit</option></select></div>
+                    <div class="row" style="padding: 8px 0"><span class="av ag">DE</span><span style="flex-grow: 1; font-size: 13px">documentation-engineer <span class="sub2">· agent</span></span><label class="sr" for="sh-r2" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Role for documentation-engineer</label><select id="sh-r2" class="inp" style="width: 120px; height: 32px"><option>Can view</option><option>Can comment</option><option selected="selected">Can edit</option></select></div>
+                  </div>
+                  <div class="fld"><label class="lb" for="sh-acc">General access</label><select id="sh-acc" class="inp"><option>Only people added</option><option selected="selected">Anyone in AutoBot Labs with the link</option><option>Public link (read-only)</option></select></div>
+                  <div style="display: flex; gap: 8px"><label class="sr" for="sh-url" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Share link</label><input id="sh-url" class="inp mono" type="text" readonly="readonly" value="https://autobot.example/s/c/7f3a9e"><button type="button" class="btn" onClick="{{copy}}" aria-live="polite">{{copyLabel}}</button></div>
+                </div>
+                <div class="dlg-f"><a href="SharedChat.dc.html" class="lnk fl">Preview shared view</a><button type="button" class="btn pri" onClick="{{d.share.hide}}">Done</button></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{d.share.closed}}" hint-placeholder-val="{{ false }}"><div class="closed">Dialog closed<button type="button" class="btn sm pri" onClick="{{d.share.show}}">Reopen</button></div></sc-if>
+          </div>
+        </div>
+        <p class="rules"><strong>Rules:</strong> Changes apply immediately, so the footer has a single “Done”. Copy confirms in text (“Link copied”) via aria-live. Every role select has an accessible name that includes the person.</p>
+      </section>
+    </div>
+
+    <div class="g2">
+      <!-- 11. SELECT FROM LIST -->
+      <section class="card" aria-labelledby="h-pk">
+        <div class="ch"><h2 id="h-pk">Select from list</h2><span class="use">Use for: picking one item from a long, searchable set</span></div>
+        <div class="bd col">
+          <div class="stg" style="min-height: 560px">
+            <div class="bgm" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <span class="stag">S+ · 460</span>
+            <sc-if value="{{d.pick.open}}" hint-placeholder-val="{{ true }}">
+              <div class="dlg" role="dialog" aria-modal="false" aria-labelledby="pk-t" onKeyDown="{{d.pick.key}}" style="width: 460px">
+                <div class="dlg-h"><div class="ht"><h3 id="pk-t">Assign to agent</h3><span class="sub2">Work item AB-142 · Fix session lifecycle leak</span></div><button type="button" class="xbtn" aria-label="Close dialog" onClick="{{d.pick.hide}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+                <div class="dlg-b">
+                  <div style="position: relative"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="position: absolute; left: 10px; top: 10px"><circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/></svg><label for="pk-q" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search agents</label><input id="pk-q" class="inp" type="search" placeholder="Search agents" onInput="{{pq}}" style="padding-left: 34px"></div>
+                  <div class="lbox" role="radiogroup" aria-labelledby="pk-t">
+                    <sc-for list="{{agents}}" as="a" hint-placeholder-count="5"><button type="button" role="radio" aria-checked="{{a.checked}}" class="lrow {{a.cls}}" onClick="{{a.pick}}"><span class="rdo {{a.cls}}"></span><span class="dot {{a.dot}}"></span><span style="flex-grow: 1; display: flex; flex-direction: column"><span style="font-size: 13.5px; font-weight: 600">{{a.name}}</span><span class="sub2">{{a.role}}</span></span><span class="pill {{a.pc}}">{{a.st}}</span></button></sc-for>
+                    <sc-if value="{{pickNone}}" hint-placeholder-val="{{ false }}"><p class="sub2" style="margin: 0; padding: 16px; text-align: center">No agents match. Try a role, e.g. “engineer”.</p></sc-if>
+                  </div>
+                </div>
+                <div class="dlg-f"><span class="sub2 fl">Selected: <strong style="color: var(--text)">{{pickedName}}</strong></span><button type="button" class="btn" onClick="{{d.pick.hide}}">Cancel</button><button type="button" class="btn pri" onClick="{{d.pick.hide}}">Assign</button></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{d.pick.closed}}" hint-placeholder-val="{{ false }}"><div class="closed">Dialog closed<button type="button" class="btn sm pri" onClick="{{d.pick.show}}">Reopen</button></div></sc-if>
+          </div>
+        </div>
+        <p class="rules"><strong>Rules:</strong> Initial focus in search; ↑/↓ moves within the radiogroup, Enter assigns. Status is a text pill beside the dot. Show an empty state for no matches; the selection survives filtering.</p>
+      </section>
+
+      <!-- 12. UNSAVED -->
+      <section class="card" aria-labelledby="h-us">
+        <div class="ch"><h2 id="h-us">Unsaved-changes guard</h2><span class="use">Use for: leaving a dirty form, dialog or editor</span></div>
+        <div class="bd col">
+          <div class="stg" style="min-height: 560px">
+            <div class="bgm" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <span class="stag">S+ · 440 · alertdialog</span>
+            <sc-if value="{{d.unsaved.open}}" hint-placeholder-val="{{ true }}">
+              <div class="dlg" role="alertdialog" aria-modal="false" aria-labelledby="us-t" aria-describedby="us-d" onKeyDown="{{d.unsaved.key}}" style="width: 440px">
+                <div class="dlg-h"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z" class="it2"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg></span><div class="ht"><h3 id="us-t">Discard unsaved changes?</h3><span class="sub2">Routine “Nightly fleet check”</span></div></div>
+                <div class="dlg-b"><p id="us-d">You changed the schedule and 2 steps. Leaving now discards these edits.</p></div>
+                <div class="dlg-f"><button type="button" class="btn dng ghost fl" onClick="{{d.unsaved.hide}}">Discard</button><button type="button" class="btn" onClick="{{d.unsaved.hide}}">Keep editing</button><button type="button" class="btn pri" onClick="{{d.unsaved.hide}}">Save &amp; leave</button></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{d.unsaved.closed}}" hint-placeholder-val="{{ false }}"><div class="closed">Guard closed<button type="button" class="btn sm pri" onClick="{{d.unsaved.show}}">Reopen</button></div></sc-if>
+          </div>
+        </div>
+        <p class="rules"><strong>Rules:</strong> Three outcomes: destructive “Discard” is split to footer-left in the outline-danger style; “Save &amp; leave” is primary on the right. Initial focus and Esc = “Keep editing”. Trigger only when the form is actually dirty.</p>
+      </section>
+    </div>
+
+    <!-- 13. SETTINGS TABS -->
+    <section class="card" aria-labelledby="h-st">
+      <div class="ch"><h2 id="h-st">Settings dialog with tabs</h2><span class="use">Use for: a handful of scoped settings for one object (a chat)</span></div>
+      <div class="bd col">
+        <div class="stg" style="min-height: 560px">
+          <div class="bgm" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <span class="stag">L · 720</span>
+          <sc-if value="{{d.settings.open}}" hint-placeholder-val="{{ true }}">
+            <div class="dlg" role="dialog" aria-modal="false" aria-labelledby="st-t" onKeyDown="{{d.settings.key}}" style="width: 720px">
+              <div class="dlg-h" style="border-bottom: 0; padding-bottom: 6px"><div class="ht"><h3 id="st-t">Chat settings</h3><span class="sub2">“Vector store benchmarks” · research-agent</span></div><button type="button" class="xbtn" aria-label="Close dialog" onClick="{{d.settings.hide}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+              <div class="tabs" role="tablist" aria-label="Chat settings"><sc-for list="{{tabs}}" as="t" hint-placeholder-count="3"><button type="button" role="tab" class="tab {{t.cls}}" aria-selected="{{t.sel}}" onClick="{{t.pick}}">{{t.label}}</button></sc-for></div>
+              <div class="dlg-b" role="tabpanel" aria-label="{{tabName}}" style="min-height: 250px; box-sizing: border-box">
+                <sc-if value="{{tGen}}" hint-placeholder-val="{{ true }}">
+                  <div class="fld"><label class="lb" for="st-nm">Chat name</label><input id="st-nm" class="inp" type="text" value="Vector store benchmarks"></div>
+                  <div>
+                    <div class="setr"><span style="flex-grow: 1; display: flex; flex-direction: column"><span style="color: var(--text); font-weight: 500">Stream responses</span><span class="sub2">Show tokens as they arrive</span></span><span class="sw on" aria-hidden="true"></span><span class="sub2" style="width: 24px">On</span></div>
+                    <div class="setr"><span style="flex-grow: 1; display: flex; flex-direction: column"><span style="color: var(--text); font-weight: 500">Show tool calls</span><span class="sub2">Expand agent tool use inline</span></span><span class="sw" aria-hidden="true"></span><span class="sub2" style="width: 24px">Off</span></div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{tModel}}" hint-placeholder-val="{{ false }}">
+                  <div class="f2">
+                    <div class="fld"><label class="lb" for="st-pr">Provider</label><select id="st-pr" class="inp"><option>ollama · local</option><option>openvino · NPU</option></select></div>
+                    <div class="fld"><label class="lb" for="st-md">Model</label><select id="st-md" class="inp"><option>qwen2.5:14b</option><option>llama3.1:8b</option></select></div>
+                  </div>
+                  <div class="fld"><label class="lb" for="st-tp">Temperature <span class="mono sub2">0.3</span></label><input id="st-tp" type="range" min="0" max="1" step="0.1" value="0.3" style="accent-color: var(--primary)"></div>
+                </sc-if>
+                <sc-if value="{{tMem}}" hint-placeholder-val="{{ false }}">
+                  <div class="setr"><span style="flex-grow: 1; display: flex; flex-direction: column"><span style="color: var(--text); font-weight: 500">Use Knowledge</span><span class="sub2">Runbooks, Research · 1,284 documents</span></span><span class="sw on" aria-hidden="true"></span><span class="sub2" style="width: 24px">On</span></div>
+                  <div class="setr"><span style="flex-grow: 1; display: flex; flex-direction: column"><span style="color: var(--text); font-weight: 500">Remember this chat</span><span class="sub2">Summaries saved to agent memory</span></span><span class="sw" aria-hidden="true"></span><span class="sub2" style="width: 24px">Off</span></div>
+                  <button type="button" class="btn dng ghost sm" style="align-self: flex-start">Clear chat memory…</button>
+                </sc-if>
+              </div>
+              <div class="dlg-f"><span class="sub2 fl">Applies to this chat only</span><button type="button" class="btn" onClick="{{d.settings.hide}}">Cancel</button><button type="button" class="btn pri" onClick="{{d.settings.hide}}">Save</button></div>
+            </div>
+          </sc-if>
+          <sc-if value="{{d.settings.closed}}" hint-placeholder-val="{{ false }}"><div class="closed">Dialog closed<button type="button" class="btn sm pri" onClick="{{d.settings.show}}">Reopen</button></div></sc-if>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules:</strong> Tabs use role="tablist"/"tab"/"tabpanel" with ←/→ to switch; body keeps a fixed min-height so the dialog doesn't jump. One Save for all tabs; switching tabs never discards. Toggles show On/Off text. Destructive settings open a confirm in place of the dialog, not on top.</p>
+    </section>
+
+    <!-- 14. LARGE DETAIL -->
+    <section class="card" aria-labelledby="h-js">
+      <div class="ch"><h2 id="h-js">Large detail dialog · scrollable</h2><span class="use">Use for: reading a long payload without leaving the list</span></div>
+      <div class="bd col">
+        <div class="stg" style="min-height: 620px">
+          <div class="bgm" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <span class="stag">XL · 960 · body max-height 360 · scrolls</span>
+          <sc-if value="{{d.json.open}}" hint-placeholder-val="{{ true }}">
+            <div class="dlg" role="dialog" aria-modal="false" aria-labelledby="js-t" aria-describedby="js-d" onKeyDown="{{d.json.key}}" style="width: 960px">
+              <div class="dlg-h"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4c-2 0-2 2-2 4s-2 4-2 4 2 0 2 4 0 4 2 4M16 4c2 0 2 2 2 4s2 4 2 4-2 0-2 4 0 4-2 4" class="it1"/></svg></span><div class="ht"><h3 id="js-t">Approval payload · Publish security artifact pack</h3><span class="sub2" id="js-d">documentation-engineer · data_access · <span class="mono">apr_01J9ZK4Q7</span></span></div><span class="pill warn" style="align-self: center">Pending</span><button type="button" class="xbtn" style="margin-left: 8px" aria-label="Close dialog" onClick="{{d.json.hide}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+              <div class="dlg-b" tabindex="0" aria-label="Payload, scrollable" style="max-height: 360px; overflow-y: auto">
+<pre class="code" style="overflow: visible">{
+  <span class="jk">"approval_id"</span>: <span class="js">"apr_01J9ZK4Q7"</span>,
+  <span class="jk">"type"</span>: <span class="js">"data_access"</span>,
+  <span class="jk">"requested_by"</span>: <span class="js">"documentation-engineer"</span>,
+  <span class="jk">"company"</span>: <span class="js">"AutoBot Labs"</span>,
+  <span class="jk">"risk"</span>: <span class="js">"medium"</span>,
+  <span class="jk">"estimated_cost_eur"</span>: 0.40,
+  <span class="jk">"scope"</span>: {
+    <span class="jk">"collection"</span>: <span class="js">"Knowledge/Security"</span>,
+    <span class="jk">"documents"</span>: 14,
+    <span class="jk">"access"</span>: [<span class="js">"read"</span>, <span class="js">"export"</span>],
+    <span class="jk">"destination"</span>: <span class="js">"artifacts/security-pack-2026-10.zip"</span>
+  },
+  <span class="jk">"justification"</span>: <span class="js">"Quarterly security artifact pack for audit."</span>,
+  <span class="jk">"tool_calls"</span>: [
+    { <span class="jk">"tool"</span>: <span class="js">"knowledge.search"</span>, <span class="jk">"args"</span>: { <span class="jk">"q"</span>: <span class="js">"security policy"</span>, <span class="jk">"k"</span>: 20 } },
+    { <span class="jk">"tool"</span>: <span class="js">"knowledge.export"</span>, <span class="jk">"args"</span>: { <span class="jk">"ids"</span>: [<span class="js">"kb_311"</span>, <span class="js">"kb_312"</span>, <span class="js">"kb_340"</span>] } },
+    { <span class="jk">"tool"</span>: <span class="js">"artifacts.write"</span>, <span class="jk">"args"</span>: { <span class="jk">"format"</span>: <span class="js">"zip"</span> } }
+  ],
+  <span class="jk">"policy"</span>: { <span class="jk">"rule"</span>: <span class="js">"export_requires_human"</span>, <span class="jk">"version"</span>: 7 },
+  <span class="jk">"created_at"</span>: <span class="js">"2026-10-10T10:44:12Z"</span>,
+  <span class="jk">"expires_at"</span>: <span class="js">"2026-10-11T10:44:12Z"</span>
+}</pre>
+              </div>
+              <div class="dlg-f" style="position: sticky; bottom: 0"><span class="sub2 fl" style="display: flex; gap: 6px; align-items: center"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.5"/></svg>Read-only. Decisions are logged to Audit logs with your name.</span><button type="button" class="btn" onClick="{{d.json.hide}}">Close</button><button type="button" class="btn dng ghost">Reject</button><button type="button" class="btn pri">Approve</button></div>
+            </div>
+          </sc-if>
+          <sc-if value="{{d.json.closed}}" hint-placeholder-val="{{ false }}"><div class="closed">Dialog closed<button type="button" class="btn sm pri" onClick="{{d.json.show}}">Reopen</button></div></sc-if>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules:</strong> Only the body scrolls; header and footer stay put and the footer note is always visible. The scroll region is focusable (tabindex="0") with a label so keyboard users can scroll it. Initial focus on the close button (reading task). Offer “Copy JSON” in the header for long payloads.</p>
+    </section>
+
+    <!-- 15. MOBILE -->
+    <section class="card" aria-labelledby="h-mb">
+      <div class="ch"><h2 id="h-mb">Mobile · full-screen dialog &amp; bottom sheet</h2><span class="use">Use for: any dialog below 600px viewport width</span></div>
+      <div class="bd" style="display: flex; flex-wrap: wrap; gap: 28px; justify-content: center">
+        <div class="col" style="align-items: center">
+          <span class="st">Full-screen dialog · 390</span>
+          <div class="phone">
+            <div class="sbar"><span>9:41</span><span class="mono">5G ▮▮▮</span></div>
+            <sc-if value="{{d.full.open}}" hint-placeholder-val="{{ true }}">
+              <div role="dialog" aria-modal="false" aria-labelledby="fs-t" onKeyDown="{{d.full.key}}" style="flex-grow: 1; display: flex; flex-direction: column; background: var(--surface); border-top: var(--bw) solid var(--border)">
+                <div style="display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 8px; border-bottom: var(--bw) solid var(--line)"><button type="button" class="xbtn" style="margin: 0; width: 40px; height: 40px" aria-label="Close" onClick="{{d.full.hide}}"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><h3 id="fs-t" style="margin: 0; font-size: 16px; font-weight: 600; flex-grow: 1">Create work item</h3><button type="button" class="btn pri sm" onClick="{{d.full.hide}}">Create</button></div>
+                <div class="dlg-b" style="flex-grow: 1; overflow-y: auto">
+                  <div class="fld"><label class="lb" for="fs-ti">Title</label><input id="fs-ti" class="inp" type="text" value="Rotate node-04 SSH keys" style="height: 44px"></div>
+                  <div class="fld"><label class="lb" for="fs-ty">Type</label><select id="fs-ty" class="inp" style="height: 44px"><option>Task</option></select></div>
+                  <div class="fld"><label class="lb" for="fs-as">Assignee</label><select id="fs-as" class="inp" style="height: 44px"><option>devops-engineer</option></select></div>
+                  <div class="fld"><label class="lb" for="fs-pr">Priority</label><select id="fs-pr" class="inp" style="height: 44px"><option>P1 · High</option></select></div>
+                  <div class="fld"><label class="lb" for="fs-de">Description</label><textarea id="fs-de" class="inp" style="height: 120px">Keys are 400 days old; policy is 365.</textarea></div>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{d.full.closed}}" hint-placeholder-val="{{ false }}"><div class="closed" style="margin: 20px">Closed<button type="button" class="btn sm pri" onClick="{{d.full.show}}">Reopen</button></div></sc-if>
+          </div>
+          <span class="sub2" style="max-width: 390px">× top-left, primary action top-right, 44px targets; no scrim. Back gesture = close (with guard).</span>
+        </div>
+        <div class="col" style="align-items: center">
+          <span class="st">Bottom sheet · 390</span>
+          <div class="phone">
+            <div class="sbar"><span>9:41</span><span class="mono">5G ▮▮▮</span></div>
+            <div style="padding: 10px 16px; display: flex; flex-direction: column; gap: 10px" aria-hidden="true">
+              <strong style="font-size: 17px">Chat · research-agent</strong>
+              <div class="card" style="padding: 12px; font-size: 13px; color: var(--text2)">Benchmarks for Qdrant vs pgvector are ready.</div>
+              <div class="card" style="padding: 12px; font-size: 13px; color: var(--text2); align-self: flex-end; width: 70%">Share them with code-reviewer.</div>
+            </div>
+            <div style="position: absolute; inset: 0; z-index: 1; background: color-mix(in srgb, var(--bg) 72%, transparent)" aria-hidden="true"></div>
+            <sc-if value="{{d.sheet.open}}" hint-placeholder-val="{{ true }}">
+              <div class="sheet" role="dialog" aria-modal="false" aria-labelledby="bs-t" onKeyDown="{{d.sheet.key}}">
+                <span class="grab" aria-hidden="true"></span>
+                <div style="display: flex; align-items: center; padding: 6px 16px 10px"><h3 id="bs-t" style="margin: 0; font-size: 16px; font-weight: 600; flex-grow: 1">Message actions</h3><button type="button" class="xbtn" aria-label="Close" onClick="{{d.sheet.hide}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+                <div style="display: flex; flex-direction: column; border-top: var(--bw) solid var(--line)">
+                  <button type="button" class="lrow" style="height: 52px"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg>Copy message</button>
+                  <button type="button" class="lrow" style="height: 52px"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="6" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8 11l8-4M8 13l8 4"/></svg>Share chat…</button>
+                  <button type="button" class="lrow" style="height: 52px"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>Regenerate response</button>
+                  <button type="button" class="lrow" style="height: 52px; color: var(--alert-text)"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="stroke: var(--alert-text)"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13"/></svg>Delete message…</button>
+                </div>
+                <div style="padding: 10px 16px 22px"><button type="button" class="btn" style="width: 100%; height: 44px; justify-content: center" onClick="{{d.sheet.hide}}">Cancel</button></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{d.sheet.closed}}" hint-placeholder-val="{{ false }}"><div class="closed" style="position: absolute; left: 20px; right: 20px; bottom: 20px; z-index: 2">Sheet closed<button type="button" class="btn sm pri" onClick="{{d.sheet.show}}">Reopen</button></div></sc-if>
+          </div>
+          <span class="sub2" style="max-width: 390px">Grab handle is decorative; × and Cancel are the accessible exits. Max height 90%; content scrolls inside.</span>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules:</strong> Below 600px: forms and wizards become full-screen dialogs; short choices and action lists become bottom sheets. Both keep role="dialog", focus trap and return focus. Swipe-down must have a button equivalent. Respect safe-area insets.</p>
+    </section>
+
+    <!-- 16. SIDE SHEET -->
+    <section class="card" aria-labelledby="h-sd">
+      <div class="ch"><h2 id="h-sd">Side sheet · right drawer</h2><span class="use">Use for: inspecting one item while the list stays in view</span></div>
+      <div class="bd col">
+        <div class="stg" style="height: 600px; place-items: start; padding: 0">
+          <div style="padding: 14px; width: calc(100% - 480px); min-width: 280px; box-sizing: border-box; display: flex; flex-direction: column; gap: 0" aria-hidden="true">
+            <strong style="font-size: 15px; padding-bottom: 10px">Backlog · Sprint 42</strong>
+            <div class="row" style="background: var(--surface); border: var(--bw) solid var(--line)"><span class="mono sub2">AB-139</span><span style="flex-grow: 1; font-size: 13px">Embed runbooks in Knowledge</span><span class="pill ok">Done</span></div>
+            <div class="row" style="background: var(--surface2); border: var(--bw) solid var(--text2)"><span class="mono sub2">AB-142</span><span style="flex-grow: 1; font-size: 13px; font-weight: 600">Fix session lifecycle leak</span><span class="pill warn">In review</span></div>
+            <div class="row" style="background: var(--surface); border: var(--bw) solid var(--line)"><span class="mono sub2">AB-145</span><span style="flex-grow: 1; font-size: 13px">Rotate node-04 SSH keys</span><span class="pill idle">To do</span></div>
+            <div class="row" style="background: var(--surface); border: var(--bw) solid var(--line)"><span class="mono sub2">AB-147</span><span style="flex-grow: 1; font-size: 13px">NPU worker budget alerting</span><span class="pill info">In progress</span></div>
+          </div>
+          <span class="stag r" style="right: 490px">drawer 480 · no scrim · list stays usable</span>
+          <sc-if value="{{d.side.open}}" hint-placeholder-val="{{ true }}">
+            <aside class="side" role="dialog" aria-modal="false" aria-labelledby="sd-t" onKeyDown="{{d.side.key}}">
+              <div class="dlg-h"><div class="ht"><span class="mono sub2">AB-142 · Bug</span><h3 id="sd-t">Fix session lifecycle leak</h3></div><button type="button" class="xbtn" aria-label="Close panel" onClick="{{d.side.hide}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+              <div class="dlg-b" style="flex-grow: 1; overflow-y: auto">
+                <dl class="kv">
+                  <dt>Status</dt><dd><span class="pill warn">In review</span></dd>
+                  <dt>Assignee</dt><dd>code-agent <span class="sub2">· agent</span></dd>
+                  <dt>Reviewer</dt><dd>code-reviewer</dd>
+                  <dt>Priority</dt><dd>P1 · High</dd>
+                  <dt>Sprint</dt><dd>Sprint 42</dd>
+                  <dt>PR</dt><dd><a href="AnalyticsCodeReview.dc.html">mrveiss/AutoBot-AI#1184</a></dd>
+                </dl>
+                <p>Sessions are not closed when the browser tab is killed; heartbeat keeps them alive for 8 h.</p>
+                <span class="st">Activity</span>
+                <div style="font-size: 13px; display: flex; flex-direction: column; gap: 6px"><span><span class="mono sub2">10:12</span> code-agent opened PR #1184</span><span><span class="mono sub2">09:40</span> Mārtiņš Veiss moved to Sprint 42</span></div>
+              </div>
+              <div class="dlg-f" style="border-radius: 0"><a href="Backlog.dc.html" class="lnk fl">Open full page</a><button type="button" class="btn" onClick="{{d.side.hide}}">Close</button><button type="button" class="btn pri">Approve PR</button></div>
+            </aside>
+          </sc-if>
+          <sc-if value="{{d.side.closed}}" hint-placeholder-val="{{ false }}"><div class="closed" style="position: absolute; right: 20px; top: 60px; z-index: 2">Drawer closed<button type="button" class="btn sm pri" onClick="{{d.side.show}}">Reopen</button></div></sc-if>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules:</strong> Non-modal by default (no scrim, no focus trap): the open row shows aria-expanded="true", focus moves to the drawer title on open and back to the row on close; Esc closes. Becomes modal (scrim + trap) only below 1024px. Footer is sticky; “Open full page” for real editing.</p>
+    </section>
+
+    <!-- 17. SHORTCUTS -->
+    <section class="card" aria-labelledby="h-ks">
+      <div class="ch"><h2 id="h-ks">Keyboard-shortcuts dialog</h2><span class="use">Use for: reference opened with ?, read and dismissed</span></div>
+      <div class="bd col">
+        <div class="stg" style="min-height: 520px">
+          <div class="bgm" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <span class="stag">L · 720</span>
+          <sc-if value="{{d.keys.open}}" hint-placeholder-val="{{ true }}">
+            <div class="dlg" role="dialog" aria-modal="false" aria-labelledby="ks-t" onKeyDown="{{d.keys.key}}" style="width: 720px">
+              <div class="dlg-h"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2" class="it1"/><path d="M6 10h.5M10 10h.5M14 10h.5M18 10h.5M8 14h8"/></svg></span><div class="ht"><h3 id="ks-t">Keyboard shortcuts</h3><span class="sub2">Press <span class="kbd">?</span> anywhere to open</span></div><button type="button" class="xbtn" aria-label="Close dialog" onClick="{{d.keys.hide}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+              <div class="dlg-b" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px 28px">
+                <div class="col"><span class="st">General</span><dl class="ks"><dt>Command menu</dt><dd><span class="kbd">Ctrl</span><span class="kbd">K</span></dd><dt>Search</dt><dd><span class="kbd">/</span></dd><dt>Toggle theme</dt><dd><span class="kbd">Ctrl</span><span class="kbd">Shift</span><span class="kbd">L</span></dd><dt>Close dialog</dt><dd><span class="kbd">Esc</span></dd></dl></div>
+                <div class="col"><span class="st">Chat</span><dl class="ks"><dt>New chat</dt><dd><span class="kbd">Ctrl</span><span class="kbd">N</span></dd><dt>Send</dt><dd><span class="kbd">Enter</span></dd><dt>New line</dt><dd><span class="kbd">Shift</span><span class="kbd">Enter</span></dd><dt>Stop generating</dt><dd><span class="kbd">Ctrl</span><span class="kbd">.</span></dd></dl></div>
+                <div class="col"><span class="st">Company OS</span><dl class="ks"><dt>Go to Approvals</dt><dd><span class="kbd">G</span><span class="kbd">A</span></dd><dt>Go to Backlog</dt><dd><span class="kbd">G</span><span class="kbd">B</span></dd><dt>Create work item</dt><dd><span class="kbd">C</span></dd></dl></div>
+                <div class="col"><span class="st">Approvals</span><dl class="ks"><dt>Approve selected</dt><dd><span class="kbd">A</span></dd><dt>Reject selected</dt><dd><span class="kbd">R</span></dd><dt>Next / previous</dt><dd><span class="kbd">J</span><span class="kbd">K</span></dd></dl></div>
+              </div>
+              <div class="dlg-f"><a href="HelpCenter.dc.html" class="lnk fl">All shortcuts in Help centre</a><button type="button" class="btn" onClick="{{d.keys.hide}}">Close</button></div>
+            </div>
+          </sc-if>
+          <sc-if value="{{d.keys.closed}}" hint-placeholder-val="{{ false }}"><div class="closed">Dialog closed<button type="button" class="btn sm pri" onClick="{{d.keys.show}}">Reopen</button></div></sc-if>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules:</strong> Read-only, so a single Close; initial focus on ×. Keys are &lt;kbd&gt; with text names, grouped by area as definition lists. Single-letter shortcuts are suppressed while typing in inputs and can be turned off in Preferences.</p>
+    </section>
+
+    <!-- 18. A11Y SUMMARY -->
+    <section class="card" aria-labelledby="h-rl">
+      <div class="ch"><h2 id="h-rl">Behaviour rules for every dialog</h2><span class="use">Use for: implementation checklist</span></div>
+      <div style="overflow-x: auto">
+        <table class="mtx" style="border-collapse: collapse; width: 100%">
+          <thead><tr><th scope="col">Topic</th><th scope="col">Rule</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Focus trap</strong></td><td>Tab / Shift+Tab cycle inside the dialog; page behind is inert. Side sheets are the exception (non-modal).</td></tr>
+            <tr><td><strong>Initial focus</strong></td><td>First field for forms; search for pickers; Cancel for risky confirms; the only button for alerts; × for read-only views. Never the destructive button.</td></tr>
+            <tr><td><strong>Esc / close</strong></td><td>Esc = Cancel. Scrim click = Cancel unless input is dirty (then guard). Session-expired ignores both.</td></tr>
+            <tr><td><strong>Return focus</strong></td><td>To the element that opened the dialog; if it was removed (deleted row), to the next row or the list heading.</td></tr>
+            <tr><td><strong>ARIA</strong></td><td>role="dialog" or "alertdialog", aria-modal="true", aria-labelledby → title, aria-describedby → description/consequence text.</td></tr>
+            <tr><td><strong>Buttons</strong></td><td>Right-aligned, Cancel then primary. Verbs, not OK/Yes. Destructive primary uses the danger style; in a 3-way guard the destructive option moves footer-left.</td></tr>
+            <tr><td><strong>Visuals</strong></td><td>Border separates the dialog from the --bg scrim; no shadows. Max height 85vh, body scrolls.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- PAGER -->
+    <nav class="card" aria-label="Design system pages" style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 14px 16px">
+      <a href="ComponentsTable.dc.html" class="btn" style="height: auto; padding: 10px 14px; flex-direction: column; align-items: flex-start; gap: 2px"><span class="sub2">← Previous</span><span style="font-weight: 600">Data table</span></a>
+      <a href="ComponentsOverlays.dc.html" class="btn" style="height: auto; padding: 10px 14px; flex-direction: column; align-items: flex-end; gap: 2px"><span class="sub2">Next →</span><span style="font-weight: 600">Overlays &amp; feedback</span></a>
+    </nav>
+
+    </div>
+  </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"$preview":{"width":1440,"height":9900}}'>
+const THEMES = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+const IDS = ['confirm', 'dz', 'alert', 'form', 'wiz', 'upload', 'share', 'pick', 'unsaved', 'settings', 'json', 'full', 'sheet', 'side', 'keys'];
+const STEPS = ['Source type', 'Repository', 'Access'];
+const SRCS = [['github', 'GitHub', 'Repo via token'], ['gitlab', 'GitLab', 'Self-hosted or cloud'], ['local', 'Local path', 'Folder on a fleet node']];
+const AGENTS = [
+  { name: 'code-agent', role: 'Staff Engineer · claude-code', st: 'active', pc: 'ok', dot: 'd-ok' },
+  { name: 'code-reviewer', role: 'Reviewer · claude-code', st: 'active', pc: 'ok', dot: 'd-ok' },
+  { name: 'research-agent', role: 'Head of Research · ollama', st: 'active', pc: 'ok', dot: 'd-ok' },
+  { name: 'documentation-engineer', role: 'Technical Writer · ollama', st: 'idle', pc: 'idle', dot: 'd-idle' },
+  { name: 'performance-engineer', role: 'Performance Lead · openvino', st: 'paused', pc: 'warn', dot: 'd-warn' },
+  { name: 'devops-engineer', role: 'Ops Lead · ollama', st: 'error', pc: 'bad', dot: 'd-bad' }
+];
+const TABS = [['gen', 'General'], ['model', 'Model'], ['mem', 'Memory']];
+
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+  }
+  setShut(id, v) {
+    const m = Object.assign({}, (this.state || {}).shut || {});
+    if (v) m[id] = true; else delete m[id];
+    const patch = { shut: m };
+    if (!v && id === 'dz') patch.dzText = '';
+    if (!v && id === 'wiz') patch.wz = 2;
+    if (!v && id === 'share') patch.copied = false;
+    this.setState(patch);
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const shut = st.shut || {};
+    const d = {};
+    IDS.forEach((id) => {
+      const open = !shut[id];
+      d[id] = {
+        open: open, closed: !open,
+        show: () => this.setShut(id, false),
+        hide: () => this.setShut(id, true),
+        key: (e) => { if (e && e.key === 'Escape') this.setShut(id, true); }
+      };
+    });
+
+    const dzText = st.dzText || '';
+    const dzMatch = dzText === 'AutoBot Labs';
+
+    const fTitle = st.fTitle || '';
+    const fErr = fTitle.trim().length < 3;
+
+    const wz = st.wz || 2;
+    const src = st.src || 'github';
+
+    const q = (st.pq || '').toLowerCase();
+    const picked = st.pa || 'code-agent';
+    const list = AGENTS.filter((a) => !q || (a.name + ' ' + a.role).toLowerCase().indexOf(q) >= 0);
+
+    const tab = st.tab || 'gen';
+
+    return {
+      theme: cur,
+      themes: THEMES.map(([id, label]) => ({ label: label, cls: id === cur ? 'on' : '', pressed: id === cur ? 'true' : 'false', pick: () => this.setState({ theme: id }) })),
+      d: d,
+
+      dzInput: (e) => this.setState({ dzText: e && e.target ? e.target.value : '' }),
+      dzMatch: dzMatch, dzNoMatch: !dzMatch,
+      dzMsg: dzMatch ? 'Name matches — Delete company is enabled.' : 'Delete stays disabled until the name matches exactly (case-sensitive).',
+
+      fErr: fErr,
+      fInvalid: fErr ? 'true' : 'false',
+      fInput: (e) => this.setState({ fTitle: e && e.target ? e.target.value : '' }),
+      fSubmit: (e) => { if (e && e.preventDefault) e.preventDefault(); if (!fErr) this.setShut('form', true); },
+
+      steps: STEPS.map((label, i) => {
+        const n = i + 1;
+        const done = n < wz, now = n === wz;
+        return { label: label, mark: done ? '✓' : String(n), cls: done ? 'done' : now ? 'cur' : '', cur: now ? 'step' : 'false', sr: done ? ', completed' : now ? ', current step' : '' };
+      }),
+      wzCount: 'Step ' + wz + ' of 3',
+      wzName: STEPS[wz - 1],
+      wz1: wz === 1, wz2: wz === 2, wz3: wz === 3,
+      wzBackOff: wz === 1, wzBackOn: wz > 1,
+      wzBack: () => this.setState({ wz: Math.max(1, wz - 1) }),
+      wzNext: () => { if (wz < 3) this.setState({ wz: wz + 1 }); else this.setShut('wiz', true); },
+      wzNextLabel: wz < 3 ? 'Next' : 'Add source',
+      srcs: SRCS.map(([id, label, hint]) => ({ label: label, hint: hint, cls: id === src ? 'on' : '', checked: id === src ? 'true' : 'false', pick: () => this.setState({ src: id }) })),
+
+      copyLabel: st.copied ? 'Link copied' : 'Copy link',
+      copy: () => this.setState({ copied: true }),
+
+      pq: (e) => this.setState({ pq: e && e.target ? e.target.value : '' }),
+      agents: list.map((a) => ({ name: a.name, role: a.role, st: a.st, pc: a.pc, dot: a.dot, cls: a.name === picked ? 'on' : '', checked: a.name === picked ? 'true' : 'false', pick: () => this.setState({ pa: a.name }) })),
+      pickNone: list.length === 0,
+      pickedName: picked,
+
+      tabs: TABS.map(([id, label]) => ({ label: label, cls: id === tab ? 'on' : '', sel: id === tab ? 'true' : 'false', pick: () => this.setState({ tab: id }) })),
+      tabName: (TABS.find((t) => t[0] === tab) || TABS[0])[1],
+      tGen: tab === 'gen', tModel: tab === 'model', tMem: tab === 'mem'
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,998 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot Components · Overlays</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.wgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:start}
+.wgrid>.card{min-width:0;position:relative;display:flex;flex-direction:column}
+.card.editing{outline:1.5px dashed var(--muted);outline-offset:3px}
+.card.editing[draggable="true"]{cursor:grab}
+.grip{display:inline-grid;place-items:center;width:18px;height:28px;cursor:grab;flex:none}
+.wtools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto}
+.mbtn{width:30px;height:30px;padding:0;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);display:inline-grid;place-items:center;cursor:pointer;flex:none}
+.mbtn:hover{background:var(--surface2)}
+.mbtn[aria-disabled="true"]{opacity:.45;cursor:default}
+.segg{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.segg .seg{height:26px;padding:0 8px}
+.hint{margin:0;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;border:var(--bw) dashed var(--border);background:var(--surface2);font-size:13px;color:var(--text2)}
+.rsz{position:absolute;right:5px;bottom:5px;fill:none;stroke:var(--muted);stroke-width:1.5;stroke-linecap:round;pointer-events:none}
+@media (max-width:760px){.wgrid>.card{grid-column:1 / -1 !important}}
+.sub2{font-size:12.5px;color:var(--muted)}
+/* ---- Components · Overlays & feedback ---- */
+.specbar{flex:1 1 100%;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:14px clamp(16px,2.5vw,32px);background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+.specbar h1{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.use{font-size:12.5px;color:var(--muted);font-weight:400}
+.st{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.rules{margin:0;padding:12px 16px;border-top:var(--bw) solid var(--line);font-size:12.5px;color:var(--text2);line-height:1.55}
+.bd{padding:16px}
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:20px;align-items:start}
+.g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:20px;align-items:start}
+.col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.stage{position:relative;border:var(--bw) dashed var(--border);border-radius:10px;background:var(--bg);overflow:hidden}
+.scrim{position:absolute;inset:0;background:color-mix(in srgb,var(--bg) 72%,transparent);display:grid;place-items:center;padding:20px;z-index:5}
+.dlg{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px;max-width:100%;box-sizing:border-box;display:flex;flex-direction:column;text-align:left}
+.dlg-h{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-bottom:var(--bw) solid var(--line)}
+.dlg-h h3{margin:0;font-size:16px;font-weight:600;color:var(--text)}
+.dlg-b{padding:16px 18px;font-size:13.5px;color:var(--text2);line-height:1.55;display:flex;flex-direction:column;gap:12px}
+.dlg-b p{margin:0}
+.dlg-f{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;padding:12px 18px;border-top:var(--bw) solid var(--line);background:var(--surface2);border-radius:0 0 10px 10px}
+.zone{position:relative}
+.zone>.ztag{position:absolute;right:8px;top:6px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);border:var(--bw) dashed var(--border);border-radius:4px;padding:0 5px;background:var(--surface)}
+.xbtn{width:30px;height:30px;border-radius:6px;border:0;background:transparent;display:grid;place-items:center;cursor:pointer;color:var(--text);margin-left:auto;flex:none;padding:0}
+.xbtn:hover{background:var(--surface2)}
+.th .btn.dng{background:var(--bar-alert);border-color:var(--bar-alert);color:var(--on-primary)}
+.th .btn.dng.ghost{background:var(--surface);color:var(--alert-text);border-color:var(--border)}
+.th .btn:disabled{opacity:.45;cursor:not-allowed}
+.inp{height:36px;box-sizing:border-box;padding:0 10px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-size:13.5px;width:100%}
+.inp[aria-invalid="true"]{border-color:var(--bar-alert);outline:1px solid var(--bar-alert)}
+textarea.inp{height:64px;padding:8px 10px;resize:vertical}
+.lb{font-size:12.5px;font-weight:600;color:var(--text)}
+.fld{display:flex;flex-direction:column;gap:6px}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:420px;max-width:100%;box-sizing:border-box;background:var(--surface);border-left:var(--bw) solid var(--border);display:flex;flex-direction:column;z-index:6}
+.kv{display:grid;grid-template-columns:110px 1fr;gap:8px 12px;font-size:13px}
+.kv dt{color:var(--muted)}.kv dd{margin:0;color:var(--text)}
+.toast{display:flex;gap:10px;align-items:flex-start;padding:12px;border:var(--bw) solid var(--border);border-left:4px solid var(--border);background:var(--surface);border-radius:8px;width:340px;max-width:100%;box-sizing:border-box}
+.toast.k-ok{border-left-color:var(--dot-ok)}.toast.k-info{border-left-color:var(--focus)}.toast.k-warn{border-left-color:var(--dot-warn)}.toast.k-bad{border-left-color:var(--bar-alert)}
+.toast b{display:block;font-size:13.5px;font-weight:600;color:var(--text)}
+.toast span.msg{display:block;font-size:12.5px;color:var(--text2);margin-top:2px}
+.lnk{border:0;background:transparent;padding:0;font:inherit;font-size:13px;font-weight:600;color:var(--link);text-decoration:underline;cursor:pointer}
+.lnk:hover{color:var(--link-h)}
+.tstack{position:absolute;right:14px;bottom:14px;display:flex;flex-direction:column;gap:8px;align-items:flex-end;z-index:4}
+.menu{position:absolute;z-index:8;background:var(--surface);border:var(--bw) solid var(--border);border-radius:8px;padding:4px;min-width:236px;box-sizing:border-box;display:flex;flex-direction:column}
+.mi{display:flex;align-items:center;gap:10px;height:32px;padding:0 10px;border-radius:5px;border:0;background:transparent;width:100%;box-sizing:border-box;font:inherit;font-size:13.5px;color:var(--text);cursor:pointer;text-align:left;text-decoration:none}
+.mi:hover,.mi.hov{background:var(--surface2)}
+.th .mi.hov{outline:var(--bw) solid var(--border)}
+.mi.dng{color:var(--alert-text)}
+.mi.dng .ic{stroke:var(--alert-text)}
+.mi:disabled,.mi[aria-disabled="true"]{opacity:.45;cursor:not-allowed}
+.mk{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted)}
+.msep{height:var(--bw);background:var(--line);margin:4px 2px;border:0}
+.mhead{padding:8px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.kbd{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:1px 5px;border-radius:4px;border:var(--bw) solid var(--border);background:var(--surface2);color:var(--text2);line-height:1.4}
+.tipw{position:relative;display:inline-flex}
+.tip{position:absolute;z-index:9;white-space:nowrap;padding:6px 9px;border-radius:6px;background:var(--primary);color:var(--on-primary);font-size:12px;font-weight:500;display:flex;gap:6px;align-items:center;pointer-events:none}
+.tip .kbd{background:transparent;color:var(--on-primary);border-color:var(--on-primary)}
+.tip::after{content:"";position:absolute;width:8px;height:8px;background:var(--primary);transform:rotate(45deg)}
+.tip.t{bottom:calc(100% + 9px);left:50%;transform:translateX(-50%)}.tip.t::after{left:calc(50% - 4px);bottom:-4px}
+.tip.r{left:calc(100% + 9px);top:50%;transform:translateY(-50%)}.tip.r::after{left:-4px;top:calc(50% - 4px)}
+.tip.b{top:calc(100% + 9px);left:50%;transform:translateX(-50%)}.tip.b::after{left:calc(50% - 4px);top:-4px}
+.tipw .tip.live{display:none}.tipw:hover .tip.live,.tipw:focus-within .tip.live{display:flex}
+.ibtn{width:36px;height:36px;border-radius:8px;border:var(--bw) solid var(--border);background:var(--surface);display:grid;place-items:center;cursor:pointer;padding:0;position:relative;color:var(--text)}
+.ibtn:hover{background:var(--surface2)}
+.ibtn[aria-expanded="true"]{background:var(--surface2);outline:var(--bw) solid var(--text2)}
+.badge{position:absolute;top:-6px;right:-7px;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:99px;background:var(--accent);color:var(--on-primary);font-size:11px;font-weight:700;display:grid;place-items:center;border:2px solid var(--surface)}
+.avatar{width:34px;height:34px;border-radius:99px;border:0;background:var(--brand-bg);color:var(--brand-fg);font:inherit;font-weight:600;font-size:12.5px;cursor:pointer;display:grid;place-items:center;flex:none;padding:0}
+.avatar[aria-expanded="true"]{outline:2px solid var(--accent);outline-offset:2px}
+.topbar{display:flex;align-items:center;gap:6px;height:52px;padding:0 14px;background:var(--surface);border-bottom:var(--bw) solid var(--border);font-size:13.5px;color:var(--text2)}
+.topbar .tl{padding:0 8px;font-weight:500}
+.panel{position:absolute;z-index:8;background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden}
+.nrow{display:flex;gap:12px;align-items:flex-start;padding:10px 14px;width:100%;box-sizing:border-box;border:0;border-bottom:var(--bw) solid var(--line);background:transparent;font:inherit;color:var(--text);cursor:pointer;text-align:left}
+.nrow:hover{background:var(--surface2)}
+.nrow.unread{background:var(--surface2)}
+.nrow.unread b{font-weight:600}
+.nrow b{display:block;font-size:13px;font-weight:500;line-height:1.4}
+.udot{width:8px;height:8px;border-radius:99px;background:var(--accent);border:1px solid var(--stroke);box-sizing:border-box;flex:none;margin-top:6px}
+.udot.read{background:transparent;border-color:transparent}
+.ghead{padding:8px 14px 4px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:var(--surface)}
+.chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px 0 6px;border-radius:99px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;font-size:13px;font-weight:600;color:var(--text);cursor:pointer}
+.chip:hover{background:var(--surface2)}
+.chip[aria-expanded="true"]{outline:var(--bw) solid var(--text2)}
+.spin{display:inline-block;border-radius:50%;border:2px solid var(--bar-track);border-top-color:var(--primary);animation:sp .8s linear infinite;box-sizing:border-box;flex:none}
+.spin.s16{width:16px;height:16px}.spin.s24{width:24px;height:24px;border-width:2.5px}.spin.s32{width:32px;height:32px;border-width:3px}.spin.s48{width:48px;height:48px;border-width:4px}
+.th .btn.pri .spin{border-color:var(--primary-h);border-top-color:var(--on-primary)}
+@keyframes sp{to{transform:rotate(360deg)}}
+.sk{background:var(--bar-track);border:1px solid var(--line);border-radius:4px;animation:pl 1.4s ease-in-out infinite;box-sizing:border-box}
+@keyframes pl{50%{opacity:.5}}
+.dots i{display:inline-block;width:4px;height:4px;border-radius:99px;background:var(--text2);margin-left:3px;animation:pl 1.2s ease-in-out infinite}
+.dots i:nth-child(2){animation-delay:.2s}.dots i:nth-child(3){animation-delay:.4s}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:2.4s}.sk,.dots i{animation:none}}
+.ring .trk{fill:none;stroke:var(--bar-track);stroke-width:5}
+.ring .val{fill:none;stroke:var(--bar);stroke-width:5;stroke-linecap:butt}
+.ring .edge{fill:none;stroke:var(--stroke);stroke-width:1}
+.al{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:8px;border:var(--bw) solid var(--border);font-size:13.5px;line-height:1.5}
+.al b{font-weight:600}
+.al .ic{stroke:currentColor}
+.al .xbtn{color:inherit;width:28px;height:28px}
+.al .lnk{color:inherit}
+.fv{outline:3px solid var(--focus);outline-offset:2px}
+.state-row{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end}
+.state-row>div{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.mock{display:flex;flex-direction:column;gap:0}
+.mock .row{background:var(--surface)}
+.row.hovsel{background:var(--surface2);outline:var(--bw) solid var(--text2);outline-offset:-2px}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <a href="ThemeManager.dc.html" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon" aria-label="Plugins" title="Plugins"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon" aria-label="Secrets" title="Secrets"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" title="Preferences"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <a href="AdminUsers.dc.html" class="icon" aria-label="Admin panel" title="Admin panel"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <button type="button" aria-label="Profile menu" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer">MV</button>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+  <aside class="sub" aria-label="Design system" style="flex: 1 1 230px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+    <a href="DesignSystem.dc.html" style="font-weight: 600; color: var(--text)">AutoBot Design System</a>
+    <span class="sub2" style="padding: 0 13px 4px">v1 · 4 themes</span>
+    <p class="sect">Overview</p>
+    <a href="DesignSystem.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z" class="i1"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z" class="it1"/></svg>Introduction</a>
+    <p class="sect">Foundations</p>
+    <a href="ComponentsStates.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4" class="i3"/><circle cx="16" cy="9" r="4" class="i2"/><circle cx="12" cy="16" r="4" class="i1"/></svg>Tokens &amp; states</a>
+    <a href="ComponentsGrid.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5" class="i1"/><rect x="13" y="4" width="7" height="7" rx="1.5" class="iw"/><rect x="4" y="13" width="7" height="7" rx="1.5" class="iw"/><rect x="13" y="13" width="7" height="7" rx="1.5" class="i2"/></svg>Grid, tables &amp; forms</a>
+    <a href="ComponentsCharts.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><rect x="5.5" y="11" width="3.5" height="7" class="i1"/><rect x="10.5" y="6" width="3.5" height="12" class="i2"/><rect x="15.5" y="13" width="3.5" height="5" class="i3"/></svg>Charts &amp; data viz</a>
+    <p class="sect">Components</p>
+    <a href="ComponentsForms.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4" class="i1"/><circle cx="16.5" cy="12" r="2.5" class="iw"/></svg>Form controls</a>
+    <a href="ComponentsTable.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="iw"/><path d="M4 10h16M4 14.5h16M10 10v9"/></svg>Data table</a>
+    <a href="ComponentsDialogs.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="it1"/><rect x="6" y="8" width="12" height="9" rx="1.5" class="iw"/></svg>Dialogs</a>
+    <a href="ComponentsOverlays.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" class="i2"/><path d="M10 21h4"/></svg>Overlays &amp; feedback</a>
+    <a href="ComponentsTooltips.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10h-7l-4 4v-4H4z" class="it1"/><path d="M8 10h8"/></svg>Tooltips</a>
+    <a href="ComponentsCommand.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" class="iw"/><path d="M7 10l3 2-3 2M12 15h5"/></svg>Command menu</a>
+    <a href="ComponentsNavigation.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M15 9l-2 4-4 2 2-4z" class="i3"/></svg>Navigation</a>
+    <a href="ComponentsLayout.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="iw"/><path d="M9 4v16M9 10h12"/></svg>Layout &amp; utility</a>
+    <a href="ComponentsChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h12v9H8l-3 3v-3H3z" class="i1"/><path d="M15 9h6v8h-2v3l-3-3h-5v-3"/></svg>Chat &amp; agent</a>
+    <p class="sect">Patterns</p>
+    <a href="FileBrowser.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="i2"/></svg>File browser</a>
+    <a href="Mailbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" class="iw"/><path d="M3 7l9 6 9-6"/></svg>Mailbox</a>
+    <a href="ComponentsUiModes.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5" class="it1"/><rect x="4.5" y="8.5" width="8" height="7" rx="3.5" class="i2"/></svg>Interface modes</a>
+    <a href="SignUp.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" class="i2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Auth pages</a>
+    <a href="AccountSecurity.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4" class="i1"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>Account settings</a>
+    <a href="SearchResults.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>Global search</a>
+    <a href="HelpCenter.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="i2"/><path d="M10 10a2 2 0 1 1 3 1.7c-.7.4-1 1-1 1.8M12 16.5v.5"/></svg>Help centre</a>
+    <span style="flex-grow: 1; min-height: 16px" aria-hidden="true"></span>
+    <a href="Main.dc.html" style="border-top: var(--bw) solid var(--line); border-radius: 0; padding-top: 12px"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg>← Back to app</a>
+  </aside>
+  <div style="flex: 999 1 520px; min-width: 0; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <div class="specbar">
+    <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 280px">
+      <span class="sub2">Design system / Components</span>
+      <h1>Components · Overlays &amp; feedback</h1>
+      <span class="sub2">Modals, dialogs, drawers, toasts, menus, tooltips, popovers, loading states and inline alerts. Open and close them in Play mode; Esc closes any open overlay.</span>
+    </div>
+    <div role="group" aria-label="Preview theme" style="display: flex; gap: 2px; padding: 3px; border-radius: 8px; background: var(--bg); border: var(--bw) solid var(--border)">
+      <sc-for list="{{themes}}" as="t" hint-placeholder-count="4"><button type="button" class="seg {{t.cls}}" aria-pressed="{{t.pressed}}" onClick="{{t.pick}}">{{t.label}}</button></sc-for>
+    </div>
+  </div>
+
+  <main onKeyDown="{{onKey}}" style="flex: 1 1 100%; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 48px; display: flex; flex-direction: column; gap: 20px">
+
+    <!-- 1. MODAL -->
+    <section class="card" aria-labelledby="h-modal">
+      <div class="ch"><h2 id="h-modal">Modal</h2><span class="use">Use for: a focused task that must finish or be cancelled before returning — invite member, rename agent, edit routine</span></div>
+      <div class="bd g2">
+        <div class="col">
+          <span class="st">Anatomy · static · M 560px</span>
+          <div class="dlg" role="dialog" aria-modal="false" aria-labelledby="m-static-t" style="width: 100%">
+            <div class="dlg-h zone"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.5" class="it1"/><path d="M3 20a6 6 0 0 1 12 0M18 8v6M15 11h6"/></svg></span><div style="display: flex; flex-direction: column; gap: 2px"><h3 id="m-static-t">Invite member to AutoBot Labs</h3><span class="sub2">They get access to Company OS and assigned agents.</span></div><button type="button" class="xbtn" aria-label="Close dialog"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span class="ztag" style="top: auto; bottom: 4px">header</span></div>
+            <div class="dlg-b zone">
+              <div class="fld"><label class="lb" for="m-s-email">Email</label><input id="m-s-email" class="inp" type="email" value="ops@autobot.example"></div>
+              <div class="fld"><label class="lb" for="m-s-role">Role</label><select id="m-s-role" class="inp"><option>Reviewer</option><option>Operator</option><option>Owner</option></select></div>
+              <span class="ztag">body</span>
+            </div>
+            <div class="dlg-f zone"><span class="ztag" style="left: 8px; right: auto; top: 14px">footer</span><button type="button" class="btn">Cancel</button><button type="button" class="btn pri">Send invite</button></div>
+          </div>
+          <span class="st" style="margin-top: 6px">Sizes</span>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; align-items: center; gap: 10px"><span class="mono sub2" style="width: 80px">S · 400</span><div style="height: 14px; width: 40%; border: var(--bw) solid var(--border); border-radius: 4px; background: var(--surface)"></div><span class="sub2">confirm, rename</span></div>
+            <div style="display: flex; align-items: center; gap: 10px"><span class="mono sub2" style="width: 80px">M · 560</span><div style="height: 14px; width: 56%; border: var(--bw) solid var(--border); border-radius: 4px; background: var(--surface)"></div><span class="sub2">forms</span></div>
+            <div style="display: flex; align-items: center; gap: 10px"><span class="mono sub2" style="width: 80px">L · 720</span><div style="height: 14px; width: 72%; border: var(--bw) solid var(--border); border-radius: 4px; background: var(--surface)"></div><span class="sub2">editors, previews</span></div>
+          </div>
+        </div>
+        <div class="col">
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+            <span class="st">Live · size</span>
+            <div class="segg" role="group" aria-label="Modal size"><sc-for list="{{modalSizes}}" as="z" hint-placeholder-count="3"><button type="button" class="seg {{z.cls}}" aria-pressed="{{z.pressed}}" onClick="{{z.pick}}">{{z.label}}</button></sc-for></div>
+            <button type="button" class="btn pri sm" aria-haspopup="dialog" onClick="{{openModal}}" style="margin-left: auto">Open modal</button>
+          </div>
+          <div class="stage" style="height: 470px">
+            <div class="mock" aria-hidden="true" style="padding: 14px; gap: 0">
+              <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px"><strong style="font-size: 15px">Members</strong><span class="btn sm">Invite member</span></div>
+              <div class="row" style="border: var(--bw) solid var(--line)"><span class="dot d-ok"></span><span style="flex-grow: 1; font-size: 13px">Mārtiņš Veiss · Owner</span><span class="pill ok">active</span></div>
+              <div class="row" style="border: var(--bw) solid var(--line)"><span class="dot d-ok"></span><span style="flex-grow: 1; font-size: 13px">code-reviewer · Agent</span><span class="pill ok">active</span></div>
+              <div class="row" style="border: var(--bw) solid var(--line)"><span class="dot d-idle"></span><span style="flex-grow: 1; font-size: 13px">documentation-engineer · Agent</span><span class="pill idle">idle</span></div>
+            </div>
+            <sc-if value="{{modalClosed}}" hint-placeholder-val="{{ false }}">
+              <p class="sub2" style="position: absolute; left: 14px; bottom: 12px; margin: 0">Closed · press “Open modal”. Last result: <span class="mono">{{modalResult}}</span></p>
+            </sc-if>
+            <sc-if value="{{modalOpen}}" hint-placeholder-val="{{ true }}">
+              <div class="scrim" onClick="{{closeModal}}">
+                <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="m-live-t" onClick="{{stop}}" style="width: {{modalW}}px">
+                  <div class="dlg-h"><div style="display: flex; flex-direction: column; gap: 2px"><h3 id="m-live-t">Invite member · {{modalSizeLabel}}</h3><span class="sub2">Focus is trapped here; Esc, Cancel, × or the backdrop close it.</span></div><button type="button" class="xbtn" aria-label="Close dialog" onClick="{{closeModal}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+                  <div class="dlg-b">
+                    <div class="fld"><label class="lb" for="m-l-email">Email</label><input id="m-l-email" class="inp" type="email" placeholder="name@autobot.example"></div>
+                    <div class="fld"><label class="lb" for="m-l-role">Role</label><select id="m-l-role" class="inp"><option>Reviewer</option><option>Operator</option><option>Owner</option></select></div>
+                  </div>
+                  <div class="dlg-f"><button type="button" class="btn" onClick="{{closeModal}}">Cancel</button><button type="button" class="btn pri" onClick="{{submitModal}}">Send invite</button></div>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules:</strong> One primary action, placed last in the footer; Cancel always present. Use role="dialog" + aria-modal="true" + aria-labelledby; move focus to the first field on open, trap Tab inside, return focus to the trigger on close; Esc and backdrop close unless there is unsaved input. Never stack modals — use a drawer for detail views.</p>
+    </section>
+
+    <div class="g2">
+      <!-- 2. DESTRUCTIVE CONFIRM -->
+      <section class="card" aria-labelledby="h-dz">
+        <div class="ch"><h2 id="h-dz">Destructive confirm</h2><span class="use">Use for: irreversible deletes of high-value objects</span></div>
+        <div class="bd col">
+          <span class="st">Live · type to confirm</span>
+          <div class="stage" style="padding: 20px; display: grid; place-items: center; min-height: 430px; box-sizing: border-box">
+            <sc-if value="{{dzActive}}" hint-placeholder-val="{{ true }}">
+              <div class="dlg" role="alertdialog" aria-modal="true" aria-labelledby="dz-t" aria-describedby="dz-d" style="width: 460px">
+                <div class="dlg-h"><span class="tile danger"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z" class="iw"/><path d="M12 10v4M12 17v.5"/></svg></span><div style="display: flex; flex-direction: column; gap: 2px"><h3 id="dz-t">Delete company “AutoBot Labs”?</h3><span class="sub2">This cannot be undone.</span></div></div>
+                <div class="dlg-b">
+                  <p id="dz-d">Permanently deletes 6 agents, 1,284 knowledge documents, 42 routines and the full approvals history. Fleet nodes are released, not wiped.</p>
+                  <div class="fld"><label class="lb" for="dz-in">Type <span class="mono" style="padding: 1px 5px; border-radius: 4px; background: var(--surface2); border: var(--bw) solid var(--border)">AutoBot Labs</span> to confirm</label><input id="dz-in" class="inp" type="text" autocomplete="off" spellcheck="false" aria-invalid="{{dzInvalid}}" aria-describedby="dz-msg" onInput="{{dzInput}}"><span id="dz-msg" class="sub2" style="color: {{dzMsgColor}}">{{dzMsg}}</span></div>
+                </div>
+                <div class="dlg-f">
+                  <button type="button" class="btn" onClick="{{dzReset}}">Cancel</button>
+                  <sc-if value="{{dzMatch}}" hint-placeholder-val="{{ false }}"><button type="button" class="btn dng" onClick="{{dzDelete}}"><svg class="ic sonp" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13"/></svg>Delete company</button></sc-if>
+                  <sc-if value="{{dzNoMatch}}" hint-placeholder-val="{{ true }}"><button type="button" class="btn dng" disabled="disabled" aria-describedby="dz-msg"><svg class="ic sonp" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13"/></svg>Delete company</button></sc-if>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{dzDone}}" hint-placeholder-val="{{ false }}">
+              <div class="al ok" role="status" style="width: 420px"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg><div style="flex-grow: 1"><b>Company deleted (demo).</b> AutoBot Labs and its data were removed.</div><button type="button" class="lnk" onClick="{{dzReset}}">Reset demo</button></div>
+            </sc-if>
+          </div>
+          <div class="state-row">
+            <div><span class="st">Disabled</span><button type="button" class="btn dng sm" disabled="disabled">Delete company</button></div>
+            <div><span class="st">Enabled · match</span><button type="button" class="btn dng sm">Delete company</button></div>
+            <div><span class="st">Focus-visible</span><button type="button" class="btn dng sm fv">Delete company</button></div>
+            <div><span class="st">Secondary destructive</span><button type="button" class="btn dng ghost sm">Remove from group</button></div>
+          </div>
+        </div>
+        <p class="rules"><strong>Rules:</strong> Name the object and the consequences in numbers. Exact, case-sensitive match enables Delete; the reason it is disabled is announced via aria-describedby. Initial focus on the input, never on Delete. Cancel stays the default for Enter.</p>
+      </section>
+
+      <!-- 3. ALERT DIALOG -->
+      <section class="card" aria-labelledby="h-ad">
+        <div class="ch"><h2 id="h-ad">Alert dialog</h2><span class="use">Use for: interruptions the user must acknowledge</span></div>
+        <div class="bd col" style="gap: 16px">
+          <span class="st">Acknowledge · single action</span>
+          <div class="stage" style="padding: 20px; display: grid; place-items: center">
+            <div class="dlg" role="alertdialog" aria-modal="true" aria-labelledby="ad1-t" aria-describedby="ad1-d" style="width: 400px">
+              <div class="dlg-h"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it2"/><path d="M12 8v4l3 2"/></svg></span><h3 id="ad1-t" style="align-self: center">Session expired</h3></div>
+              <div class="dlg-b"><p id="ad1-d">You were signed out after 30 minutes of inactivity. Unsaved changes in Workflow Builder were kept as a draft.</p></div>
+              <div class="dlg-f"><button type="button" class="btn pri">Sign in again</button></div>
+            </div>
+          </div>
+          <span class="st">Decision · two actions · warning</span>
+          <div class="stage" style="padding: 20px; display: grid; place-items: center">
+            <div class="dlg" role="alertdialog" aria-modal="true" aria-labelledby="ad2-t" aria-describedby="ad2-d" style="width: 400px">
+              <div class="dlg-h"><span class="tile danger"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="6" rx="1.5" class="it1"/><rect x="4" y="13" width="16" height="6" rx="1.5"/><path d="M8 8h.5M8 16h.5"/></svg></span><div style="display: flex; flex-direction: column; gap: 2px"><h3 id="ad2-t">node-04 is unreachable</h3><span class="pill bad" style="align-self: flex-start">Error · 3 retries failed</span></div></div>
+              <div class="dlg-b"><p id="ad2-d">devops-engineer cannot run its heartbeat. Reschedule its tasks to node-02 or keep waiting for the node.</p></div>
+              <div class="dlg-f"><button type="button" class="btn">Keep waiting</button><button type="button" class="btn pri">Move to node-02</button></div>
+            </div>
+          </div>
+        </div>
+        <p class="rules"><strong>Rules:</strong> role="alertdialog"; backdrop click does NOT dismiss; Esc only if a safe “cancel” exists. Max two actions. For non-blocking news use a toast or banner instead.</p>
+      </section>
+    </div>
+
+    <!-- 4. SIDE DRAWER -->
+    <section class="card" aria-labelledby="h-dr">
+      <div class="ch"><h2 id="h-dr">Side drawer</h2><span class="use">Use for: inspecting or acting on one item without leaving the list — approval detail, work item, agent run</span></div>
+      <div class="bd col">
+        <span class="st">Live · right drawer 420px · click Review on a row</span>
+        <div class="stage" style="height: 560px">
+          <div style="padding: 14px; display: flex; flex-direction: column; gap: 10px">
+            <div style="display: flex; align-items: center; gap: 10px"><strong style="font-size: 15px; flex-grow: 1">Approvals</strong><span class="sub2">3 pending</span></div>
+            <div class="card" style="max-width: 760px">
+              <sc-for list="{{approvals}}" as="a" hint-placeholder-count="3">
+                <div class="row"><div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px"><strong style="font-size: 13.5px; font-weight: 600">{{a.title}}</strong><span class="sub2">{{a.by}} · {{a.when}}</span></div><span class="pill {{a.cls}}">{{a.type}}</span><span class="pill {{a.statusCls}}">{{a.status}}</span><button type="button" class="btn sm" aria-haspopup="dialog" aria-expanded="{{a.expanded}}" onClick="{{a.open}}">Review</button></div>
+              </sc-for>
+            </div>
+          </div>
+          <sc-if value="{{drawerOpen}}" hint-placeholder-val="{{ true }}">
+            <aside class="drawer" role="dialog" aria-modal="false" aria-labelledby="dr-t">
+              <div class="dlg-h"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="iw"/><path d="M14 3v4h4M9 13l2 2 4-4"/></svg></span><div style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span class="sub2">Approval · {{dr.type}}</span><h3 id="dr-t">{{dr.title}}</h3></div><button type="button" class="xbtn" aria-label="Close drawer" onClick="{{closeDrawer}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+              <div class="dlg-b" style="flex-grow: 1; overflow: auto">
+                <dl class="kv" style="margin: 0"><dt>Requested by</dt><dd>{{dr.by}}</dd><dt>When</dt><dd>{{dr.when}}</dd><dt>Scope</dt><dd>{{dr.scope}}</dd><dt>Cost</dt><dd class="mono">{{dr.cost}}</dd><dt>Risk</dt><dd><span class="pill {{dr.riskCls}}">{{dr.risk}}</span></dd><dt>Status</dt><dd><span class="pill {{dr.statusCls}}">{{dr.status}}</span></dd></dl>
+                <div style="display: flex; flex-direction: column; gap: 6px"><span class="st">Activity</span>
+                  <div style="display: flex; gap: 10px; font-size: 12.5px"><span class="mono sub2" style="width: 40px">10:32</span><span>Request created by agent heartbeat</span></div>
+                  <div style="display: flex; gap: 10px; font-size: 12.5px"><span class="mono sub2" style="width: 40px">10:33</span><span>Policy check passed · 0 secrets in diff</span></div>
+                  <div style="display: flex; gap: 10px; font-size: 12.5px"><span class="mono sub2" style="width: 40px">10:44</span><span>Assigned to you as reviewer</span></div>
+                </div>
+                <div class="fld"><label class="lb" for="dr-c">Comment (optional)</label><textarea id="dr-c" class="inp" placeholder="Visible to the requesting agent"></textarea></div>
+              </div>
+              <div class="dlg-f" style="border-radius: 0"><button type="button" class="btn dng ghost" onClick="{{rejectDr}}">Reject</button><button type="button" class="btn pri" onClick="{{approveDr}}">Approve</button></div>
+            </aside>
+          </sc-if>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules:</strong> Non-modal by default (list stays usable, no scrim); the open row shows aria-expanded="true". Focus moves to the drawer title on open and back to the row button on close; Esc closes. Footer actions are sticky. Use a full page, not a drawer, for multi-step edits.</p>
+    </section>
+
+    <!-- 5. TOASTS -->
+    <section class="card" aria-labelledby="h-to">
+      <div class="ch"><h2 id="h-to">Toasts</h2><span class="use">Use for: brief, non-blocking results of an action the user just took</span></div>
+      <div class="bd g2">
+        <div class="col">
+          <span class="st">Variants · static</span>
+          <div class="toast k-ok"><span class="pill ok">Success</span><div style="flex-grow: 1"><b>Agent deployed</b><span class="msg">code-agent v2.4 is live on node-03.</span><button type="button" class="lnk" style="margin-top: 6px">View</button></div><button type="button" class="xbtn" aria-label="Dismiss notification"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+          <div class="toast k-info"><span class="pill info">Info</span><div style="flex-grow: 1"><b>Re-index started</b><span class="msg">Knowledge base · 1,284 documents queued.</span><button type="button" class="lnk" style="margin-top: 6px">Open</button></div><button type="button" class="xbtn" aria-label="Dismiss notification"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+          <div class="toast k-warn"><span class="pill warn">Warning</span><div style="flex-grow: 1"><b>Budget at 91%</b><span class="msg">performance-engineer is close to its €20 cap.</span><button type="button" class="lnk" style="margin-top: 6px">Adjust</button></div><button type="button" class="xbtn" aria-label="Dismiss notification"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+          <div class="toast k-bad"><span class="pill bad">Error</span><div style="flex-grow: 1"><b>Heartbeat failed</b><span class="msg">node-04 unreachable after 3 retries.</span><button type="button" class="lnk" style="margin-top: 6px">Retry</button></div><button type="button" class="xbtn fv" aria-label="Dismiss notification"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+          <span class="sub2">Last one shows the dismiss button in focus-visible state.</span>
+        </div>
+        <div class="col">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+            <span class="st" style="margin-right: 4px">Live · push</span>
+            <button type="button" class="btn sm" onClick="{{pushSuccess}}">Success</button>
+            <button type="button" class="btn sm" onClick="{{pushInfo}}">Info</button>
+            <button type="button" class="btn sm" onClick="{{pushWarning}}">Warning</button>
+            <button type="button" class="btn sm" onClick="{{pushError}}">Error</button>
+            <button type="button" class="lnk" onClick="{{clearToasts}}" style="margin-left: auto">Clear all</button>
+          </div>
+          <div class="stage" style="height: 430px">
+            <p class="sub2" style="margin: 0; padding: 14px; max-width: 300px">Stack sits bottom-right, newest on top, max 4. Success and info dismiss after 6 s; warning and error stay until dismissed.</p>
+            <div class="tstack" aria-live="polite" aria-relevant="additions" aria-label="Notifications">
+              <sc-for list="{{toasts}}" as="t" hint-placeholder-count="2">
+                <div class="toast {{t.k}}" role="{{t.role}}"><span class="pill {{t.cls}}">{{t.label}}</span><div style="flex-grow: 1"><b>{{t.title}}</b><span class="msg">{{t.msg}}</span><button type="button" class="lnk" style="margin-top: 6px" onClick="{{t.dismiss}}">{{t.action}}</button></div><button type="button" class="xbtn" aria-label="Dismiss notification" onClick="{{t.dismiss}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules:</strong> The stack container is aria-live="polite"; error toasts use role="alert". Kind is always written (pill label), never colour only. One action max; never put the only path to something in a toast. Pause auto-dismiss on hover/focus.</p>
+    </section>
+
+    <!-- 6. NOTIFICATION CENTRE -->
+    <section class="card" aria-labelledby="h-nc">
+      <div class="ch"><h2 id="h-nc">Notification centre</h2><span class="use">Use for: the persistent history of events across Company OS, agents and fleet</span></div>
+      <div class="bd g2" style="grid-template-columns: minmax(260px, 1fr) minmax(420px, 2.2fr)">
+        <div class="col" style="gap: 16px">
+          <span class="st">Bell states</span>
+          <div class="state-row">
+            <div><span class="st">No unread</span><button type="button" class="ibtn" aria-label="Notifications, none unread"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z" class="it2"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></button></div>
+            <div><span class="st">3 unread</span><button type="button" class="ibtn" aria-label="Notifications, 3 unread"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z" class="it2"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><span class="badge" aria-hidden="true">3</span></button></div>
+            <div><span class="st">Overflow</span><button type="button" class="ibtn" aria-label="Notifications, more than 99 unread"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z" class="it2"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><span class="badge" aria-hidden="true">99+</span></button></div>
+            <div><span class="st">Focus</span><button type="button" class="ibtn fv" aria-label="Notifications"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z" class="it2"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></button></div>
+          </div>
+          <span class="sub2">Count lives in the accessible name (“Notifications, 3 unread”); the badge is aria-hidden. Click a notification to mark it read; “Mark all read” clears the badge.</span>
+        </div>
+        <div class="stage" style="height: 560px">
+          <div class="topbar">
+            <span class="tile" style="width: 28px; height: 28px; background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><path d="M24 16v-6"/></svg></span>
+            <span class="tl" style="color: var(--text); font-weight: 600">AutoBot</span><span class="tl">Home</span><span class="tl">Chat</span><span class="tl">Company OS</span>
+            <span style="flex-grow: 1"></span>
+            <button type="button" class="ibtn" aria-label="{{bellLabel}}" aria-haspopup="true" aria-expanded="{{notifExpanded}}" aria-controls="nc-panel" onClick="{{toggleNotif}}"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z" class="it2"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><sc-if value="{{hasUnread}}" hint-placeholder-val="{{ true }}"><span class="badge" aria-hidden="true">{{unreadCount}}</span></sc-if></button>
+            <span class="avatar" aria-hidden="true" style="margin-left: 6px">MV</span>
+          </div>
+          <sc-if value="{{notifOpen}}" hint-placeholder-val="{{ true }}">
+            <div id="nc-panel" class="panel" role="region" aria-label="Notifications" style="right: 14px; top: 60px; width: 420px; max-height: 480px">
+              <div style="display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: var(--bw) solid var(--line)"><strong style="font-size: 14px; flex-grow: 1">Notifications</strong><span class="sub2">{{unreadText}}</span><button type="button" class="btn sm" onClick="{{markAll}}">Mark all read</button></div>
+              <div style="padding: 8px 14px; border-bottom: var(--bw) solid var(--line)"><div class="segg" role="group" aria-label="Filter notifications" style="display: inline-flex"><sc-for list="{{nFilters}}" as="f" hint-placeholder-count="4"><button type="button" class="seg {{f.cls}}" aria-pressed="{{f.pressed}}" onClick="{{f.pick}}">{{f.label}}</button></sc-for></div></div>
+              <div style="overflow: auto; flex-grow: 1">
+                <sc-for list="{{nGroups}}" as="g" hint-placeholder-count="2">
+                  <div role="group" aria-label="{{g.label}}">
+                    <div class="ghead">{{g.label}}</div>
+                    <sc-for list="{{g.items}}" as="n" hint-placeholder-count="3">
+                      <button type="button" class="nrow {{n.cls}}" onClick="{{n.markRead}}"><span class="udot {{n.dotCls}}" aria-hidden="true"></span><span class="tile" style="width: 30px; height: 30px">
+                        <sc-if value="{{n.isApproval}}" hint-placeholder-val="{{ true }}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></sc-if>
+                        <sc-if value="{{n.isAgent}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" class="i1"/><path d="M12 8V5"/></svg></sc-if>
+                        <sc-if value="{{n.isFleet}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="6" rx="1.5" class="it1"/><rect x="4" y="13" width="16" height="6" rx="1.5"/></svg></sc-if>
+                      </span><span style="flex-grow: 1; min-width: 0"><span class="sr">{{n.srState}}</span><b>{{n.title}}</b><span class="sub2">{{n.meta}}</span></span><span class="mono sub2" style="font-size: 11.5px; white-space: nowrap">{{n.time}}</span></button>
+                    </sc-for>
+                  </div>
+                </sc-for>
+                <sc-if value="{{nEmpty}}" hint-placeholder-val="{{ false }}"><p class="sub2" style="margin: 0; padding: 28px 14px; text-align: center">No notifications in this filter.</p></sc-if>
+              </div>
+              <div style="padding: 10px 14px; border-top: var(--bw) solid var(--line); background: var(--surface2)"><a href="Preferences.dc.html" style="font-size: 13px; font-weight: 500">Notification settings</a></div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules:</strong> Unread = dot + bold title + hidden “Unread” text. Group by Today / Earlier; filters are aria-pressed toggles. Panel is non-modal; Esc or bell closes and returns focus to the bell. Urgent items (approvals, failures) also raise a toast.</p>
+    </section>
+
+    <!-- 7-9. MENUS -->
+    <div class="g3">
+      <section class="card" aria-labelledby="h-dd">
+        <div class="ch"><h2 id="h-dd">Dropdown menu</h2><span class="use">Use for: 3–10 actions on one object</span></div>
+        <div class="bd col">
+          <div class="stage" style="height: 420px">
+            <div style="padding: 14px; display: flex; align-items: center; gap: 10px">
+              <span class="dot d-ok"></span><strong style="font-size: 13.5px; flex-grow: 1">code-agent</strong>
+              <button type="button" class="btn sm" aria-haspopup="menu" aria-expanded="{{ddExpanded}}" aria-controls="dd-menu" onClick="{{toggleDd}}">Agent actions<svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+            </div>
+            <sc-if value="{{ddOpen}}" hint-placeholder-val="{{ true }}">
+              <div id="dd-menu" class="menu" role="menu" aria-label="Agent actions" style="right: 14px; top: 56px">
+                <button type="button" class="mi" role="menuitem" onClick="{{ddPick}}" data-label="Open chat"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="it3"/></svg>Open chat<span class="mk">O</span></button>
+                <button type="button" class="mi hov" role="menuitem" onClick="{{ddPick}}" data-label="Edit configuration"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z" class="it2"/></svg>Edit configuration<span class="mk">E</span></button>
+                <button type="button" class="mi" role="menuitem" onClick="{{ddPick}}" data-label="Duplicate"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg>Duplicate<span class="mk">Ctrl D</span></button>
+                <div class="msep" role="separator"></div>
+                <button type="button" class="mi" role="menuitem" aria-haspopup="menu" aria-expanded="false" onClick="{{ddPick}}" data-label="Move to group"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" class="it1"/></svg>Move to group<svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="margin-left: auto"><path d="M9 6l6 6-6 6"/></svg></button>
+                <button type="button" class="mi" role="menuitem" aria-disabled="true" title="No logs yet — agent has not run"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Export logs<span class="mk">disabled</span></button>
+                <div class="msep" role="separator"></div>
+                <button type="button" class="mi dng" role="menuitem" onClick="{{ddPick}}" data-label="Delete agent"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13"/></svg>Delete agent…<span class="mk">Del</span></button>
+              </div>
+            </sc-if>
+            <p class="sub2" style="position: absolute; left: 14px; bottom: 12px; margin: 0">Last chosen: <span class="mono">{{ddLast}}</span></p>
+          </div>
+          <span class="sub2">“Edit configuration” shows the hover state; “Export logs” the disabled state with a reason in its tooltip.</span>
+        </div>
+        <p class="rules"><strong>Rules:</strong> role="menu"/"menuitem"; arrows move, Enter selects, Esc closes and refocuses the trigger. Destructive item last, after a separator, and opens a confirm. “…” means more input follows.</p>
+      </section>
+
+      <section class="card" aria-labelledby="h-cm">
+        <div class="ch"><h2 id="h-cm">Context menu</h2><span class="use">Use for: power-user shortcuts on rows</span></div>
+        <div class="bd col">
+          <div class="stage" style="height: 420px">
+            <div style="padding: 14px; display: flex; flex-direction: column; gap: 8px">
+              <strong style="font-size: 13.5px">Knowledge · Runbooks</strong>
+              <div class="card">
+                <sc-for list="{{docs}}" as="d" hint-placeholder-count="3">
+                  <div class="row {{d.cls}}" onContextMenu="{{d.ctx}}" style="cursor: context-menu"><span class="tile" style="width: 28px; height: 28px"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="iw"/><path d="M14 3v4h4"/></svg></span><div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column"><span style="font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{d.name}}</span><span class="sub2" style="font-size: 11.5px">{{d.meta}}</span></div><button type="button" class="mbtn" aria-label="{{d.btnLabel}}" aria-haspopup="menu" onClick="{{d.ctx}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1" class="ik"/><circle cx="12" cy="12" r="1" class="ik"/><circle cx="19" cy="12" r="1" class="ik"/></svg></button></div>
+                </sc-for>
+              </div>
+              <span class="sub2">Right-click a row (or use ⋯ / Shift+F10).</span>
+            </div>
+            <sc-if value="{{ctxOpen}}" hint-placeholder-val="{{ true }}">
+              <div class="menu" role="menu" aria-label="{{ctxLabel}}" style="left: {{ctxX}}px; top: {{ctxY}}px; min-width: 220px">
+                <div class="mhead" style="text-transform: none; letter-spacing: 0; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 210px">{{ctxDoc}}</div>
+                <button type="button" class="mi" role="menuitem" onClick="{{ctxPick}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="iw"/></svg>Open<span class="mk">Enter</span></button>
+                <button type="button" class="mi" role="menuitem" onClick="{{ctxPick}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg>Rename<span class="mk">F2</span></button>
+                <button type="button" class="mi" role="menuitem" onClick="{{ctxPick}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"/></svg>Copy link<span class="mk">Ctrl L</span></button>
+                <div class="msep" role="separator"></div>
+                <button type="button" class="mi" role="menuitem" onClick="{{ctxPick}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>Re-index</button>
+                <button type="button" class="mi" role="menuitem" aria-haspopup="menu" onClick="{{ctxPick}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" class="it1"/></svg>Move to collection<svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="margin-left: auto"><path d="M9 6l6 6-6 6"/></svg></button>
+                <div class="msep" role="separator"></div>
+                <button type="button" class="mi dng" role="menuitem" onClick="{{ctxPick}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13"/></svg>Delete document…</button>
+              </div>
+            </sc-if>
+          </div>
+          <span class="sub2">Target row stays highlighted while its menu is open.</span>
+        </div>
+        <p class="rules"><strong>Rules:</strong> Every context action must also exist in a visible place (⋯ button or toolbar). Opens at the pointer, flips to stay inside the viewport; one open at a time; click outside or Esc closes.</p>
+      </section>
+
+      <section class="card" aria-labelledby="h-pm">
+        <div class="ch"><h2 id="h-pm">Profile menu</h2><span class="use">Use for: account, theme and admin entry points</span></div>
+        <div class="bd col">
+          <div class="stage" style="height: 460px">
+            <div class="topbar" style="justify-content: flex-end"><span class="tl">Company OS</span><span class="tl">Analytics</span><button type="button" class="avatar" aria-label="Profile menu" aria-haspopup="menu" aria-expanded="{{pmExpanded}}" aria-controls="pm-menu" onClick="{{togglePm}}" style="margin-left: 8px">MV</button></div>
+            <sc-if value="{{pmOpen}}" hint-placeholder-val="{{ true }}">
+              <div id="pm-menu" class="menu" role="menu" aria-label="Profile" style="right: 14px; top: 60px; min-width: 300px">
+                <div style="display: flex; gap: 10px; align-items: center; padding: 8px 10px 10px"><span class="avatar" aria-hidden="true" style="cursor: default">MV</span><div style="display: flex; flex-direction: column; min-width: 0"><strong style="font-size: 13.5px">Mārtiņš Veiss</strong><span class="sub2" style="font-size: 12px">Owner · AutoBot Labs</span></div></div>
+                <div class="msep" role="separator"></div>
+                <a href="Preferences.dc.html" class="mi" role="menuitem"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="3.5" class="it1"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>Profile settings</a>
+                <button type="button" class="mi" role="menuitem" onClick="{{cycleTheme}}" aria-label="{{themeItemLabel}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" class="it2"/><path d="M12 5v14"/></svg>Theme<span class="pill idle" style="margin-left: auto">{{themeLabel}}</span><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+                <div class="mi" role="group" aria-label="{{pmUiLabel}}" style="cursor: default"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg>Preferred mode<span style="margin-left: auto; display: inline-flex; gap: 2px; padding: 2px; border-radius: 6px; background: var(--surface2); border: var(--bw) solid var(--border)"><button type="button" class="seg {{pmMin.cls}}" role="menuitemradio" aria-checked="{{pmMin.pressed}}" onClick="{{pmMin.pick}}" style="height: 24px; padding: 0 8px; font-size: 12px">Minimal</button><button type="button" class="seg {{pmFull.cls}}" role="menuitemradio" aria-checked="{{pmFull.pressed}}" onClick="{{pmFull.pick}}" style="height: 24px; padding: 0 8px; font-size: 12px">Full</button></span></div>
+                <a href="AdminUsers.dc.html" class="mi" role="menuitem"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/></svg>Admin panel</a>
+                <a href="ThemeManager.dc.html" class="mi" role="menuitem" aria-label="SLM Admin, opens in new window"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="it1"/><path d="M8 10h8M8 14h5"/></svg>SLM Admin<span class="mk">↗</span></a>
+                <div class="msep" role="separator"></div>
+                <a href="Login.dc.html" class="mi" role="menuitem"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10"/></svg>Sign out</a>
+              </div>
+            </sc-if>
+          </div>
+          <span class="sub2">Theme row shows the current preview theme; click it to cycle (it drives this board’s preview). Preferred mode switches Minimal / Full and is saved like the top-bar Minimal toggle.</span>
+        </div>
+        <p class="rules"><strong>Rules:</strong> Avatar button has an accessible name (“Profile menu”), not just initials. External destinations carry ↗ and say so in the label. Sign out is last, never destructive-red.</p>
+      </section>
+    </div>
+
+    <!-- 10-11. TOOLTIP + POPOVER -->
+    <div class="g2">
+      <section class="card" aria-labelledby="h-tt">
+        <div class="ch"><h2 id="h-tt">Tooltip</h2><span class="use">Use for: naming icon-only controls and showing shortcuts</span></div>
+        <div class="bd col" style="gap: 14px">
+          <span class="st">Placements · static</span>
+          <div class="stage" style="padding: 56px 24px 64px; display: flex; gap: 72px; justify-content: center; align-items: center">
+            <span class="tipw"><button type="button" class="ibtn" aria-label="Copy agent ID" aria-describedby="tt1"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg></button><span id="tt1" role="tooltip" class="tip t">Copy agent ID <span class="kbd">Ctrl C</span></span></span>
+            <span class="tipw"><button type="button" class="ibtn" aria-label="Pin to sidebar" aria-describedby="tt2"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l-1 6 4 4H6l4-4zM12 13v8" class="it2"/></svg></button><span id="tt2" role="tooltip" class="tip r">Pin to sidebar</span></span>
+            <span class="tipw" style="margin-left: 80px"><button type="button" class="ibtn" aria-label="Search knowledge" aria-describedby="tt3"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg></button><span id="tt3" role="tooltip" class="tip b">Search knowledge <span class="kbd">/</span></span></span>
+          </div>
+          <span class="st">Live · hover or Tab to these</span>
+          <div class="stage" style="padding: 52px 24px 20px; display: flex; gap: 16px; justify-content: center">
+            <span class="tipw"><button type="button" class="ibtn" aria-label="New chat" aria-describedby="tt4"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="it3"/><path d="M12 8v5M9.5 10.5h5"/></svg></button><span id="tt4" role="tooltip" class="tip t live">New chat <span class="kbd">Ctrl N</span></span></span>
+            <span class="tipw"><button type="button" class="ibtn" aria-label="Run heartbeat now" aria-describedby="tt5"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-4 4 8 2-4h6"/></svg></button><span id="tt5" role="tooltip" class="tip t live">Run heartbeat now</span></span>
+            <span class="tipw"><button type="button" class="ibtn" aria-label="Command palette" aria-describedby="tt6"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 10l2 2-2 2M12 14h4"/></svg></button><span id="tt6" role="tooltip" class="tip t live">Command palette <span class="kbd">Ctrl K</span></span></span>
+          </div>
+        </div>
+        <p class="rules"><strong>Rules:</strong> Shows on hover AND focus, after ~400 ms; Esc hides. Text only, one line, no links or buttons inside (use a popover). Linked with aria-describedby; never the only label for a control.</p>
+      </section>
+
+      <section class="card" aria-labelledby="h-po">
+        <div class="ch"><h2 id="h-po">Popover</h2><span class="use">Use for: rich quick-info on click — agent card, budget detail</span></div>
+        <div class="bd col">
+          <span class="st">Live · agent quick-info</span>
+          <div class="stage" style="height: 400px">
+            <div style="padding: 16px; font-size: 13.5px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px">
+              <span>“Vector store benchmarks” assigned to</span>
+              <button type="button" class="chip" aria-haspopup="dialog" aria-expanded="{{popExpanded}}" aria-controls="po-card" onClick="{{togglePop}}"><span class="tile" style="width: 20px; height: 20px; border-radius: 99px"><svg class="ic" width="12" height="12" viewBox="0 0 48 48" aria-hidden="true"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/></svg></span>research-agent</button>
+              <span>· due Fri</span>
+            </div>
+            <sc-if value="{{popOpen}}" hint-placeholder-val="{{ true }}">
+              <div id="po-card" class="panel" role="dialog" aria-label="research-agent details" style="left: 200px; top: 58px; width: 320px">
+                <div style="display: flex; gap: 12px; align-items: center; padding: 14px">
+                  <span class="tile lg"><svg class="ic" width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" class="iw"/><circle cx="29" cy="27" r="3" class="iw"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+                  <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><strong style="font-size: 14px">research-agent</strong><span class="sub2">Head of Research · ollama</span></div>
+                  <span class="pill ok">active</span>
+                </div>
+                <dl class="kv" style="margin: 0; padding: 0 14px 12px; grid-template-columns: 90px 1fr"><dt>Model</dt><dd class="mono">llama3.1:8b</dd><dt>Node</dt><dd class="mono">node-02</dd><dt>Last run</dt><dd>10:41 · 3m 12s</dd></dl>
+                <div style="padding: 0 14px 14px; display: flex; flex-direction: column; gap: 6px"><div style="display: flex; justify-content: space-between; font-size: 12.5px"><span>Budget · Oct</span><span class="mono">€21.60 / €30 · 72%</span></div><div class="bar"><div class="bf" style="width: 72%"></div></div></div>
+                <div class="dlg-f" style="justify-content: flex-start"><a href="Chat.dc.html" class="btn sm pri">Open chat</a><a href="Agents.dc.html" class="btn sm">View agent</a></div>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+        <p class="rules"><strong>Rules:</strong> Opens on click (not hover) and may hold links and buttons. Trigger has aria-expanded; focus moves into the popover, Tab out or Esc closes and returns focus. Keep it to one card — escalate to a drawer for more.</p>
+      </section>
+    </div>
+
+    <!-- 12. LOADING STATES -->
+    <section class="card" aria-labelledby="h-ld">
+      <div class="ch"><h2 id="h-ld">Loading states</h2><span class="use">Use for: telling people work is happening, and roughly how much is left</span></div>
+      <div class="bd" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px">
+        <div class="col" style="gap: 12px">
+          <span class="st">Spinner sizes</span>
+          <div style="display: flex; align-items: flex-end; gap: 22px">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><span class="spin s16" role="status" aria-label="Loading"></span><span class="mono sub2">16</span></div>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><span class="spin s24" role="status" aria-label="Loading"></span><span class="mono sub2">24</span></div>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><span class="spin s32" role="status" aria-label="Loading"></span><span class="mono sub2">32</span></div>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><span class="spin s48" role="status" aria-label="Loading"></span><span class="mono sub2">48</span></div>
+          </div>
+          <span class="st" style="margin-top: 8px">Button loading</span>
+          <div class="state-row">
+            <div><span class="st">Default</span><button type="button" class="btn pri sm">Save routine</button></div>
+            <div><span class="st">Loading</span><button type="button" class="btn pri sm" aria-busy="true" aria-disabled="true"><span class="spin s16" aria-hidden="true"></span>Saving…</button></div>
+            <div><span class="st">Secondary loading</span><button type="button" class="btn sm" aria-busy="true" aria-disabled="true"><span class="spin s16" aria-hidden="true"></span>Testing…</button></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: flex-start"><span class="st">Live · 2.5 s</span><button type="button" class="btn sm" aria-busy="{{reBusy}}" onClick="{{reindex}}"><sc-if value="{{reBusyFlag}}" hint-placeholder-val="{{ false }}"><span class="spin s16" aria-hidden="true"></span></sc-if>{{reLabel}}</button><span class="sub2" role="status">{{reStatus}}</span></div>
+        </div>
+
+        <div class="col" style="gap: 12px">
+          <span class="st">Circular progress</span>
+          <div style="display: flex; gap: 22px; align-items: center">
+            <div role="progressbar" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100" aria-label="Embedding documents" style="position: relative; width: 56px; height: 56px"><svg class="ring" width="56" height="56" viewBox="0 0 56 56" aria-hidden="true"><circle class="trk" cx="28" cy="28" r="22"/><circle class="val" cx="28" cy="28" r="22" stroke-dasharray="34.6 138.2" transform="rotate(-90 28 28)"/><circle class="edge" cx="28" cy="28" r="24.5"/><circle class="edge" cx="28" cy="28" r="19.5"/></svg><span class="mono" style="position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 500">25%</span></div>
+            <div role="progressbar" aria-valuenow="62" aria-valuemin="0" aria-valuemax="100" aria-label="Fleet update" style="position: relative; width: 56px; height: 56px"><svg class="ring" width="56" height="56" viewBox="0 0 56 56" aria-hidden="true"><circle class="trk" cx="28" cy="28" r="22"/><circle class="val" cx="28" cy="28" r="22" stroke-dasharray="85.7 138.2" transform="rotate(-90 28 28)"/><circle class="edge" cx="28" cy="28" r="24.5"/><circle class="edge" cx="28" cy="28" r="19.5"/></svg><span class="mono" style="position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 500">62%</span></div>
+            <div role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" aria-label="Backup" style="position: relative; width: 56px; height: 56px"><svg class="ring" width="56" height="56" viewBox="0 0 56 56" aria-hidden="true"><circle class="trk" cx="28" cy="28" r="22"/><circle class="val" cx="28" cy="28" r="22" stroke-dasharray="138.2 138.2" transform="rotate(-90 28 28)"/><circle class="edge" cx="28" cy="28" r="24.5"/><circle class="edge" cx="28" cy="28" r="19.5"/></svg><span class="mono" style="position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 500">100%</span></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px; font-size: 12.5px"><span><b style="font-weight: 600">Embedding documents</b> · 321 / 1,284</span><span class="sub2">Fleet update 62% · node-03 of 4 · Backup complete</span></div>
+          <span class="st" style="margin-top: 8px">Inline · streaming</span>
+          <div class="card" style="padding: 12px 14px; display: flex; gap: 10px; align-items: center; background: var(--surface2)" role="status" aria-live="polite">
+            <span class="tile" style="width: 28px; height: 28px"><svg class="ic" width="15" height="15" viewBox="0 0 48 48" aria-hidden="true"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><path d="M24 16v-6"/></svg></span>
+            <span class="spin s16" aria-hidden="true"></span>
+            <span style="font-size: 13.5px; color: var(--text2)">Summarizing “Fleet runbook – node recovery.md”…</span>
+            <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          </div>
+          <span class="sub2">Inline text: “Summarizing…”, “Searching 1,284 docs…”, “Thinking…”. Name the task, not just “Loading”.</span>
+        </div>
+
+        <div class="col" style="gap: 12px" aria-busy="true" aria-label="Loading content placeholders">
+          <span class="st">Skeleton · card</span>
+          <div class="card" style="padding: 14px; display: flex; gap: 12px; align-items: center"><div class="sk" style="width: 44px; height: 44px; border-radius: 10px"></div><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 8px"><div class="sk" style="height: 10px; width: 50%"></div><div class="sk" style="height: 18px; width: 30%"></div></div></div>
+          <span class="st">Skeleton · table</span>
+          <div class="card" style="overflow: hidden">
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; padding: 10px 14px; background: var(--surface2); border-bottom: var(--bw) solid var(--border)"><span class="st">Agent</span><span class="st">Status</span><span class="st">Started</span></div>
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; padding: 12px 14px; border-bottom: var(--bw) solid var(--line)"><div class="sk" style="height: 10px; width: 80%"></div><div class="sk" style="height: 10px; width: 60%"></div><div class="sk" style="height: 10px; width: 50%"></div></div>
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; padding: 12px 14px; border-bottom: var(--bw) solid var(--line)"><div class="sk" style="height: 10px; width: 65%"></div><div class="sk" style="height: 10px; width: 55%"></div><div class="sk" style="height: 10px; width: 50%"></div></div>
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; padding: 12px 14px"><div class="sk" style="height: 10px; width: 72%"></div><div class="sk" style="height: 10px; width: 45%"></div><div class="sk" style="height: 10px; width: 50%"></div></div>
+          </div>
+          <span class="st">Skeleton · list</span>
+          <div class="card">
+            <div class="row"><div class="sk" style="width: 28px; height: 28px; border-radius: 8px"></div><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 10px; width: 60%"></div><div class="sk" style="height: 8px; width: 35%"></div></div></div>
+            <div class="row"><div class="sk" style="width: 28px; height: 28px; border-radius: 8px"></div><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 10px; width: 48%"></div><div class="sk" style="height: 8px; width: 30%"></div></div></div>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><strong>Rules:</strong> &lt; 300 ms: show nothing. Known shape: skeleton (container aria-busy="true"). Known amount: progress with %, role="progressbar". Unknown: spinner with a task label. Buttons keep their width while loading and are aria-disabled. Animations slow down under prefers-reduced-motion.</p>
+    </section>
+
+    <!-- 13. INLINE ALERTS -->
+    <section class="card" aria-labelledby="h-al">
+      <div class="ch"><h2 id="h-al">Inline alerts &amp; banners</h2><span class="use">Use for: persistent, contextual status inside a page or at its top</span></div>
+      <div class="bd col" style="gap: 12px">
+        <span class="st">Page banner · full width, above page header</span>
+        <div class="al info" role="status" style="border-radius: 0; border-left: 0; border-right: 0"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8v.5"/></svg><div style="flex-grow: 1"><b>Read-only mode.</b> SLM Admin is upgrading the model registry; agent edits are paused until 14:30.</div><a href="ThemeManager.dc.html" style="font-size: 13px; font-weight: 600; color: inherit">Status ↗</a></div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-top: 6px"><span class="st" style="flex-grow: 1">Inline · dismissible · live</span><sc-if value="{{anyDismissed}}" hint-placeholder-val="{{ false }}"><button type="button" class="lnk" onClick="{{restoreAlerts}}">Restore dismissed</button></sc-if></div>
+        <sc-for list="{{alerts}}" as="a" hint-placeholder-count="4">
+          <div class="al {{a.cls}}" role="{{a.role}}">
+            <sc-if value="{{a.isInfo}}" hint-placeholder-val="{{ true }}"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8v.5"/></svg></sc-if>
+            <sc-if value="{{a.isOk}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg></sc-if>
+            <sc-if value="{{a.isWarn}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/></svg></sc-if>
+            <sc-if value="{{a.isBad}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M9 9l6 6M15 9l-6 6"/></svg></sc-if>
+            <div style="flex-grow: 1"><b>{{a.kind}}: {{a.title}}.</b> {{a.msg}} <sc-if value="{{a.hasAction}}" hint-placeholder-val="{{ false }}"><button type="button" class="lnk">{{a.action}}</button></sc-if></div>
+            <button type="button" class="xbtn" aria-label="{{a.dismissLabel}}" onClick="{{a.dismiss}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+          </div>
+        </sc-for>
+        <sc-if value="{{allDismissed}}" hint-placeholder-val="{{ false }}"><p class="hint">All alerts dismissed. Dismissal is remembered per user for non-critical alerts only; errors return until resolved.</p></sc-if>
+      </div>
+      <p class="rules"><strong>Rules:</strong> Every alert starts with its kind in words (Info / Success / Warning / Error) plus an icon. Errors use role="alert", others role="status". Only info and success are dismissible by default; errors persist until the cause is fixed. Max one banner per page.</p>
+    </section>
+
+    <nav aria-label="Design system pages" class="card" style="grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px; padding: 12px">
+      <a href="ComponentsDialogs.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">← Previous</span><span style="font-weight: 600; color: var(--text)">Dialogs</span></a>
+      <a href="ComponentsTooltips.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">Next →</span><span style="font-weight: 600; color: var(--text)">Tooltips</span></a>
+    </nav>
+  </main>
+  </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"$preview":{"width":1440,"height":5400}}'>
+const THEMES = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+const SIZES = [['sm', 'S', 400, 'Small'], ['md', 'M', 560, 'Medium'], ['lg', 'L', 720, 'Large']];
+const COMPANY = 'AutoBot Labs';
+const TOASTS = {
+  success: { cls: 'ok', k: 'k-ok', label: 'Success', title: 'Agent deployed', msg: 'code-agent v2.4 is live on node-03.', action: 'View' },
+  info: { cls: 'info', k: 'k-info', label: 'Info', title: 'Re-index started', msg: 'Knowledge base · 1,284 documents queued.', action: 'Open' },
+  warning: { cls: 'warn', k: 'k-warn', label: 'Warning', title: 'Budget at 91%', msg: 'performance-engineer is close to its €20 cap.', action: 'Adjust' },
+  error: { cls: 'bad', k: 'k-bad', label: 'Error', title: 'Heartbeat failed', msg: 'node-04 unreachable after 3 retries.', action: 'Retry' }
+};
+const DEFAULT_TOASTS = [{ id: 't2', kind: 'error' }, { id: 't1', kind: 'success' }];
+const NOTIFS = [
+  { id: 'n1', group: 'Today', cat: 'approvals', title: 'Approval requested: Publish security artifact pack', meta: 'documentation-engineer · data_access', time: '10:44' },
+  { id: 'n2', group: 'Today', cat: 'fleet', title: 'node-04 unreachable — devops-engineer heartbeat failed', meta: 'Fleet · 3 retries', time: '10:43' },
+  { id: 'n3', group: 'Today', cat: 'agents', title: 'research-agent finished “Vector store benchmarks”', meta: 'Summary added to Knowledge', time: '10:12' },
+  { id: 'n4', group: 'Earlier', cat: 'approvals', title: 'Budget alert: performance-engineer at 91%', meta: 'Costs & Budget · October', time: 'Yesterday' },
+  { id: 'n5', group: 'Earlier', cat: 'agents', title: 'code-agent opened PR: session lifecycle fix', meta: 'Awaiting code review', time: 'Yesterday' },
+  { id: 'n6', group: 'Earlier', cat: 'fleet', title: 'node-02 back online after kernel update', meta: 'Fleet · Ansible run #218', time: 'Mon' }
+];
+const DEFAULT_READ = { n4: true, n5: true, n6: true };
+const FILTERS = [['all', 'All'], ['approvals', 'Approvals'], ['agents', 'Agents'], ['fleet', 'Fleet']];
+const APPROVALS = [
+  { title: 'Publish security artifact pack', by: 'documentation-engineer', type: 'data_access', cls: 'info', when: '12 min ago', cost: '€0.40', risk: 'Medium', riskCls: 'warn', scope: 'Knowledge › Security (14 docs)' },
+  { title: 'Raise NPU worker budget to €40', by: 'performance-engineer', type: 'budget_increase', cls: 'warn', when: '1 h ago', cost: '+€20.00 / month', risk: 'Low', riskCls: 'ok', scope: 'Costs & Budget › performance-engineer' },
+  { title: 'Merge PR: session lifecycle fix', by: 'code-reviewer', type: 'code_deploy', cls: 'idle', when: '3 h ago', cost: '€0.00', risk: 'High', riskCls: 'bad', scope: 'AutoBot-AI › backend/session' }
+];
+const DOCS = [
+  { name: 'Fleet runbook – node recovery.md', meta: 'Runbooks · 12 KB · edited 2 d ago' },
+  { name: 'Company OS onboarding.pdf', meta: 'Guides · 1.4 MB · edited 5 d ago' },
+  { name: 'Vector store benchmarks 2026.md', meta: 'Research · 38 KB · edited today' }
+];
+const ALERTS = [
+  { id: 'a1', kind: 'Info', cls: 'info', title: 'Scheduled maintenance', msg: 'Fleet nodes node-01 to node-04 restart Sat 02:00–02:30 EET; agents pause automatically.', action: '' },
+  { id: 'a2', kind: 'Success', cls: 'ok', title: 'Backup complete', msg: 'Company OS snapshot saved · 2.1 GB · 10:42.', action: '' },
+  { id: 'a3', kind: 'Warning', cls: 'warn', title: 'Budget threshold', msg: 'performance-engineer has used 91% of its October budget.', action: 'Review budget' },
+  { id: 'a4', kind: 'Error', cls: 'bad', title: 'Knowledge sync failed', msg: '3 documents could not be embedded: unsupported encoding.', action: 'View errors' }
+];
+
+class Component extends DCLogic {
+  g(k, d) { const st = this.state || {}; return st[k] === undefined ? d : st[k]; }
+  componentWillUnmount() { (this._timers || []).forEach((t) => clearTimeout(t)); }
+  later(fn, ms) { this._timers = this._timers || []; this._timers.push(setTimeout(fn, ms)); }
+  closeAll() {
+    this.setState({ modalOpen: false, drawerOpen: false, notifOpen: false, ddOpen: false, ctxOpen: false, pmOpen: false, popOpen: false });
+  }
+  pushToast(kind, title, msg) {
+    this._n = (this._n || 10) + 1;
+    const id = 't' + this._n;
+    const list = this.g('toasts', DEFAULT_TOASTS).slice();
+    list.unshift({ id: id, kind: kind, title: title, msg: msg });
+    this.setState({ toasts: list.slice(0, 4) });
+    if (kind === 'success' || kind === 'info') this.later(() => this.dismissToast(id), 6000);
+  }
+  dismissToast(id) { this.setState({ toasts: this.g('toasts', DEFAULT_TOASTS).filter((t) => t.id !== id) }); }
+  decide(i, verdict) {
+    const dec = Object.assign({}, this.g('decisions', {}));
+    dec[i] = verdict;
+    this.setState({ decisions: dec, drawerOpen: false });
+    const a = APPROVALS[i];
+    if (verdict === 'approved') this.pushToast('success', 'Approved', a.title + ' · ' + a.by + ' notified.');
+    else this.pushToast('warning', 'Rejected', a.title + ' · returned to ' + a.by + '.');
+  }
+  openCtx(e, d, fromButton) {
+    if (e && e.preventDefault) e.preventDefault();
+    let x = 150, y = 110;
+    try {
+      const s = e.currentTarget.closest('.stage').getBoundingClientRect();
+      if (fromButton) { const r = e.currentTarget.getBoundingClientRect(); x = r.right - s.left - 220; y = r.bottom - s.top + 4; }
+      else { x = e.clientX - s.left; y = e.clientY - s.top; }
+      x = Math.max(8, Math.min(x, s.width - 228));
+      y = Math.max(8, Math.min(y, s.height - 270));
+    } catch (err) {}
+    this.setState({ ctxOpen: true, ctxDoc: d.name, ctxX: Math.round(x), ctxY: Math.round(y) });
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const themeName = (THEMES.find((t) => t[0] === cur) || THEMES[0])[1];
+    const pmUi = this.g('pmUi', 'full');
+    const pmUiOpt = (id) => ({
+      cls: pmUi === id ? 'on' : '',
+      pressed: pmUi === id ? 'true' : 'false',
+      pick: () => { try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {} this.setState({ pmUi: id }); }
+    });
+
+    // modal
+    const mSize = this.g('modalSize', 'md');
+    const mDef = SIZES.find((s) => s[0] === mSize) || SIZES[1];
+    const modalOpen = this.g('modalOpen', false);
+
+    // destructive confirm
+    const dzText = this.g('dzText', '');
+    const dzMatch = dzText === COMPANY;
+    const dzWrong = dzText.length > 0 && COMPANY.indexOf(dzText) !== 0;
+    const dzDone = this.g('dzDone', false);
+
+    // drawer
+    const decisions = this.g('decisions', {});
+    const drIdx = this.g('drIdx', 0);
+    const drawerOpen = this.g('drawerOpen', true);
+    const statusOf = (i) => decisions[i] === 'approved' ? ['Approved', 'ok'] : decisions[i] === 'rejected' ? ['Rejected', 'bad'] : ['Pending', 'idle'];
+    const dA = APPROVALS[drIdx];
+    const dS = statusOf(drIdx);
+
+    // notifications
+    const readMap = this.g('readMap', DEFAULT_READ);
+    const nFilter = this.g('nFilter', 'all');
+    const unread = NOTIFS.filter((n) => !readMap[n.id]).length;
+    const nGroups = ['Today', 'Earlier'].map((label) => ({
+      label: label,
+      items: NOTIFS.filter((n) => n.group === label && (nFilter === 'all' || n.cat === nFilter)).map((n) => {
+        const isRead = !!readMap[n.id];
+        return {
+          title: n.title, meta: n.meta, time: n.time,
+          cls: isRead ? '' : 'unread', dotCls: isRead ? 'read' : '', srState: isRead ? 'Read: ' : 'Unread: ',
+          isApproval: n.cat === 'approvals', isAgent: n.cat === 'agents', isFleet: n.cat === 'fleet',
+          markRead: () => { const m = Object.assign({}, this.g('readMap', DEFAULT_READ)); m[n.id] = true; this.setState({ readMap: m }); }
+        };
+      })
+    })).filter((grp) => grp.items.length > 0);
+    const notifOpen = this.g('notifOpen', true);
+
+    // menus
+    const ddOpen = this.g('ddOpen', true);
+    const pmOpen = this.g('pmOpen', true);
+    const ctxOpen = this.g('ctxOpen', true);
+    const ctxDoc = this.g('ctxDoc', DOCS[0].name);
+    const popOpen = this.g('popOpen', true);
+
+    // loading
+    const reBusy = this.g('reBusy', false);
+
+    // alerts
+    const dismissed = this.g('dismissed', {});
+    const visibleAlerts = ALERTS.filter((a) => !dismissed[a.id]);
+
+    return {
+      theme: cur,
+      themes: THEMES.map(([id, label]) => ({ label: label, cls: id === cur ? 'on' : '', pressed: id === cur ? 'true' : 'false', pick: () => this.setState({ theme: id }) })),
+      onKey: (e) => { if (e && e.key === 'Escape') this.closeAll(); },
+      stop: (e) => { if (e && e.stopPropagation) e.stopPropagation(); },
+
+      modalOpen: modalOpen,
+      modalClosed: !modalOpen,
+      modalW: mDef[2],
+      modalSizeLabel: mDef[3] + ' ' + mDef[2] + 'px',
+      modalResult: this.g('modalResult', '—'),
+      modalSizes: SIZES.map(([id, label, w, name]) => ({ label: label + ' · ' + w, cls: id === mSize ? 'on' : '', pressed: id === mSize ? 'true' : 'false', pick: () => this.setState({ modalSize: id }) })),
+      openModal: () => this.setState({ modalOpen: true }),
+      closeModal: () => this.setState({ modalOpen: false, modalResult: 'cancelled' }),
+      submitModal: () => { this.setState({ modalOpen: false, modalResult: 'invite sent' }); this.pushToast('success', 'Invite sent', 'Member invited to AutoBot Labs as Reviewer.'); },
+
+      dzActive: !dzDone,
+      dzDone: dzDone,
+      dzMatch: dzMatch,
+      dzNoMatch: !dzMatch,
+      dzInvalid: dzWrong ? 'true' : 'false',
+      dzMsg: dzMatch ? 'Name matches — Delete company is enabled.' : dzWrong ? 'Doesn’t match “AutoBot Labs” (case-sensitive).' : 'Delete company stays disabled until the name matches exactly.',
+      dzMsgColor: dzMatch ? 'var(--ok-fg)' : dzWrong ? 'var(--alert-text)' : 'var(--muted)',
+      dzInput: (e) => this.setState({ dzText: (e && e.target && e.target.value) || '' }),
+      dzDelete: () => { if (this.g('dzText', '') === COMPANY) this.setState({ dzDone: true, dzText: '' }); },
+      dzReset: () => this.setState({ dzDone: false, dzText: '' }),
+
+      approvals: APPROVALS.map((a, i) => {
+        const s = statusOf(i);
+        return {
+          title: a.title, by: a.by, when: a.when, type: a.type, cls: a.cls, status: s[0], statusCls: s[1],
+          expanded: drawerOpen && drIdx === i ? 'true' : 'false',
+          open: () => this.setState({ drawerOpen: true, drIdx: i })
+        };
+      }),
+      drawerOpen: drawerOpen,
+      dr: { title: dA.title, by: dA.by, when: dA.when, type: dA.type, scope: dA.scope, cost: dA.cost, risk: dA.risk, riskCls: dA.riskCls, status: dS[0], statusCls: dS[1] },
+      closeDrawer: () => this.setState({ drawerOpen: false }),
+      approveDr: () => this.decide(drIdx, 'approved'),
+      rejectDr: () => this.decide(drIdx, 'rejected'),
+
+      toasts: this.g('toasts', DEFAULT_TOASTS).map((t) => {
+        const k = TOASTS[t.kind];
+        return { k: k.k, cls: k.cls, label: k.label, title: t.title || k.title, msg: t.msg || k.msg, action: k.action, role: t.kind === 'error' ? 'alert' : 'status', dismiss: () => this.dismissToast(t.id) };
+      }),
+      pushSuccess: () => this.pushToast('success'),
+      pushInfo: () => this.pushToast('info'),
+      pushWarning: () => this.pushToast('warning'),
+      pushError: () => this.pushToast('error'),
+      clearToasts: () => this.setState({ toasts: [] }),
+
+      notifOpen: notifOpen,
+      notifExpanded: notifOpen ? 'true' : 'false',
+      toggleNotif: () => this.setState({ notifOpen: !notifOpen }),
+      hasUnread: unread > 0,
+      unreadCount: unread > 99 ? '99+' : String(unread),
+      unreadText: unread === 0 ? 'All caught up' : unread + ' unread',
+      bellLabel: unread === 0 ? 'Notifications, none unread' : 'Notifications, ' + unread + ' unread',
+      markAll: () => { const m = {}; NOTIFS.forEach((n) => { m[n.id] = true; }); this.setState({ readMap: m }); },
+      nFilters: FILTERS.map(([id, label]) => {
+        const c = NOTIFS.filter((n) => !readMap[n.id] && (id === 'all' || n.cat === id)).length;
+        return { label: c ? label + ' · ' + c : label, cls: id === nFilter ? 'on' : '', pressed: id === nFilter ? 'true' : 'false', pick: () => this.setState({ nFilter: id }) };
+      }),
+      nGroups: nGroups,
+      nEmpty: nGroups.length === 0,
+
+      ddOpen: ddOpen,
+      ddExpanded: ddOpen ? 'true' : 'false',
+      toggleDd: () => this.setState({ ddOpen: !ddOpen }),
+      ddPick: (e) => { let l = 'item'; try { l = e.currentTarget.getAttribute('data-label') || e.currentTarget.textContent.trim(); } catch (err) {} this.setState({ ddOpen: false, ddLast: l }); },
+      ddLast: this.g('ddLast', '—'),
+
+      docs: DOCS.map((d) => ({
+        name: d.name, meta: d.meta,
+        btnLabel: 'Actions for ' + d.name,
+        cls: ctxOpen && ctxDoc === d.name ? 'hovsel' : '',
+        ctx: (e) => this.openCtx(e, d, !!(e && e.type === 'click'))
+      })),
+      ctxOpen: ctxOpen,
+      ctxDoc: ctxDoc,
+      ctxLabel: 'Actions for ' + ctxDoc,
+      ctxX: this.g('ctxX', 150),
+      ctxY: this.g('ctxY', 96),
+      ctxPick: () => this.setState({ ctxOpen: false }),
+
+      pmOpen: pmOpen,
+      pmExpanded: pmOpen ? 'true' : 'false',
+      togglePm: () => this.setState({ pmOpen: !pmOpen }),
+      themeLabel: themeName,
+      themeItemLabel: 'Theme, current: ' + themeName + '. Activate to switch.',
+      cycleTheme: () => { const i = THEMES.findIndex((t) => t[0] === cur); this.setState({ theme: THEMES[(i + 1) % THEMES.length][0] }); },
+      pmUiLabel: 'Preferred mode, current: ' + (this.g('pmUi', 'full') === 'minimal' ? 'Minimal' : 'Full'),
+      pmMin: pmUiOpt('minimal'),
+      pmFull: pmUiOpt('full'),
+
+      popOpen: popOpen,
+      popExpanded: popOpen ? 'true' : 'false',
+      togglePop: () => this.setState({ popOpen: !popOpen }),
+
+      reBusy: reBusy ? 'true' : 'false',
+      reBusyFlag: reBusy,
+      reLabel: reBusy ? 'Re-indexing…' : 'Re-index knowledge',
+      reStatus: reBusy ? 'Re-indexing 1,284 documents' : this.g('reDone', false) ? 'Re-index finished · 1,284 documents' : 'Idle',
+      reindex: () => { if (this.g('reBusy', false)) return; this.setState({ reBusy: true }); this.later(() => this.setState({ reBusy: false, reDone: true }), 2500); },
+
+      alerts: visibleAlerts.map((a) => ({
+        kind: a.kind, title: a.title, msg: a.msg, action: a.action, hasAction: !!a.action, cls: a.cls,
+        role: a.cls === 'bad' ? 'alert' : 'status',
+        isInfo: a.cls === 'info', isOk: a.cls === 'ok', isWarn: a.cls === 'warn', isBad: a.cls === 'bad',
+        dismissLabel: 'Dismiss ' + a.kind.toLowerCase() + ': ' + a.title,
+        dismiss: () => { const m = Object.assign({}, this.g('dismissed', {})); m[a.id] = true; this.setState({ dismissed: m }); }
+      })),
+      anyDismissed: visibleAlerts.length < ALERTS.length,
+      allDismissed: visibleAlerts.length === 0,
+      restoreAlerts: () => this.setState({ dismissed: {} })
+    };
+  }
+}
+</script>
+</body>
+</html>

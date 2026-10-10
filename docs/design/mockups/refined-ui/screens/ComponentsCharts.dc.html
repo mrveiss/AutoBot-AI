@@ -1,0 +1,953 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot Components · Charts &amp; data viz</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.wgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:start}
+.wgrid>.card{min-width:0;position:relative;display:flex;flex-direction:column}
+.card.editing{outline:1.5px dashed var(--muted);outline-offset:3px}
+.card.editing[draggable="true"]{cursor:grab}
+.grip{display:inline-grid;place-items:center;width:18px;height:28px;cursor:grab;flex:none}
+.wtools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto}
+.mbtn{width:30px;height:30px;padding:0;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);display:inline-grid;place-items:center;cursor:pointer;flex:none}
+.mbtn:hover{background:var(--surface2)}
+.mbtn[aria-disabled="true"]{opacity:.45;cursor:default}
+.segg{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.segg .seg{height:26px;padding:0 8px}
+.hint{margin:0;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;border:var(--bw) dashed var(--border);background:var(--surface2);font-size:13px;color:var(--text2)}
+.rsz{position:absolute;right:5px;bottom:5px;fill:none;stroke:var(--muted);stroke-width:1.5;stroke-linecap:round;pointer-events:none}
+@media (max-width:760px){.wgrid>.card{grid-column:1 / -1 !important}}
+.sub2{font-size:12.5px;color:var(--muted)}
+/* ---- Components · Charts & data viz ---- */
+.specbar{flex:1 1 100%;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:14px clamp(16px,2.5vw,32px);background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+.specbar h1{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.use{font-size:12.5px;color:var(--muted);font-weight:400}
+.st{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.rules{margin:0;padding:12px 16px;border-top:var(--bw) solid var(--line);font-size:12.5px;color:var(--text2);line-height:1.55}
+.rules b{color:var(--text);font-weight:600}
+.bd{padding:16px}
+.cg{display:grid;grid-template-columns:repeat(auto-fit,minmax(520px,1fr));gap:20px;align-items:start}
+.cg3{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:20px;align-items:start}
+.chart{display:flex;flex-direction:column;border:var(--bw) solid var(--border);border-radius:10px;background:var(--surface);min-width:0}
+.chart-h{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px 12px;padding:12px 14px 6px}
+.chart-h h3{margin:0;font-size:14px;font-weight:600;line-height:1.35}
+.chart-h .u{display:block;font-size:12px;color:var(--muted);font-weight:400;margin-top:2px}
+.chart-h .grow{flex-grow:1;min-width:200px}
+.chart-b{padding:6px 14px 12px;min-width:0}
+.lgd{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--text2);padding:0 14px 12px;margin:0;list-style:none}
+.lgd li{display:inline-flex;align-items:center;gap:6px}
+.sw{flex:none;display:block}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+svg.cv{display:block;width:100%;height:auto;overflow:visible;font-family:'IBM Plex Sans',system-ui,sans-serif}
+.gl{stroke:var(--line);stroke-width:1}
+.ax{stroke:var(--border);stroke-width:var(--bw)}
+.tl{fill:var(--muted);font-size:11px}
+.tl.e{text-anchor:end}.tl.m{text-anchor:middle}
+.vl{fill:var(--text);font-size:11px;font-weight:600;text-anchor:middle}
+.lbl{fill:var(--text2);font-size:11px}
+.halo{paint-order:stroke;stroke:var(--surface);stroke-width:3px;stroke-linejoin:round}
+.mk{stroke:var(--stroke);stroke-width:1}
+.nf{fill:none}
+.f1{fill:var(--bar)}.f2{fill:var(--i1)}.f3{fill:var(--i2)}.f4{fill:var(--i3)}.f5{fill:var(--accent)}.f6{fill:url(#pt6)}.fs{fill:var(--surface)}
+.p2{fill:url(#pt2)}.p3{fill:url(#pt3)}.p4{fill:url(#pt4)}.p5{fill:url(#pt5)}
+.th[data-theme="contrast"] .f2,.th[data-theme="mono"] .f2{fill:url(#pt2)}
+.th[data-theme="contrast"] .f3,.th[data-theme="mono"] .f3{fill:url(#pt3)}
+.th[data-theme="contrast"] .f4,.th[data-theme="mono"] .f4{fill:url(#pt4)}
+.th[data-theme="contrast"] .f5,.th[data-theme="mono"] .f5{fill:url(#pt5)}
+.pb2{fill:var(--i1)}.pb3{fill:var(--i2)}.pb4{fill:var(--i3)}.pb5,.pb6{fill:var(--surface)}
+.pl{stroke:var(--stroke);stroke-width:1.2;fill:none}.pl5{stroke:var(--accent);stroke-width:1.6;fill:none}.pd{fill:var(--stroke)}
+.lo{fill:none;stroke:var(--stroke);stroke-width:4.5;stroke-linejoin:round}
+.lc{fill:none;stroke-width:2.5;stroke-linejoin:round}
+.c1{stroke:var(--bar)}.c2{stroke:var(--i1)}.c3{stroke:var(--i2)}.c4{stroke:var(--i3)}.c5{stroke:var(--accent)}.c6{stroke:var(--surface)}
+.d2{stroke-dasharray:8 4}.d3{stroke-dasharray:2 3}.d4{stroke-dasharray:10 3 2 3}.d5{stroke-dasharray:14 4}.d6{stroke-dasharray:4 2}
+.ara{opacity:.55}
+.tg{fill:none;stroke:var(--alert-text);stroke-width:1.5;stroke-dasharray:6 4}
+.tgt{fill:var(--alert-text);font-size:11px;font-weight:600}
+.btn[aria-pressed="true"]{background:var(--surface2);outline:var(--bw) solid var(--text2)}
+/* interactive bar chart */
+.plotw{position:relative;margin:10px 0 0 46px}
+.plot{position:relative;height:220px;border-left:var(--bw) solid var(--border);border-bottom:var(--bw) solid var(--border)}
+.gy{position:absolute;left:0;right:0;border-top:1px solid var(--line);height:0}
+.gy span{position:absolute;right:calc(100% + 8px);top:0;transform:translateY(-50%);font-size:11px;color:var(--muted);white-space:nowrap}
+.vbars{position:absolute;inset:0;display:flex;align-items:flex-end}
+.vcol{flex:1 1 0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:3px;min-width:0}
+.vb{width:56%;max-width:52px;min-height:2px;padding:0;border:1px solid var(--stroke);border-bottom:0;background:var(--bar);border-radius:3px 3px 0 0;cursor:pointer;display:block;box-sizing:border-box}
+.vb.over{background:var(--bar-alert)}
+.vb.on{outline:2px solid var(--text);outline-offset:2px}
+.ovl{font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--alert-text)}
+.thr{position:absolute;left:0;right:0;border-top:1.5px dashed var(--alert-text);pointer-events:none;height:0}
+.thr span{position:absolute;right:0;bottom:3px;font-size:11px;font-weight:600;color:var(--alert-text);background:var(--surface);padding:0 4px}
+.xls{display:flex;margin-left:46px;padding-top:6px}
+.xls span{flex:1 1 0;text-align:center;font-size:11.5px;color:var(--muted)}
+.ctip{position:absolute;z-index:5;transform:translate(-50%,-10px);background:var(--primary);color:var(--on-primary);border-radius:6px;padding:7px 10px;font-size:12px;line-height:1.45;white-space:nowrap;pointer-events:none;display:flex;flex-direction:column}
+.ctip.al{transform:translate(-22%,-10px)}.ctip.ar{transform:translate(-78%,-10px)}
+.ctip b{font-size:13px;font-weight:600}
+.ctip .mono{font-size:13px;font-weight:500}
+/* states */
+.cst{height:236px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;border:var(--bw) dashed var(--border);border-radius:8px;background:var(--surface2);padding:16px;box-sizing:border-box}
+.cst b{font-size:14px;font-weight:600}
+.cst p{margin:0;font-size:12.5px;color:var(--text2);max-width:320px;line-height:1.5}
+.cst.err{border-style:solid;border-color:var(--danger-tile-b);background:var(--danger-tile)}
+.skw{height:236px;display:flex;align-items:flex-end;gap:18px;padding:16px 24px 0;box-sizing:border-box;border-bottom:var(--bw) solid var(--border);position:relative}
+.sk{flex:1;background:var(--bar-track);border:1px solid var(--line);border-radius:4px 4px 0 0;animation:pl 1.4s ease-in-out infinite;box-sizing:border-box}
+@keyframes pl{50%{opacity:.5}}
+.spin{display:inline-block;width:20px;height:20px;border-radius:50%;border:2.5px solid var(--bar-track);border-top-color:var(--primary);animation:sp .8s linear infinite;box-sizing:border-box}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.sk{animation:none}.spin{animation-duration:2.4s}}
+.lmsg{position:absolute;top:44%;left:50%;transform:translate(-50%,-50%);display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--text2);background:var(--surface);border:var(--bw) solid var(--border);border-radius:6px;padding:6px 10px}
+/* horizontal bars */
+.hbr{display:grid;grid-template-columns:170px minmax(0,1fr) 150px;gap:12px;align-items:center;font-size:13px;padding:5px 0}
+.hbt{height:18px;border-left:var(--bw) solid var(--border)}
+.hbf{height:100%;background:var(--bar);border:1px solid var(--stroke);border-left:0;box-sizing:border-box;border-radius:0 3px 3px 0}
+.hbf.alert{background:var(--bar-alert)}
+.hbx{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+/* swatch table */
+.swt td{vertical-align:middle}
+/* donut / gauge */
+.dn{position:relative;width:180px;height:180px;flex:none}
+.dnc{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.dnc b{font-size:24px;font-weight:600;letter-spacing:-.01em;line-height:1.1}
+.dnc span{font-size:11.5px;color:var(--muted)}
+.dlg{width:100%;border-collapse:collapse}
+.dlg td{padding:7px 8px;font-size:13px}
+.gb{fill:none;stroke-width:6}
+.gbo{fill:none;stroke:var(--stroke);stroke-width:8}
+.gb.bad{stroke:var(--bar-alert);stroke-dasharray:5 3}.gb.mid{stroke:var(--i2)}.gb.good{stroke:var(--dot-ok)}
+.gtk{fill:none;stroke:var(--stroke);stroke-width:16}
+.gtr{fill:none;stroke:var(--bar-track);stroke-width:14}
+.gva{fill:none;stroke:var(--bar);stroke-width:14}
+.gv{fill:var(--text);font-size:34px;font-weight:600;text-anchor:middle}
+.gs{fill:var(--muted);font-size:12px;text-anchor:middle}
+.gbl{fill:var(--text2);font-size:11px;font-weight:600}
+.rtrk{fill:none;stroke:var(--bar-track);stroke-width:13}
+.rval{fill:none;stroke:var(--bar);stroke-width:13}
+.rval.alert{stroke:var(--bar-alert)}
+.rnum{fill:var(--text);font-size:17px;font-weight:600;text-anchor:middle}
+/* KPI + meters */
+.kc{padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.kc .k{font-size:12.5px;color:var(--muted)}
+.kc .v{font-size:26px;font-weight:600;letter-spacing:-.01em;line-height:1.1}
+.kc .v small{font-size:14px;font-weight:500;color:var(--text2)}
+.dl{display:inline-flex;align-items:center;gap:4px}
+.mtr{display:flex;flex-direction:column;gap:7px}
+.mtr-h{display:flex;justify-content:space-between;gap:12px;font-size:13px;flex-wrap:wrap}
+.mbar{position:relative;height:10px;border-radius:99px;background:var(--bar-track);border:1px solid var(--stroke);box-sizing:border-box}
+.mbar .bf{border-radius:99px 0 0 99px;border-right:1px solid var(--stroke);box-sizing:border-box}
+.tick{position:absolute;top:-5px;bottom:-5px;width:0;border-left:2px solid var(--text)}
+.mfoot{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted)}
+/* heatmap */
+.hmw{overflow-x:auto}
+.hm{display:flex;flex-direction:column;gap:3px;min-width:680px}
+.hmr{display:grid;grid-template-columns:76px repeat(12,minmax(0,1fr));gap:3px;align-items:stretch}
+.hmn{font-size:12px;color:var(--text2);display:flex;align-items:center}
+.hmh{font-size:11px;color:var(--muted);text-align:center}
+.hc{position:relative;height:34px;border-radius:4px;border:1px solid var(--stroke);box-sizing:border-box;display:grid;place-items:center;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text);overflow:hidden}
+.h0{background:var(--bar-track)}.h1{background:var(--i1t)}.h2{background:var(--i1)}
+.h3{background:color-mix(in srgb,var(--i1) 40%,var(--bar));color:var(--on-primary)}.h4{background:var(--bar);color:var(--on-primary)}
+.th[data-theme="dark"] .h2{color:var(--on-primary)}
+.hx{background:var(--surface);border-style:dashed;border-color:var(--muted);color:var(--muted)}
+.hc .lv{display:none;position:absolute;left:0;bottom:0;height:5px;background:var(--stroke)}
+.th[data-theme="contrast"] .hc,.th[data-theme="mono"] .hc{background:var(--surface);color:var(--text)}
+.th[data-theme="contrast"] .hc .lv,.th[data-theme="mono"] .hc .lv{display:block}
+.h0 .lv{width:12%}.h1 .lv{width:30%}.h2 .lv{width:50%}.h3 .lv{width:75%}.h4 .lv{width:100%}
+.hlg{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:12px;color:var(--text2)}
+.hlg .hc{width:34px;height:20px;font-size:10px}
+.ctbl{overflow-x:auto;border:var(--bw) solid var(--border);border-radius:8px}
+.ctbl table{border-collapse:collapse;width:100%}
+.ctbl caption{text-align:left;padding:8px 16px;font-size:12px;color:var(--muted)}
+.num{text-align:right;font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+.rgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px}
+.rgrid h3{margin:0 0 8px;font-size:13.5px;font-weight:600}
+.rgrid ul{margin:0;padding-left:18px;font-size:13px;color:var(--text2);line-height:1.6}
+.rgrid li b{color:var(--text);font-weight:600}
+.fx{display:grid;grid-template-columns:auto auto;gap:4px 14px;font-size:13px;margin:0}
+.fx dt{color:var(--muted)}.fx dd{margin:0}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <svg width="0" height="0" style="position: absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <pattern id="pt2" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" class="pb2"/><path d="M0 0v6" class="pl"/></pattern>
+      <pattern id="pt3" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" class="pb3"/><circle cx="2.5" cy="2.5" r="1.1" class="pd"/></pattern>
+      <pattern id="pt4" width="7" height="7" patternUnits="userSpaceOnUse"><rect width="7" height="7" class="pb4"/><path d="M0 0l7 7M7 0l-7 7" class="pl"/></pattern>
+      <pattern id="pt5" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" class="pb5"/><path d="M0 2.5h5" class="pl5"/></pattern>
+      <pattern id="pt6" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><rect width="6" height="6" class="pb6"/><path d="M0 0v6" class="pl"/></pattern>
+    </defs>
+  </svg>
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <a href="ThemeManager.dc.html" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon" aria-label="Plugins" title="Plugins"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon" aria-label="Secrets" title="Secrets"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" title="Preferences"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <a href="AdminUsers.dc.html" class="icon" aria-label="Admin panel" title="Admin panel"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <button type="button" aria-label="Profile menu" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer">MV</button>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+  <aside class="sub" aria-label="Design system" style="flex: 1 1 230px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+    <a href="DesignSystem.dc.html" style="font-weight: 600; color: var(--text)">AutoBot Design System</a>
+    <span class="sub2" style="padding: 0 13px 4px">v1 · 4 themes</span>
+    <p class="sect">Overview</p>
+    <a href="DesignSystem.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z" class="i1"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z" class="it1"/></svg>Introduction</a>
+    <p class="sect">Foundations</p>
+    <a href="ComponentsStates.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4" class="i3"/><circle cx="16" cy="9" r="4" class="i2"/><circle cx="12" cy="16" r="4" class="i1"/></svg>Tokens &amp; states</a>
+    <a href="ComponentsGrid.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5" class="i1"/><rect x="13" y="4" width="7" height="7" rx="1.5" class="iw"/><rect x="4" y="13" width="7" height="7" rx="1.5" class="iw"/><rect x="13" y="13" width="7" height="7" rx="1.5" class="i2"/></svg>Grid, tables &amp; forms</a>
+    <a href="ComponentsCharts.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><rect x="5.5" y="11" width="3.5" height="7" class="i1"/><rect x="10.5" y="6" width="3.5" height="12" class="i2"/><rect x="15.5" y="13" width="3.5" height="5" class="i3"/></svg>Charts &amp; data viz</a>
+    <p class="sect">Components</p>
+    <a href="ComponentsForms.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4" class="i1"/><circle cx="16.5" cy="12" r="2.5" class="iw"/></svg>Form controls</a>
+    <a href="ComponentsTable.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="iw"/><path d="M4 10h16M4 14.5h16M10 10v9"/></svg>Data table</a>
+    <a href="ComponentsDialogs.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="it1"/><rect x="6" y="8" width="12" height="9" rx="1.5" class="iw"/></svg>Dialogs</a>
+    <a href="ComponentsOverlays.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" class="i2"/><path d="M10 21h4"/></svg>Overlays &amp; feedback</a>
+    <a href="ComponentsTooltips.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10h-7l-4 4v-4H4z" class="it1"/><path d="M8 10h8"/></svg>Tooltips</a>
+    <a href="ComponentsCommand.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" class="iw"/><path d="M7 10l3 2-3 2M12 15h5"/></svg>Command menu</a>
+    <a href="ComponentsNavigation.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M15 9l-2 4-4 2 2-4z" class="i3"/></svg>Navigation</a>
+    <a href="ComponentsLayout.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="iw"/><path d="M9 4v16M9 10h12"/></svg>Layout &amp; utility</a>
+    <a href="ComponentsChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h12v9H8l-3 3v-3H3z" class="i1"/><path d="M15 9h6v8h-2v3l-3-3h-5v-3"/></svg>Chat &amp; agent</a>
+    <p class="sect">Patterns</p>
+    <a href="FileBrowser.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="i2"/></svg>File browser</a>
+    <a href="Mailbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" class="iw"/><path d="M3 7l9 6 9-6"/></svg>Mailbox</a>
+    <a href="ComponentsUiModes.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5" class="it1"/><rect x="4.5" y="8.5" width="8" height="7" rx="3.5" class="i2"/></svg>Interface modes</a>
+    <a href="SignUp.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" class="i2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Auth pages</a>
+    <a href="AccountSecurity.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4" class="i1"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>Account settings</a>
+    <a href="SearchResults.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>Global search</a>
+    <a href="HelpCenter.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="i2"/><path d="M10 10a2 2 0 1 1 3 1.7c-.7.4-1 1-1 1.8M12 16.5v.5"/></svg>Help centre</a>
+    <span style="flex-grow: 1; min-height: 16px" aria-hidden="true"></span>
+    <a href="Main.dc.html" style="border-top: var(--bw) solid var(--line); border-radius: 0; padding-top: 12px"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg>← Back to app</a>
+  </aside>
+  <div style="flex: 999 1 520px; min-width: 0; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <div class="specbar">
+    <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 280px">
+      <span class="sub2">Design system / Components</span>
+      <h1>Components · Charts &amp; data viz</h1>
+      <span class="sub2">Series palette, chart specimens, states and usage rules for Analytics, Company OS and fleet dashboards. Hover or Tab through the spend bars; every chart offers a table view.</span>
+    </div>
+    <div role="group" aria-label="Preview theme" style="display: flex; gap: 2px; padding: 3px; border-radius: 8px; background: var(--bg); border: var(--bw) solid var(--border)">
+      <sc-for list="{{themes}}" as="t" hint-placeholder-count="4"><button type="button" class="seg {{t.cls}}" aria-pressed="{{t.pressed}}" onClick="{{t.pick}}">{{t.label}}</button></sc-for>
+    </div>
+  </div>
+
+  <main style="flex: 1 1 100%; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 48px; display: flex; flex-direction: column; gap: 20px">
+
+    <!-- 1. SERIES PALETTE -->
+    <section class="card" aria-labelledby="h-pal">
+      <div class="ch"><h2 id="h-pal">Categorical series palette</h2><span class="use">Use for: any chart with more than one series. Assign in this order; never skip or reorder per chart.</span></div>
+      <div style="overflow-x: auto">
+        <table class="swt" style="border-collapse: collapse; width: 100%">
+          <thead><tr><th>Series</th><th>Fill · as rendered</th><th>Fill · HC / Mono pattern</th><th>Line + dash</th><th>Marker</th><th>Token</th><th>Typical use</th></tr></thead>
+          <tbody>
+            <tr><td><strong>S1</strong></td><td><svg class="sw" width="56" height="22" aria-hidden="true"><rect x="0.5" y="0.5" width="55" height="21" rx="3" class="f1 mk"/></svg></td><td><svg class="sw" width="56" height="22" aria-hidden="true"><rect x="0.5" y="0.5" width="55" height="21" rx="3" class="f1 mk"/></svg><span class="sub2" style="margin-left: 6px">solid</span></td><td><svg class="sw" width="80" height="14" aria-hidden="true"><path d="M2 7h76" class="lo"/><path d="M2 7h76" class="lc c1"/></svg></td><td><svg class="sw" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="5" class="f1 mk"/></svg></td><td class="mono">--bar</td><td>Primary metric, current period</td></tr>
+            <tr><td><strong>S2</strong></td><td><svg class="sw" width="56" height="22" aria-hidden="true"><rect x="0.5" y="0.5" width="55" height="21" rx="3" class="f2 mk"/></svg></td><td><svg class="sw" width="56" height="22" aria-hidden="true"><rect x="0.5" y="0.5" width="55" height="21" rx="3" class="p2 mk"/></svg><span class="sub2" style="margin-left: 6px">diagonal</span></td><td><svg class="sw" width="80" height="14" aria-hidden="true"><path d="M2 7h76" class="lo d2"/><path d="M2 7h76" class="lc c2 d2"/></svg></td><td><svg class="sw" width="16" height="16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" class="f2 mk"/></svg></td><td class="mono">--i1</td><td>Comparison series, previous period</td></tr>
+            <tr><td><strong>S3</strong></td><td><svg class="sw" width="56" height="22" aria-hidden="true"><rect x="0.5" y="0.5" width="55" height="21" rx="3" class="f3 mk"/></svg></td><td><svg class="sw" width="56" height="22" aria-hidden="true"><rect x="0.5" y="0.5" width="55" height="21" rx="3" class="p3 mk"/></svg><span class="sub2" style="margin-left: 6px">dots</span></td><td><svg class="sw" width="80" height="14" aria-hidden="true"><path d="M2 7h76" class="lo d3"/><path d="M2 7h76" class="lc c3 d3"/></svg></td><td><svg class="sw" width="16" height="16" aria-hidden="true"><path d="M8 2.5l6 11H2z" class="f3 mk"/></svg></td><td class="mono">--i2</td><td>Third category (e.g. retried)</td></tr>
+            <tr><td><strong>S4</strong></td><td><svg class="sw" width="56" height="22" aria-hidden="true"><rect x="0.5" y="0.5" width="55" height="21" rx="3" class="f4 mk"/></svg></td><td><svg class="sw" width="56" height="22" aria-hidden="true"><rect x="0.5" y="0.5" width="55" height="21" rx="3" class="p4 mk"/></svg><span class="sub2" style="margin-left: 6px">cross-hatch</span></td><td><svg class="sw" width="80" height="14" aria-hidden="true"><path d="M2 7h76" class="lo d4"/><path d="M2 7h76" class="lc c4 d4"/></svg></td><td><svg class="sw" width="16" height="16" aria-hidden="true"><path d="M8 1.5l6.5 6.5L8 14.5 1.5 8z" class="f4 mk"/></svg></td><td class="mono">--i3</td><td>Fourth category</td></tr>
+            <tr><td><strong>S5</strong></td><td><svg class="sw" width="56" height="22" aria-hidden="true"><rect x="0.5" y="0.5" width="55" height="21" rx="3" class="f5 mk"/></svg></td><td><svg class="sw" width="56" height="22" aria-hidden="true"><rect x="0.5" y="0.5" width="55" height="21" rx="3" class="p5 mk"/></svg><span class="sub2" style="margin-left: 6px">horizontal</span></td><td><svg class="sw" width="80" height="14" aria-hidden="true"><path d="M2 7h76" class="lo d5"/><path d="M2 7h76" class="lc c5 d5"/></svg></td><td><svg class="sw" width="16" height="16" aria-hidden="true"><path d="M3 6h3V3h4v3h3v4h-3v3H6v-3H3z" class="f5 mk"/></svg></td><td class="mono">--accent</td><td>Reserved: failed / over-limit; else 5th series</td></tr>
+            <tr><td style="border-bottom: 0"><strong>S6</strong></td><td style="border-bottom: 0"><svg class="sw" width="56" height="22" aria-hidden="true"><rect x="0.5" y="0.5" width="55" height="21" rx="3" class="f6 mk"/></svg></td><td style="border-bottom: 0"><svg class="sw" width="56" height="22" aria-hidden="true"><rect x="0.5" y="0.5" width="55" height="21" rx="3" class="f6 mk"/></svg><span class="sub2" style="margin-left: 6px">always hatched</span></td><td style="border-bottom: 0"><svg class="sw" width="80" height="14" aria-hidden="true"><path d="M2 7h76" class="lo d6"/><path d="M2 7h76" class="lc c6 d6"/></svg></td><td style="border-bottom: 0"><svg class="sw" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="5" class="fs mk" stroke-width="2"/></svg></td><td class="mono" style="border-bottom: 0">--surface + --stroke</td><td style="border-bottom: 0">"Other" / remainder bucket</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="bd" style="display: flex; flex-wrap: wrap; gap: 28px; border-top: var(--bw) solid var(--line)">
+        <div style="display: flex; flex-direction: column; gap: 8px"><span class="st">Sequential scale · heatmaps, density</span>
+          <div class="hlg"><span class="hc h0">0</span><span class="hc h1">1</span><span class="hc h2">2</span><span class="hc h3">3</span><span class="hc h4">4</span><span class="mono sub2">--bar-track → --i1t → --i1 → mix(--i1, --bar) → --bar</span></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px"><span class="st">Reference lines</span>
+          <div style="display: flex; gap: 18px; align-items: center; font-size: 12.5px; color: var(--text2)">
+            <span style="display: inline-flex; gap: 6px; align-items: center"><svg class="sw" width="40" height="10" aria-hidden="true"><path d="M0 5h40" class="tg"/></svg>Target / threshold <span class="mono sub2">--alert-text, 6 4</span></span>
+            <span style="display: inline-flex; gap: 6px; align-items: center"><svg class="sw" width="40" height="10" aria-hidden="true"><path d="M0 5h40" class="gl"/></svg>Gridline <span class="mono sub2">--line</span></span>
+            <span style="display: inline-flex; gap: 6px; align-items: center"><svg class="sw" width="40" height="10" aria-hidden="true"><path d="M0 5h40" class="ax"/></svg>Axis <span class="mono sub2">--border</span></span>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> every mark carries a 1px <span class="mono">var(--stroke)</span> outline; lines get a stroke underlay so light series stay visible on white. High contrast and Monochrome swap S2–S5 to patterns automatically; lines always differ by dash and marker shape, so no series is identified by color alone. Max 6 series; beyond that group into S6 "Other".</p>
+    </section>
+
+    <!-- 2. BAR CHARTS -->
+    <section class="card" aria-labelledby="h-bar">
+      <div class="ch"><h2 id="h-bar">Bar charts</h2><span class="use">Use for: comparing discrete categories or time buckets — spend per day, cost per agent, runs per outcome</span></div>
+      <div class="bd cg">
+
+        <!-- interactive vertical bar -->
+        <div class="chart" aria-labelledby="c-spend-t">
+          <div class="chart-h">
+            <div class="grow"><h3 id="c-spend-t">Daily LLM spend · this week</h3><span class="u">EUR per day · all agents · AutoBot Labs</span></div>
+            <div class="segg" role="group" aria-label="Preview chart state">
+              <sc-for list="{{stateOpts}}" as="s" hint-placeholder-count="4"><button type="button" class="seg {{s.cls}}" aria-pressed="{{s.pressed}}" onClick="{{s.pick}}">{{s.label}}</button></sc-for>
+            </div>
+            <sc-if value="{{isReady}}" hint-placeholder-val="{{ true }}">
+              <button type="button" class="btn sm" aria-pressed="{{tblBarPressed}}" aria-controls="c-spend-body" onClick="{{toggleTblBar}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" class="it1"/><path d="M3 10h18M3 15h18M9 5v14"/></svg>{{tblBarLabel}}</button>
+            </sc-if>
+          </div>
+          <div class="chart-b" id="c-spend-body">
+            <sc-if value="{{showBarChart}}" hint-placeholder-val="{{ true }}">
+              <div class="plotw" onKeyDown="{{plotKey}}">
+                <div class="plot">
+                  <div class="gy" style="bottom: 0"><span>€0</span></div>
+                  <div class="gy" style="bottom: 25%"><span>€2</span></div>
+                  <div class="gy" style="bottom: 50%"><span>€4</span></div>
+                  <div class="gy" style="bottom: 75%"><span>€6</span></div>
+                  <div class="gy" style="bottom: 100%"><span>€8</span></div>
+                  <div class="vbars" role="group" aria-label="Daily spend bars. Use Tab to move between days.">
+                    <div class="vcol"><button type="button" class="vb {{c0}}" style="height: 51.5%" aria-label="Monday: €4.12, 1.9M tokens, 22 heartbeat runs" onMouseEnter="{{e0}}" onFocus="{{e0}}" onMouseLeave="{{lv}}" onBlur="{{lv}}"></button></div>
+                    <div class="vcol"><button type="button" class="vb {{c1}}" style="height: 67.25%" aria-label="Tuesday: €5.38, 2.4M tokens, 24 heartbeat runs" onMouseEnter="{{e1}}" onFocus="{{e1}}" onMouseLeave="{{lv}}" onBlur="{{lv}}"></button></div>
+                    <div class="vcol"><span class="ovl" aria-hidden="true">over</span><button type="button" class="vb over {{c2}}" style="height: 75.6%" aria-label="Wednesday: €6.05, over daily cap, 2.8M tokens, 26 heartbeat runs" onMouseEnter="{{e2}}" onFocus="{{e2}}" onMouseLeave="{{lv}}" onBlur="{{lv}}"></button></div>
+                    <div class="vcol"><button type="button" class="vb {{c3}}" style="height: 60.9%" aria-label="Thursday: €4.87, 2.2M tokens, 27 heartbeat runs" onMouseEnter="{{e3}}" onFocus="{{e3}}" onMouseLeave="{{lv}}" onBlur="{{lv}}"></button></div>
+                    <div class="vcol"><span class="ovl" aria-hidden="true">over</span><button type="button" class="vb over {{c4}}" style="height: 92.75%" aria-label="Friday: €7.42, over daily cap, 3.4M tokens, 27 heartbeat runs" onMouseEnter="{{e4}}" onFocus="{{e4}}" onMouseLeave="{{lv}}" onBlur="{{lv}}"></button></div>
+                    <div class="vcol"><button type="button" class="vb {{c5}}" style="height: 26.25%" aria-label="Saturday: €2.10, 0.9M tokens, 9 heartbeat runs" onMouseEnter="{{e5}}" onFocus="{{e5}}" onMouseLeave="{{lv}}" onBlur="{{lv}}"></button></div>
+                    <div class="vcol"><button type="button" class="vb {{c6}}" style="height: 20.5%" aria-label="Sunday: €1.64, 0.7M tokens, 7 heartbeat runs" onMouseEnter="{{e6}}" onFocus="{{e6}}" onMouseLeave="{{lv}}" onBlur="{{lv}}"></button></div>
+                  </div>
+                  <div class="thr" style="bottom: 75%"><span>Daily cap €6.00</span></div>
+                  <sc-if value="{{tipOn}}" hint-placeholder-val="{{ false }}">
+                    <div class="ctip {{tipCls}}" aria-hidden="true" style="left: {{tipX}}%; bottom: {{tipB}}%"><b>{{tipDay}}</b><span class="mono">{{tipVal}}</span><span>{{tipTok}} · {{tipRuns}}</span><span>{{tipNote}}</span></div>
+                  </sc-if>
+                </div>
+                <div class="xls" style="margin-left: 0" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{showBarTable}}" hint-placeholder-val="{{ false }}">
+              <div class="ctbl">
+                <table>
+                  <caption>Daily LLM spend, Mon 6 – Sun 12 Oct. Daily cap €6.00.</caption>
+                  <thead><tr><th scope="col">Day</th><th scope="col" class="num">Spend</th><th scope="col" class="num">Tokens</th><th scope="col" class="num">Heartbeat runs</th><th scope="col">vs cap</th></tr></thead>
+                  <tbody>
+                    <sc-for list="{{dayRows}}" as="r" hint-placeholder-count="7"><tr><th scope="row" style="background: transparent; text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--text); border-bottom: var(--bw) solid var(--line)">{{r.full}}</th><td class="num">{{r.val}}</td><td class="num">{{r.tok}}</td><td class="num">{{r.runs}}</td><td><span class="pill {{r.cls}}">{{r.st}}</span></td></tr></sc-for>
+                  </tbody>
+                </table>
+              </div>
+            </sc-if>
+            <sc-if value="{{isLoading}}" hint-placeholder-val="{{ false }}">
+              <div class="skw" aria-busy="true" aria-live="polite"><div class="sk" style="height: 45%"></div><div class="sk" style="height: 62%"></div><div class="sk" style="height: 70%"></div><div class="sk" style="height: 55%"></div><div class="sk" style="height: 85%"></div><div class="sk" style="height: 25%"></div><div class="sk" style="height: 20%"></div><span class="lmsg" role="status"><span class="spin" aria-hidden="true"></span>Loading spend data…</span></div>
+            </sc-if>
+            <sc-if value="{{isEmpty}}" hint-placeholder-val="{{ false }}">
+              <div class="cst" role="status"><span class="tile lg"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16" /><rect x="6" y="12" width="3" height="8" class="it1"/><rect x="11" y="8" width="3" height="12" class="iw"/><rect x="16" y="14" width="3" height="6" class="it2"/></svg></span><b>No spend recorded this week</b><p>No agent called a paid model between Mon 6 and Sun 12 Oct. Local ollama runs are not billed.</p><button type="button" class="btn sm">Show last 30 days</button></div>
+            </sc-if>
+            <sc-if value="{{isError}}" hint-placeholder-val="{{ false }}">
+              <div class="cst err" role="alert"><span class="tile lg danger"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z" class="iw"/><path d="M12 10v4M12 17v.5"/></svg></span><b>Couldn't load spend data</b><p>The analytics service timed out (HTTP 504). Figures shown elsewhere may be stale.</p><button type="button" class="btn sm pri" onClick="{{retry}}">Retry</button></div>
+            </sc-if>
+          </div>
+          <ul class="lgd" aria-label="Legend">
+            <li><svg class="sw" width="12" height="12" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="11" class="f1 mk"/></svg>Daily spend (€)</li>
+            <li><svg class="sw" width="12" height="12" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="11" class="mk" style="fill: var(--bar-alert)"/></svg>Over cap — also labelled "over"</li>
+            <li><svg class="sw" width="22" height="8" aria-hidden="true"><path d="M0 4h22" class="tg"/></svg>Daily cap €6.00</li>
+          </ul>
+        </div>
+
+        <!-- horizontal bar -->
+        <div class="chart" aria-labelledby="c-agent-t">
+          <div class="chart-h"><div class="grow"><h3 id="c-agent-t">Cost per agent · October</h3><span class="u">EUR month to date · sorted by cost</span></div></div>
+          <div class="chart-b" role="img" aria-label="Horizontal bar chart. research-agent €21.60, performance-engineer €18.20 at 91 percent of its €20 budget, over alert, code-agent €14.40, devops-engineer €6.80, documentation-engineer €2.20.">
+            <div class="hbr"><span>research-agent</span><div class="hbt"><div class="hbf" style="width: 72%"></div></div><span class="mono">€21.60</span></div>
+            <div class="hbr"><span style="font-weight: 600">performance-engineer</span><div class="hbt"><div class="hbf alert" style="width: 60.7%"></div></div><span class="mono" style="color: var(--alert-text); font-weight: 600">€18.20 · 91% ▲ alert</span></div>
+            <div class="hbr"><span>code-agent</span><div class="hbt"><div class="hbf" style="width: 48%"></div></div><span class="mono">€14.40</span></div>
+            <div class="hbr"><span>devops-engineer</span><div class="hbt"><div class="hbf" style="width: 22.7%"></div></div><span class="mono">€6.80</span></div>
+            <div class="hbr"><span>documentation-engineer</span><div class="hbt"><div class="hbf" style="width: 7.3%"></div></div><span class="mono">€2.20</span></div>
+            <div class="hbr" style="padding-top: 2px"><span></span><div class="hbx"><span>€0</span><span>€10</span><span>€20</span><span>€30</span></div><span></span></div>
+          </div>
+          <ul class="lgd" aria-label="Legend">
+            <li><svg class="sw" width="12" height="12" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="11" class="f1 mk"/></svg>Spend (€)</li>
+            <li><svg class="sw" width="12" height="12" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="11" class="mk" style="fill: var(--bar-alert)"/></svg>Above 80% of own budget — value says "alert"</li>
+          </ul>
+          <p class="rules" style="border-top: var(--bw) solid var(--line)">Horizontal when labels are long (agent names, node hostnames) or there are more than 7 categories. Values printed at bar ends — no gridlines needed.</p>
+        </div>
+
+        <!-- stacked -->
+        <div class="chart" aria-labelledby="c-stk-t">
+          <div class="chart-h"><div class="grow"><h3 id="c-stk-t">Heartbeat runs by outcome · stacked</h3><span class="u">Runs per day · all agents · totals above bars</span></div></div>
+          <div class="chart-b">
+            <svg class="cv" viewBox="0 0 360 214" role="img" aria-label="Stacked bar chart of heartbeat runs per day: Monday 22 total, 1 failed; Tuesday 24, none failed; Wednesday 26, 2 failed; Thursday 27, 1 failed; Friday 27, 3 failed; Saturday 9; Sunday 7, 1 failed.">
+              <path d="M36 184H352M36 141H352M36 98H352M36 55H352M36 12H352" class="gl"/>
+              <text x="30" y="188" class="tl e">0</text><text x="30" y="145" class="tl e">10</text><text x="30" y="102" class="tl e">20</text><text x="30" y="59" class="tl e">30</text><text x="30" y="16" class="tl e">40</text>
+              <rect x="44.5" y="106.6" width="28" height="77.4" class="f1 mk"/><rect x="44.5" y="93.7" width="28" height="12.9" class="f3 mk"/><rect x="44.5" y="89.4" width="28" height="4.3" class="f5 mk"/>
+              <rect x="89.5" y="89.4" width="28" height="94.6" class="f1 mk"/><rect x="89.5" y="80.8" width="28" height="8.6" class="f3 mk"/>
+              <rect x="134.5" y="98" width="28" height="86" class="f1 mk"/><rect x="134.5" y="80.8" width="28" height="17.2" class="f3 mk"/><rect x="134.5" y="72.2" width="28" height="8.6" class="f5 mk"/>
+              <rect x="179.5" y="76.5" width="28" height="107.5" class="f1 mk"/><rect x="179.5" y="72.2" width="28" height="4.3" class="f3 mk"/><rect x="179.5" y="67.9" width="28" height="4.3" class="f5 mk"/>
+              <rect x="224.5" y="102.3" width="28" height="81.7" class="f1 mk"/><rect x="224.5" y="80.8" width="28" height="21.5" class="f3 mk"/><rect x="224.5" y="67.9" width="28" height="12.9" class="f5 mk"/>
+              <rect x="269.5" y="149.6" width="28" height="34.4" class="f1 mk"/><rect x="269.5" y="145.3" width="28" height="4.3" class="f3 mk"/>
+              <rect x="314.5" y="158.2" width="28" height="25.8" class="f1 mk"/><rect x="314.5" y="153.9" width="28" height="4.3" class="f5 mk"/>
+              <text x="58.5" y="84" class="vl">22</text><text x="103.5" y="75" class="vl">24</text><text x="148.5" y="67" class="vl">26</text><text x="193.5" y="63" class="vl">27</text><text x="238.5" y="63" class="vl">27</text><text x="283.5" y="140" class="vl">9</text><text x="328.5" y="149" class="vl">7</text>
+              <path d="M36 184H352" class="ax"/>
+              <text x="58.5" y="202" class="tl m">Mon</text><text x="103.5" y="202" class="tl m">Tue</text><text x="148.5" y="202" class="tl m">Wed</text><text x="193.5" y="202" class="tl m">Thu</text><text x="238.5" y="202" class="tl m">Fri</text><text x="283.5" y="202" class="tl m">Sat</text><text x="328.5" y="202" class="tl m">Sun</text>
+            </svg>
+          </div>
+          <ul class="lgd" aria-label="Legend">
+            <li><svg class="sw" width="12" height="12" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="11" class="f1 mk"/></svg>Done</li>
+            <li><svg class="sw" width="12" height="12" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="11" class="f3 mk"/></svg>Retried</li>
+            <li><svg class="sw" width="12" height="12" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="11" class="f5 mk"/></svg>Failed (S5, reserved)</li>
+          </ul>
+          <p class="rules" style="border-top: var(--bw) solid var(--line)">Max 4 segments. Largest, most stable segment at the baseline; failure always on top in S5. Print the total, not every segment.</p>
+        </div>
+
+        <!-- grouped -->
+        <div class="chart" aria-labelledby="c-grp-t">
+          <div class="chart-h"><div class="grow"><h3 id="c-grp-t">Tokens per agent · grouped</h3><span class="u">Thousands of tokens (k) · this week · input vs output</span></div></div>
+          <div class="chart-b">
+            <svg class="cv" viewBox="0 0 360 214" role="img" aria-label="Grouped bar chart of tokens per agent this week. research-agent 420k input, 96k output. code-agent 610k input, 180k output. documentation-engineer 140k input, 62k output. performance-engineer 260k input, 40k output.">
+              <path d="M36 184H352M36 141H352M36 98H352M36 55H352M36 12H352" class="gl"/>
+              <text x="30" y="188" class="tl e">0</text><text x="30" y="145" class="tl e">200k</text><text x="30" y="102" class="tl e">400k</text><text x="30" y="59" class="tl e">600k</text><text x="30" y="16" class="tl e">800k</text>
+              <rect x="51.5" y="93.7" width="22" height="90.3" class="f1 mk"/><rect x="77.5" y="163.4" width="22" height="20.6" class="f2 mk"/>
+              <rect x="130.5" y="52.8" width="22" height="131.2" class="f1 mk"/><rect x="156.5" y="145.3" width="22" height="38.7" class="f2 mk"/>
+              <rect x="209.5" y="153.9" width="22" height="30.1" class="f1 mk"/><rect x="235.5" y="170.7" width="22" height="13.3" class="f2 mk"/>
+              <rect x="288.5" y="128.1" width="22" height="55.9" class="f1 mk"/><rect x="314.5" y="175.4" width="22" height="8.6" class="f2 mk"/>
+              <text x="62.5" y="88" class="vl">420k</text><text x="88.5" y="158" class="vl">96k</text><text x="141.5" y="47" class="vl">610k</text><text x="167.5" y="140" class="vl">180k</text><text x="220.5" y="148" class="vl">140k</text><text x="246.5" y="165" class="vl">62k</text><text x="299.5" y="122" class="vl">260k</text><text x="325.5" y="170" class="vl">40k</text>
+              <path d="M36 184H352" class="ax"/>
+              <text x="75.5" y="202" class="tl m">research</text><text x="154.5" y="202" class="tl m">code</text><text x="233.5" y="202" class="tl m">docs</text><text x="312.5" y="202" class="tl m">performance</text>
+            </svg>
+          </div>
+          <ul class="lgd" aria-label="Legend">
+            <li><svg class="sw" width="12" height="12" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="11" class="f1 mk"/></svg>Input tokens</li>
+            <li><svg class="sw" width="12" height="12" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="11" class="f2 mk"/></svg>Output tokens</li>
+          </ul>
+          <p class="rules" style="border-top: var(--bw) solid var(--line)">Max 3 bars per group, max 6 groups. Same series order in every group and in the legend. Bars always start at zero.</p>
+        </div>
+      </div>
+      <p class="rules"><b>Tooltip rules:</b> bars are real <span class="mono">button</span>s with an <span class="mono">aria-label</span> that carries the full value, so the tooltip is a visual duplicate (<span class="mono">aria-hidden</span>). It opens on hover and on keyboard focus, closes on mouse-leave, blur and Esc. "View as table" swaps the plot for a captioned data table with identical numbers.</p>
+    </section>
+
+    <!-- 3. LINE + AREA -->
+    <section class="card" aria-labelledby="h-line">
+      <div class="ch"><h2 id="h-line">Line &amp; area</h2><span class="use">Use for: continuous trends over time — latency, throughput, token volume. Area only for a single volume series.</span></div>
+      <div class="bd cg">
+        <div class="chart" aria-labelledby="c-lat-t">
+          <div class="chart-h">
+            <div class="grow"><h3 id="c-lat-t">p95 latency · last 24 h</h3><span class="u">Milliseconds (ms) · 2-hour buckets · target 400 ms</span></div>
+            <button type="button" class="btn sm" aria-pressed="{{tblLinePressed}}" aria-controls="c-lat-body" onClick="{{toggleTblLine}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" class="it1"/><path d="M3 10h18M3 15h18M9 5v14"/></svg>{{tblLineLabel}}</button>
+          </div>
+          <div class="chart-b" id="c-lat-body">
+            <sc-if value="{{showLineChart}}" hint-placeholder-val="{{ true }}">
+              <svg class="cv" viewBox="0 0 640 236" role="img" aria-label="Line chart of p95 latency over the last 24 hours. Chat API ranges 280 to 460 ms and exceeds the 400 ms target from 10:00 to 14:00. RAG retrieval ranges 160 to 280 ms and stays within target.">
+                <path d="M48 208H624M48 160H624M48 112H624M48 64H624M48 16H624" class="gl"/>
+                <text x="42" y="212" class="tl e">0</text><text x="42" y="164" class="tl e">200</text><text x="42" y="116" class="tl e">400</text><text x="42" y="68" class="tl e">600</text><text x="42" y="20" class="tl e">800 ms</text>
+                <path d="M48 112H624" class="tg"/>
+                <text x="620" y="106" class="tgt" text-anchor="end">Target 400 ms</text>
+                <path d="M48 164.8L96 167.2L144 169.6L192 166L240 157.6L288 148L336 140.8L384 144.4L432 152.8L480 158.8L528 161.2L576 162.4L624 164.8" class="lo d2"/>
+                <path d="M48 164.8L96 167.2L144 169.6L192 166L240 157.6L288 148L336 140.8L384 144.4L432 152.8L480 158.8L528 161.2L576 162.4L624 164.8" class="lc c2 d2"/>
+                <path d="M48 133.6L96 138.4L144 140.8L192 136L240 121.6L288 107.2L336 97.6L384 102.4L432 114.4L480 124L528 128.8L576 131.2L624 136" class="lo"/>
+                <path d="M48 133.6L96 138.4L144 140.8L192 136L240 121.6L288 107.2L336 97.6L384 102.4L432 114.4L480 124L528 128.8L576 131.2L624 136" class="lc c1"/>
+                <circle cx="288" cy="107.2" r="4" class="f5 mk"/><circle cx="336" cy="97.6" r="4" class="f5 mk"/><circle cx="384" cy="102.4" r="4" class="f5 mk"/>
+                <text x="336" y="86" class="tgt halo" text-anchor="middle">Over target 10:00–14:00 · peak 460 ms</text>
+                <circle cx="624" cy="136" r="4" class="f1 mk"/><rect x="620" y="160.8" width="8" height="8" class="f2 mk"/>
+                <path d="M48 208H624" class="ax"/>
+                <text x="48" y="226" class="tl m">00:00</text><text x="144" y="226" class="tl m">04:00</text><text x="240" y="226" class="tl m">08:00</text><text x="336" y="226" class="tl m">12:00</text><text x="432" y="226" class="tl m">16:00</text><text x="528" y="226" class="tl m">20:00</text><text x="624" y="226" class="tl m">24:00</text>
+              </svg>
+            </sc-if>
+            <sc-if value="{{showLineTable}}" hint-placeholder-val="{{ false }}">
+              <div class="ctbl" style="max-height: 236px; overflow-y: auto">
+                <table>
+                  <caption>p95 latency per 2-hour bucket, last 24 h. Target 400 ms.</caption>
+                  <thead><tr><th scope="col">Time</th><th scope="col" class="num">Chat API</th><th scope="col" class="num">RAG retrieval</th><th scope="col">Chat API vs target</th></tr></thead>
+                  <tbody><sc-for list="{{latRows}}" as="r" hint-placeholder-count="13"><tr><td class="mono">{{r.h}}</td><td class="num">{{r.a}}</td><td class="num">{{r.b}}</td><td><span class="pill {{r.cls}}">{{r.st}}</span></td></tr></sc-for></tbody>
+                </table>
+              </div>
+            </sc-if>
+          </div>
+          <ul class="lgd" aria-label="Legend">
+            <li><svg class="sw" width="26" height="10" aria-hidden="true"><path d="M1 5h24" class="lo"/><path d="M1 5h24" class="lc c1"/><circle cx="13" cy="5" r="3.5" class="f1 mk"/></svg>Chat API (solid, circle)</li>
+            <li><svg class="sw" width="26" height="10" aria-hidden="true"><path d="M1 5h24" class="lo d2"/><path d="M1 5h24" class="lc c2 d2"/><rect x="9.5" y="1.5" width="7" height="7" class="f2 mk"/></svg>RAG retrieval (dashed, square)</li>
+            <li><svg class="sw" width="22" height="8" aria-hidden="true"><path d="M0 4h22" class="tg"/></svg>Target 400 ms</li>
+            <li><svg class="sw" width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="4" class="f5 mk"/></svg>Point over target</li>
+          </ul>
+        </div>
+
+        <div class="chart" aria-labelledby="c-area-t">
+          <div class="chart-h"><div class="grow"><h3 id="c-area-t">Tokens processed · today</h3><span class="u">Thousands of tokens per hour (k/h) · all nodes</span></div></div>
+          <div class="chart-b">
+            <svg class="cv" viewBox="0 0 420 200" role="img" aria-label="Area chart of tokens processed per hour today. Night load 5k to 8k per hour, rising from 08:00 to a peak of 52k per hour at 14:00, then falling to 20k by 22:00.">
+              <path d="M40 168H404M40 116H404M40 64H404M40 12H404" class="gl"/>
+              <text x="34" y="172" class="tl e">0</text><text x="34" y="120" class="tl e">20k</text><text x="34" y="68" class="tl e">40k</text><text x="34" y="16" class="tl e">60k</text>
+              <path d="M40 147.2L73 152.4L106 155L139 149.8L172 121.2L205 79.6L238 48.4L271 32.8L304 43.2L337 61.4L370 90L403 116L403 168L40 168Z" class="f2 ara"/>
+              <path d="M40 147.2L73 152.4L106 155L139 149.8L172 121.2L205 79.6L238 48.4L271 32.8L304 43.2L337 61.4L370 90L403 116" class="lo"/>
+              <path d="M40 147.2L73 152.4L106 155L139 149.8L172 121.2L205 79.6L238 48.4L271 32.8L304 43.2L337 61.4L370 90L403 116" class="lc c2"/>
+              <rect x="267" y="28.8" width="8" height="8" class="f2 mk"/>
+              <text x="271" y="20" class="vl halo">Peak 52k/h · 14:00</text>
+              <path d="M40 168H404" class="ax"/>
+              <text x="40" y="186" class="tl m">00:00</text><text x="139" y="186" class="tl m">06:00</text><text x="238" y="186" class="tl m">12:00</text><text x="337" y="186" class="tl m">18:00</text><text x="403" y="186" class="tl m">22:00</text>
+            </svg>
+          </div>
+          <ul class="lgd" aria-label="Legend">
+            <li><svg class="sw" width="26" height="12" aria-hidden="true"><rect x="0.5" y="4" width="25" height="7.5" class="f2 ara"/><path d="M1 4h24" class="lo"/><path d="M1 4h24" class="lc c2"/></svg>Tokens per hour (k/h)</li>
+          </ul>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> max 4 lines per chart — more becomes small multiples. Gridlines <span class="mono">var(--line)</span>, axis labels <span class="mono">var(--muted)</span>, unit on the top tick and in the subtitle. Targets and thresholds are dashed <span class="mono">--alert-text</span> lines with a text label; points that break them get an S5 marker and a written annotation. Don't stack areas with more than 3 series.</p>
+    </section>
+
+    <!-- 4. DONUT / GAUGE / RING -->
+    <section class="card" aria-labelledby="h-part">
+      <div class="ch"><h2 id="h-part">Donut, gauge &amp; score ring</h2><span class="use">Use for: share of a whole at one moment (donut); a single 0–100 score against bands (gauge, ring)</span></div>
+      <div class="bd cg3">
+        <div class="chart" aria-labelledby="c-dn-t">
+          <div class="chart-h"><div class="grow"><h3 id="c-dn-t">Tokens by model · October</h3><span class="u">Share of 12.4M tokens · month to date</span></div></div>
+          <div class="chart-b" style="display: flex; flex-wrap: wrap; gap: 18px; align-items: center">
+            <div class="dn">
+              <svg viewBox="0 0 180 180" width="180" height="180" role="img" aria-label="Donut chart. llama3.1:8b 46 percent, qwen2.5-coder:14b 27 percent, claude-sonnet 18 percent, nomic-embed-text 9 percent of 12.4 million tokens.">
+                <path d="M90 10A80 80 0 0 1 109.9 167.5L102.43 138.43A50 50 0 0 0 90 40Z" class="f1 mk"/>
+                <path d="M109.9 167.5A80 80 0 0 1 10.63 100.03L40.4 96.27A50 50 0 0 0 102.43 138.43Z" class="f2 mk"/>
+                <path d="M10.63 100.03A80 80 0 0 1 47.13 22.46L63.21 47.79A50 50 0 0 0 40.4 96.27Z" class="f3 mk"/>
+                <path d="M47.13 22.46A80 80 0 0 1 90 10L90 40A50 50 0 0 0 63.21 47.79Z" class="f4 mk"/>
+              </svg>
+              <div class="dnc" aria-hidden="true"><b>12.4M</b><span>tokens</span></div>
+            </div>
+            <table class="dlg" style="flex: 1 1 160px; min-width: 0">
+              <tbody>
+                <tr><td><svg class="sw" width="12" height="12" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="11" class="f1 mk"/></svg></td><td>llama3.1:8b</td><td class="num">5.7M</td><td class="num">46%</td></tr>
+                <tr><td><svg class="sw" width="12" height="12" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="11" class="f2 mk"/></svg></td><td>qwen2.5-coder:14b</td><td class="num">3.4M</td><td class="num">27%</td></tr>
+                <tr><td><svg class="sw" width="12" height="12" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="11" class="f3 mk"/></svg></td><td>claude-sonnet</td><td class="num">2.2M</td><td class="num">18%</td></tr>
+                <tr><td style="border-bottom: 0"><svg class="sw" width="12" height="12" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="11" class="f4 mk"/></svg></td><td style="border-bottom: 0">nomic-embed-text</td><td class="num" style="border-bottom: 0">1.1M</td><td class="num" style="border-bottom: 0">9%</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="rules">Max 5 slices + S6 "Other". Start at 12 o'clock, largest first, clockwise. Legend is a table with value and %, so slices are never read by color.</p>
+        </div>
+
+        <div class="chart" aria-labelledby="c-g-t">
+          <div class="chart-h"><div class="grow"><h3 id="c-g-t">Knowledge retrieval quality</h3><span class="u">Score 0–100 · weekly eval · 240 questions</span></div></div>
+          <div class="chart-b" style="display: flex; justify-content: center">
+            <svg viewBox="-20 -16 240 140" width="280" role="img" aria-label="Gauge: score 82 out of 100, in the Good band. Bands: Poor 0 to 49, Fair 50 to 74, Good 75 to 100." style="max-width: 100%; height: auto; font-family: 'IBM Plex Sans', system-ui, sans-serif; overflow: visible">
+              <path d="M8 100A92 92 0 0 1 100 8" class="gbo"/><path d="M100 8A92 92 0 0 1 165.05 34.95" class="gbo"/><path d="M165.05 34.95A92 92 0 0 1 192 100" class="gbo"/>
+              <path d="M8 100A92 92 0 0 1 100 8" class="gb bad"/><path d="M100 8A92 92 0 0 1 165.05 34.95" class="gb mid"/><path d="M165.05 34.95A92 92 0 0 1 192 100" class="gb good"/>
+              <path d="M30 100A70 70 0 0 1 170 100" class="gtk"/>
+              <path d="M30 100A70 70 0 0 1 170 100" class="gtr"/>
+              <path d="M30 100A70 70 0 0 1 159.11 62.49" class="gva"/>
+              <text x="22" y="24" class="gbl" text-anchor="end">Poor &lt;50</text><text x="140" y="0" class="gbl">Fair 50–74</text><text x="198" y="62" class="gbl">Good 75+</text>
+              <text x="100" y="90" class="gv">82</text><text x="100" y="110" class="gs">of 100 · Good</text>
+              <text x="30" y="118" class="tl m">0</text><text x="170" y="118" class="tl m">100</text>
+            </svg>
+          </div>
+          <p class="rules">Bands are labelled in text and differ by dash (Poor dashed). The value and band name are always printed in the center.</p>
+        </div>
+
+        <div class="chart" aria-labelledby="c-ring-t">
+          <div class="chart-h"><div class="grow"><h3 id="c-ring-t">Eval pass rate · score rings</h3><span class="u">% of eval tasks passed · last run</span></div></div>
+          <div class="chart-b" style="display: flex; flex-direction: column; gap: 4px">
+            <div class="row" style="padding: 8px 0"><svg width="64" height="64" viewBox="0 0 80 80" role="img" aria-label="research-agent 88 percent, good" style="font-family: 'IBM Plex Sans', system-ui, sans-serif"><circle cx="40" cy="40" r="26" class="rtrk"/><circle cx="40" cy="40" r="26" class="rval" stroke-dasharray="143.76 163.36" transform="rotate(-90 40 40)"/><circle cx="40" cy="40" r="33" class="nf mk"/><circle cx="40" cy="40" r="19.5" class="nf mk"/><text x="40" y="46" class="rnum">88</text></svg><div style="flex-grow: 1; display: flex; flex-direction: column"><strong style="font-size: 13.5px; font-weight: 600">research-agent</strong><span class="sub2">211 / 240 tasks</span></div><span class="pill ok">Good</span></div>
+            <div class="row" style="padding: 8px 0"><svg width="64" height="64" viewBox="0 0 80 80" role="img" aria-label="code-agent 74 percent, fair" style="font-family: 'IBM Plex Sans', system-ui, sans-serif"><circle cx="40" cy="40" r="26" class="rtrk"/><circle cx="40" cy="40" r="26" class="rval" stroke-dasharray="120.89 163.36" transform="rotate(-90 40 40)"/><circle cx="40" cy="40" r="33" class="nf mk"/><circle cx="40" cy="40" r="19.5" class="nf mk"/><text x="40" y="46" class="rnum">74</text></svg><div style="flex-grow: 1; display: flex; flex-direction: column"><strong style="font-size: 13.5px; font-weight: 600">code-agent</strong><span class="sub2">178 / 240 tasks</span></div><span class="pill warn">Fair</span></div>
+            <div class="row" style="padding: 8px 0"><svg width="64" height="64" viewBox="0 0 80 80" role="img" aria-label="documentation-engineer 46 percent, poor, below 50" style="font-family: 'IBM Plex Sans', system-ui, sans-serif"><circle cx="40" cy="40" r="26" class="rtrk"/><circle cx="40" cy="40" r="26" class="rval alert" stroke-dasharray="75.15 163.36" transform="rotate(-90 40 40)"/><circle cx="40" cy="40" r="33" class="nf mk"/><circle cx="40" cy="40" r="19.5" class="nf mk"/><text x="40" y="46" class="rnum">46</text></svg><div style="flex-grow: 1; display: flex; flex-direction: column"><strong style="font-size: 13.5px; font-weight: 600">documentation-engineer</strong><span class="sub2">110 / 240 tasks · below 50</span></div><span class="pill bad">Poor</span></div>
+          </div>
+          <p class="rules">Rings for compact lists; the band is a text pill next to the number, so the ring color is never the only signal.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. KPI SPARKLINE + PROGRESS -->
+    <section class="card" aria-labelledby="h-kpi">
+      <div class="ch"><h2 id="h-kpi">KPI sparkline &amp; progress meter</h2><span class="use">Use for: a headline number with its recent shape (sparkline); completion toward a known total (meter)</span></div>
+      <div class="bd" style="display: flex; flex-direction: column; gap: 20px">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px">
+          <div class="card kc">
+            <span class="k">Requests / min · chat API</span>
+            <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px"><span class="v">1,284</span>
+              <svg width="120" height="36" viewBox="0 0 120 36" role="img" aria-label="Trend over the last hour: rising from 980 to 1,284 requests per minute"><path d="M4 29.6L14 27.2L24 24.8L34 28.8L44 20L54 16L64 18.4L74 13.6L84 11.2L94 12.8L104 8L114 5.3L114 34L4 34Z" class="f2 ara"/><path d="M4 29.6L14 27.2L24 24.8L34 28.8L44 20L54 16L64 18.4L74 13.6L84 11.2L94 12.8L104 8L114 5.3" class="lo" style="stroke-width: 3.5"/><path d="M4 29.6L14 27.2L24 24.8L34 28.8L44 20L54 16L64 18.4L74 13.6L84 11.2L94 12.8L104 8L114 5.3" class="lc c2" style="stroke-width: 1.8"/><circle cx="114" cy="5.3" r="3" class="f1 mk"/></svg>
+            </div>
+            <span class="sub2"><span class="pill info dl">▲ up 8.2%</span> vs same hour yesterday · last 60 min</span>
+          </div>
+          <div class="card kc">
+            <span class="k">p95 latency · chat API</span>
+            <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px"><span class="v">312 <small>ms</small></span>
+              <svg width="120" height="36" viewBox="0 0 120 36" role="img" aria-label="Trend over the last hour: falling from 460 to 312 milliseconds"><path d="M4 10L14 8L24 12L34 9L44 14L54 13L64 18L74 17L84 22L94 21L104 25L114 26" class="lo" style="stroke-width: 3.5"/><path d="M4 10L14 8L24 12L34 9L44 14L54 13L64 18L74 17L84 22L94 21L104 25L114 26" class="lc c2" style="stroke-width: 1.8"/><circle cx="114" cy="26" r="3" class="f1 mk"/></svg>
+            </div>
+            <span class="sub2"><span class="pill ok dl">▼ down 32% · better</span> under 400 ms target</span>
+          </div>
+          <div class="card kc">
+            <span class="k">LLM spend · today</span>
+            <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px"><span class="v">€4.82</span>
+              <svg width="120" height="36" viewBox="0 0 120 36" role="img" aria-label="Spend accumulating through the day, now €4.82 of €6.00 daily cap"><path d="M4 14H116" class="tg" style="stroke-width: 1"/><path d="M4 32L14 30L24 29L34 27L44 26L54 23L64 22L74 19L84 18L94 17L104 16L114 17.5" class="lo" style="stroke-width: 3.5"/><path d="M4 32L14 30L24 29L34 27L44 26L54 23L64 22L74 19L84 18L94 17L104 16L114 17.5" class="lc c2" style="stroke-width: 1.8"/><circle cx="114" cy="17.5" r="3" class="f1 mk"/></svg>
+            </div>
+            <span class="sub2"><span class="pill warn dl">80% of cap</span> €6.00 daily cap (dashed)</span>
+          </div>
+        </div>
+        <p class="sub2" style="margin: 0">Sparklines have no axes or gridlines; they never appear without the number. Delta pills say direction in words ("up", "down · better") — arrows and color are secondary.</p>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px 28px">
+          <div class="mtr"><span class="st">Default · determinate</span>
+            <div class="mtr-h"><span style="font-weight: 500">Knowledge indexing · Engineering wiki</span><span class="mono" style="color: var(--text2)">2,412 / 3,540 docs · 68%</span></div>
+            <div class="mbar" role="progressbar" aria-label="Knowledge indexing" aria-valuemin="0" aria-valuemax="100" aria-valuenow="68" aria-valuetext="68 percent, 2,412 of 3,540 documents"><div class="bf" style="width: 68%"></div></div>
+            <div class="mfoot"><span>ETA 6 min</span><span>node-03</span></div>
+          </div>
+          <div class="mtr"><span class="st">With threshold marker</span>
+            <div class="mtr-h"><span style="font-weight: 500">October budget · AutoBot Labs</span><span class="mono" style="color: var(--text2)">€63 / €100 · 63%</span></div>
+            <div class="mbar" role="meter" aria-label="October budget used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="63" aria-valuetext="63 percent, alert at 80 percent"><div class="bf" style="width: 63%"></div><span class="tick" style="left: 80%" aria-hidden="true"></span></div>
+            <div class="mfoot"><span>€0</span><span style="margin-left: auto; margin-right: 12%">alert at 80%</span><span>€100</span></div>
+          </div>
+          <div class="mtr"><span class="st">Over threshold · alert</span>
+            <div class="mtr-h"><span style="font-weight: 600">performance-engineer budget</span><span class="mono" style="color: var(--alert-text); font-weight: 600">€18.20 / €20 · 91% · over alert</span></div>
+            <div class="mbar" role="meter" aria-label="performance-engineer budget used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="91" aria-valuetext="91 percent, over the 80 percent alert"><div class="bf alert" style="width: 91%"></div><span class="tick" style="left: 80%" aria-hidden="true"></span></div>
+            <div class="mfoot"><span>Approval needed to raise budget</span><a href="Approvals.dc.html">Review</a></div>
+          </div>
+          <div class="mtr" style="opacity: .6"><span class="st">Paused · disabled</span>
+            <div class="mtr-h"><span style="font-weight: 500">Re-embedding · Support tickets</span><span class="mono" style="color: var(--text2)">41% · paused</span></div>
+            <div class="mbar" role="progressbar" aria-label="Re-embedding, paused" aria-valuemin="0" aria-valuemax="100" aria-valuenow="41" aria-valuetext="41 percent, paused"><div class="bf" style="width: 41%; background: var(--dot-idle)"></div></div>
+            <div class="mfoot"><span><span class="pill idle">paused</span> by MV · 10:12</span><span></span></div>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> use <span class="mono">role="progressbar"</span> for work in progress and <span class="mono">role="meter"</span> for a level (budget, quota), always with <span class="mono">aria-valuetext</span>. The number and unit sit above the bar; thresholds are a tick plus words. Unknown duration → spinner + text, not a fake bar.</p>
+    </section>
+
+    <!-- 6. HEATMAP -->
+    <section class="card" aria-labelledby="h-heat">
+      <div class="ch"><h2 id="h-heat">Resource heatmap</h2><span class="use">Use for: density across two dimensions — fleet node × hour, agent × weekday</span></div>
+      <div class="bd" style="display: flex; flex-direction: column; gap: 14px">
+        <div class="chart" aria-labelledby="c-hm-t">
+          <div class="chart-h">
+            <div class="grow"><h3 id="c-hm-t">CPU utilisation by node · today</h3><span class="u">Average CPU % per 2-hour bucket · fleet node-01 … node-06</span></div>
+            <button type="button" class="btn sm" aria-pressed="{{tblHeatPressed}}" aria-controls="c-hm-body" onClick="{{toggleTblHeat}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" class="it1"/><path d="M3 10h18M3 15h18M9 5v14"/></svg>{{tblHeatLabel}}</button>
+          </div>
+          <div class="chart-b" id="c-hm-body">
+            <sc-if value="{{showHeat}}" hint-placeholder-val="{{ true }}">
+              <div class="hmw">
+                <div class="hm" role="img" aria-label="Heatmap of CPU percent for six nodes across twelve 2-hour buckets. node-03 is hottest, peaking at 92 percent at 12:00. node-04 has no data from 10:00 onward because it is offline. Use View as table for all values.">
+                  <div class="hmr" aria-hidden="true"><span></span><sc-for list="{{hours}}" as="h" hint-placeholder-count="12"><span class="hmh mono">{{h}}</span></sc-for></div>
+                  <sc-for list="{{heatRows}}" as="r" hint-placeholder-count="6">
+                    <div class="hmr"><span class="hmn mono">{{r.node}}</span><sc-for list="{{r.cells}}" as="c" hint-placeholder-count="12"><div class="hc {{c.cls}}" title="{{c.title}}">{{c.t}}<i class="lv"></i></div></sc-for></div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{showHeatTable}}" hint-placeholder-val="{{ false }}">
+              <div class="ctbl">
+                <table>
+                  <caption>Average CPU % per node and 2-hour bucket, today. "—" means no data (node offline).</caption>
+                  <thead><tr><th scope="col">Node</th><sc-for list="{{hours}}" as="h" hint-placeholder-count="12"><th scope="col" class="num" style="padding: 9px 8px">{{h}}</th></sc-for></tr></thead>
+                  <tbody><sc-for list="{{heatRows}}" as="r" hint-placeholder-count="6"><tr><td class="mono">{{r.node}}</td><sc-for list="{{r.cells}}" as="c" hint-placeholder-count="12"><td class="num" style="padding: 10px 8px">{{c.t}}</td></sc-for></tr></sc-for></tbody>
+                </table>
+              </div>
+            </sc-if>
+          </div>
+          <div class="hlg" style="padding: 0 14px 14px" aria-label="Legend">
+            <span class="st" style="margin-right: 4px">CPU %</span>
+            <span style="display: inline-flex; gap: 6px; align-items: center"><span class="hc h0" aria-hidden="true"><i class="lv"></i></span>0–19</span>
+            <span style="display: inline-flex; gap: 6px; align-items: center"><span class="hc h1" aria-hidden="true"><i class="lv"></i></span>20–39</span>
+            <span style="display: inline-flex; gap: 6px; align-items: center"><span class="hc h2" aria-hidden="true"><i class="lv"></i></span>40–59</span>
+            <span style="display: inline-flex; gap: 6px; align-items: center"><span class="hc h3" aria-hidden="true"><i class="lv"></i></span>60–79</span>
+            <span style="display: inline-flex; gap: 6px; align-items: center"><span class="hc h4" aria-hidden="true"><i class="lv"></i></span>80–100</span>
+            <span style="display: inline-flex; gap: 6px; align-items: center"><span class="hc hx" aria-hidden="true">—</span>No data (offline)</span>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> 5 sequential steps from tokens, light = low. Every cell prints its value; in High contrast and Monochrome the fill is replaced by a level bar at the cell bottom. Missing data is a dashed "—" cell, never the same as 0. Max ~12 × 24 cells before switching to a table.</p>
+    </section>
+
+    <!-- 7. SCATTER -->
+    <section class="card" aria-labelledby="h-sc">
+      <div class="ch"><h2 id="h-sc">Scatter</h2><span class="use">Use for: relationship between two measures — model cost vs quality, latency vs context size</span></div>
+      <div class="bd cg">
+        <div class="chart" aria-labelledby="c-sc-t">
+          <div class="chart-h"><div class="grow"><h3 id="c-sc-t">Cost vs quality by model</h3><span class="u">x: € per 1k requests · y: eval quality score (0–100) · last 7 days</span></div></div>
+          <div class="chart-b">
+            <svg class="cv" viewBox="0 0 420 236" role="img" aria-label="Scatter plot of cost versus quality. Local models: llama3.1:8b €0.15, score 70; mistral-nemo €0.45, 64; qwen2.5-coder:14b €0.90, 82; qwen2.5:32b €1.90, 86. Cloud: gemini-flash €0.60, 77; gpt-4o-mini €1.40, 80; claude-sonnet €3.10, 93. Quality floor 75.">
+              <path d="M44 200H404M44 163.2H404M44 126.4H404M44 89.6H404M44 52.8H404M44 16H404M146.9 16V200M249.7 16V200M352.6 16V200" class="gl"/>
+              <text x="38" y="204" class="tl e">50</text><text x="38" y="167" class="tl e">60</text><text x="38" y="130" class="tl e">70</text><text x="38" y="94" class="tl e">80</text><text x="38" y="57" class="tl e">90</text><text x="38" y="20" class="tl e">100</text>
+              <path d="M44 108H404" class="tg"/><text x="402" y="104" class="tgt" text-anchor="end">Quality floor 75</text>
+              <path d="M44 16V200H404" class="ax nf"/>
+              <circle cx="59.4" cy="126.4" r="5" class="f1 mk"/><circle cx="90.3" cy="148.5" r="5" class="f1 mk"/><circle cx="136.6" cy="82.2" r="5" class="f1 mk"/><circle cx="239.4" cy="67.5" r="5" class="f1 mk"/>
+              <rect x="101.2" y="96.1" width="9" height="9" class="f4 mk"/><rect x="183.5" y="85.1" width="9" height="9" class="f4 mk"/><rect x="358.4" y="37.3" width="9" height="9" class="f4 mk"/>
+              <text x="67" y="130" class="lbl halo">llama3.1:8b</text><text x="98" y="152" class="lbl halo">mistral-nemo</text><text x="113" y="113" class="lbl halo">gemini-flash</text><text x="144" y="76" class="lbl halo">qwen2.5-coder:14b</text><text x="196" y="99" class="lbl halo">gpt-4o-mini</text><text x="247" y="63" class="lbl halo">qwen2.5:32b</text><text x="354" y="33" class="lbl halo" text-anchor="end">claude-sonnet</text>
+              <text x="44" y="218" class="tl m">€0</text><text x="146.9" y="218" class="tl m">€1</text><text x="249.7" y="218" class="tl m">€2</text><text x="352.6" y="218" class="tl m">€3</text>
+              <text x="224" y="234" class="tl m">€ per 1k requests →</text>
+            </svg>
+          </div>
+          <ul class="lgd" aria-label="Legend">
+            <li><svg class="sw" width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="5" class="f1 mk"/></svg>Local · ollama (circle)</li>
+            <li><svg class="sw" width="12" height="12" aria-hidden="true"><rect x="1.5" y="1.5" width="9" height="9" class="f4 mk"/></svg>Cloud API (square)</li>
+            <li><svg class="sw" width="22" height="8" aria-hidden="true"><path d="M0 4h22" class="tg"/></svg>Quality floor 75</li>
+          </ul>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px; color: var(--text2); line-height: 1.6">
+          <span class="st">Reading this chart</span>
+          <p style="margin: 0">Top-left is best: cheap and good. qwen2.5-coder:14b is the default routing pick for code tasks; claude-sonnet is reserved for approvals-gated work where quality outweighs cost.</p>
+          <p style="margin: 0">Groups are distinguished by <b style="color: var(--text)">marker shape</b> (circle vs square) as well as series fill; every point carries a direct label, so the legend is optional for reading.</p>
+          <p style="margin: 0">Max 2–3 groups, max ~40 points with labels. Above that, drop labels, keep shapes and add hover/focus tooltips on points as in the spend chart.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. CHART STATES -->
+    <section class="card" aria-labelledby="h-st">
+      <div class="ch"><h2 id="h-st">Chart states</h2><span class="use">Use for: every chart container. Try them live with "Preview chart state" on the spend chart.</span></div>
+      <div class="bd" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px">
+        <div class="col" style="display: flex; flex-direction: column; gap: 8px"><span class="st">Loading · skeleton + aria-busy</span>
+          <div class="skw" style="border: var(--bw) solid var(--border); border-radius: 8px; height: 200px" aria-hidden="true"><div class="sk" style="height: 40%"></div><div class="sk" style="height: 65%"></div><div class="sk" style="height: 50%"></div><div class="sk" style="height: 80%"></div><div class="sk" style="height: 30%"></div><span class="lmsg"><span class="spin"></span>Loading token usage…</span></div>
+        </div>
+        <div class="col" style="display: flex; flex-direction: column; gap: 8px"><span class="st">Empty · reason + next step</span>
+          <div class="cst" style="height: 200px"><b>No heartbeat runs in this range</b><p>Routines start running once an agent is assigned. Try "Last 30 days".</p><button type="button" class="btn sm">Last 30 days</button></div>
+        </div>
+        <div class="col" style="display: flex; flex-direction: column; gap: 8px"><span class="st">Error · role="alert" + retry</span>
+          <div class="cst err" style="height: 200px"><b>Couldn't load fleet metrics</b><p>node-04 did not respond (timeout after 30 s). Other nodes are unaffected.</p><button type="button" class="btn sm pri">Retry</button></div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> keep the chart frame, title and units during every state so layout doesn't jump. Loading uses skeleton marks plus a text status; empty explains why and offers an action; error says what failed in words and offers Retry. Never show an empty axis with no explanation, and never render zeros for missing data.</p>
+    </section>
+
+    <!-- 9. RULES -->
+    <section class="card" aria-labelledby="h-rules">
+      <div class="ch"><h2 id="h-rules">Usage rules</h2><span class="use">Which chart, how many series, how to format labels, and accessibility requirements</span></div>
+      <div style="overflow-x: auto">
+        <table style="border-collapse: collapse; width: 100%">
+          <thead><tr><th>Question you're answering</th><th>Use</th><th>Max series / items</th><th>Avoid</th></tr></thead>
+          <tbody>
+            <tr><td>Compare categories (agents, nodes, models)</td><td><strong>Horizontal bar</strong>, sorted</td><td>1 series · 15 bars</td><td>Pie for &gt;5 items, 3D, truncated axis</td></tr>
+            <tr><td>Compare time buckets (days, weeks)</td><td><strong>Vertical bar</strong></td><td>1 series · 14 bars</td><td>Lines for &lt;5 discrete points</td></tr>
+            <tr><td>Composition per bucket</td><td><strong>Stacked bar</strong></td><td>4 segments</td><td>Comparing middle segments across bars</td></tr>
+            <tr><td>Two or three measures per category</td><td><strong>Grouped bar</strong></td><td>3 per group · 6 groups</td><td>Mixed units on one axis</td></tr>
+            <tr><td>Trend over continuous time</td><td><strong>Line</strong> (+ target line)</td><td>4 lines</td><td>Dual y-axes, smoothing that hides peaks</td></tr>
+            <tr><td>Volume over time, single series</td><td><strong>Area</strong></td><td>1 (stacked max 3)</td><td>Overlapping transparent areas</td></tr>
+            <tr><td>Share of a whole, one moment</td><td><strong>Donut</strong> + table legend</td><td>5 slices + Other</td><td>Side-by-side donuts for comparison</td></tr>
+            <tr><td>One score against bands</td><td><strong>Gauge</strong> or <strong>score ring</strong></td><td>1 value</td><td>Gauges without band labels</td></tr>
+            <tr><td>Headline number with recent shape</td><td><strong>KPI + sparkline</strong></td><td>1 line</td><td>Axes, legends, sparkline without number</td></tr>
+            <tr><td>Density across two dimensions</td><td><strong>Heatmap</strong>, 5 steps</td><td>12 × 24 cells</td><td>Rainbow / diverging scale for one-sided data</td></tr>
+            <tr><td>Relationship between two measures</td><td><strong>Scatter</strong></td><td>3 groups · 40 labelled points</td><td>Color-only groups</td></tr>
+            <tr><td style="border-bottom: 0">Progress toward a known total</td><td style="border-bottom: 0"><strong>Progress meter</strong></td><td style="border-bottom: 0">1 bar + 1 threshold</td><td style="border-bottom: 0">Fake progress for unknown duration</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="bd rgrid" style="border-top: var(--bw) solid var(--line)">
+        <div>
+          <h3>Label formatting</h3>
+          <dl class="fx">
+            <dt>Thousands</dt><dd class="mono">1,284 · 12.4k · 610k</dd>
+            <dt>Millions</dt><dd class="mono">1.9M · 12.4M tokens</dd>
+            <dt>Currency</dt><dd class="mono">€4.12 · €21.60 · €1.2k</dd>
+            <dt>Duration</dt><dd class="mono">312 ms · 1.4 s · 3m 12s</dd>
+            <dt>Percent</dt><dd class="mono">63% · 8.2% (1 dp only if &lt;10)</dd>
+            <dt>Time / date</dt><dd class="mono">14:00 · Mon 6 Oct</dd>
+          </dl>
+          <ul style="margin-top: 10px">
+            <li>Unit in the subtitle <b>and</b> on the top tick; never only in the tooltip.</li>
+            <li>Max 3 significant digits on axes; full precision in tables and tooltips.</li>
+            <li>Numbers in tables right-aligned, tabular figures (<span class="mono">.num</span>).</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Never color-only meaning</h3>
+          <ul>
+            <li><b>Series</b>: fill + pattern (HC/Mono), dash + marker shape for lines.</li>
+            <li><b>Thresholds</b>: dashed line with a written label ("Target 400 ms").</li>
+            <li><b>Alerts</b>: S5 / <span class="mono">--bar-alert</span> mark plus a word — "over", "alert", "Poor".</li>
+            <li><b>Direction</b>: "up 8.2%", "down · better" — not just ▲ / ▼ or green / red.</li>
+            <li><b>Outline</b>: every mark has a 1px <span class="mono">var(--stroke)</span> edge.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Accessibility &amp; interaction</h3>
+          <ul>
+            <li>Static chart: <span class="mono">role="img"</span> + <span class="mono">aria-label</span> stating the takeaway and key values.</li>
+            <li>Interactive marks: focusable <span class="mono">button</span>s with full-value <span class="mono">aria-label</span>; tooltip on hover <b>and</b> focus, Esc closes.</li>
+            <li>Every chart has a working "View as table" toggle (<span class="mono">aria-pressed</span>, captioned table).</li>
+            <li>Loading: <span class="mono">aria-busy</span> + status text; error: <span class="mono">role="alert"</span>.</li>
+            <li>Respect <span class="mono">prefers-reduced-motion</span>; no animated entrances.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <nav aria-label="Design system pages" class="card" style="grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px; padding: 12px">
+      <a href="ComponentsGrid.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">← Previous</span><span style="font-weight: 600; color: var(--text)">Grid, tables &amp; forms</span></a>
+      <a href="ComponentsForms.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">Next →</span><span style="font-weight: 600; color: var(--text)">Form controls</span></a>
+    </nav>
+  </main>
+  </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"$preview":{"width":1440,"height":5200}}'>
+const THEMES = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+const STATES = [['ready', 'Ready'], ['loading', 'Loading'], ['empty', 'Empty'], ['error', 'Error']];
+const CAP = 6;
+const DAYS = [
+  { full: 'Monday', v: 4.12, tok: '1.9M', runs: 22 },
+  { full: 'Tuesday', v: 5.38, tok: '2.4M', runs: 24 },
+  { full: 'Wednesday', v: 6.05, tok: '2.8M', runs: 26 },
+  { full: 'Thursday', v: 4.87, tok: '2.2M', runs: 27 },
+  { full: 'Friday', v: 7.42, tok: '3.4M', runs: 27 },
+  { full: 'Saturday', v: 2.10, tok: '0.9M', runs: 9 },
+  { full: 'Sunday', v: 1.64, tok: '0.7M', runs: 7 }
+];
+const LAT = [
+  ['00:00', 310, 180], ['02:00', 290, 170], ['04:00', 280, 160], ['06:00', 300, 175], ['08:00', 360, 210],
+  ['10:00', 420, 250], ['12:00', 460, 280], ['14:00', 440, 265], ['16:00', 390, 230], ['18:00', 350, 205],
+  ['20:00', 330, 195], ['22:00', 320, 190], ['24:00', 300, 180]
+];
+const HOURS = ['00', '02', '04', '06', '08', '10', '12', '14', '16', '18', '20', '22'];
+const NODES = [
+  ['node-01', [12, 10, 9, 14, 38, 62, 71, 68, 55, 41, 28, 18]],
+  ['node-02', [8, 7, 6, 9, 22, 35, 44, 47, 39, 30, 19, 11]],
+  ['node-03', [21, 18, 17, 25, 57, 84, 92, 88, 76, 60, 42, 30]],
+  ['node-04', [15, 14, 13, 16, 31, null, null, null, null, null, null, null]],
+  ['node-05', [5, 5, 4, 6, 12, 19, 24, 26, 21, 16, 10, 7]],
+  ['node-06', [33, 30, 29, 35, 48, 66, 79, 81, 70, 58, 45, 38]]
+];
+function lvl(v) {
+  if (v === null) return 'hx';
+  return v < 20 ? 'h0' : v < 40 ? 'h1' : v < 60 ? 'h2' : v < 80 ? 'h3' : 'h4';
+}
+const HEAT = NODES.map(([node, arr]) => ({
+  node: node,
+  cells: arr.map((v, j) => ({
+    cls: lvl(v),
+    t: v === null ? '—' : String(v),
+    title: node + ' at ' + HOURS[j] + ':00 · ' + (v === null ? 'no data (offline)' : 'CPU ' + v + '%')
+  }))
+}));
+
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const bs = st.barState || 'ready';
+    const tip = typeof st.tip === 'number' ? st.tip : -1;
+    const tb = !!st.tblBar;
+    const tl = !!st.tblLine;
+    const th = !!st.tblHeat;
+    const isReady = bs === 'ready';
+    const d = tip >= 0 ? DAYS[tip] : null;
+    const vals = {
+      theme: cur,
+      themes: THEMES.map(([id, label]) => ({ label: label, cls: id === cur ? 'on' : '', pressed: id === cur ? 'true' : 'false', pick: () => this.setState({ theme: id }) })),
+      stateOpts: STATES.map(([id, label]) => ({ label: label, cls: id === bs ? 'on' : '', pressed: id === bs ? 'true' : 'false', pick: () => this.setState({ barState: id, tip: null }) })),
+      isReady: isReady,
+      isLoading: bs === 'loading',
+      isEmpty: bs === 'empty',
+      isError: bs === 'error',
+      retry: () => this.setState({ barState: 'ready' }),
+      tblBarLabel: tb ? 'View as chart' : 'View as table',
+      tblBarPressed: tb ? 'true' : 'false',
+      toggleTblBar: () => this.setState({ tblBar: !tb, tip: null }),
+      showBarChart: isReady && !tb,
+      showBarTable: isReady && tb,
+      dayRows: DAYS.map((x) => ({ full: x.full, val: '€' + x.v.toFixed(2), tok: x.tok, runs: String(x.runs), cls: x.v > CAP ? 'bad' : 'ok', st: x.v > CAP ? 'Over by €' + (x.v - CAP).toFixed(2) : 'Within cap' })),
+      lv: () => this.setState({ tip: null }),
+      plotKey: (e) => { if (e && e.key === 'Escape') this.setState({ tip: null }); },
+      tipOn: !!d && isReady && !tb,
+      tipCls: tip === 0 ? 'al' : tip === DAYS.length - 1 ? 'ar' : '',
+      tipX: d ? ((tip + 0.5) / DAYS.length * 100).toFixed(2) : '0',
+      tipB: d ? (d.v / 8 * 100).toFixed(2) : '0',
+      tipDay: d ? d.full : '',
+      tipVal: d ? '€' + d.v.toFixed(2) + ' spend' : '',
+      tipTok: d ? d.tok + ' tokens' : '',
+      tipRuns: d ? d.runs + ' runs' : '',
+      tipNote: d ? (d.v > CAP ? 'Over daily cap by €' + (d.v - CAP).toFixed(2) : 'Within €6.00 daily cap') : '',
+      tblLineLabel: tl ? 'View as chart' : 'View as table',
+      tblLinePressed: tl ? 'true' : 'false',
+      toggleTblLine: () => this.setState({ tblLine: !tl }),
+      showLineChart: !tl,
+      showLineTable: tl,
+      latRows: LAT.map(([h, a, b]) => ({ h: h, a: a + ' ms', b: b + ' ms', cls: a > 400 ? 'bad' : 'ok', st: a > 400 ? 'Over by ' + (a - 400) + ' ms' : 'Within target' })),
+      tblHeatLabel: th ? 'View as heatmap' : 'View as table',
+      tblHeatPressed: th ? 'true' : 'false',
+      toggleTblHeat: () => this.setState({ tblHeat: !th }),
+      showHeat: !th,
+      showHeatTable: th,
+      hours: HOURS.map((h) => h + ':00'),
+      heatRows: HEAT
+    };
+    DAYS.forEach((x, i) => {
+      vals['e' + i] = () => this.setState({ tip: i });
+      vals['c' + i] = tip === i ? 'on' : '';
+    });
+    return vals;
+  }
+}
+</script>
+</body>
+</html>

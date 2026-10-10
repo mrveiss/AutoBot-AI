@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot Setup</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.preset{position:relative;text-align:left;font:inherit;color:var(--text);cursor:pointer;background:var(--surface);border:var(--bw) solid var(--border);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.preset:hover{background:var(--surface2)}
+.preset.sel{border-color:var(--stroke);outline:var(--bw) solid var(--stroke);background:var(--surface2)}
+.tag{font-size:11.5px;font-weight:500;padding:2px 7px;border-radius:4px;background:var(--idle-bg);color:var(--idle-fg);border:var(--pill-b);font-family:'IBM Plex Mono',ui-monospace,monospace}
+.stp{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--muted)}
+.num{width:24px;height:24px;border-radius:99px;border:1px solid var(--stroke);display:grid;place-items:center;font-weight:600;font-size:12px;background:var(--surface);color:var(--text);flex:none;box-sizing:border-box}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.hid{display:none}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.mcard{display:flex;flex-direction:column;gap:12px;padding:14px;border-radius:10px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;color:var(--text);text-align:left;cursor:pointer}
+.mcard:hover{background:var(--surface2)}
+.mcard.on{border:2px solid var(--primary);padding:13px}
+.mcard .mt{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mcard .md{font-size:13px;color:var(--text2);line-height:1.45}
+.mprev{height:110px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
+.mprev .pn{height:18px;background:var(--surface);border-bottom:var(--bw) solid var(--border);display:flex;align-items:center;gap:5px;padding:0 7px}
+.mprev .pb{flex-grow:1;display:flex;gap:6px;padding:7px}
+.mprev i{display:block;height:5px;border-radius:2px;background:var(--muted)}
+.mprev .ps{width:34px;display:flex;flex-direction:column;gap:4px}
+.mprev .pc{flex-grow:1;border-radius:4px;background:var(--surface);border:var(--bw) solid var(--border);padding:6px;display:flex;flex-direction:column;gap:5px}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <header style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 10px clamp(16px, 2.5vw, 28px); background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; letter-spacing: -.01em">AutoBot Setup</span>
+    </div>
+    <nav aria-label="Setup progress" style="margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+      <div class="stp" tabindex="0" data-tip="Completed — Ollama, Redis and ChromaDB passed" data-tip-pos="bottom"><span class="num" style="background: var(--i1)" aria-hidden="true"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" style="stroke-width: 3.5"><path d="M5 12l5 5 9-10"/></svg></span>System Check<span class="sr" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">(done)</span></div>
+      <span aria-hidden="true" style="width: 32px; height: 0; border-top: var(--bw) solid var(--stroke)"></span>
+      <div class="stp" aria-current="step" style="color: var(--text); font-weight: 600"><span class="num" style="background: var(--primary); color: var(--on-primary); border-color: var(--primary)">2</span>Preset &amp; interface</div>
+      <span aria-hidden="true" style="width: 32px; height: 0; border-top: var(--bw) dashed var(--stroke)"></span>
+      <div class="stp" tabindex="0" data-tip="Next: confirm your choices and install" data-tip-pos="bottom"><span class="num">3</span>Review &amp; Apply</div>
+    </nav>
+  </header>
+
+  <main style="flex: 1 1 100%; padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 20px; max-width: 1180px; box-sizing: border-box; margin: 0 auto">
+
+    <section class="card" style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 32px; padding: 20px">
+      <div style="flex: 1 1 320px; display: flex; flex-direction: column; gap: 8px">
+        <span class="sub2">Setup / Step 2 of 3</span>
+        <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em; line-height: 1.2">Choose a Starter Preset</h1>
+        <p style="margin: 0; font-size: 14px; line-height: 1.55; color: var(--text2); max-width: 520px">Choose a starter configuration that best matches your primary use-case. You can adjust everything later in Settings.</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px">
+          <span class="pill info">Step 2 of 3</span>
+          <span class="pill ok" tabindex="0" data-tip="Local model server answered — runs LLMs on this machine">Ollama reachable</span>
+          <span class="pill ok" tabindex="0" data-tip="In-memory store for sessions, queues and cache">Redis reachable</span>
+          <span class="pill ok" tabindex="0" data-tip="Vector database that stores knowledge embeddings for search">ChromaDB reachable</span>
+          <span class="pill warn" tabindex="0" data-tip="Based on the RAM and CPU detected in the system check — mid-size models fit best">Suggested tier: balanced</span>
+        </div>
+      </div>
+      <svg class="ic" viewBox="0 0 420 240" aria-hidden="true" style="flex: 0 1 200px; max-width: 200px; width: 100%; stroke-width: 3">
+        <rect x="30" y="58" width="96" height="120" rx="14" class="iw"/>
+        <path d="M48 84h44M48 102h60M48 120h36"/><circle cx="104" cy="152" r="12" class="i1"/><path d="M98 152l4 4 8-8"/>
+        <rect x="294" y="58" width="96" height="120" rx="14" class="iw"/>
+        <path d="M312 84h44M312 102h60M312 120h30"/><circle cx="368" cy="152" r="12" class="i2"/>
+        <rect x="150" y="34" width="120" height="150" rx="16" class="it3"/>
+        <rect x="166" y="52" width="88" height="40" rx="10" class="iw"/>
+        <path d="M180 72l10-10 10 10 10-14 14 20"/>
+        <path d="M168 110h84M168 128h60M168 146h72"/>
+        <circle cx="258" cy="176" r="18" class="i3"/><path d="M249 176l7 7 12-13"/>
+      </svg>
+    </section>
+
+    <section class="card" aria-labelledby="ps-h">
+      <div class="ch" style="flex-wrap: wrap">
+        <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="10" width="16" height="14" rx="3" class="i2"/><rect x="26" y="10" width="16" height="14" rx="3" class="iw"/><rect x="6" y="28" width="16" height="14" rx="3" class="iw"/><rect x="26" y="28" width="16" height="14" rx="3" class="i3"/><path d="M30 35l3 3 6-6"/></svg></span>
+        <h2 id="ps-h">Starter presets</h2>
+        <span class="sub2">7 presets · use arrow keys to move</span>
+      </div>
+
+      <div role="listbox" aria-label="Choose a starter preset" style="padding: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px">
+
+        <div role="option" aria-selected="true" tabindex="0" class="preset sel">
+          <div style="display: flex; align-items: center; gap: 10px">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="10" width="36" height="28" rx="5" class="iw"/><path d="M13 20l6 5-6 5M23 30h10M18 42h12"/></svg></span>
+            <span style="font-weight: 600; font-size: 14.5px; flex-grow: 1">Sysadmin Copilot</span>
+            <span class="pill warn" data-tip="Model tier: mid-size models — good quality at moderate RAM/latency" data-tip-pos="left">balanced</span>
+          </div>
+          <p style="margin: 0; font-size: 13px; line-height: 1.5; color: var(--text2)">Automate routine ops tasks: log triage, service health checks, disk-space alerts, and runbook execution via natural language.</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px"><span class="tag" data-tip="Skill: runs shell commands (with approval)">bash-executor</span><span class="tag" data-tip="Skill: reads and summarises log files">log-parser</span><span class="tag" data-tip="Skill: tracks CPU, memory, disk and services">system-monitor</span></div>
+          <span style="position: absolute; top: -9px; right: -9px; width: 22px; height: 22px; border-radius: 99px; background: var(--primary); display: grid; place-items: center" aria-label="Selected"><svg class="ic sonp" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 3.5"><path d="M5 12l5 5 9-10"/></svg></span>
+        </div>
+
+        <div role="option" aria-selected="false" tabindex="-1" class="preset">
+          <div style="display: flex; align-items: center; gap: 10px">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><circle cx="21" cy="21" r="12" class="i2"/><circle cx="21" cy="21" r="6" class="iw"/><path d="M30 30l11 11"/></svg></span>
+            <span style="font-weight: 600; font-size: 14.5px; flex-grow: 1">Deep Research</span>
+            <span class="pill bad" data-tip="Model tier: largest models — best quality, needs the most RAM/GPU" data-tip-pos="left">powerful</span>
+          </div>
+          <p style="margin: 0; font-size: 13px; line-height: 1.5; color: var(--text2)">Web search, source evaluation, and multi-step summarisation for in-depth research tasks.</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px"><span class="tag">web-search</span><span class="tag">web-scraper</span><span class="tag">knowledge-ingest</span></div>
+        </div>
+
+        <div role="option" aria-selected="false" tabindex="-1" class="preset">
+          <div style="display: flex; align-items: center; gap: 10px">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 6l14 6v10c0 9-6 16-14 19-8-3-14-10-14-19V12z" class="i3"/><path d="M18 24l5 5 8-9"/></svg></span>
+            <span style="font-weight: 600; font-size: 14.5px; flex-grow: 1">Security Scanner</span>
+            <span class="pill warn" data-tip="Model tier: mid-size models — good quality at moderate RAM/latency" data-tip-pos="left">balanced</span>
+          </div>
+          <p style="margin: 0; font-size: 13px; line-height: 1.5; color: var(--text2)">Lightweight vulnerability scanning, CVE look-ups, and dependency audit for codebases and infrastructure.</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px"><span class="tag">bash-executor</span><span class="tag" data-tip="Skill: checks packages against the public CVE vulnerability database">cve-lookup</span><span class="tag">file-scanner</span></div>
+        </div>
+
+        <div role="option" aria-selected="false" tabindex="-1" class="preset">
+          <div style="display: flex; align-items: center; gap: 10px">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><ellipse cx="24" cy="12" rx="13" ry="5" class="i1"/><path d="M11 12v22c0 3 6 5 13 5s13-2 13-5V12M11 23c0 3 6 5 13 5s13-2 13-5"/><path d="M24 2v6" class="sacc"/></svg></span>
+            <span style="font-weight: 600; font-size: 14.5px; flex-grow: 1">Knowledge Ingest</span>
+            <span class="pill ok" data-tip="Model tier: small models — quickest replies, lowest resource use" data-tip-pos="left">fast</span>
+          </div>
+          <p style="margin: 0; font-size: 13px; line-height: 1.5; color: var(--text2)">Bulk-import documents, wikis, and web pages into the knowledge base for semantic search and <abbr data-tip="Retrieval-augmented generation — answers grounded in your own documents" style="text-decoration: underline dotted">RAG</abbr>.</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px"><span class="tag">knowledge-ingest</span><span class="tag">web-scraper</span><span class="tag">pdf-parser</span></div>
+        </div>
+
+        <div role="option" aria-selected="false" tabindex="-1" class="preset">
+          <div style="display: flex; align-items: center; gap: 10px">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="26" r="15" class="iw"/><path d="M24 17v9l6 4"/><path d="M14 8l-6 5M34 8l6 5" class="sacc"/><circle cx="24" cy="26" r="2" class="i2"/></svg></span>
+            <span style="font-weight: 600; font-size: 14.5px; flex-grow: 1">Scheduled Monitor</span>
+            <span class="pill ok" data-tip="Model tier: small models — quickest replies, lowest resource use" data-tip-pos="left">fast</span>
+          </div>
+          <p style="margin: 0; font-size: 13px; line-height: 1.5; color: var(--text2)">Cron-triggered health checks with alerting — monitor URLs, services, or custom scripts on a schedule.</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px"><span class="tag" data-tip="Skill: pings URLs and checks response codes">http-probe</span><span class="tag">bash-executor</span><span class="tag">system-monitor</span></div>
+        </div>
+
+        <div role="option" aria-selected="false" tabindex="-1" class="preset">
+          <div style="display: flex; align-items: center; gap: 10px">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="9" width="36" height="30" rx="5" class="it3"/><path d="M17 19l-5 5 5 5M31 19l5 5-5 5M27 16l-6 16"/></svg></span>
+            <span style="font-weight: 600; font-size: 14.5px; flex-grow: 1">Code Companion</span>
+            <span class="pill bad" data-tip="Model tier: largest models — best quality, needs the most RAM/GPU" data-tip-pos="left">powerful</span>
+          </div>
+          <p style="margin: 0; font-size: 13px; line-height: 1.5; color: var(--text2)">AI pair-programmer: code review, refactoring suggestions, test generation, and repo-wide search.</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px"><span class="tag">code-search</span><span class="tag">bash-executor</span><span class="tag">file-scanner</span></div>
+        </div>
+
+        <div role="option" aria-selected="false" tabindex="-1" class="preset">
+          <div style="display: flex; align-items: center; gap: 10px">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path d="M7 10h34v22H18l-8 7v-7H7z" class="i1"/><path d="M15 19h18M15 25h11"/></svg></span>
+            <span style="font-weight: 600; font-size: 14.5px; flex-grow: 1">Simple Chat</span>
+            <span class="pill warn" data-tip="Model tier: mid-size models — good quality at moderate RAM/latency" data-tip-pos="left">balanced</span>
+          </div>
+          <p style="margin: 0; font-size: 13px; line-height: 1.5; color: var(--text2)">Minimal setup — just a capable chat assistant with no extra agents or integrations. Best for quick start.</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px"><span class="tag" style="font-family: inherit">No extra skills</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="ui-h">
+      <div class="ch" style="flex-wrap: wrap">
+        <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg></span>
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px">
+          <h2 id="ui-h" style="margin: 0; font-size: 15px; font-weight: 600">Choose your interface</h2>
+          <span class="sub2">Preferred mode — how much of AutoBot you see. Change it any time in Profile settings or with the Minimal button in the top bar.</span>
+        </div>
+      </div>
+      <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px">
+        <div class="mgrid" role="radiogroup" aria-labelledby="ui-h">
+          <button type="button" class="mcard {{oMin.cls}}" role="radio" aria-checked="{{oMin.pressed}}" onClick="{{oMin.pick}}">
+            <div class="mprev" aria-hidden="true">
+              <div class="pn"><span style="width: 8px; height: 8px; border-radius: 2px; background: var(--primary)"></span><i style="width: 16px"></i><i style="width: 16px"></i><i style="width: 16px"></i></div>
+              <div class="pb"><div class="ps"><i style="width: 80%"></i><i style="width: 70%"></i><i style="width: 60%"></i></div><div class="pc"><i style="width: 60%; background: var(--text)"></i><i style="width: 85%"></i><span style="margin-top: auto; width: 30px; height: 9px; border-radius: 2px; background: var(--primary)"></span></div></div>
+            </div>
+            <span class="mt">Minimal <span class="pill ok" data-tip="Approvals, errors and security notices are always shown">Recommended for new users</span><span class="pill info {{oMin.sel}}" style="margin-left: auto">Selected</span></span>
+            <span class="md">Essentials — chat, knowledge and approvals.</span>
+          </button>
+          <button type="button" class="mcard {{oFull.cls}}" role="radio" aria-checked="{{oFull.pressed}}" onClick="{{oFull.pick}}">
+            <div class="mprev" aria-hidden="true">
+              <div class="pn"><span style="width: 8px; height: 8px; border-radius: 2px; background: var(--primary)"></span><i style="width: 14px"></i><i style="width: 14px"></i><i style="width: 14px"></i><i style="width: 14px"></i><i style="width: 14px"></i><span style="flex-grow: 1"></span><i style="width: 10px; background: var(--accent)"></i><i style="width: 10px"></i><i style="width: 10px"></i></div>
+              <div class="pb"><div class="ps"><i style="width: 80%"></i><i style="width: 70%"></i><i style="width: 60%"></i><i style="width: 75%"></i><i style="width: 55%"></i><i style="width: 70%"></i></div><div class="pc"><i style="width: 60%; background: var(--text)"></i><div style="display: flex; gap: 4px"><i style="flex: 1; height: 16px; background: var(--i1)"></i><i style="flex: 1; height: 16px; background: var(--i2)"></i><i style="flex: 1; height: 16px; background: var(--i3)"></i></div><i style="width: 85%"></i></div></div>
+            </div>
+            <span class="mt">Full <span class="pill info {{oFull.sel}}" style="margin-left: auto">Selected</span></span>
+            <span class="md">Everything, incl. analytics, automation and admin.</span>
+          </button>
+        </div>
+        <span class="sub2">Minimal is recommended for new, non-technical users. Approvals, errors and security notices are always shown.</span>
+        <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="rec-h" style="padding: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px">
+      <span class="tile lg"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 6a12 12 0 0 1 7 22v6H17v-6A12 12 0 0 1 24 6z" class="i2"/><path d="M18 38h12M20 42h8M24 28v-8"/></svg></span>
+      <div style="flex: 1 1 260px; display: flex; flex-direction: column; gap: 4px">
+        <h2 id="rec-h" style="margin: 0; font-size: 15px; font-weight: 600">Recommendation from System Health Check</h2>
+        <p style="margin: 0; font-size: 13px; color: var(--text2)">Ollama detected — local models available without API keys.</p>
+      </div>
+      <dl style="display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 0">
+        <div><dt class="sub2"><span tabindex="0" data-tip="Total system memory — decides how large a local model can run">RAM</span></dt><dd class="mono" style="margin: 0; font-weight: 500; font-size: 15px">31.2 GiB</dd></div>
+        <div><dt class="sub2"><span tabindex="0" data-tip="Free space on the data volume; local models need 4–40 GiB each">Disk</span></dt><dd class="mono" style="margin: 0; font-weight: 500; font-size: 15px">412 GiB free</dd></div>
+        <div><dt class="sub2">CPU cores</dt><dd class="mono" style="margin: 0; font-weight: 500; font-size: 15px">12</dd></div>
+      </dl>
+    </section>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center">
+      <button type="button" class="btn"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>Back</button>
+      <span style="flex-grow: 1"></span>
+      <span class="sub2" style="font-size: 13px">Selected: <strong style="color: var(--text); font-weight: 600">Sysadmin Copilot</strong> · <strong style="color: var(--text); font-weight: 600">{{uiLabel}}</strong> interface</span>
+      <button type="button" class="btn pri">Next<svg class="ic sonp" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"minimal"},"$preview":{"width":1440,"height":1520}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface selected.' : 'Full interface selected.' });
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'minimal';
+    const opt = (id) => ({
+      cls: ui === id ? 'on' : '',
+      pressed: ui === id ? 'true' : 'false',
+      sel: ui === id ? '' : 'hid',
+      pick: () => this.setUi(id)
+    });
+    const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      uiLabel: ui === 'minimal' ? 'Minimal' : 'Full',
+      oMin: opt('minimal'),
+      oFull: opt('full'),
+      themes: defs.map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => { try { window.localStorage.setItem('autobot-theme', id); } catch (e) {} this.setState({ theme: id }); }
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1059 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot File browser pattern</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+/* ---- Pattern · File browser ---- */
+.specbar{flex:1 1 100%;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:14px clamp(16px,2.5vw,32px);background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+.specbar h1{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.use{font-size:12.5px;color:var(--muted);font-weight:400}
+.st{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.rules{margin:0;padding:12px 16px;border-top:var(--bw) solid var(--line);font-size:12.5px;color:var(--text2);line-height:1.55}
+.bd{padding:16px}
+.g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px;align-items:start}
+.col{display:flex;flex-direction:column;gap:8px;min-width:0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.stage{position:relative;border:var(--bw) dashed var(--border);border-radius:10px;background:var(--bg);overflow:hidden}
+.scrim{position:absolute;inset:0;background:color-mix(in srgb,var(--bg) 72%,transparent);display:grid;place-items:center;padding:20px;z-index:10}
+.dlg{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px;max-width:100%;box-sizing:border-box;display:flex;flex-direction:column;text-align:left}
+.dlg-h{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.dlg-h h3{margin:0;font-size:15.5px;font-weight:600;color:var(--text)}
+.dlg-b{padding:14px 16px;font-size:13.5px;color:var(--text2);line-height:1.55;display:flex;flex-direction:column;gap:10px}
+.dlg-b p{margin:0}
+.dlg-f{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:8px;padding:12px 16px;border-top:var(--bw) solid var(--line);background:var(--surface2);border-radius:0 0 10px 10px}
+.xbtn{width:30px;height:30px;border-radius:6px;border:0;background:transparent;display:grid;place-items:center;cursor:pointer;color:var(--text);margin-left:auto;flex:none;padding:0}
+.xbtn:hover{background:var(--surface2)}
+.th .btn.dng{background:var(--bar-alert);border-color:var(--bar-alert);color:var(--on-primary)}
+.th .btn[aria-disabled="true"],.th .ibtn[aria-disabled="true"]{opacity:.45;cursor:not-allowed}
+.inp{height:36px;box-sizing:border-box;padding:0 10px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-size:13.5px;width:100%}
+.inp[aria-invalid="true"]{border-color:var(--bar-alert);outline:1px solid var(--bar-alert)}
+.kv{display:grid;grid-template-columns:78px minmax(0,1fr);gap:7px 10px;font-size:12.5px;margin:0}
+.kv dt{color:var(--muted)}.kv dd{margin:0;color:var(--text);overflow-wrap:anywhere}
+.menu{position:absolute;z-index:9;background:var(--surface);border:var(--bw) solid var(--border);border-radius:8px;padding:4px;width:236px;box-sizing:border-box;display:flex;flex-direction:column}
+.mi{display:flex;align-items:center;gap:10px;height:32px;padding:0 10px;border-radius:5px;border:0;background:transparent;width:100%;box-sizing:border-box;font:inherit;font-size:13.5px;color:var(--text);cursor:pointer;text-align:left;text-decoration:none}
+.mi:hover{background:var(--surface2)}
+.mi.dng{color:var(--alert-text)}.mi.dng .ic{stroke:var(--alert-text)}
+.mk{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted)}
+.msep{height:var(--bw);background:var(--line);margin:4px 2px;border:0}
+.mhead{padding:7px 10px 5px;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kbd{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:1px 5px;border-radius:4px;border:var(--bw) solid var(--border);background:var(--surface2);color:var(--text2);line-height:1.4;white-space:nowrap}
+.ibtn{width:32px;height:32px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);display:grid;place-items:center;cursor:pointer;padding:0;color:var(--text);flex:none}
+.ibtn:hover{background:var(--surface2)}
+.tb{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 14px;border-bottom:var(--bw) solid var(--line)}
+.vsep{width:var(--bw);height:24px;background:var(--border);flex:none}
+.segg{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.segg .seg{height:26px;padding:0 8px;display:inline-flex;align-items:center;gap:5px}
+.crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:2px;margin:0;padding:0;list-style:none;font-size:13px;min-width:0}
+.crumbs li{display:flex;align-items:center}
+.crumbs li+li::before{content:"/";color:var(--muted);padding:0 4px}
+.crb{border:0;background:transparent;font:inherit;color:var(--text2);padding:3px 5px;border-radius:5px;cursor:pointer}
+.crb:hover{background:var(--surface2);color:var(--text);text-decoration:underline}
+.pathbox{flex:1 1 360px;min-width:0;display:flex;align-items:center;gap:6px;height:36px;padding:0 6px 0 8px;border:var(--bw) solid var(--border);border-radius:6px;background:var(--surface);box-sizing:border-box}
+.fb{position:relative;display:flex;height:600px;min-width:0}
+.tree{flex:0 0 212px;box-sizing:border-box;border-right:var(--bw) solid var(--line);overflow:auto;padding:8px 6px;background:var(--surface)}
+.tn{display:flex;align-items:center;gap:2px;height:30px;border-radius:6px;font-size:13px;color:var(--text2);box-sizing:border-box;border-left:3px solid transparent}
+.tn:hover{background:var(--surface2)}
+.tn.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.tcar{width:20px;height:20px;border:0;background:transparent;padding:0;display:grid;place-items:center;cursor:pointer;flex:none;border-radius:4px}
+.tcar[aria-expanded="true"] svg{transform:rotate(90deg)}
+.tlab{flex:1;min-width:0;border:0;background:transparent;font:inherit;color:inherit;text-align:left;display:flex;align-items:center;gap:6px;height:28px;cursor:pointer;padding:0 4px;white-space:nowrap;overflow:hidden}
+.center{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;position:relative}
+.flist{flex:1 1 auto;overflow:auto;position:relative;outline:none}
+.fh,.frow{display:grid;grid-template-columns:24px minmax(150px,1fr) 70px 104px 132px 30px 30px;align-items:center;gap:0 8px;padding:0 10px 0 12px;font-size:13px;box-sizing:border-box}
+.fh{height:34px;position:sticky;top:0;z-index:2;background:var(--surface2);border-bottom:var(--bw) solid var(--border);font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.fh button{border:0;background:transparent;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit;padding:0;cursor:pointer;display:inline-flex;gap:4px;align-items:center;text-align:left}
+.frow{min-height:40px;border-bottom:var(--bw) solid var(--line);border-left:3px solid transparent;cursor:default;user-select:none}
+.frow:hover{background:var(--surface2)}
+.frow.sel{background:var(--info-bg);border-left-color:var(--primary)}
+.frow.hov{background:var(--surface2)}
+.flist:focus-visible .kf,.frow.fv{outline:2px solid var(--focus);outline-offset:-2px}
+.frow.cut{opacity:.5}
+.nm{display:flex;align-items:center;gap:8px;min-width:0}
+.nm .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dl{border:0;background:transparent;font:inherit;color:var(--text);padding:0;cursor:pointer;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.dl:hover{text-decoration:underline}
+.fi{position:relative;width:24px;height:26px;display:grid;place-items:center;flex:none}
+.fx{position:absolute;bottom:1px;left:50%;transform:translateX(-50%);font:700 6.5px/1 'IBM Plex Mono',monospace;color:var(--text);letter-spacing:.02em}
+.cb{width:18px;height:18px;border-radius:4px;border:1.5px solid var(--text2);background:var(--surface);display:grid;place-items:center;padding:0;cursor:pointer;box-sizing:border-box}
+.cb svg{visibility:hidden}
+.cb.on{background:var(--primary);border-color:var(--primary)}.cb.on svg{visibility:visible}
+.gs{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:4px;font:600 11px/1 'IBM Plex Mono',monospace;border:var(--pill-b);box-sizing:border-box}
+.own{display:flex;align-items:center;gap:6px;min-width:0;color:var(--text2);font-size:12.5px}
+.own span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kebab{width:26px;height:26px;border:0;border-radius:5px;background:transparent;display:grid;place-items:center;cursor:pointer;padding:0}
+.kebab:hover{background:var(--surface)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:10px;padding:12px}
+.gt{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 8px 10px;border:var(--bw) solid var(--line);border-radius:8px;cursor:default;text-align:center;font-size:12.5px;min-width:0;user-select:none;background:var(--surface)}
+.gt:hover{background:var(--surface2)}
+.gt.sel{outline:2px solid var(--primary);outline-offset:-1px;background:var(--info-bg)}
+.gt .cb{position:absolute;top:6px;left:6px}
+.gt .gs{position:absolute;top:6px;right:6px}
+.gt .t{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.thumb{width:84px;height:60px;border-radius:6px;border:var(--bw) solid var(--border);display:grid;place-items:center;background:var(--surface2);overflow:hidden}
+.bulk{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 12px;background:var(--surface2);border-bottom:var(--bw) solid var(--border);font-size:13px}
+.lnk{border:0;background:transparent;padding:0 4px;font:inherit;font-size:13px;font-weight:600;color:var(--link);text-decoration:underline;cursor:pointer}
+.sbar{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:7px 12px;border-top:var(--bw) solid var(--line);font-size:12px;color:var(--muted);background:var(--surface)}
+.pv{flex:0 0 300px;box-sizing:border-box;border-left:var(--bw) solid var(--line);overflow:auto;display:flex;flex-direction:column;background:var(--surface)}
+.code{font:12px/1.65 'IBM Plex Mono',monospace;background:var(--surface2);border:var(--bw) solid var(--line);border-radius:8px;overflow:auto;max-height:230px;padding:6px 0;color:var(--text)}
+.cl{display:flex;white-space:pre}
+.ln{width:30px;flex:none;text-align:right;padding-right:10px;color:var(--muted);user-select:none}
+.imgf{border:var(--bw) solid var(--border);border-radius:8px;background:var(--surface2);padding:10px;display:flex;flex-direction:column;gap:6px;align-items:center}
+.state{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;padding:36px 20px;font-size:13px;color:var(--text2)}
+.state b{font-size:14.5px;color:var(--text)}
+.note{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border-bottom:var(--bw) solid var(--line);background:var(--surface2);font-size:12.5px;color:var(--text2);line-height:1.5}
+.err{display:flex;gap:10px;align-items:center;padding:8px 12px;border:var(--bw) solid var(--danger-tile-b);background:var(--bad-bg);color:var(--bad-fg);border-radius:8px;font-size:13px}
+.drop{position:absolute;inset:8px;z-index:11;background:color-mix(in srgb,var(--surface) 90%,transparent);border:2px dashed var(--accent);border-radius:10px;display:grid;place-items:center;text-align:center}
+.tray{position:absolute;right:12px;bottom:40px;width:330px;max-width:calc(100% - 24px);z-index:8;background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px;overflow:hidden}
+.up{display:flex;flex-direction:column;gap:5px;padding:9px 12px;border-top:var(--bw) solid var(--line);font-size:12.5px}
+.sk{height:10px;border-radius:4px;background:var(--line)}
+.catch{position:absolute;inset:0;z-index:8}
+.mini{border:var(--bw) solid var(--border);border-radius:8px;background:var(--surface);overflow:hidden}
+.opt{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:var(--bw) solid var(--line);cursor:pointer;font-size:13px;border-left:3px solid transparent}
+.opt:hover{background:var(--surface2)}
+.opt.on{background:var(--info-bg);border-left-color:var(--primary)}
+.opt.off{opacity:.55;cursor:not-allowed}
+.rad{width:16px;height:16px;border-radius:99px;border:1.5px solid var(--text2);box-sizing:border-box;flex:none;display:grid;place-items:center}
+.opt.on .rad::after{content:"";width:8px;height:8px;border-radius:99px;background:var(--primary)}
+.chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 4px 0 8px;border:var(--bw) solid var(--border);border-radius:6px;background:var(--surface2);font-size:12.5px}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <a href="ThemeManager.dc.html" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon" aria-label="Plugins" data-tip="Plugins" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <a href="AdminUsers.dc.html" class="icon" aria-label="Admin panel" data-tip="Admin panel" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <button type="button" aria-label="Profile menu" data-tip="Profile settings" data-tip-pos="left" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer">MV</button>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+  <aside class="sub" aria-label="Design system" style="flex: 1 1 230px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+    <a href="DesignSystem.dc.html" style="font-weight: 600; color: var(--text)">AutoBot Design System</a>
+    <span class="sub2" style="padding: 0 13px 4px">v1 · 4 themes</span>
+    <p class="sect">Overview</p>
+    <a href="DesignSystem.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z" class="i1"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z" class="it1"/></svg>Introduction</a>
+    <p class="sect">Foundations</p>
+    <a href="ComponentsStates.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4" class="i3"/><circle cx="16" cy="9" r="4" class="i2"/><circle cx="12" cy="16" r="4" class="i1"/></svg>Tokens &amp; states</a>
+    <a href="ComponentsGrid.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5" class="i1"/><rect x="13" y="4" width="7" height="7" rx="1.5" class="iw"/><rect x="4" y="13" width="7" height="7" rx="1.5" class="iw"/><rect x="13" y="13" width="7" height="7" rx="1.5" class="i2"/></svg>Grid, tables &amp; forms</a>
+    <a href="ComponentsCharts.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><rect x="5.5" y="11" width="3.5" height="7" class="i1"/><rect x="10.5" y="6" width="3.5" height="12" class="i2"/><rect x="15.5" y="13" width="3.5" height="5" class="i3"/></svg>Charts &amp; data viz</a>
+    <p class="sect">Components</p>
+    <a href="ComponentsForms.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4" class="i1"/><circle cx="16.5" cy="12" r="2.5" class="iw"/></svg>Form controls</a>
+    <a href="ComponentsTable.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="iw"/><path d="M4 10h16M4 14.5h16M10 10v9"/></svg>Data table</a>
+    <a href="ComponentsDialogs.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="it1"/><rect x="6" y="8" width="12" height="9" rx="1.5" class="iw"/></svg>Dialogs</a>
+    <a href="ComponentsOverlays.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" class="i2"/><path d="M10 21h4"/></svg>Overlays &amp; feedback</a>
+    <a href="ComponentsTooltips.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10h-7l-4 4v-4H4z" class="it1"/><path d="M8 10h8"/></svg>Tooltips</a>
+    <a href="ComponentsCommand.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" class="iw"/><path d="M7 10l3 2-3 2M12 15h5"/></svg>Command menu</a>
+    <a href="ComponentsNavigation.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M15 9l-2 4-4 2 2-4z" class="i3"/></svg>Navigation</a>
+    <a href="ComponentsLayout.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="iw"/><path d="M9 4v16M9 10h12"/></svg>Layout &amp; utility</a>
+    <a href="ComponentsChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h12v9H8l-3 3v-3H3z" class="i1"/><path d="M15 9h6v8h-2v3l-3-3h-5v-3"/></svg>Chat &amp; agent</a>
+    <p class="sect">Patterns</p>
+    <a href="FileBrowser.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="i2"/></svg>File browser</a>
+    <a href="Mailbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" class="iw"/><path d="M3 7l9 6 9-6"/></svg>Mailbox</a>
+    <a href="ComponentsUiModes.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5" class="it1"/><rect x="4.5" y="8.5" width="8" height="7" rx="3.5" class="i2"/></svg>Interface modes</a>
+    <a href="SignUp.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" class="i2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Auth pages</a>
+    <a href="AccountSecurity.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4" class="i1"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>Account settings</a>
+    <a href="SearchResults.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>Global search</a>
+    <a href="HelpCenter.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="i2"/><path d="M10 10a2 2 0 1 1 3 1.7c-.7.4-1 1-1 1.8M12 16.5v.5"/></svg>Help centre</a>
+    <span style="flex-grow: 1; min-height: 16px" aria-hidden="true"></span>
+    <a href="Main.dc.html" style="border-top: var(--bw) solid var(--line); border-radius: 0; padding-top: 12px"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg>← Back to app</a>
+  </aside>
+  <div style="flex: 999 1 520px; min-width: 0; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <div class="specbar">
+    <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 280px">
+      <span class="sub2">Design system / Patterns</span>
+      <h1>Pattern · File browser</h1>
+      <span class="sub2">The sandbox workspace file manager (SandboxFileBrowser, FileListTable, FilePreview, ChatFilePanel). Everything in the first card works in Play mode: tree, path bar, toolbar, selection, context menu, rename, move, delete, upload.</span>
+    </div>
+    <div role="group" aria-label="Preview theme" style="display: flex; gap: 2px; padding: 3px; border-radius: 8px; background: var(--bg); border: var(--bw) solid var(--border)">
+      <sc-for list="{{themes}}" as="t" hint-placeholder-count="4"><button type="button" class="seg {{t.cls}}" aria-pressed="{{t.pressed}}" onClick="{{t.pick}}">{{t.label}}</button></sc-for>
+    </div>
+  </div>
+
+  <main style="flex: 1 1 100%; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 48px; display: flex; flex-direction: column; gap: 20px">
+
+    <!-- 1. WORKING FILE BROWSER -->
+    <section class="card" aria-labelledby="h-fb" style="overflow: hidden">
+      <div class="ch" style="flex-wrap: wrap"><h2 id="h-fb">File Browser · Sandbox workspace</h2><span class="use">Use for: browsing and managing files agents and users share in /workspace</span><span class="pill info" data-tip="Isolated workspace; you and agents can read and write here" data-tip-pos="left">sandbox · read/write</span></div>
+
+      <div class="tb" style="gap: 6px">
+        <button type="button" class="ibtn" aria-label="Go up one folder" data-tip="Up one folder · Backspace" data-tip-pos="bottom" aria-disabled="{{atRoot}}" onClick="{{up}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+        <sc-if value="{{pathView}}" hint-placeholder-val="{{ true }}">
+          <nav class="pathbox" aria-label="Current path">
+            <button type="button" class="crb" aria-label="Go to home directory" data-tip="Go to /workspace" data-tip-pos="bottom" onClick="{{home}}" style="display: inline-flex; align-items: center; gap: 5px"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z" class="it2"/></svg>Home</button>
+            <ol class="crumbs">
+              <li><span class="mono sub2" style="padding: 0 4px">workspace</span></li>
+              <sc-for list="{{crumbs}}" as="c" hint-placeholder-count="2"><li><sc-if value="{{c.link}}" hint-placeholder-val="{{ true }}"><button type="button" class="crb mono" onClick="{{c.go}}">{{c.label}}</button></sc-if><sc-if value="{{c.cur}}" hint-placeholder-val="{{ false }}"><span class="mono" aria-current="location" style="padding: 3px 5px; font-weight: 600">{{c.label}}</span></sc-if></li></sc-for>
+            </ol>
+            <span style="flex-grow: 1" aria-hidden="true"></span>
+            <button type="button" class="xbtn" style="margin: 0" aria-label="Edit path" data-tip="Type a path · Ctrl L" data-tip-pos="left" onClick="{{editPath}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z" class="it2"/></svg></button>
+          </nav>
+        </sc-if>
+        <sc-if value="{{pathEdit}}" hint-placeholder-val="{{ false }}">
+          <div style="flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+            <div style="display: flex; gap: 6px">
+              <label for="path-in" class="sr">Path</label>
+              <input id="path-in" class="inp mono" type="text" value="{{pathDraft}}" placeholder="Enter path..." aria-invalid="{{pathInvalid}}" aria-describedby="path-err" spellcheck="false" onInput="{{pathInput}}" onKeyDown="{{pathKey}}">
+              <button type="button" class="btn sm" aria-label="Go to path" onClick="{{pathGo}}">Go</button>
+              <button type="button" class="btn sm" onClick="{{pathCancel}}">Cancel</button>
+            </div>
+            <span id="path-err" class="sub2" role="alert" style="color: var(--alert-text)">{{pathErr}}</span>
+          </div>
+        </sc-if>
+      </div>
+
+      <div class="tb">
+        <button type="button" class="btn sm" aria-label="New Folder" aria-disabled="{{noWrite}}" onClick="{{newFolder}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="i2"/><path d="M12 11v5M9.5 13.5h5"/></svg>New Folder</button>
+        <button type="button" class="btn sm" aria-label="Upload File" aria-disabled="{{noWrite}}" onClick="{{uploadDemo}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M4 19h16"/></svg>Upload File</button>
+        <span class="vsep" aria-hidden="true"></span>
+        <button type="button" class="ibtn" aria-label="Download" data-tip="Download selected" aria-disabled="{{noSel}}" onClick="{{download}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M4 19h16"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Rename (F2)" data-tip="Rename · F2 (select one item)" aria-disabled="{{notOne}}" onClick="{{renameSel}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z" class="it2"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Move to…" data-tip="Move to…" aria-disabled="{{noSel}}" onClick="{{askMove}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="it1"/><path d="M9 13.5h7M13 10.5l3 3-3 3"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Delete (Del)" data-tip="Delete · Del" aria-disabled="{{noSel}}" onClick="{{askDelete}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13" class="it3"/></svg></button>
+        <span class="vsep" aria-hidden="true"></span>
+        <button type="button" class="ibtn" aria-label="Refresh files" data-tip="Refresh files" onClick="{{refresh}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg></button>
+        <div style="flex: 1 1 180px; min-width: 150px; position: relative">
+          <label for="fb-q" class="sr">Search files</label>
+          <svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" style="position: absolute; left: 10px; top: 9px"><circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/></svg>
+          <input id="fb-q" class="inp" type="search" value="{{q}}" placeholder="Search files..." onInput="{{qInput}}" style="height: 32px; padding-left: 32px">
+        </div>
+        <div class="segg" role="group" aria-label="Sort by">
+          <span class="sub2" style="padding: 0 4px 0 6px; align-self: center; font-size: 12px">Sort:</span>
+          <sc-for list="{{sorts}}" as="s" hint-placeholder-count="4"><button type="button" class="seg {{s.cls}}" aria-pressed="{{s.pressed}}" onClick="{{s.pick}}">{{s.label}}</button></sc-for>
+          <button type="button" class="seg" aria-label="{{dirLabel}}" data-tip="{{dirLabel}}" onClick="{{flipDir}}"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" style="transform: rotate({{dirRot}}deg)"><path d="M12 5v14M6 13l6 6 6-6"/></svg></button>
+        </div>
+        <div class="segg" role="group" aria-label="View mode">
+          <button type="button" class="seg {{listCls}}" aria-pressed="{{listPressed}}" onClick="{{toList}}"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.5M4 12h.5M4 18h.5"/></svg>List</button>
+          <button type="button" class="seg {{gridCls}}" aria-pressed="{{gridPressed}}" onClick="{{toGrid}}"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg>Grid</button>
+        </div>
+      </div>
+
+      <div class="fb" data-stage="fb" onDragEnter="{{dragIn}}" onDragOver="{{dragIn}}">
+        <!-- tree -->
+        <div class="tree">
+          <div style="display: flex; align-items: center; gap: 4px; padding: 2px 4px 8px">
+            <span class="st" style="flex-grow: 1">Directory Structure</span>
+            <button type="button" class="kebab" aria-label="Expand All" data-tip="Expand all folders" data-tip-pos="bottom" onClick="{{expandAll}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9l5-5 5 5M7 15l5 5 5-5"/></svg></button>
+            <button type="button" class="kebab" aria-label="Collapse All" data-tip="Collapse all folders" data-tip-pos="bottom" onClick="{{collapseAll}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l5 5 5-5M7 20l5-5 5 5"/></svg></button>
+          </div>
+          <div role="tree" aria-label="Sandbox file tree">
+            <sc-for list="{{tree}}" as="n" hint-placeholder-count="8">
+              <div class="tn {{n.cls}}" data-tip="{{n.name}}" role="treeitem" aria-level="{{n.level}}" aria-expanded="{{n.exp}}" aria-selected="{{n.cur}}" style="padding-left: {{n.pad}}px">
+                <sc-if value="{{n.kids}}" hint-placeholder-val="{{ true }}"><button type="button" class="tcar" aria-label="{{n.togLabel}}" aria-expanded="{{n.exp}}" onClick="{{n.toggle}}"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></sc-if>
+                <sc-if value="{{n.leaf}}" hint-placeholder-val="{{ false }}"><span style="width: 20px; flex: none" aria-hidden="true"></span></sc-if>
+                <button type="button" class="tlab" onClick="{{n.go}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="fo {{n.fill}}"/></svg><span style="overflow: hidden; text-overflow: ellipsis">{{n.name}}</span><sc-if value="{{n.lock}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" class="it3"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span class="sr">(no access)</span></sc-if></button>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- centre -->
+        <div class="center">
+          <sc-if value="{{hasSel}}" hint-placeholder-val="{{ false }}">
+            <div class="bulk" role="region" aria-label="Bulk actions">
+              <strong style="font-weight: 600">{{selText}}</strong>
+              <button type="button" class="lnk" onClick="{{selToggleAll}}">{{selAllLabel}}</button>
+              <span style="flex-grow: 1" aria-hidden="true"></span>
+              <button type="button" class="btn sm" onClick="{{download}}">Download</button>
+              <button type="button" class="btn sm" onClick="{{askMove}}">Move</button>
+              <button type="button" class="btn sm" onClick="{{kbSel}}">Add to Knowledge Base</button>
+              <button type="button" class="btn sm" onClick="{{askDelete}}" style="color: var(--alert-text)">Delete</button>
+            </div>
+          </sc-if>
+          <sc-if value="{{bigNote}}" hint-placeholder-val="{{ false }}">
+            <div class="note"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="margin-top: 2px"><rect x="4" y="4" width="16" height="16" rx="2" class="it1"/><path d="M4 9h16M4 14h16"/></svg><span><b style="color: var(--text)">Large folder · 12,480 items.</b> The list is virtualized: only the ~40 rows around the viewport are mounted (fixed 40px rows, overscan 10). Sort, search and Ctrl+A run server-side across all items. Showing rows 1–14.</span></div>
+          </sc-if>
+
+          <div class="flist" tabindex="0" role="grid" aria-label="{{listLabel}}" aria-multiselectable="true" aria-rowcount="{{rowCount}}" aria-activedescendant="{{activeId}}" onKeyDown="{{key}}">
+            <sc-if value="{{loading}}" hint-placeholder-val="{{ false }}">
+              <div role="status" style="padding: 14px 14px; display: flex; flex-direction: column; gap: 16px"><span class="sub2">Loading files...</span><div class="sk" style="width: 70%"></div><div class="sk" style="width: 55%"></div><div class="sk" style="width: 62%"></div><div class="sk" style="width: 40%"></div></div>
+            </sc-if>
+            <sc-if value="{{denied}}" hint-placeholder-val="{{ false }}">
+              <div class="state" role="alert"><span class="tile lg danger"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" class="it3"/><path d="M8 11V8a4 4 0 0 1 8 0v3M12 15v2"/></svg></span><b>Permission denied</b><span>You can't open <span class="mono">.secrets</span>. The sandbox policy blocks reads of this folder for your role and for all agents.</span><span style="display: flex; gap: 8px"><button type="button" class="btn sm" onClick="{{up}}">Go back</button><a class="btn sm" href="AdminPermissionScopes.dc.html">Request files:read scope</a></span></div>
+            </sc-if>
+            <sc-if value="{{empty}}" hint-placeholder-val="{{ false }}">
+              <div class="state"><span class="tile lg"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="it2"/></svg></span><b>This folder is empty</b><span>No files found in this directory. Drag &amp; drop files here, or:</span><span style="display: flex; gap: 8px"><button type="button" class="btn sm" onClick="{{newFolder}}">New Folder</button><button type="button" class="btn sm pri" onClick="{{uploadDemo}}">Upload File</button></span></div>
+            </sc-if>
+            <sc-if value="{{noMatch}}" hint-placeholder-val="{{ false }}">
+              <div class="state"><b>No matches</b><span>Nothing in this folder matches “{{q}}”.</span><button type="button" class="btn sm" onClick="{{clearQ}}">Clear search</button></div>
+            </sc-if>
+
+            <sc-if value="{{showList}}" hint-placeholder-val="{{ true }}">
+              <div class="fh" role="row">
+                <span role="columnheader"><button type="button" class="cb {{allCbCls}}" role="checkbox" aria-checked="{{allChecked}}" aria-label="Select all" onClick="{{selToggleAll}}"><svg class="ic sonp" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 3"><path d="M5 12l5 5 9-10"/></svg></button></span>
+                <span role="columnheader" aria-sort="{{ariaName}}"><button type="button" onClick="{{sortName}}">Name<span aria-hidden="true">{{arrName}}</span></button></span>
+                <span role="columnheader" aria-sort="{{ariaSize}}"><button type="button" onClick="{{sortSize}}">Size<span aria-hidden="true">{{arrSize}}</span></button></span>
+                <span role="columnheader" aria-sort="{{ariaDate}}"><button type="button" onClick="{{sortDate}}">Modified<span aria-hidden="true">{{arrDate}}</span></button></span>
+                <span role="columnheader"><span data-tip="Agent or person who last wrote the file" data-tip-pos="bottom">Owner</span></span>
+                <span role="columnheader"><span data-tip="Git status: M modified · A added · ? untracked" data-tip-pos="bottom" tabindex="0">Git</span></span>
+                <span role="columnheader"><span class="sr">Actions</span></span>
+              </div>
+              <sc-for list="{{files}}" as="f" hint-placeholder-count="10">
+                <div class="frow {{f.cls}}" id="{{f.id}}" role="row" aria-selected="{{f.selA}}" onClick="{{f.click}}" onDoubleClick="{{f.open}}" onContextMenu="{{f.ctx}}">
+                  <span role="gridcell"><button type="button" tabindex="-1" class="cb {{f.cbCls}}" role="checkbox" aria-checked="{{f.selA}}" aria-label="{{f.cbLabel}}" onClick="{{f.tog}}"><svg class="ic sonp" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 3"><path d="M5 12l5 5 9-10"/></svg></button></span>
+                  <span role="gridcell" class="nm" data-tip="{{f.name}}">
+                    <span class="fi"><sc-if value="{{f.isDir}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="fo {{f.fill}}"/></svg></sc-if><sc-if value="{{f.isFile}}" hint-placeholder-val="{{ true }}"><svg class="ic" width="22" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 2h9l5 5v15H5z" class="fo {{f.fill}}"/><path d="M14 2v5h5"/></svg><span class="fx" aria-hidden="true">{{f.ext}}</span></sc-if></span>
+                    <sc-if value="{{f.notRen}}" hint-placeholder-val="{{ true }}">
+                      <sc-if value="{{f.isDir}}" hint-placeholder-val="{{ false }}"><button type="button" tabindex="-1" class="dl" onClick="{{f.go}}">{{f.name}}</button></sc-if>
+                      <sc-if value="{{f.isFile}}" hint-placeholder-val="{{ true }}"><span class="t">{{f.name}}</span></sc-if>
+                      <sc-if value="{{f.locked}}" hint-placeholder-val="{{ false }}"><span class="pill bad" style="font-size: 10.5px; padding: 1px 6px">no access</span></sc-if>
+                      <sc-if value="{{f.kb}}" hint-placeholder-val="{{ false }}"><span class="pill info" style="font-size: 10.5px; padding: 1px 6px">KB queued</span></sc-if>
+                    </sc-if>
+                    <sc-if value="{{f.renaming}}" hint-placeholder-val="{{ false }}">
+                      <span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; padding: 4px 0">
+                        <input id="rn-in" class="inp mono" type="text" value="{{draft}}" aria-label="New name" aria-invalid="{{renInvalid}}" aria-describedby="rn-msg" spellcheck="false" style="height: 28px; font-size: 12.5px" onClick="{{stop}}" onDoubleClick="{{stop}}" onInput="{{renInput}}" onKeyDown="{{renKey}}">
+                        <span id="rn-msg" class="sub2" style="font-size: 11px; color: {{renMsgColor}}">{{renMsg}}</span>
+                      </span>
+                    </sc-if>
+                  </span>
+                  <span role="gridcell" class="mono" style="font-size: 12px; color: var(--text2); text-align: right">{{f.size}}</span>
+                  <span role="gridcell" style="font-size: 12.5px; color: var(--text2)"><span data-tip="{{f.modFull}}">{{f.mod}}</span></span>
+                  <span role="gridcell" class="own" data-tip="{{f.owner}}"><sc-if value="{{f.agent}}" hint-placeholder-val="{{ true }}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" class="i1"/><path d="M12 8V5"/></svg></sc-if><sc-if value="{{f.human}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4" class="it2"/><path d="M5 20a7 7 0 0 1 14 0"/></svg></sc-if><span>{{f.owner}}</span></span>
+                  <span role="gridcell"><sc-if value="{{f.hasGit}}" hint-placeholder-val="{{ false }}"><span class="gs {{f.gCls}}" data-tip="{{f.gTitle}}" data-tip-pos="left"><span aria-hidden="true">{{f.g}}</span><span class="sr">{{f.gTitle}}</span></span></sc-if></span>
+                  <span role="gridcell"><button type="button" tabindex="-1" class="kebab" aria-label="{{f.moreLabel}}" data-tip="More actions · Shift F10" data-tip-pos="left" aria-haspopup="menu" onClick="{{f.ctx}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1" class="ik"/><circle cx="12" cy="12" r="1" class="ik"/><circle cx="12" cy="19" r="1" class="ik"/></svg></button></span>
+                </div>
+              </sc-for>
+            </sc-if>
+
+            <sc-if value="{{showGrid}}" hint-placeholder-val="{{ false }}">
+              <div class="grid">
+                <sc-for list="{{files}}" as="f" hint-placeholder-count="8">
+                  <div class="gt {{f.cls}}" id="{{f.id}}" role="gridcell" aria-selected="{{f.selA}}" data-tip="{{f.name}}" onClick="{{f.click}}" onDoubleClick="{{f.open}}" onContextMenu="{{f.ctx}}">
+                    <button type="button" tabindex="-1" class="cb {{f.cbCls}}" role="checkbox" aria-checked="{{f.selA}}" aria-label="{{f.cbLabel}}" onClick="{{f.tog}}"><svg class="ic sonp" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 3"><path d="M5 12l5 5 9-10"/></svg></button>
+                    <sc-if value="{{f.hasGit}}" hint-placeholder-val="{{ false }}"><span class="gs {{f.gCls}}" data-tip="{{f.gTitle}}" data-tip-pos="left"><span aria-hidden="true">{{f.g}}</span><span class="sr">{{f.gTitle}}</span></span></sc-if>
+                    <div class="thumb">
+                      <sc-if value="{{f.isImg}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="84" height="60" viewBox="0 0 84 60" aria-hidden="true"><rect x="0" y="0" width="84" height="60" class="it1" stroke="none"/><circle cx="62" cy="17" r="7" class="i2"/><path d="M0 52l22-24 16 16 12-10 34 26H0z" class="i1"/></svg></sc-if>
+                      <sc-if value="{{f.isDir}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="40" height="40" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 1.1"><path d="M3 6h6l2 2h10v11H3z" class="fo {{f.fill}}"/></svg></sc-if>
+                      <sc-if value="{{f.isDoc}}" hint-placeholder-val="{{ true }}"><span class="fi" style="width: 40px; height: 44px"><svg class="ic" width="38" height="42" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 1.1"><path d="M5 2h9l5 5v15H5z" class="fo {{f.fill}}"/><path d="M14 2v5h5"/></svg><span class="fx" style="font-size: 9px; bottom: 4px">{{f.ext}}</span></span></sc-if>
+                    </div>
+                    <span class="t">{{f.name}}</span>
+                    <span class="sub2" style="font-size: 11.5px">{{f.gridMeta}}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+
+          <div class="sbar">
+            <span>{{stats}}</span>
+            <span style="flex-grow: 1" aria-hidden="true"></span>
+            <span role="status" aria-live="polite" style="color: var(--text2)">{{msg}}</span>
+          </div>
+
+          <sc-if value="{{menuOpen}}" hint-placeholder-val="{{ false }}">
+            <div class="catch" onClick="{{closeMenu}}" onContextMenu="{{closeMenu}}"></div>
+            <div class="menu" role="menu" aria-label="{{menuTitle}}" style="left: {{menuX}}px; top: {{menuY}}px" onKeyDown="{{menuKey}}">
+              <div class="mhead mono">{{menuTitle}}</div>
+              <button type="button" role="menuitem" class="mi" onClick="{{mOpen}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5" class="i1"/></svg>{{mOpenLabel}}<span class="mk">Enter</span></button>
+              <a role="menuitem" class="mi" href="Chat.dc.html"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="it1"/></svg>Open in Chat</a>
+              <button type="button" role="menuitem" class="mi" onClick="{{mKb}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z" class="i2"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z"/></svg>Add to Knowledge Base</button>
+              <hr class="msep">
+              <button type="button" role="menuitem" class="mi" onClick="{{mRename}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg>Rename<span class="mk">F2</span></button>
+              <button type="button" role="menuitem" class="mi" onClick="{{mDup}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" class="iw"/><path d="M16 8V4H4v12h4"/></svg>Duplicate</button>
+              <button type="button" role="menuitem" class="mi" onClick="{{askMove}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z"/><path d="M9 13.5h7M13 10.5l3 3-3 3"/></svg>Move to…</button>
+              <button type="button" role="menuitem" class="mi" onClick="{{mCopy}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14l4-4M8 11l-2 2a3 3 0 0 0 4 4l2-2M16 13l2-2a3 3 0 0 0-4-4l-2 2"/></svg>Copy path</button>
+              <button type="button" role="menuitem" class="mi" onClick="{{download}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M4 19h16"/></svg>Download</button>
+              <hr class="msep">
+              <button type="button" role="menuitem" class="mi dng" onClick="{{askDelete}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13"/></svg>Delete<span class="mk">Del</span></button>
+            </div>
+          </sc-if>
+        </div>
+
+        <!-- preview -->
+        <aside class="pv" aria-label="File preview">
+          <sc-if value="{{pvHas}}" hint-placeholder-val="{{ true }}">
+            <div class="ch" style="padding: 10px 12px" data-tip="{{pvName}}" data-tip-pos="bottom"><span class="fi"><svg class="ic" width="20" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 2h9l5 5v15H5z" class="fo {{pvFill}}"/><path d="M14 2v5h5"/></svg></span><h2 class="mono" style="font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{pvName}}</h2><button type="button" class="xbtn" aria-label="Close preview" data-tip="Close preview" data-tip-pos="left" onClick="{{closePv}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+            <div style="padding: 12px; display: flex; flex-direction: column; gap: 12px">
+              <sc-if value="{{pvText}}" hint-placeholder-val="{{ true }}">
+                <div class="code" role="region" aria-label="{{pvCodeLabel}}" tabindex="0"><sc-for list="{{lines}}" as="l" hint-placeholder-count="10"><div class="cl"><span class="ln" aria-hidden="true">{{l.no}}</span><span>{{l.t}}</span></div></sc-for></div>
+                <span class="sub2" style="font-size: 11.5px">{{pvLinesNote}}</span>
+              </sc-if>
+              <sc-if value="{{pvImg}}" hint-placeholder-val="{{ false }}">
+                <figure class="imgf" style="margin: 0"><svg class="ic" width="252" height="150" viewBox="0 0 252 150" role="img" aria-label="{{pvAlt}}"><rect x="1" y="1" width="250" height="148" rx="4" class="it1"/><rect x="18" y="24" width="60" height="36" rx="4" class="iw"/><rect x="96" y="24" width="60" height="36" rx="4" class="i1"/><rect x="174" y="24" width="60" height="36" rx="4" class="iw"/><rect x="96" y="96" width="60" height="32" rx="4" class="i2"/><path d="M78 42h18M156 42h18M126 60v36"/></svg><figcaption class="sub2" style="font-size: 11.5px">1600 × 900 px · PNG · checkerboard off</figcaption></figure>
+              </sc-if>
+              <sc-if value="{{pvOther}}" hint-placeholder-val="{{ false }}">
+                <div class="state" style="padding: 18px 8px; border: var(--bw) dashed var(--border); border-radius: 8px"><span>Preview not available for this file type.</span><button type="button" class="btn sm" onClick="{{download}}">Download File</button></div>
+              </sc-if>
+              <dl class="kv">
+                <dt>Path</dt><dd class="mono" style="font-size: 11.5px">{{pvPath}}</dd>
+                <dt>Size</dt><dd>{{pvSize}}</dd>
+                <dt>Type</dt><dd>{{pvType}}</dd>
+                <dt>Modified</dt><dd>{{pvMod}}</dd>
+                <dt>Owner</dt><dd>{{pvOwner}}</dd>
+                <dt>Git</dt><dd>{{pvGit}}</dd>
+                <dt>Checksum</dt><dd class="mono" style="font-size: 11.5px"><span data-tip="{{pvSumFull}}" tabindex="0">{{pvSum}}</span></dd>
+              </dl>
+              <div style="display: flex; flex-direction: column; gap: 8px">
+                <sc-if value="{{pvNotKb}}" hint-placeholder-val="{{ true }}"><button type="button" class="btn sm pri" onClick="{{pvKbAdd}}" style="justify-content: center"><svg class="ic sonp" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4zM20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z"/></svg>Add to Knowledge Base</button></sc-if>
+                <sc-if value="{{pvKb}}" hint-placeholder-val="{{ false }}"><span class="btn sm" role="status" style="justify-content: center; cursor: default"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Queued for indexing · research-agent</span></sc-if>
+                <span style="display: flex; gap: 8px"><a class="btn sm" href="Chat.dc.html" style="flex: 1; justify-content: center"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="it1"/></svg>Open in Chat</a><button type="button" class="btn sm" onClick="{{download}}" aria-label="Download file" data-tip="Download file" data-tip-pos="left"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M4 19h16"/></svg></button></span>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{pvNone}}" hint-placeholder-val="{{ false }}">
+            <div class="state" style="padding-top: 60px"><span class="tile lg"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 2h9l5 5v15H5z" class="iw"/><path d="M14 2v5h5M8 12h8M8 16h5"/></svg></span><b>No file selected</b><span>Select a file to preview its contents and metadata. Folders open on double-click or Enter.</span><span class="sub2">{{stats}}</span></div>
+          </sc-if>
+        </aside>
+
+        <!-- upload tray -->
+        <sc-if value="{{trayOpen}}" hint-placeholder-val="{{ false }}">
+          <section class="tray" aria-label="Uploads">
+            <div class="ch" style="padding: 9px 12px"><h2 style="font-size: 13.5px">{{trayTitle}}</h2><button type="button" class="lnk" onClick="{{clearUps}}">Clear</button><button type="button" class="xbtn" style="margin: 0" aria-label="Close upload tray" data-tip="Close upload tray" data-tip-pos="left" onClick="{{closeTray}}"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+            <div role="list" style="max-height: 210px; overflow: auto">
+              <sc-for list="{{ups}}" as="u" hint-placeholder-count="3">
+                <div class="up" role="listitem">
+                  <span style="display: flex; gap: 8px; align-items: center"><span class="mono" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{u.name}}</span><span class="pill {{u.pill}}">{{u.state}}</span><sc-if value="{{u.active}}" hint-placeholder-val="{{ false }}"><button type="button" class="kebab" aria-label="{{u.cancelLabel}}" data-tip="{{u.cancelLabel}}" data-tip-pos="left" onClick="{{u.cancel}}"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></sc-if></span>
+                  <div class="bar" role="progressbar" aria-label="{{u.name}}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{u.pct}}"><div class="bf {{u.barCls}}" style="width: {{u.pct}}%"></div></div>
+                  <span class="sub2" style="font-size: 11.5px">{{u.note}}</span>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+        </sc-if>
+
+        <!-- drop overlay -->
+        <sc-if value="{{drag}}" hint-placeholder-val="{{ false }}">
+          <div class="drop" onDragOver="{{dragIn}}" onDragLeave="{{dragOut}}" onDrop="{{dropFiles}}">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none"><span class="tile lg"><svg class="ic" width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5" class="sacc"/><path d="M4 15v4h16v-4" class="it2"/></svg></span><b style="font-size: 16px">Drop files here</b><span class="sub2">Uploading to <span class="mono">{{cwd}}</span> · max 50 MB per file</span></div>
+            <button type="button" class="btn sm" onClick="{{dragCancel}}" style="position: absolute; top: 12px; right: 12px">Cancel</button>
+          </div>
+        </sc-if>
+
+        <!-- delete confirm -->
+        <sc-if value="{{delOpen}}" hint-placeholder-val="{{ false }}">
+          <div class="scrim" onKeyDown="{{dlgKey}}">
+            <div class="dlg" role="alertdialog" aria-modal="true" aria-labelledby="del-h" aria-describedby="del-b" style="width: 400px">
+              <div class="dlg-h"><span class="tile danger"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13" class="iw"/></svg></span><h3 id="del-h" style="padding-top: 6px">Confirm</h3></div>
+              <div class="dlg-b" id="del-b"><p>{{delMsg}}</p><p class="sub2">Agents that reference these paths will see “file not found” on their next run.</p></div>
+              <div class="dlg-f"><button type="button" class="btn sm" onClick="{{delCancel}}">Cancel</button><button type="button" class="btn sm dng" onClick="{{delOk}}">Delete</button></div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- move dialog -->
+        <sc-if value="{{mvOpen}}" hint-placeholder-val="{{ false }}">
+          <div class="scrim" onKeyDown="{{dlgKey}}">
+            <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="mv-h" style="width: 440px">
+              <div class="dlg-h"><h3 id="mv-h">{{mvTitle}}</h3><button type="button" class="xbtn" aria-label="Close" data-tip="Close · Esc" data-tip-pos="left" onClick="{{mvCancel}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+              <div class="dlg-b" style="padding: 0">
+                <div role="radiogroup" aria-label="Destination folder" style="max-height: 260px; overflow: auto">
+                  <sc-for list="{{mvFolders}}" as="d" hint-placeholder-count="6"><div class="opt {{d.cls}}" role="radio" aria-checked="{{d.pressed}}" tabindex="0" onClick="{{d.pick}}"><span class="rad" aria-hidden="true"></span><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="it2"/></svg><span class="mono" style="font-size: 12.5px">{{d.label}}</span></div></sc-for>
+                </div>
+              </div>
+              <div class="dlg-f"><span class="sub2" style="margin-right: auto">{{mvNote}}</span><button type="button" class="btn sm" onClick="{{mvCancel}}">Cancel</button><button type="button" class="btn sm pri" aria-disabled="{{mvDisabled}}" data-tip="Choose a destination folder other than the current one" data-tip-pos="left" onClick="{{mvOk}}">Move here</button></div>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 14px; border-top: var(--bw) solid var(--line); background: var(--surface2)">
+        <span class="st">Try</span>
+        <span class="sub2">Drag real files from your desktop onto the list, or</span>
+        <button type="button" class="btn sm" onClick="{{showDrop}}">Show drop overlay</button>
+        <button type="button" class="btn sm" onClick="{{uploadDemo}}">Simulate upload (incl. one over limit)</button>
+        <button type="button" class="btn sm" onClick="{{goLogs}}">Open large folder</button>
+        <button type="button" class="btn sm" onClick="{{goSecrets}}">Open denied folder</button>
+        <button type="button" class="btn sm" onClick="{{goEmpty}}">Open empty folder</button>
+        <button type="button" class="btn sm" onClick="{{resetFs}}">Reset demo</button>
+      </div>
+      <p class="rules"><b>Rules:</b> one tab stop for the list (role="grid", aria-activedescendant); checkboxes and row buttons are tabindex −1. Selection is shown by checkbox + left bar, never by tint alone; git status is a letter with a text label. Destructive actions always confirm with the item name. Path edits are validated against the sandbox root — paths outside <span class="mono">/workspace</span> are rejected.</p>
+    </section>
+
+    <!-- 2. STATES GALLERY -->
+    <section class="card" aria-labelledby="h-st">
+      <div class="ch"><h2 id="h-st">Row, folder and transfer states</h2><span class="use">Use for: reference when building any list of files (chat files, knowledge uploads, sandbox)</span></div>
+      <div class="bd g3">
+        <div class="col">
+          <span class="st">Row states</span>
+          <div class="mini">
+            <div class="frow" style="grid-template-columns: 24px 1fr 90px"><span class="cb" aria-hidden="true"></span><span class="nm"><span class="t">files.py</span></span><span class="sub2" style="font-size: 11px">default</span></div>
+            <div class="frow hov" style="grid-template-columns: 24px 1fr 90px"><span class="cb" aria-hidden="true"></span><span class="nm"><span class="t">chat.py</span></span><span class="sub2" style="font-size: 11px">hover</span></div>
+            <div class="frow fv" style="grid-template-columns: 24px 1fr 90px"><span class="cb" aria-hidden="true"></span><span class="nm"><span class="t">knowledge.py</span></span><span class="sub2" style="font-size: 11px">focus-visible</span></div>
+            <div class="frow sel" style="grid-template-columns: 24px 1fr 90px"><span class="cb on" aria-hidden="true"><svg class="ic sonp" width="12" height="12" viewBox="0 0 24 24" style="stroke-width: 3"><path d="M5 12l5 5 9-10"/></svg></span><span class="nm"><span class="t">main.py</span></span><span class="sub2" style="font-size: 11px">selected</span></div>
+            <div class="frow" style="grid-template-columns: 24px 1fr 90px; padding-top: 4px; padding-bottom: 4px"><span class="cb" aria-hidden="true"></span><span style="display: flex; flex-direction: column; gap: 2px"><input class="inp mono" type="text" value="main.py" aria-label="New name (example)" aria-invalid="true" style="height: 28px; font-size: 12.5px"><span class="sub2" style="font-size: 11px; color: var(--alert-text)">A file named “main.py” already exists</span></span><span class="sub2" style="font-size: 11px">renaming · error</span></div>
+            <div class="frow cut" style="grid-template-columns: 24px 1fr 90px"><span class="cb" aria-hidden="true"></span><span class="nm"><span class="t">llm_router.py</span><span class="pill idle" style="font-size: 10.5px; padding: 1px 6px" data-tip="A move is in progress; actions are disabled until it finishes">moving…</span></span><span class="sub2" style="font-size: 11px">busy · disabled</span></div>
+          </div>
+          <span class="st" style="margin-top: 8px">Git status badges</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 12px; font-size: 12.5px"><span style="display: flex; gap: 6px; align-items: center"><span class="gs warn" data-tip="Changed since the last commit">M</span>Modified</span><span style="display: flex; gap: 6px; align-items: center"><span class="gs ok" data-tip="New file staged for the next commit">A</span>Added</span><span style="display: flex; gap: 6px; align-items: center"><span class="gs idle" data-tip="New file Git isn't tracking yet">?</span>Untracked</span><span style="display: flex; gap: 6px; align-items: center"><span class="gs bad" data-tip="Removed; deletion not yet committed">D</span>Deleted</span></div>
+        </div>
+        <div class="col">
+          <span class="st">Empty folder</span>
+          <div class="mini"><div class="state" style="padding: 22px 14px"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="it2"/></svg></span><b>This folder is empty</b><span>No files found in this directory</span><span style="display: flex; gap: 6px"><button type="button" class="btn sm">New Folder</button><button type="button" class="btn sm pri">Upload File</button></span></div></div>
+          <span class="st" style="margin-top: 8px">Permission denied</span>
+          <div class="mini"><div class="state" style="padding: 22px 14px"><span class="tile danger"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" class="iw"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><b>Permission denied</b><span>Sandbox policy blocks reads of <span class="mono" data-tip="Folder holding credentials; never readable from the sandbox">/workspace/autobot-ai/.secrets</span>.</span><a class="btn sm" href="AdminPermissionScopes.dc.html">Request files:read scope</a></div></div>
+        </div>
+        <div class="col">
+          <span class="st">Error loading · dismissible</span>
+          <div class="err" role="alert"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z" class="iw"/><path d="M12 10v4M12 17v.5"/></svg><span style="flex: 1">Error loading contents: sandbox container <span class="mono">sbx-autobot-07</span> is not running.</span><button type="button" class="btn sm">Retry</button><button type="button" class="kebab" aria-label="Dismiss error" data-tip="Dismiss error" data-tip-pos="left"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+          <span class="st" style="margin-top: 8px">Loading</span>
+          <div class="mini" role="status" style="padding: 12px; display: flex; flex-direction: column; gap: 12px"><span class="sub2">Loading files...</span><div class="sk" style="width: 75%"></div><div class="sk" style="width: 52%"></div><div class="sk" style="width: 64%"></div></div>
+          <span class="st" style="margin-top: 8px">Upload tray items</span>
+          <div class="mini">
+            <div class="up" style="border-top: 0"><span style="display: flex; gap: 8px"><span class="mono" style="flex: 1">kb-sources.json</span><span class="pill info">64%</span></span><div class="bar"><div class="bf" style="width: 64%"></div></div><span class="sub2" style="font-size: 11.5px">uploading · 28.3 of 44.2 KB</span></div>
+            <div class="up"><span style="display: flex; gap: 8px"><span class="mono" style="flex: 1">fleet-topology.png</span><span class="pill ok">Done</span></span><div class="bar"><div class="bf" style="width: 100%"></div></div></div>
+            <div class="up"><span style="display: flex; gap: 8px"><span class="mono" style="flex: 1">model-weights.bin</span><span class="pill bad" data-tip="File exceeds the 50 MB sandbox limit" data-tip-pos="left">Failed</span></span><div class="bar"><div class="bf alert" style="width: 100%"></div></div><span class="sub2" style="font-size: 11.5px; color: var(--alert-text)">2.10 GB exceeds the 50 MB sandbox limit</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> empty and denied states always offer the next step. Upload failures say why in words (size, type, quota) — the red bar alone is not enough. Announce completion through the status bar (aria-live="polite"), never with a modal.</p>
+    </section>
+
+    <!-- 3. KEYBOARD + VIRTUALIZATION -->
+    <section class="card" aria-labelledby="h-kb">
+      <div class="ch"><h2 id="h-kb">Keyboard model &amp; large folders</h2><span class="use">Use for: every file list — same keys in list and grid view</span></div>
+      <div class="bd g3">
+        <div style="overflow-x: auto">
+          <table style="border-collapse: collapse; width: 100%">
+            <thead><tr><th>Key</th><th>Action</th></tr></thead>
+            <tbody>
+              <tr><td><span class="kbd">↑</span> <span class="kbd">↓</span> (grid also <span class="kbd">←</span> <span class="kbd">→</span>)</td><td>Move focus, select single</td></tr>
+              <tr><td><span class="kbd">Shift</span> + arrows / click</td><td>Extend range from anchor</td></tr>
+              <tr><td><span class="kbd">Ctrl</span> + click</td><td>Toggle one item</td></tr>
+              <tr><td><span class="kbd">Ctrl</span> <span class="kbd">A</span></td><td>Select all in folder</td></tr>
+              <tr><td><span class="kbd">Enter</span> · double-click</td><td>Open folder / preview file</td></tr>
+              <tr><td><span class="kbd">F2</span></td><td>Rename inline (Enter saves, Esc cancels)</td></tr>
+              <tr><td><span class="kbd">Del</span></td><td>Delete with confirmation</td></tr>
+              <tr><td><span class="kbd">Backspace</span></td><td>Go up one folder</td></tr>
+              <tr><td><span class="kbd">Shift</span> <span class="kbd">F10</span> · menu key</td><td>Open context menu</td></tr>
+              <tr><td style="border-bottom: 0"><span class="kbd">Home</span> <span class="kbd">End</span> · <span class="kbd">Esc</span></td><td style="border-bottom: 0">First / last · clear selection</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="col" style="gap: 12px">
+          <span class="st">Virtualized list · data/logs (12,480 items)</span>
+          <div class="mini" style="position: relative">
+            <div class="note" style="border-bottom: var(--bw) solid var(--line)"><span>Rows 4,201–4,214 of 12,480 in view · <span data-tip="Only rows near the viewport exist in the DOM; others render as you scroll" data-tip-pos="bottom">40 mounted</span></span></div>
+            <div style="display: flex">
+              <div style="flex: 1; min-width: 0">
+                <div class="frow" style="grid-template-columns: 1fr 70px; border-left: 0"><span class="mono" style="font-size: 12px">agent-run-8279.log</span><span class="mono sub2" style="font-size: 11.5px">6.2 KB</span></div>
+                <div class="frow" style="grid-template-columns: 1fr 70px; border-left: 0"><span class="mono" style="font-size: 12px">agent-run-8278.log</span><span class="mono sub2" style="font-size: 11.5px">4.9 KB</span></div>
+                <div class="frow" style="grid-template-columns: 1fr 70px; border-left: 0"><span class="mono" style="font-size: 12px">agent-run-8277.log</span><span class="mono sub2" style="font-size: 11.5px">5.4 KB</span></div>
+                <div class="frow" style="grid-template-columns: 1fr 70px; border-left: 0; border-bottom: 0"><span class="sub2">· · · placeholder rows keep the scrollbar honest</span></div>
+              </div>
+              <div aria-hidden="true" style="width: 10px; background: var(--bar-track); border-left: var(--bw) solid var(--line); position: relative"><div style="position: absolute; left: 2px; right: 2px; top: 34%; height: 14px; border-radius: 4px; background: var(--bar)"></div></div>
+            </div>
+          </div>
+          <p class="sub2" style="margin: 0; line-height: 1.55">Virtualize above 500 entries. Keep fixed 40px row height, overscan 10 rows, and expose <span class="mono">aria-rowcount</span> / <span class="mono">aria-rowindex</span> so screen readers report “row 4,203 of 12,480”. Bulk actions over everything show the total and run as an agent job.</p>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> shortcuts are only active while the list has focus and never while a rename input or dialog is open. Every shortcut also has a visible button or menu item.</p>
+    </section>
+
+    <!-- 4. FILE PICKER -->
+    <section class="card" aria-labelledby="h-pk">
+      <div class="ch"><h2 id="h-pk">File picker dialog · attach to chat</h2><span class="use">Use for: choosing an existing workspace file to attach to a chat message or agent task</span></div>
+      <div class="bd">
+        <div class="stage" style="height: 540px">
+          <div style="position: absolute; left: 20px; right: 20px; bottom: 20px; display: flex; flex-direction: column; gap: 8px">
+            <sc-if value="{{pkHasAtt}}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; flex-wrap: wrap; gap: 6px" aria-label="Attached files" role="list"><sc-for list="{{pkAtt}}" as="a" hint-placeholder-count="1"><span class="chip" role="listitem"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 2h9l5 5v15H5z" class="iw"/></svg><span class="mono">{{a.name}}</span><button type="button" class="kebab" style="width: 22px; height: 22px" aria-label="{{a.label}}" data-tip="{{a.label}}" onClick="{{a.remove}}"><svg class="ic" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span></sc-for></div>
+            </sc-if>
+            <div class="card" style="display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px">
+              <button type="button" class="ibtn" aria-label="Attach file" data-tip="Attach file from workspace" aria-haspopup="dialog" onClick="{{pkOpenFn}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11l-8 8a5 5 0 0 1-7-7l8-8a3.5 3.5 0 0 1 5 5l-8 8a2 2 0 0 1-3-3l7-7"/></svg></button>
+              <span class="sub2" style="flex: 1">Message AutoBot…</span>
+              <button type="button" class="btn sm pri" data-tip="Send · Enter" data-tip-pos="left">Send</button>
+            </div>
+          </div>
+          <sc-if value="{{pkOpen}}" hint-placeholder-val="{{ true }}">
+            <div class="scrim" style="align-items: start; padding-top: 24px" onKeyDown="{{pkKey}}">
+              <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="pk-h" style="width: 560px">
+                <div class="dlg-h"><span class="tile"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11l-8 8a5 5 0 0 1-7-7l8-8a3.5 3.5 0 0 1 5 5l-8 8a2 2 0 0 1-3-3l7-7" class="sacc"/></svg></span><div style="display: flex; flex-direction: column; gap: 2px"><h3 id="pk-h">Attach a file</h3><span class="sub2 mono" style="font-size: 11.5px">/workspace/autobot-ai</span></div><button type="button" class="xbtn" aria-label="Close" data-tip="Close · Esc" data-tip-pos="left" onClick="{{pkClose}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px; border-bottom: var(--bw) solid var(--line)">
+                  <div style="flex: 1 1 200px; position: relative"><label for="pk-q" class="sr">Search files</label><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" style="position: absolute; left: 10px; top: 9px"><circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/></svg><input id="pk-q" class="inp" type="search" value="{{pkQ}}" placeholder="Search files..." onInput="{{pkQIn}}" style="height: 32px; padding-left: 32px"></div>
+                  <div class="segg" role="group" aria-label="File type"><sc-for list="{{pkFilters}}" as="x" hint-placeholder-count="4"><button type="button" class="seg {{x.cls}}" aria-pressed="{{x.pressed}}" onClick="{{x.pick}}">{{x.label}}</button></sc-for></div>
+                </div>
+                <div role="listbox" aria-label="Workspace files" tabindex="0" aria-activedescendant="{{pkActive}}" style="max-height: 252px; overflow: auto; outline-offset: -3px" onKeyDown="{{pkListKey}}">
+                  <sc-for list="{{pkRows}}" as="r" hint-placeholder-count="6"><div class="opt {{r.cls}}" id="{{r.id}}" role="option" aria-selected="{{r.sel}}" aria-disabled="{{r.dis}}" onClick="{{r.pick}}" onDoubleClick="{{r.attach}}"><span class="rad" aria-hidden="true"></span><span class="fi"><svg class="ic" width="18" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 2h9l5 5v15H5z" class="fo {{r.fill}}"/><path d="M14 2v5h5"/></svg></span><span style="flex: 1; min-width: 0; display: flex; flex-direction: column"><span class="mono" style="font-size: 12.5px; font-weight: 500">{{r.name}}</span><span class="sub2" style="font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{r.dir}}</span></span><span class="mono sub2" style="font-size: 11.5px">{{r.size}}</span><sc-if value="{{r.tooBig}}" hint-placeholder-val="{{ false }}"><span class="pill bad" data-tip="Over the 50 MB attachment limit" data-tip-pos="left">Too large</span></sc-if></div></sc-for>
+                  <sc-if value="{{pkEmpty}}" hint-placeholder-val="{{ false }}"><p class="sub2" style="margin: 0; padding: 26px; text-align: center">No files match this search.</p></sc-if>
+                </div>
+                <div class="dlg-f"><span class="sub2" style="margin-right: auto">{{pkNote}}</span><button type="button" class="btn sm" onClick="{{pkClose}}">Cancel</button><button type="button" class="btn sm pri" aria-disabled="{{pkNoSel}}" data-tip="Select a file to attach · Enter" data-tip-pos="left" onClick="{{pkAttachFn}}">Attach</button></div>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> focus moves into the dialog and is trapped; Esc closes and returns focus to the paperclip. Attach stays disabled until a valid file is chosen; files over the limit are listed but not selectable, with the reason in words. Double-click or Enter attaches immediately.</p>
+    </section>
+
+    <nav aria-label="Design system pages" class="card" style="display: flex; flex-wrap: wrap; gap: 12px; padding: 12px">
+      <a href="ComponentsChat.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">← Previous</span><span style="font-weight: 600; color: var(--text)">Chat &amp; agent</span></a>
+      <a href="Mailbox.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">Next →</span><span style="font-weight: 600; color: var(--text)">Mailbox</span></a>
+    </nav>
+  </main>
+  </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"$preview":{"width":1440,"height":2960}}'>
+const THEMES = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+const R = '/workspace/autobot-ai';
+const LIMIT = 50 * 1048576;
+const ME = 'mrveiss';
+const D = (n, m, o, x) => Object.assign({ n: n, dir: true, s: null, m: m, o: o, g: '' }, x || {});
+const F = (n, s, m, o, g) => ({ n: n, dir: false, s: s, m: m, o: o, g: g || '' });
+const AG = ['code-agent', 'research-agent', 'devops-engineer', 'documentation-engineer'];
+const INIT = {};
+INIT[R] = [
+  D('autobot-backend', '2026-10-10 09:12', 'code-agent'),
+  D('autobot-frontend', '2026-10-10 08:47', 'code-agent'),
+  D('ansible', '2026-10-08 17:40', ME),
+  D('data', '2026-10-10 07:05', 'research-agent'),
+  D('docs', '2026-10-09 16:22', 'documentation-engineer'),
+  D('.secrets', '2026-09-30 11:02', 'root', { deny: true }),
+  F('README.md', 8421, '2026-10-10 09:30', ME, 'M'),
+  F('architecture.png', 248113, '2026-10-09 16:20', 'documentation-engineer', 'A'),
+  F('CHANGELOG.md', 15730, '2026-10-07 12:10', 'documentation-engineer'),
+  F('docker-compose.yml', 3210, '2026-10-06 10:44', ME),
+  F('pyproject.toml', 1874, '2026-10-10 08:15', 'code-agent', 'M'),
+  F('setup.sh', 2140, '2026-10-10 06:58', 'devops-engineer', '?'),
+  F('release-2026.10.tar.gz', 18874368, '2026-10-01 18:00', 'devops-engineer')
+];
+INIT[R + '/autobot-backend'] = [D('api', '2026-10-10 09:12', 'code-agent'), D('services', '2026-10-09 14:30', 'code-agent'), D('tests', '2026-10-10 08:02', 'code-agent'), F('main.py', 4310, '2026-10-10 09:12', 'code-agent', 'M'), F('requirements.txt', 912, '2026-10-02 10:00', ME)];
+INIT[R + '/autobot-backend/api'] = [F('files.py', 12840, '2026-10-10 09:12', 'code-agent', 'M'), F('chat.py', 9310, '2026-10-08 13:20', 'code-agent'), F('knowledge.py', 15022, '2026-10-07 09:41', 'research-agent')];
+INIT[R + '/autobot-backend/services'] = [F('sandbox_manager.py', 7420, '2026-10-09 14:30', 'code-agent', 'A'), F('llm_router.py', 6110, '2026-10-05 16:12', ME)];
+INIT[R + '/autobot-backend/tests'] = [F('test_files_api.py', 3380, '2026-10-10 08:02', 'code-agent', '?')];
+INIT[R + '/autobot-frontend'] = [D('src', '2026-10-10 08:47', 'code-agent'), F('package.json', 2741, '2026-10-04 11:00', ME), F('vite.config.ts', 1180, '2026-09-28 15:22', ME)];
+INIT[R + '/autobot-frontend/src'] = [D('components', '2026-10-10 08:47', 'code-agent'), F('main.ts', 860, '2026-09-20 10:10', ME)];
+INIT[R + '/autobot-frontend/src/components'] = [D('chat', '2026-10-10 08:47', 'code-agent'), D('file-browser', '2026-10-10 08:31', 'code-agent')];
+INIT[R + '/autobot-frontend/src/components/chat'] = [F('ChatFilePanel.vue', 18230, '2026-10-10 08:47', 'code-agent', 'M')];
+INIT[R + '/autobot-frontend/src/components/file-browser'] = [F('FileBrowser.vue', 9870, '2026-10-10 08:31', 'code-agent', 'M'), F('FileListTable.vue', 6420, '2026-10-03 12:00', 'code-agent'), F('FilePreview.vue', 5110, '2026-10-03 12:00', 'code-agent'), F('FileTreeView.vue', 4380, '2026-10-03 12:00', 'code-agent'), F('SandboxFileBrowser.vue', 7930, '2026-10-09 18:05', 'code-agent', 'A')];
+INIT[R + '/ansible'] = [F('site.yml', 1420, '2026-10-08 17:40', ME), F('inventory.ini', 640, '2026-10-08 17:38', ME, 'M'), F('group_vars.yml', 2210, '2026-10-01 09:00', 'devops-engineer')];
+INIT[R + '/data'] = [D('exports', '2026-10-06 12:00', 'research-agent'), D('logs', '2026-10-10 09:31', 'devops-engineer', { big: 12480 }), F('benchmarks.csv', 182400, '2026-10-10 07:05', 'research-agent'), F('kb-sources.json', 44210, '2026-10-09 22:14', 'research-agent', 'A')];
+INIT[R + '/data/exports'] = [];
+INIT[R + '/data/logs'] = Array.from({ length: 14 }, (_, i) => F('agent-run-' + (12480 - i) + '.log', 3100 + ((i * 7919) % 6000), '2026-10-10 09:' + String(31 - i * 2).padStart(2, '0'), AG[i % 4]));
+INIT[R + '/docs'] = [F('architecture.md', 22140, '2026-10-09 16:22', 'documentation-engineer'), F('api-reference.pdf', 1288490, '2026-10-06 11:10', 'documentation-engineer'), F('deployment-guide.md', 11820, '2026-10-09 15:02', 'documentation-engineer', 'M'), F('fleet-topology.png', 412300, '2026-10-08 10:30', 'devops-engineer')];
+const DEF_EXP = {}; DEF_EXP[R] = true; DEF_EXP[R + '/autobot-backend'] = true;
+const EXT = { py: ['Python', 'i1', 'PY'], ts: ['TypeScript', 'i1', 'TS'], vue: ['Vue component', 'i1', 'VUE'], md: ['Markdown', 'it2', 'MD'], yml: ['YAML', 'it2', 'YML'], json: ['JSON', 'it1', 'JSON'], toml: ['TOML', 'it2', 'TOML'], sh: ['Shell Script', 'it3', 'SH'], txt: ['Text', 'iw', 'TXT'], csv: ['CSV', 'it1', 'CSV'], ini: ['INI', 'it2', 'INI'], log: ['Log', 'iw', 'LOG'], pdf: ['PDF', 'i3', 'PDF'], png: ['Image', 'i3', 'PNG'], gz: ['Archive', 'it3', 'GZ'], bin: ['Binary', 'iw', 'BIN'] };
+const TEXTY = ['py', 'ts', 'vue', 'md', 'yml', 'json', 'toml', 'sh', 'txt', 'csv', 'ini', 'log'];
+const GIT = { M: ['Modified', 'warn'], A: ['Added', 'ok'], '?': ['Untracked', 'idle'] };
+const ext = (n) => { const i = n.lastIndexOf('.'); return i > 0 ? n.slice(i + 1).toLowerCase() : ''; };
+const info = (e) => (e.dir ? ['Directory', 'i2', ''] : EXT[ext(e.n)] || ['Unknown', 'iw', '?']);
+const fmt = (b) => (b == null ? '—' : b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : b < 1073741824 ? (b / 1048576).toFixed(1) + ' MB' : (b / 1073741824).toFixed(2) + ' GB');
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const fdate = (m) => { const d = m.slice(0, 10); const t = m.slice(11); if (d === '2026-10-10') return 'Today ' + t; if (d === '2026-10-09') return 'Yesterday ' + t; return MON[+m.slice(5, 7) - 1] + ' ' + (+m.slice(8, 10)) + ', ' + t; };
+const now = () => { const d = new Date(); return '2026-10-10 ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+const hash = (s) => { let h = 2166136261; let out = ''; for (let k = 0; k < 8; k++) { for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0; h = Math.imul(h ^ (k * 131 + 7), 16777619) >>> 0; out += ('0000000' + h.toString(16)).slice(-8); } return out; };
+const TXT = {
+  'README.md': ['# AutoBot-AI', '', 'Self-hosted modular AI platform.', 'Your data, your AI.', '', '## Quick start', '', '    cp .env.example .env', '    docker compose up -d', '', '## Layout', '- autobot-backend/   FastAPI, agents, sandbox', '- autobot-frontend/  Vue 3 SPA', '- ansible/           fleet provisioning', '- docs/              architecture + guides'],
+  'docker-compose.yml': ['services:', '  backend:', '    build: ./autobot-backend', '    ports: ["8001:8001"]', '    volumes:', '      - ./workspace:/workspace', '  frontend:', '    build: ./autobot-frontend', '    ports: ["5173:5173"]', '  redis:', '    image: redis/redis-stack:7.4.0-v1']
+};
+const sample = (e, path) => {
+  if (TXT[e.n]) return TXT[e.n];
+  const x = ext(e.n);
+  if (x === 'py') return ['"""' + e.n + ' — ' + path.replace(R + '/', '') + '"""', 'from fastapi import APIRouter, HTTPException', 'from services.sandbox_manager import sandbox', '', 'router = APIRouter(prefix="/api/files")', '', '', '@router.get("/list")', 'async def list_files(path: str = "/"):', '    """List one sandbox directory."""', '    if not sandbox.allowed(path):', '        raise HTTPException(403, "Permission denied")', '    return {"path": path, "files": await sandbox.list_dir(path)}'];
+  if (x === 'vue' || x === 'ts') return ['// ' + e.n, "import { ref, computed } from 'vue'", "import { useI18n } from 'vue-i18n'", '', 'const { t } = useI18n()', "const viewMode = ref<'list' | 'grid'>('list')", "const sortField = ref<'name' | 'date' | 'size' | 'type'>('name')", 'const selected = ref(new Set<string>())', '', 'const selectedCount = computed(() => selected.value.size)', "const title = computed(() => t('fileBrowser.header.title'))"];
+  if (x === 'md') return ['# ' + e.n.replace('.md', '').replace(/-/g, ' '), '', 'Owner: ' + e.o, '', '## Overview', 'AutoBot runs agents against a sandboxed', 'workspace mounted at /workspace.', '', '## Steps', '1. Provision the fleet with Ansible.', '2. Start the stack with Docker Compose.', '3. Verify heartbeat in Company OS.'];
+  if (x === 'yml' || x === 'ini' || x === 'toml') return ['# ' + e.n, '[autobot]', 'sandbox_root = "/workspace"', 'max_file_size_mb = 50', '', '[fleet]', 'nodes = ["node-01", "node-02", "node-03", "node-04"]', 'llm_backend = "ollama"'];
+  if (x === 'json') return ['{', '  "sources": [', '    { "url": "docs/architecture.md", "status": "indexed" },', '    { "url": "docs/deployment-guide.md", "status": "pending" }', '  ],', '  "updated_by": "' + e.o + '"', '}'];
+  if (x === 'csv') return ['model,backend,tokens_per_s,p95_ms', 'llama3.1-8b,ollama,61.4,410', 'qwen2.5-7b,ollama,66.0,388', 'phi-3-mini,openvino,94.2,201'];
+  if (x === 'sh') return ['#!/usr/bin/env bash', 'set -euo pipefail', 'cd "$(dirname "$0")"', 'cp -n .env.example .env', 'docker compose pull', 'docker compose up -d', 'echo "AutoBot is up on :5173"'];
+  if (x === 'log') return ['09:31:02 INFO  heartbeat start agent=' + e.o, '09:31:03 INFO  tool=files.list path=/workspace/autobot-ai', '09:31:05 WARN  node-04 unreachable, retry 1/3', '09:31:09 INFO  run complete in 6.8s'];
+  return ['(text)'];
+};
+const PK = [
+  ['README.md', R, 8421, 'doc'], ['architecture.png', R, 248113, 'img'], ['deployment-guide.md', R + '/docs', 11820, 'doc'], ['api-reference.pdf', R + '/docs', 1288490, 'doc'],
+  ['files.py', R + '/autobot-backend/api', 12840, 'code'], ['ChatFilePanel.vue', R + '/autobot-frontend/src/components/chat', 18230, 'code'], ['fleet-topology.png', R + '/docs', 412300, 'img'],
+  ['benchmarks.csv', R + '/data', 182400, 'doc'], ['model-weights.bin', R + '/data', 2254857830, 'other']
+];
+const PKF = [['all', 'All'], ['doc', 'Documents'], ['code', 'Code'], ['img', 'Images']];
+const SORTS = [['name', 'Name'], ['date', 'Date'], ['size', 'Size'], ['type', 'Type']];
+const DEMO_UP = [{ n: 'benchmark-results.csv', s: 186400 }, { n: 'fleet-diagram.png', s: 734003 }, { n: 'model-weights.bin', s: 2254857830 }];
+
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+  }
+  componentWillUnmount() { if (this._ut) clearInterval(this._ut); if (this._rt) clearTimeout(this._rt); }
+  componentDidUpdate() {
+    const st = this.state || {};
+    if (st.ren && this._rf !== st.ren) { this._rf = st.ren; try { const el = document.getElementById('rn-in'); if (el) { el.focus(); el.select(); } } catch (e) {} }
+    if (!st.ren) this._rf = null;
+  }
+  S() { return this.state || {}; }
+  fs() { return this.S().fs || INIT; }
+  cwd() { return this.S().cwd || R; }
+  clone() { const o = {}; const f = this.fs(); Object.keys(f).forEach((k) => { o[k] = f[k].slice(); }); return o; }
+  ent(p) { const i = p.lastIndexOf('/'); const l = this.fs()[p.slice(0, i)]; return Array.isArray(l) ? l.find((e) => e.n === p.slice(i + 1)) || null : null; }
+  denied() { return !Array.isArray(this.fs()[this.cwd()]); }
+  say(m) { this.setState({ msg: m }); }
+  go(p) {
+    p = (p || '').trim().replace(/\/+$/, '');
+    if (p !== R && p.indexOf(R + '/') !== 0) { this.setState({ pathErr: p.indexOf('/workspace') === 0 ? 'Path not found: ' + p : 'Outside the sandbox root (' + R + '): ' + (p || '/') }); return; }
+    const e = this.ent(p);
+    if (this.fs()[p] === undefined && !(e && e.deny)) { this.setState({ pathErr: 'Path not found: ' + p }); return; }
+    const exp = Object.assign({}, this.S().exp || DEF_EXP);
+    let a = p; while (a.length > R.length) { a = a.slice(0, a.lastIndexOf('/')); exp[a] = true; }
+    this.setState({ cwd: p, exp: exp, sel: {}, focus: 0, anchor: 0, preview: null, ren: null, menu: null, q: '', pathEdit: false, pathErr: '', msg: e && e.deny ? 'Permission denied: ' + p : 'Opened ' + p.replace(R, 'autobot-ai') });
+  }
+  up() { const c = this.cwd(); if (c !== R) this.go(c.slice(0, c.lastIndexOf('/'))); }
+  rows() {
+    const st = this.S(); const l = this.fs()[this.cwd()];
+    if (!Array.isArray(l)) return [];
+    const q = (st.q || '').toLowerCase(); const k = st.sort || 'name'; const dir = st.desc ? -1 : 1;
+    const key = (e) => (k === 'size' ? e.s || 0 : k === 'date' ? e.m : k === 'type' ? info(e)[0] + e.n.toLowerCase() : e.n.toLowerCase());
+    return l.filter((e) => !q || e.n.toLowerCase().indexOf(q) >= 0).sort((a, b) => (a.dir !== b.dir ? (a.dir ? -1 : 1) : key(a) < key(b) ? -dir : key(a) > key(b) ? dir : 0));
+  }
+  selNames() { const s = this.S().sel || {}; return this.rows().filter((e) => s[e.n]).map((e) => e.n); }
+  targets() { const s = this.selNames(); if (s.length) return s; const r = this.rows()[this.S().focus || 0]; return r ? [r.n] : []; }
+  open(e) { if (!e) return; if (e.dir) this.go(this.cwd() + '/' + e.n); else this.setState({ preview: e.n, menu: null, msg: 'Previewing ' + e.n }); }
+  pick(ev, i) {
+    const st = this.S(); const rows = this.rows(); const e = rows[i]; if (!e) return;
+    let sel;
+    if (ev && (ev.metaKey || ev.ctrlKey)) { sel = Object.assign({}, st.sel); sel[e.n] = !sel[e.n]; }
+    else if (ev && ev.shiftKey) { sel = {}; const a = Math.min(st.anchor || 0, rows.length - 1); for (let j = Math.min(a, i); j <= Math.max(a, i); j++) sel[rows[j].n] = true; }
+    else { sel = {}; sel[e.n] = true; }
+    const upd = { sel: sel, focus: i, menu: null };
+    if (!(ev && ev.shiftKey)) upd.anchor = i;
+    if (!e.dir) upd.preview = e.n;
+    this.setState(upd);
+  }
+  toggle(i) { const e = this.rows()[i]; if (!e) return; const sel = Object.assign({}, this.S().sel); sel[e.n] = !sel[e.n]; this.setState({ sel: sel, focus: i, anchor: i }); }
+  selectAll() {
+    const sel = {}; const rows = this.rows(); rows.forEach((e) => { sel[e.n] = true; });
+    const big = (this.ent(this.cwd()) || {}).big;
+    this.setState({ sel: sel, msg: big ? 'All ' + big.toLocaleString('en-US') + ' items selected (server-side)' : rows.length + ' selected' });
+  }
+  toggleAll() { const n = this.selNames().length; if (n && n === this.rows().length) this.setState({ sel: {} }); else this.selectAll(); }
+  rewrite(fs, from, to) { Object.keys(fs).forEach((k) => { if (k === from || k.indexOf(from + '/') === 0) { fs[to + k.slice(from.length)] = fs[k]; delete fs[k]; } }); }
+  startRename(n) { if (this.denied() || !n) return; this.setState({ ren: n, draft: n, renErr: '', menu: null }); }
+  commitRename() {
+    const st = this.S(); const old = st.ren; const nn = (st.draft || '').trim(); const cwd = this.cwd();
+    if (!old) return;
+    if (nn === old) { this.setState({ ren: null }); return; }
+    if (!nn) { this.setState({ renErr: 'Name cannot be empty' }); return; }
+    if (nn.indexOf('/') >= 0) { this.setState({ renErr: 'Name cannot contain “/”' }); return; }
+    if (this.fs()[cwd].some((e) => e.n === nn)) { this.setState({ renErr: 'A file or folder named “' + nn + '” already exists' }); return; }
+    const fs = this.clone();
+    fs[cwd] = fs[cwd].map((e) => (e.n === old ? Object.assign({}, e, { n: nn, m: now(), g: e.g || 'M' }) : e));
+    this.rewrite(fs, cwd + '/' + old, cwd + '/' + nn);
+    const sel = {}; sel[nn] = true;
+    this.setState({ fs: fs, ren: null, renErr: '', sel: sel, preview: st.preview === old ? nn : st.preview, msg: 'Renamed ' + old + ' to ' + nn });
+  }
+  newFolder() {
+    if (this.denied()) { this.say('No write access to this folder'); return; }
+    const cwd = this.cwd(); const l = this.fs()[cwd]; let n = 'New folder'; let k = 2;
+    while (l.some((e) => e.n === n)) n = 'New folder (' + k++ + ')';
+    const fs = this.clone(); fs[cwd].push(D(n, now(), ME, { g: '?' })); fs[cwd + '/' + n] = [];
+    const sel = {}; sel[n] = true;
+    this.setState({ fs: fs, ren: n, draft: n, renErr: '', sel: sel, q: '', msg: 'Folder created — type a name' });
+  }
+  askDelete() { const t = this.targets(); if (!t.length || this.denied()) return; this.setState({ del: t, menu: null }); }
+  doDelete() {
+    const st = this.S(); const cwd = this.cwd(); const names = st.del || []; const fs = this.clone();
+    fs[cwd] = fs[cwd].filter((e) => names.indexOf(e.n) < 0);
+    names.forEach((n) => { const p = cwd + '/' + n; Object.keys(fs).forEach((k) => { if (k === p || k.indexOf(p + '/') === 0) delete fs[k]; }); });
+    this.setState({ fs: fs, del: null, sel: {}, focus: 0, preview: names.indexOf(st.preview) >= 0 ? null : st.preview, msg: 'Deleted ' + (names.length === 1 ? names[0] : names.length + ' items') });
+  }
+  askMove() { const t = this.targets(); if (!t.length || this.denied()) return; this.setState({ mv: t, mvTo: null, menu: null }); }
+  doMove() {
+    const st = this.S(); const cwd = this.cwd(); const to = st.mvTo; if (!to) return;
+    const fs = this.clone(); const dest = fs[to]; const moved = []; const skipped = [];
+    (st.mv || []).forEach((n) => {
+      if (dest.some((e) => e.n === n)) { skipped.push(n); return; }
+      const e = fs[cwd].find((x) => x.n === n); fs[cwd] = fs[cwd].filter((x) => x.n !== n);
+      dest.push(Object.assign({}, e, { m: now() })); this.rewrite(fs, cwd + '/' + n, to + '/' + n); moved.push(n);
+    });
+    this.setState({ fs: fs, mv: null, sel: {}, preview: null, msg: 'Moved ' + moved.length + ' item(s) to ' + to.replace(R, 'autobot-ai') + (skipped.length ? ' · skipped ' + skipped.join(', ') + ' (name exists)' : '') });
+  }
+  dup() {
+    const cwd = this.cwd(); const t = this.targets(); const fs = this.clone(); const made = [];
+    t.forEach((n) => { const e = fs[cwd].find((x) => x.n === n); if (!e || e.dir) return; const x = ext(n); const base = x ? n.slice(0, -(x.length + 1)) : n; let nn = base + ' copy' + (x ? '.' + x : ''); let k = 2; while (fs[cwd].some((y) => y.n === nn)) nn = base + ' copy ' + k++ + (x ? '.' + x : ''); fs[cwd].push(Object.assign({}, e, { n: nn, m: now(), o: ME, g: '?' })); made.push(nn); });
+    this.setState({ fs: fs, menu: null, msg: made.length ? 'Duplicated as ' + made.join(', ') : 'Duplicate works on files only' });
+  }
+  download() {
+    const t = this.targets(); if (!t.length) return; const e = (this.fs()[this.cwd()] || []).find((x) => x.n === t[0]);
+    this.setState({ menu: null, msg: t.length === 1 && e && !e.dir ? 'Downloading ' + t[0] + ' (' + fmt(e.s) + ')' : 'Preparing autobot-ai-selection.zip (' + t.length + ' item' + (t.length > 1 ? 's' : '') + ')' });
+  }
+  kb(names) {
+    const kb = Object.assign({}, this.S().kb); const cwd = this.cwd(); const l = this.fs()[cwd] || [];
+    const files = names.filter((n) => { const e = l.find((x) => x.n === n); return e && !e.dir; });
+    files.forEach((n) => { kb[cwd + '/' + n] = true; });
+    this.setState({ kb: kb, menu: null, msg: files.length ? 'Queued ' + files.length + ' file(s) for Knowledge Base indexing' : 'Only files can be added to the Knowledge Base' });
+  }
+  openMenu(i, ev) {
+    const rows = this.rows(); const e = rows[i]; if (!e) return; const st = this.S();
+    let x = 260; let y = 90 + i * 40; let w = 900; let h = 600;
+    try { const wrap = (ev && ev.currentTarget && ev.currentTarget.closest('[data-stage]')) || document.querySelector('[data-stage="fb"]'); if (wrap) { const r = wrap.getBoundingClientRect(); w = r.width; h = r.height; const cen = wrap.querySelector('.center'); const cr = cen ? cen.getBoundingClientRect() : r; if (ev && ev.clientX) { x = ev.clientX - cr.left; y = ev.clientY - cr.top; } h = cr.height; w = cr.width; } } catch (err) {}
+    x = Math.max(8, Math.min(x, w - 244)); y = Math.max(8, Math.min(y, h - 360));
+    const upd = { menu: { i: i, x: Math.round(x), y: Math.round(y) }, focus: i };
+    if (!(st.sel || {})[e.n]) { const s = {}; s[e.n] = true; upd.sel = s; upd.anchor = i; }
+    this.setState(upd);
+  }
+  upload(files) {
+    const st = this.S(); if (this.denied()) { this.setState({ drag: false, msg: 'Upload blocked: no write access to this folder' }); return; }
+    const dest = this.cwd(); let id = st.upId || 0;
+    const add = files.map((f) => ({ id: ++id, n: f.n, s: f.s, dest: dest, p: f.s > LIMIT ? 100 : 0, err: f.s > LIMIT ? fmt(f.s) + ' exceeds the 50 MB sandbox limit' : '' }));
+    this.setState({ ups: (st.ups || []).concat(add), upId: id, trayOpen: true, drag: false, msg: 'Uploading ' + add.length + ' file(s) to ' + dest.replace(R, 'autobot-ai') });
+    if (!this._ut) this._ut = setInterval(() => this.tick(), 350);
+  }
+  tick() {
+    const st = this.S(); let fs = null; let active = 0;
+    const ups = (st.ups || []).map((u) => {
+      if (u.err || u.p >= 100) return u;
+      const p = Math.min(100, u.p + 7 + ((u.id * 7 + u.p) % 13));
+      if (p >= 100) { fs = fs || this.clone(); const l = fs[u.dest]; if (Array.isArray(l) && !l.some((e) => e.n === u.n)) l.push(F(u.n, u.s, now(), ME, '?')); } else active++;
+      return Object.assign({}, u, { p: p });
+    });
+    const upd = { ups: ups }; if (fs) upd.fs = fs;
+    if (!active) { clearInterval(this._ut); this._ut = null; upd.msg = 'Upload finished · ' + ups.filter((u) => !u.err).length + ' done, ' + ups.filter((u) => u.err).length + ' failed'; }
+    this.setState(upd);
+  }
+  key(ev) {
+    const st = this.S(); if (st.ren || st.del || st.mv) return;
+    const rows = this.rows(); const n = rows.length; const f = Math.min(st.focus || 0, Math.max(0, n - 1)); const k = ev.key;
+    const cols = st.view === 'grid' ? 4 : 1; let mv = null;
+    if (k === 'ArrowDown') mv = f + cols; else if (k === 'ArrowUp') mv = f - cols; else if (k === 'ArrowRight' && cols > 1) mv = f + 1; else if (k === 'ArrowLeft' && cols > 1) mv = f - 1; else if (k === 'Home') mv = 0; else if (k === 'End') mv = n - 1;
+    if (mv !== null) { ev.preventDefault(); if (n) this.pick({ shiftKey: ev.shiftKey }, Math.max(0, Math.min(n - 1, mv))); return; }
+    if (k === 'Enter') { ev.preventDefault(); this.open(rows[f]); }
+    else if (k === 'F2') { ev.preventDefault(); if (rows[f]) this.startRename(rows[f].n); }
+    else if (k === 'Delete') { ev.preventDefault(); this.askDelete(); }
+    else if ((ev.ctrlKey || ev.metaKey) && (k === 'a' || k === 'A')) { ev.preventDefault(); this.selectAll(); }
+    else if (k === 'Escape') this.setState({ sel: {}, menu: null });
+    else if (k === 'Backspace') { ev.preventDefault(); this.up(); }
+    else if (k === 'ContextMenu' || (k === 'F10' && ev.shiftKey)) { ev.preventDefault(); this.openMenu(f, null); }
+  }
+  tree() {
+    const st = this.S(); const exp = st.exp || DEF_EXP; const fs = this.fs(); const cwd = this.cwd(); const out = [];
+    const walk = (p, name, depth, e) => {
+      const l = fs[p]; const kids = Array.isArray(l) && l.some((x) => x.dir); const ex = !!exp[p] && kids;
+      out.push({ name: name, level: depth + 1, pad: 4 + depth * 14, kids: kids, leaf: !kids, exp: ex ? 'true' : 'false', cur: p === cwd ? 'true' : 'false', cls: p === cwd ? 'on' : '', fill: e && e.deny ? 'it3' : p === cwd ? 'i2' : 'it2', lock: !!(e && e.deny), togLabel: (ex ? 'Collapse ' : 'Expand ') + name, toggle: () => { const x = Object.assign({}, exp); x[p] = !ex; this.setState({ exp: x }); }, go: () => this.go(p) });
+      if (ex) l.filter((x) => x.dir).sort((a, b) => (a.n.toLowerCase() < b.n.toLowerCase() ? -1 : 1)).forEach((x) => walk(p + '/' + x.n, x.n, depth + 1, x));
+    };
+    walk(R, 'autobot-ai', 0, null);
+    return out;
+  }
+  renderVals() {
+    const st = this.S(); const cur = st.theme || this.props.theme || 'light';
+    const fs = this.fs(); const cwd = this.cwd(); const rows = this.rows(); const list = fs[cwd];
+    const denied = !Array.isArray(list); const selN = this.selNames(); const sel = st.sel || {};
+    const foc = Math.min(st.focus || 0, Math.max(0, rows.length - 1)); const loading = !!st.loading;
+    const kbm = st.kb || {}; const grid = st.view === 'grid'; const sortK = st.sort || 'name';
+    const big = (this.ent(cwd) || {}).big;
+    const files = rows.map((e, i) => {
+      const inf = info(e); const on = !!sel[e.n]; const g = GIT[e.g]; const x = ext(e.n);
+      return {
+        id: 'fr-' + i, name: e.n, isDir: !!e.dir, isFile: !e.dir, isImg: x === 'png', isDoc: !e.dir && x !== 'png', ext: inf[2], fill: inf[1], type: inf[0],
+        size: e.dir ? '—' : fmt(e.s), mod: fdate(e.m), modFull: e.m, owner: e.o, agent: AG.indexOf(e.o) >= 0, human: AG.indexOf(e.o) < 0,
+        gridMeta: e.dir ? 'Folder · ' + fdate(e.m) : fmt(e.s), cls: (on ? 'sel ' : '') + (i === foc ? 'kf' : ''), selA: on ? 'true' : 'false', cbCls: on ? 'on' : '', cbLabel: 'Select ' + e.n,
+        hasGit: !!g, g: e.g, gCls: g ? g[1] : '', gTitle: g ? g[0] : '', renaming: st.ren === e.n, notRen: st.ren !== e.n, locked: !!e.deny, kb: !!kbm[cwd + '/' + e.n],
+        moreLabel: 'More actions for ' + e.n,
+        click: (ev) => this.pick(ev, i), open: () => this.open(e),
+        go: (ev) => { ev.stopPropagation(); this.open(e); }, tog: (ev) => { ev.stopPropagation(); this.toggle(i); },
+        ctx: (ev) => { ev.preventDefault(); ev.stopPropagation(); this.openMenu(i, ev); }
+      };
+    });
+    const segs = cwd.slice(R.length).split('/').filter(Boolean);
+    const crumbs = [{ label: 'autobot-ai', path: R }].concat(segs.map((s, i) => ({ label: s, path: R + '/' + segs.slice(0, i + 1).join('/') })));
+    let nf = 0; let nd = 0; let tot = 0; (Array.isArray(list) ? list : []).forEach((e) => { if (e.dir) nd++; else { nf++; tot += e.s || 0; } });
+    const stats = denied ? 'No access' : big ? big.toLocaleString('en-US') + ' files · 412.6 MB · max 50 MB' : nf + ' files · ' + nd + ' dirs · ' + fmt(tot) + ' · max 50 MB';
+    const pName = st.preview === undefined ? 'README.md' : st.preview;
+    const pe = pName && Array.isArray(list) ? list.find((e) => e.n === pName && !e.dir) : null;
+    const pPath = pe ? cwd + '/' + pe.n : ''; const px = pe ? ext(pe.n) : ''; const pInf = pe ? info(pe) : ['', 'iw', ''];
+    const lines = pe && TEXTY.indexOf(px) >= 0 ? sample(pe, pPath).map((t, i) => ({ no: i + 1, t: t || ' ' })) : [];
+    const h = pe ? hash(pPath + pe.s) : ''; const pg = pe ? GIT[pe.g] : null;
+    const menu = st.menu; const mRow = menu ? rows[menu.i] : null;
+    const tgt = menu ? this.targets() : [];
+    const ups = (st.ups || []).map((u) => ({ name: u.n, pct: u.p, active: !u.err && u.p < 100, pill: u.err ? 'bad' : u.p >= 100 ? 'ok' : 'info', state: u.err ? 'Failed' : u.p >= 100 ? 'Done' : u.p + '%', barCls: u.err ? 'alert' : '', note: u.err ? u.err : u.p >= 100 ? fmt(u.s) + ' · added to ' + u.dest.replace(R, 'autobot-ai') : 'Uploading... ' + fmt(Math.round(u.s * u.p / 100)) + ' of ' + fmt(u.s), cancelLabel: 'Cancel upload of ' + u.n, cancel: () => this.setState({ ups: (this.S().ups || []).map((x) => (x.id === u.id ? Object.assign({}, x, { err: 'Cancelled', p: x.p }) : x)) }) }));
+    const activeUps = ups.filter((u) => u.active).length;
+    const mvNames = st.mv || [];
+    const mvFolders = st.mv ? Object.keys(fs).filter((k) => Array.isArray(fs[k]) && k !== cwd && !mvNames.some((n) => k === cwd + '/' + n || k.indexOf(cwd + '/' + n + '/') === 0)).sort().map((k) => ({ label: k.replace(R, 'autobot-ai'), cls: st.mvTo === k ? 'on' : '', pressed: st.mvTo === k ? 'true' : 'false', pick: () => this.setState({ mvTo: k }) })) : [];
+    const sortVal = (k) => (sortK === k ? (st.desc ? 'descending' : 'ascending') : 'none');
+    const arr = (k) => (sortK === k ? (st.desc ? ' ↓' : ' ↑') : '');
+    const setSort = (k) => () => this.setState(sortK === k ? { desc: !st.desc } : { sort: k, desc: false });
+    // picker
+    const pf = st.pkF || 'all'; const pq = (st.pkQ || '').toLowerCase();
+    const pkList = PK.filter((p) => (pf === 'all' || p[3] === pf) && (!pq || p[0].toLowerCase().indexOf(pq) >= 0));
+    const pkSel = st.pkSel || null; const pkSelRow = PK.find((p) => p[0] === pkSel && p[2] <= LIMIT);
+    const pkAtt = st.pkAtt || [];
+    const attach = (name) => { const r = PK.find((p) => p[0] === name); if (!r || r[2] > LIMIT) return; const a = (this.S().pkAtt || []).filter((x) => x !== name).concat([name]); this.setState({ pkAtt: a, pkClosed: true, pkSel: null }); };
+    return {
+      theme: cur,
+      themes: THEMES.map(([id, label]) => ({ label: label, cls: id === cur ? 'on' : '', pressed: id === cur ? 'true' : 'false', pick: () => this.setState({ theme: id }) })),
+      cwd: cwd, atRoot: cwd === R ? 'true' : 'false', up: () => this.up(), home: () => this.go(R),
+      pathView: !st.pathEdit, pathEdit: !!st.pathEdit, crumbs: crumbs.map((c, i) => ({ label: c.label, link: i < crumbs.length - 1, cur: i === crumbs.length - 1, go: () => this.go(c.path) })),
+      editPath: () => this.setState({ pathEdit: true, pathDraft: cwd, pathErr: '' }), pathDraft: st.pathDraft || '', pathErr: st.pathErr || '', pathInvalid: st.pathErr ? 'true' : 'false',
+      pathInput: (ev) => this.setState({ pathDraft: ev.target.value, pathErr: '' }), pathGo: () => this.go(this.S().pathDraft || ''),
+      pathKey: (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); this.go(ev.target.value); } else if (ev.key === 'Escape') this.setState({ pathEdit: false, pathErr: '' }); },
+      pathCancel: () => this.setState({ pathEdit: false, pathErr: '' }),
+      noWrite: denied ? 'true' : 'false', noSel: selN.length ? 'false' : 'true', notOne: selN.length === 1 ? 'false' : 'true',
+      newFolder: () => this.newFolder(), uploadDemo: () => this.upload(DEMO_UP),
+      download: () => this.download(), renameSel: () => { if (selN.length === 1) this.startRename(selN[0]); }, askMove: () => this.askMove(), askDelete: () => this.askDelete(),
+      refresh: () => { this.setState({ loading: true, menu: null }); if (this._rt) clearTimeout(this._rt); this._rt = setTimeout(() => this.setState({ loading: false, msg: 'Refreshed ' + this.cwd().replace(R, 'autobot-ai') }), 700); },
+      q: st.q || '', qInput: (ev) => this.setState({ q: ev.target.value, focus: 0 }), clearQ: () => this.setState({ q: '' }),
+      sorts: SORTS.map(([k, l]) => ({ label: l, cls: sortK === k ? 'on' : '', pressed: sortK === k ? 'true' : 'false', pick: () => this.setState({ sort: k }) })),
+      dirLabel: st.desc ? 'Sort descending (click for ascending)' : 'Sort ascending (click for descending)', dirRot: st.desc ? 0 : 180, flipDir: () => this.setState({ desc: !st.desc }),
+      listCls: grid ? '' : 'on', gridCls: grid ? 'on' : '', listPressed: grid ? 'false' : 'true', gridPressed: grid ? 'true' : 'false',
+      toList: () => this.setState({ view: 'list' }), toGrid: () => this.setState({ view: 'grid', ren: null }),
+      tree: this.tree(), expandAll: () => { const x = {}; Object.keys(fs).forEach((k) => { x[k] = true; }); this.setState({ exp: x }); }, collapseAll: () => this.setState({ exp: {} }),
+      hasSel: selN.length > 0, selText: selN.length + ' selected', selAllLabel: selN.length === rows.length ? 'Deselect' : 'Select All', selToggleAll: () => this.toggleAll(),
+      kbSel: () => this.kb(this.selNames()),
+      allCbCls: selN.length && selN.length === rows.length ? 'on' : '', allChecked: !selN.length ? 'false' : selN.length === rows.length ? 'true' : 'mixed',
+      ariaName: sortVal('name'), ariaSize: sortVal('size'), ariaDate: sortVal('date'), arrName: arr('name'), arrSize: arr('size'), arrDate: arr('date'),
+      sortName: setSort('name'), sortSize: setSort('size'), sortDate: setSort('date'),
+      bigNote: !!big && !loading, listLabel: 'Files in ' + cwd, rowCount: big ? String(big) : String(rows.length), activeId: rows.length ? 'fr-' + foc : '',
+      key: (ev) => this.key(ev), loading: loading, denied: denied && !loading, empty: !denied && !loading && Array.isArray(list) && list.length === 0,
+      noMatch: !denied && !loading && rows.length === 0 && !!st.q && list.length > 0,
+      showList: !grid && !denied && !loading && rows.length > 0, showGrid: grid && !denied && !loading && rows.length > 0, files: files,
+      draft: st.draft || '', renInvalid: st.renErr ? 'true' : 'false', renMsg: st.renErr || 'Enter to save · Esc to cancel', renMsgColor: st.renErr ? 'var(--alert-text)' : 'var(--muted)',
+      stop: (ev) => ev.stopPropagation(), renInput: (ev) => this.setState({ draft: ev.target.value, renErr: '' }),
+      renKey: (ev) => { ev.stopPropagation(); if (ev.key === 'Enter') { ev.preventDefault(); this.commitRename(); } else if (ev.key === 'Escape') { ev.preventDefault(); this.setState({ ren: null, renErr: '' }); } },
+      stats: stats, msg: st.msg || 'Ready · ' + R,
+      menuOpen: !!mRow, menuX: menu ? menu.x : 0, menuY: menu ? menu.y : 0, menuTitle: tgt.length > 1 ? tgt.length + ' items' : mRow ? mRow.n : '',
+      mOpenLabel: mRow && mRow.dir ? 'Open' : 'Preview', closeMenu: (ev) => { if (ev) ev.preventDefault(); this.setState({ menu: null }); },
+      menuKey: (ev) => { if (ev.key === 'Escape') this.setState({ menu: null }); },
+      mOpen: () => this.open(mRow), mKb: () => this.kb(this.targets()), mRename: () => this.startRename(this.targets()[0]), mDup: () => this.dup(),
+      mCopy: () => { const p = cwd + '/' + this.targets()[0]; try { navigator.clipboard.writeText(p); } catch (e) {} this.setState({ menu: null, msg: 'Path copied: ' + p }); },
+      pvHas: !!pe, pvNone: !pe, pvName: pe ? pe.n : '', pvFill: pInf[1], pvText: lines.length > 0, pvImg: px === 'png', pvOther: !!pe && !lines.length && px !== 'png',
+      lines: lines, pvCodeLabel: pe ? 'Contents of ' + pe.n : '', pvLinesNote: lines.length + ' lines · UTF-8 · read-only preview (first 200 lines)', pvAlt: pe ? 'Preview of ' + pe.n + ': diagram of backend, frontend and fleet nodes' : '',
+      pvPath: pPath, pvSize: pe ? fmt(pe.s) + ' (' + pe.s.toLocaleString('en-US') + ' bytes)' : '', pvType: pInf[0], pvMod: pe ? fdate(pe.m) : '', pvOwner: pe ? pe.o + (AG.indexOf(pe.o) >= 0 ? ' (agent)' : ' (user)') : '',
+      pvGit: pg ? pg[0] + ' (' + pe.g + ')' : 'Clean', pvSum: pe ? 'sha256:' + h.slice(0, 12) + '…' + h.slice(-6) : '', pvSumFull: pe ? 'sha256:' + h : '',
+      pvKb: !!(pe && kbm[pPath]), pvNotKb: !(pe && kbm[pPath]), pvKbAdd: () => pe && this.kb([pe.n]), closePv: () => this.setState({ preview: null }),
+      trayOpen: !!st.trayOpen && ups.length > 0, ups: ups, trayTitle: activeUps ? 'Uploading... (' + activeUps + ')' : 'Uploads', closeTray: () => this.setState({ trayOpen: false }),
+      clearUps: () => this.setState({ ups: (this.S().ups || []).filter((u) => !u.err && u.p < 100) }),
+      drag: !!st.drag, showDrop: () => this.setState({ drag: true }), dragCancel: () => this.setState({ drag: false }),
+      dragIn: (ev) => { let ok = true; try { ok = Array.prototype.indexOf.call(ev.dataTransfer.types || [], 'Files') >= 0; } catch (e) {} if (!ok) return; ev.preventDefault(); if (!this.S().drag) this.setState({ drag: true }); },
+      dragOut: (ev) => { if (ev.currentTarget === ev.target) this.setState({ drag: false }); },
+      dropFiles: (ev) => { ev.preventDefault(); let fl = []; try { fl = Array.prototype.map.call(ev.dataTransfer.files || [], (f) => ({ n: f.name, s: f.size })); } catch (e) {} this.upload(fl.length ? fl : DEMO_UP.slice(0, 2)); },
+      delOpen: !!st.del, delMsg: st.del ? (st.del.length === 1 ? 'Delete “' + st.del[0] + '”? This cannot be undone.' : 'Delete ' + st.del.length + ' selected files? This cannot be undone.') : '',
+      delCancel: () => this.setState({ del: null }), delOk: () => this.doDelete(),
+      dlgKey: (ev) => { if (ev.key === 'Escape') this.setState({ del: null, mv: null }); },
+      mvOpen: !!st.mv, mvTitle: 'Move ' + (mvNames.length === 1 ? '“' + mvNames[0] + '”' : mvNames.length + ' items') + ' to…', mvFolders: mvFolders,
+      mvNote: st.mvTo ? 'To ' + st.mvTo.replace(R, 'autobot-ai') : 'Choose a destination', mvDisabled: st.mvTo ? 'false' : 'true', mvCancel: () => this.setState({ mv: null }), mvOk: () => this.doMove(),
+      goLogs: () => this.go(R + '/data/logs'), goSecrets: () => this.go(R + '/.secrets'), goEmpty: () => this.go(R + '/data/exports'),
+      resetFs: () => { if (this._ut) { clearInterval(this._ut); this._ut = null; } this.setState({ fs: null, cwd: R, exp: null, sel: {}, preview: undefined, ups: [], trayOpen: false, kb: {}, q: '', ren: null, menu: null, del: null, mv: null, msg: 'Demo reset' }); },
+      pkOpen: !st.pkClosed, pkOpenFn: () => this.setState({ pkClosed: false }), pkClose: () => this.setState({ pkClosed: true, pkSel: null }),
+      pkKey: (ev) => { if (ev.key === 'Escape') this.setState({ pkClosed: true, pkSel: null }); },
+      pkQ: st.pkQ || '', pkQIn: (ev) => this.setState({ pkQ: ev.target.value }),
+      pkFilters: PKF.map(([k, l]) => ({ label: l, cls: pf === k ? 'on' : '', pressed: pf === k ? 'true' : 'false', pick: () => this.setState({ pkF: k }) })),
+      pkRows: pkList.map((p, i) => ({ id: 'pk-' + i, name: p[0], dir: p[1].replace(R, 'autobot-ai'), size: fmt(p[2]), tooBig: p[2] > LIMIT, fill: (EXT[ext(p[0])] || ['', 'iw'])[1], cls: (pkSel === p[0] ? 'on ' : '') + (p[2] > LIMIT ? 'off' : ''), sel: pkSel === p[0] ? 'true' : 'false', dis: p[2] > LIMIT ? 'true' : 'false', pick: () => { if (p[2] <= LIMIT) this.setState({ pkSel: p[0] }); }, attach: () => attach(p[0]) })),
+      pkActive: pkSel ? 'pk-' + pkList.findIndex((p) => p[0] === pkSel) : '', pkEmpty: pkList.length === 0,
+      pkListKey: (ev) => {
+        const ok = pkList.filter((p) => p[2] <= LIMIT); if (!ok.length) return; let i = ok.findIndex((p) => p[0] === pkSel);
+        if (ev.key === 'ArrowDown') { ev.preventDefault(); i = Math.min(ok.length - 1, i + 1); this.setState({ pkSel: ok[i][0] }); }
+        else if (ev.key === 'ArrowUp') { ev.preventDefault(); i = Math.max(0, i - 1); this.setState({ pkSel: ok[i][0] }); }
+        else if (ev.key === 'Enter' && pkSel) { ev.preventDefault(); attach(pkSel); }
+      },
+      pkNote: pkSelRow ? pkSelRow[0] + ' · ' + fmt(pkSelRow[2]) : 'Max 50 MB per file', pkNoSel: pkSelRow ? 'false' : 'true', pkAttachFn: () => { if (pkSelRow) attach(pkSelRow[0]); },
+      pkHasAtt: pkAtt.length > 0, pkAtt: pkAtt.map((n) => ({ name: n, label: 'Remove ' + n, remove: () => this.setState({ pkAtt: (this.S().pkAtt || []).filter((x) => x !== n) }) }))
+    };
+  }
+}
+</script>
+</body>
+</html>

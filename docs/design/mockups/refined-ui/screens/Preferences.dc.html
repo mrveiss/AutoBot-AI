@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot profile settings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.segs{display:inline-flex;flex-wrap:wrap;gap:2px;padding:3px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.segs .seg{display:inline-flex;align-items:center;gap:6px;height:32px}
+legend{font-size:12.5px;font-weight:600;color:var(--text2);padding:0;margin-bottom:8px}
+fieldset{border:0;margin:0;padding:0}
+.tcard{display:flex;flex-direction:column;gap:10px;padding:10px;border-radius:10px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;color:var(--text);text-align:left;cursor:pointer}
+.tcard:hover{background:var(--surface2)}
+.tcard.on{border:2px solid var(--primary);padding:9px}
+.tcard .tn{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:6px}
+.tcard .td{font-size:12px;color:var(--muted);line-height:1.35}
+.mini{height:96px;border-radius:6px;overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box}
+.mini .mn{height:20px;display:flex;align-items:center;gap:5px;padding:0 7px;box-sizing:border-box}
+.mini .mb{flex-grow:1;padding:8px;display:flex;gap:6px;box-sizing:border-box}
+.mini .mc{flex-grow:1;border-radius:4px;padding:7px;display:flex;flex-direction:column;gap:5px;box-sizing:border-box}
+.mini i{display:block;height:5px;border-radius:2px}
+.th.mini{border:var(--bw) solid var(--border)}
+.split{display:flex;gap:0;height:96px;border-radius:6px;overflow:hidden}
+.split .mini{flex:1;border-radius:0}
+.hid{display:none}
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.dep{font-size:11.5px;font-weight:500;padding:2px 8px;border-radius:5px;border:var(--bw) solid var(--border);background:var(--surface2);color:var(--text2);white-space:nowrap;align-self:flex-start}
+.prof{display:flex;align-items:center;gap:10px;padding:4px 10px 12px;margin-bottom:4px;border-bottom:var(--bw) solid var(--line)}
+.av{width:34px;height:34px;border-radius:99px;background:var(--brand-bg);color:var(--brand-fg);display:grid;place-items:center;font-weight:600;font-size:12.5px;flex:none}
+.th .nav a.avlink{width:34px;height:34px;padding:0;margin-left:8px;border-radius:99px;background:var(--brand-bg);color:var(--brand-fg);justify-content:center;font-size:12.5px;font-weight:600}
+.th .nav a.avlink.on{outline:var(--nav-on-bw) solid var(--accent);outline-offset:2px;border-bottom:0;padding-top:0}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.mcard{display:flex;flex-direction:column;gap:12px;padding:14px;border-radius:10px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;color:var(--text);text-align:left;cursor:pointer}
+.mcard:hover{background:var(--surface2)}
+.mcard.on{border:2px solid var(--primary);padding:13px}
+.mcard .mt{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.mcard .md{font-size:13px;color:var(--text2);line-height:1.45}
+.mprev{height:110px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
+.mprev .pn{height:18px;background:var(--surface);border-bottom:var(--bw) solid var(--border);display:flex;align-items:center;gap:5px;padding:0 7px}
+.mprev .pb{flex-grow:1;display:flex;gap:6px;padding:7px}
+.mprev i{display:block;height:5px;border-radius:2px;background:var(--muted)}
+.mprev .ps{width:34px;display:flex;flex-direction:column;gap:4px}
+.mprev .pc{flex-grow:1;border-radius:4px;background:var(--surface);border:var(--bw) solid var(--border);padding:6px;display:flex;flex-direction:column;gap:5px}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html" class="adv">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="ThemeManager.dc.html" class="adv" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon adv" aria-label="Plugins" data-tip="Plugins" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Admin panel" data-tip="Admin panel" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="Preferences.dc.html" class="avlink on" aria-current="page" aria-label="Profile settings, Mārtiņš Veiss" data-tip="Profile settings" data-tip-pos="bottom">MV</a>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+
+    <aside class="sub" aria-label="Profile settings sections" style="flex: 1 1 220px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+      <div class="prof">
+        <span class="av" aria-hidden="true">MV</span>
+        <div style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+          <strong style="font-size: 14px; font-weight: 600">Mārtiņš Veiss</strong>
+          <span class="sub2">Profile settings</span>
+        </div>
+      </div>
+      <a href="#xp"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg>Preferred mode <span class="pill info" style="margin-left: auto" data-tip="Interface mode currently in use" data-tip-pos="right">{{uiLabel}}</span></a>
+      <p class="sect">Personal</p>
+      <a href="Preferences.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20c0-3 2-4 4-4l8-11 3 3-11 8c0 2-1 4-4 4z" class="i3"/></svg>Appearance</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16"/></svg>Language</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" class="it3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Voice</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>Web Research</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v16l-6-4-6 4z" class="i2"/></svg>Slash Presets</a>
+      <p class="sect">Connections</p>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i2"/><path d="M12 12h9M18 12v3M21 12v2"/></svg>API Keys</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v5M15 3v5M6 8h12v4a6 6 0 0 1-12 0z" class="it1"/><path d="M12 18v3"/></svg>Connection</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l18-7-7 18-3-8z" class="i1"/></svg>Telegram</a>
+      <a href="AccountNotifications.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z" class="i2"/><path d="M10 20h4"/></svg>Notifications</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="2" class="it3"/><path d="M11 18h2"/></svg>Mobile Devices</a>
+      <p class="sect">Account</p>
+      <a href="AccountSecurity.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2" class="it2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Security</a>
+      <a href="AccountApiKeys.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3"/></svg>API Tokens</a>
+      <a href="AccountIntegrations.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2" class="i1"/><rect x="13" y="13" width="8" height="8" rx="2"/><path d="M11 7h4a2 2 0 0 1 2 2v4"/></svg>Integrations</a>
+      <p class="sect">Control</p>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6z" class="it1"/><path d="M9 12l2 2 4-4"/></svg>Privacy</a>
+      <a href="#" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4M5 4h12l-3 4 3 4H5" class="i3"/></svg>Feature Flags <span class="pill idle" style="margin-left: auto" data-tip="Requires admin role" data-tip-pos="right">admin</span></a>
+      <a href="LlmConfig.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" class="it2"/><rect x="9" y="9" width="6" height="6" class="i3"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg>LLM Configuration <span class="pill idle" style="margin-left: auto" data-tip="Managed in SLM Admin — opens in a separate console" data-tip-pos="right">SLM ↗</span></a>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 20px">
+
+      <header style="display: flex; flex-wrap: wrap; gap: 14px; align-items: center">
+        <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1">
+          <span class="sub2">Profile / Settings</span>
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">Profile settings</h1>
+          <span class="sub2">Customize your AutoBot experience with personalized preferences. Your theme is saved to your profile.</span>
+        </div>
+      </header>
+
+      <section class="card" aria-labelledby="xp">
+        <div class="ch">
+          <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="iw"/><path d="M3 9h18"/><rect x="6" y="12" width="5" height="5" rx="1" class="i1"/><path d="M14 13h4M14 16h3"/></svg></span>
+          <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px">
+            <h2 id="xp" style="margin: 0; font-size: 15px; font-weight: 600">Preferred mode</h2>
+            <span class="sub2">Choose how much of AutoBot you see. You can switch any time with the Minimal button in the top bar.</span>
+          </div>
+        </div>
+        <div style="padding: 16px; display: flex; flex-direction: column; gap: 14px">
+          <div class="mgrid" role="group" aria-label="Interface mode">
+            <button type="button" class="mcard {{mMin.cls}}" aria-pressed="{{mMin.pressed}}" onClick="{{mMin.pick}}">
+              <div class="mprev" aria-hidden="true">
+                <div class="pn"><span style="width: 8px; height: 8px; border-radius: 2px; background: var(--primary)"></span><i style="width: 16px"></i><i style="width: 16px"></i><i style="width: 16px"></i></div>
+                <div class="pb"><div class="ps"><i style="width: 80%"></i><i style="width: 70%"></i><i style="width: 60%"></i></div><div class="pc"><i style="width: 60%; background: var(--text)"></i><i style="width: 85%"></i><span style="margin-top: auto; width: 30px; height: 9px; border-radius: 2px; background: var(--primary)"></span></div></div>
+              </div>
+              <span class="mt">Minimal <span class="pill info {{mMin.sel}}" style="margin-left: auto">Selected</span></span>
+              <span class="md">Essentials only — for everyday chat, knowledge and approvals.</span>
+            </button>
+            <button type="button" class="mcard {{mFull.cls}}" aria-pressed="{{mFull.pressed}}" onClick="{{mFull.pick}}">
+              <div class="mprev" aria-hidden="true">
+                <div class="pn"><span style="width: 8px; height: 8px; border-radius: 2px; background: var(--primary)"></span><i style="width: 14px"></i><i style="width: 14px"></i><i style="width: 14px"></i><i style="width: 14px"></i><i style="width: 14px"></i><span style="flex-grow: 1"></span><i style="width: 10px; background: var(--accent)"></i><i style="width: 10px"></i><i style="width: 10px"></i></div>
+                <div class="pb"><div class="ps"><i style="width: 80%"></i><i style="width: 70%"></i><i style="width: 60%"></i><i style="width: 75%"></i><i style="width: 55%"></i><i style="width: 70%"></i><i style="width: 65%"></i></div><div class="pc"><i style="width: 60%; background: var(--text)"></i><div style="display: flex; gap: 4px"><i style="flex: 1; height: 16px; background: var(--i1)"></i><i style="flex: 1; height: 16px; background: var(--i2)"></i><i style="flex: 1; height: 16px; background: var(--i3)"></i></div><i style="width: 85%"></i><i style="width: 70%"></i></div></div>
+              </div>
+              <span class="mt">Full <span class="pill info {{mFull.sel}}" style="margin-left: auto">Selected</span></span>
+              <span class="md">Everything, including analytics, automation, admin and developer tools.</span>
+            </button>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding-top: 12px; border-top: var(--bw) solid var(--line)">
+            <div style="flex: 1 1 220px; display: flex; flex-direction: column; gap: 2px">
+              <span id="startin" style="font-size: 13.5px; font-weight: 600">Start in</span>
+              <span class="sub2">Which mode AutoBot opens in when you sign in</span>
+            </div>
+            <div class="segs" role="radiogroup" aria-labelledby="startin">
+              <button type="button" class="seg {{sLast.cls}}" role="radio" aria-checked="{{sLast.pressed}}" onClick="{{sLast.pick}}">Last used</button>
+              <button type="button" class="seg {{sMin.cls}}" role="radio" aria-checked="{{sMin.pressed}}" onClick="{{sMin.pick}}">Minimal</button>
+              <button type="button" class="seg {{sFull.cls}}" role="radio" aria-checked="{{sFull.pressed}}" onClick="{{sFull.pick}}">Full</button>
+            </div>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; color: var(--text2)">
+            <span style="display: flex; align-items: center; gap: 8px"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2" class="it1"/><path d="M9 21h6"/></svg>Remembered per device</span>
+            <span style="display: flex; align-items: center; gap: 8px"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14l4-4M8 12l-2 2a3 3 0 0 0 4 4l2-2M16 12l2-2a3 3 0 0 0-4-4l-2 2"/></svg>Hidden pages still open from direct links</span>
+            <span style="display: flex; align-items: center; gap: 8px"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10" class="sacc"/></svg>Approvals, errors and security notices are never hidden</span>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 8px; background: var(--info-bg); color: var(--info-fg); border: var(--pill-b); font-size: 13px">
+            <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" class="iw"/><path d="M12 11v6M12 7.5v.5"/></svg>
+            <span style="flex: 1 1 260px">Administrators can set the default mode and lock it per role in <strong>SLM</strong>. If your role is locked, this choice is shown but can't be changed.</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="tp">
+        <div class="ch">
+          <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 6C13 6 6 14 6 23c0 9 7 15 14 15 3 0 3-3 2-5s0-5 4-5h6c6 0 10-4 10-9C42 12 34 6 24 6z" class="iw"/><circle cx="15" cy="20" r="3" class="i3"/><circle cx="22" cy="13" r="3" class="i2"/><circle cx="31" cy="14" r="3" class="i1"/><circle cx="35" cy="22" r="2.5" class="ik"/></svg></span>
+          <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px">
+            <h2 id="tp" style="margin: 0; font-size: 15px; font-weight: 600">Theme</h2>
+            <span class="sub2">Saved to your profile and applied on every device you sign in from</span>
+          </div>
+        </div>
+        <div style="padding: 16px; display: flex; flex-direction: column; gap: 16px">
+          <div class="tgrid" role="group" aria-label="Built-in themes">
+
+            <button type="button" class="tcard {{cLight.cls}}" aria-pressed="{{cLight.pressed}}" onClick="{{cLight.pick}}">
+              <div class="th mini" data-theme="light" aria-hidden="true">
+                <div class="mn" style="background: var(--surface); border-bottom: var(--bw) solid var(--border)"><span style="width: 9px; height: 9px; border-radius: 2px; background: var(--primary)"></span><i style="width: 18px; background: var(--text); height: 4px; border-bottom: 2px solid var(--accent)"></i><i style="width: 14px; background: var(--muted); height: 4px"></i></div>
+                <div class="mb"><div class="mc" style="background: var(--surface); border: var(--bw) solid var(--border)"><i style="width: 70%; background: var(--text)"></i><i style="width: 45%; background: var(--muted)"></i><span style="margin-top: auto; width: 34px; height: 10px; border-radius: 2px; background: var(--primary)"></span></div><div style="width: 16px; display: flex; flex-direction: column; gap: 4px"><i style="background: var(--accent); height: 16px"></i><i style="background: var(--i1); height: 12px; outline: var(--pill-b)"></i></div></div>
+              </div>
+              <span class="tn">Light <span class="pill info {{cLight.sel}}" style="margin-left: auto">Selected</span></span>
+              <span class="td">Default corporate light theme</span>
+            </button>
+
+            <button type="button" class="tcard {{cDark.cls}}" aria-pressed="{{cDark.pressed}}" onClick="{{cDark.pick}}">
+              <div class="th mini" data-theme="dark" aria-hidden="true">
+                <div class="mn" style="background: var(--surface); border-bottom: var(--bw) solid var(--border)"><span style="width: 9px; height: 9px; border-radius: 2px; background: var(--primary)"></span><i style="width: 18px; background: var(--text); height: 4px; border-bottom: 2px solid var(--accent)"></i><i style="width: 14px; background: var(--muted); height: 4px"></i></div>
+                <div class="mb"><div class="mc" style="background: var(--surface); border: var(--bw) solid var(--border)"><i style="width: 70%; background: var(--text)"></i><i style="width: 45%; background: var(--muted)"></i><span style="margin-top: auto; width: 34px; height: 10px; border-radius: 2px; background: var(--primary)"></span></div><div style="width: 16px; display: flex; flex-direction: column; gap: 4px"><i style="background: var(--accent); height: 16px"></i><i style="background: var(--i1); height: 12px; outline: var(--pill-b)"></i></div></div>
+              </div>
+              <span class="tn">Dark <span class="pill info {{cDark.sel}}" style="margin-left: auto">Selected</span></span>
+              <span class="td">Low-glare navy theme for long sessions</span>
+            </button>
+
+            <button type="button" class="tcard {{cContrast.cls}}" aria-pressed="{{cContrast.pressed}}" onClick="{{cContrast.pick}}">
+              <div class="th mini" data-theme="contrast" aria-hidden="true">
+                <div class="mn" style="background: var(--surface); border-bottom: var(--bw) solid var(--border)"><span style="width: 9px; height: 9px; border-radius: 2px; background: var(--primary)"></span><i style="width: 18px; background: var(--text); height: 4px; border-bottom: 3px solid var(--accent)"></i><i style="width: 14px; background: var(--link); height: 4px"></i></div>
+                <div class="mb"><div class="mc" style="background: var(--surface); border: var(--bw) solid var(--border)"><i style="width: 70%; background: var(--text)"></i><i style="width: 45%; background: var(--muted)"></i><span style="margin-top: auto; width: 34px; height: 10px; border-radius: 2px; background: var(--primary)"></span></div><div style="width: 16px; display: flex; flex-direction: column; gap: 4px"><i style="background: var(--accent); height: 16px"></i><i style="background: var(--i1); height: 12px; outline: var(--pill-b)"></i></div></div>
+              </div>
+              <span class="tn">High contrast <span class="pill idle" style="margin-left: auto" data-tip="Meets WCAG AAA contrast (7:1) for all text">Accessibility</span></span>
+              <span class="td">Black on white, thick borders, WCAG AAA text</span>
+              <span class="pill info {{cContrast.sel}}" style="align-self: flex-start">Selected</span>
+            </button>
+
+            <button type="button" class="tcard {{cMono.cls}}" aria-pressed="{{cMono.pressed}}" onClick="{{cMono.pick}}">
+              <div class="th mini" data-theme="mono" aria-hidden="true">
+                <div class="mn" style="background: var(--surface); border-bottom: var(--bw) solid var(--border)"><span style="width: 9px; height: 9px; border-radius: 2px; background: var(--primary)"></span><i style="width: 18px; background: var(--text); height: 4px; border-bottom: 2px solid var(--accent)"></i><i style="width: 14px; background: var(--muted); height: 4px"></i></div>
+                <div class="mb"><div class="mc" style="background: var(--surface); border: var(--bw) solid var(--border)"><i style="width: 70%; background: var(--text)"></i><i style="width: 45%; background: var(--muted)"></i><span style="margin-top: auto; width: 34px; height: 10px; border-radius: 2px; background: var(--primary)"></span></div><div style="width: 16px; display: flex; flex-direction: column; gap: 4px"><i style="background: var(--bar); height: 16px"></i><i style="background: var(--i1); height: 12px; outline: var(--pill-b)"></i></div></div>
+              </div>
+              <span class="tn">Monochrome <span class="pill idle" style="margin-left: auto" data-tip="Neutral palette suited to corporate branding">Corporate</span></span>
+              <span class="td">Neutral greys only, no accent hues</span>
+              <span class="pill info {{cMono.sel}}" style="align-self: flex-start">Selected</span>
+            </button>
+
+            <button type="button" class="tcard {{cSystem.cls}}" aria-pressed="{{cSystem.pressed}}" onClick="{{cSystem.pick}}">
+              <div class="split" aria-hidden="true">
+                <div class="th mini" data-theme="light">
+                  <div class="mn" style="background: var(--surface); border-bottom: var(--bw) solid var(--border)"><span style="width: 9px; height: 9px; border-radius: 2px; background: var(--primary)"></span><i style="width: 14px; background: var(--text); height: 4px; border-bottom: 2px solid var(--accent)"></i></div>
+                  <div class="mb"><div class="mc" style="background: var(--surface); border: var(--bw) solid var(--border)"><i style="width: 70%; background: var(--text)"></i><i style="width: 45%; background: var(--muted)"></i><span style="margin-top: auto; width: 24px; height: 10px; border-radius: 2px; background: var(--primary)"></span></div></div>
+                </div>
+                <div class="th mini" data-theme="dark">
+                  <div class="mn" style="background: var(--surface); border-bottom: var(--bw) solid var(--border)"><span style="width: 9px; height: 9px; border-radius: 2px; background: var(--primary)"></span><i style="width: 14px; background: var(--text); height: 4px; border-bottom: 2px solid var(--accent)"></i></div>
+                  <div class="mb"><div class="mc" style="background: var(--surface); border: var(--bw) solid var(--border)"><i style="width: 70%; background: var(--text)"></i><i style="width: 45%; background: var(--muted)"></i><span style="margin-top: auto; width: 24px; height: 10px; border-radius: 2px; background: var(--primary)"></span></div></div>
+                </div>
+              </div>
+              <span class="tn">Match system <span class="pill info {{cSystem.sel}}" style="margin-left: auto">Selected</span></span>
+              <span class="td">Light or Dark, following your operating system setting</span>
+            </button>
+          </div>
+
+          <div style="border-top: var(--bw) solid var(--line); padding-top: 14px; display: flex; flex-direction: column; gap: 12px">
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+              <h3 style="margin: 0; font-size: 13.5px; font-weight: 600; flex-grow: 1">Additional themes</h3>
+              <span class="sub2">Deployed by your administrator via the SLM</span>
+            </div>
+            <div class="tgrid" role="group" aria-label="Additional themes">
+
+              <button type="button" class="tcard {{cOrgA.cls}}" aria-pressed="{{cOrgA.pressed}}" onClick="{{cOrgA.pick}}">
+                <div class="th mini" data-theme="mono" aria-hidden="true">
+                  <div class="mn" style="background: var(--primary)"><span style="width: 9px; height: 9px; border-radius: 2px; background: var(--on-primary)"></span><i style="width: 18px; background: var(--on-primary); height: 4px"></i></div>
+                  <div class="mb"><div class="mc" style="background: var(--surface); border: var(--bw) solid var(--border)"><i style="width: 70%; background: var(--text)"></i><i style="width: 45%; background: var(--muted)"></i><span style="margin-top: auto; width: 34px; height: 10px; border-radius: 2px; background: var(--primary)"></span></div></div>
+                </div>
+                <span class="tn">Northwind Corporate <span class="pill info {{cOrgA.sel}}" style="margin-left: auto">Selected</span></span>
+                <span class="td">Organization brand theme, based on Monochrome</span>
+                <span class="dep" data-tip="Installed by your administrator from SLM Admin → Themes, version 1.2">Deployed via SLM · v1.2</span>
+              </button>
+
+              <button type="button" class="tcard {{cOrgB.cls}}" aria-pressed="{{cOrgB.pressed}}" onClick="{{cOrgB.pick}}">
+                <div class="th mini" data-theme="dark" aria-hidden="true">
+                  <div class="mn" style="background: var(--surface); border-bottom: 2px solid var(--accent)"><span style="width: 9px; height: 9px; border-radius: 2px; background: var(--accent)"></span><i style="width: 18px; background: var(--text); height: 4px"></i></div>
+                  <div class="mb"><div class="mc" style="background: var(--surface); border: var(--bw) solid var(--border)"><i style="width: 70%; background: var(--text)"></i><i style="width: 45%; background: var(--muted)"></i><span style="margin-top: auto; width: 34px; height: 10px; border-radius: 2px; background: var(--accent)"></span></div></div>
+                </div>
+                <span class="tn">Northwind Night <span class="pill info {{cOrgB.sel}}" style="margin-left: auto">Selected</span></span>
+                <span class="td">Organization night theme, based on Dark</span>
+                <span class="dep" data-tip="Installed by your administrator from SLM Admin → Themes, version 1.2">Deployed via SLM · v1.2</span>
+              </button>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 8px; background: var(--info-bg); color: var(--info-fg); border: var(--pill-b); font-size: 13px">
+              <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" class="iw"/><path d="M12 11v6M12 7.5v.5"/></svg>
+              <span style="flex: 1 1 260px">Administrators install and deploy themes in <strong>SLM Admin → Themes</strong>.</span>
+              <a href="ThemeManager.dc.html" style="font-weight: 600">Open SLM Themes ↗</a>
+            </div>
+          </div>
+
+          <details open style="border-top: var(--bw) solid var(--line); padding-top: 14px">
+            <summary style="cursor: pointer; font-weight: 600; font-size: 13.5px; display: flex; align-items: center; gap: 8px; min-height: 28px"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2.5" class="i2"/><circle cx="15" cy="17" r="2.5" class="i1"/></svg>Advanced Customization</summary>
+            <div style="display: flex; flex-wrap: wrap; gap: 24px; margin-top: 14px">
+              <fieldset>
+                <legend>Base Theme</legend>
+                <div class="segs">
+                  <button type="button" class="seg" aria-pressed="false"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14A8 8 0 1 1 10 4a6 6 0 0 0 10 10z" class="ik"/></svg>Dark</button>
+                  <button type="button" class="seg on" aria-pressed="true"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" class="i2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Light</button>
+                  <button type="button" class="seg" aria-pressed="false"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M9 21h6"/></svg>System</button>
+                </div>
+              </fieldset>
+              <fieldset>
+                <legend>Accent Color</legend>
+                <div class="segs">
+                  <button type="button" class="seg" aria-pressed="false">Blue</button>
+                  <button type="button" class="seg" aria-pressed="false">Green</button>
+                  <button type="button" class="seg" aria-pressed="false">Purple</button>
+                  <button type="button" class="seg on" aria-pressed="true">Orange</button>
+                  <button type="button" class="seg" aria-pressed="false">Pink</button>
+                  <button type="button" class="seg" aria-pressed="false">Teal</button>
+                  <button type="button" class="seg" aria-pressed="false">Indigo</button>
+                  <button type="button" class="seg" aria-pressed="false">Red</button>
+                </div>
+              </fieldset>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="pr">
+        <div class="ch">
+          <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="8" width="36" height="30" rx="4" class="iw"/><path d="M12 16h10M12 22h18M12 28h14"/><rect x="28" y="12" width="10" height="8" rx="2" class="i2"/></svg></span>
+          <h2 id="pr">Preferences</h2>
+          <button type="button" class="btn sm" aria-label="Reset all preferences to defaults" data-tip="Reset all preferences to defaults" data-tip-pos="left"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v5h5"/></svg>Reset</button>
+        </div>
+        <div style="padding: 16px; display: flex; flex-direction: column; gap: 16px">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px">
+            <fieldset>
+              <legend>Font Size</legend>
+              <div class="segs" role="radiogroup" aria-label="Font size options">
+                <button type="button" class="seg" role="radio" aria-checked="false">Small</button>
+                <button type="button" class="seg on" role="radio" aria-checked="true">Medium</button>
+                <button type="button" class="seg" role="radio" aria-checked="false">Large</button>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>Layout Density</legend>
+              <div class="segs" role="radiogroup" aria-label="Layout density options">
+                <button type="button" class="seg" role="radio" aria-checked="false">Compact</button>
+                <button type="button" class="seg on" role="radio" aria-checked="true">Comfortable</button>
+                <button type="button" class="seg" role="radio" aria-checked="false">Spacious</button>
+              </div>
+            </fieldset>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":1460}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+    try { const p = window.localStorage.getItem('autobot-theme-pref'); if (p) this.setState({ pref: p }); } catch (e) {}
+    try { const s = window.localStorage.getItem('autobot-ui-start'); if (s === 'last' || s === 'minimal' || s === 'full') this.setState({ start: s }); } catch (e) {}
+  }
+  setStart(id) {
+    try { window.localStorage.setItem('autobot-ui-start', id); } catch (e) {}
+    this.setState({ start: id });
+  }
+  systemTheme() {
+    try { return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch (e) { return 'light'; }
+  }
+  choose(pref, theme) {
+    try { window.localStorage.setItem('autobot-theme', theme); window.localStorage.setItem('autobot-theme-pref', pref); } catch (e) {}
+    this.setState({ theme: theme, pref: pref });
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const pref = st.pref || cur;
+    const ui = st.ui || this.props.ui || 'full';
+    const mode = (id) => ({
+      cls: ui === id ? 'on' : '',
+      pressed: ui === id ? 'true' : 'false',
+      sel: ui === id ? '' : 'hid',
+      pick: () => this.setUi(id)
+    });
+    const start = st.start || 'last';
+    const startOpt = (id) => ({
+      cls: start === id ? 'on' : '',
+      pressed: start === id ? 'true' : 'false',
+      pick: () => this.setStart(id)
+    });
+    const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    const card = (id, themeId) => ({
+      cls: pref === id ? 'on' : '',
+      pressed: pref === id ? 'true' : 'false',
+      sel: pref === id ? '' : 'hid',
+      pick: () => { this.choose(id, themeId === 'system' ? this.systemTheme() : themeId); }
+    });
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      mMin: mode('minimal'),
+      mFull: mode('full'),
+      uiLabel: ui === 'minimal' ? 'Minimal' : 'Full',
+      sLast: startOpt('last'),
+      sMin: startOpt('minimal'),
+      sFull: startOpt('full'),
+      uiModes: [['minimal', 'Minimal'], ['full', 'Full']].map(([id, label]) => ({
+        label: label,
+        cls: id === ui ? 'on' : '',
+        pressed: id === ui ? 'true' : 'false',
+        pick: () => this.setUi(id)
+      })),
+      cLight: card('light', 'light'),
+      cDark: card('dark', 'dark'),
+      cContrast: card('contrast', 'contrast'),
+      cMono: card('mono', 'mono'),
+      cSystem: card('system', 'system'),
+      cOrgA: card('northwind', 'mono'),
+      cOrgB: card('northwind-night', 'dark'),
+      themes: defs.map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => { this.choose(id, id); }
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

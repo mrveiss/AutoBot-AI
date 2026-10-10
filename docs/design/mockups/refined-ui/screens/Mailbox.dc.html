@@ -1,0 +1,1235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot pattern: mailbox</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg[aria-pressed="true"]{color:var(--text);font-weight:600}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.wgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:start}
+.wgrid>.card{min-width:0;position:relative;display:flex;flex-direction:column}
+.card.editing{outline:1.5px dashed var(--muted);outline-offset:3px}
+.card.editing[draggable="true"]{cursor:grab}
+.grip{display:inline-grid;place-items:center;width:18px;height:28px;cursor:grab;flex:none}
+.wtools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto}
+.mbtn{width:30px;height:30px;padding:0;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);display:inline-grid;place-items:center;cursor:pointer;flex:none}
+.mbtn:hover{background:var(--surface2)}
+.mbtn[aria-disabled="true"]{opacity:.45;cursor:default}
+.segg{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.segg .seg{height:26px;padding:0 8px}
+.hint{margin:0;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;border:var(--bw) dashed var(--border);background:var(--surface2);font-size:13px;color:var(--text2)}
+.rsz{position:absolute;right:5px;bottom:5px;fill:none;stroke:var(--muted);stroke-width:1.5;stroke-linecap:round;pointer-events:none}
+@media (max-width:760px){.wgrid>.card{grid-column:1 / -1 !important}}
+.sub2{font-size:12.5px;color:var(--muted)}
+.specbar{flex:1 1 100%;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:14px clamp(16px,2.5vw,32px);background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+.specbar h1{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.lbl{font-size:11.5px;color:var(--muted);font-weight:500}
+.use{font-size:12.5px;color:var(--muted);font-weight:400}
+.st{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.rules{margin:0;padding:12px 16px;border-top:var(--bw) solid var(--line);font-size:12.5px;color:var(--text2);line-height:1.55}
+.rules b{font-weight:600;color:var(--text)}
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:20px;align-items:start}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.ibtn{width:32px;height:32px;border-radius:6px;border:var(--bw) solid transparent;background:transparent;display:inline-grid;place-items:center;cursor:pointer;color:var(--text);padding:0;flex:none}
+.ibtn:hover{background:var(--surface2);border-color:var(--border)}
+.ibtn[aria-pressed="true"]{background:var(--surface2);border-color:var(--stroke)}
+.ibtn.xs{width:26px;height:26px}
+.cbx{width:18px;height:18px;padding:0;border-radius:4px;border:1.5px solid var(--muted);background:var(--surface);display:inline-grid;place-items:center;cursor:pointer;flex:none;box-sizing:border-box}
+.cbx svg{display:none;fill:none;stroke:var(--on-primary);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.cbx[aria-checked="true"],.cbx[aria-checked="mixed"]{background:var(--primary);border-color:var(--primary)}
+.cbx[aria-checked="true"] .ck,.cbx[aria-checked="mixed"] .mx{display:block}
+.menu{position:absolute;z-index:6;min-width:190px;padding:4px;background:var(--surface);border:var(--bw) solid var(--stroke);border-radius:8px;display:flex;flex-direction:column}
+.mi{display:flex;align-items:center;gap:10px;width:100%;min-height:32px;padding:0 10px;border:0;border-radius:5px;background:transparent;color:var(--text);font:inherit;font-size:13px;text-align:left;cursor:pointer;box-sizing:border-box;white-space:nowrap}
+.mi:hover{background:var(--surface2)}
+.mail{display:grid;grid-template-columns:208px minmax(300px,370px) minmax(0,1fr);height:740px;position:relative}
+.mcol{border-right:var(--bw) solid var(--line);display:flex;flex-direction:column;min-height:0;min-width:0}
+.mcol:last-of-type{border-right:0}
+.scr{overflow-y:auto;min-height:0;flex:1 1 auto}
+.fld{display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border:0;border-left:3px solid transparent;border-radius:6px;background:transparent;color:var(--text2);font:inherit;font-size:13.5px;cursor:pointer;text-align:left;box-sizing:border-box}
+.fld:hover{background:var(--surface2);color:var(--text)}
+.fld.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.fld .n{margin-left:auto;font-size:12px;font-weight:600;color:var(--text2)}
+.fchip{height:28px;padding:0 10px;border-radius:99px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.fchip:hover{color:var(--text);border-color:var(--muted)}
+.fchip[aria-pressed="true"]{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.inp{height:34px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);border-radius:6px;font:inherit;font-size:13px;padding:0 10px;box-sizing:border-box;width:100%}
+.mrow{display:flex;gap:8px;align-items:flex-start;padding:10px 12px 10px 9px;border-bottom:var(--bw) solid var(--line);border-left:3px solid transparent}
+.mrow:hover{background:var(--surface2)}
+.mrow.cur{background:var(--surface2);border-left-color:var(--accent)}
+.mrow.chk{background:var(--info-bg)}
+.mmain{flex:1 1 auto;min-width:0;border:0;background:transparent;padding:0;text-align:left;font:inherit;color:var(--text);cursor:pointer;display:flex;flex-direction:column;gap:3px}
+.mmain .fr{display:flex;align-items:center;gap:6px;font-size:13.5px;min-width:0}
+.mmain .fr b{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mrow.unread .fr b,.mrow.unread .sj{font-weight:700}
+.sj{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sn{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tm{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap;flex:none}
+.mrow.unread .tm{color:var(--text);font-weight:600}
+.udot{width:8px;height:8px;border-radius:99px;background:var(--accent);border:1px solid var(--stroke);flex:none;box-sizing:border-box}
+.lab{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;color:var(--text2);padding:1px 6px 1px 4px;border:var(--bw) solid var(--border);border-radius:4px;white-space:nowrap}
+.agt{font-size:10.5px;font-weight:600;padding:1px 5px;border-radius:4px;border:var(--bw) solid var(--border);color:var(--text2);background:var(--tile);flex:none}
+.att{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:var(--bw) solid var(--border);border-radius:8px;background:var(--surface2);font-size:12.5px;color:var(--text)}
+.sumc{border:var(--bw) solid var(--border);border-left:3px solid var(--accent);border-radius:8px;background:var(--surface2);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.draftb{border:var(--bw) dashed var(--muted);border-radius:8px;background:var(--surface);padding:12px 14px;white-space:pre-wrap;font-size:13px;line-height:1.55;margin:0}
+.msgc{border:var(--bw) solid var(--border);border-radius:8px;background:var(--surface)}
+.earl{display:flex;gap:10px;align-items:baseline;width:100%;padding:9px 12px;border:0;border-bottom:var(--bw) solid var(--line);background:transparent;font:inherit;font-size:13px;color:var(--text);text-align:left;cursor:pointer}
+.earl:hover{background:var(--surface2)}
+.av{width:30px;height:30px;border-radius:99px;display:grid;place-items:center;font-size:11.5px;font-weight:600;background:var(--tile);border:var(--bw) solid var(--tile-b);flex:none}
+.cmp{position:absolute;right:16px;bottom:16px;width:540px;max-width:calc(100% - 32px);background:var(--surface);border:var(--bw) solid var(--stroke);border-radius:10px;display:flex;flex-direction:column;z-index:5}
+.rc{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 12px;border-bottom:var(--bw) solid var(--line);font-size:13px}
+.rc label{color:var(--muted);width:30px;flex:none}
+.rc input{border:0;flex:1 1 120px;min-width:120px;height:28px;background:transparent;color:var(--text);font:inherit;font-size:13px}
+.chip{display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 3px 0 9px;border-radius:99px;background:var(--tile);border:var(--bw) solid var(--tile-b);font-size:12.5px}
+.chip button{width:20px;height:20px;border-radius:99px;border:0;background:transparent;display:grid;place-items:center;cursor:pointer;padding:0}
+.tb{display:flex;gap:2px;align-items:center;padding:4px 8px;border-bottom:var(--bw) solid var(--line);flex-wrap:wrap}
+.tb .ibtn{width:30px;height:30px;font-size:13px}
+.cbody{border:0;resize:vertical;min-height:150px;padding:10px 12px;background:var(--surface);color:var(--text);font:inherit;font-size:13.5px;line-height:1.55;box-sizing:border-box;width:100%}
+.toast{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:7;display:flex;align-items:center;gap:12px;padding:9px 10px 9px 14px;border-radius:8px;background:var(--primary);color:var(--on-primary);font-size:13px;white-space:nowrap}
+.toast button{border:0;background:transparent;color:var(--on-primary);font:inherit;font-weight:600;text-decoration:underline;cursor:pointer;padding:2px 4px}
+.banner{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 16px;font-size:13px;border-bottom:var(--bw) solid var(--line)}
+.banner.err{background:var(--bad-bg);color:var(--bad-fg)}
+.banner.off{background:var(--warn-bg);color:var(--warn-fg)}
+.banner .btn{height:28px;font-size:12.5px}
+.kbd{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11.5px;padding:1px 6px;border:var(--bw) solid var(--border);border-bottom-width:2px;border-radius:4px;background:var(--surface2);color:var(--text)}
+.phone{width:372px;max-width:100%;height:720px;border:var(--bw) solid var(--stroke);border-radius:28px;overflow:hidden;display:flex;flex-direction:column;background:var(--bg);position:relative;box-sizing:border-box}
+.skel{height:10px;border-radius:4px;background:var(--bar-track);outline:var(--pill-b)}
+.spec{border:var(--bw) solid var(--line);border-radius:8px;overflow:hidden;display:flex;flex-direction:column}
+.spec>.st{padding:8px 12px;border-bottom:var(--bw) solid var(--line);background:var(--surface2)}
+.pg{flex:1 1 240px;display:flex;flex-direction:column;gap:2px;padding:12px 14px;border:var(--bw) solid var(--line);border-radius:8px;text-decoration:none}
+@media (max-width:1100px){.mail{grid-template-columns:180px minmax(0,1fr)}.mail>.mcol:nth-of-type(3){display:none}}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <a href="ThemeManager.dc.html" data-tip="Small-language-model fleet admin — opens in a new tab" data-tip-pos="bottom" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon" aria-label="Plugins" data-tip="Plugins" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <a href="AdminUsers.dc.html" class="icon" aria-label="Admin panel" data-tip="Admin panel" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <button type="button" aria-label="Profile menu" data-tip="Profile settings" data-tip-pos="left" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer">MV</button>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+  <aside class="sub" aria-label="Design system" style="flex: 1 1 230px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+    <a href="DesignSystem.dc.html" style="font-weight: 600; color: var(--text)">AutoBot Design System</a>
+    <span class="sub2" style="padding: 0 13px 4px">v1 · 4 themes</span>
+    <p class="sect">Overview</p>
+    <a href="DesignSystem.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z" class="i1"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z" class="it1"/></svg>Introduction</a>
+    <p class="sect">Foundations</p>
+    <a href="ComponentsStates.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4" class="i3"/><circle cx="16" cy="9" r="4" class="i2"/><circle cx="12" cy="16" r="4" class="i1"/></svg>Tokens &amp; states</a>
+    <a href="ComponentsGrid.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5" class="i1"/><rect x="13" y="4" width="7" height="7" rx="1.5" class="iw"/><rect x="4" y="13" width="7" height="7" rx="1.5" class="iw"/><rect x="13" y="13" width="7" height="7" rx="1.5" class="i2"/></svg>Grid, tables &amp; forms</a>
+    <a href="ComponentsCharts.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><rect x="5.5" y="11" width="3.5" height="7" class="i1"/><rect x="10.5" y="6" width="3.5" height="12" class="i2"/><rect x="15.5" y="13" width="3.5" height="5" class="i3"/></svg>Charts &amp; data viz</a>
+    <p class="sect">Components</p>
+    <a href="ComponentsForms.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4" class="i1"/><circle cx="16.5" cy="12" r="2.5" class="iw"/></svg>Form controls</a>
+    <a href="ComponentsTable.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="iw"/><path d="M4 10h16M4 14.5h16M10 10v9"/></svg>Data table</a>
+    <a href="ComponentsDialogs.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="it1"/><rect x="6" y="8" width="12" height="9" rx="1.5" class="iw"/></svg>Dialogs</a>
+    <a href="ComponentsOverlays.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" class="i2"/><path d="M10 21h4"/></svg>Overlays &amp; feedback</a>
+    <a href="ComponentsTooltips.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10h-7l-4 4v-4H4z" class="it1"/><path d="M8 10h8"/></svg>Tooltips</a>
+    <a href="ComponentsCommand.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" class="iw"/><path d="M7 10l3 2-3 2M12 15h5"/></svg>Command menu</a>
+    <a href="ComponentsNavigation.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M15 9l-2 4-4 2 2-4z" class="i3"/></svg>Navigation</a>
+    <a href="ComponentsLayout.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="iw"/><path d="M9 4v16M9 10h12"/></svg>Layout &amp; utility</a>
+    <a href="ComponentsChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h12v9H8l-3 3v-3H3z" class="i1"/><path d="M15 9h6v8h-2v3l-3-3h-5v-3"/></svg>Chat &amp; agent</a>
+    <p class="sect">Patterns</p>
+    <a href="FileBrowser.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="i2"/></svg>File browser</a>
+    <a href="Mailbox.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" class="iw"/><path d="M3 7l9 6 9-6"/></svg>Mailbox</a>
+    <a href="ComponentsUiModes.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5" class="it1"/><rect x="4.5" y="8.5" width="8" height="7" rx="3.5" class="i2"/></svg>Interface modes</a>
+    <a href="SignUp.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" class="i2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Auth pages</a>
+    <a href="AccountSecurity.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4" class="i1"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>Account settings</a>
+    <a href="SearchResults.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>Global search</a>
+    <a href="HelpCenter.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="i2"/><path d="M10 10a2 2 0 1 1 3 1.7c-.7.4-1 1-1 1.8M12 16.5v.5"/></svg>Help centre</a>
+    <span style="flex-grow: 1; min-height: 16px" aria-hidden="true"></span>
+    <a href="Main.dc.html" style="border-top: var(--bw) solid var(--line); border-radius: 0; padding-top: 12px"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg>← Back to app</a>
+  </aside>
+  <div style="flex: 999 1 520px; min-width: 0; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <div class="specbar">
+    <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 280px">
+      <span class="sub2">Design system / Patterns</span>
+      <h1>Pattern · Mailbox</h1>
+      <span class="sub2">Agent-assisted inbox: agents read, triage and summarise mail; anything they want to send waits for your sign-off. The client below works in Play mode.</span>
+    </div>
+    <span class="lbl">Preview theme</span>
+    <div role="group" aria-label="Preview theme" class="segg">
+      <sc-for list="{{themes}}" as="t" hint-placeholder-count="4"><button type="button" class="seg {{t.cls}}" aria-pressed="{{t.pressed}}" onClick="{{t.pick}}">{{t.label}}</button></sc-for>
+    </div>
+  </div>
+
+  <main style="flex: 1 1 100%; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 48px; display: flex; flex-direction: column; gap: 20px">
+
+    <div class="g2">
+      <section class="card" aria-labelledby="mb-repo">
+        <div class="ch"><h2 id="mb-repo">What exists in the codebase</h2><span class="use">From docs/research/email-reading-capability-audit.md</span></div>
+        <div class="row"><span class="pill ok">Wired</span><div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column"><span style="font-size: 13.5px; font-weight: 600">Outbound SMTP</span><span class="sub2 mono" style="font-size: 12px">services/notification_service.py · _send_email()</span></div></div>
+        <div class="row"><span class="pill warn" tabindex="0" data-tip="Code exists but nothing calls it">Orphaned</span><div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column"><span style="font-size: 13.5px; font-weight: 600">GmailService (read + send scopes) · #13713</span><span class="sub2 mono" style="font-size: 12px">operator_dashboard/gmail_service.py · zero callers</span></div></div>
+        <div class="row"><span class="pill warn" tabindex="0" data-tip="Built, but no HTTP route exposes it">No API</span><div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column"><span style="font-size: 13.5px; font-weight: 600">Outlook / Microsoft Graph · #13710</span><span class="sub2">Integration built, no router exposes it</span></div></div>
+        <div class="row"><span class="pill bad">Missing</span><div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column"><span style="font-size: 13.5px; font-weight: 600">Mail connector + MailboxView.vue · #13712, #13714</span><span class="sub2">No inbound mail, no mailbox GUI. This board is the target design.</span></div></div>
+        <div class="row"><span class="pill info">Reuse</span><div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column"><span style="font-size: 13.5px; font-weight: 600">Sign-off model · #13715</span><span class="sub2">CommandRisk tiers, ApprovalMemoryManager, ApprovalsInbox.vue pattern</span></div></div>
+      </section>
+      <section class="card" aria-labelledby="mb-why">
+        <div class="ch"><h2 id="mb-why">Pattern rules</h2><span class="use">Company OS mailbox (#13707)</span></div>
+        <div class="row"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" class="i1"/><circle cx="9.5" cy="13.5" r="1.2" class="ik"/><circle cx="14.5" cy="13.5" r="1.2" class="ik"/><path d="M12 8V5"/></svg></span><span style="font-size: 13px; line-height: 1.5">Agents may <b>read, search, label and summarise</b> on their own (<abbr tabindex="0" data-tip="Lowest CommandRisk tier — no approval needed" style="text-decoration: underline dotted">SAFE</abbr> tier).</span></div>
+        <div class="row"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span><span style="font-size: 13px; line-height: 1.5">Anything outbound is a <b>draft that needs approval</b>, shown with its risk tier before send.</span></div>
+        <div class="row"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19l1-4L16 5l3 3L9 18z" class="it2"/></svg></span><span style="font-size: 13px; line-height: 1.5">An agent draft is <b>never styled like a sent message</b>: dashed box, agent name, "Needs approval".</span></div>
+        <div class="row"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></span><span style="font-size: 13px; line-height: 1.5">Remote HTML is <b>sanitised</b>; remote images are blocked until you load them.</span></div>
+      </section>
+    </div>
+
+    <section class="card" aria-labelledby="mb-live" style="overflow: hidden">
+      <div class="ch" style="flex-wrap: wrap">
+        <h2 id="mb-live">Mailbox · three-pane client</h2>
+        <span class="use">Use for: the Company OS mailbox and any shared agent inbox.</span>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+          <span class="lbl">Simulate</span>
+          <div role="group" aria-label="Simulate connection" class="segg">
+            <sc-for list="{{nets}}" as="n" hint-placeholder-count="3"><button type="button" class="seg {{n.cls}}" aria-pressed="{{n.pressed}}" onClick="{{n.pick}}">{{n.label}}</button></sc-for>
+          </div>
+          <button type="button" class="btn sm" onClick="{{inboxZero}}">Archive all</button>
+          <button type="button" class="btn sm" onClick="{{resetDemo}}">Reset demo</button>
+        </div>
+      </div>
+
+      <sc-if value="{{netErr}}" hint-placeholder-val="{{ false }}">
+        <div class="banner err" role="alert"><span class="pill bad" style="background: var(--surface); color: var(--bad-fg)">Sync error</span><span style="flex: 1 1 300px">Couldn't reach the mail connector (IMAP, imap.autobot-labs.example:993): authentication failed. The token in the vault expired at 10:31. Last synced 10:30.</span><button type="button" class="btn" onClick="{{retrySync}}">Retry now</button><a class="btn" href="CompanySecrets.dc.html">Open Secrets</a></div>
+      </sc-if>
+      <sc-if value="{{netOff}}" hint-placeholder-val="{{ false }}">
+        <div class="banner off" role="status"><span class="pill warn" style="background: var(--surface)">Offline</span><span style="flex: 1 1 300px">You're offline. Showing mail cached at 10:41. New sends and approvals are queued and go out when the connection returns.</span><button type="button" class="btn" onClick="{{retrySync}}">Try again</button></div>
+      </sc-if>
+
+      <div class="mail">
+        <div class="mcol" style="background: var(--surface)">
+          <div style="padding: 12px">
+            <button type="button" class="btn pri" style="width: 100%; justify-content: center" onClick="{{openCompose}}" data-tip="New message · C" data-tip-pos="bottom"><svg class="ic sonp" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19l1-4L16 5l3 3L9 18z"/></svg>Compose <span class="kbd" style="margin-left: 4px; background: transparent; color: var(--on-primary); border-color: var(--on-primary)">c</span></button>
+          </div>
+          <nav aria-label="Mail folders" class="scr" style="padding: 0 8px 12px; display: flex; flex-direction: column; gap: 1px">
+            <button type="button" class="fld {{fd.inbox.cls}}" aria-current="{{fd.inbox.cur}}" onClick="{{fd.inbox.pick}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="it1"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>Inbox<span class="n">{{fd.inbox.count}}<span class="sr"> unread</span></span></button>
+            <button type="button" class="fld {{fd.starred.cls}}" aria-current="{{fd.starred.cur}}" onClick="{{fd.starred.pick}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l2.5 5 5.5.8-4 3.9 1 5.5-5-2.6-5 2.6 1-5.5-4-3.9 5.5-.8z" class="i2"/></svg>Starred</button>
+            <button type="button" class="fld {{fd.sent.cls}}" aria-current="{{fd.sent.cur}}" onClick="{{fd.sent.pick}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l16-7-6 16-3-7z" class="it1"/></svg>Sent</button>
+            <button type="button" class="fld {{fd.drafts.cls}}" aria-current="{{fd.drafts.cur}}" onClick="{{fd.drafts.pick}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19l1-4L16 5l3 3L9 18z" class="it2"/></svg>Drafts<span class="n">{{fd.drafts.count}}</span></button>
+            <button type="button" class="fld {{fd.agent.cls}}" aria-current="{{fd.agent.cur}}" onClick="{{fd.agent.pick}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" class="i1"/><circle cx="9.5" cy="13.5" r="1.2" class="ik"/><circle cx="14.5" cy="13.5" r="1.2" class="ik"/><path d="M12 8V5"/></svg><span style="display: flex; flex-direction: column; line-height: 1.25">Agent drafts<span style="font-size: 11px; font-weight: 400; color: var(--muted)">needs approval</span></span><span class="pill warn" data-tip="Agent-written replies waiting for your approval before they are sent" data-tip-pos="right" style="margin-left: auto">{{fd.agent.count}}</span></button>
+            <button type="button" class="fld {{fd.archive.cls}}" aria-current="{{fd.archive.cur}}" onClick="{{fd.archive.pick}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="4" rx="1" class="it2"/><path d="M5 9v10h14V9M10 13h4"/></svg>Archive</button>
+            <button type="button" class="fld {{fd.spam.cls}}" aria-current="{{fd.spam.cur}}" onClick="{{fd.spam.pick}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M12 8v5M12 16v.5"/></svg>Spam<span class="n">{{fd.spam.count}}</span></button>
+            <button type="button" class="fld {{fd.trash.cls}}" aria-current="{{fd.trash.cur}}" onClick="{{fd.trash.pick}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>Trash</button>
+            <p class="sect">Labels</p>
+            <sc-for list="{{labelNav}}" as="l" hint-placeholder-count="5">
+              <button type="button" class="fld {{l.cls}}" aria-current="{{l.cur}}" onClick="{{l.pick}}"><svg class="ic" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style="margin: 0 2px 0 3px"><rect x="1" y="1" width="10" height="10" rx="2.5" class="{{l.sw}}"/></svg>{{l.name}}<span class="n" style="font-weight: 500">{{l.count}}</span></button>
+            </sc-for>
+          </nav>
+          <div style="padding: 10px 12px; border-top: var(--bw) solid var(--line); display: flex; align-items: center; gap: 8px">
+            <span class="dot {{syncDot}}" data-tip="{{syncText}}" data-tip-pos="right"></span>
+            <div style="display: flex; flex-direction: column; min-width: 0">
+              <span class="mono" tabindex="0" data-tip="ceo@autobot-labs.example" style="font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">ceo@autobot-labs.example</span>
+              <span class="sub2" style="font-size: 11.5px">{{syncText}}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="mcol">
+          <div style="padding: 12px; display: flex; flex-direction: column; gap: 8px; border-bottom: var(--bw) solid var(--line)">
+            <div style="position: relative" data-tip="Search mail · /" data-tip-pos="bottom">
+              <label for="mb-q" class="sr">Search mail</label>
+              <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="position: absolute; left: 10px; top: 9px"><circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/></svg>
+              <input id="mb-q" class="inp" type="search" placeholder="Search mail  ( / )" value="{{q}}" onInput="{{onQ}}" style="padding-left: 32px">
+            </div>
+            <div role="group" aria-label="Filters" style="display: flex; gap: 6px; flex-wrap: wrap">
+              <sc-for list="{{filters}}" as="f" hint-placeholder-count="3"><button type="button" class="fchip" aria-pressed="{{f.pressed}}" onClick="{{f.toggle}}">{{f.label}}</button></sc-for>
+            </div>
+          </div>
+          <div style="position: relative; display: flex; align-items: center; gap: 8px; padding: 8px 12px; min-height: 48px; box-sizing: border-box; border-bottom: var(--bw) solid var(--line); background: var(--surface2)">
+            <button type="button" role="checkbox" class="cbx" aria-checked="{{headChecked}}" aria-label="Select all visible conversations" data-tip="Select all visible" data-tip-pos="bottom" onClick="{{toggleAll}}"><svg class="ck" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.2l2.3 2.3 4.7-5"/></svg><svg class="mx" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 6h6"/></svg></button>
+            <sc-if value="{{hasSel}}" hint-placeholder-val="{{ false }}">
+              <span style="font-size: 12.5px; font-weight: 600; white-space: nowrap">{{nSel}} selected</span>
+              <span style="margin-left: auto; display: flex; gap: 2px">
+                <button type="button" class="ibtn" aria-label="Archive selected" data-tip="Archive selected · E" data-tip-pos="bottom" onClick="{{bulkArchive}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="4" rx="1" class="it2"/><path d="M5 9v10h14V9M10 13h4"/></svg></button>
+                <button type="button" class="ibtn" aria-label="Mark selected as read" data-tip="Mark selected as read" data-tip-pos="bottom" onClick="{{bulkRead}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10l9-6 9 6v10H3z" class="iw"/><path d="M3 10l9 6 9-6"/></svg></button>
+                <button type="button" class="ibtn" aria-label="Label selected" data-tip="Label selected" data-tip-pos="bottom" aria-haspopup="menu" aria-expanded="{{labMenuOpen}}" onClick="{{toggleLabMenu}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12V4h8l9 9-8 8z" class="it1"/><circle cx="7.5" cy="8.5" r="1.3" class="ik"/></svg></button>
+                <button type="button" class="ibtn" aria-label="Delete selected" data-tip="Delete selected · #" data-tip-pos="left" onClick="{{bulkDelete}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>
+              </span>
+              <sc-if value="{{labMenu}}" hint-placeholder-val="{{ false }}">
+                <div class="menu" role="menu" aria-label="Apply label" style="right: 12px; top: 44px">
+                  <sc-for list="{{labelOpts}}" as="o" hint-placeholder-count="5"><button type="button" role="menuitem" class="mi" onClick="{{o.apply}}"><svg class="ic" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="1" y="1" width="10" height="10" rx="2.5" class="{{o.sw}}"/></svg>{{o.name}}</button></sc-for>
+                </div>
+              </sc-if>
+            </sc-if>
+            <sc-if value="{{noSel}}" hint-placeholder-val="{{ true }}">
+              <span style="font-size: 13px; font-weight: 600">{{folderName}}</span>
+              <span class="sub2" style="margin-left: auto">{{visCount}}</span>
+            </sc-if>
+          </div>
+          <div class="scr" role="list" aria-label="Conversations">
+            <sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
+              <div role="listitem" class="mrow {{r.cls}}" id="{{r.domId}}">
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 1px">
+                  <button type="button" role="checkbox" class="cbx" aria-checked="{{r.checked}}" aria-label="{{r.selLabel}}" data-tip="{{r.selLabel}}" data-tip-pos="right" onClick="{{r.toggleSel}}"><svg class="ck" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.2l2.3 2.3 4.7-5"/></svg></button>
+                  <button type="button" class="ibtn xs" aria-pressed="{{r.starred}}" aria-label="{{r.starLabel}}" data-tip="{{r.starLabel}}" data-tip-pos="right" onClick="{{r.toggleStar}}" style="border: 0; background: transparent"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l2.5 5 5.5.8-4 3.9 1 5.5-5-2.6-5 2.6 1-5.5-4-3.9 5.5-.8z" class="{{r.starCls}}"/></svg></button>
+                </div>
+                <button type="button" class="mmain" aria-current="{{r.current}}" onClick="{{r.open}}">
+                  <span class="fr">
+                    <sc-if value="{{r.unread}}" hint-placeholder-val="{{ true }}"><span class="udot"></span><span class="sr">Unread. </span></sc-if>
+                    <b>{{r.from}}</b>
+                    <sc-if value="{{r.agent}}" hint-placeholder-val="{{ false }}"><span class="agt" data-tip="Sent or drafted by an AutoBot agent, not a person" data-tip-pos="right">agent</span></sc-if>
+                    <sc-if value="{{r.hasAtt}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-label="Has attachment" role="img"><path d="M15 7l-6 6a2 2 0 0 0 3 3l6-6a4 4 0 0 0-6-6l-6 6a6 6 0 0 0 8 8l5-5"/></svg></sc-if>
+                    <span class="tm mono">{{r.time}}</span>
+                  </span>
+                  <span class="sj">{{r.subject}}</span>
+                  <span class="sn">{{r.snippet}}</span>
+                  <span style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px">
+                    <sc-if value="{{r.pendingDraft}}" hint-placeholder-val="{{ false }}"><span class="pill warn" style="font-size: 10.5px; padding: 1px 6px">Agent draft · needs approval</span></sc-if>
+                    <sc-for list="{{r.labels}}" as="l" hint-placeholder-count="1"><span class="lab"><svg class="ic" width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><rect x="1" y="1" width="8" height="8" rx="2" class="{{l.sw}}"/></svg>{{l.name}}</span></sc-for>
+                  </span>
+                </button>
+              </div>
+            </sc-for>
+            <sc-if value="{{listEmpty}}" hint-placeholder-val="{{ false }}">
+              <sc-if value="{{zero}}" hint-placeholder-val="{{ true }}">
+                <div style="padding: 40px 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center">
+                  <svg class="ic" width="120" height="96" viewBox="0 0 120 96" aria-hidden="true"><rect x="18" y="30" width="84" height="54" rx="8" class="it1"/><path d="M18 60h24l5 9h26l5-9h24"/><circle cx="60" cy="22" r="14" class="i2"/><path d="M53 22l5 5 9-10" class="sacc" stroke-width="2.4"/><path d="M96 14l4-4M102 22h5M24 14l-4-4" stroke-width="2"/></svg>
+                  <strong style="font-size: 15px">Inbox zero</strong>
+                  <span class="sub2" style="max-width: 260px">Nothing left to triage. Agents filed today's alerts and notifications; drafts that need you are in Agent drafts.</span>
+                  <button type="button" class="btn sm" onClick="{{fd.agent.pick}}">Review agent drafts</button>
+                </div>
+              </sc-if>
+              <sc-if value="{{noMatch}}" hint-placeholder-val="{{ false }}">
+                <div style="padding: 40px 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center">
+                  <svg class="ic" width="64" height="64" viewBox="0 0 48 48" aria-hidden="true"><circle cx="21" cy="21" r="12" class="it1"/><path d="M30 30l10 10M16 21h10"/></svg>
+                  <strong style="font-size: 14px">{{emptyTitle}}</strong>
+                  <span class="sub2" style="max-width: 260px">{{emptyText}}</span>
+                  <sc-if value="{{canClear}}" hint-placeholder-val="{{ true }}"><button type="button" class="btn sm" onClick="{{clearFilters}}">Clear search and filters</button></sc-if>
+                </div>
+              </sc-if>
+            </sc-if>
+          </div>
+        </div>
+
+        <div class="mcol" style="background: var(--surface)">
+          <sc-if value="{{hasRd}}" hint-placeholder-val="{{ true }}">
+            <div style="position: relative; display: flex; align-items: center; gap: 4px; padding: 8px 12px; border-bottom: var(--bw) solid var(--line); flex-wrap: wrap">
+              <button type="button" class="btn sm" onClick="{{rd.reply}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 8L5 12l5 4M5 12h9a5 5 0 0 1 5 5v1"/></svg>Reply</button>
+              <button type="button" class="btn sm" onClick="{{rd.replyAll}}">Reply all</button>
+              <button type="button" class="btn sm" onClick="{{rd.forward}}">Forward</button>
+              <span style="flex-grow: 1"></span>
+              <button type="button" class="ibtn" aria-label="Archive (e)" data-tip="Archive · E" data-tip-pos="bottom" onClick="{{rd.archive}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="4" rx="1" class="it2"/><path d="M5 9v10h14V9M10 13h4"/></svg></button>
+              <button type="button" class="ibtn" aria-label="Delete (#)" data-tip="Delete · #" data-tip-pos="bottom" onClick="{{rd.del}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>
+              <button type="button" class="ibtn" aria-label="More actions" data-tip="More actions" data-tip-pos="left" aria-haspopup="menu" aria-expanded="{{rd.moreOpen}}" onClick="{{rd.toggleMore}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.4" class="ik"/><circle cx="12" cy="12" r="1.4" class="ik"/><circle cx="19" cy="12" r="1.4" class="ik"/></svg></button>
+              <sc-if value="{{rd.more}}" hint-placeholder-val="{{ false }}">
+                <div class="menu" role="menu" aria-label="More actions" style="right: 12px; top: 46px">
+                  <button type="button" role="menuitem" class="mi" onClick="{{rd.markUnread}}">Mark as unread</button>
+                  <button type="button" role="menuitem" class="mi" onClick="{{rd.star}}">{{rd.starText}}</button>
+                  <button type="button" role="menuitem" class="mi" onClick="{{rd.snooze}}">Snooze until Monday 08:00</button>
+                  <button type="button" role="menuitem" class="mi" onClick="{{rd.spam}}">Report spam</button>
+                </div>
+              </sc-if>
+            </div>
+            <div class="scr" style="padding: 16px 18px 24px; display: flex; flex-direction: column; gap: 14px">
+              <div style="display: flex; flex-direction: column; gap: 6px">
+                <h3 style="margin: 0; font-size: 18px; font-weight: 600; line-height: 1.3">{{rd.subject}}</h3>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center">
+                  <sc-for list="{{rd.labels}}" as="l" hint-placeholder-count="2"><span class="lab"><svg class="ic" width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><rect x="1" y="1" width="8" height="8" rx="2" class="{{l.sw}}"/></svg>{{l.name}}</span></sc-for>
+                  <span class="sub2">{{rd.countText}}</span>
+                </div>
+              </div>
+
+              <sc-if value="{{rd.hasSummary}}" hint-placeholder-val="{{ true }}">
+                <section class="sumc" aria-label="AutoBot summary">
+                  <div style="display: flex; align-items: center; gap: 8px">
+                    <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" class="i1"/><circle cx="9.5" cy="13.5" r="1.2" class="ik"/><circle cx="14.5" cy="13.5" r="1.2" class="ik"/><path d="M12 8V5"/></svg>
+                    <strong style="font-size: 13.5px">AutoBot summary</strong>
+                    <span class="sub2" tabindex="0" data-tip="SAFE tier: read-only actions an agent may take without asking" style="font-size: 12px">by {{rd.sumBy}} · read-only, SAFE tier</span>
+                  </div>
+                  <p style="margin: 0; font-size: 13.5px; line-height: 1.55">{{rd.sumText}}</p>
+                  <div style="display: flex; gap: 6px; flex-wrap: wrap">
+                    <sc-for list="{{rd.actions}}" as="a" hint-placeholder-count="3"><button type="button" class="btn sm" onClick="{{a.run}}">{{a.label}}</button></sc-for>
+                  </div>
+                </section>
+              </sc-if>
+
+              <div class="msgc">
+                <sc-if value="{{rd.hasEarlier}}" hint-placeholder-val="{{ true }}">
+                  <sc-if value="{{rd.collapsed}}" hint-placeholder-val="{{ true }}">
+                    <button type="button" class="earl" aria-expanded="false" onClick="{{rd.toggleEarlier}}"><span class="pill idle">{{rd.earlierCount}} earlier</span><span class="sub2" style="flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{rd.earlierNames}}</span><span style="font-size: 12.5px; font-weight: 500">Show</span></button>
+                  </sc-if>
+                  <sc-if value="{{rd.expanded}}" hint-placeholder-val="{{ false }}">
+                    <button type="button" class="earl" aria-expanded="true" onClick="{{rd.toggleEarlier}}"><span class="pill idle">{{rd.earlierCount}} earlier</span><span class="sub2" style="flex: 1">Thread history</span><span style="font-size: 12.5px; font-weight: 500">Collapse</span></button>
+                    <sc-for list="{{rd.earlier}}" as="x" hint-placeholder-count="2">
+                      <div style="display: flex; gap: 10px; padding: 10px 12px; border-bottom: var(--bw) solid var(--line)">
+                        <span class="av">{{x.ini}}</span>
+                        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+                          <span style="display: flex; gap: 6px; align-items: center; font-size: 13px"><b style="font-weight: 600">{{x.from}}</b><sc-if value="{{x.agent}}" hint-placeholder-val="{{ false }}"><span class="agt">agent</span></sc-if><span class="sub2 mono" style="margin-left: auto; font-size: 11.5px">{{x.time}}</span></span>
+                          <span style="font-size: 13px; line-height: 1.5; color: var(--text2)">{{x.text}}</span>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </sc-if>
+                </sc-if>
+                <div style="padding: 12px; display: flex; flex-direction: column; gap: 10px">
+                  <div style="display: flex; gap: 10px; align-items: center">
+                    <span class="av">{{rd.ini}}</span>
+                    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+                      <span style="font-size: 13.5px"><b style="font-weight: 600">{{rd.from}}</b> <span class="sub2 mono" style="font-size: 12px">&lt;{{rd.addr}}&gt;</span></span>
+                      <span class="sub2" style="font-size: 12px">to {{rd.to}}</span>
+                    </div>
+                    <span class="sub2 mono" style="font-size: 12px">{{rd.time}}</span>
+                  </div>
+                  <sc-if value="{{rd.imgsBlocked}}" hint-placeholder-val="{{ false }}">
+                    <p class="hint" style="padding: 7px 10px; font-size: 12.5px"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="it1"/><path d="M4 5l16 14"/></svg>Remote images blocked to stop tracking pixels.<button type="button" class="btn sm" style="margin-left: auto; height: 26px" onClick="{{rd.loadImgs}}">Load images</button></p>
+                  </sc-if>
+                  <sc-for list="{{rd.body}}" as="p" hint-placeholder-count="3"><p style="margin: 0; font-size: 13.5px; line-height: 1.6">{{p.t}}</p></sc-for>
+                  <sc-if value="{{rd.hasAtt}}" hint-placeholder-val="{{ true }}">
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; padding-top: 4px">
+                      <sc-for list="{{rd.att}}" as="f" hint-placeholder-count="2"><button type="button" class="att" style="cursor: pointer; font: inherit; font-size: 12.5px" onClick="{{f.open}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="iw"/><path d="M14 3v4h4"/></svg><span style="font-weight: 500">{{f.name}}</span><span class="sub2" style="font-size: 11.5px">{{f.size}}</span></button></sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+              </div>
+
+              <sc-if value="{{rd.hasDraft}}" hint-placeholder-val="{{ true }}">
+                <section aria-label="Suggested reply" style="display: flex; flex-direction: column; gap: 8px">
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                    <strong style="font-size: 13.5px">Suggested reply</strong>
+                    <span class="sub2">drafted by <b style="font-weight: 600; color: var(--text)">{{rd.dAgent}}</b></span>
+                    <span class="pill {{rd.dTierCls}}" tabindex="0" data-tip="Risk tier — how much harm a mistaken send could do; higher tiers need explicit approval" data-tip-pos="left" style="margin-left: auto">{{rd.dTier}}</span>
+                  </div>
+                  <sc-if value="{{rd.dPending}}" hint-placeholder-val="{{ true }}">
+                    <span class="pill warn" tabindex="0" data-tip="Nothing leaves your mailbox until you press Approve" style="align-self: flex-start">Needs your approval · not sent</span>
+                    <pre class="draftb">{{rd.dBody}}</pre>
+                    <span class="sub2" style="font-size: 12px">{{rd.dWhy}}</span>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                      <button type="button" class="btn pri sm" onClick="{{rd.approve}}"><svg class="ic sonp" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>{{rd.approveText}}</button>
+                      <button type="button" class="btn sm" onClick="{{rd.edit}}">Edit</button>
+                      <button type="button" class="btn sm" onClick="{{rd.discard}}">Discard</button>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{rd.dSent}}" hint-placeholder-val="{{ false }}">
+                    <p class="hint" role="status"><span class="pill ok">Approved · sent</span>{{rd.dSentText}}</p>
+                  </sc-if>
+                  <sc-if value="{{rd.dGone}}" hint-placeholder-val="{{ false }}">
+                    <p class="hint" role="status"><span class="pill idle">Discarded</span>The agent will not send anything on this thread.<button type="button" class="btn sm" style="margin-left: auto" onClick="{{rd.restore}}">Restore draft</button></p>
+                  </sc-if>
+                </section>
+              </sc-if>
+              <sc-if value="{{rd.noDraft}}" hint-placeholder-val="{{ false }}">
+                <span class="sub2" style="font-size: 12px">{{rd.noDraftText}}</span>
+              </sc-if>
+            </div>
+          </sc-if>
+          <sc-if value="{{noRd}}" hint-placeholder-val="{{ false }}">
+            <div style="margin: auto; padding: 32px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center">
+              <svg class="ic" width="88" height="70" viewBox="0 0 88 70" aria-hidden="true"><rect x="8" y="12" width="72" height="48" rx="6" class="iw"/><path d="M8 16l36 24 36-24"/><circle cx="72" cy="14" r="9" class="i3"/></svg>
+              <strong style="font-size: 14px">No conversation selected</strong>
+              <span class="sub2">Pick one from the list, or press <span class="kbd">j</span> to open the first.</span>
+            </div>
+          </sc-if>
+        </div>
+
+        <sc-if value="{{cmpOpen}}" hint-placeholder-val="{{ false }}">
+          <div class="cmp" role="dialog" aria-modal="false" aria-labelledby="cmp-title">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 14px; background: var(--surface2); border-bottom: var(--bw) solid var(--line); border-radius: 10px 10px 0 0">
+              <strong id="cmp-title" style="font-size: 13.5px; flex: 1">{{cmp.title}}</strong>
+              <span class="sub2" style="font-size: 12px">{{cmp.saved}}</span>
+              <button type="button" class="ibtn" aria-label="Close compose (Esc)" data-tip="Close · Esc" data-tip-pos="left" onClick="{{cmp.close}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+            </div>
+            <div class="rc" style="color: var(--muted)"><span style="width: 30px">From</span><span class="mono" style="color: var(--text); font-size: 12.5px">ceo@autobot-labs.example</span>
+              <span style="margin-left: auto; display: flex; gap: 4px">
+                <button type="button" class="seg" aria-pressed="{{cmp.ccOn}}" onClick="{{cmp.toggleCc}}" data-tip="Carbon copy — visible to all recipients" data-tip-pos="bottom">Cc</button>
+                <button type="button" class="seg" aria-pressed="{{cmp.bccOn}}" onClick="{{cmp.toggleBcc}}" data-tip="Blind copy — hidden from other recipients" data-tip-pos="left">Bcc</button>
+              </span>
+            </div>
+            <sc-for list="{{cmp.fields}}" as="fl" hint-placeholder-count="1">
+              <div class="rc">
+                <label for="{{fl.id}}">{{fl.label}}</label>
+                <sc-for list="{{fl.chips}}" as="c" hint-placeholder-count="1">
+                  <span class="chip">{{c.addr}}<sc-if value="{{c.ext}}" hint-placeholder-val="{{ false }}"><span class="pill warn" data-tip="Outside autobot-labs.example — sending raises the risk tier" style="font-size: 10px; padding: 0 4px">external</span></sc-if><button type="button" aria-label="{{c.removeLabel}}" data-tip="{{c.removeLabel}}" onClick="{{c.remove}}"><svg class="ic" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span>
+                </sc-for>
+                <input id="{{fl.id}}" type="text" autocomplete="off" placeholder="name@domain, then Enter" value="{{fl.val}}" onInput="{{fl.onInput}}" onKeyDown="{{fl.onKey}}">
+              </div>
+            </sc-for>
+            <div class="rc"><label for="cmp-subj" class="sr">Subject</label><input id="cmp-subj" type="text" placeholder="Subject" value="{{cmp.subject}}" onInput="{{cmp.onSubject}}" style="font-weight: 600"></div>
+            <div class="tb" role="toolbar" aria-label="Formatting">
+              <sc-for list="{{cmp.tools}}" as="b" hint-placeholder-count="6"><button type="button" class="ibtn" aria-label="{{b.label}}" data-tip="{{b.label}}" aria-pressed="{{b.pressed}}" onClick="{{b.toggle}}" style="font-weight: 600">{{b.glyph}}</button></sc-for>
+              <span style="flex: 1"></span>
+              <button type="button" class="ibtn" aria-label="Attach a file" data-tip="Attach a file" data-tip-pos="left" onClick="{{cmp.attach}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 7l-6 6a2 2 0 0 0 3 3l6-6a4 4 0 0 0-6-6l-6 6a6 6 0 0 0 8 8l5-5"/></svg></button>
+            </div>
+            <label for="cmp-body" class="sr">Message body</label>
+            <textarea id="cmp-body" class="cbody" placeholder="Write your message…" value="{{cmp.body}}" onInput="{{cmp.onBody}}" style="font-weight: {{cmp.fw}}; font-style: {{cmp.fs}}; text-decoration: {{cmp.td}}"></textarea>
+            <sc-if value="{{cmp.hasAtt}}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; gap: 6px; flex-wrap: wrap; padding: 6px 12px">
+                <sc-for list="{{cmp.att}}" as="f" hint-placeholder-count="1"><span class="att" style="padding: 4px 4px 4px 10px">{{f.name}}<span class="sub2" style="font-size: 11.5px">{{f.size}}</span><button type="button" class="ibtn xs" aria-label="{{f.removeLabel}}" data-tip="{{f.removeLabel}}" onClick="{{f.remove}}"><svg class="ic" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span></sc-for>
+              </div>
+            </sc-if>
+            <div style="padding: 6px 12px; display: flex; align-items: center; gap: 8px; border-top: var(--bw) solid var(--line); font-size: 12.5px">
+              <span class="pill {{cmp.riskCls}}" tabindex="0" data-tip="Risk tier — set by recipients and content; decides whether sending needs approval">{{cmp.riskTier}}</span><span style="color: var(--text2)">{{cmp.riskText}}</span>
+            </div>
+            <sc-if value="{{cmp.hasErr}}" hint-placeholder-val="{{ false }}">
+              <p role="alert" style="margin: 0; padding: 0 12px 6px; font-size: 12.5px; color: var(--alert-text); font-weight: 500">Error: {{cmp.err}}</p>
+            </sc-if>
+            <div style="position: relative; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: var(--bw) solid var(--line)">
+              <button type="button" class="btn pri sm" onClick="{{cmp.send}}">{{cmp.sendText}}</button>
+              <button type="button" class="btn sm" aria-haspopup="menu" aria-expanded="{{cmp.schedExp}}" onClick="{{cmp.toggleSched}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it2"/><path d="M12 8v4l3 2"/></svg>Schedule</button>
+              <sc-if value="{{cmp.schedOpen}}" hint-placeholder-val="{{ false }}">
+                <div class="menu" role="menu" aria-label="Schedule send" style="left: 12px; bottom: 48px">
+                  <sc-for list="{{cmp.slots}}" as="s" hint-placeholder-count="3"><button type="button" role="menuitem" class="mi" onClick="{{s.pick}}">{{s.label}}</button></sc-for>
+                </div>
+              </sc-if>
+              <span style="flex: 1"></span>
+              <button type="button" class="btn sm" onClick="{{cmp.saveDraft}}">Save draft</button>
+              <button type="button" class="ibtn" aria-label="Discard message" data-tip="Discard message" data-tip-pos="left" onClick="{{cmp.close}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{hasToast}}" hint-placeholder-val="{{ false }}">
+          <div class="toast"><span>{{toastText}}</span><sc-if value="{{canUndo}}" hint-placeholder-val="{{ false }}"><button type="button" onClick="{{undo}}">Undo</button></sc-if></div>
+        </sc-if>
+        <div class="sr" role="status" aria-live="polite">{{toastText}}</div>
+      </div>
+      <p class="rules"><b>Rules.</b> List rows are buttons inside list items; the checkbox and star sit outside the row button so each has its own label. Unread is bold <b>and</b> a dot <b>and</b> "Unread" for screen readers. Compose is a non-modal dialog: focus goes to To on open, Esc closes it. Bulk actions only appear with a selection and every destructive action offers Undo through an aria-live toast. Agent drafts are sent only through Approve &amp; send; the risk tier shows before you approve.</p>
+    </section>
+
+    <div class="g2">
+      <section class="card" aria-labelledby="mb-mob">
+        <div class="ch"><h2 id="mb-mob">Narrow / mobile variant</h2><span class="use">Below 760px: list, then detail</span></div>
+        <div style="padding: 20px; display: flex; justify-content: center; background: var(--surface2)">
+          <div class="phone">
+            <sc-if value="{{mList}}" hint-placeholder-val="{{ true }}">
+              <div style="display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px; background: var(--surface); border-bottom: var(--bw) solid var(--line)">
+                <strong style="font-size: 17px; flex: 1">Inbox</strong>
+                <span class="pill info">{{mUnread}} unread</span>
+                <button type="button" class="ibtn" aria-label="Search mail" data-tip="Search mail" data-tip-pos="left"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/></svg></button>
+              </div>
+              <sc-if value="{{netErr}}" hint-placeholder-val="{{ false }}"><div class="banner err" role="alert" style="padding: 8px 14px; font-size: 12.5px"><b>Sync error.</b> Last synced 10:30.<button type="button" class="btn" style="margin-left: auto" onClick="{{retrySync}}">Retry</button></div></sc-if>
+              <sc-if value="{{netOff}}" hint-placeholder-val="{{ false }}"><div class="banner off" role="status" style="padding: 8px 14px; font-size: 12.5px"><b>Offline.</b> Sends are queued.</div></sc-if>
+              <div class="scr" role="list" aria-label="Inbox conversations" style="background: var(--surface)">
+                <sc-for list="{{mRows}}" as="r" hint-placeholder-count="6">
+                  <div role="listitem" class="mrow {{r.cls}}" style="padding-left: 11px">
+                    <button type="button" class="mmain" onClick="{{r.open}}">
+                      <span class="fr"><sc-if value="{{r.unread}}" hint-placeholder-val="{{ true }}"><span class="udot"></span><span class="sr">Unread. </span></sc-if><b>{{r.from}}</b><sc-if value="{{r.hasAtt}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-label="Has attachment" role="img"><path d="M15 7l-6 6a2 2 0 0 0 3 3l6-6a4 4 0 0 0-6-6l-6 6a6 6 0 0 0 8 8l5-5"/></svg></sc-if><span class="tm mono">{{r.time}}</span></span>
+                      <span class="sj">{{r.subject}}</span>
+                      <span class="sn">{{r.snippet}}</span>
+                      <sc-if value="{{r.pendingDraft}}" hint-placeholder-val="{{ false }}"><span class="pill warn" style="align-self: flex-start; font-size: 10.5px; padding: 1px 6px; margin-top: 2px">Agent draft · needs approval</span></sc-if>
+                    </button>
+                  </div>
+                </sc-for>
+                <sc-if value="{{mEmpty}}" hint-placeholder-val="{{ false }}"><div style="padding: 48px 20px; text-align: center; display: flex; flex-direction: column; gap: 6px"><strong>Inbox zero</strong><span class="sub2">Nothing left to triage.</span></div></sc-if>
+              </div>
+              <button type="button" class="btn pri" style="position: absolute; right: 16px; bottom: 16px; height: 48px; border-radius: 99px; padding: 0 18px" onClick="{{mCompose}}"><svg class="ic sonp" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19l1-4L16 5l3 3L9 18z"/></svg>Compose</button>
+            </sc-if>
+            <sc-if value="{{mDetail}}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; align-items: center; gap: 4px; padding: 10px 8px; background: var(--surface); border-bottom: var(--bw) solid var(--line)">
+                <button type="button" class="ibtn" aria-label="Back to inbox" data-tip="Back to inbox" data-tip-pos="right" onClick="{{mBack}}"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
+                <span style="flex: 1; font-size: 13px; color: var(--muted)">Inbox</span>
+                <button type="button" class="ibtn" aria-label="Archive" data-tip="Archive" data-tip-pos="bottom" onClick="{{md.archive}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="4" rx="1" class="it2"/><path d="M5 9v10h14V9M10 13h4"/></svg></button>
+                <button type="button" class="ibtn" aria-label="Delete" data-tip="Delete" data-tip-pos="left" onClick="{{md.del}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>
+              </div>
+              <div class="scr" style="padding: 14px; display: flex; flex-direction: column; gap: 12px; background: var(--surface)">
+                <h3 style="margin: 0; font-size: 16px; font-weight: 600; line-height: 1.35">{{md.subject}}</h3>
+                <div style="display: flex; gap: 8px; align-items: center"><span class="av">{{md.ini}}</span><div style="display: flex; flex-direction: column; flex: 1; min-width: 0"><b style="font-size: 13.5px; font-weight: 600">{{md.from}}</b><span class="sub2" style="font-size: 12px">{{md.countText}}</span></div><span class="sub2 mono" style="font-size: 12px">{{md.time}}</span></div>
+                <sc-if value="{{md.hasSummary}}" hint-placeholder-val="{{ true }}">
+                  <section class="sumc" aria-label="AutoBot summary" style="padding: 10px 12px"><strong style="font-size: 13px">AutoBot summary</strong><p style="margin: 0; font-size: 13px; line-height: 1.5">{{md.sumText}}</p></section>
+                </sc-if>
+                <sc-for list="{{md.body}}" as="p" hint-placeholder-count="2"><p style="margin: 0; font-size: 13.5px; line-height: 1.55">{{p.t}}</p></sc-for>
+                <sc-if value="{{md.hasDraft}}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column; gap: 8px">
+                    <span style="display: flex; gap: 6px; align-items: center"><strong style="font-size: 13px">Suggested reply</strong><span class="pill warn">Needs approval</span></span>
+                    <pre class="draftb" style="font-size: 12.5px">{{md.dBody}}</pre>
+                    <div style="display: flex; gap: 6px"><button type="button" class="btn pri sm" style="flex: 1; justify-content: center" onClick="{{md.approve}}">Approve &amp; send</button><button type="button" class="btn sm" onClick="{{md.discard}}">Discard</button></div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{md.dSent}}" hint-placeholder-val="{{ false }}"><p class="hint"><span class="pill ok">Approved · sent</span>Reply sent after your approval.</p></sc-if>
+              </div>
+              <div style="display: flex; gap: 6px; padding: 10px; background: var(--surface); border-top: var(--bw) solid var(--line)">
+                <button type="button" class="btn sm" style="flex: 1; justify-content: center" onClick="{{mCompose}}">Reply</button>
+                <button type="button" class="btn sm" style="flex: 1; justify-content: center" onClick="{{mCompose}}">Reply all</button>
+                <button type="button" class="btn sm" style="flex: 1; justify-content: center" onClick="{{mCompose}}">Forward</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{mCmp}}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; align-items: center; gap: 6px; padding: 10px 8px; background: var(--surface); border-bottom: var(--bw) solid var(--line)">
+                <button type="button" class="ibtn" aria-label="Close compose" data-tip="Close compose" data-tip-pos="right" onClick="{{mBack}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+                <strong style="flex: 1; font-size: 14px">New message</strong>
+                <button type="button" class="btn pri sm" onClick="{{mSend}}">Send</button>
+              </div>
+              <div style="background: var(--surface); flex: 1; display: flex; flex-direction: column">
+                <div class="rc"><label for="m-to">To</label><span class="chip">ops@autobot-labs.example</span><input id="m-to" type="text" placeholder="Add recipient"></div>
+                <div class="rc"><label for="m-subj" class="sr">Subject</label><input id="m-subj" type="text" placeholder="Subject" value="{{mSubj}}"></div>
+                <label for="m-body" class="sr">Message body</label>
+                <textarea id="m-body" class="cbody" placeholder="Write your message…" style="flex: 1"></textarea>
+              </div>
+            </sc-if>
+            <sc-if value="{{mHasToast}}" hint-placeholder-val="{{ false }}"><div class="toast" role="status" style="bottom: 76px">{{mToast}}</div></sc-if>
+          </div>
+        </div>
+        <p class="rules"><b>Rules.</b> One pane at a time; Back returns to the list with scroll kept. Actions move to a bottom bar within thumb reach (44px targets). The summary stays above the body; approval buttons are full-width so they can't be hit by accident while scrolling.</p>
+      </section>
+
+      <section class="card" aria-labelledby="mb-states">
+        <div class="ch"><h2 id="mb-states">States</h2><span class="use">Static specimens</span></div>
+        <div style="padding: 16px; display: flex; flex-direction: column; gap: 14px">
+          <div class="spec"><span class="st">Empty · Inbox zero</span>
+            <div style="padding: 18px; display: flex; gap: 14px; align-items: center">
+              <svg class="ic" width="72" height="58" viewBox="0 0 120 96" aria-hidden="true"><rect x="18" y="30" width="84" height="54" rx="8" class="it1"/><path d="M18 60h24l5 9h26l5-9h24"/><circle cx="60" cy="22" r="14" class="i2"/><path d="M53 22l5 5 9-10" class="sacc" stroke-width="2.4"/></svg>
+              <div style="display: flex; flex-direction: column; gap: 4px"><strong style="font-size: 14px">Inbox zero</strong><span class="sub2">Agents triaged 14 messages today. 2 drafts wait for you.</span></div>
+            </div>
+          </div>
+          <div class="spec"><span class="st">Empty · No results</span>
+            <div style="padding: 14px 18px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap"><span style="font-size: 13px">No messages match <b>"node-07"</b> with <b>Unread</b> on.</span><button type="button" class="btn sm" style="margin-left: auto">Clear filters</button></div>
+          </div>
+          <div class="spec"><span class="st">Loading · syncing</span>
+            <div aria-busy="true" aria-label="Loading conversations" style="padding: 12px 18px; display: flex; flex-direction: column; gap: 12px">
+              <div style="display: flex; flex-direction: column; gap: 6px"><div class="skel" style="width: 40%"></div><div class="skel" style="width: 85%"></div></div>
+              <div style="display: flex; flex-direction: column; gap: 6px"><div class="skel" style="width: 30%"></div><div class="skel" style="width: 70%"></div></div>
+              <span class="sub2" style="font-size: 12px">Syncing 3 of 120 conversations…</span>
+            </div>
+          </div>
+          <div class="spec"><span class="st">Error · sync failed</span>
+            <div class="banner err" style="border: 0"><span class="pill bad" style="background: var(--surface); color: var(--bad-fg)">Sync error</span><span style="flex: 1 1 200px">Connector token expired. Last synced 10:30.</span><button type="button" class="btn">Retry</button></div>
+          </div>
+          <div class="spec"><span class="st">Offline · cached</span>
+            <div class="banner off" style="border: 0"><span class="pill warn" style="background: var(--surface)">Offline</span><span>Showing mail cached at 10:41 · 1 send queued.</span></div>
+          </div>
+          <div class="spec"><span class="st">Agent draft lifecycle</span>
+            <div style="padding: 12px 18px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center">
+              <span class="pill warn">Needs approval</span><span class="sub2" aria-hidden="true">→</span>
+              <span class="pill info">Edited by you</span><span class="sub2" aria-hidden="true">→</span>
+              <span class="pill ok">Approved · sent</span>
+              <span class="sub2" style="margin: 0 4px">or</span>
+              <span class="pill idle">Discarded</span>
+              <span class="pill bad">Blocked · FORBIDDEN</span>
+            </div>
+          </div>
+        </div>
+        <p class="rules"><b>Rules.</b> Sync and offline banners name the cause, the last good sync and one recovery action. Skeletons set aria-busy and never last longer than the sync itself. Blocked drafts (credential disclosure, payment instructions) can't be approved from the mailbox at all.</p>
+      </section>
+    </div>
+
+    <div class="g2">
+      <section class="card" aria-labelledby="mb-risk">
+        <div class="ch"><h2 id="mb-risk">Sign-off tiers for mail</h2><span class="use">Reuses CommandRisk, no new enum</span></div>
+        <div style="overflow-x: auto">
+          <table style="border-collapse: collapse; width: 100%">
+            <thead><tr><th>Tier</th><th>Mail action</th><th>Default</th></tr></thead>
+            <tbody>
+              <tr><td><span class="pill ok">SAFE</span></td><td style="white-space: normal">Read, search, classify, label, summarise</td><td>Auto</td></tr>
+              <tr><td><span class="pill warn">MODERATE</span></td><td style="white-space: normal">Reply in an existing thread to a known correspondent</td><td style="white-space: normal">Auto in full autonomy, ask in sign-off</td></tr>
+              <tr><td><span class="pill bad">HIGH</span></td><td style="white-space: normal">New external address; attachments out</td><td>Always ask</td></tr>
+              <tr><td><span class="pill bad">CRITICAL</span></td><td style="white-space: normal">Bulk send; large or hidden recipient set</td><td style="white-space: normal">Per-item sign-off</td></tr>
+              <tr><td style="border-bottom: 0"><span class="pill idle">FORBIDDEN</span></td><td style="white-space: normal; border-bottom: 0">Payment instructions, credential disclosure</td><td style="border-bottom: 0">Never</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="rules"><b>Rules.</b> The tier pill shows on every draft and in compose before send. "Remember this decision" uses ApprovalMemoryManager scoped to the mailbox, not a project path.</p>
+      </section>
+      <section class="card" aria-labelledby="mb-keys">
+        <div class="ch"><h2 id="mb-keys">Keyboard shortcuts</h2><span class="use">Live in the client above</span></div>
+        <div class="row"><span class="kbd">j</span><span class="kbd">k</span><span style="font-size: 13px">Next / previous conversation</span></div>
+        <div class="row"><span class="kbd">e</span><span style="font-size: 13px">Archive the open conversation</span></div>
+        <div class="row"><span class="kbd">#</span><span style="font-size: 13px">Delete the open conversation</span></div>
+        <div class="row"><span class="kbd">r</span><span class="kbd">a</span><span class="kbd">f</span><span style="font-size: 13px">Reply / reply all / forward</span></div>
+        <div class="row"><span class="kbd">c</span><span style="font-size: 13px">Compose a new message</span></div>
+        <div class="row"><span class="kbd">s</span><span style="font-size: 13px">Star or unstar</span></div>
+        <div class="row"><span class="kbd">/</span><span style="font-size: 13px">Focus search</span></div>
+        <div class="row"><span class="kbd">Esc</span><span style="font-size: 13px">Close compose or an open menu</span></div>
+        <p class="rules"><b>Rules.</b> Single-key shortcuts are ignored while typing in a field and can be turned off in Preferences (WCAG 2.1.4). Every shortcut has a visible button equivalent.</p>
+      </section>
+    </div>
+
+    <nav aria-label="Design system pages" class="card" style="display: flex; flex-wrap: wrap; gap: 12px; padding: 12px">
+      <a href="FileBrowser.dc.html" class="pg"><span class="sub2">← Previous</span><span style="font-weight: 600; color: var(--text)">File browser</span></a>
+      <a href="ComponentsUiModes.dc.html" class="pg" style="align-items: flex-end; text-align: right"><span class="sub2">Next →</span><span style="font-weight: 600; color: var(--text)">Interface modes</span></a>
+    </nav>
+
+  </main>
+  </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"$preview":{"width":1440,"height":3000}}'>
+const THEMES = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+const ME = 'ceo@autobot-labs.example';
+const INTERNAL = ['autobot-labs.example', 'agents.autobot-labs.example', 'autobot.example', 'fleet.autobot.example', 'github.com'];
+const LABELS = [['fleet', 'Fleet', 'i1'], ['github', 'GitHub', 'i2'], ['team', 'Team', 'i3'], ['security', 'Security', 'it3'], ['billing', 'Billing', 'it2']];
+const LBL = {};
+LABELS.forEach((l) => { LBL[l[0]] = l; });
+const FNAME = { inbox: 'Inbox', starred: 'Starred', sent: 'Sent', drafts: 'Drafts', agent: 'Agent drafts', archive: 'Archive', spam: 'Spam', trash: 'Trash' };
+const SAMPLE_ATT = [['fleet-status.csv', '4 KB'], ['node-05-benchmark.png', '96 KB'], ['rollback-notes.md', '2 KB']];
+const TIER_CLS = { SAFE: 'ok', MODERATE: 'warn', HIGH: 'bad', CRITICAL: 'bad' };
+
+const MAIL = [
+  { id: 'm1', folder: 'inbox', from: 'Ops team', addr: 'ops@autobot-labs.example', cc: ['ops-rota@autobot-labs.example'], time: '10:38', unread: true, starred: true, labels: ['fleet', 'team'],
+    subject: 'Worker 0.9.4 rollout to node-05 / node-06: maintenance window',
+    snippet: 'Proposing Thursday 22:00 EET. Runbook attached; need a go / no-go from Company OS by Tuesday.',
+    att: [['runbook-worker-0.9.4.pdf', '184 KB'], ['rollout-plan.md', '6 KB']], imgs: true,
+    earlier: [
+      ['devops-engineer', 'Oct 8, 16:02', 'node-01 to node-04 upgraded to worker 0.9.4 without incident. node-05 and node-06 are still on 0.9.3; both host the NPU queue so they need a window.', true],
+      ['Ops team', 'Oct 9, 09:20', 'Thanks. Can we avoid Friday? The research digest batch runs at 23:00 on Fridays.', false],
+      ['performance-engineer', 'Oct 9, 11:47', 'Queue depth on node-05 is lowest Thursday 21:30 to 23:30 over the last four weeks (median 2). Benchmarks are in the runbook.', true]
+    ],
+    body: ['Proposing Thursday 22:00 to 23:00 EET for node-05 and node-06.', 'Plan: drain the NPU queue, upgrade the worker to 0.9.4, run the smoke benchmark, re-enable. Rollback is the 0.9.3 image pinned in Ansible.', 'We need a go / no-go from Company OS by Tuesday so the rota can be confirmed.'],
+    sumBy: 'research-agent',
+    sum: 'Ops wants a go / no-go by Tuesday to upgrade node-05 and node-06 on Thursday 22:00 EET. performance-engineer confirmed it is the quietest window; rollback is pinned. No budget impact.',
+    actions: [['Add to Timeline · Thu 22:00', 'Added "node-05/06 worker upgrade" to Timeline, Thu 22:00'], ['Create approval in Company OS', 'Approval request created in Company OS · Approvals'], ['Open SLM fleet', 'Opening SLM fleet: node-05, node-06']],
+    draft: { agent: 'devops-engineer', tier: 'MODERATE', why: 'MODERATE: reply in an existing thread to a known internal correspondent. Your autonomy setting is "sign-off", so it waits for you.', body: 'Go for Thursday 22:00 to 23:00 EET on node-05 and node-06.\n\nI will drain the NPU queue at 21:45 and post status in this thread after the smoke benchmark. Rollback stays on the pinned 0.9.3 image.\n\ndevops-engineer, for AutoBot Labs' } },
+  { id: 'm2', folder: 'inbox', from: 'Alertmanager', addr: 'alerts@fleet.autobot.example', time: '10:12', unread: true, starred: false, labels: ['fleet'],
+    subject: '[FIRING:1] NodeDown node-04 (slm-fleet)', snippet: 'node-04 unreachable for 5m · severity=critical · job=slm-worker',
+    body: ['Alert: NodeDown, severity critical.', 'node-04 (slm-worker) has not answered the health probe for 5 minutes. First seen 10:07 EET.', 'Runbook: restart the worker, then check the 09:58 deploy log.'],
+    sumBy: 'devops-engineer', sum: 'node-04 stopped answering at 10:07, nine minutes after the 09:58 deploy. A worker restart fixed the same alert 3 of the last 4 times.',
+    actions: [['Restart worker on node-04 (needs approval)', 'Restart request sent to Company OS · Approvals'], ['Open Heartbeat monitor', 'Opening Heartbeat monitor'], ['Snooze 1 h', 'Alert snoozed until 11:12']],
+    noDraft: 'No reply suggested: automated sender.' },
+  { id: 'm3', folder: 'inbox', from: 'GitHub', addr: 'notifications@github.com', time: '09:47', unread: true, starred: false, labels: ['github'],
+    subject: '[mrveiss/AutoBot-AI] Fix session lifecycle on reconnect (PR #14302)', snippet: 'code-reviewer requested your review · 4 files changed, +118 −41',
+    body: ['code-agent opened this pull request.', 'Closes the old session before issuing a new token on reconnect, so stale WebSocket sessions no longer keep their approvals.', 'Review requested from: code-reviewer, you.'],
+    sumBy: 'code-reviewer', sum: 'code-agent wrote the fix; code-reviewer approved with one nit (timeout constant). CI is green on all 6 jobs. Merging needs a Company OS approval.',
+    actions: [['Open PR on GitHub', 'Opening PR #14302'], ['Approve merge in Company OS', 'Merge approval recorded in Company OS']],
+    draft: { agent: 'code-reviewer', tier: 'MODERATE', why: 'MODERATE: comment in an existing thread. Posts to the PR as you.', body: 'Reviewed. The reconnect path now closes the old session before the new token is issued, which matches #14288. One nit on the timeout constant; fine to merge once CI is green.' } },
+  { id: 'm4', folder: 'inbox', from: 'GitHub', addr: 'notifications@github.com', time: '09:31', unread: false, starred: false, labels: ['github'],
+    subject: '[mrveiss/AutoBot-AI] Run failed: CI · frontend-unit (Dev_new_gui)', snippet: '1 job failed in 6m 12s · useCommandApproval.test.ts timed out',
+    att: [['frontend-unit.log', '42 KB']],
+    body: ['Run #8812 failed on Dev_new_gui.', 'frontend-unit: 1 failed, 1,204 passed. useCommandApproval.test.ts exceeded the 5000 ms timeout.'],
+    sumBy: 'code-agent', sum: 'Flaky test, not a regression: the same test timed out in 2 of the last 10 runs and passed on retry each time.',
+    actions: [['Re-run failed job', 'Re-run requested for frontend-unit'], ['Open run log', 'Opening frontend-unit.log']],
+    noDraft: 'No reply suggested: automated sender.' },
+  { id: 'm5', folder: 'inbox', from: 'research-agent', addr: 'research-agent@agents.autobot-labs.example', agent: true, time: '08:05', unread: true, starred: false, labels: ['team'],
+    subject: 'Weekly research digest: retrieval and reranking', snippet: '5 sources, 2 high reliability. Contextual retrieval beats rerank-only on long PDFs by 9 points.',
+    att: [['digest-2026-w41.pdf', '312 KB']],
+    body: ['This week: contextual retrieval versus rerank-only on long PDFs.', 'Contextual retrieval improved answer accuracy by 9 points on our 120-question Knowledge set; reranking alone added 3.', 'Full sources and reliability labels are in the attached digest.'],
+    sumBy: 'research-agent', sum: 'Recommends trying contextual retrieval on the Knowledge vector store; estimated re-index cost is 40 minutes of NPU time.',
+    actions: [['Save to Knowledge', 'Digest saved to Knowledge · Research'], ['Create backlog item', 'Backlog item created: try contextual retrieval']],
+    noDraft: 'Internal agent update: no reply needed.' },
+  { id: 'm6', folder: 'inbox', from: 'certbot on node-02', addr: 'certbot@fleet.autobot.example', time: 'Yesterday', unread: false, starred: false, labels: ['security', 'fleet'],
+    subject: 'Certificate for kb.autobot.example expires in 14 days', snippet: 'Auto-renew failed: DNS-01 challenge timed out (2 attempts).',
+    body: ['Renewal for kb.autobot.example failed twice.', 'DNS-01 challenge timed out. The certificate expires on Oct 24.'],
+    sumBy: 'devops-engineer', sum: 'The DNS API token was rotated in the vault on Oct 2, but certbot still reads the old one from its config file.',
+    actions: [['Open Secrets', 'Opening Secrets · DNS API token'], ['Retry renewal (needs approval)', 'Renewal request sent to Company OS · Approvals']],
+    noDraft: 'No reply suggested: automated sender.' },
+  { id: 'm7', folder: 'inbox', from: 'Grafana', addr: 'reports@fleet.autobot.example', time: 'Yesterday', unread: false, starred: false, labels: ['fleet'],
+    subject: 'Weekly fleet report · week 41', snippet: 'Uptime 99.82% · p95 latency 412 ms · 2 incidents', att: [['fleet-week41.png', '220 KB']], imgs: true,
+    body: ['Uptime 99.82% across 6 nodes.', 'p95 latency 412 ms (down 38 ms). Incidents: node-04 NodeDown (Tue), NPU queue saturation (Wed).'],
+    noDraft: 'No reply suggested: automated sender.' },
+  { id: 'm8', folder: 'inbox', from: 'Object storage billing', addr: 'billing@storage.example', time: 'Oct 8', unread: false, starred: false, labels: ['billing'],
+    subject: 'Invoice for September: €18.40', snippet: 'Your invoice is ready. The card on file will be charged on Oct 15.', att: [['invoice-2026-09.pdf', '58 KB']],
+    body: ['Your September invoice is ready: €18.40.', 'The card on file will be charged on Oct 15.'],
+    sumBy: 'research-agent', sum: 'Within the €20 monthly cap and matches the "object storage" line in Costs & Budget. Agents never act on payment instructions (FORBIDDEN tier).',
+    actions: [['Attach to Costs & Budget', 'Invoice attached to Costs & Budget · October']],
+    noDraft: 'No reply suggested.' },
+  { id: 'm9', folder: 'spam', from: 'Vault Security Team', addr: 'no-reply@vau1t-security.example', time: 'Oct 9', unread: true, starred: false, labels: [],
+    subject: 'Action required: verify your vault credentials within 24 h', snippet: 'Your secrets vault will be locked unless you confirm your master key.',
+    body: ['Your secrets vault will be locked unless you confirm your master key at the link below.'],
+    sumBy: 'devops-engineer', sum: 'Phishing: look-alike domain (vau1t) asking for a credential. Credential disclosure is FORBIDDEN for agents; links are disabled.',
+    actions: [['Block sender', 'Sender blocked']], noDraft: 'Replies to spam are disabled.' },
+  { id: 'm10', folder: 'sent', from: 'You', addr: ME, time: 'Oct 9', unread: false, starred: false, labels: ['fleet'],
+    subject: 'Re: node-04 restart', snippet: 'Approved. Restart the worker and post the health check here.', body: ['Approved. Restart the worker and post the health check here.'] },
+  { id: 'm11', folder: 'sent', from: 'code-agent', addr: 'code-agent@agents.autobot-labs.example', agent: true, time: 'Oct 7', unread: false, starred: false, labels: ['team'],
+    subject: 'Re: Weekly sync agenda', snippet: 'Sent by code-agent after your approval at 09:12.', body: ['Agenda: worker 0.9.4 rollout, flaky frontend tests, Q4 budget.', 'Sent by code-agent after your approval at 09:12.'] },
+  { id: 'm12', folder: 'drafts', from: 'You', addr: ME, time: 'Oct 6', unread: false, starred: false, labels: ['billing'],
+    subject: 'Q4 fleet budget (draft)', snippet: 'Proposal: raise the NPU worker budget to €40 and cap research-agent at €30.', body: ['Proposal: raise the NPU worker budget to €40 and cap research-agent at €30.'] },
+  { id: 'm13', folder: 'archive', from: 'GitHub', addr: 'notifications@github.com', time: 'Oct 2', unread: false, starred: false, labels: ['github'],
+    subject: '[mrveiss/AutoBot-AI] Release v0.9.3', snippet: 'Worker 0.9.3 with NPU queue fixes is out.', body: ['Worker 0.9.3 with NPU queue fixes is out.'] },
+  { id: 'm14', folder: 'trash', from: 'Self-hosting weekly', addr: 'news@selfhosting.example', time: 'Oct 1', unread: false, starred: false, labels: [],
+    subject: 'Issue 212: backups you actually test', snippet: 'This week: restore drills, ZFS snapshots and more.', body: ['This week: restore drills, ZFS snapshots and more.'] }
+];
+
+function pad(n) { return (n < 10 ? '0' : '') + n; }
+function fresh() { return MAIL.map((m, i) => Object.assign({}, m, { ord: i, labels: m.labels.slice() })); }
+function initials(s) { const p = String(s).replace(/[^A-Za-z0-9 -]/g, '').split(/[ -]/).filter(Boolean); return ((p[0] || '?')[0] + (p[1] ? p[1][0] : '')).toUpperCase(); }
+function isExt(a) { const d = String(a).split('@')[1] || ''; return INTERNAL.indexOf(d.toLowerCase()) < 0; }
+function blankCmp() { return { open: false, title: 'New message', to: [], cc: [], bcc: [], toIn: '', ccIn: '', bccIn: '', showCc: false, showBcc: false, subject: '', body: '', att: [], fmt: {}, err: '', from: null, schedOpen: false, saved: '' }; }
+
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    this._key = (e) => this.onKey(e);
+    try { document.addEventListener('keydown', this._key); } catch (e) {}
+    if ((this.state || {}).selId === undefined) this.select('m1');
+  }
+  componentWillUnmount() {
+    try { document.removeEventListener('keydown', this._key); } catch (e) {}
+    clearTimeout(this._tt); clearTimeout(this._mt);
+  }
+  componentDidUpdate() {
+    const st = this.state || {};
+    const open = !!(st.cmp && st.cmp.open);
+    if (open && !this._open) { try { const el = document.getElementById('cmp-to'); if (el) el.focus(); } catch (e) {} }
+    this._open = open;
+    if (st.selId && st.selId !== this._lastSel) {
+      try { const el = document.getElementById('mr-' + st.selId); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+    }
+    this._lastSel = st.selId;
+  }
+  st() { return this.state || {}; }
+  msgs() { return this.st().msgs || fresh(); }
+  ds(id) { const d = this.st().dstat || {}; return d[id] || 'pending'; }
+  now() { const d = new Date(); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  toast(text, undo) {
+    clearTimeout(this._tt);
+    this.setState({ toast: { text: text, undo: undo || null } });
+    this._tt = setTimeout(() => this.setState({ toast: null }), 6000);
+  }
+  visibleFrom(msgs) {
+    const st = this.st();
+    const f = st.folder || 'inbox';
+    const q = (st.q || '').toLowerCase().trim();
+    const fl = st.fl || {};
+    return msgs.filter((m) => {
+      let inF;
+      const live = m.folder !== 'trash' && m.folder !== 'spam';
+      if (f === 'starred') inF = m.starred && live;
+      else if (f === 'agent') inF = !!m.draft && this.ds(m.id) === 'pending' && live;
+      else if (f.indexOf('label:') === 0) inF = m.labels.indexOf(f.slice(6)) >= 0 && live;
+      else inF = m.folder === f;
+      if (!inF) return false;
+      if (fl.unread && !m.unread) return false;
+      if (fl.att && !(m.att && m.att.length)) return false;
+      if (fl.agent && !(m.agent || m.draft)) return false;
+      if (q && (m.from + ' ' + m.subject + ' ' + m.snippet).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    }).sort((a, b) => a.ord - b.ord);
+  }
+  visible() { return this.visibleFrom(this.msgs()); }
+  current() {
+    const st = this.st();
+    const vis = this.visible();
+    return vis.filter((m) => m.id === st.selId)[0] || null;
+  }
+  select(id) {
+    const msgs = this.msgs().map((m) => (m.id === id ? Object.assign({}, m, { unread: false }) : m));
+    this.setState({ selId: id, msgs: msgs, more: false });
+  }
+  step(d) {
+    const vis = this.visible();
+    if (!vis.length) return;
+    const i = vis.map((m) => m.id).indexOf(this.st().selId);
+    const j = i < 0 ? 0 : Math.max(0, Math.min(vis.length - 1, i + d));
+    this.select(vis[j].id);
+  }
+  pickFolder(f) { this.setState({ folder: f, sel: {}, labMenu: false, more: false, selId: null }); }
+  apply(ids, op, lab) {
+    if (!ids.length) return;
+    const prev = this.msgs();
+    const st = this.st();
+    const vis = this.visibleFrom(prev);
+    const next = prev.map((m) => {
+      if (ids.indexOf(m.id) < 0) return m;
+      if (op === 'archive') return Object.assign({}, m, { folder: 'archive', unread: false });
+      if (op === 'delete') return Object.assign({}, m, { folder: 'trash' });
+      if (op === 'spam') return Object.assign({}, m, { folder: 'spam' });
+      if (op === 'read') return Object.assign({}, m, { unread: false });
+      if (op === 'unread') return Object.assign({}, m, { unread: true });
+      if (op === 'star') return Object.assign({}, m, { starred: !m.starred });
+      if (op === 'label') return Object.assign({}, m, { labels: m.labels.indexOf(lab) < 0 ? m.labels.concat([lab]) : m.labels });
+      return m;
+    });
+    let selId = st.selId;
+    if (['archive', 'delete', 'spam'].indexOf(op) >= 0 && ids.indexOf(selId) >= 0) {
+      const order = vis.map((m) => m.id);
+      const i = order.indexOf(selId);
+      const rest = order.slice(i + 1).concat(order.slice(0, i).reverse()).filter((id) => ids.indexOf(id) < 0);
+      selId = rest[0] || null;
+      if (selId) next.forEach((m, k) => { if (m.id === selId) next[k] = Object.assign({}, m, { unread: false }); });
+    }
+    if (op === 'unread') selId = null;
+    const n = ids.length;
+    const noun = n === 1 ? 'conversation' : 'conversations';
+    const words = { archive: 'Archived', delete: 'Moved to Trash:', spam: 'Reported as spam:', read: 'Marked as read:', unread: 'Marked as unread:', star: 'Updated star on', label: 'Labelled "' + (LBL[lab] ? LBL[lab][1] : '') + '":' };
+    this.setState({ msgs: next, sel: {}, selId: selId, labMenu: false, more: false });
+    if (op !== 'star') this.toast(words[op] + ' ' + n + ' ' + noun, prev);
+  }
+  setC(patch) { this.setState({ cmp: Object.assign({}, this.st().cmp || blankCmp(), patch) }); }
+  cmp() { return this.st().cmp || blankCmp(); }
+  openCompose(preset) {
+    if (this.st().net === 'error') { /* compose still allowed; sends queue */ }
+    this.setState({ cmp: Object.assign(blankCmp(), preset || {}, { open: true }), more: false });
+  }
+  closeCompose() { this.setState({ cmp: blankCmp() }); }
+  reply(mode, m) {
+    m = m || this.current();
+    if (!m) return;
+    if (mode === 'fwd') { this.openCompose({ title: 'Forward', subject: 'Fwd: ' + m.subject, body: '\n\n---------- Forwarded message ----------\nFrom: ' + m.from + ' <' + m.addr + '>\n' + (m.body || []).join('\n'), att: (m.att || []).slice() }); return; }
+    const to = m.addr === ME ? [] : [m.addr];
+    this.openCompose({ title: mode === 'all' ? 'Reply all' : 'Reply', to: to, cc: mode === 'all' ? (m.cc || []).slice() : [], showCc: mode === 'all' && !!(m.cc && m.cc.length), subject: /^Re:/.test(m.subject) ? m.subject : 'Re: ' + m.subject });
+  }
+  addChip(k) {
+    const c = this.cmp();
+    const raw = (c[k + 'In'] || '').trim().replace(/[,;]$/, '');
+    if (!raw) return false;
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw)) { this.setC({ err: '"' + raw + '" is not a valid email address' }); return false; }
+    const patch = { err: '' };
+    patch[k] = c[k].indexOf(raw) < 0 ? c[k].concat([raw]) : c[k];
+    patch[k + 'In'] = '';
+    this.setC(patch);
+    return true;
+  }
+  send(when) {
+    const st = this.st();
+    let c = this.cmp();
+    ['to', 'cc', 'bcc'].forEach((k) => {
+      const raw = (c[k + 'In'] || '').trim();
+      if (raw && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw)) { c = Object.assign({}, c); c[k] = c[k].concat([raw]); c[k + 'In'] = ''; }
+    });
+    if (!c.to.length) { this.setState({ cmp: Object.assign({}, c, { err: 'Add at least one recipient in To' }) }); return; }
+    const msg = { id: 's' + Date.now(), ord: -1, folder: 'sent', from: 'You', addr: ME, time: when ? 'Scheduled' : this.now(), unread: false, starred: false, labels: [], subject: c.subject || '(no subject)', snippet: (c.body || '').replace(/\s+/g, ' ').slice(0, 90) || '(no text)', body: (c.body || '').split('\n').filter((x) => x.trim()), att: c.att.slice() };
+    const dstat = Object.assign({}, st.dstat || {});
+    if (c.from) dstat[c.from] = 'sent';
+    this.setState({ msgs: [msg].concat(this.msgs()), cmp: blankCmp(), dstat: dstat });
+    const who = c.to[0] + (c.to.length + c.cc.length + c.bcc.length > 1 ? ' and others' : '');
+    if (when) this.toast('Scheduled for ' + when + ' to ' + who);
+    else if (st.net === 'offline') this.toast('Queued: sends to ' + who + ' when you are back online');
+    else this.toast('Message sent to ' + who);
+  }
+  saveDraft() {
+    const c = this.cmp();
+    const msg = { id: 'd' + Date.now(), ord: -1, folder: 'drafts', from: 'You', addr: ME, time: this.now(), unread: false, starred: false, labels: [], subject: c.subject || '(no subject)', snippet: (c.body || '').slice(0, 90) || 'To: ' + (c.to.join(', ') || 'nobody yet'), body: (c.body || '').split('\n').filter((x) => x.trim()), att: c.att.slice() };
+    this.setState({ msgs: [msg].concat(this.msgs()), cmp: blankCmp() });
+    this.toast('Draft saved to Drafts');
+  }
+  setDraft(id, s) {
+    const d = Object.assign({}, this.st().dstat || {});
+    d[id] = s;
+    this.setState({ dstat: d });
+  }
+  approve(m) {
+    const off = this.st().net === 'offline';
+    this.setDraft(m.id, 'sent');
+    const sentMsg = { id: 'a' + Date.now(), ord: -1, folder: 'sent', from: m.draft.agent, addr: m.draft.agent + '@agents.autobot-labs.example', agent: true, time: this.now(), unread: false, starred: false, labels: m.labels.slice(), subject: 'Re: ' + m.subject, snippet: 'Sent by ' + m.draft.agent + ' after your approval.', body: m.draft.body.split('\n').filter((x) => x.trim()) };
+    this.setState({ msgs: [sentMsg].concat(this.msgs()) });
+    this.toast(off ? 'Approved · queued until you are back online' : 'Approved · ' + m.draft.agent + ' sent the reply');
+  }
+  onKey(e) {
+    const st = this.st();
+    const t = e.target || {};
+    const tag = (t.tagName || '').toLowerCase();
+    if (e.key === 'Escape') {
+      if (st.cmp && st.cmp.open) { if (st.cmp.schedOpen) this.setC({ schedOpen: false }); else this.closeCompose(); e.preventDefault(); }
+      else if (st.more || st.labMenu) this.setState({ more: false, labMenu: false });
+      return;
+    }
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || t.isContentEditable) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (st.cmp && st.cmp.open) return;
+    const cur = this.current();
+    const k = e.key;
+    if (k === 'j') this.step(1);
+    else if (k === 'k') this.step(-1);
+    else if (k === 'e' && cur) this.apply([cur.id], 'archive');
+    else if (k === '#' && cur) this.apply([cur.id], 'delete');
+    else if (k === 's' && cur) this.apply([cur.id], 'star');
+    else if (k === 'r' && cur) this.reply('one');
+    else if (k === 'a' && cur) this.reply('all');
+    else if (k === 'f' && cur) this.reply('fwd');
+    else if (k === 'c') this.openCompose();
+    else if (k === '/') { try { const el = document.getElementById('mb-q'); if (el) el.focus(); } catch (err) {} }
+    else return;
+    e.preventDefault();
+  }
+  mToast(text) {
+    clearTimeout(this._mt);
+    this.setState({ mtoast: text });
+    this._mt = setTimeout(() => this.setState({ mtoast: '' }), 3000);
+  }
+  renderVals() {
+    const st = this.st();
+    const cur = st.theme || this.props.theme || 'light';
+    const msgs = this.msgs();
+    const folder = st.folder || 'inbox';
+    const net = st.net || 'online';
+    const sel = st.sel || {};
+    const fl = st.fl || {};
+    const vis = this.visibleFrom(msgs);
+    const live = (m) => m.folder !== 'trash' && m.folder !== 'spam';
+    const nSel = vis.filter((m) => sel[m.id]).length;
+    const selIds = vis.filter((m) => sel[m.id]).map((m) => m.id);
+    const pending = msgs.filter((m) => m.draft && this.ds(m.id) === 'pending' && live(m)).length;
+    const fdOf = (id, count) => ({ cls: folder === id ? 'on' : '', cur: folder === id ? 'page' : 'false', pick: () => this.pickFolder(id), count: count });
+    const anyFilter = !!(fl.unread || fl.att || fl.agent || (st.q || '').trim());
+    const m = vis.filter((x) => x.id === st.selId)[0] || null;
+
+    let rd = {};
+    if (m) {
+      const dst = this.ds(m.id);
+      const earlier = m.earlier || [];
+      const exp = !!(st.expanded || {})[m.id];
+      const imgs = !!(st.imgs || {})[m.id];
+      rd = {
+        subject: m.subject, from: m.from, addr: m.addr, time: m.time, ini: initials(m.from),
+        to: m.folder === 'sent' ? 'recipients' : 'me' + (m.cc ? ', ' + m.cc.join(', ') : ''),
+        labels: m.labels.map((l) => ({ name: LBL[l][1], sw: LBL[l][2] })),
+        countText: (earlier.length + 1) + (earlier.length ? ' messages' : ' message') + (m.att && m.att.length ? ' · ' + m.att.length + ' attachment' + (m.att.length > 1 ? 's' : '') : ''),
+        hasEarlier: earlier.length > 0, collapsed: earlier.length > 0 && !exp, expanded: earlier.length > 0 && exp,
+        earlierCount: String(earlier.length),
+        earlierNames: earlier.map((x) => x[0]).join(', '),
+        earlier: earlier.map((x) => ({ from: x[0], time: x[1], text: x[2], agent: !!x[3], ini: initials(x[0]) })),
+        toggleEarlier: () => { const o = Object.assign({}, st.expanded || {}); o[m.id] = !exp; this.setState({ expanded: o }); },
+        imgsBlocked: !!m.imgs && !imgs,
+        loadImgs: () => { const o = Object.assign({}, st.imgs || {}); o[m.id] = true; this.setState({ imgs: o }); this.toast('Remote images loaded for this message'); },
+        body: (m.body || []).map((t) => ({ t: t })),
+        hasAtt: !!(m.att && m.att.length),
+        att: (m.att || []).map((a) => ({ name: a[0], size: a[1], open: () => this.toast('Opening ' + a[0] + ' in preview (sanitised)') })),
+        hasSummary: !!m.sum, sumText: m.sum || '', sumBy: m.sumBy || 'AutoBot',
+        actions: (m.actions || []).map((a) => ({ label: a[0], run: () => this.toast(a[1]) })),
+        hasDraft: !!m.draft,
+        noDraft: !m.draft && !!m.noDraft, noDraftText: m.noDraft || '',
+        dAgent: m.draft ? m.draft.agent : '', dTier: m.draft ? m.draft.tier : '', dTierCls: m.draft ? TIER_CLS[m.draft.tier] : 'idle',
+        dWhy: m.draft ? m.draft.why : '', dBody: m.draft ? m.draft.body : '',
+        dPending: !!m.draft && dst === 'pending', dSent: !!m.draft && dst === 'sent', dGone: !!m.draft && dst === 'discarded',
+        dSentText: m.draft ? (m.draft.agent + ' sent it after your approval. It is in Sent.') : '',
+        approveText: net === 'offline' ? 'Approve & queue' : 'Approve & send',
+        approve: () => this.approve(m),
+        edit: () => this.openCompose({ title: 'Edit ' + m.draft.agent + "'s draft", to: m.addr === ME ? [] : [m.addr], subject: 'Re: ' + m.subject, body: m.draft.body, from: m.id }),
+        discard: () => { this.setDraft(m.id, 'discarded'); this.toast('Draft discarded'); },
+        restore: () => this.setDraft(m.id, 'pending'),
+        reply: () => this.reply('one'), replyAll: () => this.reply('all'), forward: () => this.reply('fwd'),
+        archive: () => this.apply([m.id], 'archive'), del: () => this.apply([m.id], 'delete'),
+        more: !!st.more, moreOpen: st.more ? 'true' : 'false', toggleMore: () => this.setState({ more: !st.more }),
+        markUnread: () => this.apply([m.id], 'unread'),
+        star: () => { this.apply([m.id], 'star'); this.setState({ more: false }); }, starText: m.starred ? 'Remove star' : 'Add star',
+        snooze: () => { this.setState({ more: false }); this.toast('Snoozed until Monday 08:00'); },
+        spam: () => this.apply([m.id], 'spam')
+      };
+    }
+
+    const c = this.cmp();
+    const recips = c.to.concat(c.cc, c.bcc);
+    const ext = recips.filter(isExt);
+    const fields = [['to', 'To']].concat(c.showCc ? [['cc', 'Cc']] : [], c.showBcc ? [['bcc', 'Bcc']] : []).map((f) => {
+      const k = f[0];
+      return {
+        label: f[1], id: 'cmp-' + k, val: c[k + 'In'],
+        chips: c[k].map((a) => ({ addr: a, ext: isExt(a), removeLabel: 'Remove ' + a, remove: () => { const p = {}; p[k] = this.cmp()[k].filter((x) => x !== a); this.setC(p); } })),
+        onInput: (e) => { const p = { err: '' }; p[k + 'In'] = e.target.value; this.setC(p); },
+        onKey: (e) => {
+          const cc = this.cmp();
+          if (e.key === 'Enter' || e.key === ',' || e.key === ';') { e.preventDefault(); this.addChip(k); }
+          else if (e.key === 'Tab' && (cc[k + 'In'] || '').trim()) { this.addChip(k); }
+          else if (e.key === 'Backspace' && !cc[k + 'In'] && cc[k].length) { const p = {}; p[k] = cc[k].slice(0, -1); this.setC(p); }
+        }
+      };
+    });
+    const TOOLS = [['b', 'B', 'Bold'], ['i', 'I', 'Italic'], ['u', 'U', 'Underline'], ['ul', '•', 'Bulleted list'], ['q', '“', 'Quote'], ['link', '⛓', 'Insert link']];
+    const fmt = c.fmt || {};
+    const mInbox = msgs.filter((x) => x.folder === 'inbox').sort((a, b) => a.ord - b.ord);
+    const mv = st.mv || 'list';
+    const mm = msgs.filter((x) => x.id === st.mId)[0];
+    const mds = mm ? this.ds(mm.id) : '';
+
+    return {
+      theme: cur,
+      themes: THEMES.map(([id, label]) => ({ label: label, cls: id === cur ? 'on' : '', pressed: id === cur ? 'true' : 'false', pick: () => this.setState({ theme: id }) })),
+      nets: [['online', 'Online'], ['error', 'Sync error'], ['offline', 'Offline']].map(([id, label]) => ({ label: label, cls: id === net ? 'on' : '', pressed: id === net ? 'true' : 'false', pick: () => this.setState({ net: id }) })),
+      netErr: net === 'error', netOff: net === 'offline',
+      syncDot: net === 'online' ? 'd-ok' : (net === 'error' ? 'd-bad' : 'd-warn'),
+      syncText: net === 'online' ? 'Synced 10:41 · IMAP connector' : (net === 'error' ? 'Sync error since 10:31' : 'Offline · cached'),
+      retrySync: () => { this.setState({ net: 'online' }); this.toast('Reconnected · synced just now'); },
+      inboxZero: () => { const ids = msgs.filter((x) => x.folder === 'inbox').map((x) => x.id); this.setState({ folder: 'inbox', q: '', fl: {} }); this.apply(ids, 'archive'); },
+      resetDemo: () => this.setState({ msgs: null, folder: 'inbox', selId: 'm1', sel: {}, fl: {}, q: '', dstat: {}, expanded: {}, imgs: {}, cmp: blankCmp(), toast: null, net: 'online', mv: 'list', mId: null }),
+      openCompose: () => this.openCompose(),
+      fd: {
+        inbox: fdOf('inbox', String(msgs.filter((x) => x.folder === 'inbox' && x.unread).length)),
+        starred: fdOf('starred', ''), sent: fdOf('sent', ''),
+        drafts: fdOf('drafts', String(msgs.filter((x) => x.folder === 'drafts').length)),
+        agent: fdOf('agent', String(pending)),
+        archive: fdOf('archive', ''),
+        spam: fdOf('spam', String(msgs.filter((x) => x.folder === 'spam').length)),
+        trash: fdOf('trash', '')
+      },
+      labelNav: LABELS.map((l) => ({ name: l[1], sw: l[2], cls: folder === 'label:' + l[0] ? 'on' : '', cur: folder === 'label:' + l[0] ? 'page' : 'false', count: String(msgs.filter((x) => live(x) && x.labels.indexOf(l[0]) >= 0).length), pick: () => this.pickFolder('label:' + l[0]) })),
+      q: st.q || '',
+      onQ: (e) => this.setState({ q: e.target.value }),
+      filters: [['unread', 'Unread'], ['att', 'Has attachment'], ['agent', 'From agents']].map(([id, label]) => ({ label: label, pressed: fl[id] ? 'true' : 'false', toggle: () => { const o = Object.assign({}, fl); o[id] = !o[id]; this.setState({ fl: o }); } })),
+      headChecked: nSel === 0 ? 'false' : (nSel === vis.length ? 'true' : 'mixed'),
+      toggleAll: () => { const o = {}; if (nSel < vis.length) vis.forEach((x) => { o[x.id] = true; }); this.setState({ sel: o, labMenu: false }); },
+      hasSel: nSel > 0, noSel: nSel === 0, nSel: String(nSel),
+      bulkArchive: () => this.apply(selIds, 'archive'),
+      bulkRead: () => this.apply(selIds, 'read'),
+      bulkDelete: () => this.apply(selIds, 'delete'),
+      labMenu: !!st.labMenu, labMenuOpen: st.labMenu ? 'true' : 'false',
+      toggleLabMenu: () => this.setState({ labMenu: !st.labMenu }),
+      labelOpts: LABELS.map((l) => ({ name: l[1], sw: l[2], apply: () => this.apply(selIds, 'label', l[0]) })),
+      folderName: folder.indexOf('label:') === 0 ? 'Label · ' + LBL[folder.slice(6)][1] : FNAME[folder],
+      visCount: vis.length + (vis.length === 1 ? ' conversation' : ' conversations'),
+      rows: vis.map((x) => ({
+        domId: 'mr-' + x.id,
+        cls: (x.id === st.selId ? 'cur ' : '') + (x.unread ? 'unread ' : '') + (sel[x.id] ? 'chk' : ''),
+        from: x.from, subject: x.subject, snippet: x.snippet, time: x.time,
+        unread: !!x.unread, agent: !!x.agent, hasAtt: !!(x.att && x.att.length),
+        pendingDraft: !!x.draft && this.ds(x.id) === 'pending',
+        labels: x.labels.map((l) => ({ name: LBL[l][1], sw: LBL[l][2] })),
+        checked: sel[x.id] ? 'true' : 'false', selLabel: 'Select: ' + x.subject,
+        starred: x.starred ? 'true' : 'false', starLabel: (x.starred ? 'Unstar: ' : 'Star: ') + x.subject, starCls: x.starred ? 'i2' : 'iw',
+        current: x.id === st.selId ? 'true' : 'false',
+        toggleSel: () => { const o = Object.assign({}, sel); o[x.id] = !o[x.id]; this.setState({ sel: o }); },
+        toggleStar: () => this.apply([x.id], 'star'),
+        open: () => this.select(x.id)
+      })),
+      listEmpty: vis.length === 0,
+      zero: vis.length === 0 && folder === 'inbox' && !anyFilter,
+      noMatch: vis.length === 0 && !(folder === 'inbox' && !anyFilter),
+      emptyTitle: anyFilter ? 'No messages match' : (folder === 'agent' ? 'No drafts waiting' : 'Nothing in ' + (FNAME[folder] || 'this label')),
+      emptyText: anyFilter ? 'Try fewer filters or a shorter search.' : (folder === 'agent' ? 'Every agent draft has been approved or discarded.' : 'Messages you move here will show up in this list.'),
+      canClear: anyFilter,
+      clearFilters: () => this.setState({ q: '', fl: {} }),
+      hasRd: !!m, noRd: !m, rd: rd,
+      cmpOpen: !!c.open,
+      cmp: {
+        title: c.title, saved: c.from ? 'Agent draft · editing' : '',
+        ccOn: c.showCc ? 'true' : 'false', bccOn: c.showBcc ? 'true' : 'false',
+        toggleCc: () => this.setC({ showCc: !c.showCc }), toggleBcc: () => this.setC({ showBcc: !c.showBcc }),
+        fields: fields,
+        subject: c.subject, onSubject: (e) => this.setC({ subject: e.target.value }),
+        body: c.body, onBody: (e) => this.setC({ body: e.target.value }),
+        fw: fmt.b ? '600' : '400', fs: fmt.i ? 'italic' : 'normal', td: fmt.u ? 'underline' : 'none',
+        tools: TOOLS.map((t) => ({ glyph: t[1], label: t[2], pressed: fmt[t[0]] ? 'true' : 'false', toggle: () => { const o = Object.assign({}, this.cmp().fmt || {}); o[t[0]] = !o[t[0]]; this.setC({ fmt: o }); } })),
+        attach: () => { const a = SAMPLE_ATT[c.att.length % SAMPLE_ATT.length]; this.setC({ att: c.att.concat([a]) }); },
+        hasAtt: c.att.length > 0,
+        att: c.att.map((a, i) => ({ name: a[0], size: a[1], removeLabel: 'Remove attachment ' + a[0], remove: () => this.setC({ att: this.cmp().att.filter((x, j) => j !== i) }) })),
+        riskTier: ext.length ? 'HIGH' : (recips.length ? 'MODERATE' : 'SAFE'),
+        riskCls: ext.length ? 'bad' : (recips.length ? 'warn' : 'ok'),
+        riskText: ext.length ? ext.length + ' external address' + (ext.length > 1 ? 'es' : '') + '. You are sending as yourself; an agent would need sign-off.' : (recips.length ? 'Internal recipients only.' : 'No recipients yet.'),
+        hasErr: !!c.err, err: c.err,
+        sendText: net === 'offline' ? 'Queue send' : 'Send',
+        send: () => this.send(null),
+        schedOpen: !!c.schedOpen, schedExp: c.schedOpen ? 'true' : 'false',
+        toggleSched: () => this.setC({ schedOpen: !c.schedOpen }),
+        slots: ['Today 18:00', 'Monday 08:00', 'Tuesday 09:00'].map((s) => ({ label: s, pick: () => this.send(s) })),
+        saveDraft: () => this.saveDraft(),
+        close: () => this.closeCompose()
+      },
+      hasToast: !!st.toast, toastText: st.toast ? st.toast.text : '', canUndo: !!(st.toast && st.toast.undo),
+      undo: () => { const t = st.toast; if (t && t.undo) { this.setState({ msgs: t.undo, toast: { text: 'Undone', undo: null } }); } },
+      mList: mv === 'list', mDetail: mv === 'detail' && !!mm, mCmp: mv === 'compose',
+      mUnread: String(mInbox.filter((x) => x.unread).length),
+      mEmpty: mInbox.length === 0,
+      mRows: mInbox.map((x) => ({ cls: x.unread ? 'unread' : '', from: x.from, time: x.time, subject: x.subject, snippet: x.snippet, unread: !!x.unread, hasAtt: !!(x.att && x.att.length), pendingDraft: !!x.draft && this.ds(x.id) === 'pending', open: () => { const next = msgs.map((y) => (y.id === x.id ? Object.assign({}, y, { unread: false }) : y)); this.setState({ mv: 'detail', mId: x.id, msgs: next }); } })),
+      mBack: () => this.setState({ mv: 'list' }),
+      mCompose: () => this.setState({ mv: 'compose', mSubj: mm && mv === 'detail' ? 'Re: ' + mm.subject : '' }),
+      mSubj: st.mSubj || '',
+      mSend: () => { this.setState({ mv: 'list' }); this.mToast(net === 'offline' ? 'Queued for sending' : 'Message sent'); },
+      mHasToast: !!st.mtoast, mToast: st.mtoast || '',
+      md: mm ? {
+        subject: mm.subject, from: mm.from, time: mm.time, ini: initials(mm.from),
+        countText: ((mm.earlier || []).length + 1) + ' in thread',
+        hasSummary: !!mm.sum, sumText: mm.sum || '',
+        body: (mm.body || []).map((t) => ({ t: t })),
+        hasDraft: !!mm.draft && mds === 'pending', dSent: !!mm.draft && mds === 'sent', dBody: mm.draft ? mm.draft.body : '',
+        approve: () => { this.approve(mm); this.mToast('Approved · reply sent'); },
+        discard: () => { this.setDraft(mm.id, 'discarded'); this.mToast('Draft discarded'); },
+        archive: () => { this.apply([mm.id], 'archive'); this.setState({ mv: 'list' }); this.mToast('Archived'); },
+        del: () => { this.apply([mm.id], 'delete'); this.setState({ mv: 'list' }); this.mToast('Moved to Trash'); }
+      } : {}
+    };
+  }
+}
+</script>
+</body>
+</html>

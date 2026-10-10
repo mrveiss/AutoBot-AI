@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot Goal Tree</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.lv{font-size:10.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:5px;border:var(--bw) solid var(--border);white-space:nowrap;color:var(--text)}
+.lv-vision{background:var(--i3t)}.lv-mission{background:var(--i2t)}.lv-objective{background:var(--i1t)}.lv-kr{background:var(--surface)}
+.g{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;min-height:36px}
+.g:hover{background:var(--surface2)}
+.g .tt{flex:1 1 220px;min-width:0;font-size:13.5px;font-weight:600}
+.g .own{font-size:12px;color:var(--muted);white-space:nowrap}
+.g .pg{display:flex;align-items:center;gap:8px;flex:0 0 140px}
+.g .pg .bar{flex:1}
+.g .pc{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;width:36px;text-align:right}
+.chev{width:26px;height:26px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);display:grid;place-items:center;cursor:pointer;flex:none;padding:0}
+.branch{margin-left:22px;padding-left:10px;border-left:var(--bw) solid var(--border)}
+.cnt{font-size:11.5px;font-weight:500;padding:2px 8px;border-radius:5px;background:var(--surface2);border:var(--bw) solid var(--border);color:var(--text2);white-space:nowrap}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html" class="on" aria-current="page">Company OS</a>
+    <a href="Analytics.dc.html" class="adv">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="ThemeManager.dc.html" class="adv" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon adv" aria-label="Plugins" data-tip="Plugins" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Admin panel" data-tip="Admin panel" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="Preferences.dc.html" aria-label="Profile settings" data-tip="Profile settings" data-tip-pos="left" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer; display: grid; place-items: center; text-decoration: none">MV</a>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+
+    <aside class="sub" aria-label="Company OS" style="flex: 1 1 220px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+      <button type="button" style="margin: 0 0 6px; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 8px; border: var(--bw) solid var(--border); background: var(--surface2); font: inherit; font-size: 14px; font-weight: 600; color: var(--text); cursor: pointer; text-align: left">
+        <span style="width: 26px; height: 26px; border-radius: 6px; background: var(--brand-bg); color: var(--brand-fg); display: grid; place-items: center; font-size: 12px">AL</span><span style="flex-grow: 1; display: flex; flex-direction: column; line-height: 1.2">AutoBot Labs<span style="font-size: 11.5px; font-weight: 400; color: var(--muted)">Company OS</span></span><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+      <p class="sect">Overview</p>
+      <a href="CompanyOS.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5" class="i3"/><rect x="13" y="3" width="8" height="5" rx="1.5" class="i1"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5" class="i2"/></svg>Dashboard</a>
+      <a href="ReviewInbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>My Reviews</a>
+      <a href="Approvals.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Approvals<span class="pill warn" style="margin-left: auto">3</span></a>
+      <a href="Activity.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-6 4 3 7-9"/></svg>Activity</a>
+      <a href="CeoChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="it3"/></svg>CEO Chat</a>
+      <p class="sect">Work</p>
+      <a href="Backlog.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Backlog</a>
+      <a href="Boards.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1" class="it1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1" class="it2"/></svg>Boards</a>
+      <a href="Portfolios.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2" class="it2"/><path d="M9 7V5h6v2M3 12h18"/></svg>Portfolios</a>
+      <a href="Timeline.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9M8 12h12M4 18h7"/></svg>Timeline</a>
+      <a href="Goals.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4" class="it3"/></svg>Goals</a>
+      <a href="Automation.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L5 14h6l-1 8 8-12h-6z" class="it2"/></svg>Automation</a>
+      <a href="Routines.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>Routines</a>
+      <p class="sect">Organization</p>
+      <a href="OrgChart.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="5" rx="1" class="it2"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/></svg>Org Chart</a>
+      <a href="Members.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/></svg>Members</a>
+      <a href="Roles.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M14 10h4M14 14h3"/></svg>Roles</a>
+      <a href="Costs.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it2"/><path d="M12 7v10"/></svg>Costs &amp; Budget</a>
+      <a href="HeartbeatMonitor.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-4 4 8 2-4h6"/></svg>Heartbeat</a>
+      <a href="Portability.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h8M13 9l3 3-3 3"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg>Portability</a>
+      <a href="CompanySecrets.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3"/></svg>Secrets</a>
+      <div class="only-min minnote" style="margin: 16px 10px 0; padding-top: 12px; border-top: var(--bw) solid var(--line)"><span>Showing essentials</span><button type="button" class="linkbtn" onClick="{{showAll}}">Show all features</button></div>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 20px">
+      <header style="display: flex; flex-wrap: wrap; gap: 14px; align-items: center">
+        <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1">
+          <span class="sub2"><a href="CompanyOS.dc.html" style="color: var(--muted); text-decoration: none">Company OS</a> / Goals</span>
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">Goal Tree</h1>
+          <p class="sub2" style="margin: 0">Vision → mission → objectives → key results. Click a goal to see its linked work items.</p>
+          <span class="only-min minnote"><span>Showing essentials · status chart and item IDs hidden</span><button type="button" class="linkbtn" onClick="{{showAll}}">Show all features</button></span>
+        </div>
+        <button type="button" class="btn">Collapse all</button>
+        <button type="button" class="btn pri"><svg class="ic sonp" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New Goal</button>
+      </header>
+
+      <section aria-label="Goal summary" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px">
+        <div class="card kpi"><span class="tile lg"><svg class="ic" width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><path d="M8 40h32"/><path d="M14 40V20l10-10 10 10v20" class="it3"/><path d="M24 10V4l6 3-6 3" class="i3"/></svg></span><div><span>vision · missions</span><b>1 · 2</b></div></div>
+        <div class="card kpi"><span class="tile lg"><svg class="ic" width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="14" class="i1"/><circle cx="24" cy="24" r="6" class="iw"/></svg></span><div><span>objectives</span><b>5</b></div></div>
+        <div class="card kpi"><span class="tile lg"><svg class="ic" width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><rect x="8" y="10" width="32" height="28" rx="4" class="iw"/><path d="M14 30l6-7 5 4 8-10"/><circle cx="33" cy="17" r="3" class="i2"/></svg></span><div><span>key results · 3 achieved</span><b>11</b></div></div>
+        <div class="card kpi">
+          <svg width="44" height="44" viewBox="0 0 52 52" aria-hidden="true" style="flex: none"><circle cx="26" cy="26" r="20" fill="none" style="stroke: var(--bar-track)" stroke-width="9"/><circle cx="26" cy="26" r="20" fill="none" style="stroke: var(--bar)" stroke-width="9" stroke-dasharray="79.2 125.7" transform="rotate(-90 26 26)"/><circle cx="26" cy="26" r="24.5" fill="none" style="stroke: var(--stroke)" stroke-width="1"/><circle cx="26" cy="26" r="15.5" fill="none" style="stroke: var(--stroke)" stroke-width="1"/></svg>
+          <div><span data-tip="Average key-result progress, rolled up the goal tree">overall progress</span><b>63%</b></div>
+        </div>
+      </section>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 16px; align-items: start">
+
+        <section class="card" aria-labelledby="gt">
+          <div class="ch" style="flex-wrap: wrap">
+            <h2 id="gt">Q4 2026</h2>
+            <span class="adv" style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center"><span class="lv lv-vision" data-tip="Long-term direction the whole company works toward" data-tip-pos="bottom">vision</span><span class="lv lv-mission" data-tip="Broad outcome that serves the vision" data-tip-pos="bottom">mission</span><span class="lv lv-objective" data-tip="Concrete goal for this quarter under a mission" data-tip-pos="bottom">objective</span><span class="lv lv-kr" data-tip="Measurable target that proves an objective is met" data-tip-pos="bottom">key_result</span></span>
+          </div>
+          <div style="padding: 10px 8px; display: flex; flex-direction: column; gap: 2px">
+            <div class="g">
+              <button type="button" class="chev" aria-label="Collapse goal" aria-expanded="true" data-tip="Collapse goal"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+              <span class="lv lv-vision">vision</span>
+              <span class="tt">A self-hosted AI platform small teams run without a cloud bill</span>
+              <span class="own">ceo-agent</span>
+              <span class="pill ok">active</span>
+              <span class="pg"><span class="bar"><span class="bf" style="display: block; width: 63%"></span></span><span class="pc">63%</span></span>
+            </div>
+            <div class="branch">
+              <div class="g">
+                <button type="button" class="chev" aria-label="Collapse goal" aria-expanded="true" data-tip="Collapse goal"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+                <span class="lv lv-mission">mission</span>
+                <span class="tt">Make local inference fast on every fleet node</span>
+                <span class="own">performance-engineer</span>
+                <span class="pill ok">active</span>
+                <span class="pg"><span class="bar"><span class="bf" style="display: block; width: 58%"></span></span><span class="pc">58%</span></span>
+              </div>
+              <div class="branch">
+                <div class="g" aria-current="true" style="background: var(--surface2); outline: var(--bw) solid var(--border); border-left: 3px solid var(--accent)">
+                  <button type="button" class="chev" aria-label="Collapse goal" aria-expanded="true" data-tip="Collapse goal"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+                  <span class="lv lv-objective">objective</span>
+                  <span class="tt">Run INT4 models on the NPU worker</span>
+                  <span class="own">performance-engineer</span>
+                  <span class="pill ok">active</span>
+                  <span class="pg"><span class="bar"><span class="bf" style="display: block; width: 66%"></span></span><span class="pc">66%</span></span>
+                  <span class="cnt" data-tip="Work items linked to this goal">6 items</span>
+                </div>
+                <div class="branch">
+                  <div class="g"><span style="width: 26px; flex: none"></span><span class="lv lv-kr">key_result</span><span class="tt">p50 latency under 180 ms on node-03</span><span class="own">performance-engineer</span><span class="pill idle" data-tip="Target met — no further work tracked">achieved</span><span class="pg"><span class="bar"><span class="bf" style="display: block; width: 100%"></span></span><span class="pc">100%</span></span><span class="cnt">2 items</span></div>
+                  <div class="g"><span style="width: 26px; flex: none"></span><span class="lv lv-kr">key_result</span><span class="tt">OpenVINO export for 3 production models</span><span class="own">code-agent</span><span class="pill ok">active</span><span class="pg"><span class="bar"><span class="bf" style="display: block; width: 67%"></span></span><span class="pc">67%</span></span><span class="cnt">3 items</span></div>
+                  <div class="g"><span style="width: 26px; flex: none"></span><span class="lv lv-kr">key_result</span><span class="tt">Zero OOM restarts for 14 days</span><span class="own">devops-engineer</span><span class="pill warn" data-tip="On hold — paused until a blocker is resolved">on_hold</span><span class="pg"><span class="bar"><span class="bf alert" style="display: block; width: 30%"></span></span><span class="pc">30%</span></span><span class="cnt">1 items</span></div>
+                </div>
+                <div class="g">
+                  <button type="button" class="chev" aria-label="Expand goal" aria-expanded="false" data-tip="Expand goal"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+                  <span class="lv lv-objective">objective</span>
+                  <span class="tt">Fleet health visible in one place</span>
+                  <span class="own">devops-engineer</span>
+                  <span class="pill ok">active</span>
+                  <span class="pg"><span class="bar"><span class="bf" style="display: block; width: 45%"></span></span><span class="pc">45%</span></span>
+                  <span class="cnt">4 items</span>
+                </div>
+              </div>
+              <div class="g">
+                <button type="button" class="chev" aria-label="Collapse goal" aria-expanded="true" data-tip="Collapse goal"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+                <span class="lv lv-mission">mission</span>
+                <span class="tt">Answers grounded in the knowledge base</span>
+                <span class="own">research-agent</span>
+                <span class="pill ok">active</span>
+                <span class="pg"><span class="bar"><span class="bf" style="display: block; width: 71%"></span></span><span class="pc">71%</span></span>
+              </div>
+              <div class="branch">
+                <div class="g">
+                  <button type="button" class="chev" aria-label="Expand goal" aria-expanded="false" data-tip="Expand goal"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+                  <span class="lv lv-objective">objective</span>
+                  <span class="tt">Contextual retrieval in the vector store</span>
+                  <span class="own">research-agent</span>
+                  <span class="pill ok">active</span>
+                  <span class="pg"><span class="bar"><span class="bf" style="display: block; width: 80%"></span></span><span class="pc">80%</span></span>
+                  <span class="cnt">5 items</span>
+                </div>
+                <div class="g">
+                  <button type="button" class="chev" aria-label="Expand goal" aria-expanded="false" data-tip="Expand goal"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+                  <span class="lv lv-objective">objective</span>
+                  <span class="tt">System docs indexed and current</span>
+                  <span class="own">documentation-engineer</span>
+                  <span class="pill idle" data-tip="Draft — not yet committed; excluded from roll-up progress">draft</span>
+                  <span class="pg"><span class="bar"><span class="bf" style="display: block; width: 12%"></span></span><span class="pc">12%</span></span>
+                </div>
+                <div class="g">
+                  <button type="button" class="chev" aria-label="Expand goal" aria-expanded="false" data-tip="Expand goal"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+                  <span class="lv lv-objective">objective</span>
+                  <span class="tt">Retire the legacy keyword search path</span>
+                  <span class="own">code-agent</span>
+                  <span class="pill bad" data-tip="Cancelled — dropped and no longer tracked">cancelled</span>
+                  <span class="pg"><span class="bar"><span class="bf" style="display: block; width: 0%"></span></span><span class="pc" data-tip="No progress tracked for cancelled goals">—</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div style="display: flex; flex-direction: column; gap: 16px">
+          <section class="card" aria-labelledby="li">
+            <div class="ch">
+              <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="12" width="20" height="26" rx="3" class="iw"/><path d="M11 20h10M11 26h10M11 32h6"/><circle cx="35" cy="20" r="7" class="i1"/><circle cx="35" cy="20" r="2.5" class="i3"/><path d="M26 25h4l2-1"/></svg></span>
+              <h2 id="li">Linked items for: <span style="color: var(--alert-text)">Run INT4 models on the NPU worker</span></h2>
+              <button type="button" class="btn sm" aria-label="Close linked items" data-tip="Close linked items · Esc" data-tip-pos="left" style="width: 32px; padding: 0; justify-content: center"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+            </div>
+            <div style="padding: 12px 16px 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+              <span style="flex: 1 1 140px; height: 8px; display: flex; border-radius: 99px; overflow: hidden; outline: 1px solid var(--stroke)" aria-hidden="true"><span style="width: 50%; background: var(--bar)"></span><span style="width: 33%; background: var(--i1); border-left: 1px solid var(--stroke)"></span><span style="width: 17%; background: var(--bar-alert); border-left: 1px solid var(--stroke)"></span></span>
+              <span class="sub2">3 done · 2 in progress · 1 blocked</span>
+            </div>
+            <ul style="list-style: none; margin: 0; padding: 0">
+              <li class="row"><span class="mono sub2 adv" style="flex: none; font-size: 12px">ENG-212</span><a href="WorkItem.dc.html" style="flex-grow: 1; font-size: 13.5px; text-decoration: none">Quantize llama3.1:8b to INT4 with NNCF</a><span class="pill ok">Done</span></li>
+              <li class="row"><span class="mono sub2 adv" style="flex: none; font-size: 12px">ENG-218</span><a href="WorkItem.dc.html" style="flex-grow: 1; font-size: 13.5px; text-decoration: none">Benchmark NPU vs iGPU on node-03</a><span class="pill ok">Done</span></li>
+              <li class="row"><span class="mono sub2 adv" style="flex: none; font-size: 12px">ENG-221</span><a href="WorkItem.dc.html" style="flex-grow: 1; font-size: 13.5px; text-decoration: none">Route embeddings to OpenVINO worker</a><span class="pill ok">Done</span></li>
+              <li class="row"><span class="mono sub2 adv" style="flex: none; font-size: 12px">ENG-230</span><a href="WorkItem.dc.html" style="flex-grow: 1; font-size: 13.5px; text-decoration: none">Expose NPU worker in provider fallback chain</a><span class="pill info">In Progress</span></li>
+              <li class="row"><span class="mono sub2 adv" style="flex: none; font-size: 12px">ENG-233</span><a href="WorkItem.dc.html" style="flex-grow: 1; font-size: 13.5px; text-decoration: none">Ansible role for NPU driver on node-05</a><span class="pill info">In Progress</span></li>
+              <li class="row"><span class="mono sub2 adv" style="flex: none; font-size: 12px">OPS-087</span><a href="WorkItem.dc.html" style="flex-grow: 1; font-size: 13.5px; text-decoration: none">Memory cap for openvino-worker container</a><span class="pill warn">Blocked</span></li>
+            </ul>
+          </section>
+
+          <section class="card adv" aria-labelledby="sb">
+            <div class="ch"><h2 id="sb">Goals by status</h2></div>
+            <div style="padding: 16px; display: flex; flex-wrap: wrap; gap: 20px; align-items: center">
+              <svg width="120" height="120" viewBox="0 0 120 120" role="img" aria-label="19 goals: 12 active, 3 achieved, 2 draft, 1 on hold, 1 cancelled">
+                <circle cx="60" cy="60" r="44" fill="none" style="stroke: var(--i1)" stroke-width="20" stroke-dasharray="174.6 276.5" transform="rotate(-90 60 60)"/>
+                <circle cx="60" cy="60" r="44" fill="none" style="stroke: var(--bar)" stroke-width="20" stroke-dasharray="43.7 276.5" stroke-dashoffset="-174.6" transform="rotate(-90 60 60)"/>
+                <circle cx="60" cy="60" r="44" fill="none" style="stroke: var(--surface)" stroke-width="20" stroke-dasharray="29.1 276.5" stroke-dashoffset="-218.3" transform="rotate(-90 60 60)"/>
+                <circle cx="60" cy="60" r="44" fill="none" style="stroke: var(--i2)" stroke-width="20" stroke-dasharray="14.6 276.5" stroke-dashoffset="-247.4" transform="rotate(-90 60 60)"/>
+                <circle cx="60" cy="60" r="44" fill="none" style="stroke: var(--bar-alert)" stroke-width="20" stroke-dasharray="14.5 276.5" stroke-dashoffset="-262" transform="rotate(-90 60 60)"/>
+                <g fill="none" style="stroke: var(--stroke)" stroke-width="1">
+                  <circle cx="60" cy="60" r="54"/><circle cx="60" cy="60" r="34"/>
+                  <path d="M60 6V26M20.27 96.57L34.99 83.03M7.65 46.74L27.04 51.65M26.83 17.39L39.12 33.17M42.47 8.93L48.96 27.84"/>
+                </g>
+                <text x="60" y="66" text-anchor="middle" font-family="IBM Plex Sans" font-weight="600" font-size="20" style="fill: var(--text)">19</text>
+              </svg>
+              <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; font-size: 13px; flex: 1 1 140px">
+                <li style="display: flex; gap: 8px; align-items: center"><span class="dot" style="background: var(--i1); width: 10px; height: 10px; border-radius: 2px"></span>active<b class="mono" style="margin-left: auto; font-weight: 500">12</b></li>
+                <li style="display: flex; gap: 8px; align-items: center"><span class="dot" style="background: var(--bar); width: 10px; height: 10px; border-radius: 2px"></span>achieved<b class="mono" style="margin-left: auto; font-weight: 500">3</b></li>
+                <li style="display: flex; gap: 8px; align-items: center"><span class="dot" style="background: var(--surface); width: 10px; height: 10px; border-radius: 2px"></span>draft<b class="mono" style="margin-left: auto; font-weight: 500">2</b></li>
+                <li style="display: flex; gap: 8px; align-items: center"><span class="dot" style="background: var(--i2); width: 10px; height: 10px; border-radius: 2px"></span>on_hold<b class="mono" style="margin-left: auto; font-weight: 500">1</b></li>
+                <li style="display: flex; gap: 8px; align-items: center"><span class="dot" style="background: var(--bar-alert); width: 10px; height: 10px; border-radius: 2px"></span>cancelled<b class="mono" style="margin-left: auto; font-weight: 500">1</b></li>
+              </ul>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":1180}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      themes: defs.map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => { try { window.localStorage.setItem('autobot-theme', id); } catch (e) {} this.setState({ theme: id }); }
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,959 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot components: chat and agent primitives</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.wgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:start}
+.wgrid>.card{min-width:0;position:relative;display:flex;flex-direction:column}
+.card.editing{outline:1.5px dashed var(--muted);outline-offset:3px}
+.card.editing[draggable="true"]{cursor:grab}
+.grip{display:inline-grid;place-items:center;width:18px;height:28px;cursor:grab;flex:none}
+.wtools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto}
+.mbtn{width:30px;height:30px;padding:0;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);display:inline-grid;place-items:center;cursor:pointer;flex:none}
+.mbtn:hover{background:var(--surface2)}
+.mbtn[aria-disabled="true"]{opacity:.45;cursor:default}
+.segg{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.segg .seg{height:26px;padding:0 8px}
+.hint{margin:0;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;border:var(--bw) dashed var(--border);background:var(--surface2);font-size:13px;color:var(--text2)}
+.rsz{position:absolute;right:5px;bottom:5px;fill:none;stroke:var(--muted);stroke-width:1.5;stroke-linecap:round;pointer-events:none}
+@media (max-width:760px){.wgrid>.card{grid-column:1 / -1 !important}}
+.sub2{font-size:12.5px;color:var(--muted)}
+.specbar{flex:1 1 100%;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:14px clamp(16px,2.5vw,32px);background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+.specbar h1{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.use{font-size:12.5px;color:var(--muted);font-weight:400}
+.st{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.rules{margin:0;padding:12px 16px;border-top:var(--bw) solid var(--line);font-size:12.5px;color:var(--text2);line-height:1.55}
+.rules b{font-weight:600;color:var(--text)}
+.bd{padding:16px}
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:20px;align-items:start}
+.g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:start}
+.g4{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;align-items:start}
+.col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.ibtn{width:34px;height:34px;border-radius:6px;border:var(--bw) solid transparent;background:transparent;display:inline-grid;place-items:center;cursor:pointer;color:var(--text);padding:0;flex:none}
+.ibtn:hover{background:var(--surface2);border-color:var(--border)}
+.ibtn[aria-pressed="true"]{background:var(--surface2);border-color:var(--stroke)}
+.chip{height:30px;padding:0 10px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.chip[aria-pressed="true"]{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--stroke)}
+.chip .ck{width:12px;height:12px;border-radius:3px;border:1px solid var(--stroke);display:grid;place-items:center;box-sizing:border-box}
+.chip[aria-pressed="true"] .ck{background:var(--primary)}
+.step{display:flex;gap:10px;align-items:center;padding:9px 14px;border-bottom:var(--bw) solid var(--line);font-size:13.5px}
+.step:last-child{border-bottom:0}
+.sc{width:20px;height:20px;border-radius:99px;border:1px solid var(--stroke);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.av{width:32px;height:32px;border-radius:99px;background:var(--brand-bg);color:var(--brand-fg);display:grid;place-items:center;font-size:12px;font-weight:600;flex:none}
+.msg{position:relative;display:flex;gap:12px;align-items:flex-start}
+.msg.me{flex-direction:row-reverse}
+.mcol{display:flex;flex-direction:column;gap:6px;min-width:0;max-width:600px}
+.msg.me .mcol{align-items:flex-end}
+.who{font-size:12.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.who b{color:var(--text);font-weight:600}
+.bub{padding:11px 14px;font-size:14px;line-height:1.55;box-sizing:border-box;overflow-wrap:anywhere}
+.bub.me{background:var(--primary);color:var(--on-primary);border-radius:10px 10px 2px 10px}
+.bub.bot{background:var(--surface);border:var(--bw) solid var(--border);border-radius:2px 10px 10px 10px}
+.bub p{margin:0 0 8px}.bub p:last-child{margin:0}
+.foot{font-size:11.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
+.acts{display:inline-flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface);border:var(--bw) solid var(--border);opacity:0;transition:opacity .12s}
+.msg:hover .acts,.msg:focus-within .acts,.acts.show{opacity:1}
+.abtn{width:28px;height:28px;border:0;border-radius:5px;background:transparent;display:grid;place-items:center;cursor:pointer;padding:0;color:var(--text)}
+.abtn:hover{background:var(--surface2)}
+.notice{align-self:center;display:inline-flex;gap:8px;align-items:center;font-size:12.5px;color:var(--text2);padding:6px 12px;border-radius:99px;border:var(--bw) dashed var(--border);background:var(--surface2)}
+.tool{border:var(--bw) solid var(--border);border-radius:8px;background:var(--surface);overflow:hidden;font-size:13px}
+.tool-h{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:var(--bw) solid var(--line)}
+.tool-b{padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.kv{font-size:12px;line-height:1.6;background:var(--surface2);border:var(--bw) solid var(--line);border-radius:6px;padding:8px 10px;white-space:pre;overflow-x:auto;margin:0}
+.dots{display:inline-flex;gap:4px;align-items:center;height:20px}
+.dots i{width:7px;height:7px;border-radius:99px;background:var(--text2);animation:blink 1.2s infinite}
+.dots i:nth-child(2){animation-delay:.2s}.dots i:nth-child(3){animation-delay:.4s}
+.caret{display:inline-block;width:2px;height:1.05em;background:var(--text);vertical-align:-2px;margin-left:2px;animation:cblink 1s steps(1) infinite}
+@keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+@keyframes cblink{0%{opacity:1}50%{opacity:0}}
+@keyframes sweep{0%{transform:translateX(-100%)}100%{transform:translateX(340%)}}
+.sweep{width:30%;animation:sweep 1.6s linear infinite}
+@media (prefers-reduced-motion:reduce){.dots i,.caret,.sweep{animation:none}.acts{transition:none}}
+.trace{border:var(--bw) solid var(--border);border-radius:8px;background:var(--surface)}
+.trace summary{cursor:pointer;display:flex;align-items:center;gap:8px;padding:9px 12px;font-size:13px;font-weight:500;color:var(--text2);list-style:none}
+.trace summary::-webkit-details-marker{display:none}
+.trace .chev{transition:transform .12s}
+.trace[open] .chev{transform:rotate(90deg)}
+.tr{display:grid;grid-template-columns:44px 92px 1fr;gap:10px;padding:8px 12px;border-top:var(--bw) solid var(--line);font-size:13px;line-height:1.5;align-items:baseline}
+.code{border:var(--bw) solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface2)}
+.code-h{display:flex;align-items:center;gap:8px;padding:5px 6px 5px 12px;border-bottom:var(--bw) solid var(--line);background:var(--surface);font-size:12px;color:var(--text2)}
+.code pre{margin:0;padding:12px 14px;font-size:12.5px;line-height:1.65;overflow-x:auto;color:var(--text)}
+.tk{color:var(--accent);font-weight:500}.tc{color:var(--muted);font-style:italic}
+.cite{display:flex;flex-direction:column;gap:8px;padding:12px;border:var(--bw) solid var(--border);border-radius:8px;background:var(--surface);min-width:0;text-decoration:none;color:var(--text)}
+.th a.cite{color:var(--text)}
+.cite:hover{background:var(--surface2)}
+.num{width:20px;height:20px;border-radius:5px;border:1px solid var(--stroke);display:grid;place-items:center;font-size:11px;font-weight:600;flex:none;box-sizing:border-box;background:var(--surface)}
+.fchip{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 4px 0 6px;border:var(--bw) solid var(--border);border-radius:8px;background:var(--surface);font-size:13px;box-sizing:border-box;max-width:260px}
+.ftype{width:32px;height:32px;padding:0;border-radius:6px;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1;letter-spacing:0;font-size:9.5px;font-weight:700;border:1px solid var(--stroke);flex:none;box-sizing:border-box;color:var(--text);overflow:hidden}
+.fname{display:flex;flex-direction:column;min-width:0;line-height:1.25}
+.fname b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.thumb{position:relative;width:132px;height:92px;border-radius:8px;border:var(--bw) solid var(--border);overflow:hidden;background:var(--i1t);flex:none}
+.thumb .x{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:5px;border:var(--bw) solid var(--border);background:var(--surface);display:grid;place-items:center;cursor:pointer;padding:0}
+.sep{display:flex;align-items:center;gap:10px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.sep::before,.sep::after{content:"";flex:1;border-top:var(--bw) solid var(--line)}
+.sep.new{color:var(--alert-text)}
+.sep.new::before,.sep.new::after{border-top-color:var(--accent)}
+.sframe{position:relative;border:var(--bw) solid var(--border);border-radius:10px;overflow:hidden;background:var(--bg)}
+.scroller{height:460px;overflow-y:auto;padding:18px 20px 28px;display:flex;flex-direction:column;gap:16px;box-sizing:border-box}
+.jump{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);height:34px;padding:0 14px;border-radius:99px;border:var(--bw) solid var(--primary);background:var(--primary);color:var(--on-primary);font:inherit;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.jump:hover{background:var(--primary-h)}
+.cmp{position:relative;border:var(--bw) solid var(--stroke);border-radius:10px;background:var(--surface);padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.cmp textarea{border:0;outline:0;resize:none;font:inherit;font-size:14px;line-height:1.5;color:var(--text);background:transparent;width:100%;box-sizing:border-box;padding:2px}
+.cmp textarea::placeholder{color:var(--muted)}
+.ctl{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.sel{height:32px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;font-size:12.5px;padding:0 8px;color:var(--text)}
+.cnt{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.cnt.warn,.cnt.bad{padding:2px 6px;border-radius:4px}
+.send{width:36px;padding:0;justify-content:center}
+.th .btn.pri[aria-disabled="true"]{opacity:.4;cursor:not-allowed}
+.menu{background:var(--surface);border:var(--bw) solid var(--border);border-radius:8px;padding:4px;display:flex;flex-direction:column;gap:1px;box-sizing:border-box}
+.menu.pop{position:absolute;left:10px;bottom:calc(100% + 6px);width:380px;max-width:calc(100% - 20px);z-index:3}
+.mh{padding:6px 8px 4px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.mi{display:flex;gap:10px;align-items:center;padding:7px 8px;border-radius:6px;font:inherit;font-size:13px;cursor:pointer;border:0;background:transparent;width:100%;text-align:left;color:var(--text);box-sizing:border-box}
+.mi:hover,.mi.on{background:var(--surface2)}
+.mi.on{outline:var(--bw) solid var(--text2);outline-offset:-1px}
+.mi .mono{font-weight:500;min-width:104px}
+.kbd{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;padding:1px 5px;border-radius:4px;border:var(--bw) solid var(--border);background:var(--surface2);color:var(--text2)}
+.drop{position:absolute;inset:0;border:2px dashed var(--stroke);border-radius:10px;background:var(--surface2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-size:13.5px;z-index:2}
+.fv{outline:3px solid var(--focus);outline-offset:2px}
+.state-row{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end}
+.state-row>div{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.apc{border:var(--bw) solid var(--border);border-radius:10px;background:var(--surface);overflow:hidden}
+.apc.req{border-color:var(--stroke)}
+.apc-h{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:var(--bw) solid var(--line)}
+.apc-h h3{margin:0;font-size:14px;font-weight:600;flex-grow:1}
+.apc-b{padding:12px 14px;display:flex;flex-direction:column;gap:10px;font-size:13px;line-height:1.5}
+.cmd{font-size:12px;background:var(--surface2);border:var(--bw) solid var(--border);border-radius:6px;padding:8px 10px;overflow-x:auto;white-space:nowrap}
+.meter{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border:var(--bw) solid var(--border);border-radius:8px;background:var(--surface)}
+.sugg{display:flex;gap:10px;align-items:flex-start;text-align:left;padding:12px;border-radius:8px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;color:var(--text);cursor:pointer;min-height:64px;box-sizing:border-box}
+.sugg:hover{background:var(--surface2);border-color:var(--stroke)}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <a href="ThemeManager.dc.html" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon" aria-label="Plugins" title="Plugins"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon" aria-label="Secrets" title="Secrets"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" title="Preferences"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <a href="AdminUsers.dc.html" class="icon" aria-label="Admin panel" title="Admin panel"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <button type="button" aria-label="Profile menu" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer">MV</button>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+  <aside class="sub" aria-label="Design system" style="flex: 1 1 230px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+    <a href="DesignSystem.dc.html" style="font-weight: 600; color: var(--text)">AutoBot Design System</a>
+    <span class="sub2" style="padding: 0 13px 4px">v1 · 4 themes</span>
+    <p class="sect">Overview</p>
+    <a href="DesignSystem.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z" class="i1"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z" class="it1"/></svg>Introduction</a>
+    <p class="sect">Foundations</p>
+    <a href="ComponentsStates.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4" class="i3"/><circle cx="16" cy="9" r="4" class="i2"/><circle cx="12" cy="16" r="4" class="i1"/></svg>Tokens &amp; states</a>
+    <a href="ComponentsGrid.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5" class="i1"/><rect x="13" y="4" width="7" height="7" rx="1.5" class="iw"/><rect x="4" y="13" width="7" height="7" rx="1.5" class="iw"/><rect x="13" y="13" width="7" height="7" rx="1.5" class="i2"/></svg>Grid, tables &amp; forms</a>
+    <a href="ComponentsCharts.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><rect x="5.5" y="11" width="3.5" height="7" class="i1"/><rect x="10.5" y="6" width="3.5" height="12" class="i2"/><rect x="15.5" y="13" width="3.5" height="5" class="i3"/></svg>Charts &amp; data viz</a>
+    <p class="sect">Components</p>
+    <a href="ComponentsForms.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4" class="i1"/><circle cx="16.5" cy="12" r="2.5" class="iw"/></svg>Form controls</a>
+    <a href="ComponentsTable.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="iw"/><path d="M4 10h16M4 14.5h16M10 10v9"/></svg>Data table</a>
+    <a href="ComponentsDialogs.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="it1"/><rect x="6" y="8" width="12" height="9" rx="1.5" class="iw"/></svg>Dialogs</a>
+    <a href="ComponentsOverlays.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" class="i2"/><path d="M10 21h4"/></svg>Overlays &amp; feedback</a>
+    <a href="ComponentsTooltips.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10h-7l-4 4v-4H4z" class="it1"/><path d="M8 10h8"/></svg>Tooltips</a>
+    <a href="ComponentsCommand.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" class="iw"/><path d="M7 10l3 2-3 2M12 15h5"/></svg>Command menu</a>
+    <a href="ComponentsNavigation.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M15 9l-2 4-4 2 2-4z" class="i3"/></svg>Navigation</a>
+    <a href="ComponentsLayout.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="iw"/><path d="M9 4v16M9 10h12"/></svg>Layout &amp; utility</a>
+    <a href="ComponentsChat.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h12v9H8l-3 3v-3H3z" class="i1"/><path d="M15 9h6v8h-2v3l-3-3h-5v-3"/></svg>Chat &amp; agent</a>
+    <p class="sect">Patterns</p>
+    <a href="FileBrowser.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="i2"/></svg>File browser</a>
+    <a href="Mailbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" class="iw"/><path d="M3 7l9 6 9-6"/></svg>Mailbox</a>
+    <a href="ComponentsUiModes.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5" class="it1"/><rect x="4.5" y="8.5" width="8" height="7" rx="3.5" class="i2"/></svg>Interface modes</a>
+    <a href="SignUp.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" class="i2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Auth pages</a>
+    <a href="AccountSecurity.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4" class="i1"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>Account settings</a>
+    <a href="SearchResults.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>Global search</a>
+    <a href="HelpCenter.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="i2"/><path d="M10 10a2 2 0 1 1 3 1.7c-.7.4-1 1-1 1.8M12 16.5v.5"/></svg>Help centre</a>
+    <span style="flex-grow: 1; min-height: 16px" aria-hidden="true"></span>
+    <a href="Main.dc.html" style="border-top: var(--bw) solid var(--line); border-radius: 0; padding-top: 12px"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg>← Back to app</a>
+  </aside>
+  <div style="flex: 999 1 520px; min-width: 0; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <div class="specbar">
+    <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 280px">
+      <span class="sub2">Design system / Components</span>
+      <h1>Components · Chat &amp; agent primitives</h1>
+      <span class="sub2">Messages, streaming, reasoning, sources, code, attachments, thread scroller, composer, approvals and context meter. The live thread and composer work in Play mode.</span>
+    </div>
+    <div role="group" aria-label="Preview theme" style="display: flex; gap: 2px; padding: 3px; border-radius: 8px; background: var(--bg); border: var(--bw) solid var(--border)">
+      <sc-for list="{{themes}}" as="t" hint-placeholder-count="4"><button type="button" class="seg {{t.cls}}" aria-pressed="{{t.pressed}}" onClick="{{t.pick}}">{{t.label}}</button></sc-for>
+    </div>
+  </div>
+
+  <main style="flex: 1 1 100%; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 48px; display: flex; flex-direction: column; gap: 20px">
+
+    <!-- 1. MESSAGE BUBBLES -->
+    <section class="card" aria-labelledby="h-msg">
+      <div class="ch"><h2 id="h-msg">Message bubbles</h2><span class="use">Use for: every turn in Chat, CEO Chat and agent run logs — one shape per speaker type</span></div>
+      <div class="bd g2">
+        <div class="col" style="gap: 22px">
+          <span class="st">User · default</span>
+          <div class="msg me">
+            <span class="av" aria-hidden="true">MV</span>
+            <div class="mcol">
+              <span class="who"><b>You</b><span class="mono">10:42</span></span>
+              <div class="bub me">Check every node in the SLM fleet and restart anything that isn't answering.</div>
+              <div class="acts" role="toolbar" aria-label="Message actions"><button type="button" class="abtn" aria-label="Copy message"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5H4v11h4"/></svg></button><button type="button" class="abtn" aria-label="Edit message"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z" class="it2"/></svg></button><button type="button" class="abtn" aria-label="Delete message"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></svg></button></div>
+            </div>
+          </div>
+
+          <span class="st">AutoBot · hover (actions visible)</span>
+          <div class="msg">
+            <span class="tile" aria-hidden="true"><svg class="ic" width="20" height="20" viewBox="0 0 48 48"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" class="iw"/><circle cx="29" cy="27" r="3" class="iw"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+            <div class="mcol">
+              <span class="who"><b>AutoBot</b><span class="pill info">agent</span><span class="mono">10:43</span></span>
+              <div class="bub bot" style="background: var(--surface2)"><p>5 of 6 fleet nodes answered the ping. <strong>node-04</strong> timed out over SSH after the 09:58 deploy.</p><p>I'd restart <span class="mono">autobot-worker</span> on node-04 first — it needs your approval.</p></div>
+              <div class="foot"><span class="mono">qwen2.5:14b · 612 tokens · 2340 ms</span><span class="acts show" role="toolbar" aria-label="Message actions"><button type="button" class="abtn" aria-label="Copy response"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5H4v11h4"/></svg></button><button type="button" class="abtn fv" aria-label="Retry response"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg></button><button type="button" class="abtn" aria-label="Delete response"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></svg></button></span><span>Retry · focus-visible</span></div>
+            </div>
+          </div>
+
+          <span class="st">System notice</span>
+          <div class="notice" role="status"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M12 11v5M12 8v.5"/></svg>Overseer mode turned on · model switched to <span class="mono">qwen2.5:14b</span></div>
+
+          <span class="st">Error message</span>
+          <div class="msg">
+            <span class="tile danger" aria-hidden="true"><svg class="ic" width="18" height="18" viewBox="0 0 24 24"><path d="M12 4l9 16H3z" class="iw"/><path d="M12 10v4M12 17v.5"/></svg></span>
+            <div class="mcol" style="flex-grow: 1">
+              <span class="who"><b>AutoBot</b><span class="pill bad">Error</span><span class="mono">10:47</span></span>
+              <div class="bub bot" role="alert" style="border-color: var(--bar-alert)"><p><strong>Model request failed.</strong> The response stopped before the first token.</p><p class="mono" style="font-size: 12px; color: var(--alert-text)">ollama: connection refused · 203.0.113.14:11434</p></div>
+              <div style="display: flex; gap: 8px"><button type="button" class="btn sm pri"><svg class="ic sonp" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>Retry</button><button type="button" class="btn sm">Switch model</button></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col" style="gap: 22px">
+          <span class="st">Tool call · result</span>
+          <div class="msg">
+            <span class="tile" aria-hidden="true"><svg class="ic" width="18" height="18" viewBox="0 0 24 24"><path d="M14 6a4 4 0 0 0 5 5l-8 8a2 2 0 0 1-3-3z" class="i2"/></svg></span>
+            <div class="mcol" style="flex-grow: 1; max-width: none">
+              <span class="who"><b>Tool</b><span class="mono">ansible.ping</span><span class="mono">10:43</span></span>
+              <div class="tool">
+                <div class="tool-h"><span style="font-weight: 600; flex-grow: 1">Call · <span class="mono">ansible.ping</span></span><span class="pill ok">Succeeded</span><span class="mono sub2">1.8 s</span></div>
+                <div class="tool-b">
+                  <span class="st">Arguments</span>
+                  <pre class="kv mono">{ "inventory": "slm_fleet", "forks": 6 }</pre>
+                  <span class="st">Result</span>
+                  <pre class="kv mono">node-01..03, 05, 06 | SUCCESS
+node-04 | UNREACHABLE · ssh timeout</pre>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <span class="st">Overseer · plan and current step</span>
+          <div class="msg">
+            <span class="tile" aria-hidden="true"><svg class="ic" width="18" height="18" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2" class="iw"/><rect x="9" y="2.5" width="6" height="3.5" rx="1" class="i2"/><path d="M8.5 11l1.5 1.5 3-3M8.5 16.5l1.5 1.5 3-3" class="sacc"/></svg></span>
+            <div class="mcol" style="flex-grow: 1; max-width: none">
+              <span class="who"><b>Overseer</b><span class="pill idle">plan</span><span class="mono">10:42</span></span>
+              <div class="tool">
+                <div class="tool-h"><span style="font-weight: 600; flex-grow: 1">Execution plan · fleet health check</span><span class="sub2">2 of 4</span></div>
+                <div style="padding: 10px 14px 4px"><div class="bar" role="img" aria-label="50% of plan complete"><div class="bf" style="width: 50%"></div></div></div>
+                <ol style="margin: 0; padding: 0; list-style: none">
+                  <li class="step"><span class="sc" style="background: var(--i1)"><svg class="ic" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 3.5"><path d="M5 12l5 5 9-10"/></svg></span>Read fleet inventory<span class="pill ok" style="margin-left: auto">Done</span></li>
+                  <li class="step"><span class="sc" style="background: var(--i1)"><svg class="ic" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 3.5"><path d="M5 12l5 5 9-10"/></svg></span>Ping all 6 nodes<span class="pill ok" style="margin-left: auto">Done</span></li>
+                  <li class="step" style="font-weight: 600" aria-current="step"><span class="sc" style="background: var(--i2)"></span>Restart services on node-04<span class="pill warn" style="margin-left: auto">Awaiting approval</span></li>
+                  <li class="step" style="color: var(--muted)"><span class="sc" style="background: var(--surface); border-style: dashed"></span>Verify health and summarise<span class="pill idle" style="margin-left: auto">Pending</span></li>
+                </ol>
+              </div>
+              <div class="foot"><span class="mono">qwen2.5:14b · 288 tokens · 910 ms</span></div>
+            </div>
+          </div>
+
+          <span class="st">Disabled actions · read-only shared chat</span>
+          <div class="msg">
+            <span class="av" aria-hidden="true">MV</span>
+            <div class="mcol">
+              <span class="who"><b>Mārtiņš Veiss</b><span class="mono">Yesterday 16:05</span></span>
+              <div class="bub bot">Summarise the contextual retrieval notes into three bullets.</div>
+              <div class="foot"><span>Edit and Delete unavailable in shared view</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> user right-aligned on primary, agents left with avatar tile and role pill; every turn shows speaker + time, assistant turns add the model · tokens · duration footer. Hover actions also appear on keyboard focus (<span class="mono">:focus-within</span>); icon buttons carry aria-labels. Errors use role="alert" and say "Error" in words, never color alone.</p>
+    </section>
+
+    <!-- 2. STREAMING -->
+    <section class="card" aria-labelledby="h-stream">
+      <div class="ch"><h2 id="h-stream">Streaming message</h2><span class="use">Use for: the assistant turn while tokens arrive</span></div>
+      <div class="bd g3">
+        <div class="col">
+          <span class="st">Waiting for first token</span>
+          <div class="msg">
+            <span class="tile" aria-hidden="true"><svg class="ic" width="20" height="20" viewBox="0 0 48 48"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" class="iw"/><circle cx="29" cy="27" r="3" class="iw"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+            <div class="mcol">
+              <span class="who"><b>AutoBot</b><span>is thinking…</span></span>
+              <div class="bub bot" role="status" aria-label="AutoBot is typing"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
+              <button type="button" class="btn sm"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" class="ik"/></svg>Stop generating</button>
+            </div>
+          </div>
+        </div>
+        <div class="col">
+          <span class="st">Generating · caret</span>
+          <div class="msg">
+            <span class="tile" aria-hidden="true"><svg class="ic" width="20" height="20" viewBox="0 0 48 48"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" class="iw"/><circle cx="29" cy="27" r="3" class="iw"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+            <div class="mcol">
+              <span class="who"><b>AutoBot</b><span class="mono">142 tokens · 38 tok/s</span></span>
+              <div class="bub bot" aria-live="polite" aria-busy="true">node-04 restarted cleanly. Running the health probe on all six nodes now; worker queue depth is back under<span class="caret" aria-hidden="true"></span></div>
+              <button type="button" class="btn sm"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" class="ik"/></svg>Stop generating</button>
+            </div>
+          </div>
+        </div>
+        <div class="col">
+          <span class="st">Stopped by user</span>
+          <div class="msg">
+            <span class="tile" aria-hidden="true"><svg class="ic" width="20" height="20" viewBox="0 0 48 48"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" class="iw"/><circle cx="29" cy="27" r="3" class="iw"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+            <div class="mcol">
+              <span class="who"><b>AutoBot</b><span class="pill idle">Stopped</span></span>
+              <div class="bub bot">node-04 restarted cleanly. Running the health probe on all six nodes now…</div>
+              <div class="foot"><span class="mono">qwen2.5:14b · 214 tokens · stopped at 5.6 s</span></div>
+              <button type="button" class="btn sm">Continue</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> only the newest assistant turn streams; the Stop button replaces Send in the composer and Esc stops too. Wrap the bubble in aria-live="polite" with aria-busy while streaming; dots and caret stop animating under prefers-reduced-motion.</p>
+    </section>
+
+    <!-- 3. REASONING TRACE -->
+    <section class="card" aria-labelledby="h-trace">
+      <div class="ch"><h2 id="h-trace">Reasoning trace</h2><span class="use">Use for: the agent's thought / tool / observation log behind an answer, when Thinking is on</span></div>
+      <div class="bd g2">
+        <div class="col">
+          <span class="st">Collapsed · default</span>
+          <details class="trace">
+            <summary><svg class="ic chev" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>Reasoning trace<span class="sub2">· 6 entries · 4.1 s</span></summary>
+            <div class="tr"><span class="mono sub2">0.0s</span><span class="pill idle">Thought</span><span>The user wants every node checked; inventory lives in Ansible.</span></div>
+          </details>
+          <span class="st">Running</span>
+          <details class="trace">
+            <summary><svg class="ic chev" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>Thinking<span class="dots" aria-hidden="true" style="height: 14px"><i style="width: 5px; height: 5px"></i><i style="width: 5px; height: 5px"></i><i style="width: 5px; height: 5px"></i></span><span class="sub2">· 2 entries so far</span></summary>
+            <div class="tr"><span class="mono sub2">0.0s</span><span class="pill idle">Thought</span><span>Comparing NPU INT4 results against last week's baseline.</span></div>
+          </details>
+        </div>
+        <div class="col">
+          <span class="st">Expanded</span>
+          <details class="trace" open>
+            <summary><svg class="ic chev" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>Reasoning trace<span class="sub2">· 6 entries · 4.1 s</span></summary>
+            <div class="tr"><span class="mono sub2">0.0s</span><span class="pill idle">Thought</span><span>Every node must be checked; inventory lives in Ansible.</span></div>
+            <div class="tr"><span class="mono sub2">0.3s</span><span class="pill info">Tool</span><span class="mono" style="font-size: 12.5px">ansible.inventory(group="slm_fleet")</span></div>
+            <div class="tr"><span class="mono sub2">0.6s</span><span class="pill ok">Observation</span><span>6 hosts: node-01 … node-06.</span></div>
+            <div class="tr"><span class="mono sub2">0.7s</span><span class="pill info">Tool</span><span class="mono" style="font-size: 12.5px">ansible.ping(forks=6)</span></div>
+            <div class="tr"><span class="mono sub2">2.5s</span><span class="pill warn">Observation</span><span>node-04 unreachable (ssh timeout).</span></div>
+            <div class="tr"><span class="mono sub2">4.1s</span><span class="pill idle">Thought</span><span>A restart needs approval — ask before acting.</span></div>
+          </details>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> collapsed by default, native &lt;details&gt; so Enter/Space toggles. Entry types are labelled in words (Thought / Tool / Observation). Never put secrets or raw credentials in the trace.</p>
+    </section>
+
+    <!-- 4. CITATIONS -->
+    <section class="card" aria-labelledby="h-cite">
+      <div class="ch"><h2 id="h-cite">Citations &amp; sources</h2><span class="use">Use for: Knowledge / web sources behind a RAG answer, with inline [n] markers</span></div>
+      <div class="bd col" style="gap: 14px">
+        <p style="margin: 0; font-size: 14px; line-height: 1.6; max-width: 760px">Contextual retrieval cut failed lookups by roughly a third in our tests <a href="#src1" class="num" style="display: inline-grid; text-decoration: none" aria-label="Source 1">1</a>, with reranking adding a further gain on long PDFs <a href="#src2" class="num" style="display: inline-grid; text-decoration: none" aria-label="Source 2">2</a>.</p>
+        <div class="g4">
+          <a href="Knowledge.dc.html" class="cite" id="src1">
+            <span style="display: flex; gap: 8px; align-items: center"><span class="num">1</span><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="it1"/><path d="M14 3v4h4"/></svg><b style="font-size: 13.5px; font-weight: 600; flex-grow: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Contextual retrieval notes</b></span>
+            <span class="mono sub2" style="font-size: 11.5px">knowledge / research / retrieval.md · §3</span>
+            <span style="display: flex; gap: 8px; align-items: center"><span class="pill ok">Reliability: High</span><span class="sub2" style="margin-left: auto">Match 92%</span></span>
+            <div class="bar" role="img" aria-label="Match 92%"><div class="bf" style="width: 92%"></div></div>
+          </a>
+          <a href="Knowledge.dc.html" class="cite" id="src2">
+            <span style="display: flex; gap: 8px; align-items: center"><span class="num">2</span><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="it3"/><path d="M14 3v4h4"/></svg><b style="font-size: 13.5px; font-weight: 600; flex-grow: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Reranker benchmark · PDF set</b></span>
+            <span class="mono sub2" style="font-size: 11.5px">knowledge / benchmarks / rerank-oct.pdf · p. 4</span>
+            <span style="display: flex; gap: 8px; align-items: center"><span class="pill info">Reliability: Medium</span><span class="sub2" style="margin-left: auto">Match 78%</span></span>
+            <div class="bar" role="img" aria-label="Match 78%"><div class="bf" style="width: 78%"></div></div>
+          </a>
+          <a href="#" class="cite">
+            <span style="display: flex; gap: 8px; align-items: center"><span class="num">3</span><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it2"/><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16"/></svg><b style="font-size: 13.5px; font-weight: 600; flex-grow: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Forum thread on chunk sizes</b></span>
+            <span class="mono sub2" style="font-size: 11.5px">web · fetched 09:12 today</span>
+            <span style="display: flex; gap: 8px; align-items: center"><span class="pill warn">Reliability: Low · unverified</span><span class="sub2" style="margin-left: auto">Match 54%</span></span>
+            <div class="bar" role="img" aria-label="Match 54%"><div class="bf alert" style="width: 54%"></div></div>
+          </a>
+          <div class="cite" style="border-style: dashed; justify-content: center; align-items: center; color: var(--muted); min-height: 116px">
+            <span class="st">Empty</span><span style="font-size: 13px">No sources — answered from the model only</span>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> reliability is always spelled out (High / Medium / Low) next to match %; low-reliability web sources say "unverified". Inline markers are links to the card with aria-label "Source n". Collapse to "Sources · n" under the bubble when more than 4.</p>
+    </section>
+
+    <!-- 5. CODE BLOCK -->
+    <section class="card" aria-labelledby="h-code">
+      <div class="ch"><h2 id="h-code">Code block</h2><span class="use">Use for: code, commands and config inside assistant messages</span></div>
+      <div class="bd g2">
+        <div class="col">
+          <span class="st">Default · Copy works in Play mode</span>
+          <div class="code">
+            <div class="code-h"><span class="pill idle mono">yaml</span><span class="mono" style="flex-grow: 1">playbooks/restart-worker.yml</span><button type="button" class="btn sm" onClick="{{copyCode}}" aria-live="polite"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5H4v11h4"/></svg>{{copyLabel}}</button></div>
+<pre class="mono"><span class="tc"># restart autobot-worker on unhealthy nodes</span>
+- <span class="tk">hosts:</span> node-04
+  <span class="tk">become:</span> true
+  <span class="tk">tasks:</span>
+    - <span class="tk">name:</span> Restart worker
+      <span class="tk">ansible.builtin.systemd:</span>
+        <span class="tk">name:</span> autobot-worker
+        <span class="tk">state:</span> restarted</pre>
+          </div>
+        </div>
+        <div class="col">
+          <span class="st">Copied state · shell</span>
+          <div class="code">
+            <div class="code-h"><span class="pill idle mono">bash</span><span style="flex-grow: 1"></span><button type="button" class="btn sm" aria-label="Copied to clipboard"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Copied</button></div>
+<pre class="mono">docker compose -f /opt/autobot/compose.yml \
+  logs --tail 50 autobot-worker</pre>
+          </div>
+          <span class="st">Inline code</span>
+          <p style="margin: 0; font-size: 14px">Set <span class="mono" style="font-size: 12.5px; padding: 1px 5px; border-radius: 4px; background: var(--surface2); border: var(--bw) solid var(--border)">OLLAMA_HOST</span> before starting the worker.</p>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> language label always shown; Copy announces "Copied" via aria-live and reverts after 2 s. Long lines scroll horizontally — never wrap code. Highlight with accent + muted only, so it survives Monochrome.</p>
+    </section>
+
+    <!-- 6. ATTACHMENTS -->
+    <section class="card" aria-labelledby="h-att">
+      <div class="ch"><h2 id="h-att">Attachments</h2><span class="use">Use for: files added to the composer or shown on a sent message</span></div>
+      <div class="bd col" style="gap: 18px">
+        <div class="state-row">
+          <div><span class="st">File chip · PDF</span>
+            <span class="fchip"><span class="ftype mono" style="background: var(--i3t)">PDF</span><span class="fname"><b>rerank-oct.pdf</b><span class="sub2" style="font-size: 11.5px">2.4 MB</span></span><button type="button" class="abtn" aria-label="Remove rerank-oct.pdf"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span></div>
+          <div><span class="st">CSV</span>
+            <span class="fchip"><span class="ftype mono" style="background: var(--i1t)">CSV</span><span class="fname"><b>fleet-metrics-oct.csv</b><span class="sub2" style="font-size: 11.5px">380 KB</span></span><button type="button" class="abtn" aria-label="Remove fleet-metrics-oct.csv"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span></div>
+          <div><span class="st">Code · focus-visible</span>
+            <span class="fchip"><span class="ftype mono" style="background: var(--i2t)">PY</span><span class="fname"><b>heartbeat.py</b><span class="sub2" style="font-size: 11.5px">12 KB</span></span><button type="button" class="abtn fv" aria-label="Remove heartbeat.py"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span></div>
+          <div><span class="st">Uploading · 64%</span>
+            <span class="fchip" style="flex-direction: column; align-items: stretch; justify-content: center; gap: 4px; width: 230px; padding: 0 8px"><span style="display: flex; gap: 8px; align-items: center"><b style="font-weight: 600; flex-grow: 1; font-size: 12.5px">vcf-runbook.docx</b><span class="mono sub2" style="font-size: 11px">5.1 / 8 MB</span><button type="button" class="abtn" aria-label="Cancel upload" style="width: 22px; height: 22px"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span><span class="bar" role="progressbar" aria-label="Uploading vcf-runbook.docx" aria-valuenow="64" aria-valuemin="0" aria-valuemax="100" style="display: block"><span class="bf" style="display: block; width: 64%"></span></span></span></div>
+          <div><span class="st">Error</span>
+            <span class="fchip" style="border-color: var(--bar-alert)"><span class="ftype mono" style="background: var(--danger-tile)">ZIP</span><span class="fname"><b>logs-node04.zip</b><span style="font-size: 11.5px; color: var(--alert-text); font-weight: 600">Failed · over 25 MB</span></span><button type="button" class="abtn" aria-label="Retry upload of logs-node04.zip"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg></button></span></div>
+        </div>
+        <div class="state-row">
+          <div><span class="st">Image thumbnail</span>
+            <div class="thumb" role="img" aria-label="Screenshot: grafana-node04.png, 640 KB">
+              <svg width="132" height="92" viewBox="0 0 132 92" aria-hidden="true" class="ic"><rect x="10" y="12" width="112" height="68" rx="4" class="iw"/><path d="M18 64l18-14 14 8 20-22 16 12 20-18" stroke-width="2"/><path d="M18 70h96" style="stroke: var(--line)"/><circle cx="70" cy="36" r="3" class="i3"/></svg>
+              <button type="button" class="x" aria-label="Remove grafana-node04.png"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+            </div>
+            <span class="sub2" style="font-size: 11.5px">grafana-node04.png · 640 KB</span></div>
+          <div><span class="st">On a sent message</span>
+            <div class="bub me" style="display: flex; flex-direction: column; gap: 8px; max-width: 360px"><span>Here's the dashboard from this morning.</span><span class="fchip" style="align-self: flex-start; color: var(--text)"><span class="ftype mono" style="background: var(--i1t)">CSV</span><span class="fname"><b>fleet-metrics-oct.csv</b><span class="sub2" style="font-size: 11.5px">380 KB</span></span><button type="button" class="abtn" aria-label="Download fleet-metrics-oct.csv"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M8 11l4 4 4-4M5 20h14"/></svg></button></span></div>
+            <span class="sub2" style="font-size: 11.5px">Same chip as the composer; Remove becomes Download</span></div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> type shown as a text badge (not just an icon), size always visible; remove/cancel buttons name the file in their aria-label. Upload progress uses role="progressbar"; failures say why in words.</p>
+    </section>
+
+    <!-- 7. MESSAGE SCROLLER + LIVE COMPOSER -->
+    <section class="card" aria-labelledby="h-scroll">
+      <div class="ch"><h2 id="h-scroll">Message scroller · live</h2><span class="use">Use for: the scrolling thread with date separators, unread divider and jump-to-latest</span><span class="pill info">Interactive</span></div>
+      <div class="bd col" style="gap: 12px">
+        <div class="sframe">
+          <div class="scroller" id="cc-thread" role="log" aria-label="Fleet health check thread" aria-live="polite" onScroll="{{onThreadScroll}}">
+            <div class="sep">Yesterday</div>
+            <div class="msg me"><span class="av" aria-hidden="true">MV</span><div class="mcol"><span class="who"><b>You</b><span class="mono">16:02</span></span><div class="bub me">Which nodes got the 0.9.4 worker image?</div></div></div>
+            <div class="msg"><span class="tile" aria-hidden="true"><svg class="ic" width="20" height="20" viewBox="0 0 48 48"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" class="iw"/><circle cx="29" cy="27" r="3" class="iw"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span><div class="mcol"><span class="who"><b>AutoBot</b><span class="mono">16:02</span></span><div class="bub bot">node-01 to node-04. node-05 and node-06 are still on 0.9.3 — the rollout paused at 4 of 6.</div><div class="foot"><span class="mono">qwen2.5:14b · 96 tokens · 780 ms</span></div></div></div>
+            <div class="sep">Today</div>
+            <div class="msg me"><span class="av" aria-hidden="true">MV</span><div class="mcol"><span class="who"><b>You</b><span class="mono">10:42</span></span><div class="bub me">Check every node in the SLM fleet and restart anything that isn't answering.</div></div></div>
+            <div class="notice">Overseer mode turned on</div>
+            <div class="msg"><span class="tile" aria-hidden="true"><svg class="ic" width="18" height="18" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2" class="iw"/><rect x="9" y="2.5" width="6" height="3.5" rx="1" class="i2"/><path d="M8.5 11l1.5 1.5 3-3M8.5 16.5l1.5 1.5 3-3" class="sacc"/></svg></span><div class="mcol"><span class="who"><b>Overseer</b><span class="mono">10:42</span></span><div class="bub bot">Plan: read inventory → ping 6 nodes → restart failures (approval) → verify.</div></div></div>
+            <div class="sep new" role="separator">3 new messages</div>
+            <div class="msg"><span class="tile" aria-hidden="true"><svg class="ic" width="18" height="18" viewBox="0 0 24 24"><path d="M14 6a4 4 0 0 0 5 5l-8 8a2 2 0 0 1-3-3z" class="i2"/></svg></span><div class="mcol"><span class="who"><b>Tool</b><span class="mono">ansible.ping · 10:43</span></span><div class="bub bot mono" style="font-size: 12.5px">5 of 6 reachable · node-04 UNREACHABLE</div></div></div>
+            <div class="msg"><span class="tile" aria-hidden="true"><svg class="ic" width="20" height="20" viewBox="0 0 48 48"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" class="iw"/><circle cx="29" cy="27" r="3" class="iw"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span><div class="mcol"><span class="who"><b>AutoBot</b><span class="mono">10:44</span></span><div class="bub bot">node-04 needs a worker restart. I've raised an approval request in Company OS.</div><div class="foot"><span class="mono">qwen2.5:14b · 612 tokens · 2340 ms</span></div></div></div>
+            <div class="notice"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Approved by Mārtiņš Veiss · <span class="mono">10:46</span></div>
+            <sc-for list="{{msgs}}" as="m" hint-placeholder-count="0">
+              <sc-if value="{{m.isUser}}" hint-placeholder-val="{{ false }}">
+                <div class="msg me"><span class="av" aria-hidden="true">MV</span><div class="mcol"><span class="who"><b>You</b><span class="mono">{{m.time}}</span></span><div class="bub me">{{m.text}}</div><div class="acts" role="toolbar" aria-label="Message actions"><button type="button" class="abtn" aria-label="Copy message" onClick="{{m.onCopy}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5H4v11h4"/></svg></button><button type="button" class="abtn" aria-label="Edit message" onClick="{{m.onEdit}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z" class="it2"/></svg></button><button type="button" class="abtn" aria-label="Delete message" onClick="{{m.onDelete}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></svg></button></div></div></div>
+              </sc-if>
+              <sc-if value="{{m.isBot}}" hint-placeholder-val="{{ false }}">
+                <div class="msg"><span class="tile" aria-hidden="true"><svg class="ic" width="20" height="20" viewBox="0 0 48 48"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" class="iw"/><circle cx="29" cy="27" r="3" class="iw"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span><div class="mcol"><span class="who"><b>AutoBot</b><span class="mono">{{m.time}}</span><sc-if value="{{m.stopped}}" hint-placeholder-val="{{ false }}"><span class="pill idle">Stopped</span></sc-if></span><div class="bub bot">{{m.text}}</div><div class="foot"><span class="mono">{{m.meta}}</span><span class="acts" role="toolbar" aria-label="Response actions"><button type="button" class="abtn" aria-label="Copy response" onClick="{{m.onCopy}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5H4v11h4"/></svg></button><button type="button" class="abtn" aria-label="Retry response" onClick="{{m.onRetry}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg></button><button type="button" class="abtn" aria-label="Delete response" onClick="{{m.onDelete}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></svg></button></span></div></div></div>
+              </sc-if>
+            </sc-for>
+            <sc-if value="{{waiting}}" hint-placeholder-val="{{ false }}">
+              <div class="msg"><span class="tile" aria-hidden="true"><svg class="ic" width="20" height="20" viewBox="0 0 48 48"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" class="iw"/><circle cx="29" cy="27" r="3" class="iw"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span><div class="mcol"><span class="who"><b>AutoBot</b><span>is thinking…</span></span><div class="bub bot" role="status" aria-label="AutoBot is typing"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></div></div></div>
+            </sc-if>
+            <sc-if value="{{generating}}" hint-placeholder-val="{{ false }}">
+              <div class="msg"><span class="tile" aria-hidden="true"><svg class="ic" width="20" height="20" viewBox="0 0 48 48"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" class="iw"/><circle cx="29" cy="27" r="3" class="iw"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span><div class="mcol"><span class="who"><b>AutoBot</b><span class="mono">{{modelName}}</span></span><div class="bub bot" aria-busy="true">{{partial}}<span class="caret" aria-hidden="true"></span></div></div></div>
+            </sc-if>
+          </div>
+          <sc-if value="{{showJump}}" hint-placeholder-val="{{ true }}">
+            <button type="button" class="jump" onClick="{{jump}}"><svg class="ic sonp" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v13M6 12l6 6 6-6"/></svg>{{jumpLabel}}</button>
+          </sc-if>
+        </div>
+
+        <div class="cmp">
+          <sc-if value="{{showSlash}}" hint-placeholder-val="{{ false }}">
+            <div class="menu pop" role="listbox" aria-label="Slash commands">
+              <span class="mh">Commands</span>
+              <sc-for list="{{slashItems}}" as="s" hint-placeholder-count="3">
+                <button type="button" role="option" class="mi" onClick="{{s.pick}}"><span class="mono">{{s.cmd}}</span><span class="sub2">{{s.desc}}</span></button>
+              </sc-for>
+              <sc-if value="{{slashEmpty}}" hint-placeholder-val="{{ false }}"><span class="sub2" style="padding: 8px">No matching command</span></sc-if>
+            </div>
+          </sc-if>
+          <label class="sr" for="cc-msg">Message AutoBot</label>
+          <textarea id="cc-msg" rows="2" placeholder="Ask AutoBot, or type / for commands…" value="{{draft}}" onInput="{{onDraft}}" onKeyDown="{{onDraftKey}}"></textarea>
+          <div class="ctl">
+            <button type="button" class="ibtn" aria-label="Attach file"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 7l-7 7a2 2 0 0 0 3 3l7-7a4 4 0 0 0-6-6l-7 7a6 6 0 0 0 8 8l6-6"/></svg></button>
+            <button type="button" class="ibtn" aria-label="Voice input"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" class="it3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+            <sc-for list="{{toggles}}" as="g" hint-placeholder-count="3">
+              <button type="button" class="chip" aria-pressed="{{g.pressed}}" onClick="{{g.flip}}"><span class="ck" aria-hidden="true"><svg class="ic sonp" width="9" height="9" viewBox="0 0 24 24" style="stroke-width: 4"><path d="M5 12l5 5 9-10"/></svg></span>{{g.label}}</button>
+            </sc-for>
+            <span style="flex-grow: 1"></span>
+            <span class="cnt mono {{cntCls}}" aria-live="polite">{{cntLabel}}</span>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text2)">Model
+              <select class="sel" value="{{model}}" onChange="{{pickModel}}"><option value="auto">Auto (qwen2.5:14b)</option><option value="llama3.1:8b">llama3.1:8b · ollama</option><option value="mistral-nemo">mistral-nemo · openvino</option></select>
+            </label>
+            <sc-if value="{{streaming}}" hint-placeholder-val="{{ false }}">
+              <button type="button" class="btn" onClick="{{stop}}"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" class="ik"/></svg>Stop</button>
+            </sc-if>
+            <sc-if value="{{idle}}" hint-placeholder-val="{{ true }}">
+              <button type="button" class="btn pri send" aria-label="Send message" aria-disabled="{{sendDisabled}}" onClick="{{send}}"><svg class="ic sonp" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
+            </sc-if>
+          </div>
+        </div>
+        <p class="sub2" style="margin: 0; font-size: 12px"><span class="kbd">Enter</span> send · <span class="kbd">Shift</span>+<span class="kbd">Enter</span> new line · <span class="kbd">/</span> commands · <span class="kbd">Esc</span> stop</p>
+      </div>
+      <p class="rules"><b>Rules:</b> the thread is role="log"; date separators and the accent "n new messages" divider are text, not color. When the reader is scrolled up and messages arrive, show the jump button instead of auto-scrolling; it hides once the bottom is reached. Sending always scrolls to the newest turn.</p>
+    </section>
+
+    <!-- 8. EMPTY CHAT -->
+    <section class="card" aria-labelledby="h-empty">
+      <div class="ch"><h2 id="h-empty">Empty chat state</h2><span class="use">Use for: a new chat with no messages yet</span></div>
+      <div class="bd" style="display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 32px 16px">
+        <svg class="ic" width="120" height="96" viewBox="0 0 120 96" aria-hidden="true"><rect x="8" y="14" width="64" height="40" rx="8" class="it1"/><path d="M24 54l-6 12 16-12"/><rect x="38" y="36" width="72" height="44" rx="10" class="iw"/><rect x="58" y="48" width="32" height="22" rx="5" class="i1"/><circle cx="67" cy="59" r="2.5" class="iw"/><circle cx="81" cy="59" r="2.5" class="iw"/><path d="M74 48v-5"/><circle cx="74" cy="41" r="2.5" class="i3"/><path d="M20 28h40M20 38h26"/></svg>
+        <div style="text-align: center; display: flex; flex-direction: column; gap: 4px">
+          <h3 style="margin: 0; font-size: 18px; font-weight: 600">What should AutoBot work on?</h3>
+          <span class="sub2">Answers use your Knowledge base and the fleet tools you've enabled. Pick a starter or type your own.</span>
+        </div>
+        <div class="g4" style="width: 100%; max-width: 960px">
+          <sc-for list="{{suggestions}}" as="s" hint-placeholder-count="4">
+            <button type="button" class="sugg" onClick="{{s.pick}}"><span class="tile" aria-hidden="true"><svg class="ic" width="16" height="16" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-4 4v-4H4z" class="it1"/></svg></span><span style="display: flex; flex-direction: column; gap: 2px"><b style="font-size: 13.5px; font-weight: 600">{{s.title}}</b><span class="sub2">{{s.hint}}</span></span></button>
+          </sc-for>
+        </div>
+        <span class="sub2" style="font-size: 12px">In Play mode a starter fills the live composer above.</span>
+      </div>
+      <p class="rules"><b>Rules:</b> 3–4 starters, real tasks for this workspace; they fill the composer (never auto-send). Keep the illustration calm and small; focus goes to the composer on load.</p>
+    </section>
+
+    <!-- 9. COMPOSER ANATOMY -->
+    <section class="card" aria-labelledby="h-cmp">
+      <div class="ch"><h2 id="h-cmp">Composer anatomy</h2><span class="use">Use for: the message input in Chat, CEO Chat and agent consoles</span></div>
+      <div class="bd g2">
+        <div class="col">
+          <span class="st">Slash command dropdown · open</span>
+          <div class="menu" role="listbox" aria-label="Slash commands" style="width: 100%">
+            <span class="mh">Presets</span>
+            <button type="button" role="option" aria-selected="true" class="mi on"><span class="mono">/summarize</span><span class="sub2" style="flex-grow: 1">Decisions and open items from this chat</span><span class="kbd">↵</span></button>
+            <button type="button" role="option" aria-selected="false" class="mi"><span class="mono">/research</span><span class="sub2">research-agent with sources</span></button>
+            <button type="button" role="option" aria-selected="false" class="mi"><span class="mono">/fleet-status</span><span class="sub2">Health of all SLM fleet nodes</span></button>
+            <button type="button" role="option" aria-selected="false" class="mi"><span class="mono">/kb-search</span><span class="sub2">Search Knowledge only</span></button>
+            <button type="button" role="option" aria-selected="false" class="mi"><span class="mono">/plan</span><span class="sub2">Ask Overseer for a plan</span></button>
+          </div>
+          <div class="cmp">
+            <label class="sr" for="an-1">Message (slash example)</label>
+            <textarea id="an-1" rows="1" readonly="readonly">/su</textarea>
+            <div class="ctl"><span class="sub2" style="font-size: 12px"><span class="kbd">↑</span><span class="kbd">↓</span> move · <span class="kbd">Enter</span> insert · <span class="kbd">Esc</span> close</span></div>
+          </div>
+
+          <span class="st" style="margin-top: 8px">MCP prompt picker · open</span>
+          <div class="menu" role="listbox" aria-label="MCP prompts" style="width: 100%">
+            <span class="mh">MCP prompts</span>
+            <button type="button" role="option" class="mi"><span class="tile" style="width: 26px; height: 26px" aria-hidden="true"><svg class="ic" width="14" height="14" viewBox="0 0 24 24"><path d="M3 7h7l2 2h9v10H3z" class="i2"/></svg></span><span style="display: flex; flex-direction: column; flex-grow: 1"><b class="mono" style="font-weight: 500">review-diff</b><span class="sub2">filesystem · needs: path</span></span><span class="pill ok">Connected</span></button>
+            <button type="button" role="option" class="mi on" aria-selected="true"><span class="tile" style="width: 26px; height: 26px" aria-hidden="true"><svg class="ic" width="14" height="14" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5" class="i1"/><path d="M6 8.5v7M8 6h4a4 4 0 0 1 4 4"/></svg></span><span style="display: flex; flex-direction: column; flex-grow: 1"><b class="mono" style="font-weight: 500">pr-summary</b><span class="sub2">github · needs: repo, PR number</span></span><span class="pill ok">Connected</span></button>
+            <button type="button" role="option" class="mi" aria-disabled="true" style="opacity: .55; cursor: not-allowed"><span class="tile" style="width: 26px; height: 26px" aria-hidden="true"><svg class="ic" width="14" height="14" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2" class="it3"/><path d="M8 10l3 2-3 2"/></svg></span><span style="display: flex; flex-direction: column; flex-grow: 1"><b class="mono" style="font-weight: 500">playbook-check</b><span class="sub2">ansible · server offline</span></span><span class="pill bad">Offline</span></button>
+          </div>
+        </div>
+
+        <div class="col">
+          <span class="st">Full composer · default</span>
+          <div class="cmp">
+            <label class="sr" for="an-2">Message (anatomy)</label>
+            <textarea id="an-2" rows="2" readonly="readonly">Compare INT4 vs FP16 latency on the NPU worker and recommend one.</textarea>
+            <div class="ctl">
+              <span class="fchip"><span class="ftype mono" style="background: var(--i1t)">CSV</span><span class="fname"><b>npu-bench.csv</b><span class="sub2" style="font-size: 11.5px">84 KB</span></span><button type="button" class="abtn" aria-label="Remove npu-bench.csv"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span>
+            </div>
+            <div class="ctl">
+              <button type="button" class="ibtn" aria-label="Attach file"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 7l-7 7a2 2 0 0 0 3 3l7-7a4 4 0 0 0-6-6l-7 7a6 6 0 0 0 8 8l6-6"/></svg></button>
+              <button type="button" class="ibtn" aria-label="Voice input · recording" aria-pressed="true"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" class="i3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+              <button type="button" class="ibtn" aria-label="MCP prompts" aria-expanded="false"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="it2"/></svg></button>
+              <button type="button" class="chip" aria-pressed="true"><span class="ck" aria-hidden="true"><svg class="ic sonp" width="9" height="9" viewBox="0 0 24 24" style="stroke-width: 4"><path d="M5 12l5 5 9-10"/></svg></span>Use Knowledge</button>
+              <button type="button" class="chip" aria-pressed="true"><span class="ck" aria-hidden="true"><svg class="ic sonp" width="9" height="9" viewBox="0 0 24 24" style="stroke-width: 4"><path d="M5 12l5 5 9-10"/></svg></span>Overseer</button>
+              <button type="button" class="chip" aria-pressed="false"><span class="ck" aria-hidden="true"></span>Thinking</button>
+              <span style="flex-grow: 1"></span>
+              <select class="sel" aria-label="Model"><option>Auto (qwen2.5:14b)</option></select>
+              <button type="button" class="btn pri send" aria-label="Send message"><svg class="ic sonp" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
+            </div>
+          </div>
+          <span class="sub2" style="font-size: 12px">Voice shown recording (pressed); Thinking off; one file attached.</span>
+
+          <span class="st" style="margin-top: 8px">Send / stop states</span>
+          <div class="state-row">
+            <div><button type="button" class="btn pri send" aria-label="Send message" aria-disabled="true"><svg class="ic sonp" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button><span class="sub2" style="font-size: 11.5px">Disabled · empty</span></div>
+            <div><button type="button" class="btn pri send" aria-label="Send message"><svg class="ic sonp" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button><span class="sub2" style="font-size: 11.5px">Ready</span></div>
+            <div><button type="button" class="btn pri send fv" aria-label="Send message"><svg class="ic sonp" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button><span class="sub2" style="font-size: 11.5px">Focus-visible</span></div>
+            <div><button type="button" class="btn"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" class="ik"/></svg>Stop</button><span class="sub2" style="font-size: 11.5px">Streaming</span></div>
+          </div>
+
+          <span class="st" style="margin-top: 8px">Character counter</span>
+          <div class="state-row">
+            <div><span class="cnt mono">182 / 4000</span><span class="sub2" style="font-size: 11.5px">Normal</span></div>
+            <div><span class="cnt mono warn">3870 / 4000 · 130 left</span><span class="sub2" style="font-size: 11.5px">Near limit (90%)</span></div>
+            <div><span class="cnt mono bad">4112 / 4000 · 112 over</span><span class="sub2" style="font-size: 11.5px">Over · send disabled</span></div>
+          </div>
+
+          <span class="st" style="margin-top: 8px">Drag-drop overlay</span>
+          <div class="cmp" style="min-height: 120px">
+            <textarea rows="2" aria-label="Message (drop example)" readonly="readonly"></textarea>
+            <div class="drop" aria-live="polite"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="it1"/><path d="M14 3v4h4M12 11v6M9 14l3-3 3 3"/></svg><b style="font-weight: 600">Drop files to attach</b><span class="sub2">PDF, CSV, DOCX, images · up to 25 MB each</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> textarea always has a label; slash and MCP menus are listboxes with arrow keys, Enter to insert, Esc to close, and return focus to the textarea. Toggles are aria-pressed buttons with a check mark (not color alone). Over the character limit, Send is aria-disabled and the counter says how much to cut.</p>
+    </section>
+
+    <!-- 10. APPROVAL CARDS -->
+    <section class="card" aria-labelledby="h-appr">
+      <div class="ch"><h2 id="h-appr">Approval request card</h2><span class="use">Use for: agent actions that need a human gate — commands, budget raises, deploys</span></div>
+      <div class="bd g2">
+        <div class="col"><span class="st">Required</span>
+          <div class="apc req" role="group" aria-labelledby="ap1">
+            <div class="apc-h" style="background: var(--warn-bg)"><span class="tile" aria-hidden="true"><svg class="ic" width="18" height="18" viewBox="0 0 48 48"><path d="M24 5l15 6v11c0 10-7 17-15 20C16 39 9 32 9 22V11z" class="iw"/><path d="M24 5v37C16 39 9 32 9 22V11z" class="i2"/><path d="M24 17v9M24 31v.5" stroke-width="3"/></svg></span><h3 id="ap1">Approval required</h3><span class="pill warn">Risk: Medium</span></div>
+            <div class="apc-b">
+              <div class="cmd mono">ansible node-04 -b -m systemd -a "name=autobot-worker state=restarted"</div>
+              <span><b style="font-weight: 600">Why:</b> node-04 stopped answering after the 09:58 deploy. Requested by devops-engineer.</span>
+              <label style="display: flex; align-items: center; gap: 8px; color: var(--text2)"><input type="checkbox" style="width: 16px; height: 16px; accent-color: var(--primary)">Auto-approve similar commands</label>
+              <div style="display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap"><button type="button" class="btn sm">Deny</button><button type="button" class="btn sm">Approve with comment</button><button type="button" class="btn sm pri">Approve</button></div>
+            </div>
+          </div></div>
+        <div class="col"><span class="st">Auto-approved</span>
+          <div class="apc" role="group" aria-labelledby="ap2">
+            <div class="apc-h"><span class="tile" aria-hidden="true"><svg class="ic" width="18" height="18" viewBox="0 0 24 24"><path d="M13 2L5 14h6l-1 8 8-12h-6z" class="it2"/></svg></span><h3 id="ap2">Auto-approved</h3><span class="pill info">By rule</span></div>
+            <div class="apc-b">
+              <div class="cmd mono">ansible slm_fleet -m ping</div>
+              <span class="sub2">Rule: read-only Ansible modules · set by Mārtiņš Veiss · <span class="mono">10:43</span></span>
+              <a href="Approvals.dc.html" style="font-size: 13px; font-weight: 500; align-self: flex-start">Manage rules</a>
+            </div>
+          </div></div>
+        <div class="col"><span class="st">Approved</span>
+          <div class="apc" role="group" aria-labelledby="ap3">
+            <div class="apc-h"><span class="tile" aria-hidden="true"><svg class="ic" width="18" height="18" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10" class="sacc" stroke-width="2.2"/></svg></span><h3 id="ap3">Approved</h3><span class="pill ok">Approved</span></div>
+            <div class="apc-b">
+              <div class="cmd mono">ansible node-04 -b -m systemd -a "name=autobot-worker state=restarted"</div>
+              <span class="sub2">Mārtiņš Veiss · <span class="mono">10:46</span> · "Restart only, no reboot."</span>
+            </div>
+          </div></div>
+        <div class="col"><span class="st">Denied</span>
+          <div class="apc" role="group" aria-labelledby="ap4">
+            <div class="apc-h"><span class="tile danger" aria-hidden="true"><svg class="ic" width="18" height="18" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></span><h3 id="ap4">Denied</h3><span class="pill bad">Denied</span></div>
+            <div class="apc-b">
+              <div class="cmd mono">ansible node-04 -b -m reboot</div>
+              <span class="sub2">Mārtiņš Veiss · <span class="mono">10:45</span> · "Try a service restart first."</span>
+              <span style="font-size: 12.5px; color: var(--text2)">The agent was told and has proposed an alternative.</span>
+            </div>
+          </div></div>
+      </div>
+      <p class="rules"><b>Rules:</b> the command is always shown verbatim in mono; risk and outcome are pills with words. Required cards keep focus order Deny → Approve with comment → Approve, and are mirrored in Company OS › Approvals. Resolved cards record who and when.</p>
+    </section>
+
+    <!-- 11. CONTEXT METER -->
+    <section class="card" aria-labelledby="h-ctx">
+      <div class="ch"><h2 id="h-ctx">Context window meter</h2><span class="use">Use for: chat header — how much of the model's context the thread uses</span></div>
+      <div class="bd g3">
+        <div class="col"><span class="st">Normal</span>
+          <div class="meter"><div style="display: flex; justify-content: space-between; font-size: 13px"><span style="font-weight: 500">Context</span><span class="mono" style="color: var(--text2)">12.3k / 128k · 10%</span></div>
+            <div class="bar" role="meter" aria-label="Context window" aria-valuenow="10" aria-valuemin="0" aria-valuemax="100"><div class="bf" style="width: 10%"></div></div>
+            <span class="sub2" style="font-size: 12px">qwen2.5:14b · plenty of room</span></div></div>
+        <div class="col"><span class="st">Near limit · 88%</span>
+          <div class="meter" style="border-color: var(--bar-alert)"><div style="display: flex; justify-content: space-between; font-size: 13px"><span style="font-weight: 600">Context</span><span class="mono" style="color: var(--alert-text); font-weight: 600">112k / 128k · 88%</span></div>
+            <div class="bar" role="meter" aria-label="Context window, near limit" aria-valuenow="88" aria-valuemin="0" aria-valuemax="100"><div class="bf alert" style="width: 88%"></div></div>
+            <span style="font-size: 12px; color: var(--alert-text); font-weight: 500">Near limit — older turns will be summarized at 90%.</span>
+            <button type="button" class="btn sm" style="align-self: flex-start">Summarize now</button></div></div>
+        <div class="col"><span class="st">Summarizing</span>
+          <div class="meter"><div style="display: flex; justify-content: space-between; font-size: 13px"><span style="font-weight: 500">Context</span><span class="pill info">Summarizing</span></div>
+            <div class="bar" role="progressbar" aria-label="Summarizing earlier messages"><div class="bf sweep"></div></div>
+            <span class="sub2" style="font-size: 12px" role="status">Summarizing 42 earlier messages… sending is paused.</span></div></div>
+      </div>
+      <p class="rules"><b>Rules:</b> always show numbers next to the bar; near-limit adds a sentence and alert outline, not just a color change. While summarizing, disable Send and announce via role="status".</p>
+    </section>
+
+    <nav aria-label="Design system pages" class="card" style="grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px; padding: 12px">
+      <a href="ComponentsLayout.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">← Previous</span><span style="font-weight: 600; color: var(--text)">Layout &amp; utility</span></a>
+      <a href="FileBrowser.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">Next →</span><span style="font-weight: 600; color: var(--text)">File browser</span></a>
+    </nav>
+  </main>
+  </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"$preview":{"width":1440,"height":5600}}'>
+const LIMIT = 4000;
+const SLASH = [
+  ['/summarize', 'Decisions and open items from this chat'],
+  ['/research', 'research-agent with sources'],
+  ['/fleet-status', 'Health of all SLM fleet nodes'],
+  ['/kb-search', 'Search Knowledge only'],
+  ['/plan', 'Ask Overseer for a plan'],
+  ['/approvals', 'List pending Company OS approvals']
+];
+const SUGGESTIONS = [
+  ['Check fleet health', 'Ping every SLM node and flag failures', 'Check every node in the SLM fleet and summarise anything unhealthy.'],
+  ['Summarise approvals', 'What is waiting for me in Company OS?', '/approvals'],
+  ['Research a topic', 'With sources from Knowledge', '/research contextual retrieval vs reranking for long PDFs'],
+  ['Explain a failure', 'Why did devops-engineer heartbeat fail?', 'Why did the devops-engineer heartbeat fail at 10:12?']
+];
+const MODELS = { auto: 'qwen2.5:14b', 'llama3.1:8b': 'llama3.1:8b', 'mistral-nemo': 'mistral-nemo' };
+
+function pad(n) { return (n < 10 ? '0' : '') + n; }
+function replyFor(text) {
+  const t = text.toLowerCase();
+  if (t.indexOf('/summarize') === 0) return 'Summary so far: node-04 was unreachable after the 09:58 deploy; you approved a worker restart at 10:46. Open item: verify health on all six nodes and finish the 0.9.4 rollout on node-05 and node-06.';
+  if (t.indexOf('/approvals') === 0) return 'You have 3 pending approvals in Company OS: publish security artifact pack, raise NPU worker budget to 40 EUR, and merge the session lifecycle fix.';
+  if (t.indexOf('fleet') >= 0 || t.indexOf('node') >= 0) return 'All six fleet nodes answer now. node-04 came back after the worker restart; queue depth is 3 and falling. node-05 and node-06 still run worker 0.9.3.';
+  if (t.indexOf('/research') === 0) return 'Starting research-agent. I will search Knowledge first, then the web, and return a short brief with sources and reliability labels.';
+  return 'Got it. I will check Knowledge for related notes first, then draft a short answer with sources you can review.';
+}
+
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+  }
+  componentWillUnmount() { this.clearTimers(); }
+  clearTimers() { (this._timers || []).forEach((id) => clearTimeout(id)); this._timers = []; }
+  later(fn, ms) { this._timers = this._timers || []; this._timers.push(setTimeout(fn, ms)); }
+  now() { const d = new Date(); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  modelName() { const st = this.state || {}; return MODELS[st.model || 'auto'] || 'qwen2.5:14b'; }
+  scrollThread(smooth) {
+    try { const el = document.getElementById('cc-thread'); if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' }); } catch (e) {}
+  }
+  focusDraft() { try { const el = document.getElementById('cc-msg'); if (el) el.focus(); } catch (e) {} }
+  nextId() { this._id = (this._id || 0) + 1; return this._id; }
+  send(textArg) {
+    const st = this.state || {};
+    const text = (textArg != null ? textArg : (st.draft || '')).trim();
+    if (!text || st.streaming || text.length > LIMIT) return;
+    const msgs = (st.msgs || []).concat([{ id: this.nextId(), role: 'user', text: text, time: this.now() }]);
+    this.setState({ msgs: msgs, draft: textArg != null ? st.draft : '', streaming: true, partial: '', newCount: 0, started: Date.now() });
+    this.later(() => this.scrollThread(true), 40);
+    const reply = replyFor(text);
+    const words = reply.split(' ');
+    let i = 0;
+    const tick = () => {
+      i += 3;
+      if (i >= words.length) { this.finish(reply, false); return; }
+      this.setState({ partial: words.slice(0, i).join(' ') });
+      this.scrollThread(false);
+      this.later(tick, 110);
+    };
+    this.later(tick, 800);
+  }
+  finish(text, stopped) {
+    this.clearTimers();
+    const st = this.state || {};
+    const body = text || 'Stopped before the first token.';
+    const tokens = Math.max(1, Math.round(body.split(' ').length * 1.3));
+    const ms = Math.max(1, Date.now() - (st.started || Date.now()));
+    const meta = this.modelName() + ' · ' + tokens + ' tokens · ' + ms + ' ms' + (stopped ? ' · stopped' : '');
+    const msgs = (st.msgs || []).concat([{ id: this.nextId(), role: 'bot', text: body, time: this.now(), meta: meta, stopped: !!stopped }]);
+    this.setState({ msgs: msgs, streaming: false, partial: '' });
+    this.later(() => this.scrollThread(true), 40);
+  }
+  stop() { const st = this.state || {}; if (st.streaming) this.finish(st.partial || '', true); }
+  removeMsg(id) { const st = this.state || {}; this.setState({ msgs: (st.msgs || []).filter((m) => m.id !== id) }); }
+  copyText(text) { try { navigator.clipboard.writeText(text); } catch (e) {} }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    const draft = st.draft || '';
+    const len = draft.length;
+    const streaming = !!st.streaming;
+    const newCount = st.newCount === undefined ? 3 : st.newCount;
+    const opts = { kn: st.kn === undefined ? true : st.kn, ov: st.ov === undefined ? true : st.ov, thk: !!st.thk };
+    const slashQ = draft.indexOf('/') === 0 && draft.indexOf(' ') < 0 ? draft.toLowerCase() : null;
+    const slashItems = slashQ === null ? [] : SLASH.filter(([c]) => c.indexOf(slashQ) === 0).map(([c, d]) => ({
+      cmd: c, desc: d, pick: () => { this.setState({ draft: c + ' ' }); this.focusDraft(); }
+    }));
+    const msgs = (st.msgs || []).map((m, idx, arr) => ({
+      isUser: m.role === 'user',
+      isBot: m.role === 'bot',
+      text: m.text,
+      time: m.time,
+      meta: m.meta || '',
+      stopped: !!m.stopped,
+      onCopy: () => this.copyText(m.text),
+      onEdit: () => { this.setState({ draft: m.text }); this.focusDraft(); },
+      onDelete: () => this.removeMsg(m.id),
+      onRetry: () => {
+        const prev = arr.slice(0, idx).reverse().find((x) => x.role === 'user');
+        if (prev) { this.removeMsg(m.id); this.later(() => this.send(prev.text), 0); }
+      }
+    }));
+    return {
+      theme: cur,
+      themes: defs.map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => this.setState({ theme: id })
+      })),
+      msgs: msgs,
+      draft: draft,
+      onDraft: (e) => this.setState({ draft: e.target.value }),
+      onDraftKey: (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          if (slashItems.length && draft.indexOf(' ') < 0) { slashItems[0].pick(); return; }
+          this.send();
+        } else if (e.key === 'Escape') {
+          if (streaming) this.stop(); else if (slashQ !== null) this.setState({ draft: '' });
+        }
+      },
+      send: () => this.send(),
+      stop: () => this.stop(),
+      streaming: streaming,
+      idle: !streaming,
+      waiting: streaming && !st.partial,
+      generating: streaming && !!st.partial,
+      partial: st.partial || '',
+      modelName: this.modelName(),
+      sendDisabled: (!draft.trim() || len > LIMIT) ? 'true' : 'false',
+      cntLabel: len > LIMIT ? (len + ' / ' + LIMIT + ' · ' + (len - LIMIT) + ' over') : (len >= LIMIT * 0.9 ? (len + ' / ' + LIMIT + ' · ' + (LIMIT - len) + ' left') : (len + ' / ' + LIMIT)),
+      cntCls: len > LIMIT ? 'bad' : (len >= LIMIT * 0.9 ? 'warn' : ''),
+      showSlash: slashQ !== null,
+      slashItems: slashItems,
+      slashEmpty: slashQ !== null && slashItems.length === 0,
+      toggles: [['kn', 'Use Knowledge'], ['ov', 'Overseer'], ['thk', 'Thinking']].map(([k, label]) => ({
+        label: label,
+        pressed: opts[k] ? 'true' : 'false',
+        flip: () => this.setState({ [k]: !opts[k] })
+      })),
+      model: st.model || 'auto',
+      pickModel: (e) => this.setState({ model: e.target.value }),
+      showJump: newCount > 0,
+      jumpLabel: '↓ ' + newCount + ' new message' + (newCount === 1 ? '' : 's'),
+      jump: () => { this.scrollThread(true); this.setState({ newCount: 0 }); },
+      onThreadScroll: (e) => {
+        const el = e.currentTarget || e.target;
+        if (newCount > 0 && el && el.scrollHeight - el.scrollTop - el.clientHeight < 24) this.setState({ newCount: 0 });
+      },
+      copyLabel: st.copied ? 'Copied' : 'Copy',
+      copyCode: () => {
+        this.copyText('- hosts: node-04\n  become: true\n  tasks:\n    - name: Restart worker\n      ansible.builtin.systemd:\n        name: autobot-worker\n        state: restarted\n');
+        this.setState({ copied: true });
+        setTimeout(() => this.setState({ copied: false }), 2000);
+      },
+      suggestions: SUGGESTIONS.map(([title, hint, text]) => ({
+        title: title, hint: hint,
+        pick: () => { this.setState({ draft: text }); this.focusDraft(); }
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

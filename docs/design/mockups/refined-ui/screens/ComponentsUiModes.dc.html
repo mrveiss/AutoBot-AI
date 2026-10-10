@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot Pattern: Interface modes</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);vertical-align:top;line-height:1.5}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.segg{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.segg .seg{height:26px;padding:0 8px}
+.sub2{font-size:12.5px;color:var(--muted)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+/* ---- Components specimen classes ---- */
+.specbar{flex:1 1 100%;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:14px clamp(16px,2.5vw,28px);background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+.specbar h1{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.spec{flex:1 1 100%;box-sizing:border-box;padding:24px clamp(16px,2.5vw,32px) 48px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
+.spec>.full{grid-column:1 / -1}
+@media (max-width:900px){.spec{grid-template-columns:minmax(0,1fr)}}
+.ch .use{font-size:12.5px;color:var(--muted);font-weight:400}
+.cb{padding:16px;display:flex;flex-direction:column;gap:16px}
+.lbl{font-size:11.5px;color:var(--muted);font-weight:500}
+.rules{margin:0;padding:11px 16px;border-top:var(--bw) solid var(--line);font-size:12.5px;color:var(--text2);background:var(--surface2);border-radius:0 0 10px 10px;line-height:1.5}
+.rules b{color:var(--text)}
+.fx{outline:3px solid var(--focus);outline-offset:2px}
+.st{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+/* ---- Interface mode mechanism (same block in every app file) ---- */
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+/* ---- Board-only classes ---- */
+.code{margin:0;background:var(--surface2);border:var(--bw) solid var(--border);border-radius:8px;padding:12px 14px;font-size:12.5px;line-height:1.6;overflow-x:auto;white-space:pre;color:var(--text)}
+.uimode.is-hover .seg.h{color:var(--text);background:var(--line)}
+.anat{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start}
+.callout{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--text2);line-height:1.45}
+.num{width:20px;height:20px;border-radius:99px;border:1px solid var(--stroke);background:var(--i2t);display:grid;place-items:center;font-size:11px;font-weight:700;flex:none;box-sizing:border-box;color:var(--text)}
+.demo{border:var(--bw) solid var(--border);border-radius:8px;overflow:hidden;background:var(--bg)}
+.demo .dn{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:6px 10px;background:var(--surface);border-bottom:var(--bw) solid var(--border);font-size:13px}
+.demo .dn span.it{padding:6px 8px;border-radius:5px;color:var(--text2)}
+.demo .dn span.it.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent)}
+.kv{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0}
+.tag2{display:inline-block;font-size:12px;padding:2px 7px;border-radius:5px;border:var(--bw) solid var(--border);background:var(--surface2);color:var(--text2);margin:2px 4px 2px 0}
+.tag2.keep{background:var(--ok-bg);color:var(--ok-fg);border:var(--pill-b)}
+.rl{margin:0;padding:0;list-style:none;display:flex;flex-direction:column}
+.rl li{display:flex;gap:12px;align-items:flex-start;padding:11px 16px;border-bottom:var(--bw) solid var(--line);font-size:13.5px;line-height:1.5}
+.rl li:last-child{border-bottom:0}
+.frame{border:var(--bw) solid var(--border);border-radius:8px;overflow:hidden;background:var(--bg);display:flex;flex-direction:column;font-size:11px}
+.frame .fn{display:flex;align-items:center;gap:6px;height:30px;padding:0 10px;background:var(--surface);border-bottom:var(--bw) solid var(--border);white-space:nowrap;overflow:hidden}
+.frame .fn b{font-weight:600}
+.frame .fn .ni{color:var(--text2)}
+.frame .fn .ni.on{color:var(--text);font-weight:600;border-bottom:2px solid var(--accent)}
+.frame .fb{display:flex;min-height:300px}
+.frame .fs{width:110px;flex:none;background:var(--surface);border-right:var(--bw) solid var(--border);padding:8px;display:flex;flex-direction:column;gap:4px}
+.frame .fs i{display:block;height:6px;border-radius:2px;background:var(--line)}
+.frame .fm{flex-grow:1;min-width:0;display:flex;flex-direction:column}
+.frame .fh{display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--surface);border-bottom:var(--bw) solid var(--line)}
+.frame .ft{display:flex;gap:8px;padding:0 10px;background:var(--surface);border-bottom:var(--bw) solid var(--border);height:24px;align-items:center}
+.frame .ft span{color:var(--text2)}.frame .ft span.on{color:var(--text);font-weight:600}
+.frame .fc{padding:10px;display:flex;flex-direction:column;gap:7px;flex-grow:1}
+.mbox{border:var(--bw) solid var(--border);border-radius:5px;background:var(--surface);padding:6px 8px;display:flex;flex-direction:column;gap:4px}
+.mic{width:16px;height:16px;border-radius:4px;border:var(--bw) solid var(--border);background:var(--surface2);flex:none}
+.mchip{font-size:10px;padding:1px 6px;border-radius:4px;border:var(--bw) solid var(--border);color:var(--text2);background:var(--surface)}
+.mterm{background:var(--primary);color:var(--on-primary);border-radius:4px;padding:5px 7px;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;line-height:1.5}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html" class="adv">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <a href="ThemeManager.dc.html" class="adv" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon adv" aria-label="Plugins" title="Plugins"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" title="Secrets"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" title="Preferences"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Admin panel" title="Admin panel"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <button type="button" aria-label="Profile menu" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer">MV</button>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+  <aside class="sub" aria-label="Design system" style="flex: 1 1 230px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+    <a href="DesignSystem.dc.html" style="font-weight: 600; color: var(--text)">AutoBot Design System</a>
+    <span class="sub2" style="padding: 0 13px 4px">v1 · 4 themes</span>
+    <p class="sect">Overview</p>
+    <a href="DesignSystem.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z" class="i1"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z" class="it1"/></svg>Introduction</a>
+    <p class="sect">Foundations</p>
+    <a href="ComponentsStates.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4" class="i3"/><circle cx="16" cy="9" r="4" class="i2"/><circle cx="12" cy="16" r="4" class="i1"/></svg>Tokens &amp; states</a>
+    <a href="ComponentsGrid.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5" class="i1"/><rect x="13" y="4" width="7" height="7" rx="1.5" class="iw"/><rect x="4" y="13" width="7" height="7" rx="1.5" class="iw"/><rect x="13" y="13" width="7" height="7" rx="1.5" class="i2"/></svg>Grid, tables &amp; forms</a>
+    <a href="ComponentsCharts.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><rect x="5.5" y="11" width="3.5" height="7" class="i1"/><rect x="10.5" y="6" width="3.5" height="12" class="i2"/><rect x="15.5" y="13" width="3.5" height="5" class="i3"/></svg>Charts &amp; data viz</a>
+    <p class="sect">Components</p>
+    <a href="ComponentsForms.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4" class="i1"/><circle cx="16.5" cy="12" r="2.5" class="iw"/></svg>Form controls</a>
+    <a href="ComponentsTable.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="iw"/><path d="M4 10h16M4 14.5h16M10 10v9"/></svg>Data table</a>
+    <a href="ComponentsDialogs.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="it1"/><rect x="6" y="8" width="12" height="9" rx="1.5" class="iw"/></svg>Dialogs</a>
+    <a href="ComponentsOverlays.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" class="i2"/><path d="M10 21h4"/></svg>Overlays &amp; feedback</a>
+    <a href="ComponentsTooltips.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10h-7l-4 4v-4H4z" class="it1"/><path d="M8 10h8"/></svg>Tooltips</a>
+    <a href="ComponentsCommand.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" class="iw"/><path d="M7 10l3 2-3 2M12 15h5"/></svg>Command menu</a>
+    <a href="ComponentsNavigation.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M15 9l-2 4-4 2 2-4z" class="i3"/></svg>Navigation</a>
+    <a href="ComponentsLayout.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="iw"/><path d="M9 4v16M9 10h12"/></svg>Layout &amp; utility</a>
+    <a href="ComponentsChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h12v9H8l-3 3v-3H3z" class="i1"/><path d="M15 9h6v8h-2v3l-3-3h-5v-3"/></svg>Chat &amp; agent</a>
+    <p class="sect">Patterns</p>
+    <a href="FileBrowser.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z" class="i2"/></svg>File browser</a>
+    <a href="Mailbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" class="iw"/><path d="M3 7l9 6 9-6"/></svg>Mailbox</a>
+    <a href="ComponentsUiModes.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5" class="it1"/><rect x="4.5" y="8.5" width="8" height="7" rx="3.5" class="i2"/></svg>Interface modes</a>
+    <a href="SignUp.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" class="i2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Auth pages</a>
+    <a href="AccountSecurity.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4" class="i1"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>Account settings</a>
+    <a href="SearchResults.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>Global search</a>
+    <a href="HelpCenter.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="i2"/><path d="M10 10a2 2 0 1 1 3 1.7c-.7.4-1 1-1 1.8M12 16.5v.5"/></svg>Help centre</a>
+    <span style="flex-grow: 1; min-height: 16px" aria-hidden="true"></span>
+    <a href="Main.dc.html" style="border-top: var(--bw) solid var(--line); border-radius: 0; padding-top: 12px"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg>← Back to app</a>
+  </aside>
+  <div style="flex: 999 1 520px; min-width: 0; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <div class="specbar">
+    <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 260px">
+      <h1>Pattern · Interface modes (Minimal / Full)</h1>
+      <span class="sub2">One switch that hides advanced features for people who only need chat, knowledge and approvals — without removing anything.</span>
+    </div>
+    <span class="lbl">Preview mode</span>
+    <div role="group" aria-label="Preview interface mode" class="segg">
+      <sc-for list="{{uiModes}}" as="m" hint-placeholder-count="2"><button type="button" class="seg {{m.cls}}" aria-pressed="{{m.pressed}}" onClick="{{m.pick}}">{{m.label}}</button></sc-for>
+    </div>
+    <span class="lbl">Preview theme</span>
+    <div role="group" aria-label="Preview theme" class="segg">
+      <sc-for list="{{themes}}" as="t" hint-placeholder-count="4"><button type="button" class="seg {{t.cls}}" aria-pressed="{{t.pressed}}" onClick="{{t.pick}}">{{t.label}}</button></sc-for>
+    </div>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+  </div>
+
+  <main class="spec">
+
+    <!-- Purpose -->
+    <section class="card full" aria-labelledby="h-purpose">
+      <div class="ch"><span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5" class="it1"/><rect x="4.5" y="8.5" width="8" height="7" rx="3.5" class="i2"/></svg></span><h2 id="h-purpose">Purpose</h2><span class="use">Use for: reducing cognitive load for everyday users, without forking the product.</span></div>
+      <div class="cb" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px">
+        <div class="st"><span class="lbl">Problem</span><span style="font-size: 13.5px; line-height: 1.5">AutoBot exposes analytics, automation, SLM, MCP and developer tools on every screen. For a member who just chats and approves, that is noise.</span></div>
+        <div class="st"><span class="lbl">Solution</span><span style="font-size: 13.5px; line-height: 1.5"><b>Full</b> is today's UI. <b>Minimal</b> hides items marked advanced, collapses technical output into plain-language summaries, and keeps one link back to everything.</span></div>
+        <div class="st"><span class="lbl">Scope</span><span style="font-size: 13.5px; line-height: 1.5">Presentation only. Permissions, routes and data are identical in both modes. Default is <b>Full</b>.</span></div>
+      </div>
+    </section>
+
+    <!-- Toggle anatomy -->
+    <section class="card" aria-labelledby="h-toggle">
+      <div class="ch"><h2 id="h-toggle">Mode toggle</h2><span class="use">Use for: the top nav icon cluster, between Preferences and Admin.</span></div>
+      <div class="cb">
+        <div class="anat">
+          <div class="st">
+            <span class="lbl">Live (bound to this board) · in its place in the icon cluster</span>
+            <div style="display: flex; align-items: center; gap: 2px; padding: 6px 10px; border: var(--bw) solid var(--border); border-radius: 10px; background: var(--surface)">
+              <span class="tile" style="width: 40px; height: 40px; background: transparent; border-color: transparent"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></span>
+              <span class="tile" style="width: 40px; height: 40px; background: transparent; border-color: transparent"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></span>
+              <span class="tile" style="width: 40px; height: 40px; background: transparent; border-color: transparent"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></span>
+              <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" title="Minimal interface: hide advanced features"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+              <span class="tile" style="width: 40px; height: 40px; background: transparent; border-color: transparent"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></span>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px; flex: 1 1 220px">
+            <div class="callout"><span class="num">1</span><span>Sits in the right-hand icon cluster: Plugins · Secrets · Preferences · <b>Minimal</b> · Admin · profile. It never hides itself, so the way back to Full is always one click away.</span></div>
+            <div class="callout"><span class="num">2</span><span>One toggle button with a stable label <b>"Minimal"</b> + layout icon. On = <span class="mono">.on</span> (accent border, surface2 fill) + <span class="mono">aria-pressed="true"</span>. Off = Full UI.</span></div>
+            <div class="callout"><span class="num">3</span><span>Visually hidden <span class="mono">role="status"</span> announces "Minimal interface on / off".</span></div>
+          </div>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 18px">
+          <div class="st"><span class="lbl">Off · Full UI (default)</span><button type="button" class="uitog" aria-pressed="false"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button></div>
+          <div class="st"><span class="lbl">Hover</span><button type="button" class="uitog" aria-pressed="false" style="background: var(--surface2); color: var(--text)"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button></div>
+          <div class="st"><span class="lbl">Focus-visible</span><button type="button" class="uitog" aria-pressed="false" style="outline: 3px solid var(--focus); outline-offset: 2px"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button></div>
+          <div class="st"><span class="lbl">On · Minimal UI</span><button type="button" class="uitog on" aria-pressed="true"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button></div>
+          <div class="st"><span class="lbl">Locked by admin</span><button type="button" class="uitog on" aria-pressed="true" aria-disabled="true" title="Set by your administrator" style="opacity: .55; cursor: not-allowed"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button><span class="sub2" style="font-size: 11.5px">Tooltip + Preferences note explain why</span></div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> Saves to <span class="mono">localStorage['autobot-ui-mode']</span> (try/catch) and <span class="mono">setState({ui})</span>; loaded in <span class="mono">componentDidMount</span> next to the theme. Keep the text label next to the icon (never icon-only). The same setting is in Profile settings → Interface mode. Keyboard: Tab, then Enter/Space toggles.</p>
+    </section>
+
+    <!-- Escape hatch -->
+    <section class="card" aria-labelledby="h-hatch">
+      <div class="ch"><h2 id="h-hatch">“Show all features” link</h2><span class="use">Use for: sub-sidebar foot or page header, visible only in Minimal.</span></div>
+      <div class="cb">
+        <div class="st">
+          <span class="lbl">Live — appears when preview mode is Minimal</span>
+          <div class="only-min minnote" style="padding: 10px 12px; border: var(--bw) dashed var(--border); border-radius: 8px; background: var(--surface2)"><span>Showing essentials</span><button type="button" class="linkbtn" onClick="{{showAll}}">Show all features</button></div>
+          <span class="adv sub2" style="padding: 10px 12px; border: var(--bw) dashed var(--border); border-radius: 8px">The link only renders in Minimal — switch “Preview mode” to Minimal to see it.</span>
+        </div>
+        <div class="st"><span class="lbl">In a sub-sidebar foot</span>
+          <div style="width: 220px; padding: 8px; border: var(--bw) solid var(--border); border-radius: 8px; background: var(--surface)">
+            <div style="font-size: 13px; padding: 4px 8px; color: var(--text2)">Manage</div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-top: 8px; padding: 10px 8px 2px; border-top: var(--bw) solid var(--line)"><span>Showing essentials</span><button type="button" class="linkbtn">Show all features</button></div>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> A real <span class="mono">&lt;button&gt;</span> styled as a link (it changes state, not location). Always reachable in Minimal on every page that hides something.</p>
+    </section>
+
+    <!-- Mechanism -->
+    <section class="card full" aria-labelledby="h-mech">
+      <div class="ch"><h2 id="h-mech">Mechanism · <span class="mono">.adv</span> and <span class="mono">.only-min</span></h2><span class="use">Use for: every app file — identical so it can be rolled out by search-and-replace.</span></div>
+      <div class="cb" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px">
+        <div class="st" style="min-width: 0"><span class="lbl">1 · Root + CSS (append to helmet style)</span>
+<pre class="code mono">&lt;div class="th" data-theme="…" data-ui="…"&gt;
+
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}</pre></div>
+        <div class="st" style="min-width: 0"><span class="lbl">2 · Mark markup</span>
+<pre class="code mono">&lt;a href="Analytics.dc.html" class="adv"&gt;Analytics&lt;/a&gt;
+&lt;section class="card adv"&gt;Execution plan…&lt;/section&gt;
+&lt;section class="card only-min"&gt;
+  AutoBot checked 6 nodes · 1 needs a restart
+&lt;/section&gt;
+&lt;p class="sect adv"&gt;Research&lt;/p&gt;  &lt;!-- empty group --&gt;</pre></div>
+        <div class="st" style="min-width: 0"><span class="lbl">3 · Script (inside the same Component)</span>
+<pre class="code mono">data-props: "ui":{"editor":"enum",
+  "options":["full","minimal"],"default":"full"}
+
+componentDidMount: read 'autobot-ui-mode'
+setUi(id): localStorage.setItem(…) ; setState({ui:id, uiAnnounce})
+renderVals: ui = state.ui || props.ui || 'full'
+  uiModes: [minimal, full] → label, cls, pressed, pick
+  showAll: () =&gt; setUi('full')</pre></div>
+      </div>
+      <div class="cb" style="padding-top: 0">
+        <div class="st"><span class="lbl">Live demo — these nav items carry <span class="mono">.adv</span>; flip “Preview mode” above</span>
+          <div class="demo" style="width: 100%">
+            <div class="dn"><b style="margin-right: 8px">AutoBot</b><span class="it">Home</span><span class="it on">Chat</span><span class="it">Knowledge</span><span class="it">Company OS</span><span class="it adv">Analytics</span><span style="flex-grow: 1"></span><span class="pill idle adv">SLM Admin ↗</span><span class="pill idle adv">Plugins</span><span class="pill idle adv">Secrets</span><span class="pill idle">Preferences</span><span class="pill idle adv">Admin</span></div>
+            <div style="padding: 10px 12px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 13px">
+              <span class="adv pill info">Full: 6 extra items visible</span>
+              <span class="only-min pill ok">Minimal: 5 essentials</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="rules"><b>Rules:</b> Mark the outermost element that should vanish (a group heading too, if all its items are advanced). <span class="mono">.adv-only-full</span> is reserved for things that are not “advanced” but only make sense next to advanced items. Don't use <span class="mono">sc-if</span> for modes — CSS keeps one DOM and avoids layout jumps in the editor. Widgets rendered from a list get <span class="mono">adv</span> via their <span class="mono">cls</span> field.</p>
+    </section>
+
+    <!-- What minimal hides -->
+    <section class="card full" aria-labelledby="h-table">
+      <div class="ch"><h2 id="h-table">What Minimal hides vs keeps</h2><span class="use">Use for: the proof screens; extend per area when rolling out.</span></div>
+      <div style="overflow-x: auto">
+        <table style="border-collapse: collapse; width: 100%; min-width: 760px">
+          <thead><tr><th style="width: 130px">Area</th><th>Hidden in Minimal (<span class="mono" style="text-transform: none">.adv</span>)</th><th>Always kept</th></tr></thead>
+          <tbody>
+            <tr><td><b>Top nav</b></td><td><span class="tag2">Analytics</span><span class="tag2">SLM Admin</span><span class="tag2">Plugins</span><span class="tag2">Secrets</span><span class="tag2">Admin</span></td><td><span class="tag2 keep">Home</span><span class="tag2 keep">Chat</span><span class="tag2 keep">Knowledge</span><span class="tag2 keep">Company OS</span><span class="tag2 keep">Preferences</span><span class="tag2 keep">Profile</span><span class="tag2 keep">Mode toggle</span></td></tr>
+            <tr><td><b>Home</b></td><td><span class="tag2">Brains in use (Ollama / NPU / cloud)</span><span class="tag2">Tasks this week chart</span><span class="tag2">Fleet internals</span></td><td><span class="tag2 keep">Greeting</span><span class="tag2 keep">KPIs</span><span class="tag2 keep">Specialist agents</span><span class="tag2 keep">Recent activity</span><span class="tag2 keep">Customize layout</span></td></tr>
+            <tr><td><b>Chat</b></td><td><span class="tag2">Terminal / Browser / Remote Desktop tabs</span><span class="tag2">Compare models</span><span class="tag2">Export</span><span class="tag2">Chat settings</span><span class="tag2">Context meter</span><span class="tag2">Voice chat</span><span class="tag2">Overseer + Thinking toggles</span><span class="tag2">Model select</span><span class="tag2">Slash / MCP hint</span><span class="tag2">Execution plan + terminal output</span><span class="tag2">Reasoning trace, token stats</span></td><td><span class="tag2 keep">Chat + Files tabs</span><span class="tag2 keep">Folders + history</span><span class="tag2 keep">Attach, voice input, Use Knowledge</span><span class="tag2 keep">Plain-language summary card</span><span class="tag2 keep">Command approval card</span><span class="tag2 keep">Sources</span></td></tr>
+            <tr><td><b>Knowledge</b></td><td><span class="tag2">Graph</span><span class="tag2">Vector Store</span><span class="tag2">Research</span><span class="tag2">MCP Resources</span><span class="tag2">System Docs</span><span class="tag2">Entities</span><span class="tag2">Health</span><span class="tag2">Web Research (+ heading)</span><span class="tag2">Health strip</span><span class="tag2">Vectorization badges + bulk Vectorize</span></td><td><span class="tag2 keep">Browser</span><span class="tag2 keep">Transcriber</span><span class="tag2 keep">Manage</span><span class="tag2 keep">Categories</span><span class="tag2 keep">Document tree + preview</span><span class="tag2 keep">Failed status</span></td></tr>
+            <tr><td><b>Company OS</b></td><td><span class="tag2">Activity</span><span class="tag2">Portfolios</span><span class="tag2">Timeline</span><span class="tag2">Automation</span><span class="tag2">Routines</span><span class="tag2">Org Chart</span><span class="tag2">Roles</span><span class="tag2">Costs &amp; Budget</span><span class="tag2">Heartbeat</span><span class="tag2">Portability</span><span class="tag2">Secrets</span><span class="tag2">Heartbeat KPI + runs widget</span><span class="tag2">Live Activity</span><span class="tag2">Export</span><span class="tag2">Budget footnote</span></td><td><span class="tag2 keep">Dashboard</span><span class="tag2 keep">My Reviews</span><span class="tag2 keep">Approvals</span><span class="tag2 keep">CEO Chat</span><span class="tag2 keep">Backlog</span><span class="tag2 keep">Boards</span><span class="tag2 keep">Goals</span><span class="tag2 keep">Members</span><span class="tag2 keep">Approvals / Budget / Agents widgets</span></td></tr>
+            <tr><td style="border-bottom: 0"><b>Preferences</b></td><td style="border-bottom: 0"><span class="tag2">Feature Flags</span><span class="tag2">LLM Configuration</span></td><td style="border-bottom: 0"><span class="tag2 keep">Interface mode setting</span><span class="tag2 keep">Theme</span><span class="tag2 keep">Security, API tokens, notifications</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="rules"><b>Rules:</b> When in doubt, keep it. An item is advanced if a typical member would not use it weekly <i>and</i> hiding it loses no information they own.</p>
+    </section>
+
+    <!-- Rules -->
+    <section class="card full" aria-labelledby="h-rules">
+      <div class="ch"><h2 id="h-rules">Rules</h2><span class="use">Use for: deciding what may be marked <span class="mono">.adv</span>.</span></div>
+      <ul class="rl">
+        <li><span class="pill bad">Never</span><span>Hide <b>approvals</b>, <b>errors</b>, <b>security notices</b> or <b>data the user owns</b> (their chats, documents, budgets that block them). A failed status pill stays even when other status badges are hidden.</span></li>
+        <li><span class="pill info">Hidden ≠ disabled</span><span>Minimal only removes entry points. Direct links, bookmarks, search results and notifications still open the page; that page shows the “Show all features” link.</span></li>
+        <li><span class="pill ok">Always</span><span>Keep <b>“Show all features”</b> reachable in Minimal, and the mode toggle visible in the top nav in both modes.</span></li>
+        <li><span class="pill idle">Per user</span><span>Mode is stored per user per device. Administrators set the default and can lock it per role in <b>SLM</b>; a locked toggle is shown disabled with a reason.</span></li>
+        <li><span class="pill idle">Announce</span><span>Every change is announced via <span class="mono">aria-live="polite"</span>: “Minimal interface on. Advanced features hidden.” Focus stays on the toggle.</span></li>
+        <li><span class="pill warn">Replace, don't drop</span><span>When Minimal hides technical detail that carries meaning (execution plan, terminal output), show a one-line plain-language summary with <span class="mono">.only-min</span>.</span></li>
+        <li><span class="pill idle">Future</span><span>Don't hide items the user pinned or used in the last 14 days — they are promoted to essentials for that user.</span></li>
+      </ul>
+    </section>
+
+    <!-- Side by side -->
+    <section class="card full" aria-labelledby="h-side">
+      <div class="ch"><h2 id="h-side">Chat screen · Full vs Minimal</h2><span class="use">Static miniatures of Chat.dc.html in both modes.</span></div>
+      <div class="cb" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 18px">
+        <figure style="margin: 0; display: flex; flex-direction: column; gap: 8px">
+          <figcaption class="lbl">Full · 23 controls on screen</figcaption>
+          <div class="frame" aria-hidden="true">
+            <div class="fn"><b>AutoBot</b><span class="ni">Home</span><span class="ni on">Chat</span><span class="ni">Knowledge</span><span class="ni">Company OS</span><span class="ni">Analytics</span><span style="flex-grow: 1"></span><span class="mchip">Min</span><span class="mchip" style="font-weight: 600; color: var(--text)">Full</span><span class="mchip">SLM ↗</span><span class="mic"></span><span class="mic"></span><span class="mic"></span><span class="mic"></span></div>
+            <div class="fb">
+              <div class="fs"><span class="mchip" style="background: var(--primary); color: var(--on-primary); text-align: center">New chat</span><i style="width: 80%"></i><i style="width: 70%"></i><i style="width: 60%"></i><i style="width: 85%; margin-top: 6px"></i><i style="width: 75%"></i><i style="width: 65%"></i></div>
+              <div class="fm">
+                <div class="fh"><b style="flex-grow: 1">Fleet health check</b><span style="width: 40px; height: 4px; border-radius: 2px; background: var(--bar)"></span><span class="mic"></span><span class="mic"></span><span class="mic"></span><span class="mic"></span><span class="mic"></span></div>
+                <div class="ft"><span class="on">Chat</span><span>Files</span><span>Terminal</span><span>Browser</span><span>Remote Desktop</span></div>
+                <div class="fc">
+                  <div class="mbox" style="align-self: flex-end; background: var(--primary); color: var(--on-primary); border-color: var(--primary)">Check every node and restart anything down.</div>
+                  <div class="mbox"><b>Execution Plan · 2 of 4</b><span>✓ Read inventory · ✓ Ping 6 nodes · Restart node-04 · Verify</span></div>
+                  <div class="mterm">$ ansible slm_fleet -m ping<br>node-04 | UNREACHABLE</div>
+                  <div class="mbox" style="border-color: var(--stroke)"><b>Command Approval Required</b><span style="display: flex; gap: 4px; justify-content: flex-end"><span class="mchip">Deny</span><span class="mchip" style="background: var(--primary); color: var(--on-primary)">Approve</span></span></div>
+                  <div class="mbox" style="margin-top: auto"><span style="color: var(--muted)">Ask AutoBot, or type / for commands…</span><span style="display: flex; gap: 4px"><span class="mchip">Knowledge</span><span class="mchip">Overseer</span><span class="mchip">Thinking</span><span style="flex-grow: 1"></span><span class="mchip">Model ▾</span></span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </figure>
+        <figure style="margin: 0; display: flex; flex-direction: column; gap: 8px">
+          <figcaption class="lbl">Minimal · 9 controls on screen</figcaption>
+          <div class="frame" aria-hidden="true">
+            <div class="fn"><b>AutoBot</b><span class="ni">Home</span><span class="ni on">Chat</span><span class="ni">Knowledge</span><span class="ni">Company OS</span><span style="flex-grow: 1"></span><span class="mchip" style="font-weight: 600; color: var(--text)">Min</span><span class="mchip">Full</span><span class="mic"></span></div>
+            <div class="fb">
+              <div class="fs"><span class="mchip" style="background: var(--primary); color: var(--on-primary); text-align: center">New chat</span><i style="width: 80%"></i><i style="width: 70%"></i><i style="width: 60%"></i><i style="width: 85%; margin-top: 6px"></i><i style="width: 75%"></i><i style="width: 65%"></i></div>
+              <div class="fm">
+                <div class="fh"><b style="flex-grow: 1">Fleet health check</b><span style="color: var(--muted)">Showing essentials · <u style="color: var(--link)">Show all</u></span><span class="mic"></span></div>
+                <div class="ft"><span class="on">Chat</span><span>Files</span></div>
+                <div class="fc">
+                  <div class="mbox" style="align-self: flex-end; background: var(--primary); color: var(--on-primary); border-color: var(--primary)">Check every node and restart anything down.</div>
+                  <div class="mbox" style="flex-direction: row; align-items: center; gap: 6px"><b style="flex-grow: 1">AutoBot checked 6 nodes · 1 needs a restart — approve?</b><span class="pill warn" style="font-size: 9.5px; padding: 1px 5px">Needs you</span></div>
+                  <div class="mbox" style="border-color: var(--stroke)"><b>Command Approval Required</b><span style="display: flex; gap: 4px; justify-content: flex-end"><span class="mchip">Deny</span><span class="mchip" style="background: var(--primary); color: var(--on-primary)">Approve</span></span></div>
+                  <div class="mbox" style="margin-top: auto"><span style="color: var(--muted)">Ask AutoBot anything…</span><span style="display: flex; gap: 4px"><span class="mchip">Knowledge</span><span style="flex-grow: 1"></span><span class="mchip" style="background: var(--primary); color: var(--on-primary)">Send</span></span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </figure>
+      </div>
+      <p class="rules"><b>Note:</b> The approval card is identical in both modes. Open <a href="Chat.dc.html">Chat</a>, <a href="Main.dc.html">Home</a>, <a href="Knowledge.dc.html">Knowledge</a>, <a href="CompanyOS.dc.html">Company OS</a> or <a href="Preferences.dc.html">Preferences</a> and use the top-nav toggle to see the real thing — the choice is shared through <span class="mono">autobot-ui-mode</span>.</p>
+    </section>
+
+    <nav aria-label="Design system pages" class="card" style="grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px; padding: 12px">
+      <a href="Mailbox.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">← Previous</span><span style="font-weight: 600; color: var(--text)">Mailbox</span></a>
+      <a href="SignUp.dc.html" style="flex: 1 1 240px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--line); border-radius: 8px; text-decoration: none"><span class="sub2">Next →</span><span style="font-weight: 600; color: var(--text)">Auth pages</span></a>
+    </nav>
+  </main>
+  </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":2900}}'>
+const THEMES = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+const MODES = [['minimal', 'Minimal'], ['full', 'Full']];
+
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+  }
+  setUi(id) {
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      uiModes: MODES.map(([id, label]) => ({ label: label, cls: id === ui ? 'on' : '', pressed: id === ui ? 'true' : 'false', pick: () => this.setUi(id) })),
+      themes: THEMES.map(([id, label]) => ({ label: label, cls: id === cur ? 'on' : '', pressed: id === cur ? 'true' : 'false', pick: () => this.setState({ theme: id }) }))
+    };
+  }
+}
+</script>
+</body>
+</html>

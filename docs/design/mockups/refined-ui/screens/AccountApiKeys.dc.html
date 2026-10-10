@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot API tokens</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.segs{display:inline-flex;flex-wrap:wrap;gap:2px;padding:3px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.segs .seg{display:inline-flex;align-items:center;gap:6px;height:32px}
+legend{font-size:12.5px;font-weight:600;color:var(--text2);padding:0;margin-bottom:8px}
+fieldset{border:0;margin:0;padding:0}
+.hid{display:none}
+.prof{display:flex;align-items:center;gap:10px;padding:4px 10px 12px;margin-bottom:4px;border-bottom:var(--bw) solid var(--line)}
+.av{width:34px;height:34px;border-radius:99px;background:var(--brand-bg);color:var(--brand-fg);display:grid;place-items:center;font-weight:600;font-size:12.5px;flex:none}
+.th .nav a.avlink{width:34px;height:34px;padding:0;margin-left:8px;border-radius:99px;background:var(--brand-bg);color:var(--brand-fg);justify-content:center;font-size:12.5px;font-weight:600}
+.th .nav a.avlink.on{outline:var(--nav-on-bw) solid var(--accent);outline-offset:2px;border-bottom:0;padding-top:0}
+.inp{height:36px;box-sizing:border-box;padding:0 10px;background:var(--surface);border:var(--bw) solid var(--border);color:var(--text);border-radius:6px;font:inherit;font-size:13.5px;width:100%}
+.fld{display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:600;color:var(--text2)}
+.chip{font-size:11.5px;font-weight:500;padding:2px 7px;border-radius:5px;border:var(--bw) solid var(--border);background:var(--surface2);color:var(--text2);white-space:nowrap;font-family:'IBM Plex Mono',ui-monospace,monospace}
+.chip.w{border-color:var(--alert-text);color:var(--alert-text)}
+.chips{display:flex;flex-wrap:wrap;gap:4px;white-space:normal;max-width:300px}
+.th .btn.dng{color:var(--alert-text);border-color:var(--alert-text)}
+.scope{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:8px;border:var(--bw) solid var(--line);cursor:pointer}
+.scope:hover{background:var(--surface2)}
+.scope input{width:16px;height:16px;margin:2px 0 0;accent-color:var(--primary);flex:none}
+.scope b{font-size:13px;font-weight:600;display:block}
+.scope span{font-size:12px;color:var(--muted)}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
+.reveal{display:flex;flex-direction:column;gap:12px;padding:16px;border-radius:10px;background:var(--ok-bg);color:var(--ok-fg);border:var(--bw) solid var(--ok-fg)}
+.tok{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 8px 8px 12px;border-radius:6px;background:var(--surface);color:var(--text);border:var(--bw) solid var(--border)}
+.tok code{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13.5px;flex:1 1 300px;word-break:break-all}
+.note{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:12px 14px;border-radius:8px;border:var(--pill-b);font-size:13px}
+.note.i{background:var(--info-bg);color:var(--info-fg)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html" class="adv">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="ThemeManager.dc.html" class="adv" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px" data-tip="Small language model administration — opens separate console" data-tip-pos="bottom">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon adv" aria-label="Plugins" data-tip="Plugins" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Admin panel" data-tip="Admin panel" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="Preferences.dc.html" class="avlink on" aria-current="page" aria-label="Profile settings, Mārtiņš Veiss" data-tip="Profile settings" data-tip-pos="left">MV</a>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+
+    <aside class="sub" aria-label="Profile settings sections" style="flex: 1 1 220px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+      <div class="prof">
+        <span class="av" aria-hidden="true">MV</span>
+        <div style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+          <strong style="font-size: 14px; font-weight: 600">Mārtiņš Veiss</strong>
+          <span class="sub2">Profile settings</span>
+        </div>
+      </div>
+      <p class="sect">Personal</p>
+      <a href="Preferences.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20c0-3 2-4 4-4l8-11 3 3-11 8c0 2-1 4-4 4z" class="i3"/></svg>Appearance</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16"/></svg>Language</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" class="it3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Voice</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>Web Research</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v16l-6-4-6 4z" class="i2"/></svg>Slash Presets</a>
+      <p class="sect">Account</p>
+      <a href="AccountSecurity.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2" class="i2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v2"/></svg>Security</a>
+      <a href="AccountApiKeys.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" class="it1"/><path d="M8 10l-2 2 2 2M16 10l2 2-2 2M13 9l-2 6"/></svg>API Tokens</a>
+      <a href="AccountIntegrations.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2" class="i1"/><rect x="13" y="13" width="8" height="8" rx="2" class="i3"/><path d="M11 7h4a2 2 0 0 1 2 2v4"/></svg>Integrations</a>
+      <p class="sect">Connections</p>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i2"/><path d="M12 12h9M18 12v3M21 12v2"/></svg>API Keys</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v5M15 3v5M6 8h12v4a6 6 0 0 1-12 0z" class="it1"/><path d="M12 18v3"/></svg>Connection</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l18-7-7 18-3-8z" class="i1"/></svg>Telegram</a>
+      <a href="AccountNotifications.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z" class="i2"/><path d="M10 20h4"/></svg>Notifications</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="2" class="it3"/><path d="M11 18h2"/></svg>Mobile Devices</a>
+      <p class="sect">Control</p>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6z" class="it1"/><path d="M9 12l2 2 4-4"/></svg>Privacy</a>
+      <a href="#" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4M5 4h12l-3 4 3 4H5" class="i3"/></svg>Feature Flags <span class="pill idle" style="margin-left: auto" data-tip="Requires admin role" data-tip-pos="right">admin</span></a>
+      <a href="LlmConfig.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" class="it2"/><rect x="9" y="9" width="6" height="6" class="i3"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg>LLM Configuration <span class="pill idle" style="margin-left: auto" data-tip="Opens in the SLM Admin console" data-tip-pos="right">SLM ↗</span></a>
+      <div class="only-min minnote" style="margin: 16px 10px 0; padding-top: 12px; border-top: var(--bw) solid var(--line)"><span>Showing essentials</span><button type="button" class="linkbtn" onClick="{{showAll}}">Show all features</button></div>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 20px">
+
+      <header style="display: flex; flex-wrap: wrap; gap: 14px; align-items: center">
+        <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1">
+          <span class="sub2">Profile / Settings / API Tokens</span>
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">Personal API tokens</h1>
+          <span class="sub2">Tokens act as you for the AutoBot REST API, CLI and <span tabindex="0" data-tip="Model Context Protocol — lets AI apps like Claude Desktop call AutoBot tools">MCP</span> clients. They never exceed your own permissions.</span>
+        </div>
+        <button type="button" class="btn pri" onClick="{{openForm}}" aria-expanded="{{formOpen}}"><svg class="ic sonp" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New token</button>
+      </header>
+
+      <sc-if value="{{hasNew}}" hint-placeholder-val="{{ false }}">
+        <section class="reveal" role="status" aria-labelledby="rv">
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
+            <svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" class="iw"/><path d="M8 12l3 3 5-6"/></svg>
+            <strong id="rv" style="font-size: 14px; flex-grow: 1">Token “{{newName}}” created — copy it now. You won’t be able to see it again.</strong>
+            <button type="button" class="btn sm" onClick="{{dismiss}}">I’ve saved it</button>
+          </div>
+          <div class="tok">
+            <code aria-label="New token value">{{tokVal}}</code>
+            <button type="button" class="btn sm" aria-pressed="{{revealed}}" onClick="{{toggleReveal}}" data-tip="Show or mask the full token value">{{revealBtn}}</button>
+            <button type="button" class="btn sm" onClick="{{copy}}" data-tip="Copy full token to clipboard">{{copyTxt}}</button>
+          </div>
+          <span style="font-size: 12.5px">Store it in a password manager or AutoBot Secrets. The server keeps only a hash; prefix <span class="mono" tabindex="0" data-tip="Token prefix — the first 13 characters, safe to display; the rest is never shown again">abt_live_7Hq2</span> identifies it in the list below.</span>
+        </section>
+      </sc-if>
+
+      <sc-if value="{{formOpenB}}" hint-placeholder-val="{{ true }}">
+        <section class="card" aria-labelledby="nt">
+          <div class="ch">
+            <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i2"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></span>
+            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px">
+              <h2 id="nt" style="margin: 0; font-size: 15px; font-weight: 600">Create token</h2>
+              <span class="sub2">Grant only the scopes the client needs</span>
+            </div>
+          </div>
+          <div style="padding: 16px; display: flex; flex-direction: column; gap: 18px">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px">
+              <label class="fld">Token name<input class="inp" type="text" value="grafana-dashboard-sync" aria-describedby="nh"><span id="nh" class="sub2" style="font-weight: 400">Shown in the list and in the audit log</span></label>
+              <label class="fld">Expires<select class="inp"><option>7 days</option><option>30 days</option><option selected>90 days</option><option>1 year</option><option>Custom date</option></select></label>
+              <label class="fld adv"><span tabindex="0" data-tip="CIDR range, e.g. 198.51.100.0/24 — calls from other addresses are rejected">Restrict to IPs (optional)</span><input class="inp mono" type="text" placeholder="198.51.100.0/24"></label>
+            </div>
+            <fieldset>
+              <legend><span tabindex="0" data-tip="Scopes limit what the token can do — resource:action, e.g. knowledge:read">Scopes</span> · {{scopeCount}} selected</legend>
+              <div class="sgrid">
+                <sc-for list="{{scopes}}" as="s" hint-placeholder-count="10">
+                  <label class="scope"><input type="checkbox" checked="{{s.checked}}" onClick="{{s.toggle}}"><div><b class="mono">{{s.id}}</b><span>{{s.desc}}</span></div></label>
+                </sc-for>
+              </div>
+            </fieldset>
+            <sc-if value="{{hasWrite}}" hint-placeholder-val="{{ true }}">
+              <div class="note i"><strong>Note:</strong><span style="flex: 1 1 300px">Write and admin scopes are logged on every call and may require approval in Company OS for budget-affecting actions.</span></div>
+            </sc-if>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap">
+              <button type="button" class="btn pri" onClick="{{create}}">Create token</button>
+              <button type="button" class="btn" onClick="{{closeForm}}">Cancel</button>
+            </div>
+          </div>
+        </section>
+      </sc-if>
+
+      <section class="card" aria-labelledby="tl">
+        <div class="ch">
+          <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" class="it1"/><path d="M8 10l-2 2 2 2M16 10l2 2-2 2M13 9l-2 6"/></svg></span>
+          <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px">
+            <h2 id="tl" style="margin: 0; font-size: 15px; font-weight: 600">Your tokens</h2>
+            <span class="sub2">{{tokCount}} tokens · organization limit 10 per user</span>
+          </div>
+        </div>
+        <div style="overflow-x: auto">
+          <table style="width: 100%; border-collapse: collapse">
+            <thead><tr><th scope="col">Name</th><th scope="col"><span tabindex="0" data-tip="Highlighted scopes can write or administer — logged on every call">Scopes</span></th><th scope="col">Created</th><th scope="col">Last used</th><th scope="col"><span tabindex="0" data-tip="Amber: expiring within 7 days or no expiry set · Red: expired">Expires</span></th><th scope="col"><span class="hid">Actions</span></th></tr></thead>
+            <tbody>
+              <sc-for list="{{tokens}}" as="t" hint-placeholder-count="5">
+                <tr>
+                  <td><span style="display: flex; flex-direction: column; gap: 2px"><strong style="font-weight: 600">{{t.name}}</strong><span class="sub2 mono" tabindex="0" data-tip="Token prefix only — full value is shown once at creation">{{t.prefix}}…</span></span></td>
+                  <td><div class="chips"><sc-for list="{{t.scopes}}" as="c" hint-placeholder-count="3"><span class="chip {{c.cls}}">{{c.id}}</span></sc-for></div></td>
+                  <td class="mono">{{t.created}}</td>
+                  <td><span style="display: flex; flex-direction: column; gap: 2px"><span>{{t.used}}</span><span class="sub2 mono adv" tabindex="0" data-tip="Source IP of the most recent call">{{t.from}}</span></span></td>
+                  <td><span class="pill {{t.expCls}}">{{t.exp}}</span></td>
+                  <td style="text-align: right"><button type="button" class="btn sm dng" aria-label="{{t.label}}" onClick="{{t.revoke}}" data-tip="Takes effect on all fleet nodes within 30 s" data-tip-pos="left">Revoke</button></td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+        <sc-if value="{{noTokens}}" hint-placeholder-val="{{ false }}">
+          <div class="row"><span class="sub2">No tokens. Create one to use the AutoBot API or CLI.</span></div>
+        </sc-if>
+      </section>
+
+      <section class="card adv" aria-labelledby="us">
+        <div class="ch"><h2 id="us">Using a token</h2><a href="HelpCenter.dc.html" class="btn sm">API docs ↗</a></div>
+        <div style="padding: 16px; display: flex; flex-direction: column; gap: 10px">
+          <code class="mono" style="display: block; padding: 12px 14px; border-radius: 8px; background: var(--surface2); border: var(--bw) solid var(--line); font-size: 13px; white-space: pre-wrap">curl -H "Authorization: Bearer $AUTOBOT_TOKEN" \
+  https://autobot.example/api/v1/knowledge/search?q=redis+timeout</code>
+          <span class="sub2">Revoking a token takes effect within 30 seconds on every fleet node. Revoked tokens stay in the audit log.</span>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":1900}}'>
+const SCOPES = [
+  ['chat:read', 'Read your chat sessions and messages', 0],
+  ['chat:write', 'Start chats and send messages as you', 1],
+  ['knowledge:read', 'Search and read knowledge bases you can access', 0],
+  ['knowledge:write', 'Upload, re-index and delete documents', 1],
+  ['agents:read', 'List agents, runs and heartbeats', 0],
+  ['agents:run', 'Trigger agent runs and workflows', 1],
+  ['companyos:read', 'Read work items, budgets and approvals', 0],
+  ['companyos:approve', 'Approve or reject pending requests', 1],
+  ['fleet:read', 'Read fleet node status and metrics', 0],
+  ['admin', 'Organization administration (requires admin role)', 1]
+];
+const TOKENS = [
+  { id: 't1', name: 'autobot-cli (workstation)', prefix: 'abt_live_K9fA', scopes: ['chat:write', 'knowledge:read', 'agents:run'], created: '2026-07-02', used: '2 h ago', from: '192.0.2.41', exp: 'in 83 days', expCls: 'ok' },
+  { id: 't2', name: 'n8n invoice workflow', prefix: 'abt_live_3mXq', scopes: ['knowledge:write', 'companyos:read'], created: '2026-05-19', used: 'yesterday', from: '198.51.100.18', exp: 'in 6 days', expCls: 'warn' },
+  { id: 't3', name: 'Grafana fleet panel', prefix: 'abt_live_Pz71', scopes: ['fleet:read', 'agents:read'], created: '2026-03-11', used: '5 min ago', from: '198.51.100.22', exp: 'No expiry', expCls: 'warn' },
+  { id: 't4', name: 'Claude Desktop MCP', prefix: 'abt_live_aW0c', scopes: ['chat:read', 'knowledge:read'], created: '2026-09-30', used: 'Never', from: '—', exp: 'in 80 days', expCls: 'ok' },
+  { id: 't5', name: 'old-test-token', prefix: 'abt_live_Lr5e', scopes: ['admin'], created: '2025-11-04', used: '41 days ago', from: '198.51.100.12', exp: 'Expired', expCls: 'bad' }
+];
+const SECRET = 'abt_live_EXAMPLE0000000000000000000000'; // pragma: allowlist secret — mockup placeholder, not a real token
+
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    const sel = st.sel || { 'knowledge:read': 1, 'agents:read': 1, 'fleet:read': 1 };
+    const gone = st.gone || {};
+    const formOpen = st.formOpen !== false;
+    const hasNew = !!st.hasNew;
+    const rev = !!st.revealed;
+    const extra = hasNew ? [{ id: 'tn', name: 'grafana-dashboard-sync', prefix: 'abt_live_7Hq2', scopes: Object.keys(sel).filter((k) => sel[k]), created: '2026-10-10', used: 'Never', from: '—', exp: 'in 90 days', expCls: 'ok' }] : [];
+    const list = extra.concat(TOKENS).filter((t) => !gone[t.id]);
+    const risky = {}; SCOPES.forEach((s) => { risky[s[0]] = s[2]; });
+    const chosen = SCOPES.filter((s) => sel[s[0]]);
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      formOpen: formOpen ? 'true' : 'false',
+      formOpenB: formOpen,
+      openForm: () => { this.setState({ formOpen: true }); },
+      closeForm: () => { this.setState({ formOpen: false }); },
+      scopes: SCOPES.map((s) => ({
+        id: s[0], desc: s[1], checked: sel[s[0]] ? true : false,
+        toggle: () => { const n = Object.assign({}, sel); n[s[0]] = n[s[0]] ? 0 : 1; this.setState({ sel: n }); }
+      })),
+      scopeCount: String(chosen.length),
+      hasWrite: chosen.some((s) => s[2]),
+      create: () => { this.setState({ hasNew: true, formOpen: false, revealed: false, copied: false }); },
+      hasNew: hasNew,
+      newName: 'grafana-dashboard-sync',
+      tokVal: rev ? SECRET : 'abt_live_7Hq2' + '•'.repeat(24),
+      revealed: rev ? 'true' : 'false',
+      revealBtn: rev ? 'Hide' : 'Reveal',
+      toggleReveal: () => { this.setState({ revealed: !rev }); },
+      copyTxt: st.copied ? 'Copied' : 'Copy',
+      copy: () => { try { navigator.clipboard.writeText(SECRET); } catch (e) {} this.setState({ copied: true }); },
+      dismiss: () => { this.setState({ hasNew: false, revealed: false }); },
+      tokens: list.map((t) => ({
+        name: t.name, prefix: t.prefix, created: t.created, used: t.used, from: t.from, exp: t.exp, expCls: t.expCls,
+        scopes: t.scopes.map((c) => ({ id: c, cls: risky[c] ? 'w' : '' })),
+        label: 'Revoke token ' + t.name,
+        revoke: () => { const g = Object.assign({}, (this.state || {}).gone || {}); g[t.id] = true; this.setState({ gone: g }); }
+      })),
+      tokCount: String(list.length),
+      noTokens: list.length === 0
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AI Documents</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.btn.gh{border-color:transparent;background:transparent}
+.ibtn{width:32px;height:32px;border-radius:6px;border:var(--bw) solid transparent;background:transparent;display:inline-grid;place-items:center;cursor:pointer}
+.ibtn:hover{background:var(--surface2);border-color:var(--border)}
+.doc{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;font-size:13.5px;cursor:pointer;border-left:3px solid transparent}
+.doc:hover{background:var(--surface2)}
+.doc.on{background:var(--surface2);border-left-color:var(--primary)}
+.doc .t{flex-grow:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.doc .t b{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.doc.on .t b{font-weight:600}
+.doc .t span{font-size:12px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
+.ta{border:var(--bw) solid var(--border);border-radius:6px;padding:8px 10px;font:inherit;font-size:13.5px;color:var(--text);background:var(--surface);resize:vertical}
+.chip{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface2);text-decoration:none;font-size:13px;font-weight:500}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html" class="on" aria-current="page">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html" class="adv">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="ThemeManager.dc.html" class="adv" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon adv" aria-label="Plugins" data-tip="Plugins" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Admin panel" data-tip="Admin panel" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="Preferences.dc.html" aria-label="Profile settings" data-tip="Profile settings" data-tip-pos="left" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer; display: grid; place-items: center; text-decoration: none">MV</a>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+
+    <aside class="sub" aria-label="Knowledge Base" style="flex: 1 1 220px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+      <h2 style="margin: 0 10px 2px; font-size: 15px; font-weight: 600">Knowledge Base</h2>
+      <p class="sect">Browse</p>
+      <a href="Knowledge.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" class="i2"/></svg>Browser</a>
+      <a href="KnowledgeGraph.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7l8 1M7 8l2 8M12 17l5-7"/><circle cx="6" cy="6" r="2.5" class="i3"/><circle cx="18" cy="8" r="2.5" class="i1"/><circle cx="10" cy="18" r="2.5" class="i2"/></svg>Graph</a>
+      <a href="KnowledgeVectorStore.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" class="it1"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>Vector Store</a>
+      <a href="TranscriberProjects.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" class="it3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Transcriber</a>
+      <a href="KnowledgeResearch.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>Research</a>
+      <a href="KnowledgeMcpResources.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 10h8M8 14h5"/></svg>MCP Resources</a>
+      <a href="KnowledgeSystemDocs.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v16l-6-4-6 4z" class="it2"/></svg>System Docs</a>
+      <p class="sect">Manage</p>
+      <a href="KnowledgeManage.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Manage</a>
+      <a href="KnowledgeEntities.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4" class="it3"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>Entities</a>
+      <a href="KnowledgeHealth.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-8-5-8-11a4.5 4.5 0 0 1 8-2.5A4.5 4.5 0 0 1 20 9c0 6-8 11-8 11z" class="it3"/><path d="M7 11h3l1.5-2.5 2 5 1.5-2.5h2"/></svg>Health</a>
+      <p class="sect adv">Research</p>
+      <a href="KnowledgeResearch.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it1"/><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16"/></svg>Web Research</a>
+      <div class="only-min minnote" style="margin: 16px 10px 0; padding-top: 12px; border-top: var(--bw) solid var(--line)"><span>Showing essentials</span><button type="button" class="linkbtn" onClick="{{showAll}}">Show all features</button></div>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 20px">
+
+      <header style="display: flex; flex-wrap: wrap; gap: 14px; align-items: center">
+        <span class="tile lg"><svg class="ic" width="28" height="28" viewBox="0 0 48 48" aria-hidden="true"><path d="M14 4h16l8 8v28H14z" class="iw"/><path d="M30 4v8h8"/><path d="M19 18h12M19 23h14M19 28h9"/><circle cx="37" cy="33" r="7" class="i2"/><path d="M37 29.5v7M33.5 33h7"/></svg></span>
+        <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 260px">
+          <span class="sub2">Knowledge Base / Browser</span>
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">AI Documents</h1>
+          <span class="sub2">AI responses saved from Chat, editable and refinable — now part of the Knowledge Browser</span>
+        </div>
+        <label data-tip="Search · Ctrl K" style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border-radius: 6px; background: var(--surface); border: var(--bw) solid var(--border); flex: 0 1 320px; min-width: 220px; box-sizing: border-box">
+          <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/></svg>
+          <span class="sr">Search knowledge and documents</span>
+          <input type="search" placeholder="Search knowledge and documents…" style="border: 0; outline: 0; font: inherit; font-size: 13.5px; background: transparent; flex-grow: 1; min-width: 0; color: var(--text)">
+        </label>
+      </header>
+
+      <div role="note" class="adv" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 14px; border-radius: 8px; background: var(--surface); border: var(--bw) solid var(--border); border-left: 3px solid var(--primary); font-size: 13px">
+        <span class="pill info">Info</span>
+        <span><strong class="mono" style="font-weight: 500" data-tip="Legacy route kept for old bookmarks">/documents</strong> redirects to the Knowledge Browser, opening the selected document in the editor pane.</span>
+      </div>
+
+      <section aria-label="Documents" style="display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch">
+
+        <div class="card" style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column">
+          <details open>
+            <summary class="ch" style="cursor: pointer">
+              <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path d="M6 12h14l4 5h18v23H6z" class="i2"/><path d="M14 26h20M14 32h12"/></svg></span>
+              <strong style="font-size: 15px; font-weight: 600; flex-grow: 1">Documents</strong>
+              <button type="button" class="ibtn" aria-label="Refresh document list" data-tip="Refresh document list" data-tip-pos="left"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14 5.3M4 12a8 8 0 0 1 14-5.3"/><path d="M18 3v4h-4M6 21v-4h4"/></svg></button>
+            </summary>
+            <ul role="listbox" aria-label="Your AI documents" style="margin: 0; padding: 8px; list-style: none; display: flex; flex-direction: column; gap: 2px">
+              <li role="option" aria-selected="true" class="doc on" tabindex="0">
+                <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="it3"/><path d="M14 3v4h4"/></svg>
+                <span class="t" data-tip="Fleet node restart runbook"><b>Fleet node restart runbook</b><span>10/10/2026</span></span>
+                <button type="button" class="ibtn" aria-label="Delete Fleet node restart runbook" data-tip="Delete document" data-tip-pos="left"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" class="iw"/></svg></button>
+              </li>
+              <li role="option" aria-selected="false" class="doc" tabindex="0">
+                <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="it1"/><path d="M14 3v4h4"/></svg>
+                <span class="t" data-tip="NPU INT4 benchmark summary"><b>NPU INT4 benchmark summary</b><span>08/10/2026</span></span>
+                <button type="button" class="ibtn" aria-label="Delete NPU INT4 benchmark summary" data-tip="Delete document" data-tip-pos="left"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" class="iw"/></svg></button>
+              </li>
+              <li role="option" aria-selected="false" class="doc" tabindex="0">
+                <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="it2"/><path d="M14 3v4h4"/></svg>
+                <span class="t" data-tip="Contextual retrieval design notes"><b>Contextual retrieval design notes</b><span>05/10/2026</span></span>
+                <button type="button" class="ibtn" aria-label="Delete Contextual retrieval design notes" data-tip="Delete document" data-tip-pos="left"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" class="iw"/></svg></button>
+              </li>
+              <li role="option" aria-selected="false" class="doc" tabindex="0">
+                <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="iw"/><path d="M14 3v4h4"/></svg>
+                <span class="t" data-tip="Vue 3 migration checklist"><b>Vue 3 migration checklist</b><span>29/09/2026</span></span>
+                <button type="button" class="ibtn" aria-label="Delete Vue 3 migration checklist" data-tip="Delete document" data-tip-pos="left"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" class="iw"/></svg></button>
+              </li>
+              <li role="option" aria-selected="false" class="doc" tabindex="0">
+                <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="it1"/><path d="M14 3v4h4"/></svg>
+                <span class="t" data-tip="Ollama model upgrade plan"><b>Ollama model upgrade plan</b><span>24/09/2026</span></span>
+                <button type="button" class="ibtn" aria-label="Delete Ollama model upgrade plan" data-tip="Delete document" data-tip-pos="left"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" class="iw"/></svg></button>
+              </li>
+            </ul>
+          </details>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-top: var(--bw) solid var(--line)">
+            <span data-tip="Already on the first page" tabindex="0"><button type="button" class="btn sm gh" disabled style="opacity: .5">Prev</button></span>
+            <span class="sub2">1–5 of 23</span>
+            <button type="button" class="btn sm gh">Next</button>
+          </div>
+          <details open style="border-top: var(--bw) solid var(--line); padding: 8px 12px 12px">
+            <summary style="cursor: pointer; font-weight: 600; font-size: 13.5px; padding: 4px 0; min-height: 24px">Transcriber Projects</summary>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; padding-top: 8px">
+              <a href="TranscriberProject.dc.html" class="chip"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" class="it3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Engineering sync</a>
+              <a href="TranscriberProject.dc.html" class="chip"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" class="it3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>AI podcast</a>
+              <a href="TranscriberProjects.dc.html" style="font-size: 13px; font-weight: 500; padding: 8px 4px">View all</a>
+            </div>
+          </details>
+        </div>
+
+        <article class="card" style="flex: 999 1 420px; min-width: 0; display: flex; flex-direction: column; overflow: hidden">
+          <div class="ch" style="flex-wrap: wrap">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path d="M12 6h16l8 8v28H12z" class="iw"/><path d="M28 6v8h8"/><path d="M17 22h14M17 28h14M17 34h8"/><path d="M30 40l10-10 3 3-10 10h-3z" class="i2"/></svg></span>
+            <h2 tabindex="0" data-tip="Click to edit title" style="flex: 1 1 220px; font-size: 16px; border-bottom: var(--bw) dashed var(--border); padding-bottom: 2px">Fleet node restart runbook</h2>
+            <div style="display: flex; gap: 8px">
+              <button type="button" class="btn sm pri" data-tip="Save · Ctrl S" data-tip-pos="bottom">Save</button>
+              <button type="button" class="btn sm" aria-expanded="true" data-tip="Ask the AI to revise this document" data-tip-pos="left" style="background: var(--surface2)"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" class="i2"/></svg>Refine</button>
+            </div>
+          </div>
+
+          <div style="padding: 14px 16px; background: var(--surface2); border-bottom: var(--bw) solid var(--line); display: flex; flex-direction: column; gap: 10px">
+            <label for="refine" style="font-size: 12.5px; font-weight: 600">Refine with AI</label>
+            <textarea id="refine" rows="3" maxlength="2000" placeholder="Describe how to refine this document…" class="ta">Add a short section on what to check in the hypervisor console before rebooting.</textarea>
+            <div style="display: flex; gap: 8px; justify-content: flex-end">
+              <button type="button" class="btn sm gh">Cancel</button>
+              <button type="button" class="btn sm pri" data-tip="Apply · Ctrl Enter">Apply Refinement</button>
+            </div>
+          </div>
+
+          <div style="padding: 14px 16px; flex-grow: 1; display: flex">
+            <label for="content" class="sr">Document content</label>
+            <textarea id="content" class="mono ta" spellcheck="true" placeholder="Document content (markdown supported)…" style="flex-grow: 1; min-height: 300px; padding: 12px 14px; font-size: 13px; line-height: 1.7; background: var(--surface2); font-family: 'IBM Plex Mono', monospace"># Fleet node restart runbook
+
+## When to use
+A worker node (node-01 … node-06) stops answering SLM heartbeats for two or more intervals.
+
+## Steps
+1. Restart the `autobot-worker` service through the SLM.
+2. Wait up to two heartbeat intervals for the node to rejoin.
+3. If it is still unreachable, reboot via Ansible:
+   `ansible node-04 -b -m reboot`
+4. Confirm health on the System Health page.
+
+## Escalate if
+- The node fails to rejoin after a reboot
+- Disk usage is above 90 %</textarea>
+          </div>
+
+          <div class="sub2" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 16px; border-top: var(--bw) solid var(--line)">
+            <span>Updated <span class="mono">10/10/2026, 10:58</span></span>
+            <span class="pill info adv" data-tip="Knowledge-base facts the AI cited when writing this document">3 source facts</span>
+            <span class="pill warn" style="margin-left: auto" data-tip="Edits not saved yet — press Save or Ctrl S" data-tip-pos="left">Unsaved changes</span>
+          </div>
+        </article>
+      </section>
+
+      <section aria-label="Empty state" class="card" style="padding: 20px; display: flex; flex-wrap: wrap; gap: 20px; align-items: center; border-style: dashed; background: var(--surface2)">
+        <svg class="ic" width="72" height="72" viewBox="0 0 48 48" aria-hidden="true" style="stroke-width: 1.2"><path d="M4 8h22v14H12l-5 5v-5H4z" class="i1"/><path d="M24 22h12l8 8v14H24z" class="iw"/><path d="M36 22v8h8"/><path d="M28 36h10M28 40h6"/><path d="M18 26l4 4" class="sacc"/></svg>
+        <div style="display: flex; flex-direction: column; gap: 4px; flex: 1 1 260px">
+          <strong style="font-size: 15px; font-weight: 600">No AI documents yet.</strong>
+          <span style="font-size: 13.5px; color: var(--text2)">Save an AI response from the <a href="Chat.dc.html">chat view</a> to create a document.</span>
+        </div>
+        <a href="Chat.dc.html" class="btn">Go to Chat</a>
+      </section>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":1180}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      themes: defs.map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => { try { window.localStorage.setItem('autobot-theme', id); } catch (e) {} this.setState({ theme: id }); }
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

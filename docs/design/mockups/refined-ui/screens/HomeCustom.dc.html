@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Main Dashboard</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.sel{height:36px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-size:13px;padding:0 8px}
+.ibtn{width:36px;height:36px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);display:inline-grid;place-items:center;cursor:pointer;color:var(--text)}
+.ibtn:hover{background:var(--surface2)}
+.ibtn[aria-pressed="true"]{background:var(--surface2);outline:var(--bw) solid var(--stroke)}
+.hm{display:grid;grid-template-columns:72px repeat(12,1fr);gap:4px;font-size:12px;align-items:center}
+.hm i{display:block;height:24px;border-radius:4px;border:1px solid var(--stroke);box-sizing:border-box}
+.l0{background:var(--bar-track)}.l1{background:var(--i1t)}.l2{background:var(--i1)}.l3{background:var(--i2)}.l4{background:var(--i3)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.av{width:32px;height:32px;border-radius:99px;border:1px solid var(--stroke);display:grid;place-items:center;font-weight:600;font-size:12px;flex:none;box-sizing:border-box}
+.agt{border:var(--bw) solid var(--border);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.st{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.st strong{color:var(--text);font-weight:600}
+.wgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:start}
+.wgrid>.card{min-width:0;position:relative;display:flex;flex-direction:column}
+.card.editing{outline:1.5px dashed var(--muted);outline-offset:3px}
+.card.editing[draggable="true"]{cursor:grab}
+.grip{display:inline-grid;place-items:center;width:18px;height:28px;cursor:grab;flex:none}
+.wtools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto}
+.mbtn{width:30px;height:30px;padding:0;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);display:inline-grid;place-items:center;cursor:pointer;flex:none}
+.mbtn:hover{background:var(--surface2)}
+.mbtn[aria-disabled="true"]{opacity:.45;cursor:default}
+.segg{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.segg .seg{height:26px;padding:0 8px}
+.hint{margin:0;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;border:var(--bw) dashed var(--border);background:var(--surface2);font-size:13px;color:var(--text2)}
+.rsz{position:absolute;right:5px;bottom:5px;fill:none;stroke:var(--muted);stroke-width:1.5;stroke-linecap:round;pointer-events:none}
+.ph{margin:16px;padding:20px;border:1.5px dashed var(--border);border-radius:8px;display:flex;gap:14px;align-items:center;background:var(--surface2)}
+@media (max-width:760px){.wgrid>.card{grid-column:1 / -1 !important}}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html" class="on" aria-current="page">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html" class="adv">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="ThemeManager.dc.html" class="adv" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon adv" aria-label="Plugins" data-tip="Plugins" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Admin panel" data-tip="Admin panel" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <button type="button" aria-label="Profile menu" data-tip="Profile menu" data-tip-pos="left" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer">MV</button>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 20px; box-sizing: border-box">
+
+    <header class="card" style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px 28px; padding: 18px 20px">
+      <div style="flex: 1 1 340px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <span class="tile lg"><svg class="ic" width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="8" width="16" height="16" rx="4" class="i3"/><rect x="26" y="8" width="16" height="10" rx="4" class="i1"/><rect x="26" y="22" width="16" height="18" rx="4" class="iw"/><rect x="6" y="28" width="16" height="12" rx="4" class="i2"/></svg></span>
+          <div style="display: flex; flex-direction: column; gap: 2px">
+            <span class="sub2">Home / Dashboards</span>
+            <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">Main Dashboard</h1>
+          </div>
+        </div>
+        <p style="margin: 0; font-size: 13.5px; color: var(--text2)">Customizable dashboard with drag-and-drop widgets</p>
+        <span class="only-min minnote"><span>Showing essentials · technical widget details hidden</span><button type="button" class="linkbtn" onClick="{{showAll}}">Show all features</button></span>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px">
+          <button type="button" class="btn {{editBtnCls}}" aria-pressed="{{editPressed}}" onClick="{{toggleEdit}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5" class="i3"/><rect x="13" y="3" width="8" height="5" rx="1.5" class="i1"/><rect x="13" y="10" width="8" height="11" rx="1.5" class="iw"/><rect x="3" y="13" width="8" height="8" rx="1.5" class="i2"/></svg>{{editLabel}}</button>
+          <sc-if value="{{editing}}" hint-placeholder-val="{{ false }}">
+            <button type="button" class="btn" aria-expanded="{{catalogExpanded}}" aria-controls="cat-panel" onClick="{{toggleCatalog}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add widget</button>
+            <button type="button" class="btn" onClick="{{reset}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v5h5"/></svg>Reset layout</button>
+          </sc-if>
+          <span data-tip="Layout changes save automatically in this browser" tabindex="0" style="display: inline-flex"><button type="button" class="btn" disabled style="cursor: default; color: var(--muted)"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z" class="it1"/><rect x="8" y="4" width="7" height="5"/></svg>Saved</button></span>
+          <label><span class="sr">Dashboard</span><select class="sel" style="font-size: 13.5px"><option>Main Dashboard</option><option>Fleet CPU</option><option>Agent Watch</option></select></label>
+          <button type="button" class="ibtn" aria-label="Create new dashboard" data-tip="Create new dashboard"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+        </div>
+      </div>
+      <svg class="ic" viewBox="0 0 420 200" aria-hidden="true" style="flex: 0 1 200px; max-width: 200px; width: 100%; stroke-width: 3">
+        <rect x="40" y="20" width="250" height="150" rx="16" class="iw"/>
+        <path d="M40 46h250"/><circle cx="58" cy="33" r="4" class="i3"/><circle cx="72" cy="33" r="4" class="i2"/><circle cx="86" cy="33" r="4" class="i1"/>
+        <rect x="56" y="60" width="90" height="46" rx="8" class="it1"/>
+        <path d="M64 96l16-14 14 8 16-18 18 10"/>
+        <rect x="158" y="60" width="116" height="46" rx="8" class="iw"/>
+        <rect x="166" y="70" width="14" height="10" rx="2" class="i3"/><rect x="184" y="70" width="14" height="10" rx="2" class="i2"/><rect x="202" y="70" width="14" height="10" rx="2" class="i1"/><rect x="220" y="70" width="14" height="10" rx="2" class="i2"/><rect x="238" y="70" width="14" height="10" rx="2" class="i3"/>
+        <rect x="56" y="118" width="218" height="38" rx="8" class="it3"/>
+        <circle cx="76" cy="137" r="9" class="iw"/><circle cx="104" cy="137" r="9" class="i1"/><circle cx="132" cy="137" r="9" class="i2"/><path d="M152 137h100" stroke-dasharray="5 7"/>
+        <g transform="translate(300 64)">
+          <rect x="10" y="30" width="56" height="46" rx="12" class="i1"/>
+          <circle cx="28" cy="52" r="5" class="iw"/><circle cx="48" cy="52" r="5" class="iw"/>
+          <path d="M38 30V16"/><circle cx="38" cy="12" r="5" class="i3"/>
+          <path d="M24 76v32M52 76v32"/>
+        </g>
+      </svg>
+    </header>
+
+    <sc-if value="{{editing}}" hint-placeholder-val="{{ false }}">
+      <p class="hint" role="status"><svg class="ic" width="16" height="16" viewBox="0 0 10 16" aria-hidden="true"><circle cx="2.5" cy="3" r="1.2" class="ik"/><circle cx="7.5" cy="3" r="1.2" class="ik"/><circle cx="2.5" cy="8" r="1.2" class="ik"/><circle cx="7.5" cy="8" r="1.2" class="ik"/><circle cx="2.5" cy="13" r="1.2" class="ik"/><circle cx="7.5" cy="13" r="1.2" class="ik"/></svg>Drag a widget by its handle, or use the arrows; change size with S / M / L / Full.</p>
+    </sc-if>
+
+    <sc-if value="{{catalogOpen}}" hint-placeholder-val="{{ false }}">
+      <section id="cat-panel" class="card" aria-label="Widget catalog">
+        <div class="ch"><span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path d="M8 14h7l4 4h21v20H8z" class="iw"/><path d="M24 22v10M19 27h10" class="sacc"/></svg></span><h2>Add a widget</h2><button type="button" class="mbtn" aria-label="Close widget catalog" data-tip="Close widget catalog · Esc" data-tip-pos="left" onClick="{{toggleCatalog}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr))">
+          <sc-for list="{{catalog}}" as="c" hint-placeholder-count="4">
+            <div class="row" style="border-bottom: 0; align-items: flex-start">
+              <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5" class="i3"/><rect x="13" y="3" width="8" height="5" rx="1.5" class="i1"/><rect x="13" y="10" width="8" height="11" rx="1.5" class="iw"/><rect x="3" y="13" width="8" height="8" rx="1.5" class="i2"/></svg></span>
+              <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px"><strong style="font-size: 13.5px; font-weight: 600">{{c.title}}</strong><span class="sub2">{{c.desc}}</span></div>
+              <button type="button" class="btn sm" aria-label="{{c.addLabel}}" onClick="{{c.add}}">Add</button>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+    </sc-if>
+
+    <div class="wgrid">
+      <sc-for list="{{widgets}}" as="w" hint-placeholder-count="5">
+      <section class="card {{w.cls}}" aria-label="{{w.title}}" style="grid-column: span {{w.span}}" draggable="{{w.draggable}}" onDragStart="{{w.onDragStart}}" onDragOver="{{w.onDragOver}}" onDrop="{{w.onDrop}}">
+        <div class="ch" style="flex-wrap: wrap">
+          <sc-if value="{{w.editing}}" hint-placeholder-val="{{ false }}">
+            <span class="grip" data-tip="Drag to move" data-tip-pos="right" aria-hidden="true"><svg class="ic" width="10" height="16" viewBox="0 0 10 16" aria-hidden="true"><circle cx="2.5" cy="3" r="1.2" class="ik"/><circle cx="7.5" cy="3" r="1.2" class="ik"/><circle cx="2.5" cy="8" r="1.2" class="ik"/><circle cx="7.5" cy="8" r="1.2" class="ik"/><circle cx="2.5" cy="13" r="1.2" class="ik"/><circle cx="7.5" cy="13" r="1.2" class="ik"/></svg></span>
+          </sc-if>
+          <sc-if value="{{w.isMonitor}}" hint-placeholder-val="{{ false }}">
+            <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="8" width="36" height="26" rx="5" class="iw"/><path d="M10 24h7l3-7 5 12 3-5h10" class="sacc"/><path d="M18 40h12M24 34v6"/></svg></span><h2>System Monitor</h2><span class="pill ok">Healthy</span>
+          </sc-if>
+          <sc-if value="{{w.isHeatmap}}" hint-placeholder-val="{{ false }}">
+            <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="8" width="10" height="10" rx="2" class="i3"/><rect x="19" y="8" width="10" height="10" rx="2" class="i2"/><rect x="32" y="8" width="10" height="10" rx="2" class="i1"/><rect x="6" y="21" width="10" height="10" rx="2" class="i2"/><rect x="19" y="21" width="10" height="10" rx="2" class="iw"/><rect x="32" y="21" width="10" height="10" rx="2" class="i3"/><rect x="6" y="34" width="10" height="10" rx="2" class="i1"/><rect x="19" y="34" width="10" height="10" rx="2" class="i3"/><rect x="32" y="34" width="10" height="10" rx="2" class="iw"/></svg></span>
+            <h2>Resource Heatmap</h2>
+            <label class="adv"><span class="sr">Metric</span><select class="sel"><option>CPU Usage</option><option>Memory Usage</option><option>Disk I/O</option><option>Network I/O</option></select></label>
+            <label class="adv"><span class="sr">Time range</span><select class="sel"><option>Last 6 Hours</option><option>Last Hour</option><option>Last 24 Hours</option><option>Last 7 Days</option></select></label>
+            <button type="button" class="ibtn adv" aria-label="Refresh heatmap" data-tip="Refresh heatmap" data-tip-pos="left"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg></button>
+          </sc-if>
+          <sc-if value="{{w.isActivity}}" hint-placeholder-val="{{ false }}">
+            <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><rect x="4" y="18" width="20" height="16" rx="5" class="i1"/><circle cx="10" cy="26" r="2" class="iw"/><circle cx="18" cy="26" r="2" class="iw"/><path d="M14 18v-5"/><circle cx="14" cy="11" r="2.5" class="i3"/><rect x="26" y="22" width="18" height="14" rx="5" class="i2"/><circle cx="32" cy="29" r="2" class="iw"/><circle cx="38" cy="29" r="2" class="iw"/></svg></span>
+            <h2>Agent Activity</h2>
+            <div role="group" aria-label="View" style="display: flex; gap: 4px">
+              <button type="button" class="ibtn" aria-label="Grid view" aria-pressed="true" data-tip="Grid view"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></button>
+              <button type="button" class="ibtn" aria-label="Timeline view" aria-pressed="false" data-tip="Timeline view"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M7 12h13M4 17h8"/></svg></button>
+            </div>
+            <span class="pill ok">4 active</span>
+          </sc-if>
+          <sc-if value="{{w.isAvailable}}" hint-placeholder-val="{{ false }}">
+            <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path d="M8 14h7l4 4h21v20H8z" class="iw"/><path d="M24 22v10M19 27h10" class="sacc"/></svg></span><h2>Available Widgets</h2>
+          </sc-if>
+          <sc-if value="{{w.isWorkflow}}" hint-placeholder-val="{{ false }}">
+            <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="7" height="6" rx="1.5" class="i2"/><rect x="14" y="14" width="7" height="6" rx="1.5" class="i1"/><path d="M10 7h4v10"/></svg></span><h2>Workflow Visualization</h2><span class="pill info">New</span>
+          </sc-if>
+          <sc-if value="{{w.isArch}}" hint-placeholder-val="{{ false }}">
+            <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="5" rx="1" class="i3"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/></svg></span><h2>System Architecture</h2><span class="pill info">New</span>
+          </sc-if>
+          <sc-if value="{{w.editing}}" hint-placeholder-val="{{ false }}">
+            <div class="wtools">
+              <button type="button" class="mbtn" aria-label="{{w.upLabel}}" data-tip="{{w.upLabel}}" aria-disabled="{{w.upDisabled}}" onClick="{{w.onUp}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+              <button type="button" class="mbtn" aria-label="{{w.downLabel}}" data-tip="{{w.downLabel}}" aria-disabled="{{w.downDisabled}}" onClick="{{w.onDown}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+              <div class="segg" role="group" aria-label="{{w.sizeLabel}}">
+                <sc-for list="{{w.sizeOpts}}" as="z" hint-placeholder-count="4">
+                  <button type="button" class="seg {{z.cls}}" aria-pressed="{{z.pressed}}" data-tip="{{z.title}}" onClick="{{z.pick}}">{{z.label}}</button>
+                </sc-for>
+              </div>
+              <button type="button" class="mbtn" aria-label="{{w.removeLabel}}" data-tip="{{w.removeLabel}}" data-tip-pos="left" onClick="{{w.onRemove}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+            </div>
+          </sc-if>
+        </div>
+        <sc-if value="{{w.isMonitor}}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; font-size: 13px">
+          <div style="display: flex; flex-direction: column; gap: 6px"><div style="display: flex; justify-content: space-between"><span style="font-weight: 500">CPU</span><span class="mono" style="color: var(--text2)">38%</span></div><div class="bar"><div class="bf" style="width: 38%"></div></div></div>
+          <div style="display: flex; flex-direction: column; gap: 6px"><div style="display: flex; justify-content: space-between"><span style="font-weight: 500">Memory</span><span class="mono" style="color: var(--text2)">21.4 / 31.2 GiB</span></div><div class="bar"><div class="bf" style="width: 69%"></div></div></div>
+          <div style="display: flex; flex-direction: column; gap: 6px"><div style="display: flex; justify-content: space-between"><span style="font-weight: 500">Disk</span><span class="mono" style="color: var(--text2)">58%</span></div><div class="bar"><div class="bf" style="width: 58%"></div></div></div>
+          <div style="display: flex; flex-direction: column; gap: 6px"><div style="display: flex; justify-content: space-between"><span style="font-weight: 600">GPU / NPU</span><span class="mono" style="color: var(--alert-text); font-weight: 600" data-tip="High accelerator load — inference may slow down" data-tip-pos="left">84% · high</span></div><div class="bar"><div class="bf alert" style="width: 84%"></div></div></div>
+        </div>
+        <div style="border-top: var(--bw) solid var(--line)">
+          <div class="row adv" style="font-size: 13px"><span class="dot d-ok"></span>Backend API<span class="mono sub2" style="margin-left: auto" data-tip="Health-check round-trip latency" data-tip-pos="left">42 ms</span></div>
+          <div class="row adv" style="font-size: 13px"><span class="dot d-ok"></span>Redis<span class="mono sub2" style="margin-left: auto">1 ms</span></div>
+          <div class="row adv" style="font-size: 13px"><span class="dot d-ok"></span>Ollama · <span class="mono">qwen2.5:14b</span><span class="mono sub2" style="margin-left: auto">loaded</span></div>
+          <div class="row" style="font-size: 13px"><span class="dot d-warn"></span>node-04 worker<span class="pill warn" style="margin-left: auto" data-tip="Degraded — responding, but slow or partially failing" data-tip-pos="left">Degraded</span></div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{w.isHeatmap}}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 12px">
+          <div style="overflow-x: auto">
+            <div role="img" aria-label="CPU usage heatmap for node-01 to node-06 over the last 6 hours; node-02 and node-04 reach the highest level" style="min-width: 520px; display: flex; flex-direction: column; gap: 4px">
+              <div class="hm"><span class="mono" style="font-weight: 500">node-01</span><i class="l1"></i><i class="l1"></i><i class="l2"></i><i class="l2"></i><i class="l3"></i><i class="l2"></i><i class="l1"></i><i class="l1"></i><i class="l2"></i><i class="l2"></i><i class="l1"></i><i class="l1"></i></div>
+              <div class="hm"><span class="mono" style="font-weight: 500">node-02</span><i class="l2"></i><i class="l3"></i><i class="l3"></i><i class="l4"></i><i class="l4"></i><i class="l3"></i><i class="l2"></i><i class="l3"></i><i class="l3"></i><i class="l2"></i><i class="l2"></i><i class="l3"></i></div>
+              <div class="hm"><span class="mono" style="font-weight: 500">node-03</span><i class="l0"></i><i class="l1"></i><i class="l1"></i><i class="l1"></i><i class="l2"></i><i class="l1"></i><i class="l0"></i><i class="l1"></i><i class="l1"></i><i class="l1"></i><i class="l0"></i><i class="l0"></i></div>
+              <div class="hm"><span class="mono" style="font-weight: 500">node-04</span><i class="l3"></i><i class="l4"></i><i class="l4"></i><i class="l4"></i><i class="l3"></i><i class="l0"></i><i class="l0"></i><i class="l0"></i><i class="l1"></i><i class="l2"></i><i class="l3"></i><i class="l4"></i></div>
+              <div class="hm"><span class="mono" style="font-weight: 500">node-05</span><i class="l1"></i><i class="l2"></i><i class="l2"></i><i class="l1"></i><i class="l2"></i><i class="l3"></i><i class="l3"></i><i class="l2"></i><i class="l1"></i><i class="l2"></i><i class="l2"></i><i class="l1"></i></div>
+              <div class="hm"><span class="mono" style="font-weight: 500">node-06</span><i class="l2"></i><i class="l2"></i><i class="l3"></i><i class="l3"></i><i class="l2"></i><i class="l2"></i><i class="l3"></i><i class="l4"></i><i class="l3"></i><i class="l2"></i><i class="l2"></i><i class="l2"></i></div>
+              <div class="hm mono" style="color: var(--muted)"><span></span><span>09:00</span><span></span><span>10:00</span><span></span><span>11:00</span><span></span><span>12:00</span><span></span><span>13:00</span><span></span><span>14:00</span><span></span></div>
+            </div>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; font-size: 12.5px; color: var(--text2)">
+            <span style="display: flex; align-items: center; gap: 4px">Low<i class="l0" style="width: 18px; height: 12px; border-radius: 3px; border: 1px solid var(--stroke)"></i><i class="l1" style="width: 18px; height: 12px; border-radius: 3px; border: 1px solid var(--stroke)"></i><i class="l2" style="width: 18px; height: 12px; border-radius: 3px; border: 1px solid var(--stroke)"></i><i class="l3" style="width: 18px; height: 12px; border-radius: 3px; border: 1px solid var(--stroke)"></i><i class="l4" style="width: 18px; height: 12px; border-radius: 3px; border: 1px solid var(--stroke)"></i>High</span>
+            <span style="margin-left: auto" data-tip="Highest single-node reading in the selected range">Peak <strong class="mono" style="color: var(--text)">96%</strong></span>
+            <span>Average <strong class="mono" style="color: var(--text)">47%</strong></span>
+            <span class="adv">Minimum <strong class="mono" style="color: var(--text)">4%</strong></span>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{w.isActivity}}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 14px 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px">
+          <div class="agt">
+            <div style="display: flex; align-items: center; gap: 10px"><span class="av" style="background: var(--i1)">OR</span><div style="flex-grow: 1"><div style="font-weight: 600; font-size: 13.5px">Orchestrator</div><div class="sub2 mono adv" style="font-size: 12px">orchestrator</div></div><span class="dot d-ok" data-tip="Online" data-tip-pos="left"></span></div>
+            <span style="font-size: 12.5px; display: flex; gap: 6px; align-items: center; color: var(--text2)"><span class="dot d-warn" data-tip="Busy — working on a task"></span>Routing fleet health check…</span>
+            <div class="st"><span><strong class="mono">142</strong> Tasks</span><span class="adv"><strong class="mono">6d 4h</strong> Uptime</span><span><strong class="mono">97%</strong> Success</span></div>
+          </div>
+          <div class="agt">
+            <div style="display: flex; align-items: center; gap: 10px"><span class="av" style="background: var(--i2)">TA</span><div style="flex-grow: 1"><div style="font-weight: 600; font-size: 13.5px">Terminal Agent</div><div class="sub2 mono adv" style="font-size: 12px">terminal-agent</div></div><span class="dot d-ok" data-tip="Online" data-tip-pos="left"></span></div>
+            <span class="mono" style="font-size: 12px; display: flex; gap: 6px; align-items: center; color: var(--text2)"><span class="dot d-warn" data-tip="Busy — working on a task"></span>ansible slm_fleet -m ping</span>
+            <div class="st"><span><strong class="mono">88</strong> Tasks</span><span class="adv"><strong class="mono">2d 9h</strong> Uptime</span><span><strong class="mono">94%</strong> Success</span></div>
+          </div>
+          <div class="agt">
+            <div style="display: flex; align-items: center; gap: 10px"><span class="av" style="background: var(--i1t); border-style: dashed" data-tip="Dashed avatar: agent is idle">KA</span><div style="flex-grow: 1"><div style="font-weight: 600; font-size: 13.5px">Knowledge Agent</div><div class="sub2 mono adv" style="font-size: 12px">knowledge-agent</div></div><span class="pill idle" data-tip="Idle — running but waiting for work" data-tip-pos="left">Idle</span></div>
+            <span style="font-size: 12.5px; color: var(--text2)">Idle</span>
+            <div class="st"><span><strong class="mono">51</strong> Tasks</span><span class="adv"><strong class="mono">6d 4h</strong> Uptime</span><span><strong class="mono">100%</strong> Success</span></div>
+          </div>
+          <div class="agt" style="border-color: var(--danger-tile-b); background: var(--surface2)">
+            <div style="display: flex; align-items: center; gap: 10px"><span class="av" style="background: var(--i3t)">RA</span><div style="flex-grow: 1"><div style="font-weight: 600; font-size: 13.5px">Research Agent</div><div class="sub2 mono adv" style="font-size: 12px">research-agent</div></div></div>
+            <div style="display: flex; align-items: center; gap: 8px"><span class="pill bad" data-tip="Error — agent crashed or failed to start; check logs">Error</span><button type="button" class="btn sm adv">View Logs</button></div>
+            <div class="st"><span><strong class="mono">0</strong> Tasks</span><span class="adv"><strong class="mono">12m</strong> Uptime</span><span data-tip="No completed tasks yet, so no success rate" data-tip-pos="left"><strong class="mono">N/A</strong> Success</span></div>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{w.isAvailable}}" hint-placeholder-val="{{ false }}">
+        <p style="margin: 0; padding: 14px 16px 4px; font-size: 13px; color: var(--text2); line-height: 1.5">Drop more widgets in Customize layout → Add widget: Workflow Visualization and System Architecture.</p>
+        <div class="row" style="font-size: 13.5px; border-bottom: 0"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="7" height="6" rx="1.5" class="i2"/><rect x="14" y="14" width="7" height="6" rx="1.5" class="i1"/><path d="M10 7h4v10"/></svg>Workflow Visualization</div>
+        <div class="row" style="font-size: 13.5px; padding-top: 0"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="5" rx="1" class="i3"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/></svg>System Architecture</div>
+        <div class="adv" style="margin-top: auto; padding: 12px 16px 16px"><a href="SystemHealth.dc.html" style="font-size: 13px; font-weight: 500">Open System Health</a></div>
+        </sc-if>
+
+        <sc-if value="{{w.isWorkflow}}" hint-placeholder-val="{{ false }}">
+        <div class="ph"><svg class="ic" width="64" height="40" viewBox="0 0 64 40" aria-hidden="true"><rect x="2" y="4" width="16" height="12" rx="3" class="i2"/><rect x="24" y="24" width="16" height="12" rx="3" class="i1"/><rect x="46" y="4" width="16" height="12" rx="3" class="i3"/><path d="M18 10h10v14M40 30h14V16"/></svg><div style="display: flex; flex-direction: column; gap: 2px"><strong style="font-size: 13.5px; font-weight: 600">Workflow Visualization</strong><span class="sub2">Pick a workflow to show its live run graph here.</span></div></div>
+        </sc-if>
+
+        <sc-if value="{{w.isArch}}" hint-placeholder-val="{{ false }}">
+        <div class="ph"><svg class="ic" width="64" height="40" viewBox="0 0 64 40" aria-hidden="true"><rect x="24" y="2" width="16" height="10" rx="2" class="i3"/><rect x="4" y="28" width="16" height="10" rx="2" class="iw"/><rect x="44" y="28" width="16" height="10" rx="2" class="i1"/><path d="M32 12v8M12 28v-8h40v8"/></svg><div style="display: flex; flex-direction: column; gap: 2px"><strong style="font-size: 13.5px; font-weight: 600">System Architecture</strong><span class="sub2">Services, workers and nodes will appear here once connected.</span></div></div>
+        </sc-if>
+
+        <sc-if value="{{w.editing}}" hint-placeholder-val="{{ false }}">
+          <svg class="rsz" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M11 3L3 11M11 7L7 11"/></svg>
+        </sc-if>
+      </section>
+      </sc-for>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":1180}}'>
+const LAYOUT_KEY = 'autobot-layout-home';
+const TYPES = {
+  monitor: { title: 'System Monitor', size: 4 },
+  heatmap: { title: 'Resource Heatmap', size: 8 },
+  activity: { title: 'Agent Activity', size: 8 },
+  available: { title: 'Available Widgets', size: 4 },
+  workflow: { title: 'Workflow Visualization', size: 6 },
+  arch: { title: 'System Architecture', size: 6 }
+};
+const CATALOG = [
+  ['heatmap', 'Per-node CPU, memory and I/O over time'],
+  ['workflow', 'Live run graph of a selected workflow'],
+  ['activity', 'Status and current task of each agent'],
+  ['arch', 'Services, workers and fleet nodes']
+];
+const DEFAULT_ORDER = ['monitor', 'heatmap', 'activity', 'available'];
+const SIZES = [['S', 4, 'Small (one third)'], ['M', 6, 'Medium (half)'], ['L', 8, 'Large (two thirds)'], ['Full', 12, 'Full width']];
+const typeOf = (id) => String(id).split('~')[0];
+
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+    try {
+      const raw = window.localStorage.getItem(LAYOUT_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw);
+        const order = Array.isArray(saved.order) ? saved.order.filter((id) => TYPES[typeOf(id)]) : null;
+        if (order && order.length) this.setState({ order: order, sizes: saved.sizes || {} });
+      }
+    } catch (e) {}
+  }
+  layout() {
+    const st = this.state || {};
+    return { order: st.order || DEFAULT_ORDER.slice(), sizes: st.sizes || {} };
+  }
+  commit(order, sizes) {
+    try { window.localStorage.setItem(LAYOUT_KEY, JSON.stringify({ order: order, sizes: sizes })); } catch (e) {}
+    this.setState({ order: order, sizes: sizes });
+  }
+  move(id, delta) {
+    const { order, sizes } = this.layout();
+    const i = order.indexOf(id);
+    const j = i + delta;
+    if (i < 0 || j < 0 || j >= order.length) return;
+    const next = order.slice();
+    next.splice(i, 1);
+    next.splice(j, 0, id);
+    this.commit(next, sizes);
+  }
+  moveTo(id, targetId) {
+    const { order, sizes } = this.layout();
+    if (!id || id === targetId) return;
+    const next = order.filter((x) => x !== id);
+    const t = next.indexOf(targetId);
+    if (t < 0) return;
+    const from = order.indexOf(id);
+    const to = order.indexOf(targetId);
+    next.splice(from < to ? t + 1 : t, 0, id);
+    this.commit(next, sizes);
+  }
+  setSize(id, span) {
+    const { order, sizes } = this.layout();
+    this.commit(order, Object.assign({}, sizes, { [id]: span }));
+  }
+  remove(id) {
+    const { order, sizes } = this.layout();
+    const s = Object.assign({}, sizes);
+    delete s[id];
+    this.commit(order.filter((x) => x !== id), s);
+  }
+  add(type) {
+    const { order, sizes } = this.layout();
+    const id = order.indexOf(type) < 0 ? type : type + '~' + Date.now().toString(36);
+    this.commit(order.concat([id]), sizes);
+    this.setState({ catalogOpen: false });
+  }
+  reset() {
+    try { window.localStorage.removeItem(LAYOUT_KEY); } catch (e) {}
+    this.setState({ order: DEFAULT_ORDER.slice(), sizes: {} });
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    const editing = !!st.editing;
+    const { order, sizes } = this.layout();
+    const last = order.length - 1;
+    const widgets = order.map((id, i) => {
+      const type = typeOf(id);
+      const def = TYPES[type];
+      const span = sizes[id] || def.size;
+      return {
+        title: def.title,
+        span: span,
+        cls: editing ? 'editing' : '',
+        editing: editing,
+        draggable: editing ? 'true' : 'false',
+        isMonitor: type === 'monitor',
+        isHeatmap: type === 'heatmap',
+        isActivity: type === 'activity',
+        isAvailable: type === 'available',
+        isWorkflow: type === 'workflow',
+        isArch: type === 'arch',
+        upLabel: 'Move ' + def.title + ' earlier',
+        downLabel: 'Move ' + def.title + ' later',
+        upDisabled: i === 0 ? 'true' : 'false',
+        downDisabled: i === last ? 'true' : 'false',
+        sizeLabel: def.title + ' size',
+        removeLabel: 'Remove ' + def.title,
+        onUp: () => this.move(id, -1),
+        onDown: () => this.move(id, 1),
+        onRemove: () => this.remove(id),
+        sizeOpts: SIZES.map(([label, s, title]) => ({
+          label: label,
+          title: title,
+          cls: s === span ? 'on' : '',
+          pressed: s === span ? 'true' : 'false',
+          pick: () => this.setSize(id, s)
+        })),
+        onDragStart: (e) => {
+          this._drag = id;
+          try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); } catch (err) {}
+        },
+        onDragOver: (e) => { if (this.state && this.state.editing) e.preventDefault(); },
+        onDrop: (e) => {
+          e.preventDefault();
+          let src = this._drag;
+          try { src = e.dataTransfer.getData('text/plain') || src; } catch (err) {}
+          this._drag = null;
+          this.moveTo(src, id);
+        }
+      };
+    });
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      editing: editing,
+      editLabel: editing ? 'Done' : 'Customize layout',
+      editBtnCls: editing ? 'pri' : '',
+      editPressed: editing ? 'true' : 'false',
+      toggleEdit: () => this.setState({ editing: !editing, catalogOpen: false }),
+      reset: () => this.reset(),
+      catalogOpen: editing && !!st.catalogOpen,
+      catalogExpanded: editing && st.catalogOpen ? 'true' : 'false',
+      toggleCatalog: () => this.setState({ catalogOpen: !st.catalogOpen }),
+      catalog: CATALOG.map(([type, desc]) => ({
+        title: TYPES[type].title,
+        desc: desc,
+        addLabel: 'Add ' + TYPES[type].title + ' widget',
+        add: () => this.add(type)
+      })),
+      widgets: widgets
+    };
+  }
+}
+</script>
+</body>
+</html>

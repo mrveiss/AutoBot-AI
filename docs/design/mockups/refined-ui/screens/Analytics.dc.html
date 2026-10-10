@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot codebase analytics</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.ibtn{width:32px;padding:0;justify-content:center}
+.meta{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+.stat{display:flex;flex-direction:column;gap:2px}
+.stat b{font-size:24px;font-weight:600;letter-spacing:-.01em}
+.stat span{font-size:12.5px;color:var(--muted)}
+.fp{height:28px;padding:0 10px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;font-size:12.5px;font-weight:500;color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.fp.on{border-color:var(--primary);color:var(--text);font-weight:600;background:var(--surface2)}
+.inp{background:var(--surface);border:var(--bw) solid var(--border);color:var(--text);border-radius:6px;height:36px;padding:0 10px;font:inherit;font-size:13.5px;box-sizing:border-box;width:100%}
+textarea.inp{height:auto;padding:8px 10px;resize:vertical;line-height:1.5}
+.fl{display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:600;color:var(--text2)}
+.fl small{font-weight:400;color:var(--muted)}
+.req{color:var(--alert-text)}
+.segw{display:inline-flex;gap:2px;padding:3px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.acc{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:8px;border:var(--bw) solid var(--border);background:var(--surface);cursor:pointer;flex:1 1 120px;font-size:13px;font-weight:600;color:var(--text)}
+.acc small{font-weight:400;font-size:12px;color:var(--muted)}
+.acc.on{border-color:var(--primary);background:var(--surface2);outline:var(--bw) solid var(--primary)}
+.srow{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:12px 16px;border-bottom:var(--bw) solid var(--line)}
+.srow.sel{background:var(--surface2);border-left:3px solid var(--accent)}
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:3px 8px;border-radius:5px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.dlg{border:var(--bw) solid var(--border);border-radius:10px;background:var(--surface)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html" class="on adv" aria-current="page">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="ThemeManager.dc.html" class="adv" style="height: 34px; border: var(--bw) solid var(--border); border-radius: 6px; margin-right: 6px">SLM Admin ↗</a>
+    <a href="Plugins.dc.html" class="icon adv" aria-label="Plugins" data-tip="Plugins" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5a2 2 0 1 1 4 0h5v5a2 2 0 1 1 0 4v5H5z" class="i2"/></svg></a>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Admin panel" data-tip="Admin panel" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="Preferences.dc.html" aria-label="Profile settings" data-tip="Profile settings" data-tip-pos="bottom" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer; display: grid; place-items: center; text-decoration: none">MV</a>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+
+    <aside class="sub" aria-label="Analytics sections" style="flex: 1 1 220px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+      <h2 style="margin: 0; padding: 0 10px 4px; font-size: 15px; font-weight: 600">Analytics</h2>
+      <p class="sect">Insights</p>
+      <a href="Analytics.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="it1"/><path d="M9 9l-3 3 3 3M15 9l3 3-3 3"/></svg>Codebase</a>
+      <a href="BusinessIntelligence.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 4a8 8 0 1 0 9 9h-9z" class="i2"/><path d="M14 2.5A7.5 7.5 0 0 1 21.5 10H14z" class="i3"/></svg>Business Intelligence</a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6z" class="it1"/><path d="M12 9v4M12 16v.5"/></svg>Security</a>
+      <a href="AuditLogs.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2" class="iw"/><rect x="9" y="2.5" width="6" height="3" rx="1" class="i2"/><path d="M8.5 13l2.5 2.5 4.5-5"/></svg>Audit</a>
+      <a href="DevSpeedup.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L5 14h6l-1 8 8-12h-6z" class="it2"/></svg>Dev Tools</a>
+      <p class="sect">Operations</p>
+      <a href="Usage.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18"/><rect x="5" y="11" width="3.5" height="9" class="i1"/><rect x="10.25" y="6" width="3.5" height="14" class="i3"/><rect x="15.5" y="13" width="3.5" height="7" class="i2"/></svg>Usage</a>
+      <a href="Operations.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>Operations</a>
+      <a href="ErrorMonitoring.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 17H3z" class="it3"/><path d="M12 10v4M12 17v.5"/></svg>Errors</a>
+      <a href="Benchmark.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17a9 9 0 0 1 18 0z" class="it1"/><path d="M12 17l4-5"/></svg>Benchmark</a>
+      <a href="FailureAnalysis.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6.5" class="it2"/><path d="M15 15l5.5 5.5M6.5 10h1.8l1-2 1.6 4 1-2h1.6"/></svg>Diagnostics</a>
+      <div class="only-min minnote" style="margin: 16px 10px 0; padding-top: 12px; border-top: var(--bw) solid var(--line)"><span>Showing essentials</span><button type="button" class="linkbtn" onClick="{{showAll}}">Show all features</button></div>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 20px">
+
+      <section class="card only-min" role="note" aria-labelledby="advn-h" style="padding: 14px 16px; gap: 12px; align-items: center; flex-wrap: wrap">
+        <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg></span>
+        <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 240px; min-width: 0">
+          <h2 id="advn-h" style="margin: 0; font-size: 14px; font-weight: 600">This is an advanced area</h2>
+          <span class="sub2">It's hidden from navigation while Minimal interface is on.</span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px">
+          <button type="button" class="btn sm" onClick="{{showAll}}">Show all features</button>
+          <a href="Main.dc.html" class="btn sm">Go to Home</a>
+        </div>
+      </section>
+
+      <header style="display: flex; flex-wrap: wrap; gap: 14px; align-items: center">
+        <span class="tile lg"><svg class="ic" width="28" height="28" viewBox="0 0 48 48" aria-hidden="true"><rect x="5" y="8" width="30" height="24" rx="3" class="iw"/><path d="M5 14h30M13 20l-3 3 3 3M20 20l3 3-3 3"/><rect x="28" y="24" width="4" height="14" class="i1"/><rect x="34" y="18" width="4" height="20" class="i3"/><rect x="40" y="28" width="4" height="10" class="i2"/><path d="M26 38h20"/></svg></span>
+        <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1">
+          <span class="sub2">Analytics · Codebase insights, business intelligence, and security analysis</span>
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">Real-time Codebase Analytics</h1>
+          <p class="sub2" style="margin: 0">Select a project to view analytics</p>
+        </div>
+        <a href="#registry" class="btn">Manage Sources</a>
+        <a href="#add-source" class="btn pri"><svg class="ic sonp" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add Project</a>
+      </header>
+
+      <section aria-label="Sources summary" class="card" style="padding: 16px; display: flex; flex-wrap: wrap; gap: 28px; align-items: center">
+        <div class="stat"><span>Code sources</span><b>5</b></div>
+        <div class="stat"><span>Indexed files</span><b>9,412</b></div>
+        <div class="stat adv"><span data-tip="Functions and methods parsed into the code graph" tabindex="0">Functions mapped</span><b>48,306</b></div>
+        <div class="stat"><span data-tip="Unresolved issues found by static analysis across all sources" tabindex="0">Open problems</span><b>1,127</b></div>
+        <div style="margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+          <span class="pill info">1 syncing</span>
+          <span class="pill bad">1 error</span>
+          <span class="pill idle" data-tip="Waiting for the indexer — sources are processed one at a time" data-tip-pos="left" tabindex="0">2 queued</span>
+        </div>
+      </section>
+
+      <section aria-label="Filter projects" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+        <label style="flex: 1 1 240px; max-width: 340px"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search projects</span><input class="inp" type="search" placeholder="Search by name, repo or path..."></label>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap" role="group" aria-label="Status filter">
+          <button type="button" class="fp on" aria-pressed="true">All 4</button>
+          <button type="button" class="fp" aria-pressed="false">Ready 2</button>
+          <button type="button" class="fp" aria-pressed="false">Syncing 1</button>
+          <button type="button" class="fp" aria-pressed="false">Error 1</button>
+        </div>
+        <div class="adv" style="display: flex; gap: 6px; flex-wrap: wrap" role="group" aria-label="Type filter">
+          <button type="button" class="fp on" aria-pressed="true">Any type</button>
+          <button type="button" class="fp" aria-pressed="false">GitHub</button>
+          <button type="button" class="fp" aria-pressed="false">Local</button>
+        </div>
+        <div class="adv" style="display: flex; gap: 6px; flex-wrap: wrap" role="group" aria-label="Access filter">
+          <button type="button" class="fp on" aria-pressed="true">Any access</button>
+          <button type="button" class="fp" aria-pressed="false">Private</button>
+          <button type="button" class="fp" aria-pressed="false">Shared</button>
+          <button type="button" class="fp" aria-pressed="false">Public</button>
+        </div>
+      </section>
+
+      <section aria-label="Projects" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px">
+
+        <article class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 12px">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px">
+            <span class="tile lg"><svg class="ic" width="28" height="28" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="22" r="14" class="iw"/><path d="M18 36c0-4 1-6 3-7-5-1-8-3-8-9 0-2 1-4 2-5-.5-1.5-.5-3.5.5-5 2 0 3.5 1 5 2 2-.5 5-.5 7 0 1.5-1 3-2 5-2 1 1.5 1 3.5.5 5 1 1 2 3 2 5 0 6-3 8-8 9 2 1 3 3 3 7" class="it3"/></svg></span>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end"><span class="pill ok">ready</span><span class="pill idle" data-tip="Only you can access this source" data-tip-pos="left" tabindex="0">private</span></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <a href="AnalyticsCodebaseOverview.dc.html" style="font-size: 16px; font-weight: 600; text-decoration: none">AutoBot-AI</a>
+            <span class="meta mono"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14l4-4M8 12l-2 2a3 3 0 0 0 4 4l2-2M16 12l2-2a3 3 0 0 0-4-4l-2 2"/></svg>mrveiss/AutoBot-AI</span>
+            <span class="meta mono"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="5" r="2"/><circle cx="7" cy="19" r="2"/><circle cx="17" cy="9" r="2"/><path d="M7 7v10M17 11c0 3-4 3-10 6"/></svg>Dev_new_gui</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px; border-top: var(--bw) solid var(--line); padding-top: 10px">
+            <span class="meta">Synced 12 min ago</span>
+            <span class="meta">Indexed 2 h ago</span>
+            <span class="meta adv"><span class="mono" style="color: var(--text); font-weight: 600" data-tip="Latest indexed commit (short hash)" tabindex="0">a3f91c2</span>3 h ago</span>
+            <span style="font-size: 13px; color: var(--text2)">fix(chat): stream tool results into message timeline</span>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: auto">
+            <a href="AnalyticsCodebaseOverview.dc.html" class="btn sm" style="flex-grow: 1; justify-content: center">Open analytics</a>
+            <button type="button" class="btn sm ibtn" aria-label="Sync Now" data-tip="Sync now"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14 5M4 12a8 8 0 0 1 14-5M18 3v4h-4M6 21v-4h4"/></svg></button>
+            <a href="#add-source" class="btn sm ibtn" aria-label="Edit" data-tip="Edit source"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1-5L15 5l4 4L9 19z" class="it2"/><path d="M13 7l4 4"/></svg></a>
+            <a href="#share-source" class="btn sm ibtn" aria-label="Share" data-tip="Share access"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2.5" class="i1"/><circle cx="18" cy="6" r="2.5" class="i2"/><circle cx="18" cy="18" r="2.5" class="i3"/><path d="M8.2 10.9l7.6-3.8M8.2 13.1l7.6 3.8"/></svg></a>
+            <button type="button" class="btn sm ibtn" aria-label="Delete" data-tip="Delete source"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" class="it3"/></svg></button>
+          </div>
+        </article>
+
+        <article class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 12px">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px">
+            <span class="tile lg"><svg class="ic" width="28" height="28" viewBox="0 0 48 48" aria-hidden="true"><path d="M6 14h14l4 4h18v20H6z" class="i1"/><path d="M18 30h12M18 25h8"/></svg></span>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end"><span class="pill info">syncing</span><span class="pill warn" data-tip="Visible to specific users you shared it with" data-tip-pos="left" tabindex="0">shared</span></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <a href="AnalyticsCodebaseOverview.dc.html" style="font-size: 16px; font-weight: 600; text-decoration: none">autobot-frontend</a>
+            <span class="meta mono" data-tip="/opt/autobot/code_source/autobot-frontend" tabindex="0"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z"/></svg><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0">/opt/autobot/code_source/autobot-frontend</span></span>
+            <span class="meta mono"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="5" r="2"/><circle cx="7" cy="19" r="2"/><path d="M7 7v10"/></svg>Dev_new_gui</span>
+          </div>
+          <div class="bar" role="progressbar" aria-label="Sync progress" aria-valuenow="64" aria-valuemin="0" aria-valuemax="100"><div class="bf" style="width: 64%"></div></div>
+          <div style="display: flex; flex-direction: column; gap: 4px; border-top: var(--bw) solid var(--line); padding-top: 10px">
+            <span class="meta">Syncing... 1,204 / 1,880 files · 64%</span>
+            <span class="meta">Indexed yesterday</span>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: auto">
+            <a href="AnalyticsCodebaseOverview.dc.html" class="btn sm" style="flex-grow: 1; justify-content: center">Open analytics</a>
+            <span data-tip="Sync already in progress" tabindex="0" style="display: inline-flex"><button type="button" class="btn sm ibtn" aria-label="Syncing..." disabled style="opacity: .5"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14 5M4 12a8 8 0 0 1 14-5"/></svg></button></span>
+            <a href="#add-source" class="btn sm ibtn" aria-label="Edit" data-tip="Edit source"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1-5L15 5l4 4L9 19z" class="it2"/><path d="M13 7l4 4"/></svg></a>
+            <a href="#share-source" class="btn sm ibtn" aria-label="Share" data-tip="Share access"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2.5" class="i1"/><circle cx="18" cy="6" r="2.5" class="i2"/><circle cx="18" cy="18" r="2.5" class="i3"/><path d="M8.2 10.9l7.6-3.8M8.2 13.1l7.6 3.8"/></svg></a>
+            <button type="button" class="btn sm ibtn" aria-label="Delete" data-tip="Delete source"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" class="it3"/></svg></button>
+          </div>
+        </article>
+
+        <article class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 12px">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px">
+            <span class="tile lg"><svg class="ic" width="28" height="28" viewBox="0 0 48 48" aria-hidden="true"><rect x="8" y="10" width="32" height="10" rx="2" class="i2"/><rect x="8" y="24" width="32" height="10" rx="2" class="iw"/><circle cx="13" cy="15" r="1.5" class="i3"/><circle cx="13" cy="29" r="1.5" class="i3"/><path d="M20 15h14M20 29h14M24 34v6M16 40h16"/></svg></span>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end"><span class="pill ok">ready</span><span class="pill info" data-tip="All users can view this source" data-tip-pos="left" tabindex="0">public</span></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <a href="AnalyticsCodebaseOverview.dc.html" style="font-size: 16px; font-weight: 600; text-decoration: none">slm-server</a>
+            <span class="meta mono" data-tip="/opt/autobot/code_source/slm-server" tabindex="0"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z"/></svg><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0">/opt/autobot/code_source/slm-server</span></span>
+            <span class="meta mono"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="5" r="2"/><circle cx="7" cy="19" r="2"/><path d="M7 7v10"/></svg>main</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px; border-top: var(--bw) solid var(--line); padding-top: 10px">
+            <span class="meta">Synced 1 h ago</span>
+            <span class="meta">Indexed 1 h ago</span>
+            <span class="meta adv"><span class="mono" style="color: var(--text); font-weight: 600" data-tip="Latest indexed commit (short hash)" tabindex="0">7be0d41</span>yesterday</span>
+            <span style="font-size: 13px; color: var(--text2)">feat(fleet): drain node-04 before rolling restart</span>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: auto">
+            <a href="AnalyticsCodebaseOverview.dc.html" class="btn sm" style="flex-grow: 1; justify-content: center">Open analytics</a>
+            <button type="button" class="btn sm ibtn" aria-label="Sync Now" data-tip="Sync now"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14 5M4 12a8 8 0 0 1 14-5M18 3v4h-4M6 21v-4h4"/></svg></button>
+            <a href="#add-source" class="btn sm ibtn" aria-label="Edit" data-tip="Edit source"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1-5L15 5l4 4L9 19z" class="it2"/><path d="M13 7l4 4"/></svg></a>
+            <a href="#share-source" class="btn sm ibtn" aria-label="Share" data-tip="Share access"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2.5" class="i1"/><circle cx="18" cy="6" r="2.5" class="i2"/><circle cx="18" cy="18" r="2.5" class="i3"/><path d="M8.2 10.9l7.6-3.8M8.2 13.1l7.6 3.8"/></svg></a>
+            <button type="button" class="btn sm ibtn" aria-label="Delete" data-tip="Delete source"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" class="it3"/></svg></button>
+          </div>
+        </article>
+
+        <article class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 12px; border-color: var(--danger-tile-b)">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px">
+            <span class="tile lg danger"><svg class="ic" width="28" height="28" viewBox="0 0 48 48" aria-hidden="true"><path d="M6 14h14l4 4h18v20H6z" class="iw"/><path d="M24 22l9 15H15z" class="i3"/><path d="M24 27v4M24 34v.5"/></svg></span>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end"><span class="pill bad">error</span><span class="pill idle">private</span></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <a href="AnalyticsCodebaseOverview.dc.html" style="font-size: 16px; font-weight: 600; text-decoration: none">ansible-playbooks</a>
+            <span class="meta mono"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14l4-4M8 12l-2 2a3 3 0 0 0 4 4l2-2M16 12l2-2a3 3 0 0 0-4-4l-2 2"/></svg>infra/ansible-playbooks</span>
+          </div>
+          <div role="alert" style="display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 8px; background: var(--danger-tile); border: var(--bw) solid var(--danger-tile-b); font-size: 13px; color: var(--alert-text)">
+            <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" class="iw"/><path d="M12 8v5M12 16v.5"/></svg>
+            <span><strong>Error:</strong> git clone failed: authentication required for private repository</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <span class="meta">Never synced</span>
+            <span class="meta">Never indexed</span>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: auto">
+            <a href="AnalyticsCodebaseOverview.dc.html" class="btn sm" style="flex-grow: 1; justify-content: center">Open analytics</a>
+            <button type="button" class="btn sm ibtn" aria-label="Sync Now" data-tip="Sync now"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14 5M4 12a8 8 0 0 1 14-5M18 3v4h-4M6 21v-4h4"/></svg></button>
+            <a href="#add-source" class="btn sm ibtn" aria-label="Edit" data-tip="Edit source"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1-5L15 5l4 4L9 19z" class="it2"/><path d="M13 7l4 4"/></svg></a>
+            <a href="#share-source" class="btn sm ibtn" aria-label="Share" data-tip="Share access"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2.5" class="i1"/><circle cx="18" cy="6" r="2.5" class="i2"/><circle cx="18" cy="18" r="2.5" class="i3"/><path d="M8.2 10.9l7.6-3.8M8.2 13.1l7.6 3.8"/></svg></a>
+            <button type="button" class="btn sm ibtn" aria-label="Delete" data-tip="Delete source"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" class="it3"/></svg></button>
+          </div>
+        </article>
+
+        <a href="#add-source" style="min-height: 260px; border-radius: 10px; border: var(--bw) dashed var(--border); background: var(--surface2); font: inherit; font-size: 14px; font-weight: 600; color: var(--text); text-decoration: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px">
+          <span class="tile lg"><svg class="ic" width="28" height="28" viewBox="0 0 48 48" aria-hidden="true"><path d="M8 14h12l4 4h16v20H8z" class="i2"/><circle cx="34" cy="34" r="8" class="iw"/><path d="M34 30v8M30 34h8"/></svg></span>
+          Add Project
+          <span class="sub2" style="font-weight: 400">GitHub repository or local path</span>
+        </a>
+      </section>
+
+      <article id="registry" class="card" aria-labelledby="reg">
+        <div class="ch" style="flex-wrap: wrap">
+          <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="5" r="2.2" class="i1"/><circle cx="7" cy="19" r="2.2" class="i1"/><circle cx="17" cy="9" r="2.2" class="i2"/><path d="M7 7.2v9.6M17 11.2c0 3-4 3-10 5.8"/></svg></span>
+          <h2 id="reg">Code Source Manager</h2>
+          <span class="pill idle" style="display: inline-flex; align-items: center; gap: 6px"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>2 queued</span>
+          <a href="#add-source" class="btn sm"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add Source</a>
+        </div>
+        <div role="list">
+          <div class="srow sel" role="listitem">
+            <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" class="it3"/><path d="M9 20v-3c0-1 .5-1.7 1.2-2-2.4-.3-4.2-1.3-4.2-4.3 0-1 .4-1.8 1-2.4-.2-.6-.2-1.5.2-2.3 1 0 1.8.5 2.4 1 1-.3 2.8-.3 3.8 0 .6-.5 1.4-1 2.4-1 .4.8.4 1.7.2 2.3.6.6 1 1.4 1 2.4 0 3-1.8 4-4.2 4.3.7.3 1.2 1 1.2 2v3"/></svg></span>
+            <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 220px; min-width: 0"><span style="display: flex; gap: 8px; align-items: center"><strong style="font-size: 14px">AutoBot-AI</strong><span class="tag">Platform</span></span><span class="sub2 mono">mrveiss/AutoBot-AI · Dev_new_gui · Synced 12 min ago</span></div>
+            <span class="pill ok">ready</span><span class="pill idle">private</span>
+            <div style="display: flex; gap: 6px"><button type="button" class="btn sm ibtn" aria-label="Sync Now" data-tip="Sync now"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14 5M4 12a8 8 0 0 1 14-5M18 3v4h-4M6 21v-4h4"/></svg></button><a href="#add-source" class="btn sm ibtn" aria-label="Edit" data-tip="Edit source"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1-5L15 5l4 4L9 19z" class="it2"/></svg></a><a href="#share-source" class="btn sm ibtn" aria-label="Share" data-tip="Share access"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2.5" class="i1"/><circle cx="18" cy="6" r="2.5" class="i2"/><circle cx="18" cy="18" r="2.5" class="i3"/><path d="M8.2 10.9l7.6-3.8M8.2 13.1l7.6 3.8"/></svg></a><button type="button" class="btn sm ibtn" aria-label="Delete" data-tip="Delete source" data-tip-pos="left"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" class="it3"/></svg></button></div>
+          </div>
+          <div class="srow" role="listitem">
+            <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" class="i1"/></svg></span>
+            <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 220px; min-width: 0"><span style="display: flex; gap: 8px; align-items: center"><strong style="font-size: 14px">autobot-frontend</strong><span class="tag">Platform</span></span><span class="sub2 mono" data-tip="/opt/autobot/code_source/autobot-frontend · branch Dev_new_gui" tabindex="0">/opt/autobot/code_source/autobot-frontend · Dev_new_gui · Syncing...</span></div>
+            <span class="pill info">syncing</span><span class="pill warn">shared</span>
+            <div style="display: flex; gap: 6px"><span data-tip="Sync already in progress" tabindex="0" style="display: inline-flex"><button type="button" class="btn sm ibtn" aria-label="Syncing..." disabled style="opacity: .5"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14 5M4 12a8 8 0 0 1 14-5"/></svg></button></span><a href="#add-source" class="btn sm ibtn" aria-label="Edit" data-tip="Edit source"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1-5L15 5l4 4L9 19z" class="it2"/></svg></a><a href="#share-source" class="btn sm ibtn" aria-label="Share" data-tip="Share access"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2.5" class="i1"/><circle cx="18" cy="6" r="2.5" class="i2"/><circle cx="18" cy="18" r="2.5" class="i3"/><path d="M8.2 10.9l7.6-3.8M8.2 13.1l7.6 3.8"/></svg></a><button type="button" class="btn sm ibtn" aria-label="Delete" data-tip="Delete source" data-tip-pos="left"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" class="it3"/></svg></button></div>
+          </div>
+          <div class="srow" role="listitem">
+            <span class="tile danger"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z" class="i3"/><path d="M12 10v4M12 17v.5"/></svg></span>
+            <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 220px; min-width: 0"><strong style="font-size: 14px">ansible-playbooks</strong><span class="sub2 mono">infra/ansible-playbooks · Never synced</span><span style="font-size: 12.5px; color: var(--alert-text)"><strong>Error:</strong> git clone failed: authentication required</span></div>
+            <span class="pill bad">error</span><span class="pill idle">private</span>
+            <div style="display: flex; gap: 6px"><button type="button" class="btn sm ibtn" aria-label="Sync Now" data-tip="Sync now"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14 5M4 12a8 8 0 0 1 14-5M18 3v4h-4M6 21v-4h4"/></svg></button><a href="#add-source" class="btn sm ibtn" aria-label="Edit" data-tip="Edit source"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1-5L15 5l4 4L9 19z" class="it2"/></svg></a><a href="#share-source" class="btn sm ibtn" aria-label="Share" data-tip="Share access"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2.5" class="i1"/><circle cx="18" cy="6" r="2.5" class="i2"/><circle cx="18" cy="18" r="2.5" class="i3"/><path d="M8.2 10.9l7.6-3.8M8.2 13.1l7.6 3.8"/></svg></a><button type="button" class="btn sm ibtn" aria-label="Delete" data-tip="Delete source" data-tip-pos="left"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" class="it3"/></svg></button></div>
+          </div>
+        </div>
+        <div class="adv" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 11px 16px; border-top: var(--bw) solid var(--line); background: var(--surface2); font-size: 13px; border-radius: 0 0 10px 10px">
+          <span class="dot d-warn"></span><span data-tip="The indexer is parsing files and building the code graph" tabindex="0">Indexing running</span><span class="sub2 mono" data-tip="Source ID 4be1c9a0… — autobot-frontend" tabindex="0">(source: 4be1c9a0...)</span>
+          <span class="sub2" style="flex-grow: 1">Next in queue: slm-server, autobot-frontend</span>
+          <button type="button" class="btn sm">Remove from queue</button>
+        </div>
+      </article>
+
+      <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; align-items: start">
+        <article id="add-source" class="dlg" role="dialog" aria-modal="false" aria-labelledby="addt">
+          <div class="ch">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" class="i2"/><path d="M12 8v8M8 12h8"/></svg></span>
+            <h2 id="addt">Add Code Source</h2>
+            <a href="#" class="btn sm ibtn" aria-label="Close dialog" data-tip="Close · Esc" data-tip-pos="left">×</a>
+          </div>
+          <form style="padding: 16px; display: flex; flex-direction: column; gap: 14px">
+            <label class="fl">Name <span class="req" aria-hidden="true">*</span><input class="inp" type="text" value="AutoBot SLM" placeholder="e.g. AutoBot Main" required></label>
+            <div class="fl">Source Type
+              <div class="segw" role="radiogroup" aria-label="Source Type" style="align-self: flex-start">
+                <button type="button" class="seg on" role="radio" aria-checked="true" style="display: inline-flex; align-items: center; gap: 6px"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="5" r="2"/><circle cx="7" cy="19" r="2"/><circle cx="17" cy="9" r="2"/><path d="M7 7v10M17 11c0 3-4 3-10 6"/></svg>GitHub</button>
+                <button type="button" class="seg" role="radio" aria-checked="false" style="display: inline-flex; align-items: center; gap: 6px"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z"/></svg>Local Path</button>
+              </div>
+            </div>
+            <label class="fl">Repository <span class="req" aria-hidden="true">*</span><input class="inp mono" type="text" value="mrveiss/autobot-slm" placeholder="owner/repository" required></label>
+            <label class="fl">Branch<input class="inp mono" type="text" placeholder="main"></label>
+            <label class="fl">Credential (optional)
+              <select class="inp"><option>-- None (public repo) --</option><option selected>github-autobot-ro (token)</option><option>gh-deploy-infra (api_key)</option></select>
+              <small>Select a stored token or API key for private repositories.</small>
+            </label>
+            <fieldset style="border: 1px dashed var(--border); border-radius: 8px; margin: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 10px"><legend class="sub2" style="padding: 0 4px">When Local Path is selected</legend>
+              <label class="fl">Local Path <span class="req" aria-hidden="true">*</span><input class="inp mono" type="text" placeholder="/home/user/projects/myapp" value="/opt/autobot/code_source/slm-server"></label>
+              <label class="fl">Branch (optional)<input class="inp mono" type="text" placeholder="main"></label>
+            </fieldset>
+            <div class="fl" role="radiogroup" aria-label="Access Level">Access Level
+              <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                <label class="acc on"><input type="radio" name="acc-add" checked style="position: absolute; opacity: 0">Private<small>Only you can access</small></label>
+                <label class="acc"><input type="radio" name="acc-add" style="position: absolute; opacity: 0">Shared<small>Shared with specific users</small></label>
+                <label class="acc"><input type="radio" name="acc-add" style="position: absolute; opacity: 0">Public<small>All users can view</small></label>
+              </div>
+            </div>
+            <div role="alert" style="display: flex; gap: 8px; padding: 10px 12px; border-radius: 8px; background: var(--danger-tile); border: var(--bw) solid var(--danger-tile-b); color: var(--alert-text); font-size: 13px"><strong>Error:</strong> Repository (owner/repo) is required.</div>
+            <div style="display: flex; gap: 8px; justify-content: flex-end; border-top: var(--bw) solid var(--line); padding-top: 14px">
+              <a href="#" class="btn">Cancel</a>
+              <button type="button" class="btn pri"><svg class="ic sonp" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add Source</button>
+            </div>
+          </form>
+        </article>
+
+        <article id="share-source" class="dlg" role="dialog" aria-modal="false" aria-labelledby="sht">
+          <div class="ch">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2.5" class="i1"/><circle cx="18" cy="6" r="2.5" class="i2"/><circle cx="18" cy="18" r="2.5" class="i3"/><path d="M8.2 10.9l7.6-3.8M8.2 13.1l7.6 3.8"/></svg></span>
+            <h2 id="sht">Share Source</h2>
+            <a href="#" class="btn sm ibtn" aria-label="Close dialog" data-tip="Close · Esc" data-tip-pos="left">×</a>
+          </div>
+          <form style="padding: 16px; display: flex; flex-direction: column; gap: 14px">
+            <div style="display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 8px; background: var(--surface2); border: var(--bw) solid var(--line)">
+              <span class="tile"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" class="i1"/></svg></span>
+              <div style="display: flex; flex-direction: column; gap: 2px"><strong style="font-size: 14px">autobot-frontend</strong><span class="sub2 mono">/opt/autobot/code_source/autobot-frontend</span></div>
+            </div>
+            <div class="fl" role="radiogroup" aria-label="Access Level">Access Level
+              <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                <label class="acc"><input type="radio" name="acc-sh" style="position: absolute; opacity: 0">Private<small>Only you can access</small></label>
+                <label class="acc on"><input type="radio" name="acc-sh" checked style="position: absolute; opacity: 0">Shared<small>Shared with specific users</small></label>
+                <label class="acc"><input type="radio" name="acc-sh" style="position: absolute; opacity: 0">Public<small>All users can view</small></label>
+              </div>
+            </div>
+            <label class="fl">User IDs <small>(comma-separated)</small>
+<textarea class="inp mono" rows="4" placeholder="user1&#10;user2&#10;user3">mveiss
+ci-runner
+reviewer-bot</textarea>
+              <small>Enter user IDs to grant access to this source.</small>
+            </label>
+            <div style="display: flex; flex-direction: column; gap: 8px"><span class="fl">Currently shared with:</span>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap"><span class="tag"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" class="i1"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>mveiss</span><span class="tag"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" class="i1"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>ci-runner</span></div>
+            </div>
+            <div style="display: flex; gap: 8px; justify-content: flex-end; border-top: var(--bw) solid var(--line); padding-top: 14px">
+              <a href="#" class="btn">Cancel</a>
+              <button type="button" class="btn pri">Update Access</button>
+            </div>
+          </form>
+        </article>
+      </section>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":1180}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      themes: defs.map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => { try { window.localStorage.setItem('autobot-theme', id); } catch (e) {} this.setState({ theme: id }); }
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>
