@@ -59,11 +59,12 @@ except ImportError:  # pragma: no cover
 
 from constants.threshold_constants import TimingConstants
 from events.bus import PersistStrategy, publish_event
+from services.captcha_types import HUMAN_ONLY_TYPES, CaptchaType
 
 logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for unsupported CAPTCHA types (require human intervention)
-_UNSUPPORTED_CAPTCHA_TYPES = ("recaptcha", "hcaptcha", "cloudflare")
+_UNSUPPORTED_CAPTCHA_TYPES = tuple(t.value for t in HUMAN_ONLY_TYPES)
 
 
 class CaptchaResolutionStatus(Enum):
@@ -566,18 +567,7 @@ class CaptchaHumanLoop:
             return None
 
         try:
-            from services.captcha_solver import CaptchaType
-
-            # Map string type to enum
-            type_map = {
-                "text": CaptchaType.TEXT,
-                "math": CaptchaType.MATH,
-                "recaptcha": CaptchaType.RECAPTCHA,
-                "hcaptcha": CaptchaType.HCAPTCHA,
-                "cloudflare": CaptchaType.CLOUDFLARE,
-                "unknown": CaptchaType.UNKNOWN,
-            }
-            captcha_type_enum = type_map.get(captcha_type, CaptchaType.UNKNOWN)
+            captcha_type_enum = CaptchaType.parse(captcha_type)
 
             result = await solver.attempt_solve(
                 image_data=screenshot,
@@ -588,7 +578,7 @@ class CaptchaHumanLoop:
                 return {
                     "success": True,
                     "solution": result.solution,
-                    "confidence": result.confidence.value,
+                    "confidence": result.confidence_level.value,
                     "type": result.captcha_type.value,
                 }
 

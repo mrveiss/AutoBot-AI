@@ -163,6 +163,7 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
 _DECLARED_SCOPES = {
     "post-commit-seed-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "fact-read-authorization-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "captcha-vocabulary-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "direct-secrets-service-callers": ("autobot-backend", "autobot_shared"),
     "data-db-path-production-python": ("autobot-backend", "autobot_shared"),
     "jekyll-processed-docs": ("docs",),
@@ -192,6 +193,7 @@ def test_every_scoped_declaration_claims_the_roots_recorded_here() -> None:
     from `SCAN_ROOTS` shrinks the sweep AND the claim together and every check in the suite
     stays green over two thirds of the population -- the exact state #17844 was filed about.
     """
+    import repo_tests.captcha_fork_guard_18131_test  # noqa: F401, PLC0415
     import repo_tests.direct_secrets_service_callers_17773_test  # noqa: F401, PLC0415
     import repo_tests.docs_liquid_tags_are_defined_17930_test  # noqa: F401, PLC0415
     import repo_tests.kb_admin_read_bypass_guard_test  # noqa: F401, PLC0415

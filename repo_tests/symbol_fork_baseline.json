@@ -27,7 +27,6 @@
     "CacheEntry",
     "CacheOpportunity",
     "CaptchaSolver",
-    "CaptchaType",
     "ChatMessage",
     "CheckDefinition",
     "CheckResult",

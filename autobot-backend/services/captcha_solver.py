@@ -19,7 +19,6 @@ Falls back to human-in-the-loop system (captcha_human_loop.py)
 
 Usage:
     from services.captcha_solver import CaptchaSolver
-from autobot_shared.logging_manager import get_logger
 
     solver = CaptchaSolver()
     result = await solver.attempt_solve(page, captcha_type="text")
@@ -37,12 +36,12 @@ from __future__ import annotations
 
 import io
 import re
-from dataclasses import dataclass
-from enum import Enum
 from typing import TYPE_CHECKING
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from services.captcha_math import solve_math_expression
+from services.captcha_types import HUMAN_ONLY_TYPES, CaptchaSolveResult, CaptchaType
 
 if TYPE_CHECKING:
     from PIL import Image
@@ -54,42 +53,6 @@ _MATH_OPERATORS = frozenset({"+", "-", "=", "\u00d7", "\u00f7", "*"})
 
 # Issue #380: Pre-compiled regex patterns for CAPTCHA processing
 _NON_ALNUM_RE = re.compile(r"[^A-Za-z0-9]")
-_TRAILING_EQUALS_RE = re.compile(r"=\s*\??\s*$")
-_MATH_EXPR_RE = re.compile(r"(\d+)\s*([+\-*/])\s*(\d+)")
-
-
-class CaptchaType(Enum):
-    """Types of CAPTCHAs that can be encountered"""
-
-    TEXT = "text"  # Simple distorted text
-    MATH = "math"  # Math equation to solve
-    IMAGE_SELECT = "image_select"  # Select specific images
-    RECAPTCHA = "recaptcha"  # Google reCAPTCHA
-    HCAPTCHA = "hcaptcha"  # hCaptcha
-    CLOUDFLARE = "cloudflare"  # Cloudflare challenge
-    UNKNOWN = "unknown"
-
-
-class SolverConfidence(Enum):
-    """Confidence levels for CAPTCHA solutions"""
-
-    HIGH = "high"  # >90% confident
-    MEDIUM = "medium"  # 70-90% confident
-    LOW = "low"  # 50-70% confident
-    NONE = "none"  # <50% or unable to solve
-
-
-@dataclass
-class CaptchaSolveResult:
-    """Result of a CAPTCHA solving attempt"""
-
-    success: bool
-    captcha_type: CaptchaType
-    solution: str | None = None
-    confidence: SolverConfidence = SolverConfidence.NONE
-    error_message: str | None = None
-    processing_time_ms: float = 0.0
-    requires_human: bool = True
 
 
 class CaptchaSolver:
@@ -166,17 +129,12 @@ class CaptchaSolver:
             return await self._solve_text_captcha(image, expected_length, char_set)
         if captcha_type == CaptchaType.MATH:
             return await self._solve_math_captcha(image)
-        if captcha_type in (
-            CaptchaType.RECAPTCHA,
-            CaptchaType.HCAPTCHA,
-            CaptchaType.CLOUDFLARE,
-        ):
+        if captcha_type in HUMAN_ONLY_TYPES:
             return CaptchaSolveResult(
                 success=False,
                 captcha_type=captcha_type,
-                confidence=SolverConfidence.NONE,
+                method_used="ocr",
                 error_message=f"{captcha_type.value} requires human intervention",
-                requires_human=True,
             )
         # Default: try text solver
         return await self._solve_text_captcha(image, expected_length, char_set)
@@ -221,8 +179,8 @@ class CaptchaSolver:
             return CaptchaSolveResult(
                 success=False,
                 captcha_type=captcha_type,
+                method_used="ocr",
                 error_message=str(e),
-                requires_human=True,
                 processing_time_ms=(time.time() - start_time) * 1000,
             )
 
@@ -309,26 +267,16 @@ class CaptchaSolver:
             logger.debug("OCR attempt failed: %s", e)
             return None, 0.0
 
-    def _get_confidence_level(self, confidence: float) -> SolverConfidence:
-        """
-        Determine confidence level from numeric confidence score. Issue #620.
-        """
-        if confidence >= 0.9:
-            return SolverConfidence.HIGH
-        elif confidence >= 0.7:
-            return SolverConfidence.MEDIUM
-        return SolverConfidence.LOW
-
-    def _build_text_captcha_failure(self, best_result: str | None) -> CaptchaSolveResult:
+    def _build_text_captcha_failure(self, best_confidence: float) -> CaptchaSolveResult:
         """
         Build failure result for text CAPTCHA solving. Issue #620.
         """
         return CaptchaSolveResult(
             success=False,
             captcha_type=CaptchaType.TEXT,
-            confidence=SolverConfidence.LOW if best_result else SolverConfidence.NONE,
+            confidence=best_confidence,
+            method_used="ocr",
             error_message="OCR confidence too low",
-            requires_human=True,
         )
 
     async def _solve_text_captcha(
@@ -353,7 +301,6 @@ class CaptchaSolver:
                 success=False,
                 captcha_type=CaptchaType.TEXT,
                 error_message="Tesseract OCR not available",
-                requires_human=True,
             )
 
         processed_images = await self._preprocess_for_ocr(image)
@@ -371,11 +318,11 @@ class CaptchaSolver:
                 success=True,
                 captcha_type=CaptchaType.TEXT,
                 solution=best_result,
-                confidence=self._get_confidence_level(best_confidence),
-                requires_human=False,
+                confidence=best_confidence,
+                method_used="ocr",
             )
 
-        return self._build_text_captcha_failure(best_result)
+        return self._build_text_captcha_failure(best_confidence if best_result else 0.0)
 
     async def _solve_math_captcha(self, image: Image.Image) -> CaptchaSolveResult:
         """
@@ -392,7 +339,6 @@ class CaptchaSolver:
                 success=False,
                 captcha_type=CaptchaType.MATH,
                 error_message="Tesseract OCR not available",
-                requires_human=True,
             )
 
         try:
@@ -400,15 +346,15 @@ class CaptchaSolver:
             text = await self._quick_ocr(image)
 
             # Parse and solve the expression
-            solution = self._evaluate_math_expression(text)
+            solution = solve_math_expression(text)
 
             if solution is not None:
                 return CaptchaSolveResult(
                     success=True,
                     captcha_type=CaptchaType.MATH,
                     solution=str(solution),
-                    confidence=SolverConfidence.HIGH,
-                    requires_human=False,
+                    confidence=1.0,
+                    method_used="ocr",
                 )
 
         except Exception as e:
@@ -418,7 +364,6 @@ class CaptchaSolver:
             success=False,
             captcha_type=CaptchaType.MATH,
             error_message="Could not parse math expression",
-            requires_human=True,
         )
 
     async def _preprocess_for_ocr(self, image: Image.Image) -> list:
@@ -515,79 +460,6 @@ class CaptchaSolver:
                 text = text.replace(wrong, right)
 
         return text.upper()
-
-    # Math operation lookup table (Issue #315: extracted to reduce nesting)
-    _MATH_OPS = {
-        "+": lambda a, b: a + b,
-        "-": lambda a, b: a - b,
-        "*": lambda a, b: a * b,
-        "/": lambda a, b: a // b if b != 0 else None,
-    }
-
-    def _clean_math_expression(self, expression: str) -> str:
-        """Clean and normalize a math expression (Issue #315: extracted).
-
-        Args:
-            expression: Raw math expression
-
-        Returns:
-            Cleaned expression with normalized operators
-        """
-        expr = expression.upper()
-        # Remove "= ?" or "= " at the end (Issue #380: use pre-compiled pattern)
-        expr = _TRAILING_EQUALS_RE.sub("", expr)
-        # Replace text/symbol operators with standard operators
-        replacements = [
-            ("\u00d7", "*"),
-            ("\u00f7", "/"),
-            ("X", "*"),
-            ("PLUS", "+"),
-            ("MINUS", "-"),
-            ("TIMES", "*"),
-        ]
-        for old, new in replacements:
-            expr = expr.replace(old, new)
-        return expr
-
-    def _apply_math_operation(self, a: int, op: str, b: int) -> int | None:
-        """Apply a math operation to two operands (Issue #315: extracted).
-
-        Args:
-            a: First operand
-            op: Operator (+, -, *, /)
-            b: Second operand
-
-        Returns:
-            Result of operation, or None if invalid
-        """
-        operation = self._MATH_OPS.get(op)
-        return operation(a, b) if operation else None
-
-    def _evaluate_math_expression(self, expression: str) -> int | None:
-        """Safely evaluate a simple math expression.
-
-        Issue #315: Refactored to use helpers for reduced nesting.
-
-        Args:
-            expression: Math expression string (e.g., "5 + 3 = ?")
-
-        Returns:
-            Integer result or None if can't parse
-        """
-        try:
-            expr = self._clean_math_expression(expression)
-            # Issue #380: use pre-compiled pattern
-            match = _MATH_EXPR_RE.search(expr)
-            if not match:
-                return None
-
-            a = int(match.group(1))
-            op = match.group(2)
-            b = int(match.group(3))
-            return self._apply_math_operation(a, op, b)
-
-        except Exception:
-            return None
 
 
 get_captcha_solver = lazy_singleton(CaptchaSolver)
