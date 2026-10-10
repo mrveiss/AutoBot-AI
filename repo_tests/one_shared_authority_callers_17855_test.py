@@ -168,7 +168,7 @@ _CONSUMERS: tuple[tuple[str, str | None, frozenset[str], frozenset[str]], ...] =
     ("autobot-backend/security/enterprise/compliance_manager.py", "_get_encryption_key", frozenset({"ensure_and_read_shared_key"}), frozenset({"generate_key"})),
     ("autobot-backend/api/push.py", "_check_ssrf", frozenset({"is_public_url_async"}), frozenset({"ip_address", "getaddrinfo"})),
     ("autobot-slm-backend/api/nodes_execution.py", None, frozenset(), frozenset({"gethostbyname", "gethostname"})),
-    ("autobot-backend/knowledge/pipeline/extractors/semantic_chunker.py", "_estimate_tokens", frozenset({"estimate_fast"}), frozenset({"split"})),
+    ("autobot-backend/knowledge/pipeline/extractors/semantic_chunker.py", "_estimate_tokens", frozenset({"estimate"}), frozenset({"split"})),
     ("autobot-backend/llm_shared/optimization/prompt_compressor.py", "_count_tokens", frozenset({"estimate_fast"}), frozenset()),
     ("autobot-backend/security/domain_security.py", "_load_config", frozenset({"load_config_file"}), frozenset({"safe_load"})),
     ("autobot-backend/context_window_manager.py", "_load_config", frozenset({"load_config_file"}), frozenset({"safe_load"})),
