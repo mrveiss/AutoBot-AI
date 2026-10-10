@@ -1,0 +1,124 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+"""Every fact route hides a fact's existence from a non-reader and denies on non-object metadata (#18220)."""
+
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from fastapi import HTTPException
+
+from api import knowledge_audit as audit
+from api import knowledge_collaboration as collab
+from api import knowledge_ownership as own
+from knowledge.ownership import KnowledgeOwnership
+
+ALICE = {"user_id": "alice", "role": "user"}
+ADMIN = {"user_id": "root", "role": "admin"}
+PRIVATE = '{"owner_id": "bob", "visibility": "private"}'
+PUBLIC = '{"owner_id": "bob", "visibility": "public"}'
+SHAPES = ["[1, 2]", '"owner"', "42", "null", "{not json"]
+
+
+def _kb(raw):
+    kb = MagicMock()
+    kb.ownership_manager = KnowledgeOwnership(redis_client=object())
+    kb.redis.return_value.hget = AsyncMock(return_value=raw)
+    return kb
+
+
+def _share_req():
+    return SimpleNamespace(user_ids=["u2"], group_ids=[])
+
+
+def _perm_req():
+    return SimpleNamespace(visibility="private", organization_id=None, group_ids=[])
+
+
+async def _share(kb):
+    with patch.object(collab, "get_or_create_knowledge_base", AsyncMock(return_value=kb)):
+        return await collab.share_knowledge("f1", _share_req(), MagicMock(), ALICE)
+
+
+async def _unshare(kb):
+    with patch.object(collab, "get_or_create_knowledge_base", AsyncMock(return_value=kb)):
+        return await collab.unshare_knowledge("f1", "u2", MagicMock(), ALICE, entity_type="user")
+
+
+async def _permissions(kb):
+    with patch.object(collab, "get_or_create_knowledge_base", AsyncMock(return_value=kb)):
+        return await collab.update_knowledge_permissions("f1", _perm_req(), MagicMock(), ALICE)
+
+
+async def _access_log(kb):
+    with patch.object(audit, "get_or_create_knowledge_base", AsyncMock(return_value=kb)):
+        return await audit.get_fact_access_log("f1", MagicMock(), ALICE, limit=10)
+
+
+_ROUTES = [_share, _unshare, _permissions, _access_log]
+
+
+async def _err(route, kb):
+    with pytest.raises(HTTPException) as exc:
+        await route(kb)
+    return exc.value
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("route", _ROUTES)
+async def test_a_non_reader_gets_the_response_for_a_missing_fact(route):
+    existing = await _err(route, _kb(PRIVATE))
+    missing = await _err(route, _kb(None))
+    assert (existing.status_code, existing.detail) == (missing.status_code, missing.detail) == (404, "Fact not found")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("route", _ROUTES)
+async def test_a_reader_who_is_not_the_owner_keeps_403(route):
+    err = await _err(route, _kb(PUBLIC))
+    assert err.status_code == 403
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("route", _ROUTES)
+@pytest.mark.parametrize("raw", SHAPES)
+async def test_non_object_metadata_is_the_404_never_a_500(route, raw):
+    err = await _err(route, _kb(raw))
+    assert (err.status_code, err.detail) == (404, "Fact not found")
+
+
+# --- admin-only ownership routes: an admin passes the read check on non-object metadata ---
+
+
+def _own_kb(metadata):
+    kb = MagicMock()
+    kb.get_fact = MagicMock(return_value={"fact_id": "f1", "content": "c", "metadata": metadata})
+    kb.ownership_manager.check_access = AsyncMock(return_value=True)
+    kb.ownership_manager.share_fact = AsyncMock(return_value={"shared_with": ["u2"], "visibility": "shared"})
+    kb.ownership_manager.unshare_fact = AsyncMock(return_value={"shared_with": [], "visibility": "private"})
+    kb.update_fact = AsyncMock(return_value={"status": "success"})
+    return kb
+
+
+def _own_request():
+    request = MagicMock()
+    request.state.user = {"user_id": "root"}
+    return request
+
+
+async def _own_call(name, kb):
+    request = _own_request()
+    with patch.object(own, "get_or_create_knowledge_base", AsyncMock(return_value=kb)):
+        if name == "share":
+            return await own.share_fact("f1", SimpleNamespace(user_ids=["u2"]), request, ADMIN)
+        if name == "unshare":
+            return await own.unshare_fact("f1", "u2", request, ADMIN)
+        return await own.update_fact_visibility("f1", SimpleNamespace(visibility="private"), request, ADMIN)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["share", "unshare", "visibility"])
+@pytest.mark.parametrize("shape", [["a"], "owner", 42, None])
+async def test_ownership_routes_never_500_on_non_object_metadata(name, shape):
+    result = await _own_call(name, _own_kb(shape))
+    assert result  # reached the response: no AttributeError, no 500

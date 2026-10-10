@@ -116,7 +116,8 @@ async def share_fact(
     fact = await _get_fact_with_ownership(kb, fact_id, user_id)
 
     # Only owner can share facts
-    owner_id = fact.get("metadata", {}).get("owner_id")
+    metadata = object_metadata(fact_id, fact.get("metadata"))  # #18220: before any owner read
+    owner_id = metadata.get("owner_id")
     if owner_id and owner_id != user_id:
         raise HTTPException(
             status_code=403,
@@ -130,7 +131,6 @@ async def share_fact(
             detail="Ownership management not available",
         )
 
-    metadata = object_metadata(fact_id, fact.get("metadata"))  # #18220
     updated_metadata = await kb.ownership_manager.share_fact(fact_id, request_body.user_ids, metadata)
 
     # Save updated metadata; a failed write is not a successful share (#16663)
@@ -179,7 +179,8 @@ async def unshare_fact(
     fact = await _get_fact_with_ownership(kb, fact_id, user_id)
 
     # Only owner can unshare facts
-    owner_id = fact.get("metadata", {}).get("owner_id")
+    metadata = object_metadata(fact_id, fact.get("metadata"))  # #18220: before any owner read
+    owner_id = metadata.get("owner_id")
     if owner_id and owner_id != user_id:
         raise HTTPException(
             status_code=403,
@@ -193,7 +194,6 @@ async def unshare_fact(
             detail="Ownership management not available",
         )
 
-    metadata = object_metadata(fact_id, fact.get("metadata"))  # #18220
     updated_metadata = await kb.ownership_manager.unshare_fact(fact_id, [user_id_to_remove], metadata)
 
     # Save updated metadata; a failed write is not a successful share (#16663)
@@ -242,7 +242,8 @@ async def update_fact_visibility(
     fact = await _get_fact_with_ownership(kb, fact_id, user_id)
 
     # Only owner can change visibility
-    owner_id = fact.get("metadata", {}).get("owner_id")
+    metadata = object_metadata(fact_id, fact.get("metadata"))  # #18220: before any owner read
+    owner_id = metadata.get("owner_id")
     if owner_id and owner_id != user_id:
         raise HTTPException(
             status_code=403,
@@ -250,7 +251,6 @@ async def update_fact_visibility(
         )
 
     # Update visibility in metadata
-    metadata = object_metadata(fact_id, fact.get("metadata"))  # #18220
     metadata["visibility"] = request_body.visibility
 
     # Save updated metadata; update_fact also moves the fact between the ownership indexes (#16663)
@@ -406,9 +406,9 @@ async def get_shared_facts(
                 {
                     "fact_id": fact_id,
                     "content": fact.get("content", ""),
-                    "metadata": fact.get("metadata", {}),
+                    "metadata": object_metadata(fact_id, fact.get("metadata")),
                     "timestamp": fact.get("timestamp", ""),
-                    "owner_id": fact.get("metadata", {}).get("owner_id"),
+                    "owner_id": object_metadata(fact_id, fact.get("metadata")).get("owner_id"),
                 }
             )
 

@@ -10,6 +10,7 @@ Integrates with ChromaDB metadata and ownership system.
 """
 
 import asyncio
+import json
 from typing import Dict, List
 
 from fastapi import HTTPException
@@ -285,6 +286,27 @@ def object_metadata(fact_id: str, metadata) -> Dict:
             "Fact %s has non-object metadata (%s); treating it as unreadable", fact_id, type(metadata).__name__
         )
     return {}
+
+
+def parse_fact_metadata(fact_id: str, raw) -> Dict:
+    """Decode a stored metadata JSON value into a dict; anything unparseable or non-object reads as ``{}`` (#18220)."""
+    if isinstance(raw, (bytes, bytearray)):
+        raw = raw.decode("utf-8", errors="replace")
+    try:
+        parsed = json.loads(raw) if isinstance(raw, str) else raw
+    except ValueError:
+        parsed = raw
+    return object_metadata(fact_id, parsed)
+
+
+async def require_fact_owner(ownership_manager, fact_id: str, metadata: Dict, current_user, detail: str) -> None:
+    """Pass the owner; a non-owner reader gets 403 *detail*, a non-reader the missing-fact 404 (#18220)."""
+    user_id, _, _ = extract_user_context_from_request(current_user)
+    if metadata.get("owner_id") == user_id:
+        return
+    if not await can_read_fact(ownership_manager, fact_id, metadata, current_user):
+        raise fact_not_found()
+    raise HTTPException(status_code=403, detail=detail)
 
 
 async def _authorize_fact(kb, fact_id: str, current_user, *, write: bool) -> Dict:
