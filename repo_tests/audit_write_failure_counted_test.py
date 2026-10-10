@@ -45,9 +45,10 @@ SOURCE_ROOTS = ["autobot-backend", "autobot-slm-backend", "autobot_shared"]
 #: relative form is load-bearing (#14484).
 _EXCLUDED_DIR_NAMES = {"tests", "node_modules", "__pycache__", ".venv"}
 
+# #18088: both services' rbac_middleware.py are now re-export shims; the audit write and
+# its counter live once, in the shared module.
 MIDDLEWARES = [
-    "autobot-backend/user_management/middleware/rbac_middleware.py",
-    "autobot-slm-backend/user_management/middleware/rbac_middleware.py",
+    "autobot_shared/user_management/middleware/rbac_middleware.py",
 ]
 
 COUNTER_CALL = "record_audit_write_failure_safely"
@@ -370,7 +371,7 @@ def test_the_derived_check_would_notice_an_uncounted_sink() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("rel", MIDDLEWARES, ids=["backend", "slm-backend"])
+@pytest.mark.parametrize("rel", MIDDLEWARES, ids=["shared"])
 def test_a_swallowed_permission_denied_audit_is_counted(rel: str) -> None:
     path = REPO_ROOT / rel
     assert path.is_file(), f"{rel} is missing — this guard would pass vacuously"

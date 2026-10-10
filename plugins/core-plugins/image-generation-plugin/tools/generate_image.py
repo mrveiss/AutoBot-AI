@@ -16,6 +16,8 @@ import os
 from typing import Any, Dict
 
 # Fully-qualified (#14373) — see plugins/core-plugins/image-generation-plugin/main.py.
+from autobot_shared.generation_http_timeouts import generation_timeout, poll_timeout
+from autobot_shared.http_client import get_http_client
 from autobot_shared.tool_sdk.base import BaseTool, ToolMetadata, ToolPermission, ToolResult
 
 logger = logging.getLogger(__name__)
@@ -160,11 +162,6 @@ class GenerateImageTool(BaseTool):
         if not api_key:
             return ToolResult(success=False, error="FLUX_API_KEY not configured")
 
-        try:
-            import aiohttp
-        except ImportError:
-            return ToolResult(success=False, error="aiohttp package not installed")
-
         width, height = self._parse_size(size, default_w=1024, default_h=1024)
 
         payload: Dict[str, Any] = {
@@ -177,16 +174,17 @@ class GenerateImageTool(BaseTool):
         if negative_prompt:
             payload["negative_prompt"] = negative_prompt
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.bfl.ml/v1/flux-pro-1.1",
-                json=payload,
-                headers={"x-key": api_key, "Content-Type": "application/json"},
-            ) as resp:
-                if resp.status != 200:
-                    body = await resp.text()
-                    return ToolResult(success=False, error=f"Flux API error {resp.status}: {body}")
-                task_data = await resp.json()
+        async with get_http_client().tracked_request(
+            "POST",
+            "https://api.bfl.ml/v1/flux-pro-1.1",
+            json=payload,
+            headers={"x-key": api_key, "Content-Type": "application/json"},
+            timeout=poll_timeout(),
+        ) as resp:
+            if resp.status != 200:
+                body = await resp.text()
+                return ToolResult(success=False, error=f"Flux API error {resp.status}: {body}")
+            task_data = await resp.json()
 
         task_id = task_data.get("id")
         if not task_id:
@@ -197,14 +195,15 @@ class GenerateImageTool(BaseTool):
 
         for _ in range(60):
             await asyncio.sleep(2)
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"https://api.bfl.ml/v1/get_result?id={task_id}",
-                    headers={"x-key": api_key},
-                ) as poll:
-                    if poll.status != 200:
-                        continue
-                    result = await poll.json()
+            async with get_http_client().tracked_request(
+                "GET",
+                f"https://api.bfl.ml/v1/get_result?id={task_id}",
+                headers={"x-key": api_key},
+                timeout=poll_timeout(),
+            ) as poll:
+                if poll.status != 200:
+                    continue
+                result = await poll.json()
 
             status = result.get("status")
             if status == "Ready":
@@ -228,17 +227,10 @@ class GenerateImageTool(BaseTool):
     # Stable Diffusion (Stability AI)
     # ------------------------------------------------------------------
 
-    async def _generate_sd(
-        self, prompt: str, size: str, negative_prompt: str, n: int
-    ) -> ToolResult:
+    async def _generate_sd(self, prompt: str, size: str, negative_prompt: str, n: int) -> ToolResult:
         api_key = os.environ.get("STABILITY_API_KEY", "")
         if not api_key:
             return ToolResult(success=False, error="STABILITY_API_KEY not configured")
-
-        try:
-            import aiohttp
-        except ImportError:
-            return ToolResult(success=False, error="aiohttp package not installed")
 
         width, height = self._parse_size(size, default_w=1024, default_h=1024)
         # SD v2 supported sizes: multiples of 64, max 2048
@@ -256,30 +248,33 @@ class GenerateImageTool(BaseTool):
         if negative_prompt:
             payload["text_prompts"].append({"text": negative_prompt, "weight": -1.0})
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image",
-                json=payload,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                },
-            ) as resp:
-                if resp.status != 200:
-                    body = await resp.text()
-                    return ToolResult(success=False, error=f"Stability API error {resp.status}: {body}")
-                data = await resp.json()
+        async with get_http_client().tracked_request(
+            "POST",
+            "https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            timeout=generation_timeout(),
+        ) as resp:
+            if resp.status != 200:
+                body = await resp.text()
+                return ToolResult(success=False, error=f"Stability API error {resp.status}: {body}")
+            data = await resp.json()
 
         images = []
         for artifact in data.get("artifacts", []):
             if artifact.get("finishReason") == "SUCCESS":
                 b64 = artifact.get("base64", "")
                 # Return as data URL so frontend can display without a CDN
-                images.append({
-                    "url": f"data:image/png;base64,{b64}",
-                    "revised_prompt": None,
-                })
+                images.append(
+                    {
+                        "url": f"data:image/png;base64,{b64}",
+                        "revised_prompt": None,
+                    }
+                )
 
         if not images:
             return ToolResult(success=False, error="Stable Diffusion: no successful artifacts returned")

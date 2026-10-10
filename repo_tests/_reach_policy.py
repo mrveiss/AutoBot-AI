@@ -187,6 +187,11 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "One frontend tree's source, against all tracked `.vue`/`.ts`/`.js` including the other frontend.",
     ),
+    "post-commit-seed-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test source is a subset of tracked .py under three roots; the test-file share drifts.",
+    ),
     "import-hermeticity": (
         ABSOLUTE,
         "NOT_PATHS",

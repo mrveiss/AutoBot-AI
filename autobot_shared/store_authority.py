@@ -109,8 +109,7 @@ STORE_AUTHORITY: dict[str, Concept] = {
         system_of_record=Store.POSTGRES,
         projections=(Store.REDIS,),
         write_sites=(
-            "autobot-backend/user_management/middleware/rbac_middleware.py",
-            "autobot-slm-backend/user_management/middleware/rbac_middleware.py",
+            "autobot_shared/user_management/middleware/rbac_middleware.py",
             "autobot-slm-backend/user_management/services/sso_service.py",
         ),
         rebuilt_by="Every Redis entry is written with setex and re-derived from the users/roles/"

@@ -229,3 +229,23 @@ class TestClampingIsAnnounced:
 
         assert value == 10.0
         assert any("outside" in record.message for record in caplog.records)
+
+
+class TestEnvFloatClampedPositiveFinite:
+    """``positive_finite`` rejects what clamping cannot: NaN, inf, 0, negatives (#12979)."""
+
+    @pytest.mark.parametrize("bad", ["0", "-1", "-0.5", "nan", "inf", "-inf"])
+    def test_rejected_value_falls_back_with_a_warning(self, monkeypatch, caplog, bad):
+        monkeypatch.setenv("AUTOBOT_TEST_PF", bad)
+
+        with caplog.at_level(logging.WARNING):
+            value = env_float_clamped("AUTOBOT_TEST_PF", 30.0, positive_finite=True)
+
+        assert value == 30.0
+        assert any("positive finite" in record.message for record in caplog.records)
+
+    def test_valid_value_passes_and_flag_is_opt_in(self, monkeypatch):
+        monkeypatch.setenv("AUTOBOT_TEST_PF", "7.5")
+        assert env_float_clamped("AUTOBOT_TEST_PF", 30.0, positive_finite=True) == 7.5
+        monkeypatch.setenv("AUTOBOT_TEST_PF", "0")
+        assert env_float_clamped("AUTOBOT_TEST_PF", 30.0) == 0.0
