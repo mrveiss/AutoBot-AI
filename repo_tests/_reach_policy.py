@@ -335,6 +335,7 @@ UNSCOPED = frozenset(
         "kb-content-redaction-chokepoint",
         "nginx-play-level-yml-sweep",
         "no-created-by-admin-literal",
+        "nosec-b615-suppression-sweep",
         "npm-audit-workspace-coverage",
         "post-sync-branch-functions",
         "prompt-injection-detector-strict-mode",

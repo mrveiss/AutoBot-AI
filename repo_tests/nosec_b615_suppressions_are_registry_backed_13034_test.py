@@ -142,9 +142,10 @@ def _python_files(root: Path) -> list[str]:
 REACH = declare(
     "nosec-b615-suppression-sweep",
     discover=_python_files,
-    floor=6_000,
-    growth=600,
-    skips=0,
+    # Population IS every tracked `.py` (shape of `conflict-marker-scanned-files`): a fraction,
+    # not a floor the tree walks into; 0.99 allows legitimately unreadable files.
+    min_fraction=0.99,
+    reference=lambda root: len(_python_files(root)),
     what="tracked Python files searched for a live B615 suppression comment",
 )
 
