@@ -25,7 +25,7 @@ the problem, and add a new detector there rather than starting another (#16688).
 import re
 from typing import Any, Dict
 
-from autobot_shared.secret_redaction import BROAD_FRAGMENTS, MatchPolicy, is_credential_field, redact_content
+from autobot_shared.secret_redaction import BROAD_FRAGMENTS, MatchPolicy, is_credential_entry, redact_content
 
 # Patterns for common API key formats
 API_KEY_PATTERNS = [
@@ -37,7 +37,7 @@ API_KEY_PATTERNS = [
 
 # Keys in dicts that should be redacted (#16688, #17336). The vocabulary and the
 # matching rule are the canonical ones: ``redact_dict`` calls
-# ``is_credential_field(key, MatchPolicy.BROAD)``, which normalizes the key
+# ``is_credential_entry(key, value, MatchPolicy.BROAD)``, which normalizes the key
 # (lowercase, "_" and "-" stripped) before substring-matching it against
 # ``secret_redaction.BROAD_FRAGMENTS`` -- the credential nouns PLUS the
 # authorization terms (``Authorization``, ``auth_header``, ``x_auth``). Nothing
@@ -92,7 +92,7 @@ def redact_dict(data: Dict[str, Any]) -> Dict[str, Any]:
     """
     redacted = {}
     for key, value in data.items():
-        if is_credential_field(key, MatchPolicy.BROAD):
+        if is_credential_entry(key, value, MatchPolicy.BROAD):
             # Redact this key's value
             if isinstance(value, str):
                 redacted[key] = redact_api_key(value)

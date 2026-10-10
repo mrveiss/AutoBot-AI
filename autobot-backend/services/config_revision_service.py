@@ -23,7 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.secret_redaction import MatchPolicy, is_credential_field
+from autobot_shared.secret_redaction import MatchPolicy, is_credential_entry
 from models.config_revision import ConfigRevision
 
 logger = get_logger(__name__)
@@ -31,9 +31,9 @@ logger = get_logger(__name__)
 _REDACTED = "***REDACTED***"
 
 
-def _is_secret_key(key: str) -> bool:
-    """Return True if key name suggests a sensitive value (#1404)."""
-    return is_credential_field(key, MatchPolicy.BROAD)
+def _is_secret_key(key: str, value: Any) -> bool:
+    """Return True if the value under *key* must be masked (#1404, value-aware #17336)."""
+    return is_credential_entry(key, value, MatchPolicy.BROAD)
 
 
 def redact_secrets(config_dict: Dict[str, Any] | None) -> Dict[str, Any] | None:
@@ -44,7 +44,7 @@ def redact_secrets(config_dict: Dict[str, Any] | None) -> Dict[str, Any] | None:
     """
     if config_dict is None:
         return None
-    return {k: (_REDACTED if _is_secret_key(k) else v) for k, v in config_dict.items()}
+    return {k: (_REDACTED if _is_secret_key(k, v) else v) for k, v in config_dict.items()}
 
 
 def compute_diff(

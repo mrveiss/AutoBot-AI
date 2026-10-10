@@ -136,7 +136,9 @@ BROAD_FRAGMENTS: Tuple[str, ...] = tuple(dict.fromkeys(CREDENTIAL_SUFFIXES + AUT
 #   * a suffix form needs the remainder to END in a noun and the name to END in
 #     the quantity word (``token_count``, ``api_key_limit``) --
 #     ``token_count_secret`` does not qualify.
-# Applied by BOTH policies, to the whole name only (#17336).
+# Applied by BOTH policies, to the whole name only (#17336). It is a NAME
+# classification; value-bearing callers use ``is_credential_entry``, which keeps
+# the value masked unless it is a plain number.
 QUANTITY_PREFIXES: Tuple[str, ...] = (
     "max_",
     "min_",
@@ -190,15 +192,52 @@ def _normalized(name: str) -> str:
     return name.lower().replace("_", "").replace("-", "")
 
 
+def _is_plain_number(value: Any) -> bool:
+    """An int/float (never bool) or a pure-ASCII-digit string."""
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return True
+    return isinstance(value, str) and re.fullmatch(r"[0-9]+", value) is not None
+
+
 def is_credential_field(name: str, policy: MatchPolicy = MatchPolicy.PRECISE) -> bool:
-    """Return True when a field name denotes a credential *value* under ``policy``.
+    """NAME-ONLY classification: does this name denote a credential under ``policy``?
+
+    Use this only where no value exists (a schema, a header name). It exempts
+    :func:`is_quantity_field` names on the strength of the name alone, which
+    cannot know that ``token_count`` holds a JWT. Every caller that has a value
+    must use :func:`is_credential_entry` instead.
 
     ``policy`` is validated, never defaulted by a fallthrough: an unknown value
     raises rather than silently selecting the weaker rule.
     """
+    return _matches_vocabulary(name, policy) and not is_quantity_field(name)
+
+
+def is_credential_entry(name: str, value: Any, policy: MatchPolicy = MatchPolicy.PRECISE) -> bool:
+    """VALUE-AWARE: should the value stored under ``name`` be masked (#17336)?
+
+    A quantity-shaped name (``max_tokens``, ``token_count``) is left unmasked
+    only when its value is a plain number or a pure-digit string; under any other
+    value it is masked by BOTH policies (PRECISE included). A JWT, an
+    ``sk-...`` string, an opaque string, a list or a dict under such a name
+    stays masked: the name is a claim, the value is the evidence.
+    """
     if not isinstance(policy, MatchPolicy):
         raise TypeError(f"policy must be a MatchPolicy, got {policy!r}")
-    if not name or is_quantity_field(name):
+    if name and is_quantity_field(name):
+        # Under BOTH policies a quantity name is a credential candidate whose
+        # exemption is the value: ``token_count`` carries no noun suffix, so
+        # PRECISE would otherwise keep a JWT stored under it.
+        return not _is_plain_number(value)
+    return _matches_vocabulary(name, policy)
+
+
+def _matches_vocabulary(name: str, policy: MatchPolicy) -> bool:
+    if not isinstance(policy, MatchPolicy):
+        raise TypeError(f"policy must be a MatchPolicy, got {policy!r}")
+    if not name:
         return False
     if policy is MatchPolicy.BROAD:
         flat = _normalized(name)
@@ -239,7 +278,7 @@ def redact_url_userinfo(value: str, mask_username: bool = False) -> str:
 def _redact_credential_query_params(query: str) -> str:
     """Mask credential-shaped query-param values (``?api_key=X``, ``&token=Y``).
 
-    Reuses :func:`is_credential_field` on each param NAME -- the same rule
+    Reuses :func:`is_credential_entry` on each param NAME -- the same rule
     that already decides a config field is credential-shaped decides a query
     param is too, so ``api_key``/``token``/``secret``/... are caught without
     a second, drifting list of credential-ish names.
@@ -249,7 +288,7 @@ def _redact_credential_query_params(query: str) -> str:
     pairs = parse_qsl(query, keep_blank_values=True)
     if not pairs:
         return query
-    redacted = [(k, REDACTED_PLACEHOLDER if v and is_credential_field(k) else v) for k, v in pairs]
+    redacted = [(k, REDACTED_PLACEHOLDER if v and is_credential_entry(k, v) else v) for k, v in pairs]
     return urlencode(redacted)
 
 
@@ -282,8 +321,8 @@ def redact_value(name: str, value: Any) -> Any:
     # URL handling runs first: a ``*_dsn`` name matches both rule sets, and
     # in-place userinfo redaction is strictly more diagnosable than a full mask.
     if is_url_field(name) and isinstance(value, str):
-        return redact_url_userinfo(value, mask_username=is_credential_field(name))
-    if not is_credential_field(name):
+        return redact_url_userinfo(value, mask_username=is_credential_entry(name, value))
+    if not is_credential_entry(name, value):
         return value
     return REDACTED_PLACEHOLDER
 
@@ -343,12 +382,12 @@ def redact_text(text: str) -> str:
     return _SECRET_KV_RE.sub(r"\1\2" + LOG_MASK, text)
 
 
-def redact_mapping(mapping: Mapping[str, str]) -> Dict[str, str]:
+def redact_mapping(mapping: Mapping[str, Any]) -> Dict[str, Any]:
     """Return a copy of *mapping* with credential-named values replaced by ``***``.
 
     Uses :attr:`MatchPolicy.BROAD`: log lines and ansible extra-vars favour recall.
     """
-    return {k: (LOG_MASK if is_credential_field(k, MatchPolicy.BROAD) else v) for k, v in mapping.items()}
+    return {k: (LOG_MASK if is_credential_entry(k, v, MatchPolicy.BROAD) else v) for k, v in mapping.items()}
 
 
 # ---------------------------------------------------------------------------

@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from typing import Any, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.secret_redaction import MatchPolicy, is_credential_field
+from autobot_shared.secret_redaction import MatchPolicy, is_credential_entry
 
 logger = get_logger(__name__)
 
@@ -46,9 +46,9 @@ logger = get_logger(__name__)
 _REDACTED = "<redacted>"
 
 
-def _is_sensitive(key: str) -> bool:
-    """Return True if *key* is credential-named under the canonical BROAD policy."""
-    return is_credential_field(key, MatchPolicy.BROAD)
+def _is_sensitive(key: str, value: Any) -> bool:
+    """Return True if the value under *key* is credential-named under BROAD (value-aware)."""
+    return is_credential_entry(key, value, MatchPolicy.BROAD)
 
 
 # ---------------------------------------------------------------------------
@@ -83,7 +83,7 @@ class CausalLink:
             reason is replaced with the redaction placeholder when it contains
             any sensitive key fragment.
         """
-        safe_reason = _REDACTED if _is_sensitive(self.reason) else self.reason
+        safe_reason = _REDACTED if _is_sensitive(self.reason, self.reason) else self.reason
         return {
             "source_event_id": self.source_event_id,
             "target_event_id": self.target_event_id,
@@ -126,7 +126,7 @@ def sanitize_arguments(arguments: Any) -> Any:
         return arguments
     result: dict[str, Any] = {}
     for key, value in arguments.items():
-        if _is_sensitive(key):
+        if _is_sensitive(key, value):
             result[key] = _REDACTED
         elif isinstance(value, dict):
             result[key] = sanitize_arguments(value)

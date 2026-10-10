@@ -37,3 +37,12 @@ def test_counts_and_limits_are_exported_verbatim(name: str) -> None:
 @pytest.mark.parametrize("name", ["max_token_secret", "max_password", "token_count_secret", "api_key", "x_secret"])
 def test_secret_looking_names_are_still_placeholders(name: str) -> None:
     assert _scrub_adapter_config({name: "value"}, {})[name].startswith("{{")
+
+
+_JWT = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abcdefghijkl"  # pragma: allowlist secret
+
+
+def test_a_quantity_name_holding_a_non_number_is_still_a_placeholder() -> None:
+    out = _scrub_adapter_config({"token_count": _JWT, "max_tokens": 4096}, {})
+    assert out["token_count"] == "{{TOKEN_COUNT}}"
+    assert out["max_tokens"] == 4096

@@ -3,11 +3,19 @@
 """One vocabulary, two named policies (#17336, #17337): nothing may leave the masked set."""
 
 import re
+from pathlib import Path
 
 import pytest
 
 from autobot_shared import secret_redaction as sr
-from autobot_shared.secret_redaction import MatchPolicy, is_credential_field, redact_mapping, redact_text
+from autobot_shared.secret_redaction import (
+    MatchPolicy,
+    is_credential_entry,
+    is_credential_field,
+    redact_mapping,
+    redact_text,
+    redact_value,
+)
 
 # Frozen copies of what each retired vocabulary masked. They are the "before" half
 # of the comparison: if the canonical vocabulary ever stops covering one of these
@@ -129,3 +137,126 @@ def test_a_count_or_limit_of_a_credential_noun_is_not_a_credential(name: str, po
 )
 def test_the_quantity_rule_never_exempts_a_secret_looking_name(name: str, policy: MatchPolicy) -> None:
     assert is_credential_field(name, policy) is True
+
+
+# ---------------------------------------------------------------------------
+# Value-aware quantity exemption (#17336)
+# ---------------------------------------------------------------------------
+
+_JWT = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop"  # pragma: allowlist secret
+
+
+@pytest.mark.parametrize("policy", list(MatchPolicy))
+@pytest.mark.parametrize(
+    "name,value,masked",
+    [
+        ("token_count", _JWT, True),
+        ("token_count", 42, False),
+        ("token_count", "42", False),
+        ("token_count", 4.5, False),
+        ("token_count", True, True),
+        ("api_keys", ["sk-" + "a" * 24], True),
+        ("api_keys", {"k": "v"}, True),
+        ("max_tokens", 4096, False),
+        ("max_tokens", "sk-" + "b" * 24, True),
+        ("password_limit", "hunter2", True),
+        ("password_limit", 8, False),
+        ("secret_size", 32, False),
+        ("secret_size", "s3cr3tvalue", True),
+        ("api_key", 42, True),
+        ("max_token_secret", 42, True),
+    ],
+)
+def test_a_quantity_name_is_exempt_only_when_its_value_is_a_number(name, value, masked, policy) -> None:
+    assert is_credential_entry(name, value, policy) is masked
+
+
+def test_secret_size_and_secret_sizes_differ_by_policy_and_value() -> None:
+    # ``secret_size`` is a quantity name; ``secret_sizes`` is not (suffix list is singular)
+    # so PRECISE never classifies it (no noun suffix) and BROAD masks it for any value.
+    assert is_credential_entry("secret_size", 32, MatchPolicy.BROAD) is False
+    assert is_credential_entry("secret_sizes", 32, MatchPolicy.BROAD) is True
+    assert is_credential_entry("secret_sizes", [1, 2], MatchPolicy.BROAD) is True
+    assert is_credential_field("secret_sizes", MatchPolicy.PRECISE) is False
+
+
+def test_every_value_bearing_surface_masks_a_non_numeric_value_under_a_quantity_name() -> None:
+    assert redact_mapping({"token_count": _JWT, "max_tokens": 4096}) == {"token_count": "***", "max_tokens": 4096}
+    assert redact_value("token_count", _JWT) == "**********"
+    assert redact_value("max_tokens", 4096) == 4096
+    assert redact_value("api_keys", ["sk-" + "c" * 24]) == "**********"
+
+
+# ---------------------------------------------------------------------------
+# The mask-set delta, reproducible from the repo (#17336, #17337)
+# ---------------------------------------------------------------------------
+
+_CORPUS = Path(__file__).with_name("redaction_corpus_17336.txt")
+_RETIRED_CREDENTIAL_SUFFIXES = (
+    "secret secrets key keys token tokens password passwords passwd pass passphrase credential credentials "
+    "salt dsn signature pem cert seed"
+).split()
+_LOCATIONS = ("_path", "_file", "_dir", "_id")
+_NOUNS = "secret|secrets|key|keys|token|tokens|password|passwords|passwd|pass|passphrase|credential|credentials|salt|dsn|signature|pem|cert|seed"
+# The closed shape of "a count or limit of a credential noun", written without
+# importing is_quantity_field so it is an independent oracle for it.
+_QUANTITY_SHAPE = re.compile(
+    r"(?:(?:max|min|num|total|input|output|prompt|completion|cached)_(?:[a-z0-9_]*_)?(?:secrets|keys|tokens|passwords|credentials))"
+    rf"|(?:[a-z0-9_]*?(?:^|_)(?:{_NOUNS})_(?:count|limit|len|length|size))"
+)
+
+
+def _is_quantity_shape(name: str) -> bool:
+    return _QUANTITY_SHAPE.fullmatch(name.lower().replace("-", "_")) is not None
+
+
+def _old_precise(n: str) -> bool:
+    low = n.lower()
+    return (
+        bool(n)
+        and not low.endswith(_LOCATIONS)
+        and any(low == x or low.endswith("_" + x) for x in _RETIRED_CREDENTIAL_SUFFIXES)
+    )
+
+
+def _old_substring(fragments):
+    return lambda n: any(f in n.lower() for f in fragments)
+
+
+def _old_normalized(n: str) -> bool:
+    flat = n.lower().replace("_", "").replace("-", "")
+    return any(x in flat for x in (*_RETIRED_CREDENTIAL_SUFFIXES, "bearer", "auth", "authorization"))
+
+
+# caller -> (old predicate rebuilt from frozen literals, new policy)
+_CALLERS = {
+    "is_credential_field": (_old_precise, MatchPolicy.PRECISE),
+    "redact_mapping": (_old_substring(_RETIRED_SECURITY_REDACTION), MatchPolicy.BROAD),
+    "credential_redaction.redact_dict": (_old_normalized, MatchPolicy.BROAD),
+    "cot_events": (_old_substring(_RETIRED_COT_EVENTS), MatchPolicy.BROAD),
+    "portability": (lambda n: n.lower() in _RETIRED_PORTABILITY, MatchPolicy.PRECISE),
+    "config_revision": (_old_substring(_RETIRED_CONFIG_REVISION), MatchPolicy.BROAD),
+}
+
+
+def _corpus():
+    names = _CORPUS.read_text(encoding="utf-8").split()
+    assert len(names) > 3000, "corpus is checked in and must not shrink silently"
+    return names
+
+
+@pytest.mark.parametrize("caller", sorted(_CALLERS))
+def test_the_only_names_that_leave_the_mask_set_are_numbers_under_a_closed_quantity_shape(caller) -> None:
+    old, policy = _CALLERS[caller]
+    names = _corpus()
+    expected_removed = {n for n in names if old(n) and _is_quantity_shape(n)}
+    removed_for_a_number = {n for n in names if old(n) and not is_credential_entry(n, 1, policy)}
+    removed_for_a_string = {n for n in names if old(n) and not is_credential_entry(n, _JWT, policy)}
+    assert removed_for_a_number == expected_removed
+    assert removed_for_a_string == set(), "a non-numeric value must never leave the masked set"
+
+
+def test_the_corpus_exercises_the_rule_in_both_directions() -> None:
+    names = set(_corpus())
+    assert {"max_tokens", "token_count", "max_token_secret", "api_key", "tokenizers_parallelism"} <= names
+    assert any(_is_quantity_shape(n) for n in names) and any(not _is_quantity_shape(n) for n in names)

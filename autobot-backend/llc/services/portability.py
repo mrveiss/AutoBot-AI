@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.secret_redaction import MatchPolicy, is_credential_field
+from autobot_shared.secret_redaction import MatchPolicy, is_credential_entry
 from llc.adapters import adapter_unavailable_reason, registered_adapter_types
 from llc.models.enums import ActivityEventType, LLCCompanyStatus
 from llc.models.export import LLCExportArtifact
@@ -890,7 +890,7 @@ def _scrub_adapter_config(config: Dict[str, Any], secret_map: Dict[str, str]) ->
     """
     scrubbed: Dict[str, Any] = {}
     for k, v in config.items():
-        if is_credential_field(k, MatchPolicy.PRECISE) and v:
+        if is_credential_entry(k, v, MatchPolicy.PRECISE) and v:
             bound = secret_map.get(str(v)) or secret_map.get(k)
             placeholder_name = bound if bound else k.upper()
             scrubbed[k] = f"{{{{{placeholder_name}}}}}"
