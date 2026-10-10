@@ -164,6 +164,26 @@ no cell removes anything.
 | a dict or log record in the LLM layer | `llm_shared.credential_redaction.redact_dict` (composes `redact_nested`; adds the `API_KEY_PATTERNS` content scan) | `redact_mapping` |
 | a raw chat message | `security.chat_message_safety.scan_chat_message` | any of the above directly |
 
+### Scheme-less userinfo inventory (#18206)
+
+Config fields that can hold a `user:pass@host` value (verified by grep, `file:line`; no value is copied here):
+
+* `autobot_shared/ssot_config.py`: `database_url` (:1627), `redis_url` (:1801), `custom_endpoint` (:334),
+  `ollama_gpu_endpoint` (:338), `jaeger_endpoint` (:1695).
+* `autobot-slm-backend/config.py`: `database_url` (:206), `slm_users_database_url` (:212),
+  `autobot_users_database_url` (:218), `redis_url` (:271, env `SLM_REDIS_URL`).
+* `.env.example`: `AUTOBOT_REDIS_URL` (:153), `CELERY_BROKER_URL` (:367, commented out).
+* Ansible templates: `{{ db_env_prefix }}_DATABASE_URL` and the per-database `*_DATABASE_URL`
+  (`autobot-slm-backend/ansible/roles/postgresql/templates/db-credentials.env.j2:21,23`);
+  `AUTOBOT_REDIS_URL` (`autobot-slm-backend/ansible/roles/backend/templates/backend.env.j2:34,37`).
+* Proxy settings: none found (`grep -rniE "(https?_proxy|proxy_url)"` over `autobot_shared/`, `config/`,
+  `.env.example`, `autobot-slm-backend/config.py` and `autobot-slm-backend/ansible/`).
+
+Every one is documented and templated in `scheme://` form, which `redact_url_userinfo` already handles. No parser
+accepts the scheme-less form: SQLAlchemy `make_url` raises `ArgumentError` and `redis.Redis.from_url` raises
+`ValueError` on `user:pass@host`. The scheme-less rule is therefore defence in depth for a value pasted into a
+free-form field, not a form these settings take.
+
 ## Adding a detector
 
 Add it to the module that owns the **shape**, never to the one nearest your
