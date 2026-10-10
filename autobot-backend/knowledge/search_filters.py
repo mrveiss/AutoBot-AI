@@ -9,8 +9,12 @@ Issue #679: Filters search results based on hierarchical access control.
 Integrates with ChromaDB metadata and ownership system.
 """
 
+import asyncio
 from typing import Dict, List
 
+from fastapi import HTTPException
+
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
@@ -219,6 +223,39 @@ def extract_user_context_from_request(current_user) -> tuple:
         user_group_ids = [str(m.team_id) for m in current_user.team_memberships if m.team and not m.team.is_deleted]
 
     return user_id, user_org_id, user_group_ids
+
+
+async def can_read_fact(ownership_manager, fact_id: str, metadata: Dict, current_user) -> bool:
+    """Whether ``current_user`` may read a fact: the one per-fact read decision (#18184).
+
+    Resolves the caller's user, org, groups and admin role, then asks the ownership
+    manager. An admin reads any fact here (#16662); only explicit read APIs call this.
+    """
+    user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
+    return await ownership_manager.check_access(
+        fact_id=fact_id,
+        user_id=user_id,
+        fact_metadata=metadata,
+        user_org_id=user_org_id,
+        user_group_ids=user_group_ids,
+        is_admin=is_admin_role(current_user.get("role")),
+    )
+
+
+async def authorize_fact_read(kb, fact_id: str, current_user) -> Dict:
+    """Load a fact through the canonical KB read and require that the caller may read it (#18184).
+
+    Raises 503 without an ownership manager (no decision can be made, #16662), 404 when
+    the fact is absent, 403 when the caller cannot read it. Returns the fact dict.
+    """
+    if not getattr(kb, "ownership_manager", None):
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
+    fact = await asyncio.to_thread(kb.get_fact, fact_id)  # get_fact is synchronous
+    if not fact:
+        raise HTTPException(status_code=404, detail="Fact not found")
+    if not await can_read_fact(kb.ownership_manager, fact_id, fact.get("metadata") or {}, current_user):
+        raise HTTPException(status_code=403, detail="Access denied")
+    return fact
 
 
 def non_private_where(caller_where: Dict | None = None) -> Dict:
