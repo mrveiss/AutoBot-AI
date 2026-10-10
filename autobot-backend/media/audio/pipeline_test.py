@@ -10,9 +10,15 @@
 """Unit tests for the one pinned Whisper inference path."""
 
 import os
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from media.audio.pipeline import suffix_for_mime, transcribe_array, transcribe_bytes
+from media.audio.pipeline import (
+    suffix_for_mime,
+    transcribe_array,
+    transcribe_bytes,
+    whisper_device,
+    whisper_device_kwargs,
+)
 
 
 class TestSuffixMapping:
@@ -71,3 +77,55 @@ class TestTranscribeArray:
 
     def test_non_dict_output_is_empty(self):
         assert transcribe_array(MagicMock(return_value=None), [0.0], 16000).text == ""
+
+
+class TestWhisperDevice:
+    """AUTOBOT_WHISPER_DEVICE (#17778): cpu is byte-identical to the historical call."""
+
+    def _torch(self, monkeypatch, cuda):
+        import sys
+        import types
+
+        fake = types.SimpleNamespace(cuda=types.SimpleNamespace(is_available=lambda: cuda), float16="FP16")
+        monkeypatch.setitem(sys.modules, "torch", fake)
+
+    def test_default_adds_no_device_or_dtype_kwargs(self, monkeypatch):
+        monkeypatch.delenv("AUTOBOT_WHISPER_DEVICE", raising=False)
+        assert whisper_device_kwargs() == {}
+
+    def test_default_hf_pipeline_call_is_exactly_the_historical_one(self, monkeypatch):
+        import media.audio.pipeline as module
+
+        monkeypatch.delenv("AUTOBOT_WHISPER_DEVICE", raising=False)
+        hf = MagicMock(return_value="PIPE")
+        monkeypatch.setattr(module, "hf_pipeline", hf, raising=False)
+        monkeypatch.setattr(module, "_TRANSFORMERS_AVAILABLE", True)
+        monkeypatch.setattr(module, "_whisper_pipeline", None)
+        monkeypatch.setattr(module, "_whisper_retry_at", 0.0)
+        monkeypatch.setattr("autobot_shared.pinned_model_registry.load_verified", lambda repo, loader: (loader("REV"),))
+        assert module.get_whisper_pipeline() == "PIPE"
+        hf.assert_called_once_with("automatic-speech-recognition", model="openai/whisper-base", revision="REV")
+
+    def test_auto_with_cuda_is_cuda_fp16(self, monkeypatch):
+        monkeypatch.setenv("AUTOBOT_WHISPER_DEVICE", "auto")
+        self._torch(monkeypatch, cuda=True)
+        assert whisper_device_kwargs() == {"device": "cuda", "torch_dtype": "FP16"}
+
+    def test_auto_without_cuda_is_cpu(self, monkeypatch):
+        monkeypatch.setenv("AUTOBOT_WHISPER_DEVICE", "auto")
+        self._torch(monkeypatch, cuda=False)
+        assert whisper_device_kwargs() == {}
+
+    def test_garbage_is_cpu_with_a_warning(self, monkeypatch):
+        import media.audio.pipeline as module
+
+        monkeypatch.setenv("AUTOBOT_WHISPER_DEVICE", "tpu")
+        with patch.object(module.logger, "warning") as warn:
+            assert whisper_device_kwargs() == {}
+        assert warn.called
+
+    def test_reported_device_is_the_loaded_pipelines(self, monkeypatch):
+        import media.audio.pipeline as module
+
+        monkeypatch.setattr(module, "_whisper_pipeline", MagicMock(device="cuda:0"))
+        assert whisper_device() == "cuda:0"

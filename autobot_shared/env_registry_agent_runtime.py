@@ -562,3 +562,19 @@ register_env_var(
         component="voice",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_WHISPER_DEVICE",
+        type=str,
+        default="cpu",
+        description=(
+            "Where the shared Whisper pipeline runs: 'cpu' (default; CPU fp32, "
+            "the historical behaviour on every host) or 'auto' (CUDA with float16 "
+            "when available, else CPU). Any other value logs a warning and uses cpu. "
+            "Used by both /voice/transcribe and the multimodal audio path "
+            "(media/audio/pipeline.py)."
+        ),
+        component="voice",
+    )
+)

@@ -126,3 +126,11 @@ def test_a_file_path_is_loaded_at_16khz_and_reports_the_loaders_rate(processor, 
     audio, rate = processor._prepare_audio_data(data)
     fake.load.assert_called_once_with("/clip.wav", sr=16000)
     assert (rate, audio.dtype) == (16000, np.float32)
+
+
+def test_the_result_reports_the_device_whisper_actually_runs_on(processor) -> None:
+    """processing_device is Whisper's device, not the Wav2Vec2 model's (#17778)."""
+    with patch.object(voice_module, "whisper_device", return_value="cpu"):
+        result = processor._build_voice_result("hi", "hi", "x", np.zeros(16, dtype=np.float32), 16000, None)
+    assert result["processing_device"] == "cpu"
+    assert "wav2vec_device" in result

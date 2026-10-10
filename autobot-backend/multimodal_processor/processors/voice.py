@@ -23,7 +23,7 @@ from autobot_shared.logging_manager import get_logger
 from config import get_config_section
 from llm_shared.torch_loader import lazy_torch
 from media.audio.decode import decode_audio_bytes, decode_audio_bytes_async
-from media.audio.pipeline import get_whisper_pipeline, transcribe_array, whisper_loadable
+from media.audio.pipeline import get_whisper_pipeline, transcribe_array, whisper_device, whisper_loadable
 from voice_processing.hallucination_filter import is_silence_hallucination, peak_window_rms
 
 from ..base import BaseModalProcessor
@@ -449,7 +449,8 @@ class VoiceProcessor(BaseModalProcessor):
             "wav2vec_transcription": wav2vec_transcription,
             "command_type": command_type,
             "confidence": 0.9 if transcribed_text else 0.0,
-            "processing_device": str(self.device),
+            "processing_device": whisper_device(),
+            "wav2vec_device": str(self.device),
             "audio_duration_seconds": len(audio_array) / sampling_rate,
         }
 

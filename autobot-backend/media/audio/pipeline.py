@@ -82,6 +82,35 @@ class WhisperTranscription:
     chunks: list
 
 
+def whisper_device_kwargs() -> dict:
+    """Extra ``pipeline()`` kwargs for ``AUTOBOT_WHISPER_DEVICE`` (#17778).
+
+    ``cpu`` (default, and any unrecognised value, with a warning): ``{}`` -- the
+    historical CPU fp32 call, byte-identical. ``auto``: CUDA with float16 when
+    ``torch.cuda.is_available()``, else ``{}``.
+    """
+    from autobot_shared.env_registry import env
+
+    choice = str(env("AUTOBOT_WHISPER_DEVICE")).strip().lower()
+    if choice not in ("cpu", "auto"):
+        logger.warning("AUTOBOT_WHISPER_DEVICE=%r is not cpu|auto; using cpu", choice)
+        return {}
+    if choice == "cpu":
+        return {}
+    import torch
+
+    if not torch.cuda.is_available():
+        return {}
+    return {"device": "cuda", "torch_dtype": torch.float16}
+
+
+def whisper_device() -> str:
+    """Where Whisper actually runs: the loaded pipeline's device, else what a load would use."""
+    if _whisper_pipeline is not None:
+        return str(getattr(_whisper_pipeline, "device", "cpu"))
+    return "cuda" if whisper_device_kwargs().get("device") else "cpu"
+
+
 def whisper_loadable() -> bool:
     """Cheap, NON-loading probe: is the pinned Whisper loaded, or worth trying to load?
 
@@ -131,12 +160,14 @@ def get_whisper_pipeline() -> Any | None:
                 # broad `except` swallowed `ModelIntegrityError`.
                 from autobot_shared.pinned_model_registry import ModelIntegrityError, load_verified
 
+                device_kwargs = whisper_device_kwargs()
                 (_whisper_pipeline,) = load_verified(
                     WHISPER_MODEL,
                     lambda revision: hf_pipeline(
                         "automatic-speech-recognition",
                         model=WHISPER_MODEL,
                         revision=revision,
+                        **device_kwargs,
                     ),
                 )
                 logger.info("Whisper pipeline loaded: %s", WHISPER_MODEL)
