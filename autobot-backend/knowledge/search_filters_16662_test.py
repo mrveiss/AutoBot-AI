@@ -104,3 +104,16 @@ async def test_can_read_fact_gives_a_dict_user_and_an_orm_user_the_same_verdict(
         kwargs = mgr.check_access.await_args.kwargs
         verdicts.append((kwargs["user_id"], kwargs["is_admin"]))
     assert verdicts[0] == verdicts[1] == ("u1", role == "admin")
+
+
+def test_can_write_fact_is_the_owner_or_an_admin_for_dict_and_orm_users():
+    """One write decision (#18184): the owner and an admin write; a reader, or anyone on an ownerless fact, does not."""
+    from knowledge.search_filters import can_write_fact
+
+    owned = {"owner_id": "alice"}
+    for user in ({"user_id": "alice", "role": "user"}, _OrmUser("alice", "user")):
+        assert can_write_fact(owned, user)
+        assert not can_write_fact({"owner_id": "bob"}, user)
+        assert not can_write_fact({}, user)
+    for user in ({"user_id": "root", "role": "admin"}, _OrmUser("root", "admin")):
+        assert can_write_fact({"owner_id": "bob"}, user) and can_write_fact({}, user)

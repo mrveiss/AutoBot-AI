@@ -263,20 +263,49 @@ async def can_read_fact(
     )
 
 
-async def authorize_fact_read(kb, fact_id: str, current_user) -> Dict:
-    """Load a fact through the canonical KB read and require that the caller may read it (#18184).
+async def _authorize_fact(kb, fact_id: str, current_user, *, write: bool) -> Dict:
+    """Load a fact and require the read (or write) decision to allow the caller (#18184).
 
-    Raises 503 without an ownership manager (no decision can be made, #16662), 404 when
-    the fact is absent, 403 when the caller cannot read it. Returns the fact dict.
+    503 without an ownership manager (no decision can be made, #16662), 404 when the fact is
+    absent, 403 when the caller is not allowed. Returns the fact dict.
     """
     if not getattr(kb, "ownership_manager", None):
         raise HTTPException(status_code=503, detail="Knowledge base not available")
     fact = await asyncio.to_thread(kb.get_fact, fact_id)  # get_fact is synchronous
     if not fact:
         raise HTTPException(status_code=404, detail="Fact not found")
-    if not await can_read_fact(kb.ownership_manager, fact_id, fact.get("metadata") or {}, current_user):
+    metadata = fact.get("metadata") or {}
+    if write:
+        allowed = can_write_fact(metadata, current_user)
+    else:
+        allowed = await can_read_fact(kb.ownership_manager, fact_id, metadata, current_user)
+    if not allowed:
         raise HTTPException(status_code=403, detail="Access denied")
     return fact
+
+
+async def authorize_fact_read(kb, fact_id: str, current_user) -> Dict:
+    """Load a fact through the canonical KB read and require that the caller may read it (#18184)."""
+    return await _authorize_fact(kb, fact_id, current_user, write=False)
+
+
+def can_write_fact(metadata: Dict, current_user) -> bool:
+    """Whether a caller may write a fact: the one per-fact write decision (#18184).
+
+    The KB's only per-fact write grant is ownership -- the ``can_edit`` the access-info route
+    reports is ``owner_id == user`` -- and an admin writes any fact, resolved from the role the
+    same way :func:`can_read_fact` does. A fact with no owner is writable by an admin only.
+    """
+    if is_admin_role(_user_field(current_user, "role")):
+        return True
+    user_id, _, _ = extract_user_context_from_request(current_user)
+    owner_id = metadata.get("owner_id")
+    return bool(owner_id) and owner_id == user_id
+
+
+async def authorize_fact_write(kb, fact_id: str, current_user) -> Dict:
+    """Load a fact and require that the caller may write it, whether or not they can read it (#18184)."""
+    return await _authorize_fact(kb, fact_id, current_user, write=True)
 
 
 def non_private_where(caller_where: Dict | None = None) -> Dict:

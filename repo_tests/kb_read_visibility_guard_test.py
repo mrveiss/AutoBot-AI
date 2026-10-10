@@ -101,6 +101,7 @@ FILTER_HELPERS = frozenset(
         "build_chromadb_permission_filter",
         "check_access",
         "can_read_fact",
+        "can_write_fact",  # owner-or-admin: a strict subset of who can_read_fact allows (#18184)
         "filter_accessible_facts",
         "get_all_accessible_facts",
     }
