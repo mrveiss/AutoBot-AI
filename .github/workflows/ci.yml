@@ -474,7 +474,7 @@ jobs:
         # deselects the marker-carrying tests already covered elsewhere, so nothing
         # here runs twice within the PR gate.
         python -m pytest \
-          autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks .claude/skills/claims-audit autobot-infrastructure/shared/tests libs \
+          autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks .claude/skills/claims-audit autobot-infrastructure/shared/tests libs plugins/core-plugins \
           -n auto --dist loadscope \
           -p repo_tests.stable_shard \
           --shard-splits 12 --shard-group ${{ matrix.shard }} \
