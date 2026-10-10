@@ -3,7 +3,7 @@
 
 # Core AI Frameworks
 langchain>=1.4.3,<2.0.0          # Issue #2808: upper bound unified; MVA-1330: floor corrected to 1.3.0 — 1.2.24 does not exist on PyPI; PVE-2026-88512 SQL injection fix
-langchain-core>=1.6.6,<2.0.0   # Issue #2808: upper bound unified with backend canonical
+langchain-core>=1.6.7,<2.0.0   # Issue #2808: upper bound unified with backend canonical
 langchain-community>=0.4.2,<0.5.0  # Issue #2808: upper bound unified with backend canonical
 llama-index>=0.14.25,<0.15.0
 llama-index-core>=0.14.25,<0.15.0
@@ -16,7 +16,7 @@ chromadb>=1.5.9,<2.0.0           # upper bound guards against breaking API chang
 sentence-transformers>=6.1.0
 
 # Model and Tokenization
-transformers>=5.18.0
+transformers>=5.19.0
 tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above that is
                           # unsatisfiable. #10416 (a grouped dependency bump) raised it back to
                           # >=0.23.1 two days after #10332 fixed it, keeping this comment, and the
@@ -36,7 +36,7 @@ tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a f
 # either -- pip fails on the whole file and nothing installs. #18045 raised all three
 # declarations to >=2.1.1 together, which satisfied "all three move together" but not
 # the resolver. Raise this only when both of those allow 2.x.
-huggingface-hub>=1.32.0,<2.0
+huggingface-hub>=1.33.0,<2.0
 tiktoken>=0.14.0
 
 # Tensor Operations
@@ -67,7 +67,7 @@ nltk>=3.10.3
 # HTTP and API
 fastapi>=0.142.2
 uvicorn[standard]>=0.54.0
-aiohttp>=3.14.3
+aiohttp>=3.14.4
 httpx>=0.28.1
 httpcore>=1.0.9
 requests>=2.34.2
