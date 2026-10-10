@@ -212,3 +212,11 @@ def test_a_block_comment_marker_inside_a_string_is_data() -> None:
     text = code_text('const s = "not /* a comment */ really"\nconst c = 3\n', name="x.ts")
     assert "really" in text, "a block marker inside a string literal was treated as a comment"
     assert "const c = 3" in text
+
+
+def test_markdown_has_no_comment_syntax() -> None:
+    """A leading `#` in Markdown is a heading, so it is code to a guard (#17941)."""
+    assert markers_for("README.md") == ()
+    kept = [line.text for line in code_lines("# Heading\ntext\n", name="README.md")]
+    assert kept == ["# Heading", "text"]
+    assert [line.text for line in code_lines("# Heading\ntext\n", name="run.sh")] == ["text"]

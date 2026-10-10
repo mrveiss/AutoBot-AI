@@ -63,6 +63,9 @@ _MARKERS: dict[str, tuple[str, ...]] = {
     ".cjs": ("//",),
     ".vue": ("//",),
     ".json5": ("//",),
+    # Markdown has no comment syntax: a leading `#` is a heading, which is
+    # content a reader sees. Chosen by the processor, not defaulted (#17941).
+    ".md": (),
 }
 
 #: Files with no suffix -- git hooks, `install.sh`-style scripts invoked by

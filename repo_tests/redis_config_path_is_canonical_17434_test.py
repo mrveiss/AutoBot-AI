@@ -38,10 +38,10 @@ the belief.
 
 What these assertions can and cannot see, stated because the gap matters:
 
-* The sweep skips `#`-comment lines. That is deliberate -- #16060's first draft
-  flagged its own explanation of the bug -- but in Markdown a leading `#` is a
-  heading, so a non-canonical path inside one would be missed. No heading
-  contains one today; a path in prose or a code fence IS caught.
+* The sweep skips whole-line comments, in the syntax of the file's own processor
+  (`tools.lint._comment_syntax`; #17941). That is deliberate -- #16060's first
+  draft flagged its own explanation of the bug. Markdown has no comments, so a
+  `#` heading or a `#` line in a code fence is swept like any other text.
 * It reads literals only. A path assembled at runtime is invisible, which is
   why `test_the_declarations_agree` pins the two declarations directly.
 * It skips its own file (`_SELF`), which has to name every spelling it forbids.
@@ -63,6 +63,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import code_lines, markers_for
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ANSIBLE = "autobot-slm-backend/ansible"
@@ -218,24 +219,23 @@ def scan_text(rel: str, text: str) -> list[str]:
     `TestTheDetectorTripsAndStaysQuiet`.
     """
     findings: list[str] = []
-    for number, line in enumerate(text.splitlines(), start=1):
-        if is_comment_line(line):
-            continue
+    for number, line in code_lines(text, name=rel):
         hit = next((wrong for wrong in _WRONG if wrong in line), None)
         if hit and f"{rel}:{number}" not in _EXEMPT:
             findings.append(f"{rel}:{number} -> {hit}")
     return findings
 
 
-def is_comment_line(line: str) -> bool:
-    """A whole-line `#` comment, which the sweep never reports.
+def is_comment_line(line: str, rel: str) -> bool:
+    """A whole-line comment in the syntax of the file *rel* the sweep never reports.
 
     Named rather than inlined because `_EXEMPT`'s liveness check needs the same
     question: an exemption pointing at a line the sweep skips anyway covers
     nothing, and used to read as live because the line still contained a
-    `_WRONG` literal (#17444 review).
+    `_WRONG` literal (#17444 review). The syntax is chosen by the processor that
+    reads the file (#17941), so a Markdown `#` heading is content, not a comment.
     """
-    return line.strip().startswith("#")
+    return line.strip().startswith(markers_for(rel))
 
 
 def _sweep(root: Path) -> list[str]:
@@ -404,7 +404,7 @@ def test_every_exemption_is_still_live() -> None:
         index = int(number) - 1
         if index >= len(lines) or not any(wrong in lines[index] for wrong in _WRONG):
             stale.append(f"{where} (no longer names a non-canonical path) -- {reason}")
-        elif is_comment_line(lines[index]):
+        elif is_comment_line(lines[index], rel):
             # The sweep never reports a `#` comment line, so an exemption on one
             # excuses nothing while reading as live -- the literal is still there,
             # which is all the old check asked (#17444 review). A dead entry that
@@ -459,3 +459,14 @@ class TestTheDetectorTripsAndStaysQuiet:
         text = "\n" * (int(number) - 1) + "x = '/etc/redis/redis.conf'\n"
         assert scan_text(rel, text) == []
         assert scan_text("some/other/file.py", text) != []
+
+    def test_a_markdown_heading_is_content_not_a_comment(self) -> None:
+        """The syntax follows the processor (#17941): Markdown has no comments.
+
+        The same `#` line is prose in a YAML file and a rendered heading in a
+        Markdown one, so it is skipped in the first and swept in the second.
+        """
+        line = "# was /etc/redis/redis.conf\n"
+        assert scan_text("fake.yml", line) == []
+        assert scan_text("fake.py", line) == []
+        assert scan_text("fake.md", line) == ["fake.md:1 -> /etc/redis/redis.conf"]

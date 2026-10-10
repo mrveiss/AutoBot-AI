@@ -92,8 +92,6 @@ _PENDING_PRIVATE_STRIPPERS = frozenset(
         "repo_tests/declared_distributions.py",
         "repo_tests/mcp_verification_script_coverage_14219_test.py",
         "repo_tests/phase_validation_paths_and_skips_17089_test.py",
-        "repo_tests/redis_config_path_is_canonical_17434_test.py",
-        "repo_tests/sync_deletions_target_pinning_and_shell_safety_16310_test.py",
         "repo_tests/test_dockerignore_test_file_coverage_14127.py",
         "tools/lint/_scan_helpers.py",
         "tools/lint/check_git_write_env_scrubbed_test.py",
