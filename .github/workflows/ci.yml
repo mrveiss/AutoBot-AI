@@ -176,7 +176,7 @@ jobs:
         sudo chown -R "$(id -u):$(id -g)" "$dest"
         echo "collected $(find "$dest" -maxdepth 1 -name '*.deb' | wc -l) .deb(s)"
 
-    - uses: actions/upload-artifact@v7.0.1
+    - uses: actions/upload-artifact@v7.0.2
       with:
         name: ci-apt-debs
         path: ${{ runner.temp }}/apt-debs
@@ -806,7 +806,7 @@ jobs:
         cat DEPLOYMENT_SUMMARY.md
 
     - name: Upload deployment artifact
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@v7.0.2
       with:
         name: deployment-summary
         path: DEPLOYMENT_SUMMARY.md
