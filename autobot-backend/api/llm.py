@@ -43,7 +43,7 @@ from autobot_shared.time_utils import now_utc
 from config.manager import get_config_manager
 
 # Import unified configuration system - NO HARDCODED VALUES
-from constants.model_constants import ModelConstants
+from config.model_config import resolve_active_llm
 from services.config_service import ConfigService
 from services.llm_service import get_llm_service
 
@@ -179,12 +179,10 @@ async def get_current_llm(
     Issue #744: Requires authenticated user.
     """
     try:
-        config = ConfigService.get_llm_config()
-        current_model = config.get("model", ModelConstants.DEFAULT_OLLAMA_MODEL)
-
-        # #18193: model and provider only. The tree is admin-only on GET /config;
-        # `config` stays in the schema (generated TS type) but is always empty.
-        return {"model": current_model, "provider": config.get("provider", "ollama"), "config": {}}
+        # #18193: model and provider only (the tree is admin-only on GET /config); `config` stays
+        # in the schema for the generated TS type but is always empty.  #18215: the ACTIVE selection.
+        provider, model = resolve_active_llm(ConfigService.get_llm_config())
+        return {"model": model, "provider": provider, "config": {}}
     except Exception as e:
         logger.error("Error getting current LLM: %s", str(e))
         raise HTTPException(status_code=500, detail="Error getting current LLM")

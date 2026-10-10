@@ -113,7 +113,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/knowledge_tags.py": 887,
     "autobot-backend/api/knowledge_vectorization.py": 1704,
     "autobot-backend/api/knowledge_vectorization_test.py": 601,
-    "autobot-backend/api/llm.py": 1080,
+    "autobot-backend/api/llm.py": 1078,
     "autobot-backend/api/llm_optimization.py": 725,
     "autobot-backend/api/log_forwarding.py": 777,
     "autobot-backend/api/logs.py": 1027,

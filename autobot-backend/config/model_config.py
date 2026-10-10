@@ -8,11 +8,41 @@ LLM and model configuration management.
 """
 
 import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 from autobot_shared.ssot_config import config
 
 logger = logging.getLogger(__name__)
+
+
+def _selected(entry: Any) -> str:
+    """The model a provider entry names: ``selected_model``, else ``model``, else ""."""
+    entry = entry if isinstance(entry, dict) else {}
+    return str(entry.get("selected_model") or entry.get("model") or "")
+
+
+def resolve_active_llm(llm_config: Dict[str, Any]) -> Tuple[str, str]:
+    """The active ``(provider, model)`` of a :meth:`get_llm_config` result (#18215).
+
+    The one place that decides "active", mirroring the Settings panel's
+    ``getCurrentLLMDisplay``: ``unified.provider_type`` picks ``local`` (default) or
+    ``cloud``; that side's ``provider`` (``ollama`` / ``openai`` by default) names the entry
+    under ``providers``, whose ``selected_model`` (or ``model``) is the model.  Local ollama
+    reuses ``llm_config["ollama"]["selected_model"]``, which ``get_selected_model`` already
+    resolved (config, then env, then the default constant).  The default constant is returned
+    only when nothing is selected.
+    """
+    from constants.model_constants import ModelConstants
+
+    unified = llm_config.get("unified") or {}
+    side = "cloud" if unified.get("provider_type") == "cloud" else "local"
+    section = unified.get(side) or {}
+    provider = section.get("provider") or ("openai" if side == "cloud" else "ollama")
+    if side == "local" and provider == "ollama":
+        model = (llm_config.get("ollama") or {}).get("selected_model")
+    else:
+        model = _selected((section.get("providers") or {}).get(provider))
+    return provider, model or ModelConstants.DEFAULT_OLLAMA_MODEL
 
 
 class ModelConfigMixin:

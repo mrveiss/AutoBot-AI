@@ -100,7 +100,7 @@ def test_current_returns_only_model_and_provider_to_a_non_admin(monkeypatch) -> 
     body = r.json()
     assert set(body) == {"model", "provider", "config"}  # LLMCurrentResponse fields: schema unchanged
     # Exactly the active model and provider; `config` is the schema-required envelope, always empty.
-    assert body == {"model": ModelConstants.DEFAULT_OLLAMA_MODEL, "provider": "ollama", "config": {}}
+    assert body == {"model": "gpt-x", "provider": "openai", "config": {}}  # the fixture selects cloud/openai
     for leaked in ("SENTINEL", "unified", "api_key", "endpoint", "ollama.example", _MODEL):
         assert leaked not in r.text, leaked
 
@@ -116,3 +116,28 @@ def test_an_admin_gets_the_redacted_body(monkeypatch) -> None:
     r = _client(monkeypatch, _BACKEND_LLM, role="admin").get("/api/llm/config")
     assert r.status_code == 200 and "SENTINEL" not in r.text
     assert r.json()["ollama"]["selected_model"] == _MODEL
+
+
+def _current(monkeypatch, tree) -> dict:
+    r = _client(monkeypatch, tree, role="user").get("/api/llm/current")
+    assert r.status_code == 200
+    return r.json()
+
+
+def test_current_reports_a_non_default_local_selection(monkeypatch) -> None:
+    tree = copy.deepcopy(_BACKEND_LLM)
+    tree["provider_type"] = "local"
+    tree["local"]["providers"]["ollama"]["selected_model"] = "picked-model:1b"
+    assert _current(monkeypatch, tree) == {"model": "picked-model:1b", "provider": "ollama", "config": {}}
+
+
+def test_current_reports_a_cloud_selection(monkeypatch) -> None:
+    tree = copy.deepcopy(_BACKEND_LLM)
+    tree["cloud"]["provider"] = "openai"
+    tree["cloud"]["providers"]["openai"]["selected_model"] = "gpt-picked"
+    assert _current(monkeypatch, tree) == {"model": "gpt-picked", "provider": "openai", "config": {}}
+
+
+def test_current_falls_back_to_the_default_only_when_nothing_is_selected(monkeypatch) -> None:
+    body = _current(monkeypatch, {"provider_type": "local"})
+    assert body == {"model": ModelConstants.DEFAULT_OLLAMA_MODEL, "provider": "ollama", "config": {}}
