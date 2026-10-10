@@ -68,7 +68,7 @@ async def _run_post_commit_callbacks(session: AsyncSession) -> None:
             logger.error("post-commit callback failed after a successful commit", exc_info=True)
             errors.append(exc)
     if errors:
-        raise PostCommitCallbackError(errors)
+        raise PostCommitCallbackError(errors) from errors[0]
 
 
 @contextmanager
