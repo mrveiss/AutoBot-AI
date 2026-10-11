@@ -23,7 +23,6 @@ spendable in the gap between the two.
 from __future__ import annotations
 
 KNOWN_LARGE: dict[str, int] = {
-    "autobot-frontend/src/App.vue": 1144,
     "autobot-frontend/src/components/__tests__/ChatInterface.test.ts": 760,
     "autobot-frontend/src/components/__tests__/TerminalWindow.test.ts": 627,
     "autobot-frontend/src/components/agents/HeartbeatPanel.vue": 723,

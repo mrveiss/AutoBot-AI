@@ -30,7 +30,6 @@ entries are grandfathered history, not a way in.
 from __future__ import annotations
 
 RATCHET_BASELINE: dict[str, int] = {
-    "autobot-frontend/src/App.vue": 1144,
     "autobot-frontend/src/components/__tests__/ChatInterface.test.ts": 760,
     "autobot-frontend/src/components/__tests__/TerminalWindow.test.ts": 627,
     "autobot-frontend/src/components/agents/HeartbeatPanel.vue": 723,

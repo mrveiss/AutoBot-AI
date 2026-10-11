@@ -3,7 +3,7 @@
     <div class="login-card">
       <div class="login-header">
         <div class="logo">
-          <BrandMark :size="56" class="logo-mark" />
+          <BrandMark :size="56" class="mb-3" />
           <h1>AutoBot</h1>
           <p class="subtitle">{{ $t('auth.login.subtitle') }}</p>
         </div>
@@ -321,10 +321,6 @@ onMounted(async () => {
 .login-header {
   text-align: center;
   margin-bottom: var(--spacing-8);
-}
-
-.logo-mark {
-  margin-bottom: var(--spacing-3);
 }
 
 .logo h1 {

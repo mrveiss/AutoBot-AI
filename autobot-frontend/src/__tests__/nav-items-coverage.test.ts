@@ -39,7 +39,7 @@
 import { describe, it, expect } from 'vitest'
 import type { RouteRecordRaw } from 'vue-router'
 import { routes } from '@/router'
-import { navItems, profileMenuItems, adminMenuItems, filterByFeatureFlag } from '@/config/navItems'
+import { navItems, navIconItems, profileMenuItems, adminMenuItems, filterByFeatureFlag } from '@/config/navItems'
 
 /**
  * Routes that are intentionally NOT in main nav.
@@ -56,6 +56,7 @@ const INTENTIONALLY_HIDDEN: Record<string, string> = {
   '/agents': 'Parent shell — redirects to /agents/registry; nav uses the deep-link entry (#6634)',
   '/agents/activity': 'Reached as a tab inside /agents shell (#6634); standalone URL kept for bookmarks',
   '/agents/heartbeat': 'Reached as a tab inside /agents shell (#6634); standalone URL kept for bookmarks',
+  '/plugins': 'lives in the SLM console nav (#18240); no user-app nav entry, route kept for deep links',
   '/admin/users': 'Admin-only — surfaced via separate admin entrypoint',
   '/slm/tools/novnc': "Accessed via Chat tab's noVNC sub-tab (#6414/#6415); standalone URL kept for bookmarks",
 }
@@ -190,6 +191,47 @@ describe('navItems coverage (#6499)', () => {
     expect(checkedCount).toBeGreaterThan(5)
     // Allowlist should stay small — if it grows, prefer hideInNav meta flag
     expect(allowlistSize).toBeLessThan(15)
+  })
+})
+
+describe('header icon cluster (#18240)', () => {
+  it('every internal icon entry corresponds to a real route', () => {
+    const allPaths = allRoutePaths()
+    const orphans = navIconItems.filter((i) => i.to && !allPaths.has(i.to)).map((i) => i.to)
+    expect(orphans).toEqual([])
+  })
+
+  it('every icon entry carries an aria key and a tooltip key', () => {
+    for (const item of navIconItems) {
+      expect(item.ariaKey, item.labelKey).toMatch(/^nav\./)
+      expect(item.tipKey, item.labelKey).toMatch(/^nav\./)
+    }
+  })
+
+  it('Secrets and Platform admin are advanced; Preferences is not', () => {
+    const adv = Object.fromEntries(navIconItems.map((i) => [i.labelKey, !!i.adv]))
+    expect(adv).toEqual({ 'nav.secrets': true, 'nav.preferences': false, 'nav.platformAdmin': true })
+  })
+
+  it('Platform admin is external and gated on service management, with no router target', () => {
+    const admin = navIconItems.find((i) => i.labelKey === 'nav.platformAdmin')!
+    expect(admin.to).toBeUndefined()
+    expect(typeof admin.href).toBe('function')
+    expect(admin.requires).toBe('serviceManagement')
+  })
+
+  it('Plugins is in no user-app registry (it lives in the SLM console nav)', () => {
+    const everywhere = [...navItems, ...navIconItems, ...profileMenuItems, ...adminMenuItems]
+    expect(everywhere.map((i) => i.to)).not.toContain('/plugins')
+  })
+
+  it('Analytics and Automation are advanced; Home, Chat, Knowledge, Company OS are not', () => {
+    const adv = navItems.filter((i) => i.adv).map((i) => i.to)
+    expect(adv.sort()).toEqual(['/analytics', '/automation'])
+  })
+
+  it('Automation is pinned to the More menu, not the link rail', () => {
+    expect(navItems.filter((i) => i.overflow).map((i) => i.to)).toEqual(['/automation'])
   })
 })
 
