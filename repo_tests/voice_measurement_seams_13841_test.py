@@ -267,7 +267,15 @@ _SYMBOL = {ast.Lt: "<", ast.LtE: "<=", ast.Eq: "==", ast.NotEq: "!=", ast.Gt: ">
 _MUST_REFUSE = (0, -1, -48000)
 
 
-def refusal_problems(source: str, *, loader: str = "_load_audio_input") -> list[str]:
+def _names_the_rate(node: ast.expr) -> bool:
+    """True for ``sample_rate`` and for ``<header>.sample_rate`` -- the loader on #17778 reads
+    the rate off a parsed WAV header, and the refusal there is the same predicate."""
+    if isinstance(node, ast.Name):
+        return node.id == "sample_rate"
+    return isinstance(node, ast.Attribute) and node.attr == "sample_rate"
+
+
+def refusal_problems(source: str, *, loader: str = "_wav_audio_input") -> list[str]:
     """Why *source*'s loader does not provably refuse a non-positive frame rate.
 
     A detector over source so fixtures can drive it, because the first version asserted only
@@ -291,7 +299,7 @@ def refusal_problems(source: str, *, loader: str = "_load_audio_input") -> list[
         if not (isinstance(node, ast.If) and isinstance(node.test, ast.Compare)):
             continue
         left, ops, comps = node.test.left, node.test.ops, node.test.comparators
-        if not (isinstance(left, ast.Name) and left.id == "sample_rate" and len(ops) == 1):
+        if not (_names_the_rate(left) and len(ops) == 1):
             continue
         if not any(isinstance(stmt, ast.Raise) for stmt in node.body):
             continue
@@ -333,7 +341,7 @@ def test_a_corrupt_frame_rate_is_still_a_load_error() -> None:
 
 
 _LOADER = """
-def _load_audio_input(path):
+def _wav_audio_input(path):
 {body}
 """
 _REFUSE = "    if sample_rate <= 0:\n        raise ValueError('bad rate')"
@@ -343,6 +351,12 @@ _BUILD = "    return AudioInput(sample_rate=sample_rate)"
 def test_a_correct_refusal_is_accepted() -> None:
     """The positive control: without it a detector that always complains passes the rest."""
     assert refusal_problems(_LOADER.format(body=f"{_REFUSE}\n{_BUILD}")) == []
+
+
+def test_a_refusal_on_a_header_attribute_is_accepted() -> None:
+    """`fmt.sample_rate <= 0` is the same refusal, read off a parsed header."""
+    body = "    if fmt.sample_rate <= 0:\n        raise ValueError('bad rate')\n" + _BUILD
+    assert refusal_problems(_LOADER.format(body=body)) == []
 
 
 def test_a_refusal_that_permits_zero_is_reported() -> None:

@@ -547,3 +547,49 @@ register_env_var(
         component="judges",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_WHISPER_LOAD_RETRY_SECONDS",
+        type=float,
+        default=60.0,
+        description=(
+            "How long the shared Whisper loader waits after a FAILED model load "
+            "before trying again. A transient failure no longer disables local "
+            "transcription for the life of the process; an integrity failure is "
+            "never retried (media/audio/pipeline.py)."
+        ),
+        component="voice",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_WHISPER_DEVICE",
+        type=str,
+        default="auto",
+        description=(
+            "Where the shared Whisper pipeline runs: 'auto' (default; CUDA with "
+            "float16 when available, else CPU fp32) or 'cpu' (always CPU fp32). "
+            "Any other value logs a warning and uses cpu. "
+            "Used by both /voice/transcribe and the multimodal audio path "
+            "(media/audio/pipeline.py)."
+        ),
+        component="voice",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_FFMPEG_TIMEOUT_SECONDS",
+        type=float,
+        default=300.0,
+        description=(
+            "Wall-clock cap on one ffmpeg audio extraction. On expiry the process is "
+            "killed and reaped and the request fails with a sanitized error, so a "
+            "hostile or corrupt upload cannot hang a worker forever "
+            "(media/audio/ffmpeg_service.py)."
+        ),
+        component="voice",
+    )
+)

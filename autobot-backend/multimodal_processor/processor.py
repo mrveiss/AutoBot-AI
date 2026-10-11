@@ -752,7 +752,7 @@ class MultiModalProcessor:
                 "enabled": self.vision_processor.enabled,
             },
             "voice": {
-                "whisper_available": self.voice_processor.whisper_model is not None,
+                "whisper_available": self.voice_processor.whisper_available(),
                 "wav2vec_available": (
                     self.voice_processor.wav2vec_model is not None
                     if hasattr(self.voice_processor, "wav2vec_model")

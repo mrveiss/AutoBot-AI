@@ -36,6 +36,7 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.principal import resolve_principal_id
+from media.audio.upload_limits import read_capped_audio
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,
@@ -203,8 +204,7 @@ async def process_audio(
         if not file.content_type or not file.content_type.startswith("audio/"):
             raise HTTPException(status_code=400, detail="File must be an audio file")
 
-        # Read audio data
-        audio_data = await file.read()
+        audio_data = await read_capped_audio(file)
         if len(audio_data) == 0:
             raise HTTPException(status_code=400, detail="Empty audio file")
 
@@ -534,7 +534,7 @@ async def _create_image_input(image_file: UploadFile, intent: str, user_id: str 
 
 async def _create_audio_input(audio_file: UploadFile, intent: str, user_id: str | None) -> MultiModalInput:
     """Create MultiModalInput for audio file (Issue #398: extracted)."""
-    audio_data = await audio_file.read()
+    audio_data = await read_capped_audio(audio_file)
     return MultiModalInput(
         input_id=f"audio_{int(time.time() * 1000)}",
         modality_type=ModalityType.AUDIO,

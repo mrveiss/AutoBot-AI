@@ -37,8 +37,17 @@ def _module(rel: str) -> ast.Module:
     return ast.parse((repo_root() / rel).read_text(encoding="utf-8"))
 
 
-def _audio_mime_maps() -> list[tuple[str, int, int]]:
-    """Every dict literal mapping ``audio/*`` keys to ``.ext`` values."""
+def _parse_source(path, rel: str, unparsed: list[str]):
+    """The AST of *path*, or ``None`` after recording *rel*: an unparsed file is a gap, never a pass."""
+    try:
+        return ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+    except SyntaxError as exc:
+        unparsed.append(f"{rel}: {exc.msg}")
+        return None
+
+
+def _audio_mime_maps(unparsed: list[str]) -> list[tuple[str, int, int]]:
+    """Every dict literal mapping ``audio/*`` keys to ``.ext`` values; unparsed files go to *unparsed*."""
     found: list[tuple[str, int, int]] = []
     root = repo_root()
     for tree in ("autobot-backend", "autobot_shared"):
@@ -46,9 +55,8 @@ def _audio_mime_maps() -> list[tuple[str, int, int]]:
             rel = path.relative_to(root).as_posix()
             if rel.endswith("_test.py") or "/tests/" in rel:
                 continue
-            try:
-                mod = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
-            except SyntaxError:
+            mod = _parse_source(path, rel, unparsed)
+            if mod is None:
                 continue
             for node in ast.walk(mod):
                 if not isinstance(node, ast.Dict) or not node.keys:
@@ -64,7 +72,9 @@ def _audio_mime_maps() -> list[tuple[str, int, int]]:
 
 def test_exactly_one_audio_mime_map_exists() -> None:
     """Two of these drifted before anyone noticed; a third would drift again."""
-    maps = _audio_mime_maps()
+    unparsed: list[str] = []
+    maps = _audio_mime_maps(unparsed)
+    assert not unparsed, f"Files the guard could not parse (it did not look at them): {unparsed}"
     assert len(maps) == 1, (
         "expected one audio MIME -> suffix map, found "
         f"{len(maps)}: {[f'{rel}:{ln} ({n} entries)' for rel, ln, n in maps]}"
@@ -115,7 +125,10 @@ def test_the_whisper_loader_goes_through_load_verified() -> None:
 
     Scoped to this call site on purpose -- #17804 owns the general rule.
     """
-    loader = _function(_module(_PIPELINE), "get_whisper_pipeline")
+    # #17778: the load attempt lives in `_attempt_load`, called by `get_whisper_pipeline`.
+    mod = _module(_PIPELINE)
+    assert _mentions(_function(mod, "get_whisper_pipeline"), "_attempt_load"), "the loader no longer attempts a load"
+    loader = _function(mod, "_attempt_load")
     calls = [n for n in ast.walk(loader) if isinstance(n, ast.Call)]
 
     verified = [c for c in calls if isinstance(c.func, ast.Name) and c.func.id == "load_verified"]
@@ -126,7 +139,7 @@ def test_the_whisper_loader_goes_through_load_verified() -> None:
     )
 
     pipeline_calls = [c for c in calls if isinstance(c.func, ast.Name) and c.func.id == "hf_pipeline"]
-    assert pipeline_calls, "get_whisper_pipeline no longer calls hf_pipeline; this guard's premise moved"
+    assert pipeline_calls, "_attempt_load no longer calls hf_pipeline; this guard's premise moved"
     for call in pipeline_calls:
         assert "revision" in {kw.arg for kw in call.keywords}, (
             "the pipeline factory is called without revision=, so it resolves against whatever "
@@ -134,15 +147,21 @@ def test_the_whisper_loader_goes_through_load_verified() -> None:
         )
 
 
-def test_both_features_reach_the_same_inference_function() -> None:
-    """The point of the consolidation: one body, not two that look alike."""
-    for rel in (_PIPELINE, _VOICE):
-        names = {
-            node.func.id
-            for node in ast.walk(_module(rel))
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-        }
-        assert "transcribe_bytes" in names, f"{rel} does not call the shared transcribe_bytes"
+def test_every_caller_reaches_the_same_inference_function() -> None:
+    """One body, not two that look alike.
+
+    #17778 removed the media ``AudioPipeline`` wrapper, the second caller this guard
+    used to name: the pipeline module now only DEFINES ``transcribe_bytes``, and the
+    voice route is the caller that must reach it instead of carrying its own copy.
+    """
+    defined = {n.name for n in ast.walk(_module(_PIPELINE)) if isinstance(n, ast.FunctionDef)}
+    assert "transcribe_bytes" in defined, f"{_PIPELINE} no longer defines the shared transcribe_bytes"
+    names = {
+        node.func.id
+        for node in ast.walk(_module(_VOICE))
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+    assert "transcribe_bytes" in names, f"{_VOICE} does not call the shared transcribe_bytes"
 
 
 def test_the_route_keeps_the_behaviour_the_pipeline_does_not_have() -> None:
@@ -165,3 +184,122 @@ def test_the_route_keeps_the_behaviour_the_pipeline_does_not_have() -> None:
         "the media pipeline has acquired the voice route's hallucination filter; it had no such "
         "filter before #17780 and gaining one is a behaviour change, not a consolidation"
     )
+
+
+# ── #17778: nothing outside the shared module runs Whisper itself ─────────────
+
+_PROVIDER = "autobot-backend/voice_processing/providers/whisper_provider.py"
+_MULTIMODAL_VOICE = "autobot-backend/multimodal_processor/processors/voice.py"
+
+
+def _mentions(node: ast.AST, name: str) -> bool:
+    return any(
+        (isinstance(n, ast.Name) and n.id == name) or (isinstance(n, ast.Attribute) and n.attr == name)
+        for n in ast.walk(node)
+    )
+
+
+def _bound_pipeline_names(tree: ast.AST) -> set[str]:
+    """Source text of every name or attribute target bound from ``get_whisper_pipeline()``.
+
+    Covers `p = ...`, `p: T = ...`, `(p := ...)` and `self._p = ...`; a call on any of
+    them is a direct invocation, whatever the binding syntax.
+    """
+    bound: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            targets, value = node.targets, node.value
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            targets, value = [node.target], node.value
+        elif isinstance(node, ast.NamedExpr):
+            targets, value = [node.target], node.value
+        else:
+            continue
+        if _mentions(value, "get_whisper_pipeline"):
+            bound.update(ast.unparse(t) for t in targets if isinstance(t, (ast.Name, ast.Attribute)))
+    return bound
+
+
+def direct_whisper_invocations(source: str) -> list[int]:
+    """Line numbers where *source* runs Whisper itself instead of via the shared entry points.
+
+    Three shapes: building an ASR pipeline (`pipeline("automatic-speech-recognition", ...)`),
+    `<...whisper...>.generate(...)`, and calling a name or attribute that was bound from
+    `get_whisper_pipeline()` (`pipe = get_whisper_pipeline(); pipe(...)`, also annotated,
+    walrus and `self._pipe` bindings).
+    """
+    tree = ast.parse(source)
+    bound = _bound_pipeline_names(tree)
+    hits = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        asr = (
+            bool(node.args)
+            and isinstance(node.args[0], ast.Constant)
+            and node.args[0].value == ("automatic-speech-recognition")
+        )
+        generate = (
+            isinstance(func, ast.Attribute) and func.attr == "generate" and "whisper" in ast.unparse(func).lower()
+        )
+        bound_call = isinstance(func, (ast.Name, ast.Attribute)) and ast.unparse(func) in bound
+        if asr or generate or bound_call:
+            hits.append(node.lineno)
+    return hits
+
+
+def test_the_detector_fires_on_each_shape_and_not_on_the_shared_entry_points() -> None:
+    assert direct_whisper_invocations("pipe = get_whisper_pipeline()\npipe(path)\n") == [2]
+    assert direct_whisper_invocations("p = hf_pipeline('automatic-speech-recognition', model=m)\n") == [1]
+    assert direct_whisper_invocations("ids = self.whisper_model.generate(x)\n") == [1]
+    ok = "pipe = get_whisper_pipeline()\ntranscribe_path(pipe, path)\n"
+    assert direct_whisper_invocations(ok) == []
+
+
+def test_the_detector_follows_annotated_walrus_and_attribute_bindings() -> None:
+    assert direct_whisper_invocations("pipe: Any = get_whisper_pipeline()\npipe(path)\n") == [2]
+    assert direct_whisper_invocations("if (pipe := get_whisper_pipeline()):\n    pipe(path)\n") == [2]
+    assert direct_whisper_invocations("self._pipe = get_whisper_pipeline()\nself._pipe(path)\n") == [2]
+    assert direct_whisper_invocations("self._pipe = get_whisper_pipeline()\nother(path)\n") == []
+
+
+def test_only_the_shared_module_runs_whisper_directly() -> None:
+    root = repo_root()
+    offenders: list[str] = []
+    unparsed: list[str] = []
+    for tree in ("autobot-backend", "autobot_shared"):
+        for path in (root / tree).rglob("*.py"):
+            rel = path.relative_to(root).as_posix()
+            if rel == _PIPELINE or rel.endswith("_test.py") or "/tests/" in rel or "/test_" in rel:
+                continue
+            if _parse_source(path, rel, unparsed) is None:
+                continue
+            offenders += [
+                f"{rel}:{ln}" for ln in direct_whisper_invocations(path.read_text(encoding="utf-8", errors="replace"))
+            ]
+    assert not unparsed, f"Files the guard could not parse (it did not look at them): {unparsed}"
+    assert not offenders, f"Whisper is run directly outside media/audio/pipeline.py: {offenders}"
+
+
+def test_provider_and_multimodal_voice_call_the_shared_entry_points() -> None:
+    def called(rel: str) -> set[str]:
+        return {
+            n.func.id if isinstance(n.func, ast.Name) else n.func.attr
+            for n in ast.walk(_module(rel))
+            if isinstance(n, ast.Call) and isinstance(n.func, (ast.Name, ast.Attribute))
+        }
+
+    assert {"transcribe_path", "get_whisper_pipeline"} <= called(_PROVIDER)
+    assert {"transcribe_array", "get_whisper_pipeline"} <= called(_MULTIMODAL_VOICE)
+
+
+def test_an_unparsable_file_is_recorded_not_skipped(tmp_path) -> None:
+    """Contrast pair: a SyntaxError is reported to the caller, a valid file is not."""
+    broken, fine = tmp_path / "broken.py", tmp_path / "fine.py"
+    broken.write_text("def (:\n", encoding="utf-8")
+    fine.write_text("x = 1\n", encoding="utf-8")
+    unparsed: list[str] = []
+    assert _parse_source(broken, "broken.py", unparsed) is None
+    assert _parse_source(fine, "fine.py", unparsed) is not None
+    assert len(unparsed) == 1 and unparsed[0].startswith("broken.py")

@@ -14,7 +14,7 @@ from collections.abc import AsyncIterator
 from contextlib import aclosing
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
@@ -355,7 +355,10 @@ async def voice_clone_api(
             content={"message": "Permission denied to clone voice."},
         )
 
-    ref_bytes = await reference_audio.read()
+    # Function-local: the media package import chain is not inert (see _whisper_sync).
+    from media.audio.upload_limits import read_capped_audio  # noqa: PLC0415
+
+    ref_bytes = await read_capped_audio(reference_audio)
     tts = get_tts_client()
     wav_bytes = await tts.clone_voice(text, ref_bytes)
     security_layer.audit_log("voice_clone", user_role, "success", {"text_preview": text[:50]})
@@ -395,7 +398,10 @@ async def voice_create_api(
     audio: UploadFile = File(...),
 ):
     """Create a voice profile from reference audio."""
-    audio_bytes = await audio.read()
+    # Function-local: the media package import chain is not inert (see _whisper_sync).
+    from media.audio.upload_limits import read_capped_audio  # noqa: PLC0415
+
+    audio_bytes = await read_capped_audio(audio)
     tts = get_tts_client()
     result = await tts.create_voice(name, audio_bytes, audio.filename or "ref.wav")
     return result
@@ -446,6 +452,18 @@ def _drop_silence_hallucination(text: str, detected_lang: str, requested_lang: s
     return ""
 
 
+class TranscriptionFailed(RuntimeError):
+    """Whisper could not produce a transcript; ``status_code`` and the message reach the caller.
+
+    A failure is not silence: answering 200 with ``text: ""`` made a dead model look like
+    a user who said nothing (#17778).
+    """
+
+    def __init__(self, message: str, status_code: int):
+        super().__init__(message)
+        self.status_code = status_code
+
+
 def _whisper_sync(pipe, audio_bytes: bytes, mime: str, language: str = "") -> dict:
     """Blocking Whisper inference for this route — call via asyncio.to_thread (#1030).
 
@@ -475,7 +493,7 @@ def _whisper_sync(pipe, audio_bytes: bytes, mime: str, language: str = "") -> di
         result = transcribe_bytes(pipe, audio_bytes, mime=mime, language=language)
     except Exception as exc:
         logger.warning("Whisper transcription failed: %s", exc)
-        return {"text": "", "language": "unknown", "confidence": 0.0}
+        raise TranscriptionFailed("Speech transcription failed", 500) from exc
 
     text = _drop_silence_hallucination(result.text, result.language, language)
     return {
@@ -485,16 +503,23 @@ def _whisper_sync(pipe, audio_bytes: bytes, mime: str, language: str = "") -> di
     }
 
 
-async def _transcribe_with_whisper(audio_bytes: bytes, content_type: str, language: str = "") -> dict:
-    """Run Whisper transcription in a background thread (#1030)."""
+def _load_and_transcribe(audio_bytes: bytes, content_type: str, language: str) -> dict:
+    """Load Whisper (first use) and transcribe. BLOCKING -- worker thread only (#17778)."""
     from media.audio.pipeline import get_whisper_pipeline  # noqa: PLC0415 -- see _whisper_sync
 
     pipe = get_whisper_pipeline()
     if not pipe:
-        return {"text": "", "language": "unknown", "confidence": 0.0}
+        raise TranscriptionFailed("Speech recognition is unavailable: the Whisper model could not be loaded", 503)
+    return _whisper_sync(pipe, audio_bytes, content_type, language)
 
+
+async def _transcribe_with_whisper(audio_bytes: bytes, content_type: str, language: str = "") -> dict:
+    """Run Whisper load + transcription in a background thread (#1030, #17778).
+
+    The first call downloads and loads the model, so the load must not run on the loop.
+    """
     ct = content_type.split(";")[0].strip()
-    return await asyncio.to_thread(_whisper_sync, pipe, audio_bytes, ct, language)
+    return await asyncio.to_thread(_load_and_transcribe, audio_bytes, ct, language)
 
 
 @router.post("/transcribe", response_model=VoiceTranscribeResponse)
@@ -520,14 +545,21 @@ async def voice_transcribe_api(
             content={"text": "", "error": "Permission denied."},
         )
 
-    audio_bytes = await audio.read()
+    # Function-local: the media package import chain is not inert (see _whisper_sync).
+    from media.audio.upload_limits import read_capped_audio  # noqa: PLC0415
+
+    audio_bytes = await read_capped_audio(audio)
     if not audio_bytes:
         return JSONResponse(
             status_code=400,
             content={"text": "", "error": "Empty audio file."},
         )
 
-    result = await _transcribe_with_whisper(audio_bytes, audio.content_type or "audio/webm", language)
+    try:
+        result = await _transcribe_with_whisper(audio_bytes, audio.content_type or "audio/webm", language)
+    except TranscriptionFailed as exc:
+        security_layer.audit_log("voice_transcribe", "user", "failure", {"reason": str(exc)})
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     security_layer.audit_log(
         "voice_transcribe",
         "user",
