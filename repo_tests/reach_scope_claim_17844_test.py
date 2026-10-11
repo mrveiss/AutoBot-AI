@@ -193,6 +193,7 @@ _DECLARED_SCOPES = {
         "libs",
     ),
     "chunker-private-hook-scan": ("autobot-backend", "autobot-infrastructure", "autobot_shared"),
+    "conversation-turn-single-store": ("autobot-backend", "autobot_shared", "autobot-infrastructure"),
     "tool-effect-table-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "deployment-mode-detector-scan": ("autobot-backend/", "autobot-infrastructure/"),
     "egress-default-outbound-call-sites": (
