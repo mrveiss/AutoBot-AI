@@ -27,6 +27,9 @@ Features:
 
 Usage:
     python init_memory_graph_redis.py [--migrate] [--validate] [--benchmark] [--rollback]
+
+    --migrate reads the legacy transcripts from AUTOBOT_LEGACY_TRANSCRIPTS_DIR (SSOT config,
+    relative to AUTOBOT_BASE_DIR) -- the same directory the backend resolves (#18293).
 """
 
 import argparse
@@ -45,6 +48,7 @@ from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 from redis.commands.search.query import Query
 
 from autobot_shared.paths import project_root
+from autobot_shared.store_authority import legacy_conversation_transcripts_dir
 from constants.network_constants import NetworkConstants
 
 # #14517: the log path was a shell placeholder in a plain string literal. Python
@@ -884,7 +888,8 @@ def _execute_memory_graph_phases(initializer: MemoryGraphInitializer, args) -> b
         logger.info("PHASE 3: Conversation Migration")
         logger.info("=" * 80)
 
-        transcript_dir = project_root() / "data" / "conversation_transcripts"
+        # #18293: SSOT-config location, the same one the backend reads.
+        transcript_dir = legacy_conversation_transcripts_dir()
         migration_stats = initializer.migrate_conversations(transcript_dir)
         logger.info("\nMigration Results:")
         logger.info(json.dumps(migration_stats, indent=2))

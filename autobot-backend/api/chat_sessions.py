@@ -791,6 +791,9 @@ async def _reject_session_id_collision(chat_history_manager, session_id: str, us
         logger.warning("Could not check session %s for collision, refusing create: %s", session_id, exc)
         raise _session_id_taken_error()
     if existing is None:
+        if legacy_transcript_file(session_id) is not None:  # #18293: a legacy-only id is never taken over
+            logger.warning("Refusing create over legacy transcript id %s", session_id)
+            raise _session_id_taken_error()
         return
 
     owner = ((existing.get("metadata") or {}) if isinstance(existing, dict) else {}).get("owner")
@@ -1135,11 +1138,12 @@ async def _cleanup_terminal_sessions(request: Request, session_id: str) -> dict:
 # api/chat_sessions_delete_cleanup.py -- split out, not added here, because
 # this file was already at scripts/check_python_file_size.py's recorded
 # ceiling. See that module's docstring for why.
-from api.chat_sessions_delete_cleanup import (
-    _cleanup_chat_knowledge_context,
-    _cleanup_conversation_transcript,
-    _cleanup_knowledge_base_facts,
+from api.chat_sessions_delete_cleanup import _cleanup_chat_knowledge_context, _cleanup_knowledge_base_facts
+from api.legacy_transcript_disposal import (  # #18293: delete first, owner-verified transcript removal
+    delete_session_or_refer,
+    dispose_session_transcript,
 )
+from chat_history.legacy_transcripts import legacy_transcript_file
 
 
 async def _perform_all_session_cleanup(
@@ -1147,10 +1151,14 @@ async def _perform_all_session_cleanup(
     session_id: str,
     file_action: str,
     parsed_file_options: dict,
+    *,
+    requested_by: str | None = None,
 ) -> tuple[dict, dict, dict, dict, dict]:
-    """Perform all cleanup operations for session deletion.
+    """Perform all cleanup operations for session deletion -- only AFTER the session is deleted.
 
     Issue #665: Extracted from delete_session to reduce function complexity.
+    #18293: a legacy transcript is never removed here -- *requested_by* is recorded
+    on the #17038 proposal raised for it (``api/legacy_transcript_disposal.py``).
 
     Args:
         request: FastAPI request object with app state
@@ -1171,8 +1179,8 @@ async def _perform_all_session_cleanup(
     # Clean up knowledge base facts
     kb_cleanup_result = await _cleanup_knowledge_base_facts(request, session_id)
 
-    # Clean up conversation transcript
-    transcript_cleanup_result = await _cleanup_conversation_transcript(session_id)
+    # Legacy transcript: always kept, and proposed for #17038 review (#18293)
+    transcript_cleanup_result = await dispose_session_transcript(session_id, requested_by=requested_by)
 
     # Clean up the chat-knowledge context (#16490)
     knowledge_context_result = await _cleanup_chat_knowledge_context(request, session_id)
@@ -1184,31 +1192,6 @@ async def _perform_all_session_cleanup(
         transcript_cleanup_result,
         knowledge_context_result,
     )
-
-
-async def _delete_session_and_verify(chat_history_manager, session_id: str) -> None:
-    """Delete session from chat history and verify success.
-
-    Issue #665: Extracted from delete_session to reduce function complexity.
-
-    Args:
-        chat_history_manager: Chat history manager instance
-        session_id: Chat session ID being deleted
-
-    Raises:
-        ResourceNotFoundError: If session doesn't exist or deletion failed
-    """
-    deleted = await chat_history_manager.delete_session(session_id)
-
-    if not deleted:
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ResourceNotFoundError(f"Session {session_id} not found")
 
 
 def _build_delete_session_response(
@@ -1279,16 +1262,18 @@ async def delete_session(
 
     # Issue #4260: Get message count before deletion for SESSION_DESTROY hook
     message_count = await chat_history_manager.get_session_message_count(session_id)
-    # Perform all cleanup operations (Issue #620)
-    (
-        file_result,
-        terminal_result,
-        kb_result,
-        transcript_result,
-        knowledge_context_result,
-    ) = await _perform_all_session_cleanup(request, session_id, file_action, parsed_file_options)
-
-    await _delete_session_and_verify(chat_history_manager, session_id)
+    # #18293: delete first, then clean up -- a missing session is a 404 with nothing touched.
+    requested_by = (ownership.get("user_data") or {}).get("username")
+    await delete_session_or_refer(chat_history_manager, session_id, requested_by)
+    file_result, terminal_result, kb_result, transcript_result, knowledge_context_result = (
+        await _perform_all_session_cleanup(
+            request,
+            session_id,
+            file_action,
+            parsed_file_options,
+            requested_by=requested_by,
+        )
+    )
 
     log_chat_event(
         "session_deleted",

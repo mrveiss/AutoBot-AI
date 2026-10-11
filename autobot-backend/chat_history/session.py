@@ -711,8 +711,8 @@ class SessionMixin:
 
         try:
             cache_key = f"chat:session:{session_id}"
-            # Issue #361 - avoid blocking
-            await run_in_chat_io_executor(self.redis_client.delete, cache_key)
+            context_key = f"{REDIS_KEY.CHAT_CONVERSATION_PREFIX}{session_id}"  # #18293: its LLM-context cache too
+            await run_in_chat_io_executor(self.redis_client.delete, cache_key, context_key)  # #361: off-loop
             await run_in_chat_io_executor(self.redis_client.zrem, REDIS_KEY.CHAT_RECENT, session_id)
             logger.debug("Cleared Redis cache for session %s", session_id)
         except Exception as e:

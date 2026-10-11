@@ -314,7 +314,6 @@ class ChatWorkflowManager(
         self.redis_manager = None  # Async Redis manager
         self.redis_client = None  # Main database connection
         self.conversation_history_ttl = TTL_24_HOURS
-        self.transcript_dir = "data/conversation_transcripts"  # Long-term file storage
         self._active_streams = 0  # #16947 busy signal: incremented for process_message_stream's span
 
         self.error_manager = get_error_boundary_manager()
