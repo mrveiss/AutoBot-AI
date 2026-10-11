@@ -1,6 +1,6 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""run_pipeline processes the document's text, never its id (#18184)."""
+"""run_pipeline processes the document's text, never its id, and needs write permission on the fact (#18184)."""
 
 import re
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -64,13 +64,13 @@ async def test_pipeline_receives_document_text_not_id():
 @pytest.mark.asyncio
 async def test_input_data_is_never_a_bare_uuid_string():
     doc_id = str(uuid4())
-    kb = _kb({"fact_id": doc_id, "content": "some text", "metadata": {}})
+    kb = _kb({"fact_id": doc_id, "content": "some text", "metadata": {"owner_id": "alice"}})
     _, runner = await _call(kb, doc_id)
     assert not UUID_RE.match(runner.run.await_args.args[0])
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("fact", [None, {"fact_id": "x", "content": "  ", "metadata": {}}])
+@pytest.mark.parametrize("fact", [None, {"fact_id": "x", "content": "  ", "metadata": {"owner_id": "alice"}}])
 async def test_missing_or_empty_document_is_404_and_pipeline_not_run(fact):
     runner = _runner()
     with (
@@ -83,20 +83,49 @@ async def test_missing_or_empty_document_is_404_and_pipeline_not_run(fact):
     runner.run.assert_not_awaited()
 
 
-@pytest.mark.asyncio
-async def test_unauthorized_caller_gets_403_and_pipeline_not_run():
-    doc_id = str(uuid4())
-    kb = _kb({"fact_id": doc_id, "content": "secret", "metadata": {"owner_id": "bob"}}, allowed=False)
+async def _denied(kb, doc_id, user=USER):
     runner = _runner()
     with (
         patch.object(routes, "get_or_create_knowledge_base", AsyncMock(return_value=kb)),
         patch("knowledge.pipeline.runner.PipelineRunner", return_value=runner),
         pytest.raises(HTTPException) as exc,
     ):
-        await routes.run_pipeline(PipelineRunRequest(document_id=doc_id), MagicMock(), USER)
-    assert exc.value.status_code == 403
+        await routes.run_pipeline(PipelineRunRequest(document_id=doc_id), MagicMock(), user)
     runner.run.assert_not_awaited()
-    assert kb.ownership_manager.check_access.await_args.kwargs["user_id"] == "alice"
+    return exc.value
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("owner", ["bob", None])
+async def test_a_reader_without_write_gets_403_and_pipeline_not_run(owner):
+    """The caller can READ the fact (check_access allows) but does not own it: still 403."""
+    doc_id = str(uuid4())
+    kb = _kb({"fact_id": doc_id, "content": "shared", "metadata": {"owner_id": owner, "visibility": "public"}})
+    assert (await _denied(kb, doc_id)).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_the_owner_runs_the_pipeline():
+    doc_id = str(uuid4())
+    kb = _kb({"fact_id": doc_id, "content": "mine", "metadata": {"owner_id": "alice"}}, allowed=False)
+    resp, runner = await _call(kb, doc_id)
+    runner.run.assert_awaited_once()
+    assert resp.document_id == doc_id
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("owner", ["bob", None])
+async def test_an_admin_runs_the_pipeline_on_any_fact(owner):
+    doc_id = str(uuid4())
+    kb = _kb({"fact_id": doc_id, "content": "theirs", "metadata": {"owner_id": owner}}, allowed=False)
+    _, runner = await _call(kb, doc_id, {"user_id": "root", "role": "admin"})
+    runner.run.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_a_missing_fact_is_404_before_any_write_decision():
+    err = await _denied(_kb(None), str(uuid4()))
+    assert err.status_code == 404
 
 
 @pytest.mark.asyncio

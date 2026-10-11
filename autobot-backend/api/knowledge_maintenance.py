@@ -17,7 +17,6 @@ Includes:
 """
 
 import asyncio
-import json
 from datetime import datetime, timezone
 from pathlib import Path as PathLib
 
@@ -69,6 +68,7 @@ from knowledge.schemas import (
     SynthesisLogResponse,
     UpdateFactResponse,
 )
+from knowledge.search_filters import parse_fact_metadata
 from knowledge_factory import get_or_create_knowledge_base
 from services.knowledge.contradiction_detector import (
     ContradictionDetector,
@@ -98,18 +98,16 @@ def _process_fact_metadata(metadata_str, fact_key, created_at) -> dict | None:
     if not metadata_str:
         return None
 
-    try:
-        metadata = json.loads(metadata_str)
-        return {
-            "fact_id": metadata.get("fact_id", fact_key.split(":")[1]),
-            "fact_key": fact_key,
-            "created_at": created_at or "1970-01-01T00:00:00",
-            "category": metadata.get("category", CategoryDefaults.UNKNOWN),
-            "title": metadata.get("title", "unknown"),
-        }
-    except json.JSONDecodeError:
-        logger.warning("Failed to parse metadata for %s", fact_key)
+    metadata = parse_fact_metadata(fact_key, metadata_str, strict=True)  # #18220: a bad fact is skipped
+    if metadata is None:
         return None
+    return {
+        "fact_id": metadata.get("fact_id", fact_key.split(":")[1]),
+        "fact_key": fact_key,
+        "created_at": created_at or "1970-01-01T00:00:00",
+        "category": metadata.get("category", CategoryDefaults.UNKNOWN),
+        "title": metadata.get("title", "unknown"),
+    }
 
 
 def _group_fact_by_category_title(fact_info: dict, fact_groups: dict) -> None:
@@ -697,10 +695,8 @@ def _check_orphaned_fact(key: str, metadata_str) -> tuple:
     if not metadata_str:
         return False, False, None
 
-    try:
-        metadata = json.loads(metadata_str)
-    except (json.JSONDecodeError, TypeError):
-        logger.warning("Failed to parse metadata for %s", key)
+    metadata = parse_fact_metadata(_decode_key(key), metadata_str, strict=True)  # #18220
+    if metadata is None:
         return False, False, None
 
     file_path = metadata.get("file_path")
@@ -912,18 +908,13 @@ async def cleanup_orphaned_facts(
 # ===== SESSION-ORPHAN MANAGEMENT (Issue #547) =====
 
 
-def _parse_fact_metadata(fact_data: dict) -> dict | None:
+def _parse_fact_metadata(fact_data: dict, fact_key) -> dict | None:
     """Parse metadata from fact data, handling bytes/str and JSON parsing."""
     metadata_str = fact_data.get(b"metadata") or fact_data.get("metadata")
     if not metadata_str:
         return None
 
-    try:
-        if isinstance(metadata_str, bytes):
-            metadata_str = metadata_str.decode("utf-8")
-        return json.loads(metadata_str)
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        return None
+    return parse_fact_metadata(_decode_key(fact_key), metadata_str, strict=True)  # #18220
 
 
 def _build_orphan_fact_info(key, fact_data: dict, metadata: dict, source_session_id: str) -> dict:
@@ -983,7 +974,7 @@ def _scan_redis_for_session_orphans(redis_client, existing_session_ids: set) -> 
                 continue
 
             total_checked += 1
-            metadata = _parse_fact_metadata(fact_data)
+            metadata = _parse_fact_metadata(fact_data, key)
             if not metadata:
                 continue
 

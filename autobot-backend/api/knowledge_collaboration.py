@@ -13,7 +13,6 @@ Issue #679: Hierarchical knowledge access control system supporting:
 - Shared knowledge (explicit sharing)
 """
 
-import json
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -33,7 +32,13 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from knowledge.ownership import VisibilityLevel
-from knowledge.search_filters import can_read_fact, extract_user_context_from_request
+from knowledge.search_filters import (
+    can_read_fact,
+    extract_user_context_from_request,
+    fact_not_found,
+    parse_fact_metadata,
+    require_fact_owner,
+)
 from knowledge_factory import get_or_create_knowledge_base
 
 logger = get_logger(__name__)
@@ -57,7 +62,7 @@ async def _filter_fact_ids_by_scope(fact_ids: List[str], scope: VisibilityLevel,
     for fact_id in fact_ids:
         fact_data = await redis.hget(f"fact:{fact_id}", "metadata")
         if fact_data:
-            metadata = json.loads(fact_data)
+            metadata = parse_fact_metadata(fact_id, fact_data)
             if metadata.get("visibility") == scope:
                 filtered.append(fact_id)
     return filtered
@@ -77,7 +82,7 @@ async def _fetch_facts_from_redis(fact_ids: List[str], redis, include_title_only
             if isinstance(metadata_raw, bytes):
                 metadata_raw = metadata_raw.decode("utf-8")
 
-            metadata = json.loads(metadata_raw) if metadata_raw else {}
+            metadata = parse_fact_metadata(fact_id, metadata_raw) if metadata_raw else {}
 
             entry: Dict = {
                 "id": fact_id,
@@ -91,16 +96,12 @@ async def _fetch_facts_from_redis(fact_ids: List[str], redis, include_title_only
     return facts
 
 
-async def _fetch_and_verify_owner(fact_id: str, user_id: str, redis) -> Dict:
-    """Helper for update_knowledge_permissions. Ref: #1088."""
-    fact_data = await redis.hget(f"fact:{fact_id}", "metadata")
-    if not fact_data:
-        raise HTTPException(status_code=404, detail="Fact not found")
-    if isinstance(fact_data, bytes):
-        fact_data = fact_data.decode("utf-8")
-    metadata = json.loads(fact_data)
-    if metadata.get("owner_id") != user_id:
-        raise HTTPException(status_code=403, detail="Only the owner can update permissions")
+async def _fetch_and_verify_owner(fact_id: str, kb, current_user) -> Dict:
+    """Helper for update_knowledge_permissions. Ref: #1088, #18220."""
+    metadata = await _fetch_fact_metadata(fact_id, kb.redis())
+    await require_fact_owner(
+        kb.ownership_manager, fact_id, metadata, current_user, "Only the owner can update permissions"
+    )
     return metadata
 
 
@@ -142,10 +143,10 @@ async def _fetch_fact_metadata(fact_id: str, redis) -> Dict:
     """Fetch and decode a fact's metadata hash from Redis. Ref: #1088."""
     fact_data = await redis.hget(f"fact:{fact_id}", "metadata")
     if not fact_data:
-        raise HTTPException(status_code=404, detail="Fact not found")
+        raise fact_not_found()
     if isinstance(fact_data, bytes):
         fact_data = fact_data.decode("utf-8")
-    return json.loads(fact_data)
+    return parse_fact_metadata(fact_id, fact_data)  # #18220: non-object or malformed reads as unreadable
 
 
 def _build_access_response(fact_id: str, metadata: Dict, user_id: str) -> Dict:
@@ -165,11 +166,12 @@ def _build_access_response(fact_id: str, metadata: Dict, user_id: str) -> Dict:
     }
 
 
-async def _verify_fact_ownership(fact_id: str, user_id: str, redis, action_label: str) -> Dict:
-    """Fetch metadata and assert the caller is the owner. Ref: #1088."""
-    metadata = await _fetch_fact_metadata(fact_id, redis)
-    if metadata.get("owner_id") != user_id:
-        raise HTTPException(status_code=403, detail=f"Only the owner can {action_label} knowledge")
+async def _verify_fact_ownership(fact_id: str, kb, current_user, action_label: str) -> Dict:
+    """Fetch metadata and assert the caller is the owner. Ref: #1088, #18220."""
+    metadata = await _fetch_fact_metadata(fact_id, kb.redis())
+    await require_fact_owner(
+        kb.ownership_manager, fact_id, metadata, current_user, f"Only the owner can {action_label} knowledge"
+    )
     return metadata
 
 
@@ -375,7 +377,7 @@ async def share_knowledge(
 
     try:
         user_id, _, _ = extract_user_context_from_request(current_user)
-        metadata = await _verify_fact_ownership(fact_id, user_id, kb.redis(), "share")
+        metadata = await _verify_fact_ownership(fact_id, kb, current_user, "share")
 
         updated_metadata = await kb.ownership_manager.share_fact(
             fact_id=fact_id,
@@ -443,7 +445,7 @@ async def unshare_knowledge(
 
     try:
         user_id, _, _ = extract_user_context_from_request(current_user)
-        metadata = await _verify_fact_ownership(fact_id, user_id, kb.redis(), "unshare")
+        metadata = await _verify_fact_ownership(fact_id, kb, current_user, "unshare")
 
         updated_metadata = await _unshare_fact_by_entity(
             fact_id, entity_id, entity_type, metadata, kb.ownership_manager
@@ -502,7 +504,7 @@ async def update_knowledge_permissions(
     try:
         # Fetch metadata and verify the caller is the owner
         user_id, user_org_id, _ = extract_user_context_from_request(current_user)
-        metadata = await _fetch_and_verify_owner(fact_id, user_id, kb.redis())
+        metadata = await _fetch_and_verify_owner(fact_id, kb, current_user)
 
         # Apply visibility changes, and the org-level and admin-only guards, to metadata dict
         old_visibility = metadata.get("visibility")
@@ -556,7 +558,7 @@ async def get_knowledge_access_info(fact_id: str, request: Request, current_user
 
         has_access = await can_read_fact(kb.ownership_manager, fact_id, metadata, current_user)  # #16662, #18184
         if not has_access:
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise fact_not_found()  # #18220: a non-reader cannot tell this from a missing fact
 
         return _build_access_response(fact_id, metadata, user_id)
 
