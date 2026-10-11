@@ -10472,7 +10472,7 @@ export interface paths {
          * Get Llm Config
          * @description Get current LLM configuration.
          *
-         *     Issue #744: Requires authenticated user.
+         *     Issue #18193: admin-only, and nested credentials are redacted (defence in depth).
          */
         get: operations["get_llm_config_api_llm_config_get"];
         put?: never;

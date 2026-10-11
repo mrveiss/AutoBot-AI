@@ -80,6 +80,7 @@ CANONICAL_MATCHER = "autobot_shared/secret_redaction.py"
 #: second definition anywhere is a second implementation, whatever it is called.
 _MATCHER_ENTRY_POINTS = frozenset(
     {"is_credential_field", "redact_mapping", "redact_text", "redact_value", "redact_content", "MatchPolicy"}
+    | {"redact_nested"}  # #18193; #18205 is its convergence home with the LLM-layer redact_dict
 )
 
 # Verbs that make a module a redactor rather than a module that merely mentions

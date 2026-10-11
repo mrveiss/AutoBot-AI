@@ -6,42 +6,25 @@
 """
 Credential-aware repr redaction for Pydantic settings models.
 
-Why this exists
----------------
-``repr()`` of a Pydantic model prints every field value.  Any code path that
-formats a settings object — most commonly ``unittest.mock.patch.object`` on a
-misspelled attribute, which raises
-``AttributeError("<repr of obj> does not have the attribute 'x'")`` — therefore
-dumps the whole configuration, secrets included, into pytest output and from
-there into CI logs.
+``repr()`` of a Pydantic model prints every field value, so any code path that
+formats a settings object (e.g. ``patch.object`` on a misspelled attribute)
+dumps the whole configuration, secrets included, into CI logs (#13325).
 
 Redaction rules
 ---------------
-* Field **names are always preserved**.  Only *values* are masked, so a
-  configuration dump stays diagnosable ("which fields exist, which are set").
-* Only fields whose name *ends with* a credential noun are masked.  Suffix
-  matching (not substring) keeps ``tokenizers_parallelism`` and
-  ``speculation_num_tokens`` readable while catching ``jwt_secret``.
+* Field **names are always preserved**; only *values* are masked.
+* Only names that *end with* a credential noun are masked (suffix, not
+  substring), so ``tokenizers_parallelism`` stays readable and ``jwt_secret``
+  is caught.
 * URL-shaped fields keep scheme/host/port/path and lose only the **userinfo**
-  password.  ``database_url`` and ``redis_url`` routinely embed credentials
-  (``postgresql://user:pw@host/db``), so exempting them wholesale would leak
-  through the very vector this module closes — but host and database name are
-  exactly what an operator needs to diagnose a connection problem.
-* Location-shaped fields (``*_path``, ``*_file``, ``*_dir``) are never masked —
-  a filename is not a credential and is needed for diagnosis.
-* Empty / unset values are shown verbatim.  ``jwt_secret=''`` leaks nothing and
-  answers the most common diagnostic question directly.
+  password (``postgresql://user:pw@host/db``): exempting them would leak, masking
+  them wholesale would destroy the diagnostic.
+* Location-shaped fields (``*_path``, ``*_file``, ``*_dir``) are never masked.
+* Empty / unset values are shown verbatim.
 
-Issue: #13325
-
-Content-scanning companion (#13708)
-------------------------------------
-Everything above is *name-keyed*: it only masks a value when the field name
-already says it holds a credential. ``scan_content_for_credentials`` and
-``redact_content`` are the opposite -- they look at the *content* of free
-text (a message body, a document, a log line) with no field name to go on,
-for exactly the case a config-model redactor cannot reach: a credential
-sitting in prose ("your temporary password is X"), not behind a named field.
+Content-scanning companion (#13708): ``scan_content_for_credentials`` and
+``redact_content`` look at the *content* of free text with no field name to go
+on -- a credential sitting in prose, not behind a named field.
 
 
 Canonical redactor (#17336, #17337)
@@ -68,10 +51,9 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, ClassVar, Dict, FrozenSet, Iterable, Mapping, Tuple
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import quote, unquote_plus, urlsplit, urlunsplit
 
-# Masked stand-in for a populated credential value.  Fixed width so the mask
-# never discloses the length of the real secret.
+# Masked stand-in for a populated credential value; fixed width so it never discloses the secret's length.
 REDACTED_PLACEHOLDER = "**********"
 
 # A field is credential-shaped when its name equals one of these nouns or ends
@@ -110,11 +92,9 @@ LOCATION_SUFFIXES: Tuple[str, ...] = ("_path", "_file", "_dir", "_id")
 URL_SUFFIXES: Tuple[str, ...] = ("_url", "_uri", "_dsn")
 
 
-# Authorization terms: not field-name *suffixes* (``use_auth`` is a flag, not a
-# secret, so PRECISE must not mask it) but a substring of a header/key name under
-# BROAD (``x_auth``, ``Authorization``, ``bearer_token``).  Added to the shared
-# vocabulary so the log/event/snapshot redactors stop each carrying their own
-# copy (#17337).
+# Authorization terms: not field-name *suffixes* (``use_auth`` is a flag, so PRECISE must not mask it) but a
+# substring of a header/key name under BROAD (``x_auth``, ``Authorization``, ``bearer_token``). In the shared
+# vocabulary so the log/event/snapshot redactors stop carrying their own copy (#17337).
 AUTHORIZATION_TERMS: Tuple[str, ...] = ("auth", "authorization", "bearer")
 
 # Stems that only make sense as a substring (``private_key``, ``privatekey``);
@@ -125,14 +105,14 @@ BROAD_ONLY_STEMS: Tuple[str, ...] = ("private",)
 BROAD_FRAGMENTS: Tuple[str, ...] = tuple(dict.fromkeys(CREDENTIAL_SUFFIXES + AUTHORIZATION_TERMS + BROAD_ONLY_STEMS))
 
 
-# A COUNT or LIMIT of a credential noun (``max_tokens``, ``token_count``,
-# ``key_length``) is a number, not a credential -- but ONLY the template-export
-# path acts on that (``is_credential_entry(..., exempt_counts=True)``); every
-# other caller keeps masking it, as its retired matcher did. Deliberately tight:
-#   * a prefix form needs the REMAINDER to be a PLURAL noun (``max_tokens``,
-#     ``num_api_keys``); ``max_token_secret`` and ``max_password`` stay masked;
-#   * a suffix form needs the remainder to END in a noun and the name to END in
-#     the quantity word; ``token_count_secret`` stays masked.
+# A COUNT or LIMIT of a credential noun (``max_tokens``, ``token_count``, ``key_length``) is a number,
+# not a credential -- but ONLY the template export and the API config readout (``redact_nested`` for
+# GET /config and /current, unredacted before #18193) act on that (``exempt_counts=True``); every other
+# caller keeps masking it. Deliberately tight:
+#   * a prefix form needs the REMAINDER to be a PLURAL noun (``max_tokens``, ``num_api_keys``);
+#     ``max_token_secret`` and ``max_password`` stay masked;
+#   * a suffix form needs the remainder to END in a noun and the name to END in the quantity word;
+#     ``token_count_secret`` stays masked.
 # Under such a name any NON-number value is masked by every caller (#17336).
 QUANTITY_PREFIXES: Tuple[str, ...] = (
     "max_",
@@ -218,9 +198,11 @@ def is_credential_entry(
 
     Under a quantity-shaped name (``max_tokens``, ``token_count``) a value that
     is NOT a real int/float -- a JWT, ``sk-...``, a digit string (a PIN), a bool,
-    a list, a dict -- is masked by both policies. Only ``exempt_counts=True``,
-    which the template-export path passes because it must round-trip
-    ``max_tokens`` as a number, leaves a real int/float unmasked.
+    a list, a dict -- is masked by both policies. Only ``exempt_counts=True`` leaves a
+    real int/float unmasked; exactly two callers pass it: the template export (it must
+    round-trip ``max_tokens`` as a number) and ``redact_nested`` for the API config
+    readout of GET /config and /current (main returned those unredacted, and the
+    settings UI reads ``max_tokens``).
     """
     if not isinstance(policy, MatchPolicy):
         raise TypeError(f"policy must be a MatchPolicy, got {policy!r}")
@@ -255,50 +237,46 @@ def is_url_field(name: str) -> bool:
 def redact_url_userinfo(value: str, mask_username: bool = False) -> str:
     """Strip the password from a URL, preserving scheme/host/port/path.
 
-    ``mask_username`` additionally hides the user component, for schemes that
-    carry the credential there instead (a Sentry-style ``https://<key>@host/1``).
+    ``mask_username`` also hides the user part, where the credential sits (``https://<key>@host/1``).
     """
     try:
         parsed = urlsplit(value)
+        if not parsed.password and not (mask_username and parsed.username):
+            return value
+        port = parsed.port
     except ValueError:
-        # Unparseable: fail closed rather than emit an unredacted string.
+        # Unparseable (incl. a non-numeric port): fail closed rather than emit it unredacted.
         return REDACTED_PLACEHOLDER
-    if not parsed.password and not (mask_username and parsed.username):
-        return value
     user = REDACTED_PLACEHOLDER if (mask_username and parsed.username) else (parsed.username or "")
     netloc = f"{user}:{REDACTED_PLACEHOLDER}@" if parsed.password else f"{user}@"
     netloc += parsed.hostname or ""
-    if parsed.port:
-        netloc += f":{parsed.port}"
+    if port:
+        netloc += f":{port}"
     return urlunsplit(parsed._replace(netloc=netloc))
 
 
-def _redact_credential_query_params(query: str) -> str:
-    """Mask credential-shaped query-param values (``?api_key=X``, ``&token=Y``).
+def _redact_credential_query_params(query: str, policy: MatchPolicy = MatchPolicy.PRECISE) -> str:
+    """Mask the value of each credential-named query param IN PLACE (``?api_key=X``, ``&token=Y``).
 
-    Reuses :func:`is_credential_entry` on each param NAME -- the same rule
-    that already decides a config field is credential-shaped decides a query
-    param is too, so ``api_key``/``token``/``secret``/... are caught without
-    a second, drifting list of credential-ish names.
+    Reuses :func:`is_credential_entry` on the decoded param NAME, so no second noun list drifts.
+    Only credential pairs are rewritten: every other byte (``%20``, a valueless ``?flag``) is kept.
+    ``policy`` defaults to ``PRECISE`` (every pre-#18193 caller); ``redact_nested`` passes ``BROAD``.
     """
-    if not query:
-        return query
-    pairs = parse_qsl(query, keep_blank_values=True)
-    if not pairs:
-        return query
-    redacted = [(k, REDACTED_PLACEHOLDER if v and is_credential_entry(k, v) else v) for k, v in pairs]
-    return urlencode(redacted)
+    out = []
+    for seg in query.split("&"):
+        key, eq, val = seg.partition("=")
+        if eq and val and is_credential_entry(unquote_plus(key), unquote_plus(val), policy):
+            seg = f"{key}={quote(REDACTED_PLACEHOLDER, safe='')}"
+        out.append(seg)
+    return "&".join(out)
 
 
-def redact_url_credentials(url: str) -> str:
-    """Mask both userinfo (``user:pass@``) and credential-shaped query params
-    in a URL (#13708 round 4) -- ``redact_url_userinfo`` alone leaves
-    ``?api_key=X``/``&token=Y`` untouched, and those are exactly how most
-    REST APIs and webhook URLs carry a credential instead of Basic-Auth.
+def redact_url_credentials(url: str, policy: MatchPolicy = MatchPolicy.PRECISE) -> str:
+    """Mask userinfo (``user:pass@``) and credential-shaped query params in a URL (#13708).
 
-    Preserves scheme/host/port/path and every non-credential query param, so
-    a redacted URL is still diagnosable, same principle as
-    ``redact_url_userinfo``.
+    ``redact_url_userinfo`` alone leaves ``?api_key=X`` untouched, and that is how most REST APIs
+    and webhook URLs carry a credential.  Scheme/host/port/path and every non-credential query
+    param are kept byte-for-byte, so a credential-free URL comes back unchanged.
     """
     try:
         parsed = urlsplit(url)
@@ -306,7 +284,7 @@ def redact_url_credentials(url: str) -> str:
         return REDACTED_PLACEHOLDER
     stripped_userinfo = redact_url_userinfo(url)
     reparsed = urlsplit(stripped_userinfo) if stripped_userinfo != url else parsed
-    new_query = _redact_credential_query_params(reparsed.query)
+    new_query = _redact_credential_query_params(reparsed.query, policy)
     if new_query == reparsed.query:
         return stripped_userinfo
     return urlunsplit(reparsed._replace(query=new_query))
@@ -367,11 +345,9 @@ LEGACY_EXPORT_KEY_NAMES = frozenset(
 # credential (``Bearer <jwt>``, ``Basic <b64>``, raw tokens).
 _AUTH_HEADER_RE = re.compile(r"(?i)(authorization\s*[:=]\s*).+")
 
-# ``api_key=...`` / ``token: ...`` key/value pairs, with an optional
-# ``[a-z0-9_]*[_-]?`` prefix (``client_secret=``, ``db_password=``, #12333). The
-# word must sit immediately before the ``[:=]`` so prose and near-miss keys
-# (``password_hash_algorithm=``) never match. Every noun here is in the shared
-# vocabulary (asserted by test), so this is the text SHAPE of it, not a copy.
+# ``api_key=...`` / ``token: ...`` pairs with an optional ``[a-z0-9_]*[_-]?`` prefix (``db_password=``, #12333);
+# the word sits right before ``[:=]`` so near-miss keys (``password_hash_algorithm=``) never match. Every noun is
+# in the shared vocabulary (asserted by test): this is its text SHAPE, not a copy.
 _SECRET_KV_RE = re.compile(
     r"(?i)\b([a-z0-9_]*[_-]?(?:api[_-]?key|token|secret|password|passwd))\b(\s*[:=]\s*)([^\s,;\"']+)"
 )
@@ -395,6 +371,47 @@ def redact_mapping(mapping: Mapping[str, Any]) -> Dict[str, Any]:
     return {k: (LOG_MASK if is_credential_entry(k, v, MatchPolicy.BROAD) else v) for k, v in mapping.items()}
 
 
+_SCALARS = (bool, int, float)
+
+
+def _redact_nested_leaf(name: str, value: Any, policy: MatchPolicy) -> Any:
+    """One non-container leaf of :func:`redact_nested` (#18193)."""
+    if value is None or value == "":
+        return value
+    cred = is_credential_entry(name, value, policy, exempt_counts=True)
+    if not isinstance(value, str):
+        return value if isinstance(value, _SCALARS) and not cred else REDACTED_PLACEHOLDER  # unknown type: closed
+    url = "://" in value and not any(c.isspace() for c in value)
+    if cred and not (url and is_url_field(name)):
+        return REDACTED_PLACEHOLDER  # a URL-shaped value under a credential name (webhook secret) is masked whole
+    if url:
+        return redact_url_credentials(redact_url_userinfo(value, mask_username=True), policy)
+    return redact_content(value)
+
+
+def redact_nested(value: Any, policy: MatchPolicy = MatchPolicy.BROAD, name: str = "") -> Any:
+    """Copy of ``value`` with credentials masked at any depth, for API response bodies (#18193).
+
+    Walks dicts, lists, tuples and sets (a set comes back as a list), masking like :func:`redact_value`
+    (``REDACTED_PLACEHOLDER``): a set value, or a non-empty container, under a credential name is masked
+    whole -- except under a URL-shaped name (``db_url``), where a URL keeps its host and loses ALL userinfo
+    (the user part too: a key can sit there) and credential query params. A URL string under any other
+    name is scrubbed the same way; other strings go through :func:`redact_content` (``sk-...``, JWTs,
+    inline ``user:pass@``), so ordinary text is byte-identical. Keys, order, bool and numbers are
+    unchanged; an unknown non-scalar type fails closed. List items inherit their parent's name.
+    ``BROAD`` (also for query params): over-masking costs a field, a leak costs a secret.
+    ``exempt_counts=True`` keeps ``max_tokens=4096`` a number (GET /config and /current returned it before).
+    """
+    if isinstance(value, (Mapping, list, tuple, set, frozenset)):
+        if value and is_credential_entry(name, value, policy, exempt_counts=True):
+            return REDACTED_PLACEHOLDER
+        if isinstance(value, Mapping):
+            return {k: redact_nested(v, policy, str(k)) for k, v in value.items()}
+        items = [redact_nested(v, policy, name) for v in value]
+        return tuple(items) if isinstance(value, tuple) else items
+    return _redact_nested_leaf(name, value, policy)
+
+
 # ---------------------------------------------------------------------------
 # Content-scanning companion (#13708)
 # ---------------------------------------------------------------------------
@@ -410,17 +427,9 @@ class ContentMatch:
     confidence: str  # "high" | "medium"
 
 
-# Bounded, not the unbounded ``*``/``*?`` this replaced (CodeQL py/polynomial-redos):
-# an unanchored ``[\s\S]*?`` body scan is retried from *every* "-----BEGIN ... PRIVATE
-# KEY-----" occurrence in the input, and on a crafted string with many such markers and
-# no matching END, each retry walks to the end of the remaining text -- O(n^2) on
-# adversarial input. Real PEM key-type headers ("RSA ", "ENCRYPTED ", "OPENSSH ", ...)
-# are well under 12 characters, and real key bodies top out in the low KB (~3.2KB base64
-# for a 4096-bit RSA key, ~6.4KB for the much rarer 8192-bit) -- the bounds below give
-# both a multi-x safety margin over that, so no real PEM block is affected, while a
-# malicious restart now costs O(bound) instead of O(remaining input), making the whole
-# scan linear in input length again (verified: doubling adversarial input length roughly
-# doubles scan time, not quadruples it).
+# Bounded, not unbounded (CodeQL py/polynomial-redos): an unanchored ``[\s\S]*?`` body is retried
+# from every BEGIN marker, O(n^2) on crafted input.  Real PEM headers are well under 40 characters and
+# real key bodies top out in the low KB, so the bounds keep the scan linear and change no real block.
 _PEM_HEADER_MAX = 40
 _PEM_BODY_MAX = 16384
 _PEM_BLOCK_RE = re.compile(
@@ -428,20 +437,10 @@ _PEM_BLOCK_RE = re.compile(
     rf"[\s\S]{{0,{_PEM_BODY_MAX}}}?-----END [A-Z0-9 ]{{0,{_PEM_HEADER_MAX}}}PRIVATE KEY-----"
 )
 
-# A JWT is three base64url segments joined by dots. The HEADER always decodes
-# to a JSON object opening ``{"`` (``eyJ``) -- ``alg`` is mandatory, so it is
-# never the empty object. The PAYLOAD is only anchored on the dot structure.
-#
-# #16688: requiring ``eyJ`` on the payload too -- which this pattern did until
-# the redaction census -- makes this scanner strictly narrower than the one in
-# ``a2a/pii_pipeline.py`` (``jwt_re``), which anchors the header alone. A
-# payload only starts ``eyJ`` when its JSON begins exactly ``{"``. A serializer
-# emitting a space after the brace (``{ "sub": ...``) encodes to ``eyAi``, and
-# one padding before it gives ``IHsi``. Both are well-formed tokens that were
-# redacted on the A2A path and passed through untouched here -- and this is the
-# module ``llm_shared.credential_redaction`` delegates to, so the miss landed in
-# logs. Widened to match; deliberately a superset, never a narrowing
-# (see docs/developer/REDACTION_BOUNDARY.md).
+# A JWT is three base64url segments joined by dots.  The HEADER always opens ``eyJ`` (``alg`` is
+# mandatory); the PAYLOAD is anchored on the dot structure only, since a serializer emitting
+# ``{ "sub"`` encodes to ``eyAi`` (#16688).  Deliberately a superset of ``a2a/pii_pipeline.py``'s
+# ``jwt_re``, never a narrowing (see docs/developer/REDACTION_BOUNDARY.md).
 _JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b")
 
 # Provider-specific prefixes with a fixed, well-documented shape — the same
@@ -463,27 +462,18 @@ _KNOWN_PREFIX_RE = re.compile(
 # string as a username and wrongly redacts ordinary URL content (review).
 _BASIC_AUTH_URL_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+.-]*://[^\s/:@?#]+:[^\s/@?#]+@[^\s]+")
 
-# "your password is X", "here is your api key: Y" -- a signup/notification
-# email's own words pointing at the value that follows.  The value itself
-# still has to look credential-shaped (checked in code, not the regex): a
-# plain identifier like ``getKey()`` must not qualify just because it follows
-# the word "key" -- but that exclusion only applies to "api key"/"secret"/
-# "token" (ambiguous with a code identifier); a real password is routinely a
-# plain alphanumeric string like "Hunter123", so "password"/"passwd" keep the
-# keyword captured separately (group 1) to exempt them from it (review).
+# "your password is X", "here is your api key: Y" -- a notification's own words pointing at the value
+# that follows.  The value must still look credential-shaped (checked in code): a plain identifier like
+# ``getKey()`` must not qualify -- except for "password"/"passwd", whose values are routinely plain
+# alphanumerics ("Hunter123"), so the keyword is captured separately (group 1) to exempt them.
 _CREDENTIAL_PHRASE_RE = re.compile(
     r"\b(password|passwd|api[ _-]?key|secret|token)\b\s*(?:is|:|=)\s*[\"']?([^\s\"'.,;]{6,})[\"']?",
     re.IGNORECASE,
 )
 
-# A data: URI's base64 payload is long, high-entropy, and not a credential --
-# excluded up front so the generic scanner below never has to reason about it.
-# Bounded for the same reason as _PEM_BLOCK_RE above (CodeQL py/polynomial-redos): the
-# media-type span ``[^,\s]+`` is unbounded and its negated class also matches the "data:"
-# literal itself, so a crafted string with many "data:" occurrences and no ";base64,"
-# forces a backtrack-to-end-of-input retry at every occurrence -- O(n^2). Real MIME types
-# (even long ones like "application/vnd.openxmlformats-officedocument...") are well under
-# 255 characters, so the bound below changes nothing for a real data: URI.
+# A data: URI's base64 payload is long, high-entropy and not a credential -- excluded up front.
+# Bounded like _PEM_BLOCK_RE (CodeQL py/polynomial-redos): the unbounded media-type span would retry
+# at every "data:" occurrence.  Real MIME types are well under 255 characters.
 _DATA_URI_MEDIA_TYPE_MAX = 255
 _DATA_URI_RE = re.compile(rf"data:[^,\s]{{1,{_DATA_URI_MEDIA_TYPE_MAX}}};base64,[A-Za-z0-9+/=]+")
 
