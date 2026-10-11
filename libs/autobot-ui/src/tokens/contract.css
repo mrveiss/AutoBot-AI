@@ -28,6 +28,10 @@
   --aui-color-primary-active: #3730a3;
   --aui-color-primary-contrast: #ffffff; /* text/icon on a primary surface   */
 
+  /* ---- Color: brand mark (tile + stroke of BrandMark) ---------------- */
+  --aui-brand-bg: #1e2a44;
+  --aui-brand-fg: #ffffff;
+
   /* ---- Color: neutrals / chrome -------------------------------------- */
   --aui-color-surface: #ffffff;          /* component background              */
   --aui-color-surface-raised: #f8fafc;   /* hover / elevated rows            */
@@ -88,6 +92,13 @@
 
   /* ---- Layering ------------------------------------------------------ */
   --aui-z-modal: 1000;
+  --aui-z-tooltip: 1200;
+
+  /* ---- Tooltip (BaseTooltip) ----------------------------------------- */
+  --aui-tooltip-delay: 500ms;
+  --aui-tooltip-hide-delay: 100ms;
+  --aui-tooltip-offset: 8px;
+  --aui-tooltip-max: 280px;
 
   /* ---- Motion (components must honor prefers-reduced-motion) ---------- */
   --aui-transition-fast: 120ms ease;

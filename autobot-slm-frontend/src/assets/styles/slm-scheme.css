@@ -58,6 +58,14 @@
   --font-medium: 500;
   --font-semibold: 600;
   --duration-200: 200ms;
+  /* Brand mark + tooltip names the adapter reads (#18240). The mark keeps the
+     SLM primary the old "S" tile used. */
+  --brand-bg: var(--color-primary-600);
+  --brand-fg: var(--color-white);
+  --tooltip-delay: 500ms;
+  --tooltip-hide-delay: 100ms;
+  --tooltip-offset: 8px;
+  --tooltip-max: 280px;
   --duration-300: 300ms;
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 

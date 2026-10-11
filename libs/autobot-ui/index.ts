@@ -35,6 +35,15 @@ export { default as SkipLink } from './src/components/SkipLink.vue'
 export { default as BaseModal } from './src/components/BaseModal.vue'
 export type { ModalSize } from './src/components/BaseModal.vue'
 
+export { default as BrandMark } from './src/components/BrandMark.vue'
+
+export { default as BaseTooltip } from './src/components/BaseTooltip.vue'
+export type { TooltipPlacement } from './src/components/BaseTooltip.vue'
+
+// Screen-reader announcer (#18240) — promoted from the SLM useAccessibility.
+export { useAnnounce, LIVE_REGION_ID } from './src/composables/useAnnounce'
+export type { AnnouncePriority } from './src/composables/useAnnounce'
+
 // Dialog-a11y composables — the focus-trap / scroll-lock / focus-restore /
 // initial-focus primitives shared by every dialog and modal consumer.
 export { useFocusTrap, isTabbable, FOCUSABLE_SELECTOR } from './src/composables/useFocusTrap'
