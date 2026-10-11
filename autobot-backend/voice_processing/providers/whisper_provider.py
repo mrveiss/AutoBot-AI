@@ -93,7 +93,7 @@ class WhisperProvider(SpeechProvider):
 
     @property
     def provider_name(self) -> str:
-        """Return provider name."""
+        """Display name: local Whisper with its weights pinned to a revision."""
         return "Whisper (local, pinned)"
 
     @property
