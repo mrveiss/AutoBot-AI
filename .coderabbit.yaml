@@ -46,7 +46,9 @@ reviews:
 
   auto_review:
     enabled: true
-    drafts: false
+    # Owner 2026-10-11: CodeRabbit reviews drafts, so its threads are fixed before
+    # a PR is marked ready and takes a CI slot (no full re-run for post-green threads).
+    drafts: true
     # The actual fix: `release` is listed explicitly since it is not the
     # default branch; `main` is included too for completeness, though
     # CodeRabbit's own default behaviour already covers it (#16461).

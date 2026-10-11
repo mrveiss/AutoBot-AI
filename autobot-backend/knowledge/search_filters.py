@@ -10,6 +10,7 @@ Integrates with ChromaDB metadata and ownership system.
 """
 
 import asyncio
+import json
 from typing import Dict, List
 
 from fastapi import HTTPException
@@ -263,20 +264,104 @@ async def can_read_fact(
     )
 
 
-async def authorize_fact_read(kb, fact_id: str, current_user) -> Dict:
-    """Load a fact through the canonical KB read and require that the caller may read it (#18184).
+def fact_not_found() -> HTTPException:
+    """The one answer for a fact that is missing or that the caller may not read (#18220).
 
-    Raises 503 without an ownership manager (no decision can be made, #16662), 404 when
-    the fact is absent, 403 when the caller cannot read it. Returns the fact dict.
+    A non-reader must not be able to tell an existing fact from an absent one, so both
+    carry this exact status and detail.
+    """
+    return HTTPException(status_code=404, detail="Fact not found")
+
+
+def object_metadata(fact_id: str, metadata) -> Dict:
+    """A fact's metadata as a dict; anything that is not an object reads as ``{}`` (#18220).
+
+    ``{}`` has no owner and private visibility, so only an admin is let through. The warning
+    names the fact id and the JSON type, never the content.
+    """
+    if isinstance(metadata, dict):
+        return metadata
+    if metadata:  # an absent or empty value is an ordinary fact with no metadata
+        logger.warning(
+            "Fact %s has non-object metadata (%s); treating it as unreadable", fact_id, type(metadata).__name__
+        )
+    return {}
+
+
+def parse_fact_metadata(fact_id: str, raw, *, strict: bool = False) -> Dict | None:
+    """Decode a stored metadata JSON value into a dict (#18220).
+
+    Anything unparseable or non-object reads as ``{}``, with a WARNING naming the fact id. With
+    ``strict`` such a value returns ``None`` instead, so a batch job can skip the fact and go on.
+    """
+    if isinstance(raw, (bytes, bytearray)):
+        raw = raw.decode("utf-8", errors="replace")
+    try:
+        parsed = json.loads(raw) if isinstance(raw, str) else raw
+    except ValueError:
+        parsed = raw
+    if strict:
+        if isinstance(parsed, dict):
+            return parsed
+        logger.warning("Fact %s has non-object metadata (%s); skipping it", fact_id, type(parsed).__name__)
+        return None
+    return object_metadata(fact_id, parsed)
+
+
+async def require_fact_owner(ownership_manager, fact_id: str, metadata: Dict, current_user, detail: str) -> None:
+    """Pass the owner; a non-owner reader gets 403 *detail*, a non-reader the missing-fact 404 (#18220)."""
+    user_id, _, _ = extract_user_context_from_request(current_user)
+    if metadata.get("owner_id") == user_id:
+        return
+    if not await can_read_fact(ownership_manager, fact_id, metadata, current_user):
+        raise fact_not_found()
+    raise HTTPException(status_code=403, detail=detail)
+
+
+async def _authorize_fact(kb, fact_id: str, current_user, *, write: bool) -> Dict:
+    """Load a fact and require the read (or write) decision to allow the caller (#18184, #18220).
+
+    503 without an ownership manager (no decision can be made, #16662). 404 when the fact is
+    absent *or the caller cannot read it* -- identical, so ids cannot be probed. 403 only for a
+    caller who can read the fact but may not write it. Returns the fact dict.
     """
     if not getattr(kb, "ownership_manager", None):
         raise HTTPException(status_code=503, detail="Knowledge base not available")
     fact = await asyncio.to_thread(kb.get_fact, fact_id)  # get_fact is synchronous
     if not fact:
-        raise HTTPException(status_code=404, detail="Fact not found")
-    if not await can_read_fact(kb.ownership_manager, fact_id, fact.get("metadata") or {}, current_user):
+        raise fact_not_found()
+    metadata = object_metadata(fact_id, fact.get("metadata"))
+    if write and can_write_fact(metadata, current_user):
+        return fact
+    if not await can_read_fact(kb.ownership_manager, fact_id, metadata, current_user):
+        raise fact_not_found()
+    if write:
         raise HTTPException(status_code=403, detail="Access denied")
     return fact
+
+
+async def authorize_fact_read(kb, fact_id: str, current_user) -> Dict:
+    """Load a fact through the canonical KB read and require that the caller may read it (#18184)."""
+    return await _authorize_fact(kb, fact_id, current_user, write=False)
+
+
+def can_write_fact(metadata: Dict, current_user) -> bool:
+    """Whether a caller may write a fact: the one per-fact write decision (#18184).
+
+    The KB's only per-fact write grant is ownership -- the ``can_edit`` the access-info route
+    reports is ``owner_id == user`` -- and an admin writes any fact, resolved from the role the
+    same way :func:`can_read_fact` does. A fact with no owner is writable by an admin only.
+    """
+    if is_admin_role(_user_field(current_user, "role")):
+        return True
+    user_id, _, _ = extract_user_context_from_request(current_user)
+    owner_id = metadata.get("owner_id")
+    return bool(owner_id) and owner_id == user_id
+
+
+async def authorize_fact_write(kb, fact_id: str, current_user) -> Dict:
+    """Load a fact and require that the caller may write it, whether or not they can read it (#18184)."""
+    return await _authorize_fact(kb, fact_id, current_user, write=True)
 
 
 def non_private_where(caller_where: Dict | None = None) -> Dict:

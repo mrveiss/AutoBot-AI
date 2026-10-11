@@ -197,6 +197,11 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under three roots; the test-file share drifts.",
     ),
+    "knowledge-metadata-parse-canonical": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test knowledge_*.py route modules are a subset of tracked api files; the test-file share drifts.",
+    ),
     "fact-read-authorization-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

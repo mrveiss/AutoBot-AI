@@ -34,10 +34,14 @@ async def test_missing_fact_is_404_fact_not_found():
 
 
 @pytest.mark.asyncio
-async def test_denied_is_403_access_denied():
-    with pytest.raises(HTTPException) as exc:
+async def test_denied_is_the_same_404_as_a_missing_fact():
+    """#18220: a non-reader cannot tell an existing fact from a missing one."""
+    with pytest.raises(HTTPException) as denied:
         await _call(_kb(META, allowed=False))
-    assert (exc.value.status_code, exc.value.detail) == (403, "Access denied")
+    with pytest.raises(HTTPException) as missing:
+        await _call(_kb(None))
+    assert (denied.value.status_code, denied.value.detail) == (404, "Fact not found")
+    assert (denied.value.status_code, denied.value.detail) == (missing.value.status_code, missing.value.detail)
 
 
 @pytest.mark.asyncio
@@ -97,10 +101,21 @@ async def test_ownership_route_allowed_returns_fact_and_passes_admin_read_throug
     [
         (None, True, True, 404, "Fact not found"),
         ({"metadata": META}, True, False, 503, "Ownership management not available"),
-        ({"metadata": META}, False, True, 403, "You do not have access to this fact"),
+        ({"metadata": META}, False, True, 404, "Fact not found"),  # #18220: was 403
     ],
 )
 async def test_ownership_route_errors_are_unchanged(fact, allowed, manager, status, detail):
     with pytest.raises(HTTPException) as exc:
         await _owned(fact, allowed, manager)
     assert (exc.value.status_code, exc.value.detail) == (status, detail)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("raw", ["[1, 2]", '"owner"', "42", "null", "{not json"])
+async def test_access_info_denies_non_object_metadata_as_not_found_never_500(raw):
+    """#18220: every non-object shape reads as unreadable metadata -- the non-reader's 404."""
+    kb = _kb(META, allowed=False)
+    kb.redis.return_value.hget = AsyncMock(return_value=raw)
+    with pytest.raises(HTTPException) as exc:
+        await _call(kb)
+    assert (exc.value.status_code, exc.value.detail) == (404, "Fact not found")
