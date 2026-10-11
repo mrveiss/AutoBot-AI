@@ -20,7 +20,12 @@ from autobot_shared.audio_params import STT_CHANNELS, STT_SAMPLE_RATE, describe_
 from autobot_shared.audio_wav import wav_duration_seconds
 from autobot_shared.logging_manager import get_logger
 from voice_processing.models import AudioInput, SpeechRecognitionResult
-from voice_processing.providers import SpeechProvider, TranscriptSegment
+from voice_processing.providers import (
+    ProviderFailed,
+    SpeechProvider,
+    TranscriptSegment,
+    failures_as_provider_failed,
+)
 from voice_processing.speech_recognition import SpeechRecognitionEngine
 
 logger = get_logger(__name__)
@@ -58,30 +63,17 @@ class GenericProvider(SpeechProvider):
         Returns:
             List of transcript segments
         """
-        try:
-            # Convert audio file to AudioInput
-            # For MVP, we'll create a simple AudioInput
-            # In production, this would properly load the audio file
-            if not os.path.exists(audio_path):
-                logger.error(f"Audio file not found: {audio_path}")
-                return []
-
-            # Create AudioInput from file
-            # This is simplified - in production, we'd properly load audio data
+        if not os.path.exists(audio_path):
+            raise ProviderFailed("Generic: audio file not found")
+        with failures_as_provider_failed(self.provider_name):
             audio_input = await self._load_audio_input(audio_path)
-
-            # Use existing speech recognition engine
+            if "load_error" in audio_input.metadata:
+                raise ProviderFailed(f"Generic: {audio_input.metadata['load_error']}")
             lang = language or "en"
             result: SpeechRecognitionResult = await self.engine.transcribe_audio(audio_input, language=lang)
-
-            # Convert SpeechRecognitionResult to TranscriptSegments
             segments = self._convert_to_segments(result)
-            logger.info(f"Generic provider transcription completed: " f"{len(segments)} segments")
-            return segments
-
-        except Exception as e:
-            logger.error(f"Generic provider transcription failed: {e}")
-            return []
+        logger.info("Generic provider transcription completed: %d segments", len(segments))
+        return segments
 
     async def _load_audio_input(self, audio_path: str) -> AudioInput:
         """Load a WAV file into a complete AudioInput.
@@ -146,6 +138,8 @@ class GenericProvider(SpeechProvider):
             List of transcript segments
         """
         segments = []
+        if not result.transcription.strip():
+            return segments  # the engine ran and heard nothing
 
         # If we have speech segments with timing, use those
         if result.speech_segments:

@@ -10,8 +10,9 @@ Part of Issue #9044 (MVA-2154 parent).
 """
 
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, Iterator, List, Optional
 
 from autobot_shared.env_registry import env
 from autobot_shared.logging_manager import get_logger
@@ -101,6 +102,36 @@ def _may_fall_through(
     if primary and local_failed:
         return True
     return candidate.external_when_local_unavailable and local_unavailable
+
+
+class ProviderFailed(RuntimeError):
+    """A provider could not produce a transcript: an HTTP/auth error, timeout, bad output.
+
+    The contract every provider keeps (#17778): RAISE this (or :class:`ProviderUnavailable`)
+    on failure and return ``[]`` ONLY for a successful call that found no speech. The
+    fallback chain treats a returned ``[]`` as "ran, heard nothing" and stops there, so a
+    failure disguised as ``[]`` silently ends the chain with an empty transcript.
+    """
+
+
+class ProviderUnavailable(ProviderFailed):
+    """A dependency, binary, credential or API key the provider needs is missing."""
+
+
+@contextmanager
+def failures_as_provider_failed(name: str) -> Iterator[None]:
+    """Re-raise any operational error in the body as :class:`ProviderFailed`.
+
+    Typed errors pass through unchanged, as do the programming errors and integrity
+    failures the chain must never disguise (``_NEVER_FALL_THROUGH``). The one place
+    providers translate failures, so none raises an ad-hoc exception type.
+    """
+    try:
+        yield
+    except (ProviderFailed, *_NEVER_FALL_THROUGH):
+        raise
+    except Exception as exc:
+        raise ProviderFailed(f"{name} failed: {type(exc).__name__}: {exc}") from exc
 
 
 class TranscriptionUnavailableError(RuntimeError):

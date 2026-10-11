@@ -9,14 +9,19 @@ Cloud-based Tilde ASR provider for Latvian language.
 Part of Issue MVA-2185.
 """
 
-import asyncio
 import os
 from typing import List, Optional
 
 import aiohttp
 
 from autobot_shared.logging_manager import get_logger
-from voice_processing.providers import SpeechProvider, TranscriptSegment
+from voice_processing.providers import (
+    ProviderFailed,
+    ProviderUnavailable,
+    SpeechProvider,
+    TranscriptSegment,
+    failures_as_provider_failed,
+)
 
 logger = get_logger(__name__)
 
@@ -56,26 +61,19 @@ class TildeProvider(SpeechProvider):
             List of transcript segments
         """
         if not self.api_key:
-            logger.error("Tilde API key not configured")
-            return []
-
+            raise ProviderUnavailable("Tilde: TILDE_API_KEY not configured")
         if not os.path.exists(audio_path):
-            logger.error(f"Audio file not found: {audio_path}")
-            return []
-
-        try:
-            # Read audio file
+            raise ProviderFailed("Tilde: audio file not found")
+        with failures_as_provider_failed(self.provider_name):
             with open(audio_path, "rb") as f:
                 audio_data = f.read()
-
-            # Send to Tilde API
             segments = await self._call_tilde_api(audio_data, audio_path)
-            logger.info(f"Tilde transcription completed: {len(segments)} segments")
-            return segments
+        logger.info("Tilde transcription completed: %d segments", len(segments))
+        return segments
 
-        except Exception as e:
-            logger.error(f"Tilde transcription failed: {e}")
-            return []
+    def is_available(self) -> bool:
+        """Tilde can run only with an API key."""
+        return bool(self.api_key)
 
     async def _call_tilde_api(self, audio_data: bytes, audio_path: str) -> List[TranscriptSegment]:
         """Call Tilde ASR API.
@@ -87,39 +85,31 @@ class TildeProvider(SpeechProvider):
         Returns:
             List of transcript segments
         """
-        try:
-            # Prepare multipart form data
-            form = aiohttp.FormData()
-            form.add_field("audio", audio_data, filename=os.path.basename(audio_path), content_type="audio/wav")
-            form.add_field("language", "lv")
-            form.add_field("format", "json")
-            form.add_field("segments", "true")
+        # Prepare multipart form data
+        form = aiohttp.FormData()
+        form.add_field("audio", audio_data, filename=os.path.basename(audio_path), content_type="audio/wav")
+        form.add_field("language", "lv")
+        form.add_field("format", "json")
+        form.add_field("segments", "true")
 
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-            }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+        }
 
-            timeout = aiohttp.ClientTimeout(total=300)  # 5 minute timeout
+        timeout = aiohttp.ClientTimeout(total=300)  # 5 minute timeout
 
-            from autobot_shared.http_client import get_http_client
+        from autobot_shared.http_client import get_http_client
 
-            async with get_http_client().tracked_request(
-                "POST", self.api_url, data=form, headers=headers, timeout=timeout
-            ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(f"Tilde API error {response.status}: {error_text}")
-                    return []
+        async with get_http_client().tracked_request(
+            "POST", self.api_url, data=form, headers=headers, timeout=timeout
+        ) as response:
+            if response.status != 200:
+                error_text = await response.text()
+                logger.error("Tilde API error %s: %s", response.status, error_text[:200])
+                raise ProviderFailed(f"Tilde API error {response.status}")
 
-                result = await response.json()
-                return self._parse_tilde_response(result)
-
-        except asyncio.TimeoutError:
-            logger.error("Tilde API request timed out after 5 minutes")
-            return []
-        except Exception as e:
-            logger.error(f"Tilde API call failed: {e}")
-            return []
+            result = await response.json()
+            return self._parse_tilde_response(result)
 
     def _parse_tilde_response(self, response: dict) -> List[TranscriptSegment]:
         """Parse Tilde API response into TranscriptSegments.
@@ -130,41 +120,36 @@ class TildeProvider(SpeechProvider):
         Returns:
             List of transcript segments
         """
-        try:
-            # Tilde format (assumed):
-            # {
-            #   "transcription": {
-            #     "segments": [
-            #       {
-            #         "text": "...",
-            #         "start": 0.0,
-            #         "end": 1.5,
-            #         "confidence": 0.95
-            #       },
-            #       ...
-            #     ]
-            #   }
-            # }
+        # Tilde format (assumed):
+        # {
+        #   "transcription": {
+        #     "segments": [
+        #       {
+        #         "text": "...",
+        #         "start": 0.0,
+        #         "end": 1.5,
+        #         "confidence": 0.95
+        #       },
+        #       ...
+        #     ]
+        #   }
+        # }
 
-            segments = []
-            transcription = response.get("transcription", {})
+        segments = []
+        transcription = response.get("transcription", {})
 
-            for seg in transcription.get("segments", []):
-                segments.append(
-                    TranscriptSegment(
-                        text=seg.get("text", ""),
-                        start_time=seg.get("start", 0.0),
-                        end_time=seg.get("end", 0.0),
-                        confidence=seg.get("confidence", 0.0),
-                        language="lv",
-                    )
+        for seg in transcription.get("segments", []):
+            segments.append(
+                TranscriptSegment(
+                    text=seg.get("text", ""),
+                    start_time=seg.get("start", 0.0),
+                    end_time=seg.get("end", 0.0),
+                    confidence=seg.get("confidence", 0.0),
+                    language="lv",
                 )
+            )
 
-            return segments
-
-        except Exception as e:
-            logger.error(f"Failed to parse Tilde response: {e}")
-            return []
+        return segments
 
     @property
     def provider_name(self) -> str:
