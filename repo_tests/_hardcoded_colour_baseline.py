@@ -59,7 +59,6 @@ HARDCODED_COLOUR_LITERALS: dict[str, int] = {
     "#10b981": 2,
     "#1a1b26": 1,
     "#1e1e1e": 2,
-    "#1f2937": 1,
     "#264f78": 1,
     "#2ecc71": 1,
     "#313244": 1,
@@ -88,11 +87,11 @@ HARDCODED_COLOUR_LITERALS: dict[str, int] = {
     "#ffeaa7": 1,
     "#fff": 5,
     "#fff3cd": 1,
-    "#ffffff": 4,
+    "#ffffff": 3,
 }
 
 #: Frozen total, asserted separately so a per-literal edit cannot drift it unseen.
-TOTAL_OCCURRENCES = 55
+TOTAL_OCCURRENCES = 53
 
 
 #: ``path under autobot-frontend/src -> `!important` declarations in its <style>``.

@@ -8,7 +8,7 @@ import { getApiBase } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { isRealAuthToken } from '@/utils/authToken'
 import { isAdminRole } from '@/constants/roles'
-import { colorSchemeFor, type EffectiveTheme } from '@/composables/useTheme'
+import type { EffectiveTheme } from '@/composables/useTheme'
 
 const logger = createLogger('useUserStore')
 
@@ -118,14 +118,6 @@ export const useUserStore = defineStore('user', () => {
 
   const preferences = computed(() => currentUser.value?.preferences || defaultPreferences)
 
-  const theme = computed(() => {
-    const userTheme = preferences.value.theme
-    if (userTheme === 'auto') {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-    }
-    return userTheme
-  })
-
   const isTokenExpired = computed(() => {
     if (!authState.value.expiresAt) return false
     return new Date() >= authState.value.expiresAt
@@ -170,11 +162,6 @@ export const useUserStore = defineStore('user', () => {
         ...updates
       }
     }
-  }
-
-  function updateTheme(theme: EffectiveTheme | 'auto') {
-    updatePreferences({ theme })
-    applyTheme()
   }
 
   function updateLanguage(language: string) {
@@ -232,28 +219,9 @@ export const useUserStore = defineStore('user', () => {
     authState.value.expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000) : undefined
   }
 
-  // Theme and accessibility helpers
-  // Theme is applied via the `data-theme` attribute to match the SSOT
-  // selector convention in src/assets/tailwind.css (`@variant dark
-  // (&:where([data-theme="dark"], [data-theme="dark"] *))`). Setting a
-  // `dark` class instead leaves Tailwind's `dark:` utilities and the
-  // design-token CSS unmatched, which is why /preferences could show
-  // "Dark" while pages still rendered in light mode (#6772).
-  function applyTheme() {
-    const currentTheme = theme.value
-    const root = document.documentElement
-
-    root.setAttribute('data-theme', currentTheme)
-    // contrast and mono are light-based (#18223): colorSchemeFor maps all four.
-    root.style.colorScheme = colorSchemeFor(currentTheme)
-
-    // Update meta theme-color for mobile browsers
-    const metaThemeColor = document.querySelector('meta[name="theme-color"]')
-    if (metaThemeColor) {
-      metaThemeColor.setAttribute('content', currentTheme === 'dark' ? '#1f2937' : '#ffffff')
-    }
-  }
-
+  // Accessibility helpers. The theme itself is NOT applied here: `data-theme`
+  // has exactly one writer, composables/useTheme.ts (#18240, guarded by
+  // repo_tests/single_attribute_writer_18240_test.py).
   function applyAccessibilitySettings() {
     const root = document.documentElement
     const settings = preferences.value.accessibility
@@ -309,7 +277,6 @@ export const useUserStore = defineStore('user', () => {
             lastLoginAt: user.lastLoginAt ? new Date(user.lastLoginAt) : undefined
           }
 
-          applyTheme()
           applyAccessibilitySettings()
         } else if (hasRealToken && auth.expiresAt && new Date(auth.expiresAt) <= new Date()) {
           // Clear stale expired token so ApiClient doesn't keep sending it (#979)
@@ -440,7 +407,6 @@ export const useUserStore = defineStore('user', () => {
     isAdmin,
     hasServiceManagement,
     preferences,
-    theme,
     isTokenExpired,
 
     // Actions
@@ -448,7 +414,6 @@ export const useUserStore = defineStore('user', () => {
     logout,
     updateProfile,
     updatePreferences,
-    updateTheme,
     updateLanguage,
     updateTimezone,
     updateNotificationSettings,
@@ -456,7 +421,6 @@ export const useUserStore = defineStore('user', () => {
     updateAccessibilitySettings,
     updateChatSettings,
     refreshToken,
-    applyTheme,
     applyAccessibilitySettings,
     initializeFromStorage,
     persistToStorage,

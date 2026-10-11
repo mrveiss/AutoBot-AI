@@ -49,6 +49,7 @@ import repo_tests.one_paths_filter_job_15360_test as _paths_filter_guard  # noqa
 import repo_tests.one_semantic_chunker_14485_test as _semantic_chunker_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_session_ownership_validator_14016_test as _ownership_validator_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_session_scope_15068_test as _session_scope_guard  # noqa: F401 -- registers its scope
+import repo_tests.single_attribute_writer_18240_test as _attribute_writer_guard  # noqa: F401 -- registers its scope
 from repo_tests._paths import repo_root
 from repo_tests._reach import Reach, ReachScopeError, declare
 from repo_tests._reach_scope import relative_paths, scope_complaint
@@ -200,6 +201,7 @@ _DECLARED_SCOPES = {
     ),
     "chunker-private-hook-scan": ("autobot-backend", "autobot-infrastructure", "autobot_shared"),
     "embedding-model-literal-sites": ("autobot-backend", "autobot_shared"),
+    "single-attribute-writer-scan": ("autobot-frontend/src",),
     "tool-effect-table-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "deployment-mode-detector-scan": ("autobot-backend/", "autobot-infrastructure/"),
     "egress-default-outbound-call-sites": (
