@@ -113,7 +113,7 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
         self._bloater = BloaterDetector()
         self._coupler = CouplerDetector()
         self._dispensable = DispensableDetector()
-        self._naming = NamingDetector()
+        self._naming = NamingDetector(magic_number_threshold=self.MAGIC_NUMBER_THRESHOLD)
 
         # State tracking
         self._total_classes = 0

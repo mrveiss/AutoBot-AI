@@ -68,7 +68,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import parse_utc_iso
-from code_intelligence.anti_pattern_detection import AntiPatternSuiteAnalyzer
+from code_intelligence.anti_pattern_detection import AntiPatternSuiteAnalyzer, Thresholds
 from code_intelligence.anti_pattern_detector import (
     AntiPatternDetector,
     AntiPatternSeverity,
@@ -191,7 +191,7 @@ PATTERN_TYPE_DEFINITIONS = {
         "name": "Magic Number",
         "category": "naming",
         "description": "Unexplained numeric literals repeated in code",
-        "threshold": f"Same number appears >{AntiPatternDetector.MAGIC_NUMBER_THRESHOLD} times",
+        "threshold": f"Same number appears at least {Thresholds.MAGIC_NUMBER_THRESHOLD} times",
     },
     # Other
     "complex_conditional": {

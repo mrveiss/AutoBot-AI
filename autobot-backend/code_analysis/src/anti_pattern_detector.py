@@ -125,6 +125,9 @@ _VUE_COMP_CALL_RE = re.compile(
     r"(<[^>]*>)?\s*\(",
 )
 _COMPOSABLE_THRESHOLD = 5
+# #18188: the ONE magic-number threshold -- a number is flagged when it appears AT LEAST
+# this many times (>=). Defined here because Thresholds (types.py) imports this module.
+MAGIC_NUMBER_MIN_OCCURRENCES = 2
 _COMPOSABLE_EXCL_DIRS = frozenset({"composables", "node_modules", ".git", "__pycache__"})
 
 
@@ -210,20 +213,15 @@ class AntiPatternType(Enum):
     # legacy code_intelligence used DATA_CLUMPS — kept as alias for migration.
     DATA_CLUMP = "data_clump"
     DATA_CLUMPS = "data_clumps"  # legacy alias from code_intelligence (GH#6757)
-    PRIMITIVE_OBSESSION = "primitive_obsession"
 
     # --- Couplers ---
     FEATURE_ENVY = "feature_envy"
     CIRCULAR_DEPENDENCY = "circular_dependency"
-    SHOTGUN_SURGERY = "shotgun_surgery"
     MESSAGE_CHAINS = "message_chains"
-    INAPPROPRIATE_INTIMACY = "inappropriate_intimacy"
 
     # --- Dispensables ---
-    SPECULATIVE_GENERALITY = "speculative_generality"
     DEAD_CODE = "dead_code"
     LAZY_CLASS = "lazy_class"
-    REFUSED_BEQUEST = "refused_bequest"
     # DUPLICATE_ABSTRACTION: legacy name from code_intelligence; canonical is
     # DUPLICATE_CLASS_SHAPE (added in #6684).
     DUPLICATE_CLASS_SHAPE = "duplicate_class_shape"
@@ -457,7 +455,7 @@ class AntiPatternDetector:
     DEEP_NESTING_THRESHOLD = 4  # alias for api.code_intelligence compat
     MESSAGE_CHAIN_THRESHOLD = 4  # alias for api.code_intelligence compat
     COMPLEX_CONDITIONAL_THRESHOLD = 3  # alias for api.code_intelligence compat
-    MAGIC_NUMBER_THRESHOLD = 3  # alias for api.code_intelligence compat
+    MAGIC_NUMBER_THRESHOLD = MAGIC_NUMBER_MIN_OCCURRENCES  # alias for api.code_intelligence compat
     FEATURE_ENVY_THRESHOLD = 3
     LAZY_CLASS_METHOD_THRESHOLD = 2
     LAZY_CLASS_LOC_THRESHOLD = 20
