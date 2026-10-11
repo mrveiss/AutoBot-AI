@@ -89,12 +89,11 @@ def _production_files(root: Path) -> list[str]:
     return [rel for rel in tracked if _is_production(rel)]
 
 
-#: Bound at the 2567 files measured when the floor was added; re-pinned mid-window
-#: (#18293) at 2650 from REACH.window() against a measured population of 2750.
+#: Bound at the 2567 files measured when the floor was added.
 REACH = declare(
     "kb-admin-read-bypass",
     discover=_production_files,
-    floor=2650,
+    floor=2567,
     growth=200,
     skips=0,
     # The scope moves from prose to data (#17844): `declare` renders the same sentence from

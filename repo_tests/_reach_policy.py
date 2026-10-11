@@ -274,6 +274,11 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Frontend ts and vue source, excluding tests and generated types, against all tracked frontend files.",
     ),
+    "tool-effect-table-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test source under three roots, a subset of all tracked Python; the test-file share drifts.",
+    ),
     "chunker-private-hook-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
