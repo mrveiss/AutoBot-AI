@@ -352,13 +352,13 @@ fieldset{border:0;margin:0;padding:0}
           <table style="width: 100%; border-collapse: collapse">
             <thead><tr><th scope="col">Time</th><th scope="col">Event</th><th scope="col">Method</th><th scope="col" class="adv">IP address</th><th scope="col">Location</th><th scope="col">Result</th></tr></thead>
             <tbody>
-              <tr><td class="mono">2026-10-10 08:12</td><td>Sign-in</td><td>Password + TOTP</td><td class="mono adv">192.0.2.41</td><td>Ķekava, LV</td><td><span class="pill ok">Succeeded</span></td></tr>
-              <tr><td class="mono">2026-10-09 21:47</td><td>Sign-in</td><td>Passkey (iPhone)</td><td class="mono adv">198.51.100.17</td><td>Ķekava, LV</td><td><span class="pill ok">Succeeded</span></td></tr>
-              <tr><td class="mono">2026-10-08 14:03</td><td>API token created</td><td>Session</td><td class="mono adv">192.0.2.41</td><td>Ķekava, LV</td><td><span class="pill info" tabindex="0" data-tip="Security event logged for audit — not a sign-in" data-tip-pos="left">Recorded</span></td></tr>
+              <tr><td class="mono">2026-10-10 08:12</td><td>Sign-in</td><td>Password + TOTP</td><td class="mono adv">192.0.2.41</td><td>Example City, LV</td><td><span class="pill ok">Succeeded</span></td></tr>
+              <tr><td class="mono">2026-10-09 21:47</td><td>Sign-in</td><td>Passkey (iPhone)</td><td class="mono adv">198.51.100.17</td><td>Example City, LV</td><td><span class="pill ok">Succeeded</span></td></tr>
+              <tr><td class="mono">2026-10-08 14:03</td><td>API token created</td><td>Session</td><td class="mono adv">192.0.2.41</td><td>Example City, LV</td><td><span class="pill info" tabindex="0" data-tip="Security event logged for audit — not a sign-in" data-tip-pos="left">Recorded</span></td></tr>
               <tr><td class="mono">2026-10-07 03:18</td><td>Sign-in attempt</td><td>Password</td><td class="mono adv">203.0.113.88</td><td><span tabindex="0" data-tip="IP belongs to a VPN or anonymizing provider — location can't be determined">Unknown (VPN)</span></td><td><span class="pill bad">Failed — wrong password</span></td></tr>
               <tr><td class="mono">2026-10-07 03:17</td><td>Sign-in attempt</td><td>Password</td><td class="mono adv">203.0.113.88</td><td>Unknown (VPN)</td><td><span class="pill bad">Failed — wrong password</span></td></tr>
               <tr><td class="mono">2026-10-06 09:30</td><td>Sign-in</td><td>Password + Telegram</td><td class="mono adv">198.51.100.12</td><td>Office LAN, Riga</td><td><span class="pill ok">Succeeded</span></td></tr>
-              <tr><td class="mono">2026-10-02 17:55</td><td>Recovery code used</td><td>Recovery code</td><td class="mono adv">198.51.100.17</td><td>Ķekava, LV</td><td><span class="pill warn" tabindex="0" data-tip="Recovery code sign-ins are flagged — confirm it was you" data-tip-pos="left">Succeeded — review</span></td></tr>
+              <tr><td class="mono">2026-10-02 17:55</td><td>Recovery code used</td><td>Recovery code</td><td class="mono adv">198.51.100.17</td><td>Example City, LV</td><td><span class="pill warn" tabindex="0" data-tip="Recovery code sign-ins are flagged — confirm it was you" data-tip-pos="left">Succeeded — review</span></td></tr>
               <tr><td class="mono">2026-09-28 11:04</td><td>New device sign-in</td><td>Password + TOTP</td><td class="mono adv">198.51.100.31</td><td>Office LAN, Riga</td><td><span class="pill ok">Succeeded</span></td></tr>
             </tbody>
           </table>
@@ -371,8 +371,8 @@ fieldset{border:0;margin:0;padding:0}
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":2280}}'>
 const SESSIONS = [
-  { id: 's1', device: 'Workstation · Linux', browser: 'Firefox 131', ip: '192.0.2.41', loc: 'Ķekava, LV', last: 'Active now', me: true, dot: 'd-ok' },
-  { id: 's2', device: 'iPhone 15', browser: 'AutoBot mobile 2.4', ip: '198.51.100.17', loc: 'Ķekava, LV', last: '12 min ago', me: false, dot: 'd-ok' },
+  { id: 's1', device: 'Workstation · Linux', browser: 'Firefox 131', ip: '192.0.2.41', loc: 'Example City, LV', last: 'Active now', me: true, dot: 'd-ok' },
+  { id: 's2', device: 'iPhone 15', browser: 'AutoBot mobile 2.4', ip: '198.51.100.17', loc: 'Example City, LV', last: '12 min ago', me: false, dot: 'd-ok' },
   { id: 's3', device: 'MacBook Pro', browser: 'Chrome 129', ip: '198.51.100.12', loc: 'Office LAN, Riga', last: '4 days ago', me: false, dot: 'd-idle' },
   { id: 's4', device: 'CLI · autobot-cli', browser: 'autobot-cli 0.9.4', ip: '198.51.100.31', loc: 'Office LAN, Riga', last: '12 days ago', me: false, dot: 'd-idle' }
 ];
