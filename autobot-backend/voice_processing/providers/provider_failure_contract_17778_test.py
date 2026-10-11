@@ -17,7 +17,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from autobot_shared.http_client import get_http_client
-from voice_processing.models import SpeechRecognitionResult
 from voice_processing.providers import (
     ProviderFailed,
     ProviderRegistry,
@@ -212,14 +211,53 @@ async def test_late_valid_output_without_segments_is_silence(late_present, audio
 # ── Generic ───────────────────────────────────────────────────────────────────
 
 
-def _recognition(text):
-    return MagicMock(
-        spec=SpeechRecognitionResult, transcription=text, speech_segments=[], confidence=0.9, language="en"
+@pytest.fixture
+def sr_module(monkeypatch):
+    """The SpeechRecognition module: the real one when installed, else a stand-in with its exception types.
+
+    Only the network call (``Recognizer.recognize_google``) is ever patched by the tests; the
+    engine code under test is the real ``SpeechRecognitionEngine``.
+    """
+    try:
+        import speech_recognition as sr
+
+        return sr
+    except ImportError:
+        pass
+    import sys
+    import types
+
+    sr = types.ModuleType("speech_recognition")
+
+    class UnknownValueError(Exception):
+        pass
+
+    class RequestError(Exception):
+        pass
+
+    class AudioData:
+        def __init__(self, data, rate, width):
+            self.data, self.rate, self.width = data, rate, width
+
+    class Recognizer:
+        def recognize_google(self, *a, **k):
+            raise RequestError("no network in tests")
+
+        def recognize_sphinx(self, *a, **k):
+            raise RequestError("pocketsphinx is not installed")
+
+    sr.UnknownValueError, sr.RequestError, sr.AudioData, sr.Recognizer = (
+        UnknownValueError,
+        RequestError,
+        AudioData,
+        Recognizer,
     )
+    monkeypatch.setitem(sys.modules, "speech_recognition", sr)
+    return sr
 
 
 @pytest.fixture
-def generic(tmp_path):
+def wav_path(tmp_path):
     import io
     import wave
 
@@ -229,26 +267,65 @@ def generic(tmp_path):
         wav.setnchannels(1)
         wav.setsampwidth(2)
         wav.setframerate(16000)
-        wav.writeframes(b"\x00\x00" * 1600)
+        wav.writeframes(b"\x01\x00" * 1600)
     path.write_bytes(buf.getvalue())
-    return GenericProvider(), str(path)
+    return str(path)
+
+
+@pytest.fixture
+def generic(sr_module):
+    return GenericProvider()
 
 
 @pytest.mark.asyncio
-async def test_generic_engine_failure_raises_and_an_empty_transcription_is_silence(generic):
-    provider, path = generic
-    with patch.object(provider.engine, "transcribe_audio", AsyncMock(side_effect=RuntimeError("engine"))):
+async def test_generic_request_error_through_the_real_engine_is_a_failure_not_silence(generic, wav_path, sr_module):
+    with patch.object(generic.engine.recognizer, "recognize_google", side_effect=sr_module.RequestError("quota")):
         with pytest.raises(ProviderFailed):
-            await provider.transcribe(path, "en")
-    with patch.object(provider.engine, "transcribe_audio", AsyncMock(return_value=_recognition(""))):
-        assert await provider.transcribe(path, "en") == []
+            await generic.transcribe(wav_path, "en")
+
+
+@pytest.mark.asyncio
+async def test_generic_unknown_value_is_genuine_silence(generic, wav_path, sr_module):
+    rec = generic.engine.recognizer
+    with (
+        patch.object(rec, "recognize_google", side_effect=sr_module.UnknownValueError()),
+        patch.object(rec, "recognize_sphinx", side_effect=sr_module.UnknownValueError()),
+    ):
+        assert await generic.transcribe(wav_path, "en") == []
+
+
+@pytest.mark.asyncio
+async def test_generic_google_silence_with_sphinx_not_installed_is_still_silence(generic, wav_path, sr_module):
+    with (
+        patch.object(generic.engine.recognizer, "recognize_google", side_effect=sr_module.UnknownValueError()),
+        patch.object(
+            generic.engine.recognizer, "recognize_sphinx", side_effect=sr_module.RequestError("not installed")
+        ),
+    ):
+        assert await generic.transcribe(wav_path, "en") == []
+
+
+@pytest.mark.asyncio
+async def test_generic_recognized_speech_becomes_a_segment(generic, wav_path):
+    answer = {"alternative": [{"transcript": "hello", "confidence": 0.9}]}
+    with patch.object(generic.engine.recognizer, "recognize_google", return_value=answer):
+        segments = await generic.transcribe(wav_path, "en")
+    assert [s.text for s in segments] == ["hello"]
+
+
+@pytest.mark.asyncio
+async def test_generic_without_the_library_is_unavailable_not_silence(wav_path):
+    provider = GenericProvider()
+    provider.engine.recognizer = None
+    assert provider.is_available() is False
+    with pytest.raises(ProviderUnavailable):
+        await provider.transcribe(wav_path, "en")
 
 
 @pytest.mark.asyncio
 async def test_generic_unreadable_wav_raises_not_silence(generic, audio):
-    provider, _ = generic
     with pytest.raises(ProviderFailed):  # `audio` is 64 zero bytes: not a WAV
-        await provider.transcribe(audio, "en")
+        await generic.transcribe(audio, "en")
 
 
 # ── the chain, end to end, with the real classes ─────────────────────────────

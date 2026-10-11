@@ -22,6 +22,7 @@ from autobot_shared.logging_manager import get_logger
 from voice_processing.models import AudioInput, SpeechRecognitionResult
 from voice_processing.providers import (
     ProviderFailed,
+    ProviderUnavailable,
     SpeechProvider,
     TranscriptSegment,
     failures_as_provider_failed,
@@ -63,6 +64,8 @@ class GenericProvider(SpeechProvider):
         Returns:
             List of transcript segments
         """
+        if not self.is_available():
+            raise ProviderUnavailable("Generic: the SpeechRecognition library is not available")
         if not os.path.exists(audio_path):
             raise ProviderFailed("Generic: audio file not found")
         with failures_as_provider_failed(self.provider_name):
@@ -74,6 +77,10 @@ class GenericProvider(SpeechProvider):
             segments = self._convert_to_segments(result)
         logger.info("Generic provider transcription completed: %d segments", len(segments))
         return segments
+
+    def is_available(self) -> bool:
+        """Generic can run only when the engine has a recognizer (the SpeechRecognition library)."""
+        return self.engine.recognizer is not None
 
     async def _load_audio_input(self, audio_path: str) -> AudioInput:
         """Load a WAV file into a complete AudioInput.

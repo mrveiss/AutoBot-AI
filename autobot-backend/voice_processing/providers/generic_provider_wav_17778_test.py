@@ -55,7 +55,8 @@ def _result() -> SpeechRecognitionResult:
 @pytest.fixture
 def provider():
     gen = GenericProvider()
-    gen.engine = create_autospec(SpeechRecognitionEngine, instance=True, spec_set=True)
+    gen.engine = create_autospec(SpeechRecognitionEngine, instance=True)
+    gen.engine.recognizer = object()  # an instance attribute set in __init__, so not on the spec
     gen.engine.transcribe_audio.return_value = _result()
     return gen
 
