@@ -65,11 +65,37 @@ class UserPreferences(BaseModel):
         max_length=64,
         description="Selected named theme preset (e.g. catppuccin-mocha); 'auto' when none",
     )
+    ui_mode: str = Field(
+        "full",
+        pattern=r"^(minimal|full)\z",
+        description="Shell UI mode (minimal, full)",
+    )
+    ui_start: str = Field(
+        "last",
+        pattern=r"^(last|minimal|full)\z",
+        description="Which UI mode to open in on sign-in (last, minimal, full)",
+    )
+    theme_variant: str = Field(
+        "default",
+        max_length=64,
+        pattern=r"^[a-z0-9][a-z0-9_-]{0,62}\z",  # same charset as theme_install._ID
+        description="Theme variant id: 'default', a built-in, or an installed theme id",
+    )
     # Additional preferences can be added here in the future
 
 
 # Appearance fields persisted alongside reasoning_effort (#8988).
-_APPEARANCE_FIELDS = ("theme", "accent_color", "layout_density", "font_size", "theme_preset")
+_APPEARANCE_FIELDS = (
+    "theme",
+    "accent_color",
+    "layout_density",
+    "font_size",
+    "theme_preset",
+    "ui_mode",
+    "ui_start",
+    "theme_variant",
+)
+_ALL_FIELDS = ("reasoning_effort", *_APPEARANCE_FIELDS)
 
 
 class UserPreferencesData(BaseModel):
@@ -100,7 +126,7 @@ async def _get_user_preferences_from_redis(user_id: str) -> UserPreferences:
 
         defaults = UserPreferences()
         values: Dict[str, str] = {}
-        for field in ("reasoning_effort", *_APPEARANCE_FIELDS):
+        for field in _ALL_FIELDS:
             stored = await _read(field)
             values[field] = stored if stored is not None else getattr(defaults, field)
 
@@ -112,13 +138,16 @@ async def _get_user_preferences_from_redis(user_id: str) -> UserPreferences:
         return UserPreferences()
 
 
-async def _store_user_preferences_to_redis(user_id: str, preferences: UserPreferences) -> None:
+async def _store_user_preferences_to_redis(
+    user_id: str, preferences: UserPreferences, fields: tuple[str, ...] | None = None
+) -> None:
     """
     Store user preferences to Redis.
 
     Args:
         user_id: User ID
         preferences: UserPreferences object to store
+        fields: Only these fields are written (partial PATCH); None writes all
 
     Raises:
         RedisError: If Redis operation fails
@@ -126,7 +155,7 @@ async def _store_user_preferences_to_redis(user_id: str, preferences: UserPrefer
     redis_client = await get_async_redis_client(database=RedisDatabase.MAIN)
 
     # Store each preference under its own key (no expiration - permanent preference)
-    for field in ("reasoning_effort", *_APPEARANCE_FIELDS):
+    for field in fields if fields is not None else _ALL_FIELDS:
         await redis_client.set(f"user:{user_id}:preferences:{field}", getattr(preferences, field))
 
     logger.info(
@@ -178,10 +207,10 @@ async def update_user_preferences(
     current_user: Dict = Depends(get_current_user),
 ) -> DataResponse[UserPreferencesData]:
     """
-    Update current user's preferences.
+    Update current user's preferences (partial: omitted fields keep stored values).
 
     Args:
-        preferences: New preference values
+        preferences: Preference values; only fields present in the body are written
 
     Returns:
         DataResponse with updated preferences
@@ -195,7 +224,9 @@ async def update_user_preferences(
         raise HTTPException(status_code=401, detail="User ID not found in token")
 
     try:
-        await _store_user_preferences_to_redis(user_id, preferences)
+        sent = tuple(f for f in _ALL_FIELDS if f in preferences.model_fields_set)
+        await _store_user_preferences_to_redis(user_id, preferences, sent)
+        merged = await _get_user_preferences_from_redis(user_id)
     except RedisError as e:
         logger.error(f"Failed to update user preferences: {e}")
         raise HTTPException(status_code=500, detail="Failed to update preferences")
@@ -204,7 +235,7 @@ async def update_user_preferences(
         success=True,
         data=UserPreferencesData(
             user_id=user_id,
-            preferences=preferences,
+            preferences=merged,
         ),
         message="User preferences updated successfully",
     )

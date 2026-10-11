@@ -100859,6 +100859,24 @@ export interface components {
              * @default auto
              */
             theme_preset: string;
+            /**
+             * Ui Mode
+             * @description Shell UI mode (minimal, full)
+             * @default full
+             */
+            ui_mode: string;
+            /**
+             * Ui Start
+             * @description Which UI mode to open in on sign-in (last, minimal, full)
+             * @default last
+             */
+            ui_start: string;
+            /**
+             * Theme Variant
+             * @description Theme variant id: 'default', a built-in, or an installed theme id
+             * @default default
+             */
+            theme_variant: string;
         } & {
             [key: string]: unknown;
         };
