@@ -355,7 +355,10 @@ async def voice_clone_api(
             content={"message": "Permission denied to clone voice."},
         )
 
-    ref_bytes = await reference_audio.read()
+    # Function-local: the media package import chain is not inert (see _whisper_sync).
+    from media.audio.upload_limits import read_capped_audio  # noqa: PLC0415
+
+    ref_bytes = await read_capped_audio(reference_audio)
     tts = get_tts_client()
     wav_bytes = await tts.clone_voice(text, ref_bytes)
     security_layer.audit_log("voice_clone", user_role, "success", {"text_preview": text[:50]})
@@ -395,7 +398,10 @@ async def voice_create_api(
     audio: UploadFile = File(...),
 ):
     """Create a voice profile from reference audio."""
-    audio_bytes = await audio.read()
+    # Function-local: the media package import chain is not inert (see _whisper_sync).
+    from media.audio.upload_limits import read_capped_audio  # noqa: PLC0415
+
+    audio_bytes = await read_capped_audio(audio)
     tts = get_tts_client()
     result = await tts.create_voice(name, audio_bytes, audio.filename or "ref.wav")
     return result
@@ -539,7 +545,10 @@ async def voice_transcribe_api(
             content={"text": "", "error": "Permission denied."},
         )
 
-    audio_bytes = await audio.read()
+    # Function-local: the media package import chain is not inert (see _whisper_sync).
+    from media.audio.upload_limits import read_capped_audio  # noqa: PLC0415
+
+    audio_bytes = await read_capped_audio(audio)
     if not audio_bytes:
         return JSONResponse(
             status_code=400,
