@@ -945,6 +945,32 @@
       "deviceInitFailed": "Falha ao iniciar o fluxo do dispositivo",
       "stillWaiting": "Ainda aguardando aprovação — tente novamente em instantes.",
       "pollFailed": "Falha na verificação"
+    },
+    "preferredMode": {
+      "title": "Modo preferido",
+      "subtitle": "Escolha quanto do AutoBot você quer ver. Você pode alternar a qualquer momento com o botão Mínimo na barra superior.",
+      "group": "Modo da interface",
+      "minimal": "Mínimo",
+      "minimalDesc": "Só o essencial — para o bate-papo, o conhecimento e as aprovações do dia a dia.",
+      "full": "Completo",
+      "fullDesc": "Tudo, incluindo análises, automação, administração e ferramentas para desenvolvedores.",
+      "selected": "Selecionado",
+      "startIn": "Iniciar em",
+      "startInDesc": "Em qual modo o AutoBot abre quando você entra",
+      "startLast": "Último usado",
+      "startMinimal": "Mínimo",
+      "startFull": "Completo",
+      "noteSynced": "Salvo na sua conta e neste dispositivo",
+      "noteDirectLinks": "Páginas ocultas ainda abrem por links diretos",
+      "noteNeverHidden": "Aprovações, erros e avisos de segurança nunca são ocultados"
+    },
+    "additionalThemes": {
+      "title": "Temas adicionais",
+      "subtitle": "Implantados pelo seu administrador via SLM",
+      "deployed": "Implantado via SLM · v{version}",
+      "empty": "Nenhum tema adicional implantado.",
+      "info": "Os administradores instalam e implantam temas no console do SLM.",
+      "slmLink": "SLM › Configurações › Temas ↗"
     }
   },
   "voice": {
@@ -5912,7 +5938,9 @@
     },
     "loadingSpinner": {
       "loading": "Loading…"
-    }
+    },
+    "minimalNote": "Exibindo o essencial · widgets técnicos ocultos",
+    "minimalNoteAction": "Mostrar todos os recursos"
   },
   "base": {
     "badge": {
@@ -7991,6 +8019,19 @@
       "budgetPolicies": "custo gastos limites dinheiro",
       "systemHealth": "status disponibilidade diagnóstico monitoramento",
       "vault": "credenciais chaves senhas tokens cofre"
+    },
+    "homeAria": "Início do AutoBot",
+    "vaultTip": "Segredos — chaves e credenciais armazenadas",
+    "preferencesTip": "Preferências",
+    "platformAdmin": "Administração da plataforma",
+    "platformAdminAria": "Administração da plataforma, abre o console do SLM em uma nova guia",
+    "platformAdminTip": "Administração da plataforma — abre o console do SLM ↗",
+    "profileMenu": "Menu do perfil",
+    "uiMode": {
+      "label": "Mínimo",
+      "tip": "Interface mínima — oculta os recursos avançados",
+      "announceMinimal": "Interface mínima ativada. Recursos avançados ocultos.",
+      "announceFull": "Interface completa ativada. Todos os recursos exibidos."
     }
   },
   "llcCompanyStatus": {

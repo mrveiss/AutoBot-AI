@@ -945,6 +945,32 @@
       "deviceInitFailed": "No se pudo iniciar el flujo de dispositivo",
       "stillWaiting": "Aún esperando la aprobación: inténtalo de nuevo en un momento.",
       "pollFailed": "Error al consultar el estado"
+    },
+    "preferredMode": {
+      "title": "Modo preferido",
+      "subtitle": "Elige cuánto de AutoBot quieres ver. Puedes cambiar en cualquier momento con el botón Mínimo de la barra superior.",
+      "group": "Modo de interfaz",
+      "minimal": "Mínimo",
+      "minimalDesc": "Solo lo esencial: para el chat, el conocimiento y las aprobaciones del día a día.",
+      "full": "Completo",
+      "fullDesc": "Todo, incluidos análisis, automatización, administración y herramientas para desarrolladores.",
+      "selected": "Seleccionado",
+      "startIn": "Iniciar en",
+      "startInDesc": "El modo en que se abre AutoBot al iniciar sesión",
+      "startLast": "Último usado",
+      "startMinimal": "Mínimo",
+      "startFull": "Completo",
+      "noteSynced": "Se guarda en tu cuenta y en este dispositivo",
+      "noteDirectLinks": "Las páginas ocultas siguen abriéndose desde enlaces directos",
+      "noteNeverHidden": "Las aprobaciones, los errores y los avisos de seguridad nunca se ocultan"
+    },
+    "additionalThemes": {
+      "title": "Temas adicionales",
+      "subtitle": "Implementados por tu administrador mediante SLM",
+      "deployed": "Implementado mediante SLM · v{version}",
+      "empty": "No hay temas adicionales implementados.",
+      "info": "Los administradores instalan e implementan temas en la consola SLM.",
+      "slmLink": "SLM › Ajustes › Temas ↗"
     }
   },
   "voice": {
@@ -5912,7 +5938,9 @@
     },
     "loadingSpinner": {
       "loading": "Loading…"
-    }
+    },
+    "minimalNote": "Mostrando lo esencial · widgets técnicos ocultos",
+    "minimalNoteAction": "Mostrar todas las funciones"
   },
   "base": {
     "badge": {
@@ -7991,6 +8019,19 @@
       "budgetPolicies": "costo gasto límites dinero",
       "systemHealth": "estado disponibilidad diagnóstico monitoreo",
       "vault": "credenciales claves contraseñas tokens bóveda"
+    },
+    "homeAria": "Inicio de AutoBot",
+    "vaultTip": "Secretos: claves y credenciales almacenadas",
+    "preferencesTip": "Preferencias",
+    "platformAdmin": "Administración de la plataforma",
+    "platformAdminAria": "Administración de la plataforma, abre la consola SLM en una pestaña nueva",
+    "platformAdminTip": "Administración de la plataforma — abre la consola SLM ↗",
+    "profileMenu": "Menú de perfil",
+    "uiMode": {
+      "label": "Mínimo",
+      "tip": "Interfaz mínima: oculta las funciones avanzadas",
+      "announceMinimal": "Interfaz mínima activada. Funciones avanzadas ocultas.",
+      "announceFull": "Interfaz completa activada. Se muestran todas las funciones."
     }
   },
   "llcCompanyStatus": {

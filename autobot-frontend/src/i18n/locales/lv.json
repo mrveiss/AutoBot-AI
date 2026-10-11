@@ -945,6 +945,32 @@
       "deviceInitFailed": "Neizdevās sākt ierīces plūsmu",
       "stillWaiting": "Joprojām gaida apstiprinājumu — pēc brīža mēģiniet vēlreiz.",
       "pollFailed": "Pārbaude neizdevās"
+    },
+    "preferredMode": {
+      "title": "Vēlamais režīms",
+      "subtitle": "Izvēlieties, cik daudz no AutoBot redzēt. Varat pārslēgties jebkurā laikā ar pogu Minimāls augšējā joslā.",
+      "group": "Interfeisa režīms",
+      "minimal": "Minimāls",
+      "minimalDesc": "Tikai būtiskais — ikdienas tērzēšanai, zināšanām un apstiprinājumiem.",
+      "full": "Pilns",
+      "fullDesc": "Viss, ieskaitot analītiku, automatizāciju, administrēšanu un izstrādātāju rīkus.",
+      "selected": "Atlasīts",
+      "startIn": "Sākt režīmā",
+      "startInDesc": "Kādā režīmā AutoBot tiek atvērts pēc pieteikšanās",
+      "startLast": "Pēdējais izmantotais",
+      "startMinimal": "Minimāls",
+      "startFull": "Pilns",
+      "noteSynced": "Saglabāts jūsu kontā un šajā ierīcē",
+      "noteDirectLinks": "Paslēptās lapas joprojām atveras no tiešajām saitēm",
+      "noteNeverHidden": "Apstiprinājumi, kļūdas un drošības paziņojumi netiek paslēpti nekad"
+    },
+    "additionalThemes": {
+      "title": "Papildu motīvi",
+      "subtitle": "Tos izvieto jūsu administrators, izmantojot SLM",
+      "deployed": "Izvietots, izmantojot SLM · v{version}",
+      "empty": "Nav izvietotu papildu motīvu.",
+      "info": "Administratori motīvus instalē un izvieto SLM konsolē.",
+      "slmLink": "SLM › Iestatījumi › Motīvi ↗"
     }
   },
   "voice": {
@@ -5912,7 +5938,9 @@
     },
     "loadingSpinner": {
       "loading": "Loading…"
-    }
+    },
+    "minimalNote": "Tiek rādīts būtiskais · tehniskie logrīki paslēpti",
+    "minimalNoteAction": "Rādīt visas funkcijas"
   },
   "base": {
     "badge": {
@@ -7991,6 +8019,19 @@
       "budgetPolicies": "izmaksas tēriņi limiti nauda",
       "systemHealth": "statuss pieejamība diagnostika uzraudzība",
       "vault": "akreditācijas dati atslēgas paroles žetoni seifs"
+    },
+    "homeAria": "AutoBot sākums",
+    "vaultTip": "Noslēpumi — saglabātās atslēgas un akreditācijas dati",
+    "preferencesTip": "Preferences",
+    "platformAdmin": "Platformas administrēšana",
+    "platformAdminAria": "Platformas administrēšana, atver SLM konsoli jaunā cilnē",
+    "platformAdminTip": "Platformas administrēšana — atver SLM konsoli ↗",
+    "profileMenu": "Profila izvēlne",
+    "uiMode": {
+      "label": "Minimāls",
+      "tip": "Minimāls interfeiss — paslēpt papildu funkcijas",
+      "announceMinimal": "Minimālais interfeiss ieslēgts. Papildu funkcijas paslēptas.",
+      "announceFull": "Pilnais interfeiss ieslēgts. Parādītas visas funkcijas."
     }
   },
   "llcCompanyStatus": {

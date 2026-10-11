@@ -945,6 +945,32 @@
       "deviceInitFailed": "Échec du lancement du flux par appareil",
       "stillWaiting": "Approbation toujours en attente — réessayez dans un instant.",
       "pollFailed": "Échec de la vérification"
+    },
+    "preferredMode": {
+      "title": "Mode préféré",
+      "subtitle": "Choisissez la part d’AutoBot que vous voyez. Vous pouvez basculer à tout moment avec le bouton Minimal de la barre supérieure.",
+      "group": "Mode d’interface",
+      "minimal": "Minimal",
+      "minimalDesc": "L’essentiel uniquement : pour le chat, les connaissances et les validations du quotidien.",
+      "full": "Complet",
+      "fullDesc": "Tout, y compris l’analytique, l’automatisation, l’administration et les outils de développement.",
+      "selected": "Sélectionné",
+      "startIn": "Démarrer en",
+      "startInDesc": "Le mode dans lequel AutoBot s’ouvre à la connexion",
+      "startLast": "Dernier utilisé",
+      "startMinimal": "Minimal",
+      "startFull": "Complet",
+      "noteSynced": "Enregistré dans votre compte et sur cet appareil",
+      "noteDirectLinks": "Les pages masquées restent accessibles par des liens directs",
+      "noteNeverHidden": "Les validations, les erreurs et les alertes de sécurité ne sont jamais masquées"
+    },
+    "additionalThemes": {
+      "title": "Thèmes supplémentaires",
+      "subtitle": "Déployés par votre administrateur via SLM",
+      "deployed": "Déployé via SLM · v{version}",
+      "empty": "Aucun thème supplémentaire n’est déployé.",
+      "info": "Les administrateurs installent et déploient les thèmes dans la console SLM.",
+      "slmLink": "SLM › Paramètres › Thèmes ↗"
     }
   },
   "voice": {
@@ -5912,7 +5938,9 @@
     },
     "loadingSpinner": {
       "loading": "Loading…"
-    }
+    },
+    "minimalNote": "Affichage de l’essentiel · widgets techniques masqués",
+    "minimalNoteAction": "Afficher toutes les fonctions"
   },
   "base": {
     "badge": {
@@ -7991,6 +8019,19 @@
       "budgetPolicies": "coût dépenses limites argent",
       "systemHealth": "statut disponibilité diagnostic surveillance",
       "vault": "identifiants clés mots de passe jetons coffre"
+    },
+    "homeAria": "Accueil AutoBot",
+    "vaultTip": "Secrets : clés et identifiants stockés",
+    "preferencesTip": "Préférences",
+    "platformAdmin": "Administration de la plateforme",
+    "platformAdminAria": "Administration de la plateforme, ouvre la console SLM dans un nouvel onglet",
+    "platformAdminTip": "Administration de la plateforme — ouvre la console SLM ↗",
+    "profileMenu": "Menu du profil",
+    "uiMode": {
+      "label": "Minimal",
+      "tip": "Interface minimale : masquer les fonctions avancées",
+      "announceMinimal": "Interface minimale activée. Fonctions avancées masquées.",
+      "announceFull": "Interface complète activée. Toutes les fonctions sont affichées."
     }
   },
   "llcCompanyStatus": {

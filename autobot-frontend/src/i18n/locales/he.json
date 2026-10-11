@@ -211,6 +211,19 @@
       "budgetPolicies": "עלות הוצאות מגבלות כסף",
       "systemHealth": "מצב זמינות אבחון ניטור",
       "vault": "אישורים מפתחות סיסמאות אסימונים כספת"
+    },
+    "homeAria": "דף הבית של AutoBot",
+    "vaultTip": "סודות — מפתחות ופרטי גישה שמורים",
+    "preferencesTip": "העדפות",
+    "platformAdmin": "ניהול הפלטפורמה",
+    "platformAdminAria": "ניהול הפלטפורמה, פותח את מסוף SLM בלשונית חדשה",
+    "platformAdminTip": "ניהול הפלטפורמה — פותח את מסוף SLM ↗",
+    "profileMenu": "תפריט פרופיל",
+    "uiMode": {
+      "label": "מינימלי",
+      "tip": "ממשק מינימלי — הסתרת יכולות מתקדמות",
+      "announceMinimal": "הממשק המינימלי הופעל. יכולות מתקדמות מוסתרות.",
+      "announceFull": "הממשק המלא הופעל. כל היכולות מוצגות."
     }
   },
   "llcCompanyStatus": {
@@ -5012,7 +5025,9 @@
     },
     "loadingSpinner": {
       "loading": "Loading…"
-    }
+    },
+    "minimalNote": "מוצג החיוני בלבד · ווידג׳טים טכניים מוסתרים",
+    "minimalNoteAction": "הצגת כל היכולות"
   },
   "collaboration": {
     "participantList": {
@@ -7028,6 +7043,32 @@
       "deviceInitFailed": "הפעלת זרימת המכשיר נכשלה",
       "stillWaiting": "עדיין ממתין לאישור — נסו שוב בעוד רגע.",
       "pollFailed": "הבדיקה נכשלה"
+    },
+    "preferredMode": {
+      "title": "מצב מועדף",
+      "subtitle": "בחרו כמה מ-AutoBot תרצו לראות. אפשר לעבור בכל עת בעזרת הכפתור ״מינימלי״ בסרגל העליון.",
+      "group": "מצב ממשק",
+      "minimal": "מינימלי",
+      "minimalDesc": "רק החיוני — לשיחה, ידע ואישורים יומיומיים.",
+      "full": "מלא",
+      "fullDesc": "הכול, כולל ניתוח נתונים, אוטומציה, ניהול וכלי מפתחים.",
+      "selected": "נבחר",
+      "startIn": "התחלה במצב",
+      "startInDesc": "המצב שבו AutoBot נפתח בעת הכניסה",
+      "startLast": "האחרון שבו השתמשתי",
+      "startMinimal": "מינימלי",
+      "startFull": "מלא",
+      "noteSynced": "נשמר בחשבון שלכם ובמכשיר זה",
+      "noteDirectLinks": "דפים מוסתרים עדיין נפתחים מקישורים ישירים",
+      "noteNeverHidden": "אישורים, שגיאות והתראות אבטחה לעולם אינם מוסתרים"
+    },
+    "additionalThemes": {
+      "title": "ערכות נושא נוספות",
+      "subtitle": "נפרסו על ידי מנהל המערכת באמצעות SLM",
+      "deployed": "נפרס באמצעות SLM · v{version}",
+      "empty": "לא נפרסו ערכות נושא נוספות.",
+      "info": "מנהלי מערכת מתקינים ופורסים ערכות נושא במסוף SLM.",
+      "slmLink": "SLM › הגדרות › ערכות נושא ↗"
     }
   },
   "visualizations": {
