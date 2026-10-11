@@ -81,7 +81,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/batch_jobs.py": 964,
     "autobot-backend/api/browser_mcp.py": 1340,
     "autobot-backend/api/cache_management.py": 779,
-    "autobot-backend/api/chat.py": 2778,
+    "autobot-backend/api/chat.py": 2776,  # #18316: one delete implementation
     "autobot-backend/api/chat_sessions.py": 1938,  # #18293: legacy transcripts only ever proposed
     "autobot-backend/api/code_intelligence.py": 2156,
     "autobot-backend/api/code_search.py": 922,
