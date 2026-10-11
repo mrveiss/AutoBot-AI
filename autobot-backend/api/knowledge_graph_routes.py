@@ -28,7 +28,7 @@ from api.schemas_knowledge import (
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from knowledge.search_filters import authorize_fact_read
+from knowledge.search_filters import authorize_fact_write
 from knowledge_factory import get_or_create_knowledge_base
 
 logger = get_logger(__name__)
@@ -56,7 +56,7 @@ async def run_pipeline(
     current_user: dict = Depends(get_current_user),
 ):
     """Run the Extract-Cognify-Load pipeline on a document."""
-    # #18184: the pipeline runs on the document's text, read through the canonical fact-read check.
+    # #18184: the pipeline runs on the document's text and writes graph records, so it needs fact write permission.
     try:
         try:
             document_uuid = UUID(request.document_id)
@@ -64,7 +64,7 @@ async def run_pipeline(
             raise HTTPException(status_code=422, detail="document_id must be a UUID")
         kb = await get_or_create_knowledge_base(http_request.app, force_refresh=False)
         document_id = str(document_uuid)  # canonical form: UUID() also accepts upper-case and un-hyphenated input
-        fact = await authorize_fact_read(kb, document_id, current_user)
+        fact = await authorize_fact_write(kb, document_id, current_user)
         text = fact.get("content") or ""
         if not text.strip():
             raise HTTPException(status_code=404, detail="Document has no text")
