@@ -86,11 +86,19 @@ _NEVER_FALL_THROUGH = (ModelIntegrityError, TypeError, AttributeError, NameError
 _RAN, _UNAVAILABLE, _RAISED = "ran", "unavailable", "raised"
 
 
-def _may_fall_through(candidate: SpeechProvider, local_unavailable: bool) -> bool:
-    """Whether a later *candidate* may receive audio after an earlier provider could not run."""
+def _may_fall_through(
+    candidate: SpeechProvider, local_unavailable: bool, local_failed: bool = False, primary: bool = False
+) -> bool:
+    """Whether a later *candidate* may receive audio after an earlier provider could not run.
+
+    *primary*: the candidate is the language's declared primary external provider; it may take
+    over once a local engine of that chain was unavailable or raised (*local_failed*).
+    """
     if not candidate.is_external:
         return True
     if env("AUTOBOT_SPEECH_EXTERNAL_FALLTHROUGH"):
+        return True
+    if primary and local_failed:
         return True
     return candidate.external_when_local_unavailable and local_unavailable
 
@@ -118,6 +126,15 @@ class ProviderRegistry:
     def __init__(self):
         """Initialize empty provider registry."""
         self._providers: Dict[str, List[SpeechProvider]] = {}
+        self._primary_external: Dict[str, SpeechProvider] = {}
+
+    def declare_primary_external(self, language: str, provider: SpeechProvider) -> None:
+        """Declare *provider* the primary external provider of *language* (owner decision, #17778).
+
+        It alone may receive audio after the language's local engine is unavailable or raised,
+        without ``AUTOBOT_SPEECH_EXTERNAL_FALLTHROUGH``. Declared once, beside the chain's registration.
+        """
+        self._primary_external[language] = provider
 
     def register(self, language: str, provider: SpeechProvider, priority: int = 0):
         """Register a provider for a language.
@@ -182,7 +199,9 @@ class ProviderRegistry:
         non-selected EXTERNAL provider unless ``AUTOBOT_SPEECH_EXTERNAL_FALLTHROUGH`` is
         on. A failed selected cloud therefore goes to local providers (Whisper) and
         stops. The one owner-decided exception is Generic when Whisper is UNAVAILABLE
-        (:attr:`SpeechProvider.external_when_local_unavailable`, #17781 AC3).
+        (:attr:`SpeechProvider.external_when_local_unavailable`, #17781 AC3), and a language's
+        declared primary external provider (:meth:`declare_primary_external`, Latvian -> Tilde)
+        once its local engine failed.
 
         Returns ``ProviderTranscription(provider, segments)``; ``provider`` is the one
         that ran (segments may be empty: a genuine empty transcript).
@@ -197,15 +216,17 @@ class ProviderRegistry:
         if not providers:
             raise ValueError(f"No speech provider available for language: {language}")
         reasons: List[str] = []
-        local_unavailable = False
+        local_unavailable = local_failed = False
+        primary = self._primary_external.get(language)
         for index, provider in enumerate(providers):
-            if index and not _may_fall_through(provider, local_unavailable):
+            if index and not _may_fall_through(provider, local_unavailable, local_failed, provider is primary):
                 reasons.append(f"{provider.provider_name}: external fallthrough refused")
                 continue
             status, segments = await self._attempt(provider, audio_path, language, reasons)
             if status == _RAN:
                 return ProviderTranscription(provider, segments)
             local_unavailable = local_unavailable or (status == _UNAVAILABLE and provider.is_default_local)
+            local_failed = local_failed or not provider.is_external
         raise TranscriptionUnavailableError(language, reasons)
 
     @staticmethod

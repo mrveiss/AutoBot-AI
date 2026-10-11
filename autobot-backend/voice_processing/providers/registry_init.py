@@ -73,6 +73,9 @@ def initialize_providers():
     tilde = TildeProvider()
     registry.register("lv", tilde, priority=5)  # Fallback for Latvian
     registry.register("lat", tilde, priority=5)
+    # Owner decision (#17778): Tilde is Latvian's primary external provider, allowed after LATE fails.
+    registry.declare_primary_external("lv", tilde)
+    registry.declare_primary_external("lat", tilde)
 
     # ── Local pinned Whisper (Issue #17778) ───────────────────────────────────
     # The default transcriber when no cloud key is set. Priority 5 sits above

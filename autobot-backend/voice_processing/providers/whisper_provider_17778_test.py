@@ -210,3 +210,56 @@ async def test_a_provider_that_ran_with_no_speech_is_a_genuine_empty_not_an_erro
     registry.register("en", _fake("a", segments=[]), priority=0)
     outcome = await registry.transcribe_with_fallback("a.wav", "en")
     assert outcome.provider is not None and outcome.segments == []
+
+
+def _lv_registry(late, tilde, other_cloud=None):
+    registry = ProviderRegistry()
+    registry.register("lv", late, priority=10)
+    registry.register("lv", tilde, priority=5)
+    registry.declare_primary_external("lv", tilde)
+    if other_cloud is not None:
+        registry.register("lv", other_cloud, priority=1)
+    return registry
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("late_kwargs", [{"available": False}, {"error": RuntimeError("down")}])
+async def test_latvian_with_late_failing_runs_tilde(late_kwargs):
+    tilde = _external("tilde")
+    outcome = await _lv_registry(_fake("late", **late_kwargs), tilde).transcribe_with_fallback("a.wav", "lv")
+    assert outcome.provider is tilde
+
+
+@pytest.mark.asyncio
+async def test_latvian_with_late_missing_and_tilde_failing_reaches_no_other_cloud():
+    other = _external("other")
+    registry = _lv_registry(_fake("late", available=False), _external("tilde", error=RuntimeError("x")), other)
+    with pytest.raises(TranscriptionUnavailableError):
+        await registry.transcribe_with_fallback("a.wav", "lv")
+    other.transcribe.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_english_with_whisper_raising_does_not_reach_tilde(monkeypatch):
+    registry = _registry_with_defaults(monkeypatch, cloud_key=False)
+    _, generic = registry.get_all_providers("en")
+    tilde = _external("tilde")
+    registry._providers["en"] = [(_local("whisper", error=RuntimeError("boom")), 5), (tilde, 3), (generic, 0)]
+    with pytest.raises(TranscriptionUnavailableError):
+        await registry.transcribe_with_fallback("a.wav", "en")
+    tilde.transcribe.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_opt_in_still_enables_general_fallthrough_for_latvian(monkeypatch):
+    monkeypatch.setenv("AUTOBOT_SPEECH_EXTERNAL_FALLTHROUGH", "true")
+    other = _external("other")
+    registry = _lv_registry(_fake("late", available=False), _external("tilde", error=RuntimeError("x")), other)
+    assert (await registry.transcribe_with_fallback("a.wav", "lv")).provider is other
+
+
+def test_registry_init_declares_tilde_primary_for_latvian(monkeypatch):
+    registry = _registry_with_defaults(monkeypatch, cloud_key=False)
+    for lang in ("lv", "lat"):
+        assert type(registry._primary_external[lang]).__name__ == "TildeProvider"
+    assert "en" not in registry._primary_external
