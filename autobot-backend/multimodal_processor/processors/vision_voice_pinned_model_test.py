@@ -47,7 +47,7 @@ def vision_module():
 @pytest.fixture
 def voice_module():
     fake_transformers = types.ModuleType("transformers")
-    for name in ("WhisperProcessor", "WhisperForConditionalGeneration", "Wav2Vec2Processor", "Wav2Vec2ForCTC"):
+    for name in ("Wav2Vec2Processor", "Wav2Vec2ForCTC"):
         setattr(fake_transformers, name, MagicMock(name=name))
     fake_librosa = types.ModuleType("librosa")
 
@@ -110,31 +110,26 @@ def test_vision_processor_pins_clip_and_blip2_revisions(vision_module):
     ]
 
 
-def test_voice_processor_pins_whisper_and_wav2vec_revisions(voice_module):
+def test_voice_processor_pins_the_wav2vec_revision_and_loads_no_whisper(voice_module):
+    """Whisper is the one pinned pipeline's job now (#17778); only Wav2Vec2 loads here."""
     proc = _bare_instance(voice_module.VoiceProcessor)
 
     with (
         patch(
             "autobot_shared.pinned_model_registry.get_pinned_revision",
-            side_effect=lambda repo_id: {"openai/whisper-base": "3" * 40, "facebook/wav2vec2-base-960h": "4" * 40}[
-                repo_id
-            ],
+            side_effect=lambda repo_id: {"facebook/wav2vec2-base-960h": "4" * 40}[repo_id],
         ) as mock_get,
         patch("autobot_shared.pinned_model_registry.verify_cached_model") as mock_verify,
     ):
         proc._load_models()
 
-    voice_module.WhisperProcessor.from_pretrained.assert_called_once_with("openai/whisper-base", revision="3" * 40)
-    assert voice_module.WhisperForConditionalGeneration.from_pretrained.call_args.kwargs["revision"] == "3" * 40
     voice_module.Wav2Vec2Processor.from_pretrained.assert_called_once_with(
         "facebook/wav2vec2-base-960h", revision="4" * 40, use_fast=True
     )
     assert voice_module.Wav2Vec2ForCTC.from_pretrained.call_args.kwargs["revision"] == "4" * 40
-    assert mock_get.call_count == 2
-    assert mock_verify.call_args_list == [
-        (("openai/whisper-base",),),
-        (("facebook/wav2vec2-base-960h",),),
-    ]
+    assert mock_get.call_count == 1
+    assert mock_verify.call_args_list == [(("facebook/wav2vec2-base-960h",),)]
+    assert not hasattr(voice_module, "WhisperForConditionalGeneration"), "a second in-process Whisper crept back"
 
 
 # ---------------------------------------------------------------------------
@@ -190,49 +185,21 @@ def test_vision_processor_blip2_failure_leaves_blip2_none_but_keeps_verified_cli
     assert proc.blip_processor is None
 
 
-def test_voice_processor_whisper_failure_leaves_both_whisper_attrs_none(voice_module):
+def test_voice_processor_wav2vec_failure_leaves_both_wav2vec_attrs_none(voice_module):
     from autobot_shared.pinned_model_registry import ModelIntegrityError
 
     proc = _bare_instance(voice_module.VoiceProcessor)
-    proc.whisper_model = None
-    proc.whisper_processor = None
     proc.wav2vec_model = None
     proc.wav2vec_processor = None
 
     with (
-        patch("autobot_shared.pinned_model_registry.get_pinned_revision", return_value="3" * 40),
+        patch("autobot_shared.pinned_model_registry.get_pinned_revision", return_value="4" * 40),
         patch(
             "autobot_shared.pinned_model_registry.verify_cached_model",
-            side_effect=ModelIntegrityError("tampered whisper"),
+            side_effect=ModelIntegrityError("tampered wav2vec"),
         ),
     ):
         proc._load_models()  # must not raise
 
-    assert proc.whisper_model is None, "a tampered Whisper model must never be assigned"
-    assert proc.whisper_processor is None
-    assert proc.wav2vec_model is None, "Wav2Vec2 is never reached when Whisper's own verify fails"
-    assert proc.wav2vec_processor is None
-
-
-def test_voice_processor_wav2vec_failure_leaves_wav2vec_none_but_keeps_verified_whisper(voice_module):
-    from autobot_shared.pinned_model_registry import ModelIntegrityError
-
-    proc = _bare_instance(voice_module.VoiceProcessor)
-    proc.whisper_model = None
-    proc.whisper_processor = None
-    proc.wav2vec_model = None
-    proc.wav2vec_processor = None
-
-    with (
-        patch("autobot_shared.pinned_model_registry.get_pinned_revision", return_value="3" * 40),
-        patch(
-            "autobot_shared.pinned_model_registry.verify_cached_model",
-            side_effect=[None, ModelIntegrityError("tampered wav2vec")],
-        ),
-    ):
-        proc._load_models()  # must not raise
-
-    assert proc.whisper_model is not None, "Whisper already passed its own verify and must stay usable"
-    assert proc.whisper_processor is not None
     assert proc.wav2vec_model is None, "a tampered Wav2Vec2 model must never be assigned"
     assert proc.wav2vec_processor is None

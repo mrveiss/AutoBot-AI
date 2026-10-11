@@ -522,3 +522,61 @@ register_env_var(
         component="ai",
     )
 )
+
+# --- speech egress and audio decode bounds (#17778) --------------------------
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SPEECH_EXTERNAL_FALLTHROUGH",
+        type=bool,
+        default=False,
+        description=(
+            "When true, a speech provider that could not run or raised may hand the same audio to a "
+            "NON-selected external provider (another cloud ASR, Tilde, Generic/recognize_google). Default "
+            "false: the first provider that ran ends the chain, a failed selected cloud goes to local "
+            "Whisper, and audio never reaches a second third party "
+            "(voice_processing/providers/__init__.py, #17778)."
+        ),
+        component="voice",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_AUDIO_UPLOAD_MAX_BYTES",
+        type=int,
+        default=52428800,
+        description=(
+            "Largest audio upload, in bytes, the multimodal audio routes accept before any decode or "
+            "ffmpeg work; larger bodies get HTTP 413 (media/audio/upload_limits.py, #17778)."
+        ),
+        component="voice",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_AUDIO_DECODE_MAX_SECONDS",
+        type=float,
+        default=600.0,
+        description=(
+            "Longest audio, in seconds, the upload decoder will transcode. ffmpeg is told to stop one "
+            "second past this and anything longer is refused, so a decompression bomb cannot outlive the "
+            "request timeout (media/audio/decode.py, #17778)."
+        ),
+        component="voice",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_AUDIO_DECODE_MAX_OUTPUT_BYTES",
+        type=int,
+        default=33554432,
+        description=(
+            "Largest transcoded WAV, in bytes, the upload decoder will read back into memory; the file is "
+            "stat-ed first and refused when over (media/audio/decode.py, #17778)."
+        ),
+        component="voice",
+    )
+)
