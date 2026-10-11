@@ -95,7 +95,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/security/ThreatIntelligenceSettings.vue": 652,
     "autobot-frontend/src/components/settings/ApiKeySetupWizard.vue": 614,
     "autobot-frontend/src/components/settings/SettingsPanel.vue": 943,
-    "autobot-frontend/src/components/settings/ThemePresetPicker.vue": 611,
     "autobot-frontend/src/components/terminal/AdvancedStepConfirmationModal.vue": 616,
     "autobot-frontend/src/components/terminal/BaseXTerminal.vue": 825,
     "autobot-frontend/src/components/terminal/TerminalModals.vue": 743,
