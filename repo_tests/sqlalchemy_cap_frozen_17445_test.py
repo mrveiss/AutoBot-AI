@@ -40,17 +40,21 @@ from __future__ import annotations
 
 import re
 
+import packaging.requirements as packaging_requirements
+import packaging.specifiers as packaging_specifiers
 import pytest
+import yaml
+from repo_tests._paths import repo_root
 
-yaml = pytest.importorskip("yaml")
-packaging_requirements = pytest.importorskip("packaging.requirements")
-packaging_specifiers = pytest.importorskip("packaging.specifiers")
-
-from repo_tests._paths import repo_root  # noqa: E402
+# yaml and packaging are imported plainly on purpose: a missing dependency must FAIL
+# this guard, never skip it and let an unchecked cap read as green.
 
 _CONFIG = repo_root() / ".github" / "dependabot.yml"
 _CEILING = "2.1"
-_PROBES = ("2.1.0", "2.1.1", "2.1.9")  # any 2.1.x the pin admits is a failure
+# Range-based checks: a spec must exclude EVERY sampled release from the ceiling
+# upward (so `!=2.1.0` or an ignore of only `==2.1.0` fails), spread across 2.1.x,
+# 2.2 and 3.0 so no single-release exclusion can pass.
+_EXCLUDED = ("2.1.0", "2.1.1", "2.1.99", "2.2.0", "2.9.0", "3.0.0")
 _PATCHES = ("2.0.0", "2.0.54", "2.0.99")  # 2.0.x patches that must stay available
 _EXACT_20X = re.compile(r"2\.0\.\d+")  # a concrete patch; rejects the `2.0.*` wildcard
 
@@ -83,9 +87,9 @@ def _sqlalchemy_requirement(text: str):
 
 
 def _admitted_21x(text: str) -> list[str]:
-    """The 2.1.x probe versions the manifest's sqlalchemy requirement admits."""
+    """The versions at or above the ceiling that the manifest's requirement admits."""
     spec = _sqlalchemy_requirement(text).specifier
-    return [v for v in _PROBES if spec.contains(v, prereleases=True)]
+    return [v for v in _EXCLUDED if spec.contains(v, prereleases=True)]
 
 
 def _shape_ok(text: str, shape: str) -> bool:
@@ -94,9 +98,7 @@ def _shape_ok(text: str, shape: str) -> bool:
         return any(s.operator == "==" and _EXACT_20X.fullmatch(s.version) for s in spec)
     # Upper bound: any spelling (`<2.1`, `<2.1.0`, `<=2.0.99`) that excludes 2.1
     # and still admits a 2.0.x. A missing upper bound admits 2.1 and fails here.
-    return not any(spec.contains(v, prereleases=True) for v in _PROBES) and any(
-        spec.contains(v, prereleases=True) for v in _PATCHES
-    )
+    return not _admitted_21x(text) and any(spec.contains(v, prereleases=True) for v in _PATCHES)
 
 
 def _pip_block(document: dict, directory: str) -> dict:
@@ -127,8 +129,8 @@ def _blocked(versions: list[str], candidate: str) -> bool:
 
 
 def _excludes_the_ceiling(versions: list[str]) -> bool:
-    """True when *versions* bars the first release at the ceiling."""
-    return _blocked(versions, f"{_CEILING}.0")
+    """True when *versions* bars EVERY release from the ceiling upward that we sample."""
+    return all(_blocked(versions, v) for v in _EXCLUDED)
 
 
 def _keeps_patches_available(versions: list[str]) -> bool:
@@ -154,8 +156,27 @@ def _ignore_problem(document: dict, directory: str) -> str | None:
     return None
 
 
+class _UniqueKeyLoader(yaml.SafeLoader):
+    """SafeLoader that raises on a duplicate mapping key instead of overwriting it."""
+
+    def construct_mapping(self, node, deep=False):
+        seen = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if key in seen:
+                raise yaml.constructor.ConstructorError(
+                    None, None, f"duplicate mapping key {key!r}", key_node.start_mark
+                )
+            seen.add(key)
+        return super().construct_mapping(node, deep=deep)
+
+
+def _load_unique(text: str) -> dict:
+    return yaml.load(text, Loader=_UniqueKeyLoader)  # noqa: S506 -- SafeLoader subclass
+
+
 def _document() -> dict:
-    return yaml.safe_load(_CONFIG.read_text(encoding="utf-8"))
+    return _load_unique(_CONFIG.read_text(encoding="utf-8"))
 
 
 @pytest.mark.parametrize(("manifest", "directory", "shape"), _ROWS, ids=_IDS)
@@ -211,6 +232,15 @@ _BARS_PATCHES = {
         }
     ]
 }
+_SINGLE_RELEASE = {
+    "updates": [
+        {
+            "package-ecosystem": "pip",
+            "directory": "/x",
+            "ignore": [{"dependency-name": "sqlalchemy", "versions": ["==2.1.0"]}],
+        }
+    ]
+}
 _NO_ENTRY = {"updates": [{"package-ecosystem": "pip", "directory": "/x", "ignore": []}]}
 
 
@@ -223,6 +253,7 @@ _NO_ENTRY = {"updates": [{"package-ecosystem": "pip", "directory": "/x", "ignore
         ("sqlalchemy>=2.1.0,<2.2\n", "upper-bound", True, False),  # the #17706 bump
         ("sqlalchemy>=2.0.54\n", "upper-bound", True, False),  # cap deleted
         ("sqlalchemy==2.1.0\n", "exact", True, False),
+        ("sqlalchemy>=2.0.54,!=2.1.0\n", "upper-bound", True, False),  # one release skipped
         ("sqlalchemy>=2.0.54,<2.1.0\n", "upper-bound", False, True),  # equivalent spelling
         ("sqlalchemy>=2.0.54,<=2.0.99\n", "upper-bound", False, True),  # safe, different bound
         ("sqlalchemy>=2.0.54\n", "upper-bound", True, False),  # no upper bound at all
@@ -237,8 +268,8 @@ def test_the_manifest_check_itself(text: str, shape: str, admits: bool, shape_ok
 
 @pytest.mark.parametrize(
     ("document", "holds"),
-    [(_GOOD_IGNORE, True), (_MAJOR_ONLY, False), (_NO_ENTRY, False), (_BARS_PATCHES, False)],
-    ids=["versions-range", "semver-major-only (#17706)", "no-entry", "bars-2.0.x-patches"],
+    [(_GOOD_IGNORE, True), (_MAJOR_ONLY, False), (_NO_ENTRY, False), (_BARS_PATCHES, False), (_SINGLE_RELEASE, False)],
+    ids=["versions-range", "semver-major-only (#17706)", "no-entry", "bars-2.0.x-patches", "single-release"],
 )
 def test_the_ignore_check_itself(document: dict, holds: bool) -> None:
     assert (_ignore_problem(document, "/x") is None) is holds
@@ -248,6 +279,7 @@ def test_the_ignore_check_itself(document: dict, holds: bool) -> None:
     ("versions", "excludes", "keeps_patches"),
     [
         ([">=2.1"], True, True),
+        (["==2.1.0"], False, True),  # bars one release only -- 2.1.1+ still proposed
         ([">=2.1.0"], True, True),
         ([">=2.0"], True, False),  # bars 2.1 but also every 2.0.x patch
         ([">=2.2"], False, True),  # lets 2.1 through -- the bug this guards
@@ -258,3 +290,11 @@ def test_the_ignore_check_itself(document: dict, holds: bool) -> None:
 def test_the_range_check_itself(versions: list[str], excludes: bool, keeps_patches: bool) -> None:
     assert _excludes_the_ceiling(versions) is excludes
     assert _keeps_patches_available(versions) is keeps_patches
+
+
+def test_a_duplicate_yaml_key_is_rejected() -> None:
+    assert _load_unique("a: 1\nb:\n  c: 2\n") == {"a": 1, "b": {"c": 2}}
+    with pytest.raises(yaml.YAMLError, match="duplicate mapping key"):
+        _load_unique("a: 1\na: 2\n")
+    with pytest.raises(yaml.YAMLError, match="duplicate mapping key"):
+        _load_unique("x:\n  k: 1\n  k: 2\n")
