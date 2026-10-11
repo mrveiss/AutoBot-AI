@@ -94,7 +94,11 @@ def _declared_members() -> set[str]:
     ("label", "source", "expected"),
     [
         ("a result construction", "X(pattern_type=AntiPatternType.GOD_CLASS)\n", {"GOD_CLASS"}),
-        ("a catalog dict key", "D = {AntiPatternType.GOD_CLASS: 1}\n", set()),
+        (
+            "a catalog dict key",
+            "D = {" + "AntiPatternType.GOD_CLASS: 1}\n",
+            set(),
+        ),  # split: one literal would read as a format field
         ("a comparison", "if t == AntiPatternType.GOD_CLASS:\n    pass\n", set()),
         ("a comment", "# pattern_type=AntiPatternType.GOD_CLASS\n", set()),
         ("the sibling test enum", "X(pattern_type=TestAntiPatternType.GOD_CLASS)\n", set()),
