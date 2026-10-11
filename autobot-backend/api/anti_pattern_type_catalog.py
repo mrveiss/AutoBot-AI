@@ -31,7 +31,6 @@ ALIAS_TYPES: frozenset = frozenset(
     }
 )
 
-_NOT_EMITTED = "Declared in the canonical enum; no detector currently emits this type"
 _SMELL = "None (code smell)"
 
 
@@ -122,10 +121,6 @@ _TYPE_DETAILS: Dict[AntiPatternType, Dict[str, Any]] = {
         ["low", "high"],
         _SMELL,
     ),
-    AntiPatternType.PRIMITIVE_OBSESSION: _d(
-        "Primitive Obsession", _NOT_EMITTED, {}, [], "None (not currently detected)"
-    ),
-    AntiPatternType.SHOTGUN_SURGERY: _d("Shotgun Surgery", _NOT_EMITTED, {}, [], "None (not currently detected)"),
     # Thresholds.MESSAGE_CHAIN_THRESHOLD (types.py:69), compared with >= at
     # detectors/couplers.py:361; severity: get_message_chain_severity.
     AntiPatternType.MESSAGE_CHAINS: _d(
@@ -135,13 +130,6 @@ _TYPE_DETAILS: Dict[AntiPatternType, Dict[str, Any]] = {
         ["low", "high"],
         "Law of Demeter",
     ),
-    AntiPatternType.INAPPROPRIATE_INTIMACY: _d(
-        "Inappropriate Intimacy", _NOT_EMITTED, {}, [], "None (not currently detected)"
-    ),
-    AntiPatternType.SPECULATIVE_GENERALITY: _d(
-        "Speculative Generality", _NOT_EMITTED, {}, [], "None (not currently detected)"
-    ),
-    AntiPatternType.REFUSED_BEQUEST: _d("Refused Bequest", _NOT_EMITTED, {}, [], "None (not currently detected)"),
     # Class-level constants _SHAPE_MIN_METHODS_STRICT / _SHAPE_JACCARD_THRESHOLD
     # (code_analysis/src/anti_pattern_detector.py:1640-1641, used at :1858-1866).
     AntiPatternType.DUPLICATE_CLASS_SHAPE: _d(

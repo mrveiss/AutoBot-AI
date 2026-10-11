@@ -213,20 +213,15 @@ class AntiPatternType(Enum):
     # legacy code_intelligence used DATA_CLUMPS — kept as alias for migration.
     DATA_CLUMP = "data_clump"
     DATA_CLUMPS = "data_clumps"  # legacy alias from code_intelligence (GH#6757)
-    PRIMITIVE_OBSESSION = "primitive_obsession"
 
     # --- Couplers ---
     FEATURE_ENVY = "feature_envy"
     CIRCULAR_DEPENDENCY = "circular_dependency"
-    SHOTGUN_SURGERY = "shotgun_surgery"
     MESSAGE_CHAINS = "message_chains"
-    INAPPROPRIATE_INTIMACY = "inappropriate_intimacy"
 
     # --- Dispensables ---
-    SPECULATIVE_GENERALITY = "speculative_generality"
     DEAD_CODE = "dead_code"
     LAZY_CLASS = "lazy_class"
-    REFUSED_BEQUEST = "refused_bequest"
     # DUPLICATE_ABSTRACTION: legacy name from code_intelligence; canonical is
     # DUPLICATE_CLASS_SHAPE (added in #6684).
     DUPLICATE_CLASS_SHAPE = "duplicate_class_shape"
