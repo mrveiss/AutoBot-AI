@@ -88,17 +88,26 @@ _RAN, _UNAVAILABLE, _RAISED = "ran", "unavailable", "raised"
 
 
 def _may_fall_through(
-    candidate: SpeechProvider, local_unavailable: bool, local_failed: bool = False, primary: bool = False
+    candidate: SpeechProvider,
+    local_unavailable: bool,
+    local_failed: bool = False,
+    primary: bool = False,
+    external_attempted: bool = False,
 ) -> bool:
     """Whether a later *candidate* may receive audio after an earlier provider could not run.
 
     *primary*: the candidate is the language's declared primary external provider; it may take
     over once a local engine of that chain was unavailable or raised (*local_failed*).
+    Both exceptions apply only while no external provider has been ATTEMPTED in this chain
+    (*external_attempted*): audio that already reached one third party never reaches a second
+    without ``AUTOBOT_SPEECH_EXTERNAL_FALLTHROUGH``.
     """
     if not candidate.is_external:
         return True
     if env("AUTOBOT_SPEECH_EXTERNAL_FALLTHROUGH"):
         return True
+    if external_attempted:
+        return False
     if primary and local_failed:
         return True
     return candidate.external_when_local_unavailable and local_unavailable
@@ -247,10 +256,12 @@ class ProviderRegistry:
         if not providers:
             raise ValueError(f"No speech provider available for language: {language}")
         reasons: List[str] = []
-        local_unavailable = local_failed = False
+        local_unavailable = local_failed = external_attempted = False
         primary = self._primary_external.get(language)
         for index, provider in enumerate(providers):
-            if index and not _may_fall_through(provider, local_unavailable, local_failed, provider is primary):
+            if index and not _may_fall_through(
+                provider, local_unavailable, local_failed, provider is primary, external_attempted
+            ):
                 reasons.append(f"{provider.provider_name}: external fallthrough refused")
                 continue
             status, segments = await self._attempt(provider, audio_path, language, reasons)
@@ -258,6 +269,7 @@ class ProviderRegistry:
                 return ProviderTranscription(provider, segments)
             local_unavailable = local_unavailable or (status == _UNAVAILABLE and provider.is_default_local)
             local_failed = local_failed or not provider.is_external
+            external_attempted = external_attempted or (provider.is_external and status != _UNAVAILABLE)
         raise TranscriptionUnavailableError(language, reasons)
 
     @staticmethod

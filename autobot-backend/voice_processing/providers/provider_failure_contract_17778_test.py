@@ -113,6 +113,17 @@ async def test_assemblyai_job_error_raises_and_completed_without_utterances_is_s
             assert await assemblyai.transcribe(audio, "en") == []
 
 
+@pytest.mark.asyncio
+async def test_assemblyai_poll_http_error_raises_at_once_instead_of_looping(assemblyai, audio):
+    with (
+        patch.object(assemblyai, "_upload", AsyncMock(return_value="u")),
+        patch.object(assemblyai, "_submit", AsyncMock(return_value="t")),
+    ):
+        with patch("asyncio.sleep", AsyncMock()) as slept, _http(status=401), pytest.raises(ProviderFailed):
+            await assemblyai.transcribe(audio, "en")
+    slept.assert_not_called()
+
+
 # ── Google ────────────────────────────────────────────────────────────────────
 
 
@@ -371,3 +382,66 @@ async def test_a_failed_selected_cloud_is_a_failure_and_never_reaches_a_second_c
         with pytest.raises(TranscriptionUnavailableError):
             await registry.transcribe_with_fallback(audio, "en")
     upload.assert_not_called()
+
+
+# ── no second external party without the opt-in ──────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_english_cloud_failure_then_whisper_missing_never_reaches_generic(deepgram, audio, sr_module):
+    from voice_processing.providers.whisper_provider import WhisperProvider
+
+    whisper, generic = WhisperProvider(), GenericProvider()
+    registry = ProviderRegistry()
+    registry.register("en", deepgram, priority=20)
+    registry.register("en", whisper, priority=5)
+    registry.register("en", generic, priority=0)
+    with (
+        patch.object(whisper, "is_available", return_value=False),
+        patch.object(generic.engine, "transcribe_audio", AsyncMock()) as run,
+        _http(status=500, text="x"),
+    ):
+        with pytest.raises(TranscriptionUnavailableError) as caught:
+            await registry.transcribe_with_fallback(audio, "en")
+    run.assert_not_called()
+    assert "Deepgram: ProviderFailed" in caught.value.reasons
+    assert "Generic (Google/Sphinx): external fallthrough refused" in caught.value.reasons
+
+
+@pytest.mark.asyncio
+async def test_latvian_cloud_failure_then_late_missing_never_reaches_tilde(tilde, audio, monkeypatch):
+    import voice_processing.providers.cloud.google_provider as gmod
+
+    monkeypatch.setattr(gmod, "_google_available", True)
+    monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", audio)
+    google = GoogleSpeechProvider()
+    registry = ProviderRegistry()
+    registry.register("lv", google, priority=20)
+    registry.register("lv", LateProvider(late_binary_path="/nonexistent/late-binary"), priority=10)
+    registry.register("lv", tilde, priority=5)
+    registry.declare_primary_external("lv", tilde)
+    with (
+        patch.object(google, "_sync_transcribe", side_effect=RuntimeError("quota")),
+        patch.object(tilde, "transcribe", AsyncMock()) as run,
+    ):
+        with pytest.raises(TranscriptionUnavailableError) as caught:
+            await registry.transcribe_with_fallback(audio, "lv")
+    run.assert_not_called()
+    assert "Tilde: external fallthrough refused" in caught.value.reasons
+
+
+@pytest.mark.asyncio
+async def test_the_opt_in_lifts_the_one_external_limit(tilde, audio, monkeypatch):
+    import voice_processing.providers.cloud.google_provider as gmod
+
+    monkeypatch.setenv("AUTOBOT_SPEECH_EXTERNAL_FALLTHROUGH", "true")
+    monkeypatch.setattr(gmod, "_google_available", True)
+    monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", audio)
+    google = GoogleSpeechProvider()
+    registry = ProviderRegistry()
+    registry.register("lv", google, priority=20)
+    registry.register("lv", LateProvider(late_binary_path="/nonexistent/late-binary"), priority=10)
+    registry.register("lv", tilde, priority=5)
+    body = {"transcription": {"segments": [{"text": "x", "start": 0, "end": 1, "confidence": 0.9}]}}
+    with patch.object(google, "_sync_transcribe", side_effect=RuntimeError("quota")), _http(body=body):
+        assert (await registry.transcribe_with_fallback(audio, "lv")).provider is tilde

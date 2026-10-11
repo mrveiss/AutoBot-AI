@@ -162,6 +162,7 @@ async def test_assemblyai_transcribe_request_shape(audio_file):
     submit_resp.__aexit__ = AsyncMock(return_value=False)
 
     poll_resp = AsyncMock()
+    poll_resp.status = 200
     poll_resp.json = AsyncMock(return_value=ASSEMBLYAI_COMPLETED)
     poll_resp.__aenter__ = AsyncMock(return_value=poll_resp)
     poll_resp.__aexit__ = AsyncMock(return_value=False)

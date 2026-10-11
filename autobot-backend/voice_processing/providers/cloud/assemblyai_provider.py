@@ -74,6 +74,8 @@ class AssemblyAIProvider(CloudSpeechProvider):
             async with get_http_client().tracked_request(
                 "GET", f"{_BASE_URL}/transcript/{transcript_id}", headers=self._headers(), timeout=_DEFAULT_TIMEOUT
             ) as resp:
+                if resp.status != 200:
+                    raise ProviderFailed(f"AssemblyAI poll failed: {resp.status}")
                 data = await resp.json()
             status = data.get("status")
             if status == "completed":
