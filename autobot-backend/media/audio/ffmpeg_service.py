@@ -67,9 +67,13 @@ async def _kill_and_reap(process: asyncio.subprocess.Process) -> None:
 async def _communicate_bounded(process: asyncio.subprocess.Process) -> tuple[bytes, bytes]:
     """``communicate()`` under :data:`FFMPEG_TIMEOUT_SECONDS`; kill and reap on timeout OR cancel.
 
-    A caller's own ``asyncio.wait_for`` (``/voice/transcribe`` allows 30 s) cancels this
-    coroutine long before the 300 s cap; without the ``CancelledError`` branch ffmpeg
-    would keep running (#17778).
+    A caller's own deadline cancels this coroutine long before the 300 s cap -- e.g. the
+    ``asyncio.wait_for`` in ``VoiceProcessor.process`` around the multimodal audio decode.
+    Without the ``CancelledError`` branch ffmpeg would keep running (#17778). The Whisper
+    inference that follows runs in a worker thread (``asyncio.to_thread``); a thread cannot
+    be cancelled, so a cancelled request leaves it running to completion while it holds
+    ``_whisper_inference_lock``. That is stated, not bounded: stopping it would need
+    cooperative cancellation inside the transformers pipeline call.
     """
     try:
         return await asyncio.wait_for(process.communicate(), timeout=FFMPEG_TIMEOUT_SECONDS)
