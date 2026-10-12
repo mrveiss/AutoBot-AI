@@ -334,6 +334,7 @@ logger.info(
 )
 
 # Include session management router
+from api.chat_sessions import delete_session as _canonical_delete_session
 from api.chat_sessions import router as sessions_router
 
 router.include_router(sessions_router)
@@ -1926,26 +1927,23 @@ async def delete_chat_by_id(
     request_id = generate_request_id()
     log_request_context(request, "delete_chat_by_id", request_id)
 
-    # Get dependencies from request state
-    chat_history_manager = get_chat_history_manager(request)
-
-    if not chat_history_manager:
-        return create_error_response(
-            error_code="SERVICE_UNAVAILABLE",
-            message="Chat history service not available",
-            request_id=request_id,
-            status_code=503,
-        )
-
-    # Delete the chat session
-    result = chat_history_manager.delete_session(session_id=chat_id)
+    # One delete implementation: the canonical session-delete route owns the
+    # verify-then-cleanup ordering, file/KB/terminal cleanup and audit (#18316).
+    # A missing session surfaces as the canonical not-found error.
+    await _canonical_delete_session(
+        session_id=chat_id,
+        request=request,
+        ownership=ownership,
+        file_action="delete",
+        file_options=None,
+    )
 
     return JSONResponse(
         status_code=200,
         media_type="application/json; charset=utf-8",
         content={
             "success": True,
-            "data": {"session_id": chat_id, "deleted": result},
+            "data": {"session_id": chat_id, "deleted": True},
             "message": "Chat deleted successfully",
             "request_id": request_id,
         },

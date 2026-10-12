@@ -291,7 +291,7 @@ REACH = declare(
     # Prose citing a measurement survives the rebase that changes it -- the
     # resolver owns the value and nothing owns the sentence. The arithmetic is
     # in the commit message, which cannot drift from the tree it describes.
-    floor=3247,
+    floor=3371,  # re-pinned mid-window (#18293): population 3521, window [3221, 3521]
     growth=300,
     what="tracked production python files",
 )

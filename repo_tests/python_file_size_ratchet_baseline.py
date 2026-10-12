@@ -81,8 +81,8 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/batch_jobs.py": 964,
     "autobot-backend/api/browser_mcp.py": 1340,
     "autobot-backend/api/cache_management.py": 779,
-    "autobot-backend/api/chat.py": 2778,
-    "autobot-backend/api/chat_sessions.py": 1953,
+    "autobot-backend/api/chat.py": 2776,  # #18316: delete delegates to the canonical path
+    "autobot-backend/api/chat_sessions.py": 1938,  # #18293: legacy transcripts only ever proposed
     "autobot-backend/api/code_intelligence.py": 2154,
     "autobot-backend/api/code_search.py": 922,
     "autobot-backend/api/codebase_analytics/analyzers.py": 1684,
@@ -161,7 +161,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1682,
     "autobot-backend/chat_workflow/llm_handler.py": 1343,
-    "autobot-backend/chat_workflow/manager.py": 3976,  # #17513: markers extracted
+    "autobot-backend/chat_workflow/manager.py": 3975,  # #18293: transcript_dir retired
     "autobot-backend/chat_workflow/tool_handler.py": 3731,  # #11542 dispatch merge + #14068 mirror
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,

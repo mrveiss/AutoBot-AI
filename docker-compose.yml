@@ -233,6 +233,9 @@ services:
       # volume's mount point makes canonical == legacy for this service, so
       # the migration correctly no-ops instead of relocating anything.
       - AUTOBOT_DATA_DIR=${AUTOBOT_DATA_DIR:-/app/data}
+      # #18293: the retired chat-transcript store (read-only legacy), where its old writer put
+      # it -- data/conversation_transcripts under the image WORKDIR (/app). Pinned, not inferred.
+      - AUTOBOT_LEGACY_TRANSCRIPTS_DIR=${AUTOBOT_LEGACY_TRANSCRIPTS_DIR:-/app/data/conversation_transcripts}
       # No AI Stack VM ships with compose — disable the poll to stop the per-boot
       # connection-error warning flood (#9782). Set to true if you run an AI Stack.
       - AUTOBOT_AI_STACK_ENABLED=${AUTOBOT_AI_STACK_ENABLED:-false}

@@ -130,9 +130,10 @@ class WorkflowSession:
 
 Key behaviors:
 
-- **Redis key format:** `chat:conversation:{session_id}` with 24-hour TTL
-- **File transcripts:** `data/conversation_transcripts/{session_id}.json`
-- **History window:** Last 10 exchanges are kept in memory; older entries are in file only
+- **System of record:** the chat session (`chat_history`, `chat:session:{session_id}` + session file) is the one durable home of every turn (#18293)
+- **Redis key format:** `chat:conversation:{session_id}` with 24-hour TTL, a cache of the LLM-context projection of the chat session
+- **Legacy transcripts:** `data/conversation_transcripts/{session_id}.json` is no longer written; it is read only for sessions with no turns in the chat session
+- **History window:** Last 10 completed exchanges, projected from the chat session; the full history stays in the chat session
 - **Inactive cleanup:** `cleanup_inactive_sessions(max_age_seconds=3600)` removes stale sessions
 - **Thread safety:** All session operations use `asyncio.Lock`
 - **Global singleton:** `get_chat_workflow_manager()` returns a thread-safe singleton
