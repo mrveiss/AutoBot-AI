@@ -31,6 +31,7 @@ from pathlib import Path
 import pytest
 import repo_tests.ansible_concept_forks_17856_test as _ansible_forks_guard  # noqa: F401 -- registers its scope
 import repo_tests.anti_pattern_type_emitted_18189_test as _anti_pattern_guard  # noqa: F401 -- registers its scope
+import repo_tests.audit_writer_single_source_17225_test as _audit_writer_guard  # noqa: F401 -- registers its scope
 import repo_tests.chunker_private_embedding_hooks_18185_test as _chunker_hooks_guard  # noqa: F401 -- registers its scope
 import repo_tests.concept_forks_17856_test as _concept_forks_guard  # noqa: F401 -- registers its scope
 import repo_tests.container_hardening_single_source_17267_test as _hardening_guard  # noqa: F401 -- registers its scope
@@ -183,6 +184,7 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
 _DECLARED_SCOPES = {
     "container-hardening-inline": ("autobot-backend", "autobot_shared"),
     "brand-mark-announcer-scan": ("libs/autobot-ui", "autobot-frontend/src", "autobot-slm-frontend/src"),
+    "audit-writer-single-source": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "one-content-digest-scan": ("autobot-backend", "autobot_shared"),
     "semantic-chunker-fork-scan": ("autobot-backend", "autobot_shared"),
     "migration-gate-test-import-sweep": ("autobot-backend/tests/migrations",),

@@ -91,7 +91,6 @@ GRANDFATHERED = frozenset(
         "autobot-backend/knowledge_sync_incremental_test.py",
         "autobot-backend/llc/tests/test_autobot_agent_adapter.py",
         "autobot-backend/onboarding/doctor_test.py",
-        "autobot-backend/services/audit_logger_test.py",
         "autobot-backend/services/knowledge/test_contradiction_detector.py",
         "autobot-backend/services/knowledge/test_doc_indexer.py",
         "autobot-backend/services/knowledge/test_doc_indexer_dim_mismatch.py",

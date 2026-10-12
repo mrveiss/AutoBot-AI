@@ -213,6 +213,18 @@ TEXT_RECORDERS: Tuple[TextRecorder, ...] = (
 #: never as a place to put a finding instead of fixing it.
 KNOWN_STRANDED: Dict[str, Tuple[str, ...]] = {}
 
+#: Ledgers whose entries record paths that must stay ABSENT -- a tombstone, not a
+#: record of the tree. Each names a module a change deliberately deleted, kept so
+#: a guard can fail if it comes back. Absence is their point, so they are never
+#: "stranded"; they are checked the other way round instead
+#: (:func:`test_every_tombstone_stays_buried`): an entry the tree holds again is
+#: the failure. Keyed like a census record (``<file>:<symbol>``), with the reason.
+TOMBSTONE_LEDGERS: Dict[str, str] = {
+    "repo_tests/audit_writer_single_source_17225_test.py:_RETIRED_MODULES": (
+        "#17225 D2: the three legacy audit stores deleted when their callers moved to the canonical service"
+    ),
+}
+
 
 class Tree:
     """The tracked tree, answering "is this recorded path still here?"."""
@@ -423,7 +435,7 @@ def test_the_stranded_census_is_pinned_and_may_only_shrink():
     """No recorder may strand a new entry, and no fixed entry may stay pinned."""
     census = _census()
     _assert_reach(census)
-    stranded = census.stranded(_tree())
+    stranded = {k: v for k, v in census.stranded(_tree()).items() if k not in TOMBSTONE_LEDGERS}
 
     new = {
         recorder: tuple(e for e in entries if e not in KNOWN_STRANDED.get(recorder, ()))
@@ -441,6 +453,16 @@ def test_the_stranded_census_is_pinned_and_may_only_shrink():
     }
     healed = {recorder: entries for recorder, entries in healed.items() if entries}
     assert not healed, f"The census over-states the tree -- drop these in the same commit as their fix: {healed}"
+
+
+def test_every_tombstone_stays_buried():
+    """A tombstone ledger must be found, and every path it names must still be absent."""
+    census = _census()
+    tree = _tree()
+    for key, reason in TOMBSTONE_LEDGERS.items():
+        assert key in census.records, f"FIX THE SWEEP: tombstone ledger {key} was not discovered ({reason})"
+        back = sorted(e for e in census.records[key] if tree.holds(e))
+        assert not back, f"{key}: {back} exist again. {reason}"
 
 
 # --------------------------------------------------------------------------

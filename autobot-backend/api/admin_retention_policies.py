@@ -215,24 +215,11 @@ async def _count_redis_keys(pattern: str) -> int:
 
 
 async def _count_audit_entries() -> int:
-    """Return total entries across all audit: sorted sets."""
+    """Return the number of records in the canonical audit trail (#17225); 0 = unavailable."""
     try:
-        from autobot_shared.redis_client import get_async_redis_client
+        from services.audit.audit import count_since
 
-        redis = await get_async_redis_client(database="main")
-        if redis is None:
-            return 0
-        total = 0
-        cursor: int = 0
-        while True:
-            cursor, keys = await redis.scan(cursor, match="audit:*", count=500)
-            for key in keys:
-                key_type = await redis.type(key)
-                if key_type == "zset":
-                    total += await redis.zcard(key)
-            if cursor == 0:
-                break
-        return total
+        return await count_since(0) or 0
     except Exception as exc:
         logger.debug("_count_audit_entries failed: %s", exc)
         return 0
@@ -262,6 +249,13 @@ async def _count_kb_facts() -> int:
         return 0
 
 
+def _audit_retention_table() -> Dict[str, int]:
+    """The audit retention policy table, category -> days (#17225 D5)."""
+    from services.audit.retention import RETENTION_DAYS
+
+    return {category.value: days for category, days in RETENTION_DAYS.items()}
+
+
 @router.get("/retention-settings", response_model=Dict[str, Any])
 @with_error_handling()
 async def get_retention_settings(
@@ -286,6 +280,7 @@ async def get_retention_settings(
             "chat_retention_days": ssot_config.chat_retention_days,
             "file_retention_days": ssot_config.file_retention_days,
             "audit_retention_days": ssot_config.audit_retention_days,
+            "audit_retention_days_by_category": _audit_retention_table(),
             "kb_retention_days": ssot_config.kb_retention_days,
         },
         "storage_counts": {

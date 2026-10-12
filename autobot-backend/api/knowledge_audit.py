@@ -26,7 +26,7 @@ from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.time_utils import now_utc
 from knowledge.search_filters import fact_not_found, parse_fact_metadata, require_fact_owner
 from knowledge_factory import get_or_create_knowledge_base
-from services.audit.audit import KnowledgeAuditLog  # GH#8290 Phase 2
+from services.audit.knowledge_view import KnowledgeAuditLog  # #17225: canonical audit trail
 
 logger = get_logger(__name__)
 

@@ -35,10 +35,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.slug import url_slug
 from autobot_shared.time_utils import now_utc
+from autobot_shared.user_management.audit_rows import audit_row
 from autobot_shared.user_management.base_service import BaseService, TenantContext
 from autobot_shared.user_management.models.audit import (
     AuditAction,
-    AuditLog,
     AuditResourceType,
 )
 from autobot_shared.user_management.models.organization import OrganizationCore
@@ -586,13 +586,12 @@ class OrganizationService(BaseService):
         outcome: str = "success",
     ) -> None:
         """Create audit log entry."""
-        audit_entry = AuditLog(
-            id=uuid.uuid4(),
+        audit_entry = audit_row(
             org_id=org_id,
             user_id=self.context.user_id,
             action=action,
             resource_type=resource_type,
-            resource_id=resource_id,
+            resource=resource_id,
             outcome=outcome,
             details=details,
         )

@@ -274,7 +274,6 @@
 1|other|autobot-backend/judges/__init__.py|"system"
 1|other|autobot-backend/judges/__init__.py|"user"
 1|other|autobot-backend/knowledge/__init__.py|"general"
-1|other|autobot-backend/knowledge/audit_log.py|100
 1|other|autobot-backend/knowledge/backends/async_base.py|10
 1|other|autobot-backend/knowledge/backends/async_chromadb_adapter.py|10
 1|other|autobot-backend/knowledge/backends/async_memory_adapter.py|10
@@ -438,7 +437,6 @@
 1|other|autobot-backend/services/ai_stack_client.py|60
 1|other|autobot-backend/services/approval_gate_service.py|50
 2|other|autobot-backend/services/audit/audit.py|100
-1|other|autobot-backend/services/audit/audit_log.py|100
 1|other|autobot-backend/services/audit_logger.py|100
 1|other|autobot-backend/services/audit_logger.py|offset=0
 1|other|autobot-backend/services/autoresearch/auto_research_agent.py|60
@@ -471,7 +469,6 @@
 1|other|autobot-backend/services/context_sufficiency.py|"system"
 1|other|autobot-backend/services/context_sufficiency.py|"user"
 1|other|autobot-backend/services/delegation_service.py|50
-1|other|autobot-backend/services/event_log.py|100
 1|other|autobot-backend/services/execution/claude_code_backend.py|"assistant"
 1|other|autobot-backend/services/execution/modal_backend.py|300
 1|other|autobot-backend/services/fact_extraction_service.py|100
