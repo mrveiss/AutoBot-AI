@@ -46,7 +46,7 @@ def _discover(root: Path) -> list[str]:
 REACH = declare(
     "captcha-type-fork-scan",
     discover=_discover,
-    floor=4_756,
+    floor=4897,
     growth=300,
     roots=SCANNED_ROOTS,
     what="tracked Python files scanned for a re-declared CAPTCHA taxonomy",

@@ -121,7 +121,7 @@ def _discover(root: Path) -> list[str]:
 REACH = declare(
     "severity-enum-fork-scan",
     discover=_discover,
-    floor=4_818,
+    floor=5078,
     growth=500,
     roots=SCANNED_ROOTS,
     what="tracked Python files scanned for a re-declared severity ladder",

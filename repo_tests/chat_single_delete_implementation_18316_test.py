@@ -44,11 +44,11 @@ def _api_sources(root: Path) -> list[str]:
         return []
 
 
-#: Mid-window from REACH.window(): 416 non-test api modules measured 2026-10-11, window [376, 416].
+#: Mid-window from REACH.window(): 434 non-test api modules measured 2026-10-13 (train-9), window [394, 434].
 REACH = declare(
     "chat-single-delete-implementation",
     discover=_api_sources,
-    floor=396,
+    floor=414,
     growth=40,
     what="non-test python modules",
     roots=_ROOTS,
