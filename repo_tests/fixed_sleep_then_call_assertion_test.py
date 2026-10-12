@@ -66,6 +66,10 @@ _EXEMPTION_MARKER = "# fixed sleep on purpose (#16255):"
 #: exempt sleeps across these 10 sites.
 _EXEMPT_SITES: dict[tuple[str, str], int] = {
     (
+        "autobot-backend/chat_workflow/turn_control_17273_test.py",
+        "test_no_work_happens_after_the_consumer_is_gone",
+    ): 1,  # absence of a dispatch across the LLM call's duration is the subject; no event to wait on
+    (
         "autobot-backend/knowledge/embedding_cache_test.py",
         "TestEmbeddingCache.test_ttl_expiration",
     ): 1,  # TTL expiry via time.time() is the subject; no injectable clock

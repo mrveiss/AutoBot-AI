@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from autobot_shared.eventually import eventually
 from chat_workflow import graph as graph_module
 from chat_workflow import turn_cancel_bus, turn_control
 from chat_workflow.manager import ChatWorkflowManager
@@ -95,7 +96,8 @@ async def test_no_work_happens_after_the_consumer_is_gone(monkeypatch, drop_chec
     mgr = _manager(monkeypatch, fake)
 
     await _first_chunk_then_close(mgr, "s-after", fake)
-    await asyncio.sleep(0.4)  # longer than the LLM call would have taken
+    # fixed sleep on purpose (#16255): proving NO dispatch happens needs the LLM call's whole duration to pass
+    await asyncio.sleep(0.4)
 
     assert fake.tool_dispatches == 0, "a detached task would have run on to dispatch tools"
 
@@ -215,9 +217,8 @@ async def test_a_real_asgi_disconnect_reaches_the_llm_call(monkeypatch, drop_che
             first_chunk_out.set()
 
     await response({"type": "http", "asgi": {"version": "3.0"}}, receive, send)
-    await asyncio.sleep(0.1)
+    await eventually(lambda: fake.llm_cancelled is True)
 
-    assert fake.llm_cancelled is True
     assert fake.tool_dispatches == 0
     assert not turn_control.has_active_turn("s-asgi")
 

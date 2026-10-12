@@ -94,7 +94,7 @@ def _inspected_files(root: Path) -> list[Path]:
 REACH = declare(
     "undefined-css-var-scan",
     discover=_inspected_files,
-    floor=1458,
+    floor=1503,
     growth=60,
     skips=0,
     what="frontend source files scanned for var() references",

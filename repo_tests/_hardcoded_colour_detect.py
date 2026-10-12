@@ -122,7 +122,7 @@ def _important_scanned_files(root: Path) -> list[str]:
 REACH_COLOUR_FILES = declare(
     "hardcoded-colour-scan",
     discover=_colour_scanned_files,
-    floor=820,
+    floor=857,
     growth=60,
     skips=0,
     what="frontend source files scanned for colour literals",

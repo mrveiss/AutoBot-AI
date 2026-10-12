@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from autobot_shared.eventually import eventually
 from chat_workflow import graph as graph_module
 from chat_workflow import turn_cancel_bus as bus
 from chat_workflow import turn_control
@@ -122,10 +123,11 @@ async def test_a_worker_that_never_answers_makes_the_outcome_unconfirmed(redis, 
 
 
 @pytest.mark.asyncio
-async def test_a_malformed_message_does_not_end_the_listener(redis, monkeypatch):
+async def test_a_malformed_message_does_not_end_the_listener(redis, monkeypatch, caplog):
     fake, stream = await _running_turn(monkeypatch, "s-bad")
     await redis.publish(bus.CHANNEL_PREFIX + "s-bad", json.dumps({"nonsense": True}))
-    await asyncio.sleep(0.05)
+    # The listener has rejected the bad message, so the cancel below reaches a listener that survived it.
+    await eventually(lambda: "turn-cancel request for session s-bad failed" in caplog.text)
 
     outcome = await bus.request_cancel("s-bad", "client_cancel", _no_local_turn, worker_id="worker-b")
     await stream.aclose()
