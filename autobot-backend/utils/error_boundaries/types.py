@@ -16,6 +16,16 @@ from typing import Any, Dict
 
 from autobot_shared.status_enums import Severity
 
+
+class PassThroughError(Exception):
+    """Marker base: ``with_error_handling`` re-raises these unchanged.
+
+    A subclass is answered by an app-level exception handler (e.g. the
+    registry-unavailable 503), which the decorator would otherwise pre-empt
+    by converting the error into a generic trace-id 500 (#17982).
+    """
+
+
 # Module-level tuples for error type classification (from original module)
 CRITICAL_ERROR_TYPES = (SystemExit, KeyboardInterrupt, MemoryError)
 HIGH_SEVERITY_ERROR_TYPES = (ConnectionError, TimeoutError, OSError)

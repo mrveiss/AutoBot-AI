@@ -43,7 +43,6 @@ _UNCONVERTED = {
     "autobot-backend/agents/npu_code_search_agent.py": _CEILING,
     "autobot-backend/agents/scope_enforcement.py": "x- prefixed id, unconverted",
     "autobot-backend/api/analytics_continuous_learning.py": _CEILING,
-    "autobot-backend/api/codebase_analytics/duplicate_detector.py": _QUEUED,
     "autobot-backend/code_analysis/auto-tools/playwright_sanitizer.py": _TOOL,
     "autobot-backend/code_analysis/auto-tools/security_deep_sanitizer.py": _TOOL,
     "autobot-backend/code_analysis/auto-tools/security_sanitizer.py": _TOOL,

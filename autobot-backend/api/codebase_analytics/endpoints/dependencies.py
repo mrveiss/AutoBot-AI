@@ -494,9 +494,9 @@ async def get_dependencies(
     # Issue #12330: Resolve the default source once so both the ChromaDB module
     # load and the filesystem scan below are scoped to the same project.
     if not source_id:
-        from api.codebase_analytics.source_storage import get_default_source_id
+        from api.codebase_analytics.endpoints.shared import default_source_id
 
-        source_id = await get_default_source_id()
+        source_id = await default_source_id()
 
     code_collection = await asyncio.to_thread(get_code_collection)
     modules: Dict[str, Dict] = {}

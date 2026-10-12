@@ -80,8 +80,7 @@ from autobot_shared import env_registry_llc  # noqa: E402,F401
 from autobot_shared import env_registry_logging  # noqa: E402,F401
 from autobot_shared import env_registry_security  # noqa: E402,F401
 from autobot_shared import env_registry_slm  # noqa: E402,F401
-from autobot_shared import env_registry_terminal  # noqa: E402,F401
-from autobot_shared import env_registry_testing  # noqa: E402,F401
+from autobot_shared import env_registry_analytics, env_registry_terminal, env_registry_testing  # noqa: E402,F401
 
 # --- events (#14817, #14818) -------------------------------------------------
 

@@ -88,12 +88,11 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/analyzers.py": 1684,
     "autobot-backend/api/codebase_analytics/api_endpoint_scanner.py": 1444,
     "autobot-backend/api/codebase_analytics/chromadb_storage.py": 1389,  # #18055: split to problem_storage.py
-    "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1326,
+    "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1119,
     "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 756,
-    "autobot-backend/api/codebase_analytics/endpoints/duplicates.py": 660,  # #17758: triplicated cached body collapsed
     "autobot-backend/api/codebase_analytics/endpoints/environment.py": 698,  # #13602: sanitised traversal log
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 827,
-    "autobot-backend/api/codebase_analytics/endpoints/report.py": 2267,
+    "autobot-backend/api/codebase_analytics/endpoints/report.py": 2266,
     "autobot-backend/api/codebase_analytics/endpoints/stats.py": 663,
     "autobot-backend/api/conversation_files.py": 1078,
     "autobot-backend/api/database_mcp.py": 1076,
@@ -486,7 +485,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/tests/services/test_sso_service.py": 1258,
     "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
     "autobot-slm-backend/user_management/services/sso_service.py": 778,
-    "autobot_shared/env_registry.py": 1215,  # #13602: +1 sibling import, -14 registration
+    "autobot_shared/env_registry.py": 1214,  # #13602: +1 sibling import, -14 registration
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
     "autobot_shared/network_constants.py": 616,
     "autobot_shared/npu/integration.py": 929,

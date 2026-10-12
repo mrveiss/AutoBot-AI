@@ -258,9 +258,9 @@ async def get_import_tree(
     """
     effective_source_id = source_id
     if not effective_source_id:
-        from api.codebase_analytics.source_storage import get_default_source_id
+        from api.codebase_analytics.endpoints.shared import default_source_id
 
-        effective_source_id = await get_default_source_id()
+        effective_source_id = await default_source_id()
 
     indexed = await _load_import_tree_from_index(effective_source_id)
     if indexed is not None:

@@ -380,8 +380,8 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
         """Run file-level detections."""
         patterns: List[AntiPatternResult] = []
 
-        # Dead code detection
-        patterns.extend(self._dispensable.detect_dead_code(tree, file_path))
+        # Dead code + duplicate-class detection
+        patterns.extend(self._dispensable.detect_file_level(tree, file_path))
 
         # Missing docstrings
         if self.detect_naming:

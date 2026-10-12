@@ -22,7 +22,7 @@ from constants.threshold_constants import RetryConfig, exponential_backoff_delay
 from utils.cancel_tokens import begin_cancel_scope, end_cancel_scope, signal_cancel_scope
 
 from .boundary_manager import get_error_boundary_manager
-from .types import APIErrorResponse, ErrorCategory, ErrorContext, RecoveryStrategy
+from .types import APIErrorResponse, ErrorCategory, ErrorContext, PassThroughError, RecoveryStrategy
 
 logger = get_logger(__name__)
 
@@ -458,8 +458,8 @@ def with_error_handling(
                 """Async wrapper that catches exceptions and converts to API errors."""
                 try:
                     return await func(*args, **kwargs)
-                except HTTPException:
-                    raise  # Preserve intentional HTTP status codes
+                except (HTTPException, PassThroughError):
+                    raise  # Preserve intentional HTTP status codes / app-level handlers (#17982)
                 except Exception as e:
                     error_response = _create_api_error_response(e, category, func_operation, error_code_prefix)
                     return _raise_or_return_error(error_response)
@@ -472,8 +472,8 @@ def with_error_handling(
                 """Sync wrapper that catches exceptions and converts to API errors."""
                 try:
                     return func(*args, **kwargs)
-                except HTTPException:
-                    raise  # Preserve intentional HTTP status codes
+                except (HTTPException, PassThroughError):
+                    raise  # Preserve intentional HTTP status codes / app-level handlers (#17982)
                 except Exception as e:
                     error_response = _create_api_error_response(e, category, func_operation, error_code_prefix)
                     return _raise_or_return_error(error_response)

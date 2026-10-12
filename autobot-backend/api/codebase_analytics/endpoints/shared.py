@@ -38,6 +38,7 @@ __all__ = [
     "ImportContext",
     "is_external_module",
     "authorize_source_access",
+    "default_source_id",
     "filter_problems_by_file_existence",
     "get_project_root",
     "require_source_access",
@@ -59,18 +60,28 @@ async def resolve_source_root(source_id: "str | None") -> "Path | None":
         source_id: The source identifier to look up, or None.
 
     Returns:
-        Path to the source clone directory, or None if unresolvable.
+        Path to the source clone directory, or None when the source is unknown
+        or has no clone. Raises ``RegistryUnavailable`` when the lookup itself
+        failed -- not found and lookup failed are different facts (#17982).
     """
     if not source_id:
         return None
-    try:
-        from api.codebase_analytics.source_storage import get_source
+    from api.codebase_analytics.source_storage import RegistryUnavailable, get_source
 
+    try:
         source = await get_source(source_id)
-        if source and source.clone_path:
-            return Path(source.clone_path)
+    except RegistryUnavailable:
+        logger.error("source lookup for %s failed: the registry is unavailable", source_id)
+        raise
     except Exception as exc:
-        logger.debug("Could not resolve source root for %s: %s", source_id, exc)
+        # #17982: a lookup that THREW is not "no such source". This was
+        # `except Exception: logger.debug(...)` followed by `return None`, so a
+        # fault and an unknown id were the same observable and a refused scan
+        # asserted the id was unknown. Surfaced as the registry fault it is.
+        logger.error("source lookup for %s failed: %s", source_id, exc, exc_info=True)
+        raise RegistryUnavailable(f"source lookup for {source_id!r} failed") from exc
+    if source and source.clone_path:
+        return Path(source.clone_path)
     return None
 
 
@@ -118,12 +129,12 @@ async def resolve_scan_root(source_id: "str | None", use_default: bool = True, s
         project root.
     """
     if not source_id and use_default:
-        try:
-            from api.codebase_analytics.source_storage import get_default_source_id
+        from api.codebase_analytics.source_storage import get_default_source_id
 
-            source_id = await get_default_source_id()
-        except Exception as exc:
-            logger.debug("resolve_scan_root: default source lookup failed: %s", exc)
+        # #17982: a registry fault propagates. Swallowing it here fell through to
+        # AutoBot's own tree, so a scan that never found out which project to
+        # read reported a result for the wrong one.
+        source_id = await get_default_source_id()
 
     source_root = await resolve_source_root(source_id)
     if source_root:
@@ -213,6 +224,27 @@ def _caller_owner_id(user: "dict | None") -> "str | None":
     return _NO_OWNER_ID
 
 
+def _registry_unavailable_503() -> HTTPException:
+    """The one response for an unreadable source registry; the cause is already logged."""
+    return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Code source registry unavailable")
+
+
+async def default_source_id() -> "str | None":
+    """The default source id for an HTTP handler; an unreadable registry is a 503 (#17982).
+
+    Handlers fell back to ``None`` (and so to a cross-project or AutoBot-root
+    answer) when this raised nothing but returned ``None`` for a fault. Tasks
+    call ``get_default_source_id`` directly and let ``RegistryUnavailable`` fail them.
+    """
+    from api.codebase_analytics.source_storage import RegistryUnavailable, get_default_source_id
+
+    try:
+        return await get_default_source_id()
+    except RegistryUnavailable:
+        logger.error("default source lookup failed: the registry is unavailable")
+        raise _registry_unavailable_503() from None
+
+
 async def authorize_source_access(source_id: "str | None", user: "dict | None") -> None:
     """Enforce that ``user`` may access the code source ``source_id`` (#12358).
 
@@ -229,9 +261,14 @@ async def authorize_source_access(source_id: "str | None", user: "dict | None") 
     """
     if not source_id:
         return
-    from api.codebase_analytics.source_storage import _is_visible, get_source
+    from api.codebase_analytics.source_storage import RegistryUnavailable, _is_visible, get_source
 
-    source = await get_source(source_id)
+    try:
+        source = await get_source(source_id)
+    except RegistryUnavailable:
+        # A fault is not "no such source": answering 404 here told the caller the
+        # id was unknown when the registry could not be read (#17982).
+        raise _registry_unavailable_503() from None
     if source is None or not _is_visible(source, _caller_owner_id(user)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

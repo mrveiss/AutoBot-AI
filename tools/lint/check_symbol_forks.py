@@ -49,22 +49,39 @@ import ast
 import json
 import sys
 from collections import defaultdict
-from dataclasses import dataclass, field
 from pathlib import Path
 
-from _scan_helpers import tracked_paths
+# Run as a script, `tools/lint` is sys.path[0] and the repo root is not.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from autobot_shared.symbol_forks import (  # noqa: E402
+    FORK_EXCLUDED_NAMES,
+    FORK_EXCLUDED_PARTS,
+    FORK_MIRRORED_PREFIX,
+    FORK_ROOTS,
+    ForkCluster,
+    ForkDefinition,
+    fork_definitions_in,
+    fork_find_clusters,
+    fork_in_population,
+    fork_is_mandatory_mirror,
+    fork_is_route_handler,
+    fork_is_test_file,
+    fork_tracked_python_files,
+)
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
-ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
-
-# Directory parts that take a file out of the population entirely.
-EXCLUDED_PARTS = frozenset({"__pycache__", "node_modules", "venv", ".venv", "migrations", "alembic"})
-
-# Names whose repetition across modules is the intended design, not a fork.
-# `main` is a script entry point; alembic revisions each define upgrade/downgrade
-# (and their directories are excluded too, so this is belt and braces).
-EXCLUDED_NAMES = frozenset({"main", "upgrade", "downgrade", "migrate"})
+# The detector itself lives in `autobot_shared.symbol_forks` so the analytics
+# cross-file pass counts with the SAME code (#18067). Everything below is the
+# CLI's policy -- floor, baseline, ratchet -- over that one implementation, with
+# the original names kept for the tests and importers that use them.
+ROOTS = FORK_ROOTS
+EXCLUDED_PARTS = FORK_EXCLUDED_PARTS
+EXCLUDED_NAMES = FORK_EXCLUDED_NAMES
+MIRRORED_PREFIX = FORK_MIRRORED_PREFIX
+Definition = ForkDefinition
+Cluster = ForkCluster
 
 #: Floor on files successfully PARSED — not on files listed, and never on
 #: findings. "0 new clusters" is meaningless if the sweep collapsed, and a
@@ -75,155 +92,30 @@ MIN_FILES_PARSED = 2000
 
 BASELINE = _REPO_ROOT / "repo_tests" / "symbol_fork_baseline.json"
 
-
-def is_test_file(path: Path) -> bool:
-    """Tests legitimately redefine names: fixtures, fakes, back-compat shims."""
-    name = path.name
-    return name.endswith("_test.py") or name.startswith("test_") or "tests" in path.parts
-
-
-#: A MANDATORY byte-identical mirror, not a fork (#16401). Ansible ships
-#: `autobot-slm-backend/slm/agent/` to the target host from
-#: `autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/`, and
-#: `ansible/tests/detect_agent_code_drift_test.py` fails if the two trees differ.
-#: So every symbol there is defined twice BY DESIGN and must stay that way —
-#: consolidating one would break the payload or the drift test.
-#:
-#: `duplication-guard.yml` already excludes this path for the same reason, with the
-#: same wording: "there is nothing here this guard can ask anyone to deduplicate."
-#: This detector did not, so 17 of the clusters it counted were that mirror. A
-#: ratchet whose population includes entries nobody may touch reports a floor it
-#: can never reach, and sends whoever works it toward a change that breaks a test.
-#: Excluded here so the count means ACTIONABLE forks.
-MIRRORED_PREFIX = "autobot-slm-backend/ansible/roles/slm_agent/files/"
-
-
-def is_mandatory_mirror(path: Path) -> bool:
-    """True for the ansible payload copy of `autobot-slm-backend/slm/agent/`."""
-    return path.as_posix().startswith(MIRRORED_PREFIX)
-
-
-def in_population(path: Path) -> bool:
-    """The declared boundary, in one place so the test can pin it."""
-    if EXCLUDED_PARTS & set(path.parts):
-        return False
-    if is_mandatory_mirror(path):
-        return False
-    return not is_test_file(path)
+is_test_file = fork_is_test_file
+is_mandatory_mirror = fork_is_mandatory_mirror
+in_population = fork_in_population
+is_route_handler = fork_is_route_handler
 
 
 def tracked_python_files() -> list[Path]:
     """`git ls-files` rather than a walk: untracked scratch files are not the tree."""
-    # `tracked_paths` rather than a hand-rolled `git ls-files`: an inherited
-    # GIT_DIR outranks `cwd=`, so a bare call run from one worktree can
-    # enumerate ANOTHER checkout's index and answer confidently about the wrong
-    # tree (#14896, #15176). With 14 live worktrees here that is not theoretical.
-    #
-    # NOT `<root>/**/*.py`: that pathspec silently misses files sitting directly
-    # in a root (autobot-backend/circuit_breaker.py and ~40 others), which made
-    # the first frozen baseline 324 instead of 365. Match on the roots and
-    # filter the extension here, where the rule is visible.
-    tracked = tracked_paths(_REPO_ROOT, *ROOTS, exclude=sorted(EXCLUDED_PARTS))
-    return [Path(rel) for rel in tracked if rel.endswith(".py")]
-
-
-@dataclass
-class Definition:
-    """One module-level binding of a name."""
-
-    path: str
-    lineno: int
-    kind: str
-    body_statements: int
-
-
-@dataclass
-class Cluster:
-    """One name, defined at module level in two or more files."""
-
-    name: str
-    definitions: list[Definition] = field(default_factory=list)
-
-    @property
-    def kinds(self) -> set[str]:
-        return {d.kind for d in self.definitions}
-
-    @property
-    def drifted(self) -> bool:
-        """Different body sizes mean the copies are not the same text any more.
-
-        This is an indicator, not proof: two definitions can differ in size and
-        still be one concept correctly specialised. It is here because a clone
-        metric reports the *opposite* signal -- identical copies score high and
-        drifted ones score zero.
-        """
-        return len({d.body_statements for d in self.definitions}) > 1
-
-
-def is_route_handler(node: ast.AST) -> bool:
-    """True for `@router.get(...)`-style decorators.
-
-    A route handler's name is scoped to its own router, so the same name in
-    several API modules is normal design. Without this, the loudest clusters
-    are all endpoints and the real forks are buried under them.
-    """
-    for dec in getattr(node, "decorator_list", []):
-        func = dec.func if isinstance(dec, ast.Call) else dec
-        if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
-            if func.value.id in ("router", "app", "api_router"):
-                return True
-    return False
+    return fork_tracked_python_files(_REPO_ROOT, ROOTS)
 
 
 def definitions_in(path: Path) -> "list[tuple[str, Definition]] | None":
     """Module-level class/def bindings. Nested and conditional defs are out of scope."""
-    try:
-        tree = ast.parse((_REPO_ROOT / path).read_text(encoding="utf-8"))
-    except (SyntaxError, OSError):
-        # None, not [] — "could not read this file" is a different fact from
-        # "read it and it defines nothing", and the reach floor below counts
-        # successful PARSES, so the two must not be conflated.
-        return None
-    found = []
-    for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            kind = "function"
-        elif isinstance(node, ast.ClassDef):
-            kind = "class"
-        else:
-            continue
-        if node.name.startswith("_") or node.name in EXCLUDED_NAMES:
-            continue
-        if is_route_handler(node):
-            continue
-        found.append((node.name, Definition(str(path), node.lineno, kind, len(node.body))))
-    return found
+    return fork_definitions_in(path, _REPO_ROOT)
 
 
 def find_clusters(paths: list[Path]) -> "tuple[dict[str, Cluster], int]":
     """Group module-level definitions by name; keep those bound in >=2 files.
 
     Returns the clusters AND the number of files successfully PARSED, which is
-    what the vacuity floor binds to. `len(paths)` counts what git listed, so a
-    broken `in_population` or a tree of unparsable files would clear a floor on
-    it while the sweep saw almost nothing (CodeRabbit).
+    what the vacuity floor binds to.
     """
-    by_name: dict[str, list[Definition]] = defaultdict(list)
-    parsed = 0
-    for path in paths:
-        if not in_population(path):
-            continue
-        found = definitions_in(path)
-        if found is None:
-            continue
-        parsed += 1
-        for name, definition in found:
-            by_name[name].append(definition)
-    clusters = {}
-    for name, defs in by_name.items():
-        if len({d.path for d in defs}) > 1:
-            clusters[name] = Cluster(name, sorted(defs, key=lambda d: (d.path, d.lineno)))
-    return clusters, parsed
+    scan = fork_find_clusters(paths, _REPO_ROOT)
+    return scan.clusters, scan.parsed
 
 
 def canonical_candidate(cluster: Cluster, import_counts: dict[str, int]) -> Definition:

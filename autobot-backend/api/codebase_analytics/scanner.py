@@ -416,10 +416,15 @@ async def do_indexing_with_progress(task_id: str, root_path: str, source_id: str
         # so a missing dep doesn't break the existing per-file pipeline.
         try:
             from api.codebase_analytics.cross_file_analysis import (
-                run_cross_file_analysis,
+                analyze_cross_file_with_outcome,
             )
 
-            await run_cross_file_analysis(root_path, source_id=source_id, progress_callback=update_progress)
+            outcome = await analyze_cross_file_with_outcome(
+                root_path, source_id=source_id, progress_callback=update_progress
+            )
+            if not outcome.ran:
+                # #18067: a pass that never ran is not "no findings".
+                logger.warning("[Task %s] Cross-file rules did not run: %s", task_id, outcome.reason)
         except Exception as exc:
             logger.warning("[Task %s] Cross-file analysis skipped: %s", task_id, exc)
 
