@@ -132,3 +132,39 @@ def test_no_adapter_class_is_defined_twice() -> None:
     _, classes = _scan()
     dups = {name: mods for name, mods in classes.items() if len(mods) > 1}
     assert not dups, f"#15024: duplicate adapter classes {dups}"
+
+
+def _declared_platforms(source: str) -> set[str]:
+    """String values passed as `platform=` keywords in `source`."""
+    return {
+        kw.value.value
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call)
+        for kw in node.keywords
+        if kw.arg == "platform" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str)
+    }
+
+
+def _channel_type_values(source: str) -> set[str]:
+    """String values of the `ChannelType` members, read from source (the gateway cannot be imported here)."""
+    cls = next(n for n in ast.parse(source).body if isinstance(n, ast.ClassDef) and n.name == "ChannelType")
+    return {n.value.value for n in cls.body if isinstance(n, ast.Assign) and isinstance(n.value, ast.Constant)}
+
+
+def test_the_platform_extractors_see_a_known_positive_and_a_known_negative() -> None:
+    assert _declared_platforms('super().__init__(platform="whatsapp", x=1)') == {"whatsapp"}
+    assert _declared_platforms("super().__init__(platform=name)") == set()
+    assert _channel_type_values('class ChannelType:\n    A = "a"\n    B = "b"\n') == {"a", "b"}
+
+
+def test_channel_type_lists_every_channel_that_has_an_adapter() -> None:
+    root = repo_root()
+    platforms: set[str] = set()
+    for rel in REACH.examined(root):
+        if rel.startswith(_CANONICAL) and "adapter" in rel and not rel.endswith("_test.py"):
+            platforms |= _declared_platforms((root / rel).read_text(encoding="utf-8"))
+    assert len(platforms) >= 9, sorted(platforms)
+    declared = _channel_type_values((root / _GATEWAY / "types.py").read_text(encoding="utf-8"))
+    assert (
+        not platforms - declared
+    ), f"#15024: adapters ship for {sorted(platforms - declared)} but ChannelType has no member for them"
