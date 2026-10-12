@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from autobot_shared.url_safety import is_public_url_async
@@ -65,7 +66,9 @@ class PlaywrightService:
         """Check if Playwright container is healthy"""
         try:
             timeout = aiohttp.ClientTimeout(total=self.timeout)
-            async with await self.http_client.get(f"{self.base_url}/health", timeout=timeout) as response:
+            async with await self.http_client.get(
+                f"{self.base_url}/health", timeout=timeout, guard_egress=EGRESS_POLICY
+            ) as response:
                 if response.status == 200:
                     health_data = await response.json()
                     self._healthy = health_data.get("status") == "healthy"
@@ -108,7 +111,7 @@ class PlaywrightService:
         """
         timeout = aiohttp.ClientTimeout(total=self.timeout)
         async with await self.http_client.post(
-            f"{self.base_url}/{endpoint}", json=payload, timeout=timeout
+            f"{self.base_url}/{endpoint}", json=payload, timeout=timeout, guard_egress=EGRESS_POLICY
         ) as response:
             if response.status == 200:
                 return await response.json()
@@ -336,7 +339,7 @@ class PlaywrightService:
 
             timeout = aiohttp.ClientTimeout(total=self.timeout)
             async with await self.http_client.post(
-                f"{self.base_url}/test-frontend", json=payload, timeout=timeout
+                f"{self.base_url}/test-frontend", json=payload, timeout=timeout, guard_egress=EGRESS_POLICY
             ) as response:
                 if response.status == 200:
                     result = await response.json()
@@ -386,7 +389,9 @@ class PlaywrightService:
             if self._healthy:
                 # Get additional health info from container
                 timeout = aiohttp.ClientTimeout(total=self.timeout)
-                async with await self.http_client.get(f"{self.base_url}/health", timeout=timeout) as response:
+                async with await self.http_client.get(
+                    f"{self.base_url}/health", timeout=timeout, guard_egress=EGRESS_POLICY
+                ) as response:
                     if response.status == 200:
                         container_health = await response.json()
                         status.update(

@@ -65,6 +65,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 import venv_provenance as provenance
 from autobot_shared.env_utils import env_float
+from autobot_shared.slug import sanitize_token
 from autobot_shared.time_utils import utc_timestamp
 
 # Plain stdlib logging, deliberately (mirrors code_sync.py itself, and the
@@ -94,7 +95,6 @@ _DECLARED_LOCK_FILENAME = ".autobot_declared_lock.json"
 EXPLICIT_LIST_COMPONENTS: frozenset = frozenset({"autobot-npu-worker", "autobot-browser-worker", "autobot-slm-agent"})
 
 _NAME_BOUNDARY_RE = re.compile(r"[<>=!~;\[\s]")
-_NORMALIZE_RE = re.compile(r"[-_.]+")
 # Narrow, dependency-free extraction of a PEP 621 `[project] name = "..."` field —
 # a full TOML parser is unwarranted for the one string this needs, and `tomllib`
 # is 3.11+ only while this module must import under whatever interpreter the
@@ -118,7 +118,7 @@ class ReconcileReport:
 
 def normalize_name(name: str) -> str:
     """PEP 503 normalization — how pip itself compares distribution names."""
-    return _NORMALIZE_RE.sub("-", name).strip("-").lower()
+    return sanitize_token(name, allowed=None, separator_chars="-_.", case="lower", strip_edges="-")
 
 
 def extract_requirement_name(spec: str) -> Optional[str]:

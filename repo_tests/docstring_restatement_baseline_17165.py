@@ -116,7 +116,7 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
     "autobot-backend/services/codebase_indexing_service.py": frozenset({"index_autobot_codebase", "index_single_file"}),
     "autobot-backend/services/load_balancer.py": frozenset({"get_all_workers"}),
     "autobot-backend/services/npu_worker_manager.py": frozenset({"test_worker_connection"}),
-    "autobot-backend/services/redis_service_manager.py": frozenset({"ServiceOperationResult"}),
+    "autobot-backend/services/redis_service_models.py": frozenset({"ServiceOperationResult"}),
     "autobot-backend/services/temporal_invalidation_service.py": frozenset({"remove_invalidation_rule"}),
     "autobot-backend/services/wake_word_service.py": frozenset({"remove_callback"}),
     "autobot-backend/services/workflow_automation/models.py": frozenset({"WorkflowStepStatus"}),

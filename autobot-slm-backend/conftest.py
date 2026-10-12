@@ -414,6 +414,7 @@ _REAL_SERVICE_MODULES = (
     "ansible_utils",
     "provision_progress",
     "process_divergence",
+    "unit_names",  # #18359: stdlib-only validators; journal_fetch imports it
     "journal_fetch",
     # #15462: has a co-located test that imports it, so it must be real-loaded
     # here or it resolves to a MagicMock depending on shard order

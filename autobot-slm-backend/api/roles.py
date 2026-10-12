@@ -21,11 +21,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from api._post_sync_plan import ordered_post_sync_plan
-from autobot_shared.ssot_config import config
 from models.database import Node, NodeRole, Role, RoleStatus, SyncType
 from services.auth import get_current_user
 from services.database import get_db
 from services.role_registry import get_role_definitions, list_roles
+from services.service_restart import build_service_ssh_base_cmd, build_service_ssh_cmd, run_systemctl_over_ssh
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/roles", tags=["roles"])
@@ -133,6 +133,7 @@ class ExecuteActionRequest(BaseModel):
     category: str = Field(..., min_length=1)
 
 
+_SSH_ACTION_TIMEOUT_S = 120.0  # kept as-is: unifying the restart timeouts is the owner decision on #17455
 _ROLES_LIST_TIMEOUT = 10.0  # seconds; guards against slow DB / detection hangs (#11360)
 
 
@@ -621,10 +622,9 @@ async def execute_node_action(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Role has no systemd_service",
             )
-        success, output = await _run_ssh_cmd(
-            node,
-            f"sudo -n systemctl restart {' '.join(role.systemd_service)}",  # #16025: >1 unit, one call
-        )
+        success, output = await _reported(
+            _restart_over_ssh(build_service_ssh_base_cmd(node), role.systemd_service)
+        )  # #16025: >1 unit, one call
     else:
         cmd = role.post_sync_cmd
         if not cmd:
@@ -652,36 +652,32 @@ async def execute_node_action(
 
 async def _run_ssh_cmd(node: Node, remote_cmd: str) -> tuple:
     """Run a command on a node via SSH. Returns (success, output)."""
-    ssh_user = node.ssh_user or "autobot"
-    ssh_port = node.ssh_port or 22
-    ssh_key = config.path.ssh_key_path  # canonical inter-node key (#12429)
-    ssh_cmd = [
-        "/usr/bin/ssh",
-        "-o",
-        "StrictHostKeyChecking=accept-new",
-        "-o",
-        "ConnectTimeout=10",
-        "-o",
-        "BatchMode=yes",
-        "-i",
-        ssh_key,
-        "-p",
-        str(ssh_port),
-        f"{ssh_user}@{node.ip_address}",
-        remote_cmd,
-    ]
+    return await _reported(_spawn_ssh(build_service_ssh_cmd(node, remote_cmd)))
+
+
+async def _spawn_ssh(ssh_cmd: list) -> tuple:
+    """Run *ssh_cmd*; returns (returncode, stdout, stderr)."""
+    process = await asyncio.create_subprocess_exec(
+        *ssh_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=_SSH_ACTION_TIMEOUT_S)
+    return process.returncode, stdout, stderr
+
+
+async def _restart_over_ssh(ssh_base_cmd: list, units: List[str]) -> tuple:
+    """Restart *units* in one `sudo -n systemctl` call; returns (returncode, stdout, stderr)."""
+    done = await run_systemctl_over_ssh(
+        ssh_base_cmd, "restart", units, use_noninteractive_sudo=True, timeout=_SSH_ACTION_TIMEOUT_S
+    )
+    return done.returncode, done.stdout, done.stderr
+
+
+async def _reported(call) -> tuple:
+    """Await *call* (an ssh run) and report it to the user as (success, output capped at 2000)."""
     try:
-        process = await asyncio.create_subprocess_exec(
-            *ssh_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(),
-            timeout=120.0,
-        )
+        returncode, stdout, stderr = await call
         combined = stdout.decode("utf-8", errors="replace") + stderr.decode("utf-8", errors="replace")
-        return process.returncode == 0, combined[:2000]
+        return returncode == 0, combined[:2000]
     except asyncio.TimeoutError:
         return False, "Timeout after 120 seconds"
     except Exception as e:

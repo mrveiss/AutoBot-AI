@@ -1052,9 +1052,9 @@ class CodePatternAnalyzer:
         callers get a well-shaped vector when embedding infrastructure is
         unavailable, never as a substitute for one (#12407, #13437).
         """
-        import hashlib
+        from autobot_shared.content_digest import content_digest
 
-        hash_bytes = hashlib.sha256(code.encode()).digest()
+        hash_bytes = bytes.fromhex(content_digest(code))
         # 768 dimensions to match nomic-embed-text.
         return [(hash_bytes[i % 32] - 128) / 128.0 for i in range(768)]
 

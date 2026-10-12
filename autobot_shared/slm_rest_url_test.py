@@ -49,7 +49,7 @@ _MIGRATED_CALL_SITES = {
     "autobot-backend/llc/services/slm_policy.py": 'client._rest_url(f"/api/settings/',
     "autobot-backend/orchestration/dag_executor.py": 'rest_url(slm_url, f"/api/nodes/',
     "autobot-backend/services/redis_service_manager.py": 'rest_url(self.slm_url, f"/api/nodes/',
-    "autobot-backend/services/skill_management/skill_proposer.py": 'rest_url(slm_url, "/api/skills/propose")',
+    "autobot-backend/services/skill_management/skill_proposer.py": 'rest_url(config.slm_url, "/api/skills/propose")',
     "scripts/daily_health_check.py": 'rest_url(self.slm_url, "/api/health")',
 }
 

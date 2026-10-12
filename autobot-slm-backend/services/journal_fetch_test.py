@@ -151,7 +151,7 @@ def test_the_since_window_is_only_added_when_asked():
     with_window = journal_fetch.build_journal_command("autobot-backend", 100, "1h")
 
     assert "--since" not in without
-    assert "--since='1h'" in with_window
+    assert "--since=1h" in with_window
     # -n carries the caller's bound; a fetch that silently ignored it would ask
     # for the journal's default page and time out on a busy node.
     assert "-n 100" in without
@@ -185,3 +185,57 @@ async def test_a_child_that_exited_before_the_kill_still_reports_the_timeout(mon
         await journal_fetch.fetch_service_journal(_SSH_CMD, "autobot-backend")
 
     assert "AUTOBOT_SLM_JOURNAL_SSH_TIMEOUT_SECONDS" in str(excinfo.value)
+
+
+# ---------------------------------------------------------------------------
+# #18359: nothing request-derived reaches the remote shell unquoted
+# ---------------------------------------------------------------------------
+
+_HOSTILE = ["foo;id", "$(id)", "`id`", "a b", "-H", "--help", "a\nid", "a'b", '"x"', "../x"]
+
+
+@pytest.mark.parametrize("unit", _HOSTILE)
+def test_a_hostile_unit_is_refused(unit):
+    with pytest.raises(ValueError):
+        journal_fetch.build_journal_command(unit, 10)
+
+
+@pytest.mark.parametrize(
+    "since", ["1h;id", "$(id)", "`id`", "'; id #", "1h\nid", "-H", "1 hour; id", "yesterday x", ""]
+)
+def test_a_hostile_since_is_refused_or_omitted(since):
+    if since == "":
+        assert "--since" not in journal_fetch.build_journal_command("a", 10, since)
+        return
+    with pytest.raises(ValueError):
+        journal_fetch.build_journal_command("a", 10, since)
+
+
+@pytest.mark.parametrize(
+    "since", ["1h", "-30min", "2 d ago", "today", "yesterday", "2026-10-12", "2026-10-12 08:30:00", "2026-10-12T08:30"]
+)
+def test_a_valid_since_contrast_is_accepted_and_quoted(since):
+    import shlex
+
+    cmd = journal_fetch.build_journal_command("slm-agent", 10, since)
+    assert cmd == f"sudo -n journalctl -u slm-agent -n 10 --no-pager --since={shlex.quote(since)}"
+
+
+@pytest.mark.parametrize(("lines", "bound"), [(0, 1), (-5, 1), (10**9, 1000), (50, 50)])
+def test_lines_is_an_int_clamped_to_a_sane_bound(lines, bound):
+    assert f"-n {bound} " in journal_fetch.build_journal_command("a", lines) + " "
+
+
+def test_a_non_integer_lines_is_refused():
+    with pytest.raises(ValueError):
+        journal_fetch.build_journal_command("a", "5; id")
+
+
+def test_the_unit_goes_through_shlex_quote(monkeypatch):
+    """With the validator bypassed, quoting alone keeps a hostile unit one inert word."""
+    import shlex
+
+    monkeypatch.setattr(journal_fetch, "validate_unit_name", lambda u: u)
+    cmd = journal_fetch.build_journal_command("foo;id", 10)
+    assert "-u 'foo;id' " in cmd
+    assert shlex.split(cmd)[4] == "foo;id"

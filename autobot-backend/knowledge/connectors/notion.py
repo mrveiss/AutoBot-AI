@@ -18,13 +18,13 @@ Config keys (under ``ConnectorConfig.config``):
     notion_api_base (str): Override API base URL (optional; for testing).
 """
 
-import hashlib
 from datetime import datetime
 from typing import Any, Dict, List
 
 import aiohttp
 
 from autobot_shared.auth import BearerAuth
+from autobot_shared.content_digest import content_digest
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.notion_utils import extract_title as _extract_title
@@ -118,7 +118,7 @@ class NotionConnector(AbstractConnector):
 
         # Update stored hash so future incremental syncs are accurate
         if text.strip():
-            content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+            content_hash = content_digest(text)
             await self._store_hash(source_id, content_hash)
 
         return ContentResult(

@@ -14,10 +14,10 @@ Implements GH#6627.
 """
 
 import json
-import re
 from typing import Any
 
 from autobot_shared.content_digest import content_digest
+from autobot_shared.text_tokens import word_token_list
 
 
 def normalize_content(content: Any) -> str:
@@ -32,7 +32,7 @@ def normalize_content(content: Any) -> str:
 
 def tokenize(text: str) -> list[str]:
     """Split text into lower-cased word/number tokens."""
-    return re.findall(r"\b\w+\b", text.lower())
+    return word_token_list(text, split_underscore=False)
 
 
 def content_hash(content: Any) -> str:

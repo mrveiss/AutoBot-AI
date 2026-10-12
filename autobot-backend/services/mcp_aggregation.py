@@ -19,12 +19,11 @@ from typing import Any, AsyncContextManager, Callable, Sequence
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import redact_provider_error
+from autobot_shared.slug import sanitize_token
 from skills.sync.mcp_client import RejectedTool
 from type_defs.mcp import MCPToolDefinition
 
 logger = get_logger(__name__)
-
-_SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 # A client factory takes a server URI and returns an async-context-manager object
 # exposing `discover_tools_detailed() -> ToolDiscovery` (MCPClient's shape, #17467).
@@ -42,7 +41,7 @@ def server_id_from_uri(uri: str) -> str:
     """Return a stable, lowercase slug for *uri* suitable as a name prefix."""
     slug = re.sub(r"^[a-z]+://", "", uri.lower())
     slug = slug.split("/")[0]
-    return _SLUG_RE.sub("_", slug).strip("_") or "mcp"
+    return sanitize_token(slug, replacement="_", strip_edges="_") or "mcp"
 
 
 #: Exception types that mean OUR bug, not the server's state (#17439, #17467).

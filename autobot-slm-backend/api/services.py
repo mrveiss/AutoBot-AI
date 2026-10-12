@@ -22,6 +22,7 @@ from typing_extensions import Annotated
 from api.orchestration import FleetServicesResponse, ServiceCategoryUpdate
 from api.orchestration import get_fleet_services as orchestration_fleet_services
 from api.orchestration import update_fleet_service_category
+from api.service_action_guard import FLEET_SERVICE_ACTION_ROUTE, NODE_SERVICE_ACTION_ROUTE, SERVICE_LOGS_ROUTE
 from api.service_ports import SERVICE_PORT_MAP
 from api.websocket import ws_manager
 from autobot_shared.ssot_config import config
@@ -370,10 +371,7 @@ async def _upsert_service(
         return True, False
 
 
-@router.post(
-    "/{node_id}/services/{service_name}/start",
-    response_model=ServiceActionResponse,
-)
+@router.post("/{node_id}/services/{service_name}/start", **NODE_SERVICE_ACTION_ROUTE)
 async def start_service(
     node_id: str,
     service_name: str,
@@ -430,10 +428,7 @@ async def start_service(
     )
 
 
-@router.post(
-    "/{node_id}/services/{service_name}/stop",
-    response_model=ServiceActionResponse,
-)
+@router.post("/{node_id}/services/{service_name}/stop", **NODE_SERVICE_ACTION_ROUTE)
 async def stop_service(
     node_id: str,
     service_name: str,
@@ -547,10 +542,7 @@ async def _notify_restart_result(node_id: str, service_name: str, success: bool,
     )
 
 
-@router.post(
-    "/{node_id}/services/{service_name}/restart",
-    response_model=ServiceActionResponse,
-)
+@router.post("/{node_id}/services/{service_name}/restart", **NODE_SERVICE_ACTION_ROUTE)
 async def restart_service(
     node_id: str,
     service_name: str,
@@ -586,10 +578,7 @@ async def restart_service(
     )
 
 
-@router.get(
-    "/{node_id}/services/{service_name}/logs",
-    response_model=ServiceLogsResponse,
-)
+@router.get("/{node_id}/services/{service_name}/logs", **SERVICE_LOGS_ROUTE)
 async def get_service_logs(
     node_id: str,
     service_name: str,
@@ -946,10 +935,7 @@ async def _get_fleet_nodes_or_raise(
     return services, nodes
 
 
-@fleet_router.post(
-    "/services/{service_name}/start",
-    response_model=ServiceActionResponse,
-)
+@fleet_router.post("/services/{service_name}/start", **FLEET_SERVICE_ACTION_ROUTE)
 async def start_fleet_service(
     service_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -1005,10 +991,7 @@ async def start_fleet_service(
     )
 
 
-@fleet_router.post(
-    "/services/{service_name}/stop",
-    response_model=ServiceActionResponse,
-)
+@fleet_router.post("/services/{service_name}/stop", **FLEET_SERVICE_ACTION_ROUTE)
 async def stop_fleet_service(
     service_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -1063,10 +1046,7 @@ async def stop_fleet_service(
     )
 
 
-@fleet_router.post(
-    "/services/{service_name}/restart",
-    response_model=ServiceActionResponse,
-)
+@fleet_router.post("/services/{service_name}/restart", **FLEET_SERVICE_ACTION_ROUTE)
 async def restart_fleet_service(
     service_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],

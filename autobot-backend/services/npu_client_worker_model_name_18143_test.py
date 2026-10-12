@@ -27,8 +27,12 @@ def _supported_models() -> set:
 
 @pytest.mark.asyncio
 async def test_request_model_is_one_the_worker_loads(monkeypatch):
+    from autobot_shared import egress_allowlist
     from services import npu_client
 
+    # #17576: the request is egress-guarded, so the fake worker origin must be an internal one.
+    monkeypatch.setattr(egress_allowlist, "_ssot_service_urls", lambda: ["http://worker"])
+    egress_allowlist.reset_internal_origin_state()
     seen = {}
 
     @asynccontextmanager

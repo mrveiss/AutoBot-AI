@@ -12,7 +12,7 @@ import asyncio
 import time
 from typing import List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from ai_hardware_accelerator import HardwareDevice
 from api.schemas_knowledge import (
@@ -27,6 +27,7 @@ from api.schemas_knowledge import (
     SearchPerformanceAnalyticsResponse,
 )
 from api.system_health import register_singleton_probe
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.embedding_model import EmbeddingUnavailableError, raise_if_embedding_refused
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_llm_logger
@@ -37,7 +38,7 @@ from type_defs.common import Metadata
 
 logger = get_llm_logger("search_api")
 
-router = APIRouter(tags=["Search"])
+router = APIRouter(tags=["Search"], dependencies=[Depends(get_current_user)])
 
 
 def _parse_force_device(force_device_str: str | None) -> HardwareDevice | None:
@@ -228,7 +229,7 @@ async def benchmark_search_performance(request: BenchmarkRequest):
     operation="optimize_search_engine",
     error_code_prefix="ENHANCED_SEARCH",
 )
-async def optimize_search_engine(request: NPUOptimizationRequest):
+async def optimize_search_engine(request: NPUOptimizationRequest, _: bool = Depends(check_admin_permission)):
     """
     Optimize search engine for specific workload types.
 

@@ -23,6 +23,9 @@ picked itself -- from the SSOT or operator configuration. A URL a user, an LLM o
 must use ``guard_egress=False`` (public-only, no internal trust): trusting an internal origin there
 would let the requester aim the server at its own services.
 
+**Config LLM base URLs are not trusted as internal.** The OpenAI and Anthropic base URLs (and any other
+operator-set LLM gateway URL) stay on the public-only check; a private gateway needs an owner policy decision.
+
 **Residual, stated rather than discovered (#18199).** Matching compares origin *strings* and does not
 resolve DNS. A DNS-named config host is trusted wherever the name resolves at request time.
 
@@ -142,6 +145,11 @@ def _ssot_service_urls() -> list[str]:
     return urls + _server_called_urls()
 
 
+def _ws_scheme(url: str) -> str:
+    """*url* with ``http``/``https`` mapped to ``ws``/``wss`` (same host and port): the SLM event socket."""
+    return re.sub(r"^http(s?)://", r"ws\1://", url, count=1, flags=re.IGNORECASE)
+
+
 def _server_called_urls() -> list[str]:
     """Origins the server itself calls, each from its SSOT source (never a second literal list).
 
@@ -149,8 +157,10 @@ def _server_called_urls() -> list[str]:
     to a human. These are here because server code requests them: ``api/analytics.py`` health check
     (frontend), ``api/vnc_proxy.py`` ``VNC_ENDPOINTS`` HTTP and websockify calls (``vm.main`` and
     ``vm.browser`` on ``port.vnc``; the websockify call is ``wss://``, so both schemes), and
-    ``api/monitoring.py`` Alertmanager queries (``ServiceURLs.ALERTMANAGER_API``). Prometheus is deliberately
-    absent: its host is derived two ways (``vm.main`` vs ``REDIS_VM_IP``), pending #18326.
+    ``api/monitoring.py`` Alertmanager queries (``ServiceURLs.ALERTMANAGER_API``), the SLM event websocket
+    (``config.slm_url`` with the scheme mapped http->ws, https->wss), and the local LLM servers the provider
+    health probes call (``config.llm.lmstudio_host`` and ``config.vllm_host``, both full URLs).
+    Prometheus is deliberately absent: its host is derived two ways (``vm.main`` vs ``REDIS_VM_IP``), pending #18326.
     """
     from autobot_shared.network_constants import ServiceURLs
     from autobot_shared.ssot_config import config
@@ -163,6 +173,9 @@ def _server_called_urls() -> list[str]:
             for scheme in ("http", "wss")
         ),
         ServiceURLs.ALERTMANAGER_API,
+        _ws_scheme(config.slm_url),
+        config.llm.lmstudio_host,
+        config.vllm_host,
     ]
 
 

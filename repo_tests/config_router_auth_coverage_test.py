@@ -24,22 +24,8 @@ from repo_tests.config_router_auth import config_registered_routers, enumerate_c
 #: exposure. None of them is an exemption.
 KNOWN_UNGATED: frozenset[str] = frozenset(
     {
-        "api.analytics_llm_patterns",
-        "api.analytics_pattern_learning",
-        "api.code_search",
-        "api.development_speedup",
-        "api.error_resilience",
-        "api.knowledge_eval",
-        "api.natural_language_search",
-        "api.phases",
         "api.prometheus_endpoint",
         "api.rum",
-        "api.search",
-        "api.system_validation",
-        "api.validation_dashboard",
-        "routers.code_completion",
-        "routers.feedback",
-        "routers.model_management",
     }
 )
 
@@ -92,7 +78,7 @@ _EVER_UNGATED: frozenset[str] = frozenset(
 #: Pinned to len(KNOWN_UNGATED). Lower it with every removal; raising it is the
 #: deliberate act the rule exists to make visible. It catches what the set above
 #: cannot: an entry removed once and later put back.
-_MAX_KNOWN_UNGATED = 16
+_MAX_KNOWN_UNGATED = 2
 
 
 #: Config-registered routers this sweep cannot read, pinned so that a new one

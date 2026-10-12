@@ -53,7 +53,7 @@ class PipelineDispatcher:
 
         async with PipelineDispatcher(worker_urls) as d:
             async for token in d.run_pipeline(plan, prompt_tokens):
-                print(token)
+                emit(token)
     """
 
     def __init__(
@@ -157,6 +157,7 @@ class PipelineDispatcher:
                     "layer_end": assignment.layer_range.end,
                     "hidden_state": hidden_state,
                 }
+                # pending #18356: pipeline dispatcher never attached
                 async with self._session.post(url, json=payload) as resp:
                     resp.raise_for_status()
                     result = await resp.json()
@@ -199,6 +200,7 @@ class PipelineDispatcher:
                     "layer_end": assignment.layer_range.end,
                     "hidden_state": hidden_state,
                 }
+                # pending #18356: pipeline dispatcher never attached
                 async with self._session.post(url, json=payload) as resp:
                     resp.raise_for_status()
                     async for line in resp.content:

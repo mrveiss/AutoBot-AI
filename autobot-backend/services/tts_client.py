@@ -28,6 +28,7 @@ import aiohttp
 from autobot_shared.audio_wav import wav_duration_seconds
 from autobot_shared.env_utils import blank_to_none
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.metrics.tts import REALTIME_FACTOR_FLOOR, TtsRoute
 from autobot_shared.ssot_config import config, get_config
@@ -256,7 +257,7 @@ class TTSClient:
             timeout = aiohttp.ClientTimeout(total=HEALTH_TIMEOUT)
             client = get_http_client()
             async with client.tracked_request(
-                "GET", f"{self.base_url}/health", timeout=timeout, suppress_error_log=True
+                "GET", f"{self.base_url}/health", timeout=timeout, suppress_error_log=True, guard_egress=EGRESS_POLICY
             ) as resp:
                 if resp.status == 200:
                     data = await resp.json()
@@ -276,7 +277,7 @@ class TTSClient:
             data.add_field("language", language)
         client = get_http_client()
         async with client.tracked_request(
-            "POST", f"{self.base_url}/tts/synthesize", data=data, timeout=timeout
+            "POST", f"{self.base_url}/tts/synthesize", data=data, timeout=timeout, guard_egress=EGRESS_POLICY
         ) as resp:
             if resp.status != 200:
                 body = await resp.text()
@@ -302,7 +303,7 @@ class TTSClient:
             data.add_field("language", language)
         client = get_http_client()
         async with client.tracked_request(
-            "POST", f"{self.base_url}/tts/synthesize/stream", data=data, timeout=timeout
+            "POST", f"{self.base_url}/tts/synthesize/stream", data=data, timeout=timeout, guard_egress=EGRESS_POLICY
         ) as resp:
             if resp.status in (404, 405):
                 # Route table skew, not a synthesis failure — see #12886.
@@ -408,7 +409,7 @@ class TTSClient:
         )
         client = get_http_client()
         async with client.tracked_request(
-            "POST", f"{self.base_url}/tts/clone-voice", data=data, timeout=timeout
+            "POST", f"{self.base_url}/tts/clone-voice", data=data, timeout=timeout, guard_egress=EGRESS_POLICY
         ) as resp:
             if resp.status != 200:
                 body = await resp.text()
@@ -421,7 +422,7 @@ class TTSClient:
         try:
             client = get_http_client()
             async with client.tracked_request(
-                "GET", f"{self.base_url}/voices", timeout=timeout, suppress_error_log=True
+                "GET", f"{self.base_url}/voices", timeout=timeout, suppress_error_log=True, guard_egress=EGRESS_POLICY
             ) as resp:
                 if resp.status == 200:
                     return await resp.json()
@@ -441,7 +442,9 @@ class TTSClient:
             content_type="audio/wav",
         )
         client = get_http_client()
-        async with client.tracked_request("POST", f"{self.base_url}/voices/create", data=data, timeout=timeout) as resp:
+        async with client.tracked_request(
+            "POST", f"{self.base_url}/voices/create", data=data, timeout=timeout, guard_egress=EGRESS_POLICY
+        ) as resp:
             if resp.status != 200:
                 body = await resp.text()
                 raise RuntimeError(f"Voice create error {resp.status}: {body}")
@@ -453,7 +456,11 @@ class TTSClient:
         try:
             client = get_http_client()
             async with client.tracked_request(
-                "DELETE", f"{self.base_url}/voices/{voice_id}", timeout=timeout, suppress_error_log=True
+                "DELETE",
+                f"{self.base_url}/voices/{voice_id}",
+                timeout=timeout,
+                suppress_error_log=True,
+                guard_egress=EGRESS_POLICY,
             ) as resp:
                 return resp.status == 200
         except Exception as e:

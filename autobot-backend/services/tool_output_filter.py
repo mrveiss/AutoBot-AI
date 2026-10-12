@@ -27,6 +27,7 @@ import yaml
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.slug import sanitize_token
 from utils.encoding_utils import strip_ansi_escapes
 
 logger = get_logger(__name__)
@@ -327,14 +328,13 @@ def _tee_hint_path(tee_path: Path) -> str:
 
 
 def tee_and_hint(raw: str, slug: str, exit_code: int, mode: str = "failures") -> str | None:
-    """
-    Save *raw* output to a tee file; return a read-path hint or None on error.
+    """Save *raw* output to a tee file; return a read-path hint or None on error.
 
     Only saves when the output is non-trivial (>500 chars).
     """
     if len(raw) <= 500:
         return None
-    safe_slug = re.sub(r"[^\w-]", "_", slug)[:60]
+    safe_slug = sanitize_token(slug, allowed=r"\w-", replacement="_", collapse=False, max_length=60)
     checksum = hashlib.md5(raw.encode("utf-8"), usedforsecurity=False).hexdigest()[:8]  # nosec B324  # noqa: S324
     filename = f"{safe_slug}.{checksum}.txt"
     try:

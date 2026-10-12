@@ -22,6 +22,7 @@ from autobot_shared.ssot_config import config
 from models.database import CodeSource, Node, NodeRole, Role, RoleStatus
 from services.database import db_service
 from services.deploy_artifacts import rsync_artifact_excludes
+from services.service_restart import run_systemctl_over_ssh
 from services.ssh_utils import _ssh_key_usable, build_ssh_base_cmd
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,7 @@ CODE_CACHE_DIR = Path(os.environ.get("SLM_CODE_CACHE", "/var/lib/slm/code-cache"
 # be able to raise it without editing code.
 POST_SYNC_TIMEOUT_S = env_int("AUTOBOT_SYNC_POST_CMD_TIMEOUT_S", 300)
 SSH_KEY_PATH = config.path.ssh_key_path  # canonical inter-node key (#12429)
+_RESTART_TIMEOUT_S = 60  # literal kept as-is: unifying the three restart timeouts is the owner decision on #17455
 
 
 class SyncOrchestrator:
@@ -243,17 +245,15 @@ class SyncOrchestrator:
         """
         if not (restart and ctx.auto_restart and ctx.systemd_service):
             return
-
         try:
-            ssh_cmd = build_ssh_base_cmd(ctx.node_ip, ctx.node_user, ctx.node_port, SSH_KEY_PATH)
-            ssh_cmd.append(f"sudo systemctl restart {' '.join(ctx.systemd_service)}")  # #16025: >1 unit, one call
-
-            proc = await asyncio.create_subprocess_exec(
-                *ssh_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
+            await run_systemctl_over_ssh(
+                build_ssh_base_cmd(ctx.node_ip, ctx.node_user, ctx.node_port, SSH_KEY_PATH),
+                "restart",
+                ctx.systemd_service,  # #16025: >1 unit, one call
+                use_noninteractive_sudo=False,  # no -n: unification is pending the owner decision on #17455
+                timeout=_RESTART_TIMEOUT_S,
+                merge_stderr=True,
             )
-            await asyncio.wait_for(proc.communicate(), timeout=60)
             logger.info("Restarted %s on %s", " ".join(ctx.systemd_service), node_id)
         except Exception as e:
             logger.warning("Service restart failed: %s", e)

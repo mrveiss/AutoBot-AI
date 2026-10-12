@@ -15,13 +15,38 @@ import asyncio
 from typing import Dict, List
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.slm_rest_url import rest_url
 from autobot_shared.ssot_config import config
+from llc.services.slm_policy import fetch_slm_policy_json
 from services.skill_management.skill_extractor import ExtractedSkill
 from services.slm_client import get_slm_client
 
 logger = get_logger(__name__)
+
+
+#: SLM setting holding the server-wide skill-proposal policy, ``{"enabled": true}``. Read through the SLM settings
+#: API (``fetch_slm_policy_json``), so one switch governs every backend and an absent, unreadable or malformed
+#: value means OFF. Off because no ``skills/propose`` receiver exists yet, the request carries no Authorization
+#: header, and ``auto_validate`` needs a security review (#18367).
+SKILL_PROPOSAL_SETTING_KEY = "skill_proposal_policy"
+
+_disabled_logged = False
+
+
+async def _proposals_enabled() -> bool:
+    """True only when the SLM-managed policy explicitly enables proposals; logs the off state once."""
+    global _disabled_logged
+    policy = await fetch_slm_policy_json(SKILL_PROPOSAL_SETTING_KEY)
+    if isinstance(policy, dict) and policy.get("enabled") is True:
+        return True
+    if not _disabled_logged:
+        _disabled_logged = True
+        logger.info(
+            "Skill proposals are off (SLM setting %s not enabled, #18367); nothing is sent", SKILL_PROPOSAL_SETTING_KEY
+        )
+    return False
 
 
 class SkillProposalError(Exception):
@@ -105,6 +130,8 @@ class SkillProposer:
             response = await self._send_proposal_to_slm(proposal_payload)
 
             # Check if SLM accepted the proposal
+            if response.get("status") == "disabled":
+                return False  # switched off server-wide; _proposals_enabled() logged it once
             if response.get("status") == "accepted":
                 logger.debug("SLM accepted skill proposal: %s", skill.name)
                 return True
@@ -124,31 +151,26 @@ class SkillProposer:
             raise
 
     async def _send_proposal_to_slm(self, payload: Dict) -> Dict:
-        """Send skill proposal to SLM API.
+        """Send skill proposal to SLM API (``POST /api/skills/propose``), when the server-wide policy allows it.
 
         Args:
             payload: Proposal payload with skill definition
 
         Returns:
-            SLM response
+            SLM response, or ``{"status": "disabled"}`` when proposals are switched off (nothing is sent)
 
         Raises:
             SkillProposalError: If request fails
         """
-        if not self.slm_client or not hasattr(self.slm_client, "_ws_url"):
-            # Fallback: use HTTP directly
-            return await self._send_proposal_http(payload)
-
+        if not await _proposals_enabled():
+            return {"status": "disabled"}
         try:
-            # Call SLM endpoint: POST /api/skills/propose
-            slm_url = self.slm_client._ws_url.replace("ws://", "http://").replace("wss://", "https://")
-            proposal_url = rest_url(slm_url, "/api/skills/propose")
-
-            async with self.http_client.post(
-                proposal_url,
+            async with await self.http_client.post(
+                rest_url(config.slm_url, "/api/skills/propose"),
                 json=payload,
                 timeout=config.timeout.llm_call,
                 ssl=False,  # Self-signed certs in dev
+                guard_egress=EGRESS_POLICY,
             ) as response:
                 if response.status != 200:
                     text = await response.text()
@@ -160,28 +182,6 @@ class SkillProposer:
             raise SkillProposalError("SLM request timeout")
         except Exception as e:
             raise SkillProposalError(f"Failed to send proposal: {e}")
-
-    async def _send_proposal_http(self, payload: Dict) -> Dict:
-        """Send proposal via HTTP as fallback."""
-        try:
-            slm_url = config.slm_url
-
-            async with self.http_client.post(
-                rest_url(slm_url, "/api/skills/propose"),
-                json=payload,
-                timeout=config.timeout.llm_call,
-                ssl=False,
-            ) as response:
-                if response.status != 200:
-                    text = await response.text()
-                    raise SkillProposalError(f"SLM returned {response.status}: {text}")
-
-                return await response.json()
-
-        except asyncio.TimeoutError:
-            raise SkillProposalError("SLM request timeout")
-        except Exception as e:
-            raise SkillProposalError(f"HTTP proposal failed: {e}")
 
     async def validate_skill_syntax(self, skill: ExtractedSkill) -> bool:
         """Validate skill syntax and required fields.

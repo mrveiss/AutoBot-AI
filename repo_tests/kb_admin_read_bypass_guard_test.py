@@ -89,7 +89,8 @@ def _production_files(root: Path) -> list[str]:
     return [rel for rel in tracked if _is_production(rel)]
 
 
-#: Bound at the 2567 files measured when the floor was added.
+#: Bound at the 2567 files measured when the floor was added; since re-pinned mid-window
+#: from REACH.window() as the tree grew (the value below carries its own measurement).
 REACH = declare(
     "kb-admin-read-bypass",
     discover=_production_files,

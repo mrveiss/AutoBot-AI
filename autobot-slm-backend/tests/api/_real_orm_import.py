@@ -125,6 +125,7 @@ def import_modules_with_real_orm(import_names: tuple, path_loaded: dict | None =
     path_loaded = path_loaded or {}
     touched = tuple(path_loaded) + tuple(import_names)
     saved = {name: sys.modules.get(name) for name in touched}
+    bindings = _parent_bindings(touched)
     try:
         with real_modules_swapped():
             loaded = [load_real_module(name, path) for name, path in path_loaded.items()]
@@ -138,3 +139,33 @@ def import_modules_with_real_orm(import_names: tuple, path_loaded: dict | None =
                 sys.modules[name] = mod
             else:
                 sys.modules.pop(name, None)
+        _restore_parent_bindings(bindings)
+
+
+_UNBOUND = object()
+
+
+def _parent_bindings(names: tuple) -> list:
+    """``(parent, attr, value)`` for each dotted name whose parent package is loaded.
+
+    Importing ``api.roles`` also sets ``api.roles`` as an ATTRIBUTE of the ``api``
+    package. Restoring ``sys.modules`` alone leaves that attribute on the real-ORM
+    module, so a later ``patch("api.roles.x")`` patches one object while the code
+    under test reads another (#18186: it broke test_colocated_managed_update_11605).
+    """
+    out = []
+    for name in names:
+        parent_name, _, attr = name.rpartition(".")
+        parent = sys.modules.get(parent_name) if parent_name else None
+        if parent is not None:
+            out.append((parent, attr, getattr(parent, attr, _UNBOUND)))
+    return out
+
+
+def _restore_parent_bindings(bindings: list) -> None:
+    for parent, attr, value in bindings:
+        if value is _UNBOUND:
+            if attr in vars(parent):
+                delattr(parent, attr)
+        else:
+            setattr(parent, attr, value)

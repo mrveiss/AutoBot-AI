@@ -76,3 +76,9 @@ def sample_search_results():
             rerank_score=0.58,  # Below default threshold
         ),
     ]
+
+
+@pytest.fixture
+def slm_egress_open(monkeypatch):
+    """Let ``SLMClient`` skip its egress assertion, for tests whose subject is URL or token handling (#17576)."""
+    monkeypatch.setattr("services.slm_client.assert_egress_policy", AsyncMock())

@@ -131,6 +131,15 @@ PYTEST_PYTHON="$(pick_python)"
 node_modules_usable() {
   [ -d "$1/node_modules" ] && [ -x "$1/node_modules" ]
 }
+# #18406: vitest prints a "Test Files" summary whenever it ran at least one test file,
+# pass or fail. A non-zero exit WITHOUT it means vitest died before collecting
+# anything (a package missing from an emptied node_modules, an unloadable config), so
+# no test ran -- that is COULD NOT RUN, exactly as vue-tsc's "no error TS line" rule.
+# A " FAIL " line also counts as having run: a crash after some tests failed (OOM, a
+# killed worker) can lose the summary, and that must stay a failure, not become allowable.
+vitest_ran_nothing() {
+  ! printf '%s\n' "$1" | grep -qE "Test Files| FAIL "
+}
 ok()    { printf "${GRN}[pre-push OK]${CLR} %s\n" "$*" >&2; }
 
 EXIT_CODE=0
@@ -522,6 +531,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 
       if [ "$vitest_exit" = "124" ]; then
         did_not_run "vitest (${project})" "${TEST_TIMEOUT}"
+      elif [ "$vitest_exit" != "0" ] && vitest_ran_nothing "$vitest_output"; then
+        could_not_run "vitest (${project})" \
+          "exited ${vitest_exit} before running a single test: $(printf '%s\n' "$vitest_output" | grep -m1 -E 'Error|error' || printf '%s\n' "$vitest_output" | tail -1)"
       elif [ "$vitest_exit" != "0" ]; then
         fail "vitest failures (${project}, #5142):"
         echo "$vitest_output" | tail -25 >&2

@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.text_tokens import word_token_list
 from services.ai_stack_client import AIStackClient, AIStackError
 
 logger = get_logger(__name__)
@@ -134,12 +135,11 @@ class SkillExtractor:
 
     def _has_workflow_patterns(self, conversation_history: List[Dict[str, str]]) -> bool:
         """Check if conversation contains workflow/multi-step patterns."""
-        import re
 
         content_lower = " ".join(msg.get("content", "").lower() for msg in conversation_history)
 
         # Strip punctuation and split into words
-        words = re.findall(r"\b\w+\b", content_lower)
+        words = word_token_list(content_lower, split_underscore=False, lowercase=False)
 
         workflow_count = sum(1 for word in words if word in self.WORKFLOW_KEYWORDS)
         pattern_count = sum(1 for word in words if word in self.PATTERN_KEYWORDS)

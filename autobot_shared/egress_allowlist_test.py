@@ -105,13 +105,17 @@ def test_cdp_and_websocket_origins_are_dropped_with_distinct_ports(monkeypatch):
         websocket_url="ws://10.0.0.1:8001/api/ws",
         vm=SimpleNamespace(chromadb="10.0.0.1", main="10.0.0.1", browser="10.0.0.2"),
         port=SimpleNamespace(chromadb=8100, vnc=6080),
+        llm=SimpleNamespace(lmstudio_host="http://10.0.0.9:1234"),
+        vllm_host="http://10.0.0.9:8000",
     )
     import autobot_shared.ssot_config as ssot
 
     monkeypatch.setattr(ssot, "config", fake)
     monkeypatch.setattr(_nc, "ServiceURLs", _PROM)
     origins = al.static_internal_origins()
-    assert "http://10.0.0.1:8100" in origins and len(origins) == 8 + len(SERVER_CALLED)
+    assert (
+        "http://10.0.0.1:8100" in origins and len(origins) == 8 + len(SERVER_CALLED) + 3
+    )  # +3: SLM websocket, LM Studio, vLLM
     for dropped in ("http://10.0.0.1:9222", "ws://10.0.0.1:8001"):
         assert dropped not in origins
     assert set(SERVER_CALLED) <= origins
@@ -135,8 +139,11 @@ _PROM = SimpleNamespace(PROMETHEUS_API="http://10.0.0.3:9090", ALERTMANAGER_API=
 def server_called(monkeypatch):
     fake = SimpleNamespace(
         frontend_url="http://10.0.0.1:5173",
+        slm_url="http://10.0.0.1:8000",
         vm=SimpleNamespace(main="10.0.0.1", browser="10.0.0.2"),
         port=SimpleNamespace(vnc=6080),
+        llm=SimpleNamespace(lmstudio_host="http://10.0.0.9:1234"),
+        vllm_host="http://10.0.0.9:8000",
     )
     import autobot_shared.ssot_config as ssot
 
@@ -391,6 +398,8 @@ def _patched_ssot(monkeypatch, hosts):
         frontend_url="http://127.0.0.1:5",
         vm=SimpleNamespace(chromadb="127.0.0.1", main="127.0.0.1", browser="127.0.0.1"),
         port=SimpleNamespace(chromadb=4, vnc=6),
+        llm=SimpleNamespace(lmstudio_host="http://10.0.0.9:1234"),
+        vllm_host="http://10.0.0.9:8000",
         **urls,
     )
     import autobot_shared.ssot_config as ssot

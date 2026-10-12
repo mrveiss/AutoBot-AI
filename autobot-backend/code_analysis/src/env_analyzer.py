@@ -20,6 +20,7 @@ from typing import Any
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.slug import sanitize_token
 from autobot_shared.ssot_config import QUALITY_MODEL, config
 from autobot_shared.ssot_constants import TTL_1_HOUR
 from utils.line_index import LineIndex  # #12884
@@ -1105,9 +1106,7 @@ class EnvironmentAnalyzer:
             return prefixes[value_type]
 
         # Clean up the suggested name
-        suggestion = re.sub(r"[^A-Z0-9_]", "_", base)
-        suggestion = re.sub(r"_+", "_", suggestion)
-        suggestion = suggestion.strip("_")
+        suggestion = sanitize_token(base, allowed="A-Z0-9_", replacement="_", separator_chars="_", strip_edges="_")
 
         return f"AUTOBOT_{suggestion}" if not suggestion.startswith("AUTOBOT_") else suggestion
 

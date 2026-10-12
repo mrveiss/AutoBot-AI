@@ -31,10 +31,11 @@ from autobot_shared.time_utils import utc_timestamp
 from config import settings
 from models.database import BlueGreenDeployment, BlueGreenStatus, Node, NodeStatus
 from models.schemas import BlueGreenCreate, BlueGreenResponse, EligibleNodeResponse
+from services.purge_playbook import PURGE_PLAYBOOK_TEMPLATE as _PURGE_PLAYBOOK_TEMPLATE
 
 # The purge playbook lives in its own module because this file is at its
 # grandfathered size ceiling (#14236) and may not grow (#16071).
-from services.purge_playbook import PURGE_PLAYBOOK_TEMPLATE as _PURGE_PLAYBOOK_TEMPLATE
+from services.service_restart import run_systemctl_over_ssh
 
 logger = logging.getLogger(__name__)
 
@@ -1132,7 +1133,7 @@ class BlueGreenService:
             return False
 
         try:
-            cmd = [
+            ssh_base_cmd = [
                 "ssh",
                 "-o",
                 "StrictHostKeyChecking=accept-new",
@@ -1143,17 +1144,15 @@ class BlueGreenService:
                 "-p",
                 str(ssh_port),
                 f"{ssh_user}@{ip_address}",
-                f"sudo systemctl stop {shlex.quote(service)}",
             ]
-
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            done = await run_systemctl_over_ssh(
+                ssh_base_cmd,
+                "stop",
+                [shlex.quote(service)],
+                use_noninteractive_sudo=False,
+                timeout=30.0,
             )
-
-            await asyncio.wait_for(process.communicate(), timeout=30.0)
-            return process.returncode == 0
+            return done.returncode == 0
 
         except Exception as e:
             logger.warning("Failed to stop service %s: %s", service, e)
@@ -1262,7 +1261,7 @@ class BlueGreenService:
 
         Related to: Issue #665 (function length reduction via template extraction)
         """
-        path.write_text(_PURGE_PLAYBOOK_TEMPLATE, encoding="utf-8")
+        await asyncio.to_thread(path.write_text, _PURGE_PLAYBOOK_TEMPLATE, encoding="utf-8")
         logger.info("Created purge playbook: %s", path)
 
     async def _broadcast_deployment_event(self, bg_deployment_id: str, event_type: str, message: str) -> None:

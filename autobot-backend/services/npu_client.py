@@ -28,6 +28,7 @@ import aiohttp
 from autobot_shared.embedding_model import active_embedding_model, npu_worker_model_name
 from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config, get_config
 
@@ -176,9 +177,12 @@ class NPUClient:
         async with self._lock:
             try:
                 session = await self._get_session()
+                url = f"{self.base_url}/health"
+                await assert_egress_policy(url)
                 async with session.get(
-                    f"{self.base_url}/health",
+                    url,
                     timeout=aiohttp.ClientTimeout(total=HEALTH_CHECK_TIMEOUT),
+                    allow_redirects=False,
                 ) as response:
                     if response.status == 200:
                         data = await response.json()
@@ -197,9 +201,12 @@ class NPUClient:
         """Get information about the NPU worker's device"""
         try:
             session = await self._get_session()
+            url = f"{self.base_url}/device-info"
+            await assert_egress_policy(url)
             async with session.get(
-                f"{self.base_url}/device-info",
+                url,
                 timeout=aiohttp.ClientTimeout(total=HEALTH_CHECK_TIMEOUT),
+                allow_redirects=False,
             ) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -242,11 +249,14 @@ class NPUClient:
 
         try:
             session = await self._get_session()
+            url = f"{self.base_url}/embedding/generate"
+            await assert_egress_policy(url)
             async with session.post(
-                f"{self.base_url}/embedding/generate",
+                url,
                 json=texts,
                 params={"model_name": npu_worker_model_name(model_name), "use_cache": str(use_cache).lower()},
                 timeout=aiohttp.ClientTimeout(total=BATCH_TIMEOUT),
+                allow_redirects=False,
             ) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -309,10 +319,13 @@ class NPUClient:
             payload: Dict[str, Any] = {"audio_path": audio_path, "model": model}
             if language:
                 payload["language"] = language
+            url = f"{self.base_url}/whisper/transcribe"
+            await assert_egress_policy(url)
             async with session.post(
-                f"{self.base_url}/whisper/transcribe",
+                url,
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=timeout),
+                allow_redirects=False,
             ) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -336,9 +349,12 @@ class NPUClient:
         """Get NPU worker statistics"""
         try:
             session = await self._get_session()
+            url = f"{self.base_url}/stats"
+            await assert_egress_policy(url)
             async with session.get(
-                f"{self.base_url}/stats",
+                url,
                 timeout=aiohttp.ClientTimeout(total=HEALTH_CHECK_TIMEOUT),
+                allow_redirects=False,
             ) as response:
                 if response.status == 200:
                     return await response.json()
@@ -380,6 +396,7 @@ async def _try_ollama_embedding(text: str, model_name: str, ollama_url: str) -> 
     200-with-empty-result — previously indistinguishable in the logs.
     """
     try:
+        # pending #18357: two Ollama host homes
         async with get_http_client().tracked_request(
             "POST",
             ollama_url,

@@ -180,7 +180,7 @@ async def download_whatsapp_media(media_id: str) -> Tuple[Optional[bytes], Optio
     try:
         # Step 1: resolve the temporary download URL
         async with http_client.tracked_request(
-            "GET", f"{base_url}/{media_id}", headers=headers, timeout=timeout
+            "GET", f"{base_url}/{media_id}", headers=headers, timeout=timeout, guard_egress=False
         ) as resp:
             if resp.status != 200:
                 logger.warning(
@@ -198,7 +198,9 @@ async def download_whatsapp_media(media_id: str) -> Tuple[Optional[bytes], Optio
             return None, None
 
         # Step 2: fetch the raw bytes
-        async with http_client.tracked_request("GET", download_url, headers=headers, timeout=timeout) as resp:
+        async with http_client.tracked_request(
+            "GET", download_url, headers=headers, timeout=timeout, guard_egress=False
+        ) as resp:
             if resp.status != 200:
                 logger.warning(
                     "WhatsApp media download failed (media_id=%s, status=%s)",

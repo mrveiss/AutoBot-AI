@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 from models.database import Node, Service, SystemdState
+from services.orchestrator_ssh import report_ssh, spawn_ssh, ssh_base_cmd, systemctl_sudo_call, systemctl_user_cmd
 
 logger = logging.getLogger(__name__)
 
@@ -809,56 +810,19 @@ class ServiceOrchestrator:
 
     async def _execute_ssh(self, host: str, command: str, requires_sudo: bool = False) -> Tuple[bool, str]:
         """Execute SSH subprocess (#788: split from _run_ssh_command)."""
-        ssh_cmd = [
-            "/usr/bin/ssh",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-o",
-            "ConnectTimeout=10",
-            "-o",
-            "BatchMode=yes",
-            "-i",
-            str(self.ssh_key),
-            f"{self.ssh_user}@{host}",
-        ]
-
         if requires_sudo:
             command = f"sudo -n {command}"
-
-        ssh_cmd.append(command)
-
-        try:
-            process = await asyncio.create_subprocess_exec(
-                *ssh_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30.0)
-
-            if process.returncode == 0:
-                output = stdout.decode("utf-8", errors="replace")
-                return True, output or "Command completed successfully"
-            else:
-                error = stderr.decode("utf-8", errors="replace")
-                return False, f"Command failed: {error[:500]}"
-
-        except asyncio.TimeoutError:
-            return False, "SSH command timed out"
-        except Exception as e:
-            logger.exception("SSH command error: %s", e)
-            return False, "SSH command error"
+        return await report_ssh(spawn_ssh([*ssh_base_cmd(self.ssh_user, self.ssh_key, host), command]))
 
     async def _systemctl_action(
         self, host: str, service: str, action: str, requires_sudo: bool = True
     ) -> Tuple[bool, str]:
         """Run a systemctl action on a remote host."""
-        if requires_sudo:
-            command = f"sudo -n systemctl {action} {service}"
-        else:
-            command = f"systemctl --user {action} {service}"
-
-        return await self._run_ssh_command(host, command, requires_sudo=False)
+        if not requires_sudo:
+            return await self._run_ssh_command(host, systemctl_user_cmd(action, service), requires_sudo=False)
+        async with self._ssh_semaphore:
+            base = ssh_base_cmd(self.ssh_user, self.ssh_key, host)
+            return await report_ssh(systemctl_sudo_call(base, action, service))
 
     async def _check_service_health(
         self,

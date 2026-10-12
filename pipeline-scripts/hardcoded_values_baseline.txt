@@ -1299,7 +1299,6 @@
 1|other|autobot-slm-backend/api/infrastructure.py|"/opt/autobot/backups
 1|other|autobot-slm-backend/api/infrastructure.py|300
 3|other|autobot-slm-backend/api/nodes.py|"/opt/autobot/backups/
-1|other|autobot-slm-backend/api/roles.py|120
 1|other|autobot-slm-backend/api/scim.py|offset=0
 1|other|autobot-slm-backend/api/secrets.py|https://huggingface.co/settings/tokens
 1|ssot|autobot-slm-backend/api/slm_users.py|:5432
@@ -1317,7 +1316,7 @@
 1|other|autobot-slm-backend/scripts/autobot-admin.py|"/opt/autobot/autobot-slm-backend/.env
 1|ssot|autobot-slm-backend/scripts/verify_endpoints.py|:8080
 1|other|autobot-slm-backend/services/agent_seeder.py|30
-5|other|autobot-slm-backend/services/backup.py|30
+3|other|autobot-slm-backend/services/backup.py|30
 2|other|autobot-slm-backend/services/backup.py|300
 1|other|autobot-slm-backend/services/backup.py|60
 1|other|autobot-slm-backend/services/blue_green.py|30
@@ -1334,9 +1333,7 @@
 1|other|autobot-slm-backend/services/service_orchestrator.py|"/opt/autobot/autobot-backend
 1|other|autobot-slm-backend/services/service_orchestrator.py|"/opt/autobot/autobot-browser-worker
 1|other|autobot-slm-backend/services/service_orchestrator.py|"/opt/autobot/autobot-slm-frontend
-1|other|autobot-slm-backend/services/service_orchestrator.py|30
 2|other|autobot-slm-backend/services/sync_orchestrator.py|120
-1|other|autobot-slm-backend/services/sync_orchestrator.py|60
 1|other|autobot-slm-backend/slm/agent/health_collector.py|30
 1|other|autobot-slm-backend/slm/agent/version.py|"/opt/autobot/autobot-slm-agent
 1|other|autobot-slm-backend/tests/conftest.py|"sqlite:///:memory:"

@@ -117,6 +117,7 @@ class NPUClient:
 
         session = self._get_session()
         try:
+            # pending #18356: pipeline dispatcher never attached
             async with session.post(url, json=payload) as resp:
                 if resp.status != 200:
                     body = await resp.text()
@@ -141,6 +142,7 @@ class NPUClient:
 
         session = self._get_session()
         try:
+            # pending #18356: pipeline dispatcher never attached
             async with session.get(url) as resp:
                 if resp.status != 200:
                     body = await resp.text()

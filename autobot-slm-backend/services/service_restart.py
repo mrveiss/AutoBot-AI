@@ -36,8 +36,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import shlex
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Tuple
+from typing import Sequence, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,6 +47,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.ssot_config import config
 from models.database import Node, Service, SystemdState
+from services.unit_names import validate_unit_name
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +70,8 @@ _RESPONSE_FLUSH_DELAY_SECONDS = env_float_clamped("AUTOBOT_SLM_RESTART_FLUSH_DEL
 _RESTART_SSH_TIMEOUT_SECONDS = env_float_clamped("AUTOBOT_SLM_RESTART_SSH_TIMEOUT_SECONDS", 30.0, 1.0, 600.0)
 
 
-def build_service_ssh_cmd(node: Node, remote_cmd: str) -> list:
-    """Build SSH command list for service action. Ref: #1088."""
+def build_service_ssh_base_cmd(node: Node) -> list:
+    """The ssh argv for *node*, up to but not including the remote command. Ref: #1088."""
     ssh_user = node.ssh_user or "autobot"
     ssh_port = node.ssh_port or 22
     ssh_key = config.path.ssh_key_path  # canonical inter-node key (#12429)
@@ -85,8 +88,82 @@ def build_service_ssh_cmd(node: Node, remote_cmd: str) -> list:
         "-p",
         str(ssh_port),
         f"{ssh_user}@{node.ip_address}",
-        remote_cmd,
     ]
+
+
+def build_service_ssh_cmd(node: Node, remote_cmd: str) -> list:
+    """Build SSH command list for service action. Ref: #1088."""
+    return [*build_service_ssh_base_cmd(node), remote_cmd]
+
+
+@dataclass(frozen=True)
+class SystemctlResult:
+    """What one remote `systemctl` call produced; the caller decides how to report it.
+
+    `stderr` is None when the call merged it into `stdout` (`merge_stderr=True`).
+    """
+
+    returncode: int | None
+    stdout: bytes
+    stderr: bytes | None
+
+
+# systemctl verbs the executor will put on a remote command line (#18359).
+ALLOWED_SYSTEMCTL_ACTIONS = frozenset({"start", "stop", "restart", "status", "reload"})
+
+
+def systemctl_remote_command(
+    action: str,
+    units: Sequence[str],
+    *,
+    use_noninteractive_sudo: bool = True,
+    tolerate_failure: bool = False,
+    user_scope: bool = False,
+) -> str:
+    """The ONE remote shell line for ``systemctl <action> -- <units>``: validated, units quoted (#18359).
+
+    ``user_scope`` builds ``systemctl --user`` (no sudo) for the per-user manager.
+    """
+    if action not in ALLOWED_SYSTEMCTL_ACTIONS:
+        raise ValueError(f"systemctl action not allowed: {action!r}")
+    quoted = " ".join(shlex.quote(validate_unit_name(unit)) for unit in units)
+    tail = " || true" if tolerate_failure else ""
+    if user_scope:
+        return f"systemctl --user {action} -- {quoted}{tail}"
+    sudo = "sudo -n" if use_noninteractive_sudo else "sudo"
+    return f"{sudo} systemctl {action} -- {quoted}{tail}"
+
+
+async def run_systemctl_over_ssh(
+    ssh_base_cmd: list,
+    action: str,
+    units: Sequence[str],
+    *,
+    use_noninteractive_sudo: bool,
+    timeout: float,
+    merge_stderr: bool = False,
+    tolerate_failure: bool = False,
+) -> SystemctlResult:
+    """The ONE place an SSH `sudo [-n] systemctl <action> -- <units>` command is built and run (#18186).
+
+    `units` are joined into a single call (#16025). `ssh_base_cmd` is the caller's ssh argv up
+    to the host, so each caller keeps the builder it already used. Nothing is caught here: a
+    timeout or spawn error propagates, because each site reports failure its own way
+    (the unification of the `-n` flag, the timeout and that contract is #17455's decision).
+    `action` is allowlisted and each unit validated and `shlex.quote`d (#18359), so a bad value
+    raises ValueError before anything is spawned. `tolerate_failure` appends exactly ` || true`.
+    """
+    remote_cmd = systemctl_remote_command(
+        action, units, use_noninteractive_sudo=use_noninteractive_sudo, tolerate_failure=tolerate_failure
+    )
+    ssh_cmd = [*ssh_base_cmd, remote_cmd]
+    process = await asyncio.create_subprocess_exec(
+        *ssh_cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT if merge_stderr else asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+    return SystemctlResult(process.returncode, stdout, stderr)
 
 
 async def run_ansible_service_action(
@@ -95,26 +172,22 @@ async def run_ansible_service_action(
     action: str,
 ) -> Tuple[bool, str]:
     """Run SSH command to control a service via systemctl. Ref: #1088."""
-    remote_cmd = f"sudo -n systemctl {action} {service_name}"
-    ssh_cmd = build_service_ssh_cmd(node, remote_cmd)
+    ssh_base_cmd = build_service_ssh_base_cmd(node)  # outside the try, as before: a bad node row raises
 
     try:
-        process = await asyncio.create_subprocess_exec(
-            *ssh_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(),
+        result = await run_systemctl_over_ssh(
+            ssh_base_cmd,
+            action,
+            [service_name],
+            use_noninteractive_sudo=True,
             timeout=_RESTART_SSH_TIMEOUT_SECONDS,
         )
 
-        if process.returncode == 0:
+        if result.returncode == 0:
             logger.info("Service %s %s on %s completed", service_name, action, node.hostname)
             return True, f"Service {service_name} {action} completed"
         else:
-            error = stderr.decode("utf-8", errors="replace")
+            error = (result.stderr or b"").decode("utf-8", errors="replace")
             logger.error("Service action failed on %s: %s", node.hostname, error[:500])
             return False, f"Failed to {action} service: {error[:200]}"
 
