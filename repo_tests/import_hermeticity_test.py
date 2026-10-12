@@ -178,7 +178,7 @@ REACH = declare(
     # nothing owns the sentence. The arithmetic is in the commit message, which
     # cannot drift from the tree it describes. Re-derive rather than trusting
     # any figure written here.
-    floor=660,
+    floor=687,  # re-pinned mid-window: population 717, window [657, 717]
     what="non-test modules under api/ and autobot_shared/, both backends",
     growth=60,
 )
