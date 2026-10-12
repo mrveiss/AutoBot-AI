@@ -6,6 +6,7 @@
 import { fileURLToPath } from 'node:url'
 import { mergeConfig, defineConfig, configDefaults, type UserConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
+import { autobotUiResolve } from '../libs/autobot-ui/vite-resolve'
 
 export default mergeConfig(
   defineConfig({
@@ -16,7 +17,9 @@ export default mergeConfig(
       // find their vue/pinia peers in this app's own node_modules rather than
       // walking up from the real ../libs / ../autobot-plugins path (MVA-893).
       preserveSymlinks: true,
+      dedupe: autobotUiResolve().dedupe,
       alias: {
+        ...autobotUiResolve().alias,
         '@': fileURLToPath(new URL('./src', import.meta.url)),
         // Mirror vite.config.ts (#13079): without this, any test that mounts a
         // component importing from '@shared' fails to resolve at transform time.
