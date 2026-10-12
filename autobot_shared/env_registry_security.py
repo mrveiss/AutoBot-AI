@@ -235,3 +235,33 @@ register_env_var(
         range=(60, 2592000),
     )
 )
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PROVIDER_KEY_HYDRATION_TIMEOUT_S",
+        type=int,
+        default=30,
+        description=(
+            "Seconds a process waits for its one-time provider-key vault hydration before treating the "
+            "vault as unreachable (#18094). On timeout every vault-resolved key is refused (fail closed); a "
+            "hydration that finishes later still swaps its result in."
+        ),
+        component="security",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PROVIDER_KEY_REHYDRATE_BACKOFF_S",
+        type=int,
+        default=30,
+        description=(
+            "First delay before a process whose provider-key vault was unreachable tries to hydrate again on a "
+            "later key resolution (#18094). Doubles after each failed retry, capped at 20x this value; a "
+            "successful hydration resets it. Until a retry succeeds, keys stay refused, never served from env."
+        ),
+        component="security",
+    )
+)

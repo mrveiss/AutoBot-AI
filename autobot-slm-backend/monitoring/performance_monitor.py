@@ -27,6 +27,7 @@ from metrics_types import DatabaseMetrics, InterVMMetrics, ServiceMetrics, Syste
 
 from autobot_shared.network_constants import NetworkConstants
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import utc_timestamp
 from config import ConfigManager
 
@@ -83,8 +84,7 @@ class PerformanceMonitor:
         self.metrics_history = []
         self.alert_history = []
         self.redis_client = None
-        _base = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
-        self.performance_data_path = Path(_base) / "logs" / "performance"
+        self.performance_data_path = Path(ssot_config.path.base_dir) / "logs" / "performance"
         self.performance_data_path.mkdir(parents=True, exist_ok=True)
 
     def setup_logging(self, log_level: str):
@@ -96,7 +96,7 @@ class PerformanceMonitor:
                 logging.StreamHandler(),
                 logging.FileHandler(
                     os.path.join(
-                        os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"),
+                        ssot_config.path.base_dir,
                         "logs/performance_monitor.log",
                     )
                 ),

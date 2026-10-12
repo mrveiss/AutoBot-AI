@@ -49,8 +49,12 @@ class SLMAgent:
         if os.path.exists(path):
             with open(path, encoding="utf-8") as f:
                 return yaml.safe_load(f)
+        node_id = os.environ.get("SLM_NODE_ID")
+        if not node_id:
+            logger.error("Node ID required (SLM_NODE_ID); refusing to register a placeholder node")
+            raise SystemExit(1)
         return {
-            "node_id": os.environ.get("SLM_NODE_ID", "unknown"),
+            "node_id": node_id,
             "admin_url": os.environ.get("SLM_ADMIN_URL", f"http://{os.environ.get('SLM_HOST', '127.0.0.1')}:8000"),
             "heartbeat_interval": int(os.environ.get("SLM_HEARTBEAT_INTERVAL", "30")),
         }

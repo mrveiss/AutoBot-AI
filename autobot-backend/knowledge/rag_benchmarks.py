@@ -27,6 +27,7 @@ from typing import Callable, Dict, List, Set
 import pytest
 
 from autobot_shared.logging_manager import get_logger
+from constants.user_scope_constants import GLOBAL_USER
 
 # Add project root and shared infrastructure to path so benchmark_base is importable
 _repo_root = Path(__file__).parent.parent.parent
@@ -1240,9 +1241,8 @@ class TestRealKBBenchmarks:
 # ---------------------------------------------------------------------------
 
 #: Sentinel user namespace for benchmark-generated feedback events.
-#: Mirrors RetrievalLearner.GLOBAL_USER so all users benefit from benchmark
-#: runs without the benchmarks knowing anything about individual user IDs.
-_BENCHMARK_USER = "__global__"
+#: Is RetrievalLearner's GLOBAL_USER so all users benefit from benchmark runs.
+_BENCHMARK_USER = GLOBAL_USER
 
 #: Redis stream TTL for benchmark-injected feedback events (30 days).
 _BENCHMARK_STREAM_TTL = 60 * 60 * 24 * 30

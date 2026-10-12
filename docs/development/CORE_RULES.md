@@ -75,8 +75,8 @@ api_key = config.get_secret("EXTERNAL_API_KEY")  # From secrets manager # pragma
 # ✅ Ports - always configurable
 BACKEND_PORT = int(os.getenv("AUTOBOT_BACKEND_PORT", "8001"))
 
-# ✅ URLs - build from components
-API_BASE_URL = f"{HTTP_PROTOCOL}://{BACKEND_HOST}:{BACKEND_PORT}"
+# ✅ URLs - read the SSOT, never rebuild them (autobot_shared.ssot_config.config)
+API_BASE_URL = ssot_config.backend_url
 
 # ✅ File paths - relative to project or configurable
 DATA_DIR = os.getenv("AUTOBOT_DATA_DIR", "data")

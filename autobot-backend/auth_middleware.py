@@ -18,6 +18,7 @@ from typing import Dict, Tuple
 from fastapi import HTTPException, Request, status
 
 from auth_revocation import reject_if_revoked_by_password_change
+from autobot_shared import node_proxy
 from autobot_shared.auth.interactive_principal import LOGIN_TOKEN_TYPE, is_login_token, is_purpose_bound
 from autobot_shared.auth.jwt_core import (
     decode_jwt_multi,
@@ -949,11 +950,10 @@ async def get_current_user(request: Request) -> Dict:
 def verify_internal_api_key(provided: str | None) -> bool:
     """Constant-time check of the trusted internal-service API key (Issue #1145).
 
-    Returns True only when the internal key is configured AND ``provided`` matches
-    it exactly. Uses :func:`secrets.compare_digest` so a partial match cannot be
-    inferred from response timing; a missing/``None`` header can never match.
+    True only when the key (``node_proxy.internal_api_key()``, its one reader, #17856) is configured AND
+    ``provided`` matches it exactly; ``compare_digest`` blocks timing inference; a missing header never matches.
     """
-    expected = ssot_config.misc.internal_api_key
+    expected = node_proxy.internal_api_key()
     if not expected or not provided:
         return False
     return secrets.compare_digest(provided, expected)

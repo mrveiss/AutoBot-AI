@@ -46,7 +46,9 @@ logger = logging.getLogger(__name__)
 def _require_env() -> None:
     """Abort with a clear message when required env vars are missing."""
     missing = []
-    if not os.getenv("AUTOBOT_INTERNAL_API_KEY") and not (os.getenv("SLM_SERVICE_KEY") and os.getenv("SLM_SERVICE_ID")):
+    from autobot_shared.node_proxy import internal_api_key
+
+    if not internal_api_key() and not (os.getenv("SLM_SERVICE_KEY") and os.getenv("SLM_SERVICE_ID")):
         missing.append("AUTOBOT_INTERNAL_API_KEY (or SLM_SERVICE_KEY + SLM_SERVICE_ID) — vault auth")
     if not any(os.getenv(v) for v in ("SLM_ENCRYPTION_KEY", "SLM_SECRET_KEY")):
         missing.append("SLM_ENCRYPTION_KEY or SLM_SECRET_KEY (legacy decryption)")

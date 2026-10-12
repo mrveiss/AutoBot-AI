@@ -24,7 +24,7 @@ import sys
 import aiohttp
 from aiohttp import web
 
-from autobot_shared import async_compat, env_utils, time_utils
+from autobot_shared import async_compat, env_utils, node_proxy, time_utils
 
 from . import event_buffer
 from .health_collector import HealthCollector
@@ -126,7 +126,7 @@ class SLMAgent:
         # every request via the session default headers. Empty -> the server
         # rejects our heartbeats 401 and the fleet Service table never
         # populates, so warn loudly.
-        self._internal_api_key = os.environ.get("AUTOBOT_INTERNAL_API_KEY", "")
+        self._internal_api_key = node_proxy.internal_api_key()
         if not self._internal_api_key:
             logger.warning("AUTOBOT_INTERNAL_API_KEY not set — heartbeats will be rejected 401 (#11450)")
 

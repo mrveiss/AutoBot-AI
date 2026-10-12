@@ -220,7 +220,7 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
 
-    host = os.getenv("NPU_WORKER_HOST", "0.0.0.0")
+    host = os.getenv("NPU_WORKER_BIND_HOST") or os.getenv("NPU_WORKER_HOST", "0.0.0.0")
     port = int(os.getenv("NPU_WORKER_PORT", 8081))
     workers = int(os.getenv("NPU_WORKER_WORKERS", 1))
 

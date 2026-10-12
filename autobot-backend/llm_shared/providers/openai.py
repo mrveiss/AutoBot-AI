@@ -69,7 +69,7 @@ class OpenAIProvider(OpenAICompatibleProvider):
     missing_key_error = "OpenAI API key not configured. Set OPENAI_API_KEY or provide api_key in provider settings."
 
     def _resolve_api_key(self) -> str | None:
-        """Resolve API key from settings, then the vault seam (env wins; else System vault, #15276).
+        """Resolve API key from settings, then the vault seam (vault first; env as a logged fallback, #15276).
 
         Exactly two tiers -- no third bare-config retry. A prior revision of this
         method carried a second ``config.openai_api_key`` read behind a fresh

@@ -12,7 +12,7 @@ import time
 import pytest
 import websockets
 
-from autobot_shared.ssot_config import config as ssot_config
+from autobot_shared import node_proxy
 from tests.test_helpers import get_test_backend_url
 
 
@@ -20,12 +20,13 @@ def _internal_api_key_headers() -> dict[str, str]:
     """Auth headers for this e2e script's own WebSocket handshake (#14989).
 
     api.terminal.terminal_websocket now authenticates every handshake
-    (#14960) via the canonical SSOT-configured internal-service key -- the
+    (#14960) via the internal-service key from its one reader,
+    node_proxy.internal_api_key() (#17856 row 13a) -- the
     same credential auth_middleware.verify_internal_api_key checks -- rather
     than a bare value or a parallel path. Empty when unconfigured, matching
     verify_internal_api_key's own "never matches" behaviour for a missing key.
     """
-    key = ssot_config.misc.internal_api_key
+    key = node_proxy.internal_api_key()
     return {"X-Internal-API-Key": key} if key else {}
 
 

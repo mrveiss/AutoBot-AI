@@ -124,7 +124,7 @@ def _populate_default_providers(registry: CapabilityRegistry) -> None:
 
     Mirrors ``agent_loop.search.registry``: import lazily, skip silently when
     credentials are absent. Slack/Discord bot tokens now route through
-    ``resolve_provider_key`` (env wins; else System vault) -- the third
+    ``resolve_provider_key`` (vault first; env as a logged fallback) -- the third
     ``CredentialGatedRegistry`` sibling named in
     ``autobot_shared/credential_gated_registry.py``'s own docstring, and the
     only one of the three never migrated to the seam until now.
@@ -137,12 +137,15 @@ def _populate_default_providers(registry: CapabilityRegistry) -> None:
 
     from integrations.communication_integration import DiscordIntegration, SlackIntegration
     from integrations.messaging_adapters import DiscordMessagingAdapter, SlackMessagingAdapter
-    from services.provider_key_vault import resolve_provider_key
+    from services.provider_key_vault import registration_refusal, resolve_provider_key
 
-    slack_token = resolve_provider_key("SLACK_BOT_TOKEN", getattr(_cfg, "slack_bot_token", "") or "")
-    _register_messaging_if_token(registry, "slack", slack_token, SlackIntegration, SlackMessagingAdapter)
-    discord_token = resolve_provider_key("DISCORD_BOT_TOKEN", getattr(_cfg, "discord_bot_token", "") or "")
-    _register_messaging_if_token(registry, "discord", discord_token, DiscordIntegration, DiscordMessagingAdapter)
+    # A vault refusal (#18094) skips that one integration with the reason logged.
+    with registration_refusal("Slack messaging integration"):
+        slack_token = resolve_provider_key("SLACK_BOT_TOKEN", getattr(_cfg, "slack_bot_token", "") or "")
+        _register_messaging_if_token(registry, "slack", slack_token, SlackIntegration, SlackMessagingAdapter)
+    with registration_refusal("Discord messaging integration"):
+        discord_token = resolve_provider_key("DISCORD_BOT_TOKEN", getattr(_cfg, "discord_bot_token", "") or "")
+        _register_messaging_if_token(registry, "discord", discord_token, DiscordIntegration, DiscordMessagingAdapter)
 
     try:
         from services.tts_client import get_tts_client

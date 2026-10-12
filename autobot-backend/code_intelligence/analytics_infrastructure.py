@@ -25,9 +25,11 @@ Part of EPIC #217 - Advanced Code Intelligence Methods
 import asyncio
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
+from autobot_shared.content_digest import content_digest
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.slug import sanitize_token
@@ -51,8 +53,6 @@ SIMILARITY_MEDIUM = 0.70
 SIMILARITY_LOW = 0.50
 
 # Issue #554: Security - Allowed collection name pattern (alphanumeric, underscore, hyphen)
-import re
-
 COLLECTION_NAME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]{0,63}$")
 
 # Issue #554: Security - Allowed Redis key characters
@@ -498,7 +498,7 @@ class AnalyticsInfrastructureMixin(CollectionEmbeddingSpace):
 
     def _generate_content_hash(self, content: str) -> str:
         """Generate hash for content-based deduplication."""
-        return hashlib.sha256(content.encode()).hexdigest()[:16]
+        return content_digest(content, width=16)
 
     def _get_infrastructure_metrics(self) -> Dict[str, Any]:
         """Get current infrastructure metrics."""

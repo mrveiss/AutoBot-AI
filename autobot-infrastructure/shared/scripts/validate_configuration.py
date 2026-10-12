@@ -32,35 +32,21 @@ project_root = Path(__file__).parent.parent  # shared/, where docker/compose liv
 
 
 def test_default_configuration():
-    """Test configuration with default values"""
+    """Test configuration with default values (read from the SSOT, #18094)."""
     logger.info("Testing Default Configuration...")
 
     try:
-        # `config` no longer exports the Redis and WebSocket values (#18289): they live in the
-        # shared network constants, which the backend's own config builds on.
-        from autobot_shared.network_constants import NetworkConstants, ServiceURLs
-        from config import API_BASE_URL, BACKEND_PORT, HTTP_PROTOCOL, OLLAMA_PORT
-
-        REDIS_PORT = NetworkConstants.REDIS_PORT
-        REDIS_URL = ServiceURLs.REDIS_VM
-        REDIS_PROTOCOL = REDIS_URL.split("://", 1)[0]
-        WS_BASE_URL = NetworkConstants.get_websocket_url()
-        WS_PROTOCOL = WS_BASE_URL.split("://", 1)[0]
+        from autobot_shared.ssot_config import config as ssot_config
 
         # Test URLs are properly formed (Issue #380: use module-level constants)
-        assert API_BASE_URL.startswith(_HTTP_PROTOCOLS)
-        assert REDIS_URL.startswith("redis://")
-        assert WS_BASE_URL.startswith(_WS_PROTOCOLS)
+        assert ssot_config.backend_url.startswith(_HTTP_PROTOCOLS)
+        assert ssot_config.redis_url.startswith(("redis://", "rediss://"))
+        assert ssot_config.websocket_url.startswith(_WS_PROTOCOLS)
 
         # Test ports are integers
-        assert isinstance(BACKEND_PORT, int)
-        assert isinstance(OLLAMA_PORT, int)
-        assert isinstance(REDIS_PORT, int)
-
-        # Test protocols are valid
-        assert HTTP_PROTOCOL in {"http", "https"}
-        assert WS_PROTOCOL in {"ws", "wss"}
-        assert REDIS_PROTOCOL == "redis"
+        assert isinstance(ssot_config.port.backend, int)
+        assert isinstance(ssot_config.port.ollama, int)
+        assert isinstance(ssot_config.port.redis, int)
 
         logger.info("Default configuration validation passed")
         return True
@@ -70,56 +56,28 @@ def test_default_configuration():
         return False
 
 
-def _reload_config():
-    """Re-read the backend's configuration so a changed environment shows (#18289).
-
-    The values are computed when ``config.compat`` is imported, so reloading the ``config`` package
-    alone returns the cached ones; the registry's own cache is cleared for the same reason.
-    """
-    import importlib
-
-    import config
-    import config.compat
-    from config.registry import ConfigRegistry
-
-    ConfigRegistry.clear_cache()
-    importlib.reload(config.compat)
-    return importlib.reload(config)
-
-
 def test_custom_configuration():
-    """Test configuration with custom environment variables"""
+    """Test that AUTOBOT_* overrides reach the SSOT after a reload."""
     logger.info("Testing Custom Configuration...")
 
-    # The registry reads ``AUTOBOT_<KEY with dots as underscores>`` (config/registry.py): the older
-    # AUTOBOT_BACKEND_PORT / AUTOBOT_OLLAMA_HOST names are not read any more, and the HTTP protocol
-    # is a fixed ``http`` rather than a setting (#18289).
     test_env = {
-        "AUTOBOT_PORT_BACKEND": "8002",
-        "AUTOBOT_VM_OLLAMA": "192.168.1.100",
-        "AUTOBOT_PORT_OLLAMA": "11435",
-        "AUTOBOT_PORT_REDIS": "6380",
+        "AUTOBOT_BACKEND_PORT": "8002",
+        "AUTOBOT_OLLAMA_PORT": "11435",
+        "AUTOBOT_REDIS_PORT": "6380",
     }
-
-    # Save original environment
-    original_env = {}
-    for key in test_env:
-        original_env[key] = os.environ.get(key)
-        os.environ[key] = test_env[key]
+    original_env = {key: os.environ.get(key) for key in test_env}
+    os.environ.update(test_env)
 
     try:
-        from autobot_shared.network_constants import NetworkConstants
+        from autobot_shared.ssot_config import config as ssot_config
+        from autobot_shared.ssot_config import reload_config
 
-        config = _reload_config()
+        reload_config()
 
-        # Verify custom values are applied
-        assert config.HTTP_PROTOCOL == "http"
-        assert config.BACKEND_PORT == 8002
-        assert config.OLLAMA_PORT == 11435
-        assert NetworkConstants.REDIS_PORT == 6380
-        assert config.OLLAMA_HOST_IP == "192.168.1.100"
-        assert config.API_BASE_URL.startswith("http://")
-        assert f":{config.BACKEND_PORT}" in config.API_BASE_URL
+        assert ssot_config.port.backend == 8002
+        assert ssot_config.port.ollama == 11435
+        assert ssot_config.port.redis == 6380
+        assert f":{ssot_config.port.backend}" in ssot_config.backend_url
 
         logger.info("Custom configuration validation passed")
         return True
@@ -129,13 +87,14 @@ def test_custom_configuration():
         return False
 
     finally:
-        # Restore original environment, and the configuration read from it
         for key, value in original_env.items():
             if value is None:
                 os.environ.pop(key, None)
             else:
                 os.environ[key] = value
-        _reload_config()
+        from autobot_shared.ssot_config import reload_config
+
+        reload_config()
 
 
 def test_backend_configuration():

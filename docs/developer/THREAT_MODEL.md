@@ -92,6 +92,13 @@ Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-back
   ref matched against `_GIT_REF_PATTERN` (:39), rejecting a leading `-` or `..`. Dropping any one is a finding on its own.
 - `PluginRegistry._plugins` and `HookRegistry` are process-wide singletons that do not dedupe —
   a load path re-initialising a live plugin double-registers its callbacks (#14000).
+- A credential resolver is injected only into a plugin whose resolved directory lies under a trusted
+  built-in root ([`credential_binding.py`](../../autobot_shared/plugin_sdk/credential_binding.py) `bound_resolver`),
+  never by `manifest.name` alone. `plugin_install.py` refuses a community install that takes a built-in name.
+  Both plugin hosts (startup `PluginManager`, API `PluginLoader`) take their search and trust lists from
+  [`plugin_paths.py`](../../autobot-backend/plugin_paths.py); the CWD-relative dev fallback is searched but never trusted.
+  Keying a resolver on the self-declared name lets any installed plugin claim it (#18094). The resolver narrows
+  the sanctioned path and is not isolation: an in-process plugin can still read `os.environ` and module state.
 
 ## 4. Secrets & credentials
 

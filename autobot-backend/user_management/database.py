@@ -312,6 +312,24 @@ async def init_database() -> None:
             await asyncio.sleep(_DB_INIT_RETRY_DELAY_SECONDS)
 
 
+@asynccontextmanager
+async def isolated_session_factory() -> AsyncGenerator[async_sessionmaker[AsyncSession], None]:
+    """A session factory on a private, unpooled engine, disposed on exit (#18094).
+
+    For one-shot work on a short-lived event loop outside the app's own loop -- e.g.
+    provider-key hydration from a Celery worker init or a CLI. The shared engine's
+    pooled connections are bound to the loop that opened them, so borrowing it from a
+    loop that is about to close would leave dead connections behind for the next user.
+    """
+    from sqlalchemy.pool import NullPool
+
+    engine = create_async_engine(get_deployment_config().postgres_url, poolclass=NullPool)
+    try:
+        yield async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+    finally:
+        await engine.dispose()
+
+
 async def close_database() -> None:
     """
     Close the database connection pool.

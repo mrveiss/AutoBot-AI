@@ -24,6 +24,11 @@ import aiohttp
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# `autobot_shared` lives at the repository root, which is not on the path when this
+# script is run standalone (#18094; same bootstrap as deployment_rollback.py).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 # #14518: the first-party imports below carried a stale ``backend.`` package
 # prefix -- no ``backend`` package exists -- and autobot-backend was never on
@@ -67,9 +72,9 @@ class AutomatedTestingSuite:
             "api_tests": [],
         }
         # Import configuration from centralized source
-        from config import API_BASE_URL
+        from autobot_shared.ssot_config import config as ssot_config
 
-        self.backend_url = API_BASE_URL
+        self.backend_url = ssot_config.backend_url
 
     def run_unit_tests(self) -> List[TestResult]:
         """Run Python unit tests"""

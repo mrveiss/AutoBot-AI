@@ -42,7 +42,14 @@ class TildeProvider(SpeechProvider):
             api_key: Tilde API key (defaults to env var)
             api_url: Tilde API URL (defaults to env var or public endpoint)
         """
-        self.api_key = api_key or os.getenv("TILDE_API_KEY")
+        from services.provider_key_vault import VaultKeyUnavailableError, resolve_provider_key
+
+        self._refusal = ""
+        try:  # vault first; env as a logged fallback; an unreadable vault key is refused (#18094)
+            self.api_key = api_key or resolve_provider_key("TILDE_API_KEY", os.getenv("TILDE_API_KEY", "")) or None
+        except VaultKeyUnavailableError as exc:
+            self.api_key, self._refusal = None, str(exc)
+            logger.error("Tilde provider unavailable: %s", exc)
         self.api_url = api_url or os.getenv("TILDE_API_URL", "https://api.tilde.com/v1/asr")
 
         if not self.api_key:
@@ -60,6 +67,8 @@ class TildeProvider(SpeechProvider):
         Returns:
             List of transcript segments
         """
+        if self._refusal:
+            raise ProviderUnavailable(f"Tilde: {self._refusal}")
         if not self.api_key:
             raise ProviderUnavailable("Tilde: TILDE_API_KEY not configured")
         if not os.path.exists(audio_path):

@@ -457,7 +457,7 @@ message_display:
 The ConfigManager includes built-in validation:
 
 ```python
-from src.config import validate_config
+from config import validate_config
 
 # Validate current configuration
 status = validate_config()
@@ -540,7 +540,7 @@ developer:
 ### Validation Command
 ```bash
 # Validate configuration without starting the application
-python -c "from src.config import validate_config; print(validate_config())"
+python -c "from config import validate_config; print(validate_config())"
 ```
 
 ---

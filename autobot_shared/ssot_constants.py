@@ -766,7 +766,7 @@ class QueryDefaults:
     DEFAULT_OFFSET: int = 0
     DEFAULT_PAGE_SIZE: int = 50
     MAX_PAGE_SIZE: int = 500
-    RAG_DEFAULT_RESULTS: int = 5
+    RAG_DEFAULT_RESULTS: int = ModelConfig.RAG_DEFAULT_MAX_RESULTS  # alias of the canonical (#18094)
     RAG_MAX_RESULTS: int = 20
     KNOWLEDGE_DEFAULT_LIMIT: int = 100
 

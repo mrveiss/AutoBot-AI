@@ -30,6 +30,7 @@ from performance_monitor import VMS
 from src.constants.model_constants import ModelConstants
 
 from autobot_shared.network_constants import NetworkConstants
+from autobot_shared.ssot_config import config as ssot_config
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +55,7 @@ class PerformanceBenchmark:
     def __init__(self, output_dir: str = None):
         self.logger = logging.getLogger(__name__)
         if output_dir is None:
-            _base = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
-            output_dir = f"{_base}/logs/benchmarks"
+            output_dir = f"{ssot_config.path.base_dir}/logs/benchmarks"
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.results = []
@@ -1043,7 +1043,7 @@ async def main():
     parser.add_argument(
         "--output-dir",
         default=os.path.join(
-            os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"),
+            ssot_config.path.base_dir,
             "logs/benchmarks",
         ),
         help="Output directory for results",

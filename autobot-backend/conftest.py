@@ -42,6 +42,7 @@ sys.path.insert(0, str(backend_root))
 # real-loading before its dependent imports it.
 from testkit.module_stubs import make_pkg_stub as _make_pkg_stub
 from testkit.module_stubs import real_load_and_bind as _real_load_and_bind
+from testkit.provider_key_vault_state import empty_reachable_provider_key_vault  # noqa: F401 -- autouse
 
 # Stub chromadb before it is imported. chromadb hangs at import time on
 # machines without a local Chroma server (it fires gRPC keep-alive probes via
@@ -1264,10 +1265,7 @@ def single_use_fake_redis():
 
 @pytest.fixture(autouse=True)
 def set_test_environment():
-    """
-    Set TEST environment variables for all tests.
-    Prevents tests from affecting production data.
-    """
+    """Set TEST environment variables for all tests, so they cannot affect production data."""
     original_env = dict(os.environ)
 
     config.test_mode = "true"

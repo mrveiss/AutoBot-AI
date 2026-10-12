@@ -33,15 +33,15 @@ def test_api_key_resolves_through_the_vault_seam_when_config_is_empty(monkeypatc
     assert OpenAIRealtimeProvider._api_key() == "vault-only-value"
 
 
-def test_api_key_prefers_config_over_the_vault(monkeypatch) -> None:
-    """Dual-read, config(env)-first -- the first and only preferred tier."""
+def test_api_key_prefers_the_vault_over_config(monkeypatch) -> None:
+    """Vault first; config (env) is the logged migration fallback (#18094, owner decision 2026-10-12)."""
     import services.provider_key_vault as vault_mod
     from autobot_shared.ssot_config import get_config
 
     monkeypatch.setattr(get_config().llm, "openai_api_key", "config-value", raising=False)
     monkeypatch.setattr(vault_mod, "_hydrated_keys", {"OPENAI_API_KEY": "vault-value"})
 
-    assert OpenAIRealtimeProvider._api_key() == "config-value"
+    assert OpenAIRealtimeProvider._api_key() == "vault-value"
 
 
 def test_only_two_tiers_are_consulted(monkeypatch) -> None:

@@ -22,7 +22,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
-from services.provider_key_vault import resolve_provider_key
+from services.provider_key_vault import VaultKeyUnavailableError, resolve_provider_key
 
 logger = get_logger(__name__)
 
@@ -186,7 +186,13 @@ def get_slack_hook() -> Any:
     if _hook is not None:
         return _hook
 
-    token = resolve_provider_key("SLACK_BOT_TOKEN", config.slack_bot_token).strip()
+    try:
+        token = resolve_provider_key("SLACK_BOT_TOKEN", config.slack_bot_token).strip()
+    except VaultKeyUnavailableError as exc:
+        # #18094: refused, not absent -- notifications are off for this call, said at ERROR,
+        # and nothing is cached so a later successful hydration turns them back on.
+        logger.error("Slack notifications disabled: %s", exc)
+        return _NullSlackHook()
     if not token:
         logger.debug("SLACK_BOT_TOKEN not set — Slack notifications disabled")
         _hook = _NullSlackHook()

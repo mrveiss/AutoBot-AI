@@ -197,12 +197,6 @@ def get_deployment_config() -> DeploymentConfig:
     return _deployment_config
 
 
-def is_feature_enabled(feature: str) -> bool:
-    """Check if a specific feature is enabled for the current deployment mode."""
-    config = get_deployment_config()
-    return getattr(config.features, feature, False)
-
-
 def requires_auth() -> bool:
     """Check if authentication is required for the current deployment mode.
 

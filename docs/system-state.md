@@ -2054,9 +2054,9 @@ class OllamaConnectionPool:
 ```python
 def get_standardized_service_address(service_name: str, port: int, protocol: str = "http") -> str:
     service_host_mapping = {
-        "redis": REDIS_HOST_IP,
-        "ollama": OLLAMA_HOST_IP,
-        "backend": BACKEND_HOST_IP,
+        "redis": ssot_config.vm.redis,
+        "ollama": ssot_config.vm.ollama,
+        "backend": ssot_config.vm.main,
         # ... other services
     }
     host = service_host_mapping.get(service_name, _get_default_host_for_service("host"))

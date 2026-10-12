@@ -26,6 +26,11 @@ from typing import Any, Dict, List, Tuple
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
 from autobot_shared.ssot_constants import TTL_1_HOUR
+
+# #18094: the similarity-threshold triple has one owner (analytics_infrastructure,
+# which analysis_base also imports); it cannot live in shared/analysis_base because
+# that module imports analytics_infrastructure, so the dependency would be a cycle.
+from code_intelligence.analytics_infrastructure import SIMILARITY_MEDIUM
 from knowledge.index_embedding_space import index_embedding_space
 
 from .extractors import PythonPatternExtractor, TypeScriptPatternExtractor
@@ -64,11 +69,6 @@ _SKIP_DIRS: frozenset = frozenset(
         ".mypy_cache",
     }
 )
-
-# Similarity thresholds
-SIMILARITY_HIGH = 0.85
-SIMILARITY_MEDIUM = 0.70
-SIMILARITY_LOW = 0.50
 
 # ChromaDB collection name
 PATTERNS_COLLECTION = "cross_language_patterns"

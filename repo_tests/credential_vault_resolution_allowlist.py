@@ -68,10 +68,6 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/user_management/config.py", "postgres_password"): (
         f"{_AUTH_BOOTSTRAP}: the vault's own Postgres backing store cannot gate itself"
     ),
-    ("autobot-backend/auth_middleware.py", "internal_api_key"): (
-        f"{_AUTH_BOOTSTRAP}: the exact confused-deputy example "
-        "autobot-slm-backend/services/system_secrets_vault.py documents for this same credential"
-    ),
     ("autobot-backend/initialization/lifespan.py", "slm_auth_token"): (
         f"{_AUTH_BOOTSTRAP}: internal backend-to-SLM service auth token, same as the two siblings above"
     ),

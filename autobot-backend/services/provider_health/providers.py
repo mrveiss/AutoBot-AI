@@ -7,6 +7,7 @@ Provider-specific health check implementations
 """
 
 import time
+from typing import Callable
 
 import aiohttp
 
@@ -16,9 +17,29 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.ssot_config import get_ollama_url
 from constants.model_constants import ANTHROPIC_CLAUDE3_HAIKU_DATED
-from services.provider_key_vault import resolve_provider_key
+from services.provider_key_vault import VaultKeyUnavailableError, resolve_provider_key
 
 from .base import BaseProviderHealth, ProviderHealthResult, ProviderStatus
+
+
+def _health_key(resolve: Callable[[], str]) -> tuple[str, str]:
+    """``(key, refusal)``: a vault refusal (#18094) becomes a reported health state, never a constructor crash."""
+    try:
+        return resolve(), ""
+    except VaultKeyUnavailableError as exc:
+        return "", str(exc)
+
+
+def _refused_result(checker: BaseProviderHealth) -> ProviderHealthResult:
+    """The health result for a key the vault holds but could not read -- the reason, never a value."""
+    return checker._create_result(
+        status=ProviderStatus.UNAVAILABLE,
+        available=False,
+        message=checker.key_refusal,
+        response_time=0.0,
+        details={"api_key_set": True, "vault_readable": False},
+    )
+
 
 logger = get_logger(__name__)
 
@@ -110,7 +131,9 @@ class OpenAIHealth(BaseProviderHealth):
     def __init__(self) -> None:
         """Initialize OpenAI health checker with API key configuration."""
         super().__init__("openai")
-        self.api_key = resolve_provider_key("OPENAI_API_KEY", ssot_config.openai_api_key)
+        self.api_key, self.key_refusal = _health_key(
+            lambda: resolve_provider_key("OPENAI_API_KEY", ssot_config.openai_api_key)
+        )
         # Use env var for base URL, fallback to standard OpenAI API
         self.base_url = ssot_config.openai_api_base_url
 
@@ -153,6 +176,8 @@ class OpenAIHealth(BaseProviderHealth):
         start_time = time.time()
 
         # Check if API key is configured
+        if self.key_refusal:
+            return _refused_result(self)
         if not self.api_key:
             return self._create_result(
                 status=ProviderStatus.NOT_CONFIGURED,
@@ -210,7 +235,9 @@ class AnthropicHealth(BaseProviderHealth):
     def __init__(self) -> None:
         """Initialize Anthropic health checker with API key configuration."""
         super().__init__("anthropic")
-        self.api_key = resolve_provider_key("ANTHROPIC_API_KEY", ssot_config.anthropic_api_key)
+        self.api_key, self.key_refusal = _health_key(
+            lambda: resolve_provider_key("ANTHROPIC_API_KEY", ssot_config.anthropic_api_key)
+        )
         # Use env var for base URL, fallback to standard Anthropic API
         self.base_url = ssot_config.anthropic_api_base_url
 
@@ -247,6 +274,8 @@ class AnthropicHealth(BaseProviderHealth):
         start_time = time.time()
 
         # Check if API key is configured
+        if self.key_refusal:
+            return _refused_result(self)
         if not self.api_key:
             return self._create_result(
                 status=ProviderStatus.NOT_CONFIGURED,
@@ -313,7 +342,9 @@ class GoogleHealth(BaseProviderHealth):
     def __init__(self) -> None:
         """Initialize Google health checker with API key from environment."""
         super().__init__("google")
-        self.api_key = resolve_provider_key("GOOGLE_API_KEY", ssot_config.google_api_key)
+        self.api_key, self.key_refusal = _health_key(
+            lambda: resolve_provider_key("GOOGLE_API_KEY", ssot_config.google_api_key)
+        )
         self.base_url = "https://generativelanguage.googleapis.com/v1"
 
     def _build_google_result(self, response_status: int, data: dict, response_time: float) -> ProviderHealthResult:
@@ -356,6 +387,8 @@ class GoogleHealth(BaseProviderHealth):
         start_time = time.time()
 
         # Check if API key is configured
+        if self.key_refusal:
+            return _refused_result(self)
         if not self.api_key:
             return self._create_result(
                 status=ProviderStatus.NOT_CONFIGURED,

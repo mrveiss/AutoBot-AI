@@ -37,6 +37,7 @@ from typing import Any
 
 import aiohttp
 
+from autobot_shared import node_proxy
 from autobot_shared.env_utils import env_float
 from autobot_shared.http_client import get_http_client, sign_request
 
@@ -59,7 +60,7 @@ def _ssot_backend_url() -> str:
 # ---------------------------------------------------------------------------
 # Module-level configuration — read once from env, never hard-coded.
 # ---------------------------------------------------------------------------
-_INTERNAL_API_KEY: str = os.getenv("AUTOBOT_INTERNAL_API_KEY", "")  # primary auth (#10492 Option A)
+_INTERNAL_API_KEY: str = node_proxy.internal_api_key()  # primary auth (#10492 Option A)
 _SERVICE_ID: str = os.getenv("SLM_SERVICE_ID", "slm-backend")
 _SERVICE_KEY: str = os.getenv("SLM_SERVICE_KEY", "")  # HMAC fallback
 _BACKEND_BASE_URL: str = os.getenv("SLM_AUTHORITY_BASE_URL", _ssot_backend_url()).rstrip("/")

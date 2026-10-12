@@ -128,11 +128,13 @@ class RedisConfigLoader:
         if yaml_path is not None:
             return yaml_path if os.path.exists(yaml_path) else None
 
+        from autobot_shared.ssot_config import config as ssot_config
+
         possible_paths = [
             "/app/config/redis-databases.yaml",  # Container
             "./config/redis-databases.yaml",  # Host relative
             os.path.join(
-                os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"),
+                ssot_config.path.base_dir,
                 "config/redis-databases.yaml",
             ),  # Host absolute
         ]

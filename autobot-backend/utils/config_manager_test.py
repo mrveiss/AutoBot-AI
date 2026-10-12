@@ -13,7 +13,7 @@ from unittest.mock import patch
 import pytest
 
 from autobot_shared.network_constants import NetworkConstants
-from config import get_config_section, get_config_value, is_feature_enabled
+from config import get_config_section, get_config_value
 from config.manager import ConfigManager as ConfigManager
 
 # NOTE (#11954): This file tested a much older, flat-schema ConfigManager
@@ -163,19 +163,18 @@ class TestConfigManager:
         empty_config = cm.get_config_section("nonexistent")
         assert empty_config == {}
 
-    def test_feature_enabled_check(self):
-        """Test is_feature_enabled functionality"""
+    def test_section_enabled_flags(self):
+        """Section ``enabled`` leaves read through get_nested.
+
+        Subsystem flags are autobot_shared.feature_flags.is_feature_enabled, the one
+        definition (#17856 row 16); the manager's same-name dot-path wrapper is retired.
+        """
         cm = ConfigManager()
 
-        # Test existing enabled features
-        assert cm.is_feature_enabled("multimodal.vision") is True
-        assert cm.is_feature_enabled("multimodal.voice") is True
-
-        # Test disabled features
-        assert cm.is_feature_enabled("npu") is False
-
-        # Test non-existent features
-        assert cm.is_feature_enabled("nonexistent.feature") is False
+        assert cm.get_nested("multimodal.vision.enabled", False) is True
+        assert cm.get_nested("multimodal.voice.enabled", False) is True
+        assert cm.get_nested("npu.enabled", False) is False
+        assert cm.get_nested("nonexistent.feature.enabled", False) is False
 
     def test_configuration_validation(self):
         """Test configuration validation.
@@ -290,29 +289,6 @@ class TestConfigManager:
         assert security["secrets_key"] is None
         assert security["audit_log_file"] == "data/audit.log"
 
-    def test_backward_compatibility_wrapper(self):
-        """Test backward compatibility Config class wrapper.
-
-        Config() requires a manager instance — Config(ConfigManager()) — and
-        Config.get() delegates to the manager's flat .get(), not dot-path
-        traversal (#11954).
-        """
-        from config import Config
-
-        manager = ConfigManager()
-        config = Config(manager)
-
-        # Test that it provides access to complete config
-        full_config = config.config
-        assert isinstance(full_config, dict)
-        assert "backend" in full_config
-        assert "redis" in full_config
-
-        # Config.get() delegates to the flat ConfigManager.get()
-        manager.set("compat_test_key", "compat_value")
-        assert config.get("compat_test_key") == "compat_value"
-        assert config.get("nonexistent_key", "fallback") == "fallback"
-
     def test_global_instance_functions(self):
         """Test global convenience functions.
 
@@ -331,10 +307,6 @@ class TestConfigManager:
         section = get_config_section("redis")
         assert isinstance(section, dict)
         assert section["port"] == NetworkConstants.REDIS_PORT
-
-        # Test is_feature_enabled function
-        assert is_feature_enabled("multimodal.vision") is True
-        assert is_feature_enabled("npu") is False
 
     def test_data_and_task_transport_sections(self):
         """Test data and task transport configuration sections"""

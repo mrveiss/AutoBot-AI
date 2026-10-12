@@ -126,7 +126,10 @@ npu_worker:
   # Environment variables
   environment:
     PYTHONPATH: "{{ autobot.base_dir }}"
-    NPU_WORKER_HOST: "0.0.0.0"
+    # Bind address only (#18094). The legacy NPU_WORKER_HOST name carried both bind and
+    # connect meaning; the worker falls back to it, but connect readers use
+    # AUTOBOT_NPU_WORKER_HOST, so the old name is not set here.
+    NPU_WORKER_BIND_HOST: "0.0.0.0"
     NPU_WORKER_PORT: 8081
     NPU_WORKER_WORKERS: 1
     REDIS_HOST: "{{ redis_host }}"

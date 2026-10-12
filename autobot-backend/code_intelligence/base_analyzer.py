@@ -57,7 +57,34 @@ class Language(Enum):
     YAML = "yaml"
     JSON = "json"
     GO = "go"
+    # Detected for classification only; no analyzer targets these (#18094).
+    JAVA = "java"
+    C = "c"
+    CPP = "cpp"
+    CSHARP = "csharp"
+    RUBY = "ruby"
+    RUST = "rust"
+    PHP = "php"
+    SWIFT = "swift"
+    KOTLIN = "kotlin"
+    SCALA = "scala"
+    POWERSHELL = "powershell"
+    XML = "xml"
+    HTML = "html"
+    CSS = "css"
+    SQL = "sql"
+    MARKDOWN = "markdown"
     UNKNOWN = "unknown"
+
+    @classmethod
+    def _missing_(cls, value):
+        """Accept the shell dialect names ("bash", "sh", "zsh") as SHELL."""
+        if isinstance(value, str) and value.lower() in _SHELL_ALIASES:
+            return cls.SHELL
+        return None
+
+
+_SHELL_ALIASES = frozenset({"bash", "sh", "zsh"})
 
 
 class IssueCategory(Enum):
@@ -213,7 +240,47 @@ EXTENSION_TO_LANGUAGE: Dict[str, Language] = {
     ".yml": Language.YAML,
     ".json": Language.JSON,
     ".go": Language.GO,
+    ".java": Language.JAVA,
+    ".c": Language.C,
+    ".h": Language.C,
+    ".cpp": Language.CPP,
+    ".cs": Language.CSHARP,
+    ".rb": Language.RUBY,
+    ".rs": Language.RUST,
+    ".php": Language.PHP,
+    ".swift": Language.SWIFT,
+    ".kt": Language.KOTLIN,
+    ".scala": Language.SCALA,
+    ".ps1": Language.POWERSHELL,
+    ".xml": Language.XML,
+    ".html": Language.HTML,
+    ".css": Language.CSS,
+    ".sql": Language.SQL,
+    ".md": Language.MARKDOWN,
 }
+
+#: Languages recognised for classification that no analyzer targets; an unanalysed
+#: file in one of them is not an error (it never was, before they were recognised).
+CLASSIFICATION_ONLY_LANGUAGES = frozenset(
+    {
+        Language.JAVA,
+        Language.C,
+        Language.CPP,
+        Language.CSHARP,
+        Language.RUBY,
+        Language.RUST,
+        Language.PHP,
+        Language.SWIFT,
+        Language.KOTLIN,
+        Language.SCALA,
+        Language.POWERSHELL,
+        Language.XML,
+        Language.HTML,
+        Language.CSS,
+        Language.SQL,
+        Language.MARKDOWN,
+    }
+)
 
 
 def detect_language(file_path: Path) -> Language:
@@ -342,7 +409,7 @@ class MultiLanguageAnalyzer:
         analyzers = self.get_analyzers_for_file(file_path)
         if not analyzers:
             language = detect_language(file_path)
-            if language != Language.UNKNOWN:
+            if language != Language.UNKNOWN and language not in CLASSIFICATION_ONLY_LANGUAGES:
                 result.errors.append(f"No analyzer registered for language: {language.value}")
             return result
 

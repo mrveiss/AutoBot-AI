@@ -19,9 +19,9 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from autobot_shared.secrets_vault import VaultKind, VaultRef
+from services import provider_key_vault
 from services.envelope_secrets_service import EnvelopeSecretsService
 from services.provider_key_vault import (
-    _hydrated_keys,
     capture_provider_key,
     hydrate_provider_keys_from_vault,
     resolve_provider_key,
@@ -47,11 +47,11 @@ async def session(fresh_db_url):
 
 
 @pytest.fixture(autouse=True)
-def _clear_hydration_cache():
-    """The process-lifetime hydration cache must not leak between tests."""
-    _hydrated_keys.clear()
-    yield
-    _hydrated_keys.clear()
+def _clear_hydration_cache(monkeypatch):
+    """The process-lifetime hydration state must not leak between tests (hydration swaps the cache, #18094)."""
+    monkeypatch.setattr(provider_key_vault, "_hydrated_keys", {})
+    monkeypatch.setattr(provider_key_vault, "_unreadable_keys", set())
+    monkeypatch.setattr(provider_key_vault, "_vault_state", provider_key_vault.VAULT_REACHABLE)
 
 
 async def test_capture_lands_in_system_vault(session):
@@ -113,18 +113,18 @@ async def test_hydrate_finds_vault_only_key(session, monkeypatch):
     assert resolve_provider_key("ANTHROPIC_API_KEY", "") == "claude-key-value"
 
 
-async def test_hydrate_skips_when_env_var_already_set(session, monkeypatch):
-    """Env wins -- an Ansible-provisioned deployment is unaffected by the vault."""
+async def test_hydrate_loads_the_vault_even_when_env_var_is_set(session, monkeypatch):
+    """The vault wins (#18094, owner decision 2026-10-12); the env var is only a logged fallback."""
     monkeypatch.setenv("GROQ_API_KEY", "env-value")
     await capture_provider_key(
         session, name="GROQ_API_KEY", plaintext="vault-value", created_by=_SENTINEL_USER, root_key=_ROOT
     )
     await session.commit()
 
+    provider_key_vault._hydrated_keys.clear()  # prove hydration (not the capture-time refresh) loads it
     hydrated = await hydrate_provider_keys_from_vault(session, root_key=_ROOT)
-    assert "GROQ_API_KEY" not in hydrated  # env already set -- vault never even queried
-    # resolve_provider_key: env value always wins over anything in the cache.
-    assert resolve_provider_key("GROQ_API_KEY", "env-value") == "env-value"
+    assert "GROQ_API_KEY" in hydrated
+    assert resolve_provider_key("GROQ_API_KEY", "env-value") == "vault-value"
 
 
 async def test_hydrate_is_idempotent_second_run_noop(session, monkeypatch):
@@ -220,16 +220,17 @@ async def test_hydrate_finds_vault_only_search_credential(session, monkeypatch):
     assert resolve_provider_key("BRAVE_SEARCH_API_KEY", "") == "brave-vault-value"
 
 
-async def test_search_credential_env_wins_over_vault(session, monkeypatch):
+async def test_search_credential_vault_wins_over_env(session, monkeypatch):
     monkeypatch.setenv("SEARXNG_TOKEN", "env-value")
     await capture_provider_key(
         session, name="SEARXNG_TOKEN", plaintext="vault-value", created_by=_SENTINEL_USER, root_key=_ROOT
     )
     await session.commit()
 
+    provider_key_vault._hydrated_keys.clear()
     hydrated = await hydrate_provider_keys_from_vault(session, root_key=_ROOT)
-    assert "SEARXNG_TOKEN" not in hydrated  # env already set -- vault never even queried
-    assert resolve_provider_key("SEARXNG_TOKEN", "env-value") == "env-value"
+    assert "SEARXNG_TOKEN" in hydrated
+    assert resolve_provider_key("SEARXNG_TOKEN", "env-value") == "vault-value"
 
 
 # --- #15267 AC: a secret_dependencies edge exists for each search credential consumer. ---
@@ -276,7 +277,7 @@ async def test_hydrate_registers_a_dependency_edge_for_the_search_registry(sessi
 
 
 async def test_hydrate_dependency_edge_survives_env_override(session, monkeypatch):
-    """The edge is recorded even while the env var currently wins (#15267)."""
+    """The edge is recorded even while the env var is also set (#15267)."""
     monkeypatch.setenv("GROQ_API_KEY", "env-value")
     await capture_provider_key(
         session, name="GROQ_API_KEY", plaintext="vault-value", created_by=_SENTINEL_USER, root_key=_ROOT
@@ -288,7 +289,7 @@ async def test_hydrate_dependency_edge_survives_env_override(session, monkeypatc
     secret_id = next(s.id for s in secrets if s.name == "GROQ_API_KEY")
 
     hydrated = await hydrate_provider_keys_from_vault(session, root_key=_ROOT)
-    assert "GROQ_API_KEY" not in hydrated  # env wins -- cache untouched
+    assert "GROQ_API_KEY" in hydrated  # the vault wins (#18094), so it is hydrated despite the env var
 
     deps = await SecretDependencyService().what_depends_on(session, secret_id=secret_id)
     assert any(d.dependent_kind == "service" and d.dependent_id == "llm_shared.provider_registry" for d in deps)

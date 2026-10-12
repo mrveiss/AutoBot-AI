@@ -180,10 +180,10 @@ class AdvancedRAGOptimizer:
 
     def _init_search_config(self) -> None:
         """Initialize search configuration parameters. Issue #620."""
-        self.hybrid_weight_semantic = 0.7  # Weight for semantic similarity
-        self.hybrid_weight_keyword = 0.3  # Weight for keyword matching
-        self.max_results_per_stage = 20  # Results to consider in each stage
-        self.diversity_threshold = 0.85  # Similarity threshold for diversification
+        self.hybrid_weight_semantic = model_config.RAG_HYBRID_WEIGHT_SEMANTIC
+        self.hybrid_weight_keyword = model_config.RAG_HYBRID_WEIGHT_KEYWORD
+        self.max_results_per_stage = model_config.RAG_MAX_RESULTS_PER_STAGE
+        self.diversity_threshold = model_config.RAG_DIVERSITY_THRESHOLD
 
     def _init_query_patterns(self) -> None:
         """Initialize query analysis keyword patterns. Issue #620."""

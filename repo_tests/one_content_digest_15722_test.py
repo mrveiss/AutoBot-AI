@@ -46,7 +46,6 @@ _UNCONVERTED = {
     "autobot-backend/code_analysis/auto-tools/playwright_sanitizer.py": _TOOL,
     "autobot-backend/code_analysis/auto-tools/security_deep_sanitizer.py": _TOOL,
     "autobot-backend/code_analysis/auto-tools/security_sanitizer.py": _TOOL,
-    "autobot-backend/code_intelligence/analytics_infrastructure.py": _QUEUED,
     "autobot-backend/services/claim_verifier.py": "claim-text digest, unconverted",
     "autobot-backend/services/npu_client.py": "encodes with errors=replace, a different input form",
 }

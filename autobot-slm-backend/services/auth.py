@@ -28,7 +28,6 @@ rejected before PyJWT is invoked.
 
 import asyncio
 import logging
-import os
 import secrets
 from datetime import timedelta
 from typing import Callable, NoReturn
@@ -38,6 +37,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared import node_proxy
 from autobot_shared.auth.jwt_core import _peek_alg, decode_jwt_or_none, encode_jwt, hash_password
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.time_utils import now_utc
@@ -323,7 +323,7 @@ def verify_internal_api_key(provided: str | None) -> bool:
     Returns True only when the key is configured AND *provided* matches exactly;
     ``secrets.compare_digest`` prevents timing inference and a None can't match.
     """
-    expected = os.getenv("AUTOBOT_INTERNAL_API_KEY", "")
+    expected = node_proxy.internal_api_key()
     if not expected or not provided:
         return False
     return secrets.compare_digest(provided, expected)

@@ -424,3 +424,16 @@ def _reset_async_redis_pools_on_worker_init(sender=None, **kwargs):
             "worker_process_init: async Redis pool reset failed (worker will still start)",
             exc_info=True,
         )
+
+
+# #18094: a worker resolves provider keys (knowledge tasks build a KnowledgeBase, whose LLM and
+# embedding providers resolve OPENAI/ANTHROPIC keys). The lifespan never runs here, so read the
+# vault once per forked worker before its first task. Never raises: a failure is classified as a
+# vault outage, which refuses keys rather than serving env.
+@worker_process_init.connect
+def _hydrate_provider_keys_on_worker_init(sender=None, **kwargs):
+    """Hydrate the provider-key vault cache in each worker process."""
+    from services.provider_key_process_init import hydrate_this_process
+
+    hydrated = hydrate_this_process()
+    logger.info("worker_process_init: provider keys hydrated from vault: %d (#18094)", len(hydrated))
