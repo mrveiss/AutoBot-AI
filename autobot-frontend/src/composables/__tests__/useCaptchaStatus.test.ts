@@ -17,6 +17,8 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { effectScope } from 'vue'
+import { readFileSync, readdirSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 // `vi.hoisted`, not a plain `const`: vitest hoists every `vi.mock` call and the
 // module imports above these declarations, and `useCaptchaStatus` calls
@@ -53,7 +55,7 @@ vi.mock('@/utils/debugUtils', () => ({
   }),
 }))
 
-import { useCaptchaStatus } from '../research/useCaptchaStatus'
+import { captchaTypeLabelKeyFor, useCaptchaStatus } from '../research/useCaptchaStatus'
 
 /** Run the composable inside a scope, as its siblings' specs do -- it registers
  *  an `onUnmounted` hook and would warn outside one. */
@@ -118,5 +120,42 @@ describe('openVnc', () => {
     withCaptchaStatus((api) => api.openVnc())
 
     expect(openSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('captchaTypeLabelKeyFor', () => {
+  const en = JSON.parse(readFileSync(resolve(__dirname, '../../i18n/locales/en.json'), 'utf-8'))
+  const localeFiles = readdirSync(resolve(__dirname, '../../i18n/locales')).filter((f) => f.endsWith('.json'))
+
+  it.each([
+    ['recaptcha', 'recaptcha'],
+    ['hcaptcha', 'hcaptcha'],
+    ['cloudflare', 'cloudflare'],
+    ['slider', 'slider'],
+    ['image_select', 'imageSelect'],
+    ['text', 'text'],
+    ['text_image', 'text'],
+    ['math', 'math'],
+    ['unknown', 'unknown'],
+  ])('maps %s to its own label', (wire, slug) => {
+    expect(captchaTypeLabelKeyFor(wire)).toBe(`research.captcha.types.${slug}`)
+  })
+
+  it.each([undefined, '', 'nonsense'])('shows the unknown label for %s', (wire) => {
+    expect(captchaTypeLabelKeyFor(wire)).toBe('research.captcha.types.unknown')
+  })
+
+  it('every key it can return exists in all 11 locales', () => {
+    expect(localeFiles).toHaveLength(11)
+    const keys = new Set(
+      ['recaptcha', 'hcaptcha', 'cloudflare', 'slider', 'image_select', 'text', 'math', 'unknown', 'x'].map(
+        captchaTypeLabelKeyFor,
+      ),
+    )
+    for (const file of localeFiles) {
+      const types = JSON.parse(readFileSync(resolve(__dirname, '../../i18n/locales', file), 'utf-8')).research.captcha.types
+      for (const key of keys) expect(types[key.split('.').pop()!], `${file}: ${key}`).toBeTruthy()
+    }
+    expect(Object.keys(en.research.captcha.types)).toHaveLength(8)
   })
 })

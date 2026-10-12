@@ -7512,6 +7512,16 @@
       "detected": "CAPTCHA Detected",
       "openVnc": "Open VNC Desktop",
       "skipSource": "Skip Source",
+      "types": {
+        "recaptcha": "reCAPTCHA",
+        "hcaptcha": "hCaptcha",
+        "cloudflare": "چالش Cloudflare",
+        "slider": "کپچای لغزنده",
+        "imageSelect": "کپچای انتخاب تصویر",
+        "text": "کپچای متنی",
+        "math": "کپچای ریاضی",
+        "unknown": "کپچای ناشناخته"
+      },
       "solved": "I've Solved It"
     }
   },

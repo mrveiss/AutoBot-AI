@@ -6566,7 +6566,17 @@
       "clickToSolve": "Noklikšķiniet, lai atrisinātu VNC",
       "openVnc": "Atvērt VNC darbvirsmu",
       "solved": "Esmu to atrisinājis",
-      "skipSource": "Izlaist avotu"
+      "skipSource": "Izlaist avotu",
+      "types": {
+        "recaptcha": "reCAPTCHA",
+        "hcaptcha": "hCaptcha",
+        "cloudflare": "Cloudflare pārbaude",
+        "slider": "CAPTCHA ar slīdni",
+        "imageSelect": "CAPTCHA ar attēlu izvēli",
+        "text": "Teksta CAPTCHA",
+        "math": "Matemātiskā CAPTCHA",
+        "unknown": "Nezināma CAPTCHA"
+      }
     }
   },
   "operations": {

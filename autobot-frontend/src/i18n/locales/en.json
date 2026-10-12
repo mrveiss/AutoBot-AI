@@ -6573,7 +6573,17 @@
       "clickToSolve": "Click to solve in VNC",
       "openVnc": "Open VNC Desktop",
       "solved": "I've Solved It",
-      "skipSource": "Skip Source"
+      "skipSource": "Skip Source",
+      "types": {
+        "recaptcha": "reCAPTCHA",
+        "hcaptcha": "hCaptcha",
+        "cloudflare": "Cloudflare Challenge",
+        "slider": "Slider CAPTCHA",
+        "imageSelect": "Image Selection CAPTCHA",
+        "text": "Text CAPTCHA",
+        "math": "Math CAPTCHA",
+        "unknown": "Unknown CAPTCHA"
+      }
     }
   },
   "operations": {

@@ -6566,7 +6566,17 @@
       "clickToSolve": "Cliquer pour résoudre dans VNC",
       "openVnc": "Ouvrir le bureau VNC",
       "solved": "Je l'ai résolu",
-      "skipSource": "Ignorer la source"
+      "skipSource": "Ignorer la source",
+      "types": {
+        "recaptcha": "reCAPTCHA",
+        "hcaptcha": "hCaptcha",
+        "cloudflare": "Défi Cloudflare",
+        "slider": "CAPTCHA à curseur",
+        "imageSelect": "CAPTCHA de sélection d'images",
+        "text": "CAPTCHA textuel",
+        "math": "CAPTCHA mathématique",
+        "unknown": "CAPTCHA inconnu"
+      }
     }
   },
   "operations": {

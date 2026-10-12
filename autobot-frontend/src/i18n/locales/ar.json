@@ -6566,7 +6566,17 @@
       "clickToSolve": "Click to solve in VNC",
       "openVnc": "Open VNC Desktop",
       "solved": "I've Solved It",
-      "skipSource": "Skip Source"
+      "skipSource": "Skip Source",
+      "types": {
+        "recaptcha": "reCAPTCHA",
+        "hcaptcha": "hCaptcha",
+        "cloudflare": "تحدي Cloudflare",
+        "slider": "CAPTCHA بالمنزلق",
+        "imageSelect": "CAPTCHA باختيار الصور",
+        "text": "CAPTCHA نصي",
+        "math": "CAPTCHA رياضي",
+        "unknown": "CAPTCHA غير معروف"
+      }
     }
   },
   "operations": {
