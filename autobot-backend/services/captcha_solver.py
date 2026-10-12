@@ -43,6 +43,7 @@ from typing import TYPE_CHECKING
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.slug import sanitize_token
 
 if TYPE_CHECKING:
     from PIL import Image
@@ -53,7 +54,6 @@ logger = get_logger(__name__)
 _MATH_OPERATORS = frozenset({"+", "-", "=", "\u00d7", "\u00f7", "*"})
 
 # Issue #380: Pre-compiled regex patterns for CAPTCHA processing
-_NON_ALNUM_RE = re.compile(r"[^A-Za-z0-9]")
 _TRAILING_EQUALS_RE = re.compile(r"=\s*\??\s*$")
 _MATH_EXPR_RE = re.compile(r"(\d+)\s*([+\-*/])\s*(\d+)")
 
@@ -495,7 +495,7 @@ class CaptchaSolver:
             Cleaned text
         """
         # Remove spaces and special characters (Issue #380: use pre-compiled pattern)
-        text = _NON_ALNUM_RE.sub("", text)
+        text = sanitize_token(text, allowed="A-Za-z0-9", replacement="", collapse=False)
 
         # Common OCR mistakes
         replacements = {

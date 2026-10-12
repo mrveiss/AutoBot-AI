@@ -7,7 +7,6 @@ Markdown Reference System for AutoBot Phase 7
 Integrates markdown documents with SQLite database for enhanced knowledge management
 """
 
-import hashlib
 import json
 import re
 import sqlite3
@@ -15,14 +14,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
+from autobot_shared.content_digest import content_digest
 from autobot_shared.frontmatter import split_frontmatter
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.text_tokens import word_token_list
 from memory import MemoryManager
 
 logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for markdown parsing
-_WORD_RE = re.compile(r"\b\w+\b")
 _TAGS_RE = re.compile(r"tags:\s*\[(.*?)\]")
 _INLINE_TAGS_RE = re.compile(r"#(\w+)")
 _HEADER_RE = re.compile(r"^(#{1,6})\s+(.+)")
@@ -164,10 +164,10 @@ class MarkdownReferenceSystem:
         """
         stat = file_path.stat()
         return {
-            "content_hash": hashlib.sha256(content.encode()).hexdigest(),
+            "content_hash": content_digest(content),
             "created_at": datetime.fromtimestamp(stat.st_ctime),
             "last_modified": datetime.fromtimestamp(stat.st_mtime),
-            "word_count": len(_WORD_RE.findall(content)),
+            "word_count": len(word_token_list(content, split_underscore=False, lowercase=False)),
             "tags": self._extract_tags(content),
         }
 
@@ -271,7 +271,7 @@ class MarkdownReferenceSystem:
         """
         section["end_line"] = end_line
         section["content_text"] = "\n".join(lines[section["start_line"] - 1 : section["end_line"]])
-        section["content_hash"] = hashlib.sha256(section["content_text"].encode()).hexdigest()
+        section["content_hash"] = content_digest(section["content_text"])
         return section
 
     def _insert_sections_to_db(self, conn: sqlite3.Connection, sections: List[Dict[str, Any]]) -> None:

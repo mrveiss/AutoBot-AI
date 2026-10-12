@@ -15,6 +15,7 @@ import re
 from typing import Callable, Dict, List, Optional, Set
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.text_tokens import word_tokens
 
 from .tier_config import ComplexityResult, TierConfig
 
@@ -330,7 +331,7 @@ class TaskComplexityScorer:
     def _score_technical(self, content: str) -> float:
         """Score based on technical term density (0-3)."""
         content_lower = content.lower()
-        words = set(re.findall(r"\b\w+\b", content_lower))
+        words = word_tokens(content_lower, split_underscore=False, lowercase=False)
 
         # Check for multi-word terms
         term_count = 0

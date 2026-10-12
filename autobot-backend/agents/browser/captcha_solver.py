@@ -80,9 +80,6 @@ _SLIDER_PATTERNS = frozenset({"slider", "slide-verify", "slidercaptcha", "drag"}
 _MATH_EXPR_RE = re.compile(r"(\d+)\s*([+\-*/×÷xX])\s*(\d+)")
 _TRAILING_EQUALS_RE = re.compile(r"\s*[=?]+\s*$")
 
-# Non-alphanumeric characters used to clean OCR output
-_NON_ALNUM_RE = re.compile(r"[^A-Za-z0-9]")
-
 # ---------------------------------------------------------------------------
 # Enumerations and result types
 # ---------------------------------------------------------------------------

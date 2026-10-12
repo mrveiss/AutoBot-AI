@@ -38,11 +38,11 @@ from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.slug import sanitize_token
 
 logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for query parsing and code analysis
-_NON_WORD_CHARS_RE = re.compile(r"[^\w\s\-_]")
 _CAMEL_CASE_RE = re.compile(r"\b(?:[A-Z][a-z]{1,30}){2,10}\b")
 _SNAKE_CASE_RE = re.compile(r"\b[a-z]+(?:_[a-z]+)+\b")
 _QUOTED_STRING_RE = re.compile(r'"([^"]+)"|\'([^\']+)\'')
@@ -528,7 +528,7 @@ class NaturalLanguageQueryParser:
         # Remove extra whitespace
         query = " ".join(query.split())
         # Remove punctuation except hyphens and underscores
-        query = _NON_WORD_CHARS_RE.sub(" ", query)
+        query = sanitize_token(query, allowed=r"\w\s\-_", replacement=" ", collapse=False)
         return query.strip()
 
     def _classify_intent(self, query: str) -> Tuple[QueryIntent, float]:

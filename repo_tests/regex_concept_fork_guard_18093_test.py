@@ -127,6 +127,66 @@ CONCEPTS = (
         ),
         rejects=(r"[0-9a-f]{8}", r"[0-9]{4}-[0-9]{2}", r"[0-9a-fA-F]{32}", r"[a-z]{8}-[a-z]{4}"),
     ),
+    Concept(
+        "word-tokenizer",
+        # A bare `\\W` / `[\\W_]` run: the separator pattern of "lowercase and split into words".
+        r"^(?:\\W|\[\\W_\])\+$|^\\b\\w\+\\b$",
+        canonical={
+            "autobot_shared/text_tokens.py": "the one tokenizer; replaced identical copies in prepared_facts and skill_router"
+        },
+        allowed={},
+        matches=(r"[\W_]+", r"\W+", r"\b\w+\b"),
+        # Near neighbours: a different separator class, a positive word class, and the
+        # sanitiser shape that the other concept owns.
+        # `\b\w+\b|[^\w\s]` is `training/data_loader.Tokenizer` -- a case-preserving code
+        # tokenizer that also emits punctuation tokens to build a vocabulary; not word extraction.
+        rejects=(r"\s+", r"\w+", r"[\w_]+", r"[^a-z0-9]+", r"[\W_]", r"[\W_]+x", r"\b\w+\b|[^\w\s]", r"\bword\b"),
+    ),
+    Concept(
+        "char-sanitizer-class",
+        # A pattern that is NOTHING but a negated alphanumeric/word class (`[^a-z0-9]+`,
+        # `[^\\w-]`, `[^A-Za-z0-9._@+-]`) or a bare `\\W` run: "everything that is not
+        # safe". That shape is how a slug / Redis key / filename / tag sanitizer is
+        # written, and each variation (allowed set, replacement, collapse, case, cap)
+        # is a keyword of `autobot_shared.slug.sanitize_token`, not a new regex.
+        r"^(?:\[\^[^\]]*(?:a-z|A-Z|0-9|\\w)[^\]]*\]|\\W|\[\\W_?\])[+*]?$",
+        # The helper builds its pattern with an f-string, so it holds no literal for the
+        # recognizer to find; the allowlist below keeps this concept non-vacuous instead.
+        canonical={},
+        allowed={
+            "autobot-backend/knowledge/rag_benchmarks.py": (
+                "a benchmark: `test_text_preprocessing_benchmark` exists to time THIS regex.sub, "
+                "so routing it through the helper would change what is measured"
+            ),
+            "autobot-backend/voice_processing/language_detection.py": (
+                "`.split()` into filename tokens -- tokenising, not sanitising; no output string is built"
+            ),
+            "autobot_shared/text_tokens.py": (
+                "the one word tokenizer (`tokenize`): a split into tokens, not a sanitiser; has its own "
+                "`word-tokenizer` concept below"
+            ),
+            "autobot-slm-backend/api/setup_wizard.py": (
+                '`_sanitize_ansible_name` fits `sanitize_token(allowed="a-zA-Z0-9_", replacement="_", '
+                "collapse=False)` exactly, but touching the file trips two hooks on code this change does not "
+                "own: 3 pre-existing blocking reads inside `async def` (#7444) and the 130-line "
+                "`_run_provisioning_task` (#620). Migrate it together with those"
+            ),
+            "autobot-slm-frontend/scripts/extract-i18n.py": (
+                "standalone Node-project tool script; does not import the Python packages"
+            ),
+        },
+        matches=(
+            r"[^a-z0-9]+",
+            r"[^\w-]",
+            r"[^A-Za-z0-9._@+-]+",
+            r"[^a-zA-Z0-9_:.-]",
+            r"\W+",
+            r"[\W_]+",
+        ),
+        # Near neighbours that are different concepts: negated classes with no
+        # alphanumeric/word member (parsing, not sanitising) and positive classes.
+        rejects=(r"[^\s]", r"[^)]*\)", r'[^"]*', r"[a-z0-9]+", r"\d+", r"[^\]]+", r"[^/]+/", r"[^a-z0-9]+x"),
+    ),
 )
 
 
@@ -254,6 +314,21 @@ def test_every_permitted_path_exists(concept: Concept) -> None:
     tracked = set(_tracked_python_files())
     missing = sorted(p for p in concept.permitted if p not in tracked)
     assert not missing, f"#18093: {concept.name} names paths that are not tracked files: {missing}"
+
+
+def test_the_sanitizer_concept_is_not_vacuous() -> None:
+    """With no canonical literal, the allowlist is what proves the recognizer sees the tree.
+
+    And the helper every migrated site calls must still exist with the keywords the
+    sites pass; `utils/slug_equivalence_18093_test.py` pins each site against its old
+    output.
+    """
+    concept = next(c for c in CONCEPTS if c.name == "char-sanitizer-class")
+    literals, _ = _regex_literals()
+    seen = {rel for rel, _, pat in literals if concept.recognizer.search(pat)}
+    assert seen == set(concept.allowed), f"sanitizer literals: {sorted(seen)} vs allowed {sorted(concept.allowed)}"
+    source = (repo_root() / "autobot_shared/slug.py").read_text(encoding="utf-8")
+    assert "def sanitize_token(" in source
 
 
 def test_the_blind_spots_are_recorded() -> None:

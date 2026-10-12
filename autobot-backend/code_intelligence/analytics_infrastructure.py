@@ -30,6 +30,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.slug import sanitize_token
 from knowledge.index_embedding_space import CollectionEmbeddingSpace
 
 logger = get_logger(__name__)
@@ -351,11 +352,10 @@ class AnalyticsInfrastructureMixin(CollectionEmbeddingSpace):
         # Issue #554: Validate key format to prevent injection
         if not REDIS_KEY_PATTERN.match(full_key):
             # Sanitize by removing invalid characters
-            sanitized = re.sub(r"[^a-zA-Z0-9_:.-]", "_", full_key)
-            if not sanitized or len(sanitized) > 256:
+            full_key = sanitize_token(full_key, allowed="a-zA-Z0-9_:.-", replacement="_", collapse=False)
+            if not full_key or len(full_key) > 256:
                 logger.warning("Redis key rejected after sanitization: %s", key[:50])
                 return None
-            full_key = sanitized
 
         # Limit key length (Redis max is 512MB but practical limit is much lower)
         if len(full_key) > 256:
