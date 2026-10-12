@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Tuple
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.embedding_refusal import reraise_http_or_refusal
 from api.schemas_knowledge import (
@@ -35,6 +35,7 @@ from api.schemas_knowledge import (
     SearchResultWithExplanation,
 )
 from api.system_health import ComponentHealth, register_health_probe
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
@@ -49,11 +50,8 @@ _FUNC_DEF_RE = re.compile(r"def\s+(\w+)")
 _CLASS_DEF_RE = re.compile(r"class\s+(\w+)")
 _ASYNC_FUNC_RE = re.compile(r"async\s+def\s+(\w+)")
 
-# Issue #336: Keyword heuristics dispatch table for intent classification
-KEYWORD_INTENT_FALLBACKS: Dict[Tuple[str, ...], "QueryIntent"] = {}  # Populated after enum defined
-
 # Issue #3355: prefix moved to router registry (feature_routers.py)
-router = APIRouter(tags=["natural-language-search", "code-search"])
+router = APIRouter(tags=["natural-language-search", "code-search"], dependencies=[Depends(get_current_user)])
 
 
 # =============================================================================
@@ -339,7 +337,7 @@ QUESTION_TYPES = {
 
 # Issue #336: Keyword heuristics dispatch table for intent classification fallback
 # Maps (keyword1, keyword2, ...) tuples to QueryIntent
-KEYWORD_INTENT_FALLBACKS = {
+KEYWORD_INTENT_FALLBACKS: Dict[Tuple[str, ...], QueryIntent] = {
     ("define", "declaration"): QueryIntent.FIND_DEFINITION,
     ("use", "call"): QueryIntent.FIND_USAGE,
     ("implement", "work"): QueryIntent.FIND_IMPLEMENTATION,

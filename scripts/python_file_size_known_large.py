@@ -64,9 +64,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/analytics_embedding_patterns.py": 603,
     "autobot-backend/api/analytics_evolution.py": 1202,
     "autobot-backend/api/analytics_export.py": 656,
-    "autobot-backend/api/analytics_llm_patterns.py": 995,
+    "autobot-backend/api/analytics_llm_patterns.py": 946,
     "autobot-backend/api/analytics_log_patterns.py": 1039,
-    "autobot-backend/api/analytics_pattern_learning.py": 1067,
+    "autobot-backend/api/analytics_pattern_learning.py": 956,
     "autobot-backend/api/analytics_performance.py": 791,
     "autobot-backend/api/analytics_precommit.py": 788,
     "autobot-backend/api/analytics_quality.py": 1729,
@@ -79,7 +79,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/chat.py": 2776,  # #18316: delete delegates to the canonical path
     "autobot-backend/api/chat_sessions.py": 1938,  # #18293: legacy transcripts only ever proposed
     "autobot-backend/api/code_intelligence.py": 2154,
-    "autobot-backend/api/code_search.py": 922,
+    "autobot-backend/api/code_search.py": 828,
     "autobot-backend/api/codebase_analytics/analyzers.py": 1684,
     "autobot-backend/api/codebase_analytics/api_endpoint_scanner.py": 1444,
     "autobot-backend/api/codebase_analytics/chromadb_storage.py": 1389,  # #18055: split to problem_storage.py
@@ -92,7 +92,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/endpoints/stats.py": 663,
     "autobot-backend/api/conversation_files.py": 1078,
     "autobot-backend/api/database_mcp.py": 1076,
-    "autobot-backend/api/development_speedup.py": 668,
+    "autobot-backend/api/development_speedup.py": 611,
     "autobot-backend/api/enterprise_features.py": 700,
     "autobot-backend/api/envelope_secrets.py": 615,
     "autobot-backend/api/files.py": 1365,
@@ -121,7 +121,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/memory.py": 1573,
     "autobot-backend/api/monitoring.py": 1316,
     "autobot-backend/api/multimodal.py": 833,
-    "autobot-backend/api/natural_language_search.py": 1258,
+    "autobot-backend/api/natural_language_search.py": 1256,
     "autobot-backend/api/npu_workers.py": 1481,
     "autobot-backend/api/orchestration.py": 610,
     "autobot-backend/api/playwright.py": 877,
@@ -141,7 +141,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/system.py": 1108,
     "autobot-backend/api/terminal.py": 1294,
     "autobot-backend/api/terminal_handlers.py": 1497,
-    "autobot-backend/api/validation_dashboard.py": 671,
+    "autobot-backend/api/validation_dashboard.py": 670,
     "autobot-backend/api/vnc_manager.py": 1651,
     "autobot-backend/api/vnc_mcp.py": 763,
     "autobot-backend/api/websockets.py": 1120,  # #16457: accepts routed through websocket_subprotocol.accept_websocket

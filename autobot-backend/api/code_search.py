@@ -14,7 +14,7 @@ import re
 from collections import defaultdict
 from typing import List
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from agents.npu_code_search_agent import (
@@ -22,6 +22,7 @@ from agents.npu_code_search_agent import (
     index_project,
     search_codebase,
 )
+from api.code_search_examples import SEARCH_EXAMPLES_DATA
 from api.embedding_refusal import reraise_http_or_refusal
 from api.schemas_code import (
     CodeAnalyticsRequest,
@@ -39,12 +40,13 @@ from api.schemas_code import (
     CodeSearchStatusResultResponse,
 )
 from api.schemas_common import DataResponse
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for index status validation (Issue #326)
@@ -53,102 +55,6 @@ SUCCESSFUL_INDEX_STATUSES = {"success", "already_indexed"}
 # Issue #380: Module-level frozenset for valid search types
 _VALID_SEARCH_TYPES = frozenset({"semantic", "exact", "regex", "element"})
 
-# Issue #281: Search examples extracted from get_search_examples for reuse
-SEARCH_EXAMPLES_DATA = {
-    "examples": {
-        "semantic_search": {
-            "description": "AI-powered semantic similarity search",
-            "examples": [
-                {
-                    "query": "authentication middleware",
-                    "type": "semantic",
-                    "use_case": "Find code related to authentication, even if exact terms don't match",
-                },
-                {
-                    "query": "database connection pool",
-                    "type": "semantic",
-                    "use_case": "Find database connectivity code across different implementations",
-                },
-            ],
-        },
-        "exact_search": {
-            "description": "Find exact string matches",
-            "examples": [
-                {
-                    "query": "def authenticate",
-                    "type": "exact",
-                    "use_case": "Find exact function definitions",
-                },
-                {
-                    "query": "import redis",
-                    "type": "exact",
-                    "use_case": "Find specific imports",
-                },
-            ],
-        },
-        "regex_search": {
-            "description": "Pattern-based search using regular expressions",
-            "examples": [
-                {
-                    "query": "def\\s+\\w+_test\\s*\\(",
-                    "type": "regex",
-                    "use_case": "Find all test functions",
-                },
-                {
-                    "query": "class\\s+\\w+Exception",
-                    "type": "regex",
-                    "use_case": "Find exception classes",
-                },
-            ],
-        },
-        "element_search": {
-            "description": "Search for specific code elements by name",
-            "examples": [
-                {
-                    "query": "authenticate",
-                    "type": "element",
-                    "use_case": "Find functions, classes, or variables named 'authenticate'",
-                },
-                {
-                    "query": "UserModel",
-                    "type": "element",
-                    "use_case": "Find specific class definitions",
-                },
-            ],
-        },
-    },
-    "language_filters": (
-        "python",
-        "javascript",
-        "typescript",
-        "java",
-        "cpp",
-        "c",
-        "csharp",
-        "ruby",
-        "go",
-        "rust",
-        "php",
-        "swift",
-        "kotlin",
-        "scala",
-        "bash",
-        "yaml",
-        "json",
-        "html",
-        "css",
-        "sql",
-        "markdown",
-    ),
-    "usage_tips": (
-        "Use semantic search for concept-based queries",
-        "Use exact search for finding specific code patterns",
-        "Use regex search for complex pattern matching",
-        "Use element search for finding specific functions/classes by name",
-        "Add language filters to narrow down results",
-        "Results are cached for performance - clear cache if codebase changes",
-    ),
-}
 
 _get_code_search_agent = lazy_singleton(get_npu_code_search)
 
@@ -159,7 +65,7 @@ _get_code_search_agent = lazy_singleton(get_npu_code_search)
     operation="index_codebase",
     error_code_prefix="CODE_SEARCH",
 )
-async def index_codebase(request: CodeSearchIndexRequest):
+async def index_codebase(request: CodeSearchIndexRequest, _: bool = Depends(check_admin_permission)):
     """
     Index a codebase for fast searching.
 
@@ -363,7 +269,7 @@ async def get_search_status():
     operation="clear_search_cache",
     error_code_prefix="CODE_SEARCH",
 )
-async def clear_search_cache():
+async def clear_search_cache(_: bool = Depends(check_admin_permission)):
     """
     Clear the search cache.
 

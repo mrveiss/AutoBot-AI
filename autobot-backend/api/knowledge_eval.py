@@ -9,14 +9,15 @@ This bypasses cached instances and creates fresh knowledge base for testing
 
 import asyncio
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from api.schemas_knowledge import KnowledgeFreshStatsData, KnowledgeRebuildIndexData
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 logger = get_logger(__name__)
 
 
@@ -62,7 +63,7 @@ async def get_fresh_kb_stats():
     operation="test_rebuild_search_index",
     error_code_prefix="KNOWLEDGE_TEST",
 )
-async def test_rebuild_search_index():
+async def test_rebuild_search_index(_: bool = Depends(check_admin_permission)):
     """Test rebuilding the search index"""
     try:
         from knowledge_base import KnowledgeBase
