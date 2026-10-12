@@ -115,6 +115,11 @@ def _gate_approval() -> SimpleNamespace:
         decided_at=None,
         created_at=None,
         updated_at=None,
+        source=None,
+        risk_tier=None,
+        expires_at=None,
+        payload_hash=None,
+        resume_ref=None,
         comments=[],
         task_links=[],
     )

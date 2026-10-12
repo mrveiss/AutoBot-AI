@@ -11,18 +11,22 @@ notifications for pending approvals.
 """
 
 import uuid
+from datetime import datetime
 from typing import Any, Dict, List
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.store_authority import system_of_record
 from autobot_shared.time_utils import now_utc
 from models.approval import Approval, ApprovalComment, ApprovalStatus, TaskApprovalLink
-from services.approval_execution import run_post_approval_actions
+from services.approval_execution import resume_decided_approval, run_post_approval_actions
+from services.approval_record_fields import payload_hash_of, record_fields
 
 logger = get_logger(__name__)
+SYSTEM_OF_RECORD = system_of_record("approval")
 
 # Valid state transitions: source -> {allowed targets}
 _VALID_TRANSITIONS = {
@@ -30,6 +34,7 @@ _VALID_TRANSITIONS = {
         ApprovalStatus.APPROVED.value,
         ApprovalStatus.REJECTED.value,
         ApprovalStatus.REVISION_REQUESTED.value,
+        ApprovalStatus.EXPIRED.value,
     },
     ApprovalStatus.REVISION_REQUESTED.value: {
         ApprovalStatus.APPROVED.value,
@@ -56,8 +61,19 @@ class ApprovalGateService:
         workflow_step: str | None = None,
         context: Dict[str, Any] | None = None,
         task_ids: List[str] | None = None,
+        *,
+        source: str | None = None,
+        risk_tier: Any = None,
+        expires_at: datetime | None = None,
+        payload_hash: str | None = None,
+        resume_ref: str | None = None,
+        owner_user: str | None = None,
     ) -> Approval:
-        """Create a new approval gate request."""
+        """Create a new approval gate request.
+
+        The keyword-only record fields (#13421) are for server-side emitters; they are validated
+        by ``record_fields`` and are deliberately not accepted from the HTTP create route.
+        """
         approval = Approval(
             title=title,
             description=description,
@@ -67,28 +83,26 @@ class ApprovalGateService:
             workflow_id=workflow_id,
             workflow_step=workflow_step,
             context=context or {},
+            **record_fields(
+                source=source,
+                risk_tier=risk_tier,
+                expires_at=expires_at,
+                payload_hash=payload_hash,
+                resume_ref=resume_ref,
+                context=context,
+                owner_user=owner_user,
+            ),
         )
         self.session.add(approval)
         await self.session.flush()
-
-        if task_ids:
-            for tid in task_ids:
-                link = TaskApprovalLink(
-                    approval_id=approval.id,
-                    task_id=tid,
-                )
-                self.session.add(link)
+        for tid in task_ids or ():
+            self.session.add(TaskApprovalLink(approval_id=approval.id, task_id=tid))
 
         await self.session.commit()
         await self.session.refresh(approval)
 
         await self._notify("approval_pending", approval)
-        logger.info(
-            "Approval %s created: type=%s, agent=%s",
-            approval.id,
-            approval_type,
-            requested_by_agent,
-        )
+        logger.info("Approval %s created: type=%s, agent=%s", approval.id, approval_type, requested_by_agent)
         return approval
 
     # -- Status transitions --------------------------------------------
@@ -168,6 +182,8 @@ class ApprovalGateService:
             approval.description = description
         if context is not None:
             approval.context = context
+            if approval.source:
+                approval.payload_hash = payload_hash_of(context)
 
         await self.session.commit()
         await self.session.refresh(approval)
@@ -273,6 +289,10 @@ class ApprovalGateService:
         agent_id: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        *,
+        source: str | None = None,
+        risk_tier: str | None = None,
+        extra_where: tuple = (),
     ) -> List[Approval]:
         """List unscoped approvals with optional filters (see ``get``: never a company-scoped row)."""
         stmt = (
@@ -286,17 +306,69 @@ class ApprovalGateService:
             .limit(limit)
             .offset(offset)
         )
-        if status:
-            stmt = stmt.where(Approval.status == status)
-        if approval_type:
-            stmt = stmt.where(Approval.approval_type == approval_type)
-        if workflow_id:
-            stmt = stmt.where(Approval.workflow_id == workflow_id)
-        if agent_id:
-            stmt = stmt.where(Approval.requested_by_agent == agent_id)
-
+        filters = {
+            Approval.status: status,
+            Approval.approval_type: approval_type,
+            Approval.workflow_id: workflow_id,
+            Approval.requested_by_agent: agent_id,
+            Approval.source: source,
+            Approval.risk_tier: risk_tier,
+        }
+        for column, wanted in filters.items():
+            if wanted:
+                stmt = stmt.where(column == wanted)
+        for clause in extra_where:
+            stmt = stmt.where(clause)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def list_pending(
+        self,
+        *,
+        viewer: str | None,
+        is_admin: bool,
+        source: str | None = None,
+        risk_tier: str | None = None,
+        limit: int,
+        offset: int,
+    ) -> List[Approval]:
+        """Pending, unexpired, unscoped approvals the *viewer* may see -- the inbox query (#13421).
+
+        Ownership (#18413, THREAT_MODEL s2): an admin sees all; anyone else sees the approvals
+        whose ``owner_user`` is their username, plus the legacy unsourced gates that never had an
+        owner. A sourced row with no owner matches nobody but an admin -- unknown is never unowned.
+        A past ``expires_at`` is hidden (#18412) even before a sweeper has marked the row.
+        """
+        visible = [or_(Approval.expires_at.is_(None), Approval.expires_at > now_utc())]
+        if not is_admin:
+            legacy = and_(Approval.source.is_(None), Approval.owner_user.is_(None))
+            visible.append(or_(Approval.owner_user == viewer, legacy) if viewer else legacy)
+        return await self.list_approvals(
+            status=ApprovalStatus.PENDING.value,
+            limit=limit,
+            offset=offset,
+            source=source,
+            risk_tier=risk_tier,
+            extra_where=tuple(visible),
+        )
+
+    async def expire_stale(self) -> int:
+        """Move every pending approval past ``expires_at`` to EXPIRED and resume its source (#18412).
+
+        Each row is claimed by the same conditional UPDATE a decision uses, so a sweep racing a
+        decision resumes the work exactly once. Returns the number expired.
+        """
+        stale = select(Approval.id).where(
+            Approval.company_id.is_(None),
+            Approval.status == ApprovalStatus.PENDING.value,
+            Approval.expires_at.is_not(None),
+            Approval.expires_at <= now_utc(),
+        )
+        expired = 0
+        for approval_id in (await self.session.execute(stale)).scalars().all():
+            if await self._expire_if_pending(approval_id) is not None:
+                expired += 1
+        return expired
 
     async def list_pending_for_workflow(
         self,
@@ -334,6 +406,53 @@ class ApprovalGateService:
             raise ValueError(f"Approval {approval_id} not found")
         return approval
 
+    async def _claim(
+        self,
+        approval_id: uuid.UUID,
+        new_status: ApprovalStatus,
+        decided_by: str | None,
+        *,
+        unexpired_only: bool,
+    ) -> bool:
+        """Atomically move a row to *new_status*; True only for the caller that won (#18413).
+
+        One conditional UPDATE keyed on the allowed source statuses, so two concurrent decisions
+        cannot both pass: the loser matches no row. Resume runs only for the winner.
+        """
+        allowed_from = [src for src, targets in _VALID_TRANSITIONS.items() if new_status.value in targets]
+        conditions = [
+            Approval.id == approval_id,
+            Approval.company_id.is_(None),
+            Approval.status.in_(allowed_from),
+        ]
+        if unexpired_only:
+            conditions.append(or_(Approval.expires_at.is_(None), Approval.expires_at > now_utc()))
+        stmt = (
+            update(Approval)
+            .where(*conditions)
+            .values(status=new_status.value, decided_by_user=decided_by, decided_at=now_utc())
+            .returning(Approval.id)
+        )
+        return (await self.session.execute(stmt)).first() is not None
+
+    async def _expire_if_pending(self, approval_id: uuid.UUID) -> Approval | None:
+        """Claim pending -> EXPIRED, commit, notify and resume; None when someone else decided first."""
+        if not await self._claim(approval_id, ApprovalStatus.EXPIRED, None, unexpired_only=False):
+            await self.session.rollback()
+            return None
+        await self.session.commit()
+        approval = await self._reload(approval_id)
+        await self._notify("approval_expired", approval)
+        logger.info("Approval %s expired", approval_id)
+        await resume_decided_approval(approval, self.session)
+        return approval
+
+    async def _reload(self, approval_id: uuid.UUID) -> Approval:
+        """Re-read the row after a Core UPDATE, bypassing any stale identity-map state."""
+        approval = await self._get_or_raise(approval_id)
+        await self.session.refresh(approval)
+        return approval
+
     async def _transition(
         self,
         approval_id: uuid.UUID,
@@ -342,38 +461,26 @@ class ApprovalGateService:
         comment: str | None,
         author_type: str,
     ) -> Approval:
-        """Perform a status transition with validation."""
-        approval = await self._get_or_raise(approval_id)
-
-        allowed = _VALID_TRANSITIONS.get(approval.status, set())
-        if new_status.value not in allowed:
-            raise ValueError(f"Cannot transition from {approval.status} " f"to {new_status.value}")
-
-        approval.status = new_status.value
-        approval.decided_by_user = decided_by
-        approval.decided_at = now_utc()
-
+        """Perform a status transition atomically; resume the source only for the winning caller."""
+        current = await self._get_or_raise(approval_id)
+        prior_status = current.status  # read now: a rollback below expires the instance
+        if current.expires_at is not None and current.expires_at <= now_utc():
+            if prior_status == ApprovalStatus.PENDING.value:
+                await self._expire_if_pending(approval_id)
+            raise ValueError(f"Cannot transition: approval {approval_id} expired")
+        if not await self._claim(approval_id, new_status, decided_by, unexpired_only=True):
+            await self.session.rollback()
+            raise ValueError(f"Cannot transition from {prior_status} to {new_status.value}")
         if comment:
             # author_type is the verified caller's, never a literal (#17056).
-            c = ApprovalComment(
-                approval_id=approval_id,
-                author=decided_by,
-                author_type=author_type,
-                body=comment,
+            self.session.add(
+                ApprovalComment(approval_id=approval_id, author=decided_by, author_type=author_type, body=comment)
             )
-            self.session.add(c)
-
         await self.session.commit()
-        await self.session.refresh(approval)
-
-        event = f"approval_{new_status.value}"
-        await self._notify(event, approval)
-        logger.info(
-            "Approval %s -> %s by %s",
-            approval_id,
-            new_status.value,
-            decided_by,
-        )
+        approval = await self._reload(approval_id)
+        await self._notify(f"approval_{new_status.value}", approval)
+        logger.info("Approval %s -> %s by %s", approval_id, new_status.value, decided_by)
+        await resume_decided_approval(approval, self.session)
         return approval
 
     async def _notify(
@@ -397,6 +504,9 @@ class ApprovalGateService:
                     "decided_by_user": approval.decided_by_user,
                     "workflow_id": approval.workflow_id,
                     "workflow_step": approval.workflow_step,
+                    "source": approval.source,
+                    "risk_tier": approval.risk_tier,
+                    "expires_at": approval.expires_at.isoformat() if approval.expires_at else None,
                 },
                 persist=PersistStrategy.NONE,
             )

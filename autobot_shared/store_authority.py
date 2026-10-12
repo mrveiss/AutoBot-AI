@@ -323,6 +323,24 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "claims exist to prevent. Every claim carries a TTL and is renewed by its holder, so the "
         "durable record of the work is the a2a Task, never the claim.",
     ),
+    "approval": Concept(
+        name="approval",
+        system_of_record=Store.POSTGRES,
+        projections=(),
+        write_sites=(
+            "autobot-backend/services/approval_gate_service.py",
+            "autobot-backend/llc/services/approval.py",
+        ),
+        rebuilt_by="Nothing yet rebuilds a copy: no projection is declared (see note).",
+        note="One approval record for every surface (#13421): the `approvals` row is the decision; "
+        "any Redis state a surface keeps is a live projection of a PENDING row, never the record of "
+        "a decision. Owner decision 2026-10-12: terminal approvals stay live in Redis (hot path, TTL) "
+        "and write a mirror row resolved on decide. That Redis state exists today as "
+        "`command_approval_manager` and is NOT yet declared a projection here, because its rebuild "
+        "from the row does not exist -- slice S2a (#13421) must add it, or this entry is wrong. "
+        "`autoresearch_proposal` below is a separate Redis-authoritative concept until S2e/S4 "
+        "migrates it.",
+    ),
     "autoresearch_proposal": Concept(
         name="autoresearch_proposal",
         system_of_record=Store.REDIS,

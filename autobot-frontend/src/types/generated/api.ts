@@ -16670,7 +16670,7 @@ export interface paths {
         };
         /**
          * List Approvals
-         * @description List approval gates with optional filters (#1402).
+         * @description List approval gates with optional filters (#1402, #13421).
          */
         get: operations["list_approvals_api_approval_gates_get"];
         put?: never;
@@ -16679,6 +16679,26 @@ export interface paths {
          * @description Create a new approval gate request (#1402).
          */
         post: operations["create_approval_api_approval_gates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/approval-gates/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Pending Approvals
+         * @description Every pending approval across all sources -- the one approval inbox (#13421).
+         */
+        get: operations["list_pending_approvals_api_approval_gates_pending_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -58573,7 +58593,7 @@ export interface components {
         };
         /**
          * ApprovalGateResponse
-         * @description Response for an approval gate.
+         * @description One approval record as the API returns it, including the #13421 source, risk tier and expiry.
          */
         ApprovalGateResponse: {
             /** Id */
@@ -58604,6 +58624,14 @@ export interface components {
             created_at?: string | null;
             /** Updated At */
             updated_at?: string | null;
+            source?: components["schemas"]["ApprovalSource"] | null;
+            risk_tier?: components["schemas"]["RiskTier"] | null;
+            /** Expires At */
+            expires_at?: string | null;
+            /** Payload Hash */
+            payload_hash?: string | null;
+            /** Resume Ref */
+            resume_ref?: string | null;
             /** Comments */
             comments?: components["schemas"]["ApprovalCommentResponse"][];
             /** Task Links */
@@ -58709,6 +58737,17 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * ApprovalSource
+         * @description Which surface raised an approval (#13421).
+         *
+         *     The seven pre-existing approval surfaces plus the MCP tool-schema gate (#13414).
+         *     ``terminal_command`` covers both the chat command card and the command permission
+         *     dialog -- they share one backend. Stored in ``Approval.source`` (nullable: rows
+         *     created before #13421, and the LLC company case, carry none).
+         * @enum {string}
+         */
+        ApprovalSource: "terminal_command" | "agent_tool" | "workflow_plan" | "plugin_capability" | "autoresearch" | "skill_governance" | "company" | "mcp_tool_schema";
         /**
          * ApprovalStatus
          * @description Possible statuses for an approval gate.
@@ -91847,6 +91886,12 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * RiskTier
+         * @description Ascending approval risk grade; ``str`` so it stores in a String column unchanged.
+         * @enum {string}
+         */
+        RiskTier: "low" | "medium" | "high" | "critical";
         /** RoleAssignmentResponse */
         RoleAssignmentResponse: {
             /**
@@ -98107,7 +98152,7 @@ export interface components {
         };
         /**
          * TaskApprovalLinkResponse
-         * @description Response for a task-approval link.
+         * @description A task or issue linked to an approval, nested in ``ApprovalGateResponse``.
          */
         TaskApprovalLinkResponse: {
             /** Id */
@@ -126347,6 +126392,8 @@ export interface operations {
                 approval_type?: components["schemas"]["ApprovalType"] | null;
                 workflow_id?: string | null;
                 agent_id?: string | null;
+                source?: components["schemas"]["ApprovalSource"] | null;
+                risk_tier?: components["schemas"]["RiskTier"] | null;
                 /** @description Maximum number of items to return */
                 limit?: number;
                 /** @description Number of items to skip before returning results */
@@ -126398,6 +126445,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalGateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_pending_approvals_api_approval_gates_pending_get: {
+        parameters: {
+            query?: {
+                source?: components["schemas"]["ApprovalSource"] | null;
+                risk_tier?: components["schemas"]["RiskTier"] | null;
+                /** @description Maximum number of items to return */
+                limit?: number;
+                /** @description Number of items to skip before returning results */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalGateResponse"][];
                 };
             };
             /** @description Validation Error */

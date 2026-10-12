@@ -48,6 +48,13 @@ PostApprovalAction = Callable[["Approval", "AsyncSession"], Awaitable[None]]
 
 _REGISTRY: dict[str, PostApprovalAction] = {}
 
+#: source -> handler that continues the work a decided approval was blocking (#13421).
+#: Distinct from ``_REGISTRY``: that dispatches on ``context["action"]`` and runs only on
+#: APPROVE; this dispatches on ``Approval.source`` and runs on EVERY decision, because a
+#: rejected tool call must also unblock the agent loop waiting on it. The handler reads
+#: ``approval.status`` to tell which.
+_RESUME_HANDLERS: dict[str, PostApprovalAction] = {}
+
 #: action -> the production module that PROPOSES it (#17315). Registered in
 #: the same call as the handler, so the two halves of a gate cannot drift
 #: apart: an action with an executor and no proposer is unreachable, which
@@ -78,6 +85,22 @@ def register_post_approval_action(action: str, handler: PostApprovalAction, *, p
         raise ValueError(f"action {action!r} must name the production module that proposes it (#17315)")
     _REGISTRY[action] = handler
     _PROPOSERS[action] = proposed_by.strip()
+
+
+def register_resume_handler(source: str, handler: PostApprovalAction) -> None:
+    """Register *handler* to resume the work behind a decided approval of *source* (#13421).
+
+    Runs after the decision commits, for approved, rejected and revision-requested alike, and
+    only for an approval that carries a ``resume_ref``. Failures are recorded, never raised.
+    """
+    if not source or not source.strip():
+        raise ValueError("a resume handler needs a non-empty source")
+    _RESUME_HANDLERS[source] = handler
+
+
+def is_registered_resume_source(source: str) -> bool:
+    """Whether *source* has a resume handler -- the creation-time check for ``resume_ref``."""
+    return source in _RESUME_HANDLERS
 
 
 def is_registered_action(action: str) -> bool:
@@ -124,6 +147,30 @@ async def run_post_approval_actions(approval: "Approval", session: "AsyncSession
     except Exception as exc:
         logger.exception("Post-approval action %r failed for approval %s", action, approval.id)
         await _record_dispatch_failure(approval, session, action=action, reason=safe_error_reason(exc))
+
+
+async def resume_decided_approval(approval: "Approval", session: "AsyncSession") -> None:
+    """Continue the work behind a decided approval via its source's resume handler (#13421).
+
+    A no-op for an approval with no ``resume_ref``. A ``resume_ref`` whose source has no handler
+    is recorded as an anomaly exactly like an unregistered action (#17141) -- never raised, and
+    never undoing the decision already committed.
+    """
+    source, ref = getattr(approval, "source", None), getattr(approval, "resume_ref", None)
+    if not source or not ref:
+        return
+    handler = _RESUME_HANDLERS.get(source)
+    if handler is None:
+        logger.error("Approval %s has resume_ref but source %r has no resume handler", approval.id, source)
+        await _record_dispatch_failure(
+            approval, session, action=f"resume:{source}", reason=f"no resume handler registered for source {source!r}"
+        )
+        return
+    try:
+        await handler(approval, session)
+    except Exception as exc:
+        logger.exception("Resume of approval %s (source %r) failed", approval.id, source)
+        await _record_dispatch_failure(approval, session, action=f"resume:{source}", reason=safe_error_reason(exc))
 
 
 async def _record_dispatch_failure(approval: "Approval", session: "AsyncSession", *, action: str, reason: str) -> None:

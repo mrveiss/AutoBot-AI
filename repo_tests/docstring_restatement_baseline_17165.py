@@ -73,11 +73,9 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
     ),
     "autobot-backend/api/schemas_workflows.py": frozenset(
         {
-            "ApprovalGateResponse",
             "BatchJobStatus",
             "BatchJobType",
             "SystemValidationRequestModel",
-            "TaskApprovalLinkResponse",
         }
     ),
     "autobot-backend/api/sequential_thinking_mcp.py": frozenset({"clear_thinking_session"}),
