@@ -56,22 +56,6 @@
           <h3>{{ $t('profile.preferences') }}</h3>
 
           <div class="pref-group">
-            <label class="pref-label">{{ $t('profile.theme') }}</label>
-            <div class="option-row">
-              <button
-                v-for="opt in themeOptions"
-                :key="opt.value"
-                @click="localPrefs.theme = opt.value"
-                class="option-btn"
-                :class="{ active: localPrefs.theme === opt.value }"
-                type="button"
-              >
-                {{ opt.label }}
-              </button>
-            </div>
-          </div>
-
-          <div class="pref-group">
             <label class="pref-label">{{ $t('profile.notifications') }}</label>
             <div class="toggle-list">
               <label class="toggle-item">
@@ -115,11 +99,6 @@
 
       <!-- Appearance & Voice Tab -->
       <div v-if="activeTab === 'appearance'" v-bind="panelAttrs('appearance')">
-        <div class="profile-section">
-          <h3>{{ $t('profile.appearance') }}</h3>
-          <PreferencesPanel />
-        </div>
-
         <div class="profile-section">
           <h3>{{ $t('profile.voiceChatDisplay') }}</h3>
           <div class="option-row">
@@ -217,7 +196,6 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/stores/useUserStore'
-import PreferencesPanel from '@/components/ui/PreferencesPanel.vue'
 import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
 import LanguageSettingsPanel from '@/components/settings/LanguageSettingsPanel.vue'
 import DeviceManagementPanel from '@/components/profile/DeviceManagementPanel.vue'
@@ -256,14 +234,7 @@ const successMessage = ref<string | null>(null)
 const errorMessage = ref<string | null>(null)
 const isChangingPassword = ref(false)
 
-const themeOptions = computed(() => [
-  { value: 'light' as const, label: t('profile.themeLight') },
-  { value: 'dark' as const, label: t('profile.themeDark') },
-  { value: 'auto' as const, label: t('profile.themeAuto') }
-])
-
 const localPrefs = ref({
-  theme: userStore.preferences.theme,
   notifications: { ...userStore.preferences.notifications },
   ui: { ...userStore.preferences.ui }
 })
@@ -273,7 +244,6 @@ watch(
   () => userStore.preferences,
   (prefs) => {
     localPrefs.value = {
-      theme: prefs.theme,
       notifications: { ...prefs.notifications },
       ui: { ...prefs.ui }
     }
@@ -288,7 +258,6 @@ function handleClose(): void {
 }
 
 function savePreferences(): void {
-  userStore.updateTheme(localPrefs.value.theme)
   userStore.updateNotificationSettings(localPrefs.value.notifications)
   userStore.updateUISettings(localPrefs.value.ui)
   userStore.persistToStorage()

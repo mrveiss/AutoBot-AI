@@ -27,6 +27,10 @@
   --aui-color-primary-active: var(--color-primary-active);
   --aui-color-primary-contrast: var(--text-on-primary);
 
+  /* ---- Color: brand mark --------------------------------------------- */
+  --aui-brand-bg: var(--brand-bg);
+  --aui-brand-fg: var(--brand-fg);
+
   /* ---- Color: neutrals / chrome -------------------------------------- */
   --aui-color-surface: var(--bg-surface);
   --aui-color-surface-raised: var(--bg-elevated);
@@ -87,6 +91,13 @@
 
   /* ---- Z-index ------------------------------------------------------- */
   --aui-z-modal: var(--z-modal);
+  --aui-z-tooltip: var(--z-tooltip);
+
+  /* ---- Tooltip ------------------------------------------------------- */
+  --aui-tooltip-delay: var(--tooltip-delay);
+  --aui-tooltip-hide-delay: var(--tooltip-hide-delay);
+  --aui-tooltip-offset: var(--tooltip-offset);
+  --aui-tooltip-max: var(--tooltip-max);
 
   /* ---- Motion -------------------------------------------------------- */
   --aui-transition-fast: var(--duration-200) var(--ease-in-out);

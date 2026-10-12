@@ -13,6 +13,8 @@ import { setLocale } from '@/i18n'
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { useUiMode, type UiMode, type UiStart } from '@/composables/useUiMode'
+import { useThemeVariant, hasStoredThemeVariant } from '@/composables/useThemeVariant'
 import {
   useTheme,
   ACCENT_COLORS,
@@ -31,6 +33,10 @@ interface AccountAppearance {
   layout_density: LayoutDensity
   font_size: FontSize
   theme_preset: ThemePreset
+  // #18240: the interface mode and the theme variant follow the user too.
+  ui_mode: UiMode
+  ui_start: UiStart
+  theme_variant: string
 }
 
 /** Backend response for the active personality profile (#753 language sync). */
@@ -226,6 +232,8 @@ export function usePreferences() {
   // Theme owns base mode / accent / preset; usePreferences owns density / fontSize.
   // Both are persisted together to the account so choices follow the user (#8988).
   const theme = useTheme()
+  const uiMode = useUiMode()
+  const variant = useThemeVariant()
 
   /**
    * Persist all appearance prefs to the user account (source of truth across devices).
@@ -240,7 +248,13 @@ export function usePreferences() {
         layout_density: layoutDensity.value,
         font_size: fontSize.value,
         theme_preset: theme.preset.value,
+        ui_mode: uiMode.uiMode.value,
+        ui_start: uiMode.uiStart.value,
+        theme_variant: variant.themeVariant.value,
       }
+      // The endpoint is a partial PATCH (#18240): every field sent here is
+      // written, every field omitted is left alone. All are sent so a stale
+      // device cannot silently keep an older value for one of them.
       await apiClient.patch(`${getApiBase()}/users/me/preferences`, payload)
       logger.debug('Appearance prefs saved to account', payload)
     } catch (error) {
@@ -249,10 +263,32 @@ export function usePreferences() {
   }
 
   /**
+   * The account's `default` variant is also what a user who never chose gets, so
+   * it only overrides a device that holds an explicit choice (a deployment may
+   * pin another build-time default). Any other id is the user's own pick; an
+   * id this deployment no longer installs reverts inside setThemeVariant.
+   */
+  async function applyAccountVariant(id: string | undefined): Promise<void> {
+    if (!id || id === variant.themeVariant.value) return
+    if (id === 'default' && !hasStoredThemeVariant()) return
+    try {
+      await variant.setThemeVariant(id)
+    } catch (error) {
+      logger.warn('Account theme variant could not be applied', error)
+    }
+  }
+
+  /**
    * Load appearance prefs from the user account and apply them. Called after login
    * so a fresh device inherits the user's stored theme/accent/density.
+   *
+   * Every account appearance field (theme, accent, preset, density, font size,
+   * reasoning effort, interface mode, theme variant) applies only at a fresh
+   * sign-in (owner decision 2026-10-12): on a session restore the device's
+   * current values are kept, never overwritten. Changes still save to the account.
    */
-  async function loadAppearanceFromBackend(): Promise<void> {
+  async function loadAppearanceFromBackend(opts: { freshSignIn?: boolean } = {}): Promise<void> {
+    if (!opts.freshSignIn) return
     try {
       const res = await apiClient.get<{ data?: { preferences?: AccountAppearance } }>(
         `${getApiBase()}/users/me/preferences`
@@ -269,6 +305,8 @@ export function usePreferences() {
       if (prefs.layout_density) setLayoutDensity(prefs.layout_density)
       if (prefs.font_size) setFontSize(prefs.font_size)
       if (prefs.reasoning_effort) setReasoningEffort(prefs.reasoning_effort)
+      uiMode.applyAccount(prefs.ui_mode, prefs.ui_start)
+      await applyAccountVariant(prefs.theme_variant)
       logger.debug('Appearance prefs loaded from account', prefs)
     } catch (error) {
       logger.warn('Could not load appearance prefs from account', error)
@@ -314,8 +352,9 @@ export function usePreferences() {
       _scheduleAppearanceSync()
     })
 
-    // Theme owns base mode / accent / preset — sync those to the account too
-    watch([theme.theme, theme.accentColor, theme.preset], () => {
+    // Theme owns base mode / accent / preset; useUiMode owns the interface
+    // mode and useThemeVariant the variant -- sync all of them to the account too
+    watch([theme.theme, theme.accentColor, theme.preset, uiMode.uiMode, uiMode.uiStart, variant.themeVariant], () => {
       _scheduleAppearanceSync()
     })
 

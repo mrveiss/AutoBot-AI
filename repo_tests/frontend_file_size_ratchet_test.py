@@ -354,7 +354,7 @@ def test_the_commit_path_reports_an_unreadable_staged_file(hook, tmp_path, monke
 #: this constant -- a comparison cannot police what moves with it -- applies to
 #: the sum one step further out, so the per-entry direction check still has no
 #: fixed reference. Do not read a falling total as "no ceiling was raised".
-MAX_CEILING_TOTAL = 183698  # merge train: #18274/#15502 -37 (ssot-config.ts, ssot-config.spec.ts) and #18262 -615 off 184350; #17983/#15008: SecretsManager.vue 2947 -> 2775 (unenforced controls removed); merged with #18065's useVoiceConversation 986
+MAX_CEILING_TOTAL = 181943  # #18240: App.vue 1144 left the list (now 500, under 600) -1144 off 183087; earlier: merge train: #18274/#15502 -37 (ssot-config.ts, ssot-config.spec.ts) and #18262 -615 off 184350; #17983/#15008: SecretsManager.vue 2947 -> 2775 (unenforced controls removed); merged with #18065's useVoiceConversation 986
 
 
 def test_the_ceiling_total_only_shrinks(hook):

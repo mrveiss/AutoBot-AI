@@ -413,12 +413,20 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   # third appears, so a new frontend cannot silently fall into the first one.
   FRONTEND_PROJECTS="autobot-frontend autobot-slm-frontend"
 
+  # #17959: the shared kit carries no install of its own, but both apps resolve
+  # `@autobot/ui` to this in-tree directory (vite/vitest alias, tsconfig paths),
+  # so their vue-tsc and vitest exercise it. A kit change is therefore CLAIMED
+  # through every consuming app, instead of being reported as unrunnable.
+  KIT_TREE="libs/autobot-ui"
+
   frontend_changed=$(echo "$changed" | grep -E '\.(ts|vue)$' || true)
   frontend_unclaimed="$frontend_changed"
+  kit_changed=$(echo "$frontend_changed" | grep -E "^${KIT_TREE}/" || true)
+  frontend_unclaimed=$(echo "$frontend_unclaimed" | grep -vE "^${KIT_TREE}/" || true)
 
   for project in $FRONTEND_PROJECTS; do
     project_changed=$(echo "$frontend_changed" | grep -E "^${project}/" || true)
-    [ -n "$project_changed" ] || continue
+    [ -n "$project_changed" ] || [ -n "$kit_changed" ] || continue
     frontend_unclaimed=$(echo "$frontend_unclaimed" | grep -vE "^${project}/" || true)
 
     # Reset per iteration: a leaked exit code from the previous project would be
@@ -444,7 +452,10 @@ while read -r local_ref local_sha remote_ref remote_sha; do
           "exited ${tsc_exit} without a single 'error TS' line: $(echo "$tsc_output" | tail -1)"
       elif [ "$tsc_exit" != "0" ]; then
         # Distinguish errors in changed files (block) vs pre-existing (warn)
-        changed_ts_files=$(echo "$project_changed" | sed "s|^${project}/||" || true)
+        # Kit paths are not project-prefixed, so the sed leaves them intact and
+        # they match tsc's `../libs/autobot-ui/...(` diagnostics by substring.
+        changed_ts_files=$(printf '%s\n%s\n' "$project_changed" "$kit_changed" \
+          | grep -v '^$' | sed "s|^${project}/||" || true)
         if [ -n "$changed_ts_files" ]; then
           # Show only errors that mention any of the changed files
           # #17579 review: each changed path was an UNBOUNDED fixed-string
@@ -536,11 +547,36 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       could_not_run "vitest (${project})" \
         "${project}/node_modules is missing or cannot be traversed, so the $(echo "$all_tests" | grep -c .) selected test file(s) did not run"
     fi
+
+    # #17959: kit change -> this app's tests that depend on it. `vitest related`
+    # walks the module graph, which reaches the kit through the in-tree alias, so
+    # the selection is exactly the tests that import a changed kit file.
+    if [ -n "$kit_changed" ] && node_modules_usable "$project_dir"; then
+      kit_rel=$(echo "$kit_changed" | sed 's|^|../|')
+      log "${project}: ${KIT_TREE} changed — running vitest related (timeout ${TEST_TIMEOUT}s)"
+      kit_exit=0
+      kit_output=$(
+        cd "$project_dir" \
+        && timeout "$TEST_TIMEOUT" npx vitest related --run --passWithNoTests $(echo "$kit_rel") 2>&1
+      ) || kit_exit=$?
+      if [ "$kit_exit" = "124" ]; then
+        did_not_run "vitest related (${project})" "${TEST_TIMEOUT}"
+      elif [ "$kit_exit" != "0" ]; then
+        fail "vitest failures after a ${KIT_TREE} change (${project}, #17959):"
+        echo "$kit_output" | tail -25 >&2
+        EXIT_CODE=1
+      else
+        ok "vitest related (${project}): tests depending on ${KIT_TREE} pass"
+      fi
+    elif [ -n "$kit_changed" ]; then
+      could_not_run "vitest related (${project})" \
+        "${project}/node_modules is missing or cannot be traversed, so tests depending on ${KIT_TREE} did not run"
+    fi
   done
 
   # #17574: `.ts`/`.vue` outside a project that declares a `type-check` script --
-  # libs/autobot-ui, libs/autobot-sdk-ts, the MCP tools. None carries an install
-  # or that script, so nothing here can check them; they used to be handed to
+  # libs/autobot-sdk-ts, the MCP tools (libs/autobot-ui is claimed through the
+  # apps above, #17959). None carries an install or that script, so nothing here can check them; they used to be handed to
   # autobot-frontend's invocation, which is how a foreign path reached a vitest
   # that could not see it. Recorded rather than dropped: not checking is a fact
   # about this push, and a silent skip is the failure mode #16912 describes.

@@ -945,6 +945,32 @@
       "deviceInitFailed": "Der Geräteablauf konnte nicht gestartet werden",
       "stillWaiting": "Die Zustimmung steht noch aus — versuchen Sie es gleich noch einmal.",
       "pollFailed": "Abfrage fehlgeschlagen"
+    },
+    "preferredMode": {
+      "title": "Bevorzugter Modus",
+      "subtitle": "Wählen Sie, wie viel von AutoBot Sie sehen. Sie können jederzeit über die Schaltfläche „Minimal“ in der oberen Leiste wechseln.",
+      "group": "Oberflächenmodus",
+      "minimal": "Minimal",
+      "minimalDesc": "Nur das Wesentliche — für Chat, Wissen und Freigaben im Alltag.",
+      "full": "Vollständig",
+      "fullDesc": "Alles, einschließlich Analysen, Automatisierung, Administration und Entwicklerwerkzeugen.",
+      "selected": "Ausgewählt",
+      "startIn": "Starten in",
+      "startInDesc": "In welchem Modus AutoBot nach der Anmeldung öffnet",
+      "startLast": "Zuletzt verwendet",
+      "startMinimal": "Minimal",
+      "startFull": "Vollständig",
+      "noteSynced": "In Ihrem Konto und auf diesem Gerät gespeichert",
+      "noteDirectLinks": "Ausgeblendete Seiten öffnen sich weiterhin über direkte Links",
+      "noteNeverHidden": "Freigaben, Fehler und Sicherheitshinweise werden nie ausgeblendet"
+    },
+    "additionalThemes": {
+      "title": "Weitere Designs",
+      "subtitle": "Von Ihrer Administration über SLM bereitgestellt",
+      "deployed": "Über SLM bereitgestellt · v{version}",
+      "empty": "Es sind keine weiteren Designs bereitgestellt.",
+      "info": "Administratoren installieren und verteilen Designs in der SLM-Konsole.",
+      "slmLink": "SLM › Einstellungen › Designs ↗"
     }
   },
   "voice": {
@@ -5912,7 +5938,9 @@
     },
     "loadingSpinner": {
       "loading": "Loading…"
-    }
+    },
+    "minimalNote": "Nur das Wesentliche wird angezeigt · technische Widgets ausgeblendet",
+    "minimalNoteAction": "Alle Funktionen anzeigen"
   },
   "base": {
     "badge": {
@@ -7991,6 +8019,19 @@
       "budgetPolicies": "Kosten Ausgaben Limits Geld",
       "systemHealth": "Status Verfügbarkeit Diagnose Überwachung",
       "vault": "Zugangsdaten Schlüssel Passwörter Token Tresor"
+    },
+    "homeAria": "AutoBot Startseite",
+    "vaultTip": "Geheimnisse — gespeicherte Schlüssel und Zugangsdaten",
+    "preferencesTip": "Einstellungen",
+    "platformAdmin": "Plattform-Administration",
+    "platformAdminAria": "Plattform-Administration, öffnet die SLM-Konsole in einem neuen Tab",
+    "platformAdminTip": "Plattform-Administration — öffnet die SLM-Konsole ↗",
+    "profileMenu": "Profilmenü",
+    "uiMode": {
+      "label": "Minimal",
+      "tip": "Minimale Oberfläche — erweiterte Funktionen ausblenden",
+      "announceMinimal": "Minimale Oberfläche aktiv. Erweiterte Funktionen ausgeblendet.",
+      "announceFull": "Vollständige Oberfläche aktiv. Alle Funktionen angezeigt."
     }
   },
   "llcCompanyStatus": {

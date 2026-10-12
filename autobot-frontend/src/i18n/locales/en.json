@@ -945,6 +945,32 @@
       "deviceInitFailed": "Device flow initiation failed",
       "stillWaiting": "Still waiting for approval — try again in a moment.",
       "pollFailed": "Poll failed"
+    },
+    "preferredMode": {
+      "title": "Preferred mode",
+      "subtitle": "Choose how much of AutoBot you see. You can switch any time with the Minimal button in the top bar.",
+      "group": "Interface mode",
+      "minimal": "Minimal",
+      "minimalDesc": "Essentials only — for everyday chat, knowledge and approvals.",
+      "full": "Full",
+      "fullDesc": "Everything, including analytics, automation, admin and developer tools.",
+      "selected": "Selected",
+      "startIn": "Start in",
+      "startInDesc": "Which mode AutoBot opens in when you sign in",
+      "startLast": "Last used",
+      "startMinimal": "Minimal",
+      "startFull": "Full",
+      "noteSynced": "Saved to your account and this device",
+      "noteDirectLinks": "Hidden pages still open from direct links",
+      "noteNeverHidden": "Approvals, errors and security notices are never hidden"
+    },
+    "additionalThemes": {
+      "title": "Additional themes",
+      "subtitle": "Deployed by your administrator via the SLM",
+      "deployed": "Deployed via SLM · v{version}",
+      "empty": "No additional themes are deployed.",
+      "info": "Administrators install and deploy themes in the SLM console.",
+      "slmLink": "SLM › Settings › Themes ↗"
     }
   },
   "voice": {
@@ -5919,7 +5945,9 @@
     },
     "loadingSpinner": {
       "loading": "Loading…"
-    }
+    },
+    "minimalNote": "Showing essentials · technical widgets hidden",
+    "minimalNoteAction": "Show all features"
   },
   "base": {
     "badge": {
@@ -8040,6 +8068,19 @@
       "budgetPolicies": "cost spending limits money",
       "systemHealth": "status uptime diagnostics monitoring",
       "vault": "credentials keys passwords tokens vault"
+    },
+    "homeAria": "AutoBot home",
+    "vaultTip": "Secrets — stored keys and credentials",
+    "preferencesTip": "Preferences",
+    "platformAdmin": "Platform admin",
+    "platformAdminAria": "Platform admin, opens the SLM console in a new tab",
+    "platformAdminTip": "Platform admin — opens the SLM console ↗",
+    "profileMenu": "Profile menu",
+    "uiMode": {
+      "label": "Minimal",
+      "tip": "Minimal interface — hide advanced features",
+      "announceMinimal": "Minimal interface on. Advanced features hidden.",
+      "announceFull": "Full interface on. All features shown."
     }
   },
   "llcCompanyStatus": {

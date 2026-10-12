@@ -3,6 +3,7 @@
     <div class="login-card">
       <div class="login-header">
         <div class="logo">
+          <BrandMark :size="56" class="mb-3" />
           <h1>AutoBot</h1>
           <p class="subtitle">{{ $t('auth.login.subtitle') }}</p>
         </div>
@@ -87,6 +88,7 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
+import { BrandMark } from '@autobot/ui'
 import type { Role } from '@/types/_generated/workflow'
 import { DEFAULT_ROLE } from '@/constants/roles'
 import { useI18n } from 'vue-i18n'

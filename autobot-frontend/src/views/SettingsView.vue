@@ -126,10 +126,9 @@ Issue #753: User preference management interface
             <p class="section-description">{{ $t('settings.appearanceDesc') }}</p>
           </div>
           <div class="section-content">
+            <UiModeSettingsCard class="mb-6" />
             <ThemePresetPicker />
-            <div style="margin-top: var(--spacing-xl);">
-              <PreferencesPanel />
-            </div>
+            <PreferencesPanel class="mt-6" />
           </div>
         </section>
 
@@ -375,6 +374,7 @@ Issue #753: User preference management interface
 <script setup lang="ts">
 import PreferencesPanel from '@/components/ui/PreferencesPanel.vue'
 import ThemePresetPicker from '@/components/settings/ThemePresetPicker.vue'
+import UiModeSettingsCard from '@/components/settings/UiModeSettingsCard.vue'
 import LanguageSettingsPanel from '@/components/settings/LanguageSettingsPanel.vue'
 import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
 import WebResearchSettingsPanel from '@/components/settings/WebResearchSettingsPanel.vue'
