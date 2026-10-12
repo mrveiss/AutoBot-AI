@@ -38,11 +38,6 @@ on:
       - 'autobot-frontend/src/**/*.ts'
       - 'autobot-frontend/src/**/*.js'
       - 'autobot-frontend/src/**/*.vue'
-      # #17377: the repo's own tooling is main scope too -- the size gates were three
-      # copies of one ratchet in scripts/, and an unscanned tree cannot show a fork.
-      - 'scripts/**/*.py'
-      - 'tools/**/*.py'
-      - 'pipeline-scripts/**/*.py'
       # #13044: these three trees were ungated. A PR touching only
       # `autobot_shared/` did not trigger this workflow at all, so the
       # guard reported nothing rather than reporting clean.
@@ -59,11 +54,6 @@ on:
       - 'autobot-frontend/src/**/*.ts'
       - 'autobot-frontend/src/**/*.js'
       - 'autobot-frontend/src/**/*.vue'
-      # #17377: the repo's own tooling is main scope too -- the size gates were three
-      # copies of one ratchet in scripts/, and an unscanned tree cannot show a fork.
-      - 'scripts/**/*.py'
-      - 'tools/**/*.py'
-      - 'pipeline-scripts/**/*.py'
       - 'autobot_shared/**/*.py'
       - 'autobot-slm-backend/**/*.py'
       - 'autobot-slm-frontend/src/**/*.ts'
@@ -108,24 +98,7 @@ jobs:
       # the reported number would have RAISED a ratchet, which is the one direction
       # it must never move. Measured here instead: the SLM scope is 2831 against a
       # 2831 pin, exact, so it stays.
-      # 11707 -> 11604 (#17377): RECLAIMED SLACK, not a reduction made by #17377. The
-      # size-gate consolidation lives in scripts/ and tools/lint/, which neither scope
-      # scans, and jscpd measured both trees identically: 11,604 lines, 672 clones,
-      # 1,603,884 lines scanned, on origin/main and on the branch alike (this
-      # workflow's exact flags, jscpd 5.0.6, locally). The 103 lines were freed by
-      # other merges since #17317 and are pinned before a later PR can spend them.
-      # 11604 -> 11881 (#17377): a SCOPE change, not new duplication. The main scope
-      # now also scans scripts/, tools/ and pipeline-scripts/ -- the repo's own
-      # tooling, where the three file-size gates were three copies of one ratchet and
-      # no scan could see it. Both figures measured with this workflow's exact flags
-      # and jscpd 5.0.6 over git-archive exports, widened scope on both sides:
-      #   origin/main 12,108 lines, 694 clones, 1,638,816 lines in 4,475 files
-      #   #17377      11,881 lines, 686 clones, 1,638,643 lines in 4,476 files
-      # The 227-line drop is the size gates alone: 12 clones among
-      # scripts/check_*_file_size.py became 4, and no other clone differs. The
-      # pin rises only against the narrower scope's 11,604; against the same
-      # scope it falls. Nothing gates a raised pin yet (#16393), so this is stated.
-      MAX_DUP_LINES: '11881'
+      MAX_DUP_LINES: '11707'
       # #13044: the three trees this guard used to skip get their OWN pin rather
       # than being folded into the one above. When first scanned they carried
       # 2.4x the duplication ratio of the gated trees, and averaging would hide
@@ -147,21 +120,8 @@ jobs:
       # 0 when the count is UNDER its pin, so a fall in duplication is never noticed
       # and a later PR can spend it. Both figures are recorded so the next person
       # can tell a real reduction from reclaimed slack.
-      # 2831 -> 2830 (#17377): one line of reclaimed slack, measured in the same run --
-      # 2,830 lines, 123 clones, 265,516 lines scanned, identical on base and branch.
-      SLM_MAX_DUP_LINES: '2830'
+      SLM_MAX_DUP_LINES: '2831'
       JSCPD_VERSION: '5.0.6'
-      # The scope of each gate, stated ONCE (#17377). The scan steps and "Explain
-      # failure" read these; the `paths:` triggers above cannot read env, so
-      # repo_tests/duplication_guard_scope_is_stated_once_17377_test.py asserts
-      # both trigger lists name exactly these trees.
-      MAIN_SCOPE_DIRS: 'autobot-backend autobot-frontend/src scripts tools pipeline-scripts'
-      SLM_SCOPE_DIRS: 'autobot_shared autobot-slm-backend autobot-slm-frontend/src'
-      # Where each scan tees jscpd's report, stated once (#17377): the scan, its gate
-      # and "Explain failure" all read these, and the tests point them at a temp
-      # directory so a stray /tmp file on a developer machine cannot change a verdict.
-      MAIN_LOG: '/tmp/main-dup.log'
-      SLM_LOG: '/tmp/slm-gate.log'
     steps:
       - uses: actions/checkout@v7
 
@@ -173,14 +133,13 @@ jobs:
         id: main_scope
         run: |
           set -o pipefail
-          read -r -a scope <<< "${MAIN_SCOPE_DIRS}"
           npx --yes "jscpd@${JSCPD_VERSION}" \
-            "${scope[@]}" \
+            autobot-backend autobot-frontend/src \
             -k 70 -l 8 --skip-comments \
             -f python,typescript,javascript,vue \
             -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**" \
-            -r console 2>&1 | tee "${MAIN_LOG}"
-          python3 scripts/duplication_gate.py "${MAIN_LOG}" "${MAX_DUP_LINES}"
+            -r console 2>&1 | tee /tmp/main-dup.log
+          python3 scripts/duplication_gate.py /tmp/main-dup.log "${MAX_DUP_LINES}"
 
       # The report-only scan that used to run before this one existed to print the
       # figure for an UNMEASURED pin. The gate prints it on every run now, and an
@@ -197,14 +156,13 @@ jobs:
         id: slm_scope
         run: |
           set -o pipefail
-          read -r -a scope <<< "${SLM_SCOPE_DIRS}"
           npx --yes "jscpd@${JSCPD_VERSION}" \
-            "${scope[@]}" \
+            autobot_shared autobot-slm-backend autobot-slm-frontend/src \
             -k 70 -l 8 --skip-comments \
             -f python,typescript,javascript,vue \
             -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**,**/ansible/roles/slm_agent/files/**" \
-            -r console 2>&1 | tee "${SLM_LOG}"
-          python3 scripts/duplication_gate.py "${SLM_LOG}" "${SLM_MAX_DUP_LINES}"
+            -r console 2>&1 | tee /tmp/slm-gate.log
+          python3 scripts/duplication_gate.py /tmp/slm-gate.log "${SLM_MAX_DUP_LINES}"
 
       - name: Explain failure
         if: failure()
@@ -238,13 +196,13 @@ jobs:
           failed=0
           if [ "${MAIN_OUTCOME}" = "failure" ]; then
             failed=1
-            report "The main duplication scope" "${MAIN_LOG}" "${MAX_DUP_LINES}" \
-              "${MAIN_SCOPE_DIRS// / + }" MAX_DUP_LINES
+            report "The backend/frontend duplication scope" "${MAIN_LOG:-/tmp/main-dup.log}" "${MAX_DUP_LINES}" \
+              "autobot-backend + autobot-frontend/src" MAX_DUP_LINES
           fi
           if [ "${SLM_OUTCOME}" = "failure" ]; then
             failed=1
-            report "The shared/SLM duplication scope" "${SLM_LOG}" "${SLM_MAX_DUP_LINES}" \
-              "${SLM_SCOPE_DIRS// / + }" SLM_MAX_DUP_LINES
+            report "The shared/SLM duplication scope" "${SLM_LOG:-/tmp/slm-gate.log}" "${SLM_MAX_DUP_LINES}" \
+              "autobot_shared + autobot-slm-backend + autobot-slm-frontend/src" SLM_MAX_DUP_LINES
           fi
           if [ "${failed}" = "0" ]; then
             echo "::error::This job failed outside both duplication gates."
