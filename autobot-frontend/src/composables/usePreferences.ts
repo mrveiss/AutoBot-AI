@@ -281,8 +281,12 @@ export function usePreferences() {
   /**
    * Load appearance prefs from the user account and apply them. Called after login
    * so a fresh device inherits the user's stored theme/accent/density.
+   *
+   * The account's interface mode ('Start in' resolution) and theme variant apply
+   * only at a fresh sign-in (owner decision 2026-10-12): on a session restore the
+   * device's current mode and variant are kept, never overwritten.
    */
-  async function loadAppearanceFromBackend(): Promise<void> {
+  async function loadAppearanceFromBackend(opts: { freshSignIn?: boolean } = {}): Promise<void> {
     try {
       const res = await apiClient.get<{ data?: { preferences?: AccountAppearance } }>(
         `${getApiBase()}/users/me/preferences`
@@ -299,8 +303,10 @@ export function usePreferences() {
       if (prefs.layout_density) setLayoutDensity(prefs.layout_density)
       if (prefs.font_size) setFontSize(prefs.font_size)
       if (prefs.reasoning_effort) setReasoningEffort(prefs.reasoning_effort)
-      uiMode.applyAccount(prefs.ui_mode, prefs.ui_start)
-      await applyAccountVariant(prefs.theme_variant)
+      if (opts.freshSignIn) {
+        uiMode.applyAccount(prefs.ui_mode, prefs.ui_start)
+        await applyAccountVariant(prefs.theme_variant)
+      }
       logger.debug('Appearance prefs loaded from account', prefs)
     } catch (error) {
       logger.warn('Could not load appearance prefs from account', error)

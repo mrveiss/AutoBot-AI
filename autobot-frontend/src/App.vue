@@ -175,13 +175,18 @@ export default {
       logger.debug('User preferences system initialized');
 
       // Cross-device language sync: load stored language from backend after login (#1675)
+      let handledSignIns = 0
       watch(
         () => userStore.isAuthenticated,
         async (authenticated) => {
           if (authenticated) {
+            // A login() since the last pass is a fresh sign-in; anything else is a
+            // session restore, which keeps the device's mode and variant (#18240).
+            const freshSignIn = userStore.signInCount > handledSignIns;
+            handledSignIns = userStore.signInCount;
             await prefs.loadLanguageFromBackend();
             // Cross-device appearance sync: pull stored theme/accent/density (#8988)
-            await prefs.loadAppearanceFromBackend();
+            await prefs.loadAppearanceFromBackend({ freshSignIn });
           }
         },
         { immediate: true }

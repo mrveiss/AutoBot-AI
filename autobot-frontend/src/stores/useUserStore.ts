@@ -69,6 +69,10 @@ export const useUserStore = defineStore('user', () => {
 
   const currentUser = ref<UserProfile | null>(null)
 
+  // Counts fresh sign-ins (login() only). A session restore from storage or the
+  // backend never bumps it, so consumers can tell a sign-in from a reload (#18240).
+  const signInCount = ref(0)
+
   const defaultPreferences: UserPreferences = {
     theme: 'light',
     language: 'en',
@@ -125,6 +129,7 @@ export const useUserStore = defineStore('user', () => {
 
   // Actions
   function login(user: UserProfile, tokens: { token: string; refreshToken?: string; expiresIn?: number }) {
+    signInCount.value += 1
     currentUser.value = user
     authState.value = {
       isAuthenticated: true,
@@ -401,6 +406,7 @@ export const useUserStore = defineStore('user', () => {
     // State
     authState,
     currentUser,
+    signInCount,
 
     // Computed
     isAuthenticated,

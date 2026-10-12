@@ -60,7 +60,7 @@ describe('loadAppearanceFromBackend', () => {
   it('applies ui_mode with start=last', async () => {
     apiGet.mockResolvedValue({ data: { preferences: { ui_mode: 'minimal', ui_start: 'last', theme_variant: 'default' } } })
     const { prefs, ui } = await fresh()
-    await prefs.loadAppearanceFromBackend()
+    await prefs.loadAppearanceFromBackend({ freshSignIn: true })
     expect(ui.uiMode.value).toBe('minimal')
     expect(document.documentElement.getAttribute('data-ui')).toBe('minimal')
   })
@@ -68,7 +68,7 @@ describe('loadAppearanceFromBackend', () => {
   it('opens in the pinned start mode when ui_start is not last', async () => {
     apiGet.mockResolvedValue({ data: { preferences: { ui_mode: 'full', ui_start: 'minimal' } } })
     const { prefs, ui } = await fresh()
-    await prefs.loadAppearanceFromBackend()
+    await prefs.loadAppearanceFromBackend({ freshSignIn: true })
     expect(ui.uiMode.value).toBe('minimal')
     expect(ui.uiStart.value).toBe('minimal')
   })
@@ -76,7 +76,7 @@ describe('loadAppearanceFromBackend', () => {
   it('applies a non-default account theme_variant', async () => {
     apiGet.mockResolvedValue({ data: { preferences: { theme_variant: 'ember' } } })
     const { prefs, variant } = await fresh()
-    await prefs.loadAppearanceFromBackend()
+    await prefs.loadAppearanceFromBackend({ freshSignIn: true })
     expect(variant.themeVariant.value).toBe('ember')
   })
 
@@ -84,7 +84,7 @@ describe('loadAppearanceFromBackend', () => {
     vi.stubEnv('VITE_DEFAULT_THEME_VARIANT', 'ember')
     apiGet.mockResolvedValue({ data: { preferences: { theme_variant: 'default' } } })
     const { prefs, variant } = await fresh()
-    await prefs.loadAppearanceFromBackend()
+    await prefs.loadAppearanceFromBackend({ freshSignIn: true })
     expect(variant.themeVariant.value).toBe('ember')
     vi.unstubAllEnvs()
   })
@@ -93,7 +93,7 @@ describe('loadAppearanceFromBackend', () => {
     localStorage.setItem('autobot-theme-variant', 'ember')
     apiGet.mockResolvedValue({ data: { preferences: { theme_variant: 'default' } } })
     const { prefs, variant } = await fresh()
-    await prefs.loadAppearanceFromBackend()
+    await prefs.loadAppearanceFromBackend({ freshSignIn: true })
     expect(variant.themeVariant.value).toBe('default')
   })
 
@@ -101,7 +101,39 @@ describe('loadAppearanceFromBackend', () => {
     localStorage.setItem('autobot-ui-mode', 'minimal')
     apiGet.mockResolvedValue({ data: { preferences: { font_size: 'large' } } })
     const { prefs, ui } = await fresh()
-    await prefs.loadAppearanceFromBackend()
+    await prefs.loadAppearanceFromBackend({ freshSignIn: true })
     expect(ui.uiMode.value).toBe('minimal')
+  })
+})
+
+describe('loadAppearanceFromBackend on a session restore (no fresh sign-in)', () => {
+  it('keeps the device mode and start, whatever the account holds', async () => {
+    localStorage.setItem('autobot-ui-mode', 'full')
+    apiGet.mockResolvedValue({ data: { preferences: { ui_mode: 'minimal', ui_start: 'minimal' } } })
+    const { prefs, ui } = await fresh()
+    await prefs.loadAppearanceFromBackend()
+    expect(ui.uiMode.value).toBe('full')
+    expect(ui.uiStart.value).toBe('last')
+    expect(document.documentElement.getAttribute('data-ui')).toBe('full')
+  })
+
+  it('keeps the device theme variant', async () => {
+    localStorage.setItem('autobot-theme-variant', 'ember')
+    apiGet.mockResolvedValue({ data: { preferences: { theme_variant: 'default' } } })
+    const { prefs, variant } = await fresh()
+    await prefs.loadAppearanceFromBackend()
+    expect(variant.themeVariant.value).toBe('ember')
+  })
+
+  it('a toggle then a reload keeps the toggled mode; a fresh sign-in replaces it', async () => {
+    apiGet.mockResolvedValue({ data: { preferences: { ui_mode: 'full', ui_start: 'last' } } })
+    const first = await fresh()
+    first.ui.setMode('minimal') // the user's in-session toggle, written to the device
+    const reloaded = await fresh() // reload: modules re-read localStorage
+    await reloaded.prefs.loadAppearanceFromBackend()
+    expect(reloaded.ui.uiMode.value).toBe('minimal')
+
+    await reloaded.prefs.loadAppearanceFromBackend({ freshSignIn: true })
+    expect(reloaded.ui.uiMode.value).toBe('full')
   })
 })
