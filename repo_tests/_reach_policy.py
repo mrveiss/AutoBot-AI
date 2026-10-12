@@ -251,6 +251,16 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under two roots; the test-file share drifts.",
     ),
+    "architecture-family-definition-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test source is a subset of tracked .py under four roots; the test-file share drifts.",
+    ),
+    "optimization-taxonomy-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test source of one package directory, against all tracked Python under it.",
+    ),
     "single-attribute-writer-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

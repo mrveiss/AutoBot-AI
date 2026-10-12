@@ -60,6 +60,7 @@ import repo_tests.one_semantic_chunker_14485_test as _semantic_chunker_guard  # 
 import repo_tests.one_session_ownership_validator_14016_test as _ownership_validator_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_session_scope_15068_test as _session_scope_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_ssh_restart_executor_18186_test as _ssh_restart_guard
+import repo_tests.optimization_taxonomies_13049_test as _taxonomy_guard  # noqa: F401 -- registers its scope
 import repo_tests.single_attribute_writer_18240_test as _attribute_writer_guard  # noqa: F401 -- registers its scope
 from repo_tests._paths import repo_root
 from repo_tests._reach import Reach, ReachScopeError, declare
@@ -246,6 +247,13 @@ _DECLARED_SCOPES = {
     "ansible-concept-forks-17856-scan": ("autobot-slm-backend/ansible",),
     "concept-forks-17856-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "gateway-adapter-package-scan": ("autobot-backend/services/gateway",),
+    "architecture-family-definition-scan": (
+        "autobot-backend",
+        "autobot-npu-worker",
+        "autobot-slm-backend",
+        "autobot_shared",
+    ),
+    "optimization-taxonomy-scan": ("autobot-backend/llm_shared/optimization",),
     "post-commit-seed-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "fact-read-authorization-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "infra-backend-import-scan": ("autobot-infrastructure",),

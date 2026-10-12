@@ -9,8 +9,8 @@ Architecture-aware OpenVINO inference dispatcher.
 Dispatches model-load and inference requests to the correct OpenVINO code path
 based on the model's architecture_family field (GH#7352, MVA-1383).
 
-Supported families track the enum defined in llm_interface_pkg/types.py
-(GH#7347): transformer, ssm, linear_attention, hybrid.
+Families come from autobot_shared.model_taxonomy.ArchitectureFamily (#13049);
+this worker supports only the subset named in _get_supported_families().
 
 SSM path (Mamba/S4 models) is gated behind the NPU_SSM_ENABLED env-var
 feature flag (default off until validated in staging).
@@ -21,8 +21,9 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any, Callable, Dict, FrozenSet, List, Optional
+
+from autobot_shared.model_taxonomy import ArchitectureFamily
 
 logger = logging.getLogger(__name__)
 
@@ -35,15 +36,6 @@ __all__ = [
     "is_npu_ssm_enabled",
     "SUPPORTED_FAMILIES",
 ]
-
-
-class ArchitectureFamily(str, Enum):
-    """Architecture families understood by the NPU worker."""
-
-    TRANSFORMER = "transformer"
-    SSM = "ssm"
-    LINEAR_ATTENTION = "linear_attention"
-    HYBRID = "hybrid"
 
 
 def is_npu_ssm_enabled() -> bool:
