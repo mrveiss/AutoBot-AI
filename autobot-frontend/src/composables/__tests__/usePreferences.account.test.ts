@@ -137,3 +137,33 @@ describe('loadAppearanceFromBackend on a session restore (no fresh sign-in)', ()
     expect(reloaded.ui.uiMode.value).toBe('full')
   })
 })
+
+describe('every appearance field follows the sign-in rule', () => {
+  const account = { theme: 'dark', accent_color: 'green', layout_density: 'spacious', font_size: 'large', reasoning_effort: 'high' }
+
+  it('keeps the device theme, density and font size on a restore, without asking the account', async () => {
+    localStorage.setItem('autobot-theme', 'light')
+    apiGet.mockResolvedValue({ data: { preferences: account } })
+    const { prefs } = await fresh()
+    const { usePreferences } = await import('../usePreferences')
+    const before = { d: usePreferences().layoutDensity.value, f: usePreferences().fontSize.value }
+    await prefs.loadAppearanceFromBackend()
+    const after = usePreferences()
+    expect(after.layoutDensity.value).toBe(before.d)
+    expect(after.fontSize.value).toBe(before.f)
+    expect(after.fontSize.value).not.toBe('large')
+    expect(after.layoutDensity.value).not.toBe('spacious')
+    expect(localStorage.getItem('autobot-theme')).toBe('light')
+  })
+
+  it('applies the account theme, density and font size at a fresh sign-in', async () => {
+    localStorage.setItem('autobot-theme', 'light')
+    apiGet.mockResolvedValue({ data: { preferences: account } })
+    const { prefs } = await fresh()
+    await prefs.loadAppearanceFromBackend({ freshSignIn: true })
+    const { usePreferences } = await import('../usePreferences')
+    expect(usePreferences().layoutDensity.value).toBe('spacious')
+    expect(usePreferences().fontSize.value).toBe('large')
+    expect(localStorage.getItem('autobot-theme')).toBe('dark')
+  })
+})
