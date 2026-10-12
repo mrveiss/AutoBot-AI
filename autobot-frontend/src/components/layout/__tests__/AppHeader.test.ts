@@ -77,14 +77,19 @@ describe('AppHeader icon cluster', () => {
     expect(wrapper.find(`a[aria-label="${en.nav.platformAdminAria}"]`).exists()).toBe(false)
   })
 
-  it('gives every icon an aria-label and a tooltip it is described by', async () => {
+  it('gives every icon an aria-label and a tooltip, described by it only where the tip adds to the name', async () => {
     const wrapper = await mountHeader('admin')
     const controls = wrapper.get('[data-testid="nav-icon-cluster"]').findAll('a, button')
     expect(controls.length).toBeGreaterThanOrEqual(4)
     for (const control of controls) {
       const name = control.attributes('aria-label') ?? control.text()
       expect(name.length, 'accessible name').toBeGreaterThan(0)
-      const tip = document.getElementById(control.attributes('aria-describedby') ?? '')
+      const describedby = control.attributes('aria-describedby')
+      if (name === en.nav.preferences) {
+        expect(describedby, 'tip repeats the name').toBeUndefined() // not read twice
+        continue
+      }
+      const tip = document.getElementById(describedby ?? '')
       expect(tip?.getAttribute('role')).toBe('tooltip')
       expect(tip?.textContent?.trim().length).toBeGreaterThan(0)
     }

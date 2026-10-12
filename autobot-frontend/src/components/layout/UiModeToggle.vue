@@ -16,6 +16,7 @@
         :class="isMinimal
           ? 'border-autobot-accent bg-autobot-bg-tertiary text-autobot-text-primary font-semibold'
           : 'border-transparent text-autobot-text-secondary hover:bg-autobot-bg-tertiary hover:text-autobot-text-primary'"
+        :aria-label="$t('nav.uiMode.label')"
         :aria-pressed="isMinimal"
         :aria-describedby="describedby"
         data-testid="ui-mode-toggle"

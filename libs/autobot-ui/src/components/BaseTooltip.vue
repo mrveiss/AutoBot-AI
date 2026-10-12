@@ -7,7 +7,9 @@
   the focusable element as `aria-describedby`. Content is `text` or the
   `content` slot (the kit holds no strings). Opens on hover (after
   --aui-tooltip-delay) and on focus (immediately); closes on Esc, blur, and
-  leave (after --aui-tooltip-hide-delay). A touch long-press opens it; focus is
+  leave (after --aui-tooltip-hide-delay). The bubble is hoverable (WCAG 1.4.13):
+  it sits inside the root, so moving the pointer onto it cancels the pending
+  hide. Mouse events the browser emulates after a touch are ignored. A touch long-press opens it; focus is
   the fallback for keyboard/AT. The bubble is position:absolute, so showing it
   never shifts layout; motion is off under prefers-reduced-motion.
 -->
@@ -28,11 +30,14 @@ const props = withDefaults(
 
 const LONG_PRESS_MS = 500
 const TOUCH_LINGER_MS = 1500
+/** Browsers emulate mouseenter/leave up to ~this long after a touch. */
+const EMULATED_MOUSE_MS = 1000
 
 const id = `aui-tooltip-${useId()}`
 const root = ref<HTMLElement | null>(null)
 const open = ref(false)
 let timer: ReturnType<typeof setTimeout> | undefined
+let lastTouchAt = -Infinity
 
 const active = computed(() => open.value && !props.disabled)
 
@@ -56,8 +61,13 @@ function schedule(next: boolean, ms: number): void {
   }, ms)
 }
 
-const onEnter = () => schedule(true, tokenMs('--aui-tooltip-delay'))
-const onLeave = () => schedule(false, tokenMs('--aui-tooltip-hide-delay'))
+const isEmulatedMouse = () => Date.now() - lastTouchAt < EMULATED_MOUSE_MS
+const onEnter = () => {
+  if (!isEmulatedMouse()) schedule(true, tokenMs('--aui-tooltip-delay'))
+}
+const onLeave = () => {
+  if (!isEmulatedMouse()) schedule(false, tokenMs('--aui-tooltip-hide-delay'))
+}
 const onFocus = () => schedule(true, 0)
 const onBlur = () => schedule(false, 0)
 
@@ -66,10 +76,12 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 function onTouchStart(): void {
+  lastTouchAt = Date.now()
   schedule(true, LONG_PRESS_MS)
 }
 
 function onTouchEnd(): void {
+  lastTouchAt = Date.now()
   // Cancels a press that never reached the threshold; lingers if it did.
   if (open.value) schedule(false, TOUCH_LINGER_MS)
   else clearTimeout(timer)
@@ -128,7 +140,6 @@ onBeforeUnmount(() => {
   color: var(--aui-color-text-inverse);
   font-family: var(--aui-font-sans);
   font-size: var(--aui-text-sm);
-  pointer-events: none;
   visibility: hidden;
   opacity: 0;
   transition: opacity var(--aui-transition-fast);

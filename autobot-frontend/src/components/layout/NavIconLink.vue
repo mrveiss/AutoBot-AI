@@ -17,7 +17,7 @@
         rel="noopener noreferrer"
         :class="linkClass"
         :aria-label="$t(item.ariaKey)"
-        :aria-describedby="describedby"
+        :aria-describedby="tipAddsInfo ? describedby : undefined"
       >
         <NavItemIcon :item="item" class="h-5 w-5" />
       </a>
@@ -26,7 +26,7 @@
         :to="item.to ?? '/'"
         :class="[linkClass, active ? 'text-autobot-text-primary bg-autobot-bg-tertiary' : '']"
         :aria-label="$t(item.ariaKey)"
-        :aria-describedby="describedby"
+        :aria-describedby="tipAddsInfo ? describedby : undefined"
       >
         <NavItemIcon :item="item" class="h-5 w-5" />
       </router-link>
@@ -37,13 +37,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { BaseTooltip } from '@autobot/ui'
 import type { NavIconItem } from '@/config/navItems'
 import NavItemIcon from '@/components/layout/NavItemIcon.vue'
 
 const props = defineProps<{ item: NavIconItem }>()
+const { t } = useI18n()
 const route = useRoute()
 const active = computed(() => !!props.item.to && route.path.startsWith(props.item.to))
+
+// aria-label already names the control; describing it with the same words reads
+// it twice. Link the tooltip only where it says something the name does not.
+const norm = (v: string) => v.trim().toLowerCase()
+const tipAddsInfo = computed(() => norm(t(props.item.tipKey)) !== norm(t(props.item.ariaKey)))
 
 const linkClass =
   'inline-flex h-10 w-10 items-center justify-center rounded-lg text-autobot-text-secondary transition-colors duration-150 hover:bg-autobot-bg-tertiary hover:text-autobot-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-autobot-primary'

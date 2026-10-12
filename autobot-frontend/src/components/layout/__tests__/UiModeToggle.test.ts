@@ -34,6 +34,13 @@ describe('UiModeToggle', () => {
     expect(document.getElementById(tipId)?.textContent).toContain(en.nav.uiMode.tip)
   })
 
+  it('has an accessible name even though the visible label is hidden below xl', async () => {
+    const wrapper = await mountToggle()
+    const button = wrapper.get('[data-testid="ui-mode-toggle"]')
+    expect(wrapper.get('span.hidden').classes()).toContain('xl:inline')
+    expect(button.attributes('aria-label')).toBe(en.nav.uiMode.label)
+  })
+
   it('pressing it enters Minimal: aria-pressed, data-ui, and an announcement', async () => {
     const wrapper = await mountToggle()
     const button = wrapper.get('[data-testid="ui-mode-toggle"]')

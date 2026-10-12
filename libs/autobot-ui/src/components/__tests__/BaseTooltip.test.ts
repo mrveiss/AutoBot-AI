@@ -85,4 +85,45 @@ describe('BaseTooltip', () => {
     expect(isOpen(w)).toBe(false)
     w.unmount()
   })
+
+  it('has a bubble that can receive the pointer (no pointer-events: none)', () => {
+    const w = make()
+    const bubble = w.find('[role="tooltip"]').element as HTMLElement
+    expect(bubble.style.pointerEvents).not.toBe('none')
+    expect(bubble.parentElement).toBe(w.element)
+    w.unmount()
+  })
+
+  it('stays open when the pointer moves from the trigger onto the bubble', async () => {
+    vi.useFakeTimers()
+    const w = make()
+    await w.trigger('mouseenter')
+    expect(isOpen(w)).toBe(true)
+    await w.trigger('mouseleave') // pointer crosses the gap: hide is pending
+    await w.trigger('mouseenter') // ...and lands on the bubble: hide is cancelled
+    vi.advanceTimersByTime(5000)
+    await w.vm.$nextTick()
+    expect(isOpen(w)).toBe(true)
+    await w.trigger('mouseleave') // contrast: leaving for good closes it
+    vi.advanceTimersByTime(5000)
+    await w.vm.$nextTick()
+    expect(isOpen(w)).toBe(false)
+    w.unmount()
+  })
+
+  it('ignores the mouse events a browser emulates after a tap', async () => {
+    vi.useFakeTimers()
+    const w = make()
+    await w.trigger('touchstart')
+    await w.trigger('touchend')
+    await w.trigger('mouseenter') // emulated
+    vi.advanceTimersByTime(600)
+    await w.vm.$nextTick()
+    expect(isOpen(w)).toBe(false)
+
+    vi.advanceTimersByTime(2000) // a real mouse later still works
+    await w.trigger('mouseenter')
+    expect(isOpen(w)).toBe(true)
+    w.unmount()
+  })
 })
