@@ -45,7 +45,7 @@
               <span class="name-text">{{ routine.name }}</span>
               <span v-if="routine.description" class="name-desc">{{ routine.description }}</span>
             </td>
-            <td><code class="cron">{{ routine.cron_schedule }}</code></td>
+            <td>{{ scheduleSummary(routineSpec(routine)) }}</td>
             <td>{{ producesLabel(routine.produces) }}</td>
             <td>
               <span class="status-badge" :class="`status-${routine.status}`">{{ statusLabel(routine.status) }}</span>
@@ -93,11 +93,7 @@
             <span>{{ $t('llc.routines.fieldDescription') }}</span>
             <input v-model="form.description" type="text" />
           </label>
-          <label class="field">
-            <span>{{ $t('llc.routines.fieldCron') }}</span>
-            <input v-model="form.cron_schedule" type="text" required placeholder="0 9 * * 1-5" />
-            <small class="field-hint">{{ $t('llc.routines.fieldCronHint') }}</small>
-          </label>
+          <SchedulePickerField v-model="form.schedule" @update:valid="scheduleValid = $event" />
           <label class="field">
             <span>{{ $t('llc.routines.fieldAssignee') }}</span>
             <select v-model="form.assignee_agent_id">
@@ -119,7 +115,7 @@
           <p v-if="editorError" class="state-error">{{ editorError }}</p>
           <div class="modal-actions">
             <button type="button" class="btn-sm" @click="closeEditor">{{ $t('common.cancel') }}</button>
-            <button type="submit" class="btn-primary" :disabled="saving">
+            <button type="submit" class="btn-primary" :disabled="saving || !scheduleValid">
               {{ saving ? $t('llc.routines.saving') : $t('llc.routines.save') }}
             </button>
           </div>
@@ -157,12 +153,17 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { formatDateTime, formatDuration } from '@/utils/formatHelpers'
 import { useI18n } from 'vue-i18n'
+import type { ScheduleSpec } from '@autobot/ui'
+import SchedulePickerField from '@/components/schedule/SchedulePickerField.vue'
+import { routineSpec, schedulePayload, useScheduleSummary } from '@/composables/useSchedule'
 
 const props = defineProps<{ companyId?: string }>()
 
 const logger = createLogger('RoutinesView')
 const api = useApiClient()
 const { t } = useI18n()
+const scheduleSummary = useScheduleSummary()
+const scheduleValid = ref(true)
 
 interface Routine {
   id: string
@@ -170,6 +171,8 @@ interface Routine {
   name: string
   description?: string | null
   cron_schedule: string
+  /** Stored schedule contract (#18432); absent on routines created before it. */
+  schedule_spec?: ScheduleSpec | null
   assignee_agent_id?: string | null
   status: 'active' | 'paused' | 'archived'
   produces: 'new_work_item' | 'updates_recurring'
@@ -210,7 +213,7 @@ const editorError = ref('')
 const form = ref({
   name: '',
   description: '',
-  cron_schedule: '',
+  schedule: null as ScheduleSpec | null,
   assignee_agent_id: null as string | null,
   produces: 'new_work_item' as Routine['produces'],
   workItemTitle: '',
@@ -269,7 +272,7 @@ function openCreate() {
   form.value = {
     name: '',
     description: '',
-    cron_schedule: '',
+    schedule: null,
     assignee_agent_id: null,
     produces: 'new_work_item',
     workItemTitle: '',
@@ -283,7 +286,7 @@ function openEdit(routine: Routine) {
   form.value = {
     name: routine.name,
     description: routine.description ?? '',
-    cron_schedule: routine.cron_schedule,
+    schedule: routineSpec(routine),
     assignee_agent_id: routine.assignee_agent_id ?? null,
     produces: routine.produces,
     workItemTitle: (routine.work_item_template?.title as string) ?? '',
@@ -300,7 +303,9 @@ function buildPayload() {
   const payload: Record<string, unknown> = {
     name: f.name,
     description: f.description || null,
-    cron_schedule: f.cron_schedule,
+    // Exactly ONE of cron_schedule / schedule_spec (the server refuses both):
+    // a cron spec is today's payload, calendar/once go as schedule_spec alone.
+    ...schedulePayload(f.schedule),
     assignee_agent_id: f.assignee_agent_id || null,
     produces: f.produces,
   }
@@ -475,14 +480,6 @@ onMounted(() => {
 .name-desc {
   font-size: 0.75rem;
   color: var(--text-muted);
-}
-
-.cron {
-  font-family: var(--font-mono, monospace);
-  font-size: 0.8125rem;
-  background: var(--bg-code, var(--routines-bg-code));
-  padding: 0.125rem 0.375rem;
-  border-radius: var(--radius-sm);
 }
 
 .status-badge {
