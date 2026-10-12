@@ -53,6 +53,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_text
+
 _REPO_ROOT = repo_root()
 
 _MAIN_SRC = _REPO_ROOT / "autobot-frontend" / "src"
@@ -85,7 +87,9 @@ _BASELINES = {
         # #16245: SettingsPanel.vue's unrendered /system/health/detailed loader was
         # removed with its two `apiClient.get<...>` calls; recounted at the rebased
         # tree, combined with the other cuts already on main.
-        "inline_generics": 562,
+        # #15771: 562 -> 548. The count now reads code only, so 14 matches that were
+        # comments quoting `api.get<...>` (the prose of earlier removals) no longer count.
+        "inline_generics": 548,
     },
     "autobot-slm-frontend": {
         "clients": 1,
@@ -105,7 +109,8 @@ _BASELINES = {
         # Data Hygiene page's new orphan-storage/orphan-repair/audit calls
         # (#17157). None has a generated contract yet to derive from.
         "responses": 34,
-        "inline_generics": 87,
+        # #15771: 87 -> 86, one match that was a comment.
+        "inline_generics": 86,
     },
 }
 
@@ -193,8 +198,13 @@ def _hand_typed_response_count(root: Path) -> int:
 
 
 def _inline_generic_count(root: Path) -> int:
-    """Unverified response-shape assertions at the call site."""
-    return sum(len(_INLINE_GENERIC_RE.findall(_read(path))) for path in _source_files(root))
+    """Unverified response-shape assertions at the call site, counted in code only (#15771).
+
+    The pattern also matches the prose that explains a removal, so a correct change that
+    documents itself left the count unchanged and failed the build. The shared stripper
+    (#17941) reads each file with its own comment syntax.
+    """
+    return sum(len(_INLINE_GENERIC_RE.findall(code_text(_read(path), name=path.name))) for path in _source_files(root))
 
 
 def _measure(app: str) -> dict[str, int]:
@@ -252,3 +262,18 @@ def test_contract_sprawl_only_shrinks(app: str, dimension: str) -> None:
         f"{app}: {dimension} is down to {actual} but the baseline still says {baseline} — "
         "lower it in the commit that did the work, so the number stays a deliberate claim"
     )
+
+
+@pytest.mark.parametrize(
+    ("label", "source", "expected"),
+    [
+        ("code", "const r = api.get<Shape>('/x')\n", 1),
+        ("line comment quoting it", "// was api.get<Shape>('/x'), now derived\n", 0),
+        ("block comment quoting it", "/* api.get<Shape>('/x') */\nconst a = 1\n", 0),
+        ("code beside a comment", "// api.get<A>()\nconst r = api.post<B>('/y')\n", 1),
+    ],
+)
+def test_the_inline_generic_count_reads_code_and_not_prose(label: str, source: str, expected: int) -> None:
+    """#15771: documenting a removal must not keep the removed construct counted."""
+    found = _INLINE_GENERIC_RE.findall(code_text(source, name="x.ts"))
+    assert len(found) == expected, label
