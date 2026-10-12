@@ -11,6 +11,7 @@ and file operations.
 
 import asyncio
 import json
+import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List
 
@@ -27,14 +28,15 @@ class DocumentsMixin:
     Document management mixin for knowledge base.
 
     Provides document operations:
-    - Add documents with chunking
+    - Add documents, split into chunks that share a document id (#17830)
     - Process files (PDF, TXT, MD)
     - Directory ingestion
     - Export all data
     - Librarian functionality
 
     Key Features:
-    - Automatic chunking and vectorization
+    - Automatic chunking (``autobot_shared.doc_chunking``) and vectorization
+    - Partial-success ingest: a time-budget overrun keeps stored chunks (#17986)
     - Multiple file format support
     - Category extraction
     """
@@ -54,22 +56,27 @@ class DocumentsMixin:
             doc_id: Optional document ID
 
         Returns:
-            Result dictionary with status and details
+            Result dictionary: ``status`` ("success" | "partial" | "timeout" | "error"),
+            plus ``chunks_stored`` / ``chunks_total`` for multi-chunk
+            documents. A ``partial`` document keeps its stored chunks; retrying with the
+            same ``doc_id`` resumes after them.
         """
+        from knowledge.document_ingest import ingest_document
         from utils.knowledge_base_timeouts import kb_timeouts
 
         if not content.strip():
             return {"status": "error", "message": "Empty content provided"}
 
         try:
-            # Use asyncio.wait_for for timeout protection
-            return await asyncio.wait_for(
-                self._add_document_internal(content, metadata, doc_id),
-                timeout=kb_timeouts.document_add,
+            # The budget is per document, enforced between and inside chunks, so a
+            # timeout keeps the chunks already stored and reports "partial" (#17986).
+            return await ingest_document(
+                self,
+                content,
+                metadata if metadata is not None else {},
+                doc_id or str(uuid.uuid4()),
+                kb_timeouts.document_add,
             )
-        except asyncio.TimeoutError:
-            logger.warning("Document addition timed out")
-            return {"status": "timeout", "message": "Document addition timed out"}
         except Exception as e:
             logger.error("Document addition failed: %s", e)
             return {"status": "error", "message": "Document operation failed"}

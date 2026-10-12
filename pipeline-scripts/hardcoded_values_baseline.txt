@@ -967,7 +967,6 @@
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-wsl2-compatible.js|:5173
 1|ssot|autobot-infrastructure/shared/tests/test_chat_responses.js|:5173
 3|ssot|autobot-infrastructure/shared/tests/test_workflow_api.js|:8001
-1|ssot|autobot-infrastructure/shared/tools/index_documentation.py|:11434
 1|other|autobot-slm-backend/ansible/_shared/tasks/pre_migration_backup.yml|"/opt/autobot/backups/pre-migration/backend-$(date +%s).dump
 1|other|autobot-slm-backend/ansible/apply-system-updates.yml|"/opt/autobot/backups/system-updates/sources.list-{{ ansible_facts[
 1|other|autobot-slm-backend/ansible/apply-system-updates.yml|300

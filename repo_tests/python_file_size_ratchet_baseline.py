@@ -104,7 +104,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/git_mcp.py": 1356,
     "autobot-backend/api/http_client_mcp.py": 963,
     "autobot-backend/api/ide_integration.py": 928,
-    "autobot-backend/api/knowledge.py": 3414,
+    "autobot-backend/api/knowledge.py": 3320,
     "autobot-backend/api/knowledge_api_integration_test.py": 623,
     "autobot-backend/api/knowledge_categories.py": 674,
     "autobot-backend/api/knowledge_collections.py": 726,
@@ -344,7 +344,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/services/graph_rag_service_test.py": 895,
     "autobot-backend/services/knowledge/autonomous_loop.py": 798,
     "autobot-backend/services/knowledge/code_indexer.py": 1179,
-    "autobot-backend/services/knowledge/doc_indexer.py": 1274,
+    "autobot-backend/services/knowledge/doc_indexer.py": 1267,
     "autobot-backend/services/knowledge/service.py": 851,
     "autobot-backend/services/knowledge/test_autonomous_loop.py": 708,
     "autobot-backend/services/knowledge/test_doc_indexer.py": 1466,
@@ -483,7 +483,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/tests/services/test_sso_service.py": 1258,
     "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
     "autobot-slm-backend/user_management/services/sso_service.py": 778,
-    "autobot_shared/env_registry.py": 1214,  # #13602: +1 sibling import, -14 registration
+    "autobot_shared/env_registry.py": 1177,  # #13602: +1 sibling import, -14 registration
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
     "autobot_shared/network_constants.py": 616,
     "autobot_shared/npu/integration.py": 929,

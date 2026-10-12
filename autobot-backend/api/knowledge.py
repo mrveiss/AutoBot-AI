@@ -109,6 +109,13 @@ from knowledge.schemas.stats import (
     KnowledgeMainCategoriesResponse,
     KnowledgeStatsBasic,
 )
+from knowledge.upload_pages import clean_upload_text
+from knowledge.upload_rejections import (
+    UploadRejection,
+    UploadRejectionCode,
+    extract_within_deadline,
+)
+from knowledge.upload_rejections import no_text_rejection as _no_text_rejection
 
 # NOTE: Pydantic models moved to knowledge_maintenance.py (Issue #185 - split oversized files)
 # NOTE: Tag-related models moved to knowledge_tags.py
@@ -683,10 +690,8 @@ async def _store_fact_in_kb(kb, content: str, metadata: dict) -> str:
     caller writing ``type: file``, is a document: SYSTEM unless something already claims it (#16693)."""
     if metadata.get("type") == "file":
         stamp_if_document(metadata)
-    if hasattr(kb, "store_fact"):
-        result = await kb.store_fact(content=content, metadata=metadata)
-    else:
-        result = await kb.store_fact(text=content, metadata=metadata)
+    # The one ingest path (#18407): long input is chunked, with per-chunk page_spans.
+    result = await kb.add_document(content, metadata)
     return result.get("fact_id")
 
 
@@ -834,22 +839,25 @@ def _validate_file_upload(filename: str, file_size: int) -> None:
 
     # Check file size
     if file_size > MAX_FILE_SIZE_BYTES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File too large. Maximum size is {MAX_FILE_SIZE_MB}MB",
+        raise UploadRejection(
+            UploadRejectionCode.TOO_LARGE,
+            f"File too large. Maximum size is {MAX_FILE_SIZE_MB}MB",
+            max_mb=MAX_FILE_SIZE_MB,
         )
 
     # Check extension
     ext = os.path.splitext(filename.lower())[1]
     if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File type not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}",
+        allowed = sorted(ALLOWED_EXTENSIONS)
+        raise UploadRejection(
+            UploadRejectionCode.UNSUPPORTED_TYPE,
+            f"File type not allowed. Allowed: {', '.join(allowed)}",
+            allowed=allowed,
         )
 
     # Check for path traversal
     if contains_path_traversal(filename):
-        raise HTTPException(status_code=400, detail="Invalid filename")
+        raise UploadRejection(UploadRejectionCode.INVALID_FILENAME, "Invalid filename")
 
 
 @router.post("/facts", response_model=AddFactResponse)
@@ -1018,7 +1026,7 @@ def _extract_pdf_document(filename: str, file_content: bytes) -> "ExtractedDocum
     Issue #620. Returns the structured :class:`ExtractedDocument` rather than
     its flattened text so the caller can consult ``has_usable_text_layer``
     instead of a ``.strip()`` check a page-number-stamped scan would pass
-    (#13884) — and so ``_no_text_detail`` can reuse this parse instead of
+    (#13884) — and so ``_no_text_rejection`` can reuse this parse instead of
     running a second one (#13884 review).
 
     Args:
@@ -1037,10 +1045,12 @@ def _extract_pdf_document(filename: str, file_content: bytes) -> "ExtractedDocum
         return extract_pdf(file_content)
     except DocumentDependencyError as e:
         logger.error("PDF support unavailable for %s: %s", filename, e)
-        raise HTTPException(status_code=400, detail="PDF support requires pypdf library")
+        raise UploadRejection(
+            UploadRejectionCode.PARSER_UNAVAILABLE, "PDF support requires pypdf library", library="pypdf"
+        )
     except DocumentExtractionError as e:
         logger.error("PDF parse error for %s: %s", filename, e)
-        raise HTTPException(status_code=400, detail="Failed to parse PDF file")
+        raise UploadRejection(UploadRejectionCode.PARSE_FAILED, "Failed to parse PDF file", format="pdf")
 
 
 def _extract_docx_document(filename: str, file_content: bytes) -> "ExtractedDocument":
@@ -1067,10 +1077,12 @@ def _extract_docx_document(filename: str, file_content: bytes) -> "ExtractedDocu
         return extract_docx(file_content)
     except DocumentDependencyError as e:
         logger.error("DOCX support unavailable for %s: %s", filename, e)
-        raise HTTPException(status_code=400, detail="DOCX support requires python-docx library")
+        raise UploadRejection(
+            UploadRejectionCode.PARSER_UNAVAILABLE, "DOCX support requires python-docx library", library="python-docx"
+        )
     except DocumentExtractionError as e:
         logger.error("DOCX parse error for %s: %s", filename, e)
-        raise HTTPException(status_code=400, detail="Failed to parse DOCX file")
+        raise UploadRejection(UploadRejectionCode.PARSE_FAILED, "Failed to parse DOCX file", format="docx")
 
 
 def _extract_file_content(filename: str, file_content: bytes) -> "tuple[str, ExtractedDocument | None]":
@@ -1116,7 +1128,7 @@ def _extract_file_content(filename: str, file_content: bytes) -> "tuple[str, Ext
         # #13894: store the text *without* page markers. `## Page 7` is structure,
         # not meaning, and it competes with the document's own words for
         # similarity once embedded. The page numbers travel as metadata instead —
-        # see _page_provenance_metadata, which derives its offsets from the same
+        # see page_provenance_metadata, which derives its offsets from the same
         # pure render of the same pages, so they always index this exact string.
         from media.document.extraction import render_plain
 
@@ -1146,58 +1158,6 @@ def _has_usable_content(content: str, extracted: "ExtractedDocument | None") -> 
     if extracted is not None:
         return extracted.has_usable_text_layer
     return bool(content.strip())
-
-
-def _page_provenance_metadata(extracted: "ExtractedDocument | None") -> dict:
-    """Page provenance for a stored fact, as metadata rather than marker text (#13894).
-
-    Offsets are derived from the same pure ``render_plain`` call over the same
-    pages that produced the stored content, so they index that exact string. A
-    retrieved span resolves to a page via ``page_for_offset`` / ``pages_for_span``
-    without the page number ever having entered the embedding.
-
-    Returns an empty dict for unpaginated formats — a DOCX has no pages, and
-    inventing ``page: 1`` would be a fabricated citation.
-    """
-    if extracted is None or not extracted.pages:
-        return {}
-
-    from media.document.extraction import render_plain
-
-    _text, spans = render_plain(extracted.pages)
-    if not spans:
-        return {}
-
-    return {
-        "page_count": extracted.page_count,
-        "page_spans": [span.as_metadata() for span in spans],
-        "pages_with_text": [span.number for span in spans],
-    }
-
-
-def _no_text_detail(extracted: "ExtractedDocument | None") -> str:
-    """Explain *why* no text was extracted, not merely that none was (#13884).
-
-    Consumes the extraction ``_extract_file_content`` already performed
-    instead of re-parsing the file: a second ``extract_pdf`` call doubled
-    parse cost on a user-triggerable path and used a different dispatch route
-    (magic-byte sniffing) than the extension-based one above it, which could
-    disagree with it.
-
-    A paginated document that parsed cleanly but carries no text layer is a
-    scan; telling the user that is the difference between "try OCR" and "try
-    another file". A DOCX or a non-document format gets the generic message —
-    OCR is not the fix for an empty markdown file.
-    """
-    if extracted is None or extracted.format != "pdf":
-        return "No text content could be extracted from file"
-
-    if extracted.page_count:
-        return (
-            f"No text layer found in any of the {extracted.page_count} page(s). "
-            "The document appears to be scanned or image-only and needs OCR."
-        )
-    return "No text content could be extracted from file"
 
 
 def _parse_upload_tags(tags_str) -> list:
@@ -1242,7 +1202,7 @@ async def upload_file_to_knowledge(
     form = await req.form()
     file = form.get("file")
     if not file or not hasattr(file, "read"):
-        raise HTTPException(status_code=400, detail="File is required")
+        raise UploadRejection(UploadRejectionCode.FILE_REQUIRED, "File is required")
 
     # Get filename and sanitize (Issue #549 Code Review: Security)
     filename = os.path.basename(getattr(file, "filename", "unknown"))
@@ -1255,38 +1215,21 @@ async def upload_file_to_knowledge(
     category = form.get("category", "uploads")
     tags = _parse_upload_tags(form.get("tags", "[]"))
 
-    # #14754: _extract_file_content does blocking CPU work — PDF parsing plus pdfplumber layout analysis on every page
-    # — and this handler is async, so a large upload held the worker's event loop for the whole extraction and stalled
-    # every other coroutine on it, health endpoints included.
-    from media.document.ocr import extraction_timeout
-
-    _deadline = extraction_timeout()
-    try:
-        content, extracted_doc = await asyncio.wait_for(
-            asyncio.to_thread(_extract_file_content, filename, file_content),
-            timeout=_deadline,
-        )
-    except asyncio.TimeoutError:
-        # The deadline is what makes the offload safe: to_thread frees the loop but the default executor's slots are
-        # process-wide and shared with the OCR path, so an extraction that never returns holds one indefinitely.
-        # Reported as a rejected upload rather than left to hang (#14754).
-        logger.warning("Extraction of %s exceeded %ss", filename, _deadline)
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f"Could not read {filename!r} within {_deadline}s. The document may be "
-                "unusually large or complex; try splitting it."
-            ),
-        )
+    content, extracted_doc = await extract_within_deadline(_extract_file_content, filename, file_content)
     if not _has_usable_content(content, extracted_doc):
         # #13884: distinguish "we could not read it" from "it is empty". A scanned
         # PDF parses fine and yields nothing, and a generic message left the user
         # with no way to tell that OCR — not a different file — is what is needed.
-        raise HTTPException(status_code=400, detail=_no_text_detail(extracted_doc))
+        raise _no_text_rejection(extracted_doc)
 
     # Issue #5064: sanitize against prompt injection; #13708: also the redact_content chokepoint,
     # since this endpoint's own extraction path skips content_extraction.py's redacted wrappers.
-    content = redact_content(_sanitize_document(content, source="file_upload").sanitized_text)
+    # Cleaned page by page for a paginated document, so page_spans index the text that is finally stored (#18407).
+    content, page_metadata = clean_upload_text(
+        content,
+        extracted_doc,
+        lambda text: redact_content(_sanitize_document(text, source="file_upload").sanitized_text),
+    )
 
     logger.info("Uploading file: filename='%s', size=%d", filename, len(file_content))
 
@@ -1298,7 +1241,7 @@ async def upload_file_to_knowledge(
         "type": "file",
         "filename": filename,
     }
-    fact_metadata.update(_page_provenance_metadata(extracted_doc))
+    fact_metadata.update(page_metadata)
 
     fact_id = await _store_fact_in_kb(kb_to_use, content, fact_metadata)
 
@@ -2631,30 +2574,20 @@ async def get_import_statistics(
 # =============================================================================
 
 
-async def _get_indexed_docs_from_redis(kb) -> list:
-    """
-    Get all indexed documentation metadata from Redis doc_hash keys.
+async def _get_indexed_docs() -> list:
+    """One metadata dict per document in the ``autobot_docs`` collection (#18129).
 
-    Issue #165: Scans doc_hash:* keys to get document metadata for browsing.
+    Reads the collection ``DocIndexerService`` writes -- the single documentation store.
+    A collection that cannot be opened is a 503, not an empty browser.
     """
-    docs = []
-    cursor = 0
-    while True:
-        cursor, keys = await asyncio.to_thread(kb.redis_client.scan, cursor, match="doc_hash:*", count=500)
-        if keys:
-            # Batch fetch document data
-            values = await asyncio.to_thread(kb.redis_client.mget, keys)
-            for key, value in zip(keys, values):
-                if value:
-                    try:
-                        doc_data = json.loads(value)
-                        doc_data["content_hash"] = key.replace("doc_hash:", "")
-                        docs.append(doc_data)
-                    except (json.JSONDecodeError, TypeError):
-                        continue
-        if cursor == 0:
-            break
-    return docs
+    from services.knowledge.doc_indexer import get_doc_indexer_service
+    from services.knowledge.doc_listing import list_indexed_documents
+
+    try:
+        return await list_indexed_documents(get_doc_indexer_service())
+    except RuntimeError as exc:
+        logger.warning("documentation browser: %s", exc)
+        raise HTTPException(status_code=503, detail="Documentation index unavailable")
 
 
 def _filter_docs(docs: list, request: DocsBrowseRequest) -> list:
@@ -2734,17 +2667,8 @@ async def browse_documentation(
     Supports category, doc_type, file_path, and search filters.
     Issue #744: Requires admin authentication.
     """
-    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    if kb is None:
-        # Issue #5407: KB instance not initialized - emit counter before 503.
-        logger.warning("browse_documentation: KB uninitialized - raising 503")
-        from knowledge.metrics import autobot_kb_degradation_total
-
-        autobot_kb_degradation_total.labels(endpoint="docs_browse", reason="kb_uninit").inc()
-        raise HTTPException(status_code=503, detail="Knowledge base unavailable")
-
     # Get all indexed documents
-    all_docs = await _get_indexed_docs_from_redis(kb)
+    all_docs = await _get_indexed_docs()
 
     # Apply filters
     filtered_docs = _filter_docs(all_docs, request)
@@ -2790,22 +2714,13 @@ async def get_documentation_categories(
     Categories are detected from file paths using CATEGORY_TAXONOMY.
     Issue #744: Requires admin authentication.
     """
-    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    if kb is None:
-        # Issue #5407: KB instance not initialized - emit counter before 503.
-        logger.warning("get_documentation_categories: KB uninitialized - raising 503")
-        from knowledge.metrics import autobot_kb_degradation_total
-
-        autobot_kb_degradation_total.labels(endpoint="docs_categories", reason="kb_uninit").inc()
-        raise HTTPException(status_code=503, detail="Knowledge base unavailable")
-
     # Get all indexed documents
-    all_docs = await _get_indexed_docs_from_redis(kb)
+    all_docs = await _get_indexed_docs()
 
     # Count by category (detected from file path)
     from pathlib import Path
 
-    from scripts.utilities.index_documentation import CATEGORY_TAXONOMY, detect_category
+    from services.knowledge.doc_taxonomy import CATEGORY_TAXONOMY, detect_category
 
     category_counts: dict = {}
     for doc in all_docs:
@@ -2856,16 +2771,7 @@ async def get_documentation_stats(
     Issue #165: Provides overview stats for documentation health dashboard.
     Issue #744: Requires admin authentication.
     """
-    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    if kb is None:
-        # Issue #5407: KB instance not initialized - emit counter before 503.
-        logger.warning("get_documentation_stats: KB uninitialized - raising 503")
-        from knowledge.metrics import autobot_kb_degradation_total
-
-        autobot_kb_degradation_total.labels(endpoint="docs_stats", reason="kb_uninit").inc()
-        raise HTTPException(status_code=503, detail="Knowledge base unavailable")
-
-    all_docs = await _get_indexed_docs_from_redis(kb)
+    all_docs = await _get_indexed_docs()
 
     # Calculate stats
     total_chunks = sum(doc.get("chunks", 0) for doc in all_docs)

@@ -9,7 +9,8 @@ that needs registering goes in its own per-component module instead of
 raising that ceiling. ``env_registry_agent_runtime.py`` holds the sibling
 population sized in the same sweep for the agent-loop/orchestration side;
 this one holds the rest -- chat, sessions, workspaces, memory, notifications,
-auth, tooling, and knowledge indexing. #15151 later added three ``network``
+auth and tooling. Knowledge-indexing variables moved to
+``env_registry_knowledge.py`` when this file reached the 600-line ceiling. #15151 later added three ``network``
 vars found the same way, from a different reader shape (see below).
 
 Same #15710 provenance as ``env_registry_agent_runtime``, which states it:
@@ -118,53 +119,6 @@ register_env_var(
     )
 )
 
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_CODE_INDEX_GIT_TIMEOUT_SECONDS",
-        type=int,
-        default=10,
-        description=(
-            "Ceiling on each read-only git call the code indexer's "
-            "provenance lookups make. Raising it tolerates a slower git "
-            "history walk on a large repo; lowering it fails a stalled git "
-            "call faster, at the risk of a false timeout on a legitimately "
-            "slow repo (services/knowledge/code_indexer.py)."
-        ),
-        component="knowledge",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_COGNIFIER_BATCH_MAX_TOKENS_PER_CHUNK",
-        type=int,
-        default=1024,
-        description=(
-            "Per-chunk token budget used to scale max_tokens with the number "
-            "of chunks packed into one batched cognifier extraction call "
-            "(#11012). Raising it reduces truncation risk for large chunks; "
-            "lowering it caps per-chunk cost, at the risk of truncating "
-            "longer chunks (knowledge/pipeline/cognifiers/llm_utils.py)."
-        ),
-        component="knowledge",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_COGNIFIER_BATCH_MAX_TOKENS_CAP",
-        type=int,
-        default=8192,
-        description=(
-            "Absolute ceiling on the max_tokens sent for a batched cognifier "
-            "extraction call, regardless of batch size (#11012). Raising it "
-            "allows a larger batched response before truncation; lowering it "
-            "protects against an oversized request to the LLM provider "
-            "(knowledge/pipeline/cognifiers/llm_utils.py)."
-        ),
-        component="knowledge",
-    )
-)
 
 register_env_var(
     EnvVarSpec(
@@ -519,23 +473,6 @@ register_env_var(
     )
 )
 
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_KB_VECTORIZE_CHECK_INTERVAL_SECONDS",
-        type=int,
-        default=300,
-        description=(
-            "Seconds between vector-reconciler wakes (#17548). The reconciler finds knowledge "
-            "facts that were stored but never vectorised -- the declared half of the projection "
-            "contract that previously never ran. Env-backed rather than a literal because the "
-            "cadence suiting a KB with a handful of facts is not the one suiting a large one, and "
-            "floored at 30s so a misconfiguration cannot turn it into a busy loop against Redis. "
-            "Prefixed AUTOBOT_ deliberately: the registry's sweep is keyed on that prefix, so an "
-            "unprefixed name is not reported as unregistered, it is invisible (#17751)."
-        ),
-        component="knowledge",
-    )
-)
 
 register_env_var(
     EnvVarSpec(

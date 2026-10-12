@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """RAG graph-retrieval AUTOBOT_* environment variable registrations (#18141).
 
-Sibling of ``env_registry_ai.py`` (which sits at the 600-line ceiling) and imported from
-it, so the side-effect registration happens whenever ``env_registry`` loads.
+Sibling of ``env_registry_ai.py`` (which sits at the 600-line ceiling), imported by
+``env_registry`` itself like every split module, so registration happens whenever it loads.
 """
 
 from __future__ import annotations

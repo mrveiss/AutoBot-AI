@@ -30,7 +30,6 @@ Closes GH#7081.
 
 from __future__ import annotations
 
-from autobot_shared import env_registry_rag  # noqa: E402,F401
 from autobot_shared.env_registry import EnvVarSpec, register_env_var
 from autobot_shared.llm_provider_order import DEFAULT_ORDER
 

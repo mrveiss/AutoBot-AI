@@ -10,7 +10,7 @@ stats, watcher). They returned plain dicts, so their schemas weren't
 emitted in ``/openapi.json`` and the Vue views hand-wrote duplicates.
 
 ``extra="allow"`` is used throughout because the doc-index pipeline
-(``scripts/utilities/index_documentation.py``) writes freeform metadata
+(``services.knowledge.doc_indexer``) writes freeform metadata
 into each ``doc_hash:*`` entry — we don't want to strip diagnostic
 fields from API output.
 """
@@ -78,7 +78,7 @@ class DocsCategoriesResponse(BaseModel):
     """Shape of ``GET /api/knowledge_base/docs/categories``.
 
     Sorted descending by ``count``; metadata comes from
-    ``scripts.utilities.index_documentation.CATEGORY_TAXONOMY``.
+    ``services.knowledge.doc_taxonomy.CATEGORY_TAXONOMY``.
     """
 
     model_config = ConfigDict(extra="allow")

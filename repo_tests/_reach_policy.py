@@ -261,6 +261,11 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under two roots; the test-file share drifts.",
     ),
+    "one-doc-indexer": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test source is a subset of tracked .py under six roots; the test-file share drifts.",
+    ),
     "github-api-single-module": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
