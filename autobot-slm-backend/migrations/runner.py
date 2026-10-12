@@ -80,6 +80,9 @@ MIGRATIONS = [
     "widen_systemd_service_to_sequence",
     # Issue #15495: per-node LLM hardware capability profile (RAM/VRAM/GPU/NPU).
     "add_node_capability_profiles_table",
+    # Issue #17225: audit_logs is the audit trail's system of record; the shared
+    # AuditLog model gained category/actor/session_id/resource_ref.
+    "add_audit_logs_canonical_columns",
 ]
 
 

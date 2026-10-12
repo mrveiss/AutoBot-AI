@@ -62,6 +62,8 @@ _MOCK_NAMES = [
     "user_management.config",
     # audit model — we supply a hand-rolled stub below
     "autobot_shared.user_management.models.audit",
+    # #17225 D1: the one audit_logs row constructor; stubbed to build the _AuditLog below.
+    "autobot_shared.user_management.audit_rows",
     "user_management.models",
     "user_management.models.base",
     # The shared audit counter rbac_middleware imports at module level (#14750).
@@ -105,6 +107,7 @@ class _AuditResourceType:
 _audit_mod.AuditLog = _AuditLog
 _audit_mod.AuditAction = _AuditAction
 _audit_mod.AuditResourceType = _AuditResourceType
+sys.modules["autobot_shared.user_management.audit_rows"].audit_row = lambda **kwargs: _AuditLog(**kwargs)
 
 # autobot_shared.logging_manager / .ssot_constants are imported by rbac_middleware
 # but were missing from _MOCK_NAMES (#13312): a bare MagicMock has no submodule

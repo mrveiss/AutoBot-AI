@@ -23251,17 +23251,14 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         source = inspect.getsource(security.get_command_history)
         self.assertIn("user: str = None", source)
         self.assertIn("limit: int = 50", source)
-        self.assertIn("get_command_history(user=user, limit=limit)", source)
+        self.assertIn("await security_layer.get_command_history(user=user, limit=limit)", source)
 
     def test_batch_137_migration_preserves_audit_log_reading(self):
-        """Verify migration preserves audit log file reading"""
+        """Verify the audit log is read from the canonical audit trail (#17225 D6)"""
         from api import security
 
         source = inspect.getsource(security.get_audit_log)
-        self.assertIn("audit_log_file", source)
-        self.assertIn("json.loads", source)
-        self.assertIn("FileNotFoundError", source)
-        self.assertIn("JSONDecodeError", source)
+        self.assertIn("get_audit_entries(limit=limit)", source)
 
     # ==============================================
     # BATCH 138: voice.py - COMPLETE (100%)

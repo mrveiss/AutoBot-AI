@@ -74,6 +74,8 @@ _MOCK_NAMES = [
     # audit model imported at module level by rbac_middleware (#11794)
     "user_management.models",
     "autobot_shared.user_management.models.audit",
+    # #17225 D1: the one audit_logs row constructor, imported at module level.
+    "autobot_shared.user_management.audit_rows",
     # The shared audit counter rbac_middleware imports at module level (#14750).
     # Same reason as autobot_shared.logging_manager above (#13312): the parent
     # `autobot_shared` here is a path-less MagicMock, so the import machinery

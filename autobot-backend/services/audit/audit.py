@@ -2,82 +2,50 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Canonical audit service — single taxonomy for all audit categories (#6475).
+"""Canonical audit service -- the one write and read path for every audit record.
 
-Three prior log modules (services/event_log.py, services/audit/audit_log.py,
-knowledge/audit_log.py) each stored overlapping data in separate Redis keys.
-This module provides one canonical surface; the three originals forward to it
-via shim helpers defined at the bottom of each legacy file.
+#6475 opened with three audit stores and closed with them still live; by #17225
+there were eight. Every one now funnels here (docs/developer/AUDIT_SYSTEMS.md):
 
-Migration plan:
-  Phase 1 (done):   audit.py landed; legacy files have shim wrappers.
-  Phase 2 (GH#8290): Callers migrated area-by-area to import from here.
-                     Backwards-compatible bridge symbols are exported so callers
-                     only need to update their import line, not their call sites.
-  Phase 3 (follow-up): Remove the three legacy files once all callers migrated.
+* ``services/audit/audit_log.py``, ``services/event_log.py`` and
+  ``knowledge/audit_log.py`` are retired (D2); their vocabularies live in
+  ``taxonomy.py`` and their callers use the helpers below.
+* ``services/audit_logger.audit_log()`` is an adapter onto :func:`record` (D3).
+* ``SecurityLayer.audit_log`` routes through :func:`emit_security` (D6).
+* Retention comes from one table, ``retention.py`` (D5).
+
+Every producer -- ``emit``, ``emit_security``, ``emit_compliance``,
+``emit_knowledge``, ``audit_record`` -- reaches :func:`record`.
 """
 
-import json
+import asyncio
 import time
-import uuid
-from dataclasses import asdict, dataclass, field
-from enum import Enum
 from typing import Any, Dict, List
 
+from autobot_shared.async_compat import fire_and_forget_threadsafe
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_write import run_redis_write
+from services.audit import store
+from services.audit.projection import write_event
+from services.audit.purge import PurgeResult, purge_expired
+from services.audit.taxonomy import (  # noqa: F401 -- re-exported vocabulary
+    AuditAction,
+    AuditCategory,
+    AuditEvent,
+    AuditEventType,
+    AuditFilter,
+    EventType,
+    action_name,
+    event_from_dict,
+)
 
 logger = get_logger(__name__)
 
-# ---------------------------------------------------------------------------
-# Retention constants (per category)
-# ---------------------------------------------------------------------------
-
-_SECURITY_TTL = 90 * 24 * 3600
-_COMPLIANCE_TTL = 90 * 24 * 3600
-_KNOWLEDGE_TTL = 365 * 24 * 3600
-_GOVERNANCE_TTL = 365 * 24 * 3600
-
-_CATEGORY_TTL: Dict[str, int] = {
-    "security": _SECURITY_TTL,
-    "compliance": _COMPLIANCE_TTL,
-    "knowledge": _KNOWLEDGE_TTL,
-    "governance": _GOVERNANCE_TTL,
-}
-
-# ---------------------------------------------------------------------------
-# Public taxonomy
-# ---------------------------------------------------------------------------
-
-UNIFIED_KEY = "audit:unified"
-
-
-class AuditCategory(str, Enum):
-    SECURITY = "security"  # session, api_key, user, config (was audit_log)
-    COMPLIANCE = "compliance"  # login/logout, agent invoke (was event_log)
-    KNOWLEDGE = "knowledge"  # view, search, share (was knowledge/audit_log)
-    GOVERNANCE = "governance"  # skill approval, budget breach, agent pause
-
-
-@dataclass
-class AuditEvent:
-    category: AuditCategory
-    action: str
-    actor_id: str
-    id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    resource_type: str | None = None
-    resource_id: str | None = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    occurred_at: float = field(default_factory=time.time)
-    ip_address: str | None = None
-    session_id: str | None = None
-    outcome: str = "success"
-
-    def to_dict(self) -> Dict[str, Any]:
-        d = asdict(self)
-        d["category"] = self.category.value
-        return d
+#: The serving loop, captured the first time a record is made on it, so a
+#: producer on a thread with no loop of its own can hand its write over.
+_LOOP: asyncio.AbstractEventLoop | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -102,53 +70,82 @@ async def _analyse_for_threats(event: AuditEvent) -> None:
 
 
 async def record(event: AuditEvent) -> None:
-    """Persist a single audit event to the unified Redis sorted set.
+    """Persist one audit event: the ``audit_logs`` row first, then the Redis projection.
 
-    #13562: this is also where the bus feeds ``ThreatDetectionEngine``. Every
-    producer — ``emit``, ``emit_security``, ``emit_compliance``,
-    ``emit_knowledge``, ``audit_record`` — funnels here, so one call site covers
-    the bus rather than N. Analysis runs BEFORE the Redis write and never
-    depends on it: a detector that only sees the events Redis accepted is
-    blindest exactly when the platform is degraded.
+    #13562: this is also where the bus feeds ``ThreatDetectionEngine``. Analysis
+    runs BEFORE the write and never depends on it: a detector that only sees the
+    events storage accepted is blindest exactly when the platform is degraded.
+    The projection is written even when the row is refused, so the event is not
+    lost outright -- the loss of the durable copy is logged and counted.
     """
+    _remember_loop()
     await _analyse_for_threats(event)
+    await _persist(event)
+    await _project(event)
+
+
+async def _persist(event: AuditEvent) -> None:
+    try:
+        await store.insert_event(event)
+    except Exception as exc:  # noqa: BLE001 -- counted below; an audit write must not raise
+        logger.error("audit: system-of-record write failed for %s: %s", event.action, type(exc).__name__)
+        record_audit_write_failure_safely(event.action, type(exc).__name__)
+
+
+async def _project(event: AuditEvent) -> None:
     redis = await get_async_redis_client(database="main")
     if redis is None:
-        logger.debug(
-            "audit: Redis unavailable, event dropped: %s/%s",
-            event.category,
-            event.action,
-        )
+        logger.warning("audit: Redis unavailable, projection skipped: %s/%s", event.category.value, event.action)
         return
-    raw = json.dumps(event.to_dict(), ensure_ascii=False)
-    ttl = _CATEGORY_TTL.get(event.category.value, _COMPLIANCE_TTL)
-    async with redis.pipeline() as pipe:
-        await pipe.zadd(UNIFIED_KEY, {raw: event.occurred_at})
-        # UNIFIED_KEY spans all categories with different TTLs — never set expire
-        # on it (#8303). Per-category keys each carry their own TTL.
-        cat_key = f"audit:category:{event.category.value}"
-        await pipe.zadd(cat_key, {raw: event.occurred_at})
-        await pipe.expire(cat_key, ttl)
-        await pipe.execute()
+    await write_event(redis, event)
 
 
-def emit(event: AuditEvent) -> None:
-    """Fire-and-forget wrapper around :func:`record`.
+def _remember_loop() -> asyncio.AbstractEventLoop | None:
+    """The loop running in this thread, remembered for producers on other threads."""
+    global _LOOP
+    try:
+        _LOOP = asyncio.get_running_loop()
+    except RuntimeError:
+        return None
+    return _LOOP
 
-    Safe to call from any sync or async context.
+
+def emit(event: AuditEvent) -> bool:
+    """Schedule :func:`record` without waiting; safe from any thread.
+
+    Returns ``False`` only when nothing could be scheduled -- a thread with no
+    running loop before any loop was seen -- which is logged at ERROR. A sync
+    FastAPI handler or a worker thread hands the write to the serving loop.
+
+    #17225: this name used to be redefined further down as an ``EventType``
+    bridge, so ``emit(AuditEvent(...))`` -- the call every direct producer made
+    -- was recorded as a COMPLIANCE event whose action was the event's repr.
     """
+    if _remember_loop() is None:
+        return fire_and_forget_threadsafe(record(event), name="audit", loop=_LOOP) is not None
     run_redis_write(record(event), label="audit")
-
-
-# Capture the real emit before the Phase-2 bridge shadows the name below.
-# emit_compliance / emit_security must call _emit_real to avoid a recursion
-# cycle: bridge-emit → emit_compliance → emit → bridge-emit → ...
-_emit_real = emit
+    return True
 
 
 # ---------------------------------------------------------------------------
 # Read path
 # ---------------------------------------------------------------------------
+
+
+class AuditStoreUnavailable(RuntimeError):
+    """The audit trail could not be read -- distinct from "nothing was recorded"."""
+
+
+async def query_filtered(flt: AuditFilter, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+    """Every event matching *flt*, newest first, paginated, from the system of record.
+
+    Raises :class:`AuditStoreUnavailable` when the store cannot be reached: an
+    unreadable audit trail must never read as an empty one (#13258).
+    """
+    try:
+        return await store.select_events(flt, limit, offset)
+    except Exception as exc:  # noqa: BLE001 -- re-raised as the one "cannot read" signal
+        raise AuditStoreUnavailable(f"the audit trail cannot be read: {type(exc).__name__}") from exc
 
 
 async def query(
@@ -159,51 +156,82 @@ async def query(
     to_ts: float | None = None,
     limit: int = 100,
     offset: int = 0,
-    max_scan: int = 10_000,
 ) -> List[Dict[str, Any]]:
-    """Query audit events.  Filters are applied in-memory after a Redis scan."""
+    """Query audit events; "everything for user U in window W" is ``query(actor_id=U, ...)``."""
+    flt = AuditFilter(category=category, actor_id=actor_id, action=action, from_ts=from_ts, to_ts=to_ts)
+    return await query_filtered(flt, limit=limit, offset=offset)
+
+
+async def query_events(
+    user_id: str | None = None,
+    event_type: str | None = None,
+    from_ts: float | None = None,
+    to_ts: float | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> List[Dict[str, Any]]:
+    """Compliance events (the admin event-log view; was ``services.event_log.query_events``)."""
+    return await query(
+        category=AuditCategory.COMPLIANCE,
+        actor_id=user_id,
+        action=event_type,
+        from_ts=from_ts,
+        to_ts=to_ts,
+        limit=limit,
+        offset=offset,
+    )
+
+
+async def count_since(from_ts: float) -> int | None:
+    """Events recorded since *from_ts*; ``None`` when the store cannot be reached."""
+    try:
+        return await store.count_events(from_ts)
+    except Exception as exc:  # noqa: BLE001 -- None is the "unreachable" answer
+        logger.warning("audit: cannot count records: %s", type(exc).__name__)
+        return None
+
+
+async def rebuild_projection(from_ts: float, limit: int = 10_000) -> int:
+    """Re-project up to *limit* rows recorded since *from_ts* from ``audit_logs`` into Redis."""
     redis = await get_async_redis_client(database="main")
     if redis is None:
-        return []
-    key = f"audit:category:{category.value}" if category else UNIFIED_KEY
-    min_score: Any = from_ts if from_ts is not None else 0
-    max_score: Any = to_ts if to_ts is not None else "+inf"
-    # #8302: cap Redis scan before Python-side filtering to prevent OOM
-    raws = await redis.zrangebyscore(key, min_score, max_score, start=0, num=max_scan)
-    results: List[Dict[str, Any]] = []
-    for raw in raws:
-        try:
-            ev = json.loads(raw)
-        except Exception:
-            continue
-        if actor_id and ev.get("actor_id") != actor_id:
-            continue
-        if action and ev.get("action") != action:
-            continue
-        results.append(ev)
-    results.sort(key=lambda e: e.get("occurred_at", 0), reverse=True)
-    return results[offset : offset + limit]
+        raise AuditStoreUnavailable("the projection cannot be rebuilt: Redis is unavailable")
+    events = await store.select_events(AuditFilter(from_ts=from_ts), limit, 0)
+    for event in events:
+        await write_event(redis, event_from_dict(event))
+    return len(events)
+
+
+async def apply_retention(cap_days: int | None = None, dry_run: bool = False) -> PurgeResult:
+    """Apply the retention table to the Redis projection -- the one purge path (D5).
+
+    The ``audit_logs`` rows are not purged here (see ``store.py``)."""
+    redis = await get_async_redis_client(database="main")
+    if redis is None:
+        logger.warning("audit: Redis unavailable, retention not applied")
+        return PurgeResult(errors=1)
+    return await purge_expired(redis, time.time(), cap_days=cap_days, dry_run=dry_run)
 
 
 # ---------------------------------------------------------------------------
-# Convenience helpers (match legacy call-sites during migration)
+# Category helpers -- the producers' entry points
 # ---------------------------------------------------------------------------
 
 
 def emit_compliance(
-    action: str,
+    action: Any,
     actor_id: str | None,
     *,
     resource_type: str | None = None,
     resource_id: str | None = None,
     metadata: Dict[str, Any] | None = None,
     ip_address: str | None = None,
-) -> None:
-    """Drop-in shim for services/event_log.emit()."""
-    _emit_real(
+) -> bool:
+    """Record a COMPLIANCE event; *action* may be an ``EventType`` or a string."""
+    return emit(
         AuditEvent(
             category=AuditCategory.COMPLIANCE,
-            action=action,
+            action=action_name(action),
             actor_id=actor_id or "system",
             resource_type=resource_type,
             resource_id=resource_id,
@@ -214,7 +242,7 @@ def emit_compliance(
 
 
 def emit_security(
-    action: str,
+    action: Any,
     actor_id: str,
     *,
     resource_type: str | None = None,
@@ -223,12 +251,12 @@ def emit_security(
     ip_address: str | None = None,
     session_id: str | None = None,
     outcome: str = "success",
-) -> None:
-    """Drop-in shim for services/audit/audit_log.audit_record()."""
-    _emit_real(
+) -> bool:
+    """Record a SECURITY event; *action* may be an ``AuditAction`` or a string."""
+    return emit(
         AuditEvent(
             category=AuditCategory.SECURITY,
-            action=action,
+            action=action_name(action),
             actor_id=actor_id,
             resource_type=resource_type,
             resource_id=resource_id,
@@ -241,7 +269,7 @@ def emit_security(
 
 
 async def emit_knowledge(
-    action: str,
+    action: Any,
     actor_id: str,
     *,
     resource_type: str | None = None,
@@ -249,11 +277,11 @@ async def emit_knowledge(
     metadata: Dict[str, Any] | None = None,
     ip_address: str | None = None,
 ) -> None:
-    """Async shim for knowledge/audit_log.KnowledgeAuditLog.log_event()."""
+    """Record a KNOWLEDGE event and wait for it; *action* may be an ``AuditEventType``."""
     await record(
         AuditEvent(
             category=AuditCategory.KNOWLEDGE,
-            action=action,
+            action=action_name(action),
             actor_id=actor_id,
             resource_type=resource_type,
             resource_id=resource_id,
@@ -263,78 +291,9 @@ async def emit_knowledge(
     )
 
 
-# ---------------------------------------------------------------------------
-# Phase 2 (GH#8290): Backwards-compatible bridge symbols for migrated callers
-#
-# Callers of the three legacy modules update only their import line.
-# These bridges accept the EXACT same signatures as the legacy functions so no
-# call-site edits are needed.
-# ---------------------------------------------------------------------------
-
-# --- Re-export legacy enum types so import-only callers need no changes ----
-
-import warnings as _warnings  # noqa: E402
-
-with _warnings.catch_warnings():
-    # Suppress the DeprecationWarnings these modules emit at import time — they
-    # are designed to warn external callers, not the canonical migration target.
-    _warnings.simplefilter("ignore", DeprecationWarning)
-    from knowledge.audit_log import (
-        AuditEventType,
-    )
-    from knowledge.audit_log import KnowledgeAuditLog as _KnowledgeAuditLog  # noqa: E402
-    from services.audit.audit_log import AuditAction  # noqa: E402
-    from services.event_log import EventType  # noqa: E402
-
-
-# --- Drop-in replacements for services/event_log.emit() and query_events() -
-
-
-def emit(  # type: ignore[misc]  — intentional override of local name  # noqa: F811
-    event_type: "EventType",
-    user_id: str | None = None,
-    resource_type: str | None = None,
-    resource_id: str | None = None,
-    metadata: Dict[str, Any] | None = None,
-    ip_address: str | None = None,
-) -> None:
-    """Bridge: drop-in for ``services.event_log.emit()`` (GH#8290 Phase 2)."""
-    emit_compliance(
-        action=event_type.value if hasattr(event_type, "value") else str(event_type),
-        actor_id=user_id,
-        resource_type=resource_type,
-        resource_id=resource_id,
-        metadata=metadata,
-        ip_address=ip_address,
-    )
-
-
-async def query_events(
-    user_id: str | None = None,
-    event_type: str | None = None,
-    from_ts: float | None = None,
-    to_ts: float | None = None,
-    limit: int = 100,
-    offset: int = 0,
-) -> List[Dict[str, Any]]:
-    """Bridge: drop-in for ``services.event_log.query_events()`` (GH#8290 Phase 2)."""
-    return await query(
-        category=AuditCategory.COMPLIANCE,
-        actor_id=user_id,
-        action=event_type,
-        from_ts=from_ts,
-        to_ts=to_ts,
-        limit=limit,
-        offset=offset,
-    )
-
-
-# --- Drop-in replacement for services/audit/audit_log.audit_record() -------
-
-
 def audit_record(
     user_id: str,
-    action: "AuditAction",
+    action: Any,
     resource_type: str | None = None,
     resource_id: str | None = None,
     metadata: Dict[str, Any] | None = None,
@@ -342,10 +301,10 @@ def audit_record(
     session_id: str | None = None,
     outcome: str = "success",
 ) -> None:
-    """Bridge: drop-in for ``services.audit.audit_log.audit_record()`` (GH#8290 Phase 2)."""
+    """Positional-signature form of :func:`emit_security` (was ``audit_log.audit_record``)."""
     emit_security(
-        action=action.value if hasattr(action, "value") else str(action),
-        actor_id=user_id,
+        action,
+        user_id,
         resource_type=resource_type,
         resource_id=resource_id,
         metadata=metadata,
@@ -353,44 +312,3 @@ def audit_record(
         session_id=session_id,
         outcome=outcome,
     )
-
-
-# --- Drop-in compatibility class for knowledge/audit_log.KnowledgeAuditLog --
-
-
-class KnowledgeAuditLog(_KnowledgeAuditLog):
-    """Bridge: subclass of ``KnowledgeAuditLog`` that delegates to audit.
-
-    Callers that instantiate ``KnowledgeAuditLog(redis_client)`` and call
-    ``.log_event()`` continue to work unchanged (GH#8290 Phase 2).
-    The ``log_event`` override also writes to the unified Redis key so all
-    knowledge events appear in the unified audit stream.
-    """
-
-    async def log_event(
-        self,
-        event_type: "AuditEventType",
-        user_id: str,
-        fact_id: str | None = None,
-        organization_id: str | None = None,
-        details: Dict | None = None,
-        ip_address: str | None = None,
-    ) -> str:
-        event_id = await super().log_event(
-            event_type=event_type,
-            user_id=user_id,
-            fact_id=fact_id,
-            organization_id=organization_id,
-            details=details,
-            ip_address=ip_address,
-        )
-        # Also write to unified stream
-        await emit_knowledge(
-            action=(event_type.value if hasattr(event_type, "value") else str(event_type)),
-            actor_id=user_id,
-            resource_type="fact" if fact_id else "knowledge",
-            resource_id=fact_id or organization_id,
-            metadata=details or {},
-            ip_address=ip_address,
-        )
-        return event_id

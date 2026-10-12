@@ -20,7 +20,7 @@ from auth_middleware import get_current_user
 from auth_rbac import require_role
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
-from services.event_log import EventType, emit
+from services.audit.audit import EventType, emit_compliance
 
 logger = get_logger(__name__)
 
@@ -164,9 +164,9 @@ async def set_user_bundle(
         raise HTTPException(status_code=500, detail="Database error") from exc
 
     # Audit log
-    emit(
+    emit_compliance(
         EventType.CONFIG_CHANGED,
-        user_id=str(admin_id),
+        str(admin_id),
         resource_type="user_voice_bundle",
         resource_id=user_id,
         metadata={

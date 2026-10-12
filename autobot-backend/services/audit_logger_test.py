@@ -3,97 +3,32 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Unit tests for AuditLogger service.
+Unit tests for the operation audit logger -- an adapter onto the canonical audit service.
 
-Issue #3277: audit logging system — verify core behaviour without a live Redis
-instance by mocking get_async_redis_client and aiofiles.
+Issue #3277 (the logger), #17225 D3 (it stores nothing of its own): every entry is
+recorded through ``services.audit.audit`` and read back from it.
 """
 
-import json
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tests.fixtures import make_async_redis, make_redis_pipeline
-
-# Stub heavy/optional imports that are pulled in by the models package on collection.
-# These are unavailable in the dev venv; the tests do not exercise SQLAlchemy code.
-for _stub in (
-    "sqlalchemy",
-    "sqlalchemy.orm",
-    "sqlalchemy.dialects",
-    "sqlalchemy.dialects.postgresql",
-    "sqlalchemy.ext",
-    "sqlalchemy.ext.declarative",
-    "aiofiles",
-):
-    if _stub not in sys.modules:
-        sys.modules[_stub] = MagicMock()
-
-# Stub models package so services.audit_logger can import AuditQueryContext without
-# triggering the heavy SQLAlchemy __init__.py chain.
-if "models" not in sys.modules:
-    _models_stub = MagicMock()
-
-    from dataclasses import dataclass
-    from datetime import datetime as _dt
-
-    @dataclass
-    class _AuditQueryContext:
-        start_time: _dt
-        end_time: _dt
-        limit: int = 100
-        offset: int = 0
-
-    _models_stub.task_context = MagicMock()
-    _models_stub.task_context.AuditQueryContext = _AuditQueryContext
-    sys.modules["models"] = _models_stub
-    sys.modules["models.task_context"] = _models_stub.task_context
-elif "models.task_context" not in sys.modules:
-    from dataclasses import dataclass as _dc
-    from datetime import datetime as _dt2
-    from unittest.mock import MagicMock as _MM
-
-    @_dc
-    class _AuditQueryContext2:
-        start_time: _dt2
-        end_time: _dt2
-        limit: int = 100
-        offset: int = 0
-
-    _tc_stub = _MM()
-    _tc_stub.AuditQueryContext = _AuditQueryContext2
-    sys.modules["models.task_context"] = _tc_stub
-
-from services.audit_logger import (  # noqa: E402
+import services.audit_logger as audit_logger_module
+from services.audit.purge import PurgeResult
+from services.audit.taxonomy import AuditCategory
+from services.audit_logger import (
+    SYSTEM_ACTOR,
     AuditEntry,
     AuditLogger,
+    audit_log,
     close_audit_logger,
     get_audit_logger,
 )
 
 # ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _make_pipeline_mock():
-    # Migrated to canonical ``make_redis_pipeline()`` (#7280 round 7, post-#7339).
-    return make_redis_pipeline()
-
-
-def _make_redis_mock(pipeline=None):
-    # Migrated to canonical ``make_async_redis(pipeline=...)`` (#7280 round 7).
-    return make_async_redis(
-        pipeline=pipeline or _make_pipeline_mock(),
-        zrange_returns=[],
-    )
-
-
-# ---------------------------------------------------------------------------
-# AuditEntry tests
+# AuditEntry
 # ---------------------------------------------------------------------------
 
 
@@ -130,19 +65,45 @@ class TestAuditEntry:
         assert "PASSWORD" not in entry.details
         assert "Authorization" not in entry.details
 
-    def test_json_roundtrip(self) -> None:
+    def test_event_roundtrip(self) -> None:
+        """An entry recorded as a canonical event reads back as the same entry (D3 field mapping)."""
         entry = AuditEntry(
             operation="file.upload",
-            result="success",
+            result="denied",
             user_id="bob",
+            session_id="s1",
+            resource="/api/files",
+            user_role="user",
+            vm_name="backend",
             details={"size": 1024},
+            performance_ms=3.5,
         )
-        json_str = entry.to_json()
-        restored = AuditEntry.from_json(json_str)
-        assert restored.id == entry.id
-        assert restored.operation == entry.operation
-        assert restored.user_id == entry.user_id
-        assert restored.details == entry.details
+        event = entry.to_event()
+        assert event.category is AuditCategory.SECURITY
+        assert (event.action, event.actor_id, event.outcome, event.resource_id) == (
+            "file.upload",
+            "bob",
+            "denied",
+            "/api/files",
+        )
+        restored = AuditEntry.from_event(event.to_dict())
+        assert restored == entry
+
+    def test_a_system_operation_is_recorded_as_the_system_actor(self) -> None:
+        assert AuditEntry(operation="egress.check").to_event().actor_id == SYSTEM_ACTOR
+
+    def test_another_producers_event_reads_as_an_entry(self) -> None:
+        """One trail: an emit_security record shows up in the operation view with its metadata as details."""
+        restored = AuditEntry.from_event(
+            {
+                "action": "api_key.create",
+                "actor_id": "carol",
+                "outcome": "success",
+                "metadata": {"k": 1},
+                "occurred_at": 5.0,
+            }
+        )
+        assert (restored.operation, restored.user_id, restored.details) == ("api_key.create", "carol", {"k": 1})
 
     def test_to_response_dict_keys(self) -> None:
         entry = AuditEntry(operation="session.create", user_id="carol")
@@ -167,212 +128,105 @@ class TestAuditEntry:
 
 
 # ---------------------------------------------------------------------------
-# AuditLogger — log and batch flush
+# AuditLogger -- records and reads through the canonical service
 # ---------------------------------------------------------------------------
 
 
 class TestAuditLoggerLog:
-    @pytest.fixture
-    def logger(self, tmp_path):
-        al = AuditLogger(
-            retention_days=7,
-            batch_size=5,
-            batch_timeout_seconds=0.05,
-            fallback_log_dir=str(tmp_path / "audit"),
-        )
-        return al
-
     @pytest.mark.asyncio
-    async def test_log_returns_true_on_success(self, logger, tmp_path) -> None:
-        pipe = _make_pipeline_mock()
-        redis = _make_redis_mock(pipe)
-        with patch(
-            "services.audit_logger.get_async_redis_client",
-            new=AsyncMock(return_value=redis),
-        ):
-            await logger.initialize()
-            ok = await logger.log(
-                operation="auth.login",
-                result="success",
-                user_id="alice",
-                ip_address="127.0.0.1",
-            )
+    async def test_log_records_one_sanitised_security_event(self) -> None:
+        emit = MagicMock(return_value=True)
+        with patch.object(audit_logger_module.canonical, "emit", new=emit):
+            ok = await AuditLogger().log("auth.login", "success", user_id="alice", details={"password": "x", "n": 1})
         assert ok is True
-        assert logger._total_logged == 1
+        event = emit.call_args.args[0]
+        assert (event.category, event.action, event.actor_id) == (AuditCategory.SECURITY, "auth.login", "alice")
+        assert event.metadata["details"] == {"n": 1}, "OWASP: the secret never reaches the record"
 
     @pytest.mark.asyncio
-    async def test_batch_flushed_when_full(self, tmp_path) -> None:
-        al = AuditLogger(
-            retention_days=7,
-            batch_size=3,
-            batch_timeout_seconds=60,
-            fallback_log_dir=str(tmp_path / "audit"),
-        )
-        pipe = _make_pipeline_mock()
-        redis = _make_redis_mock(pipe)
-
-        with patch(
-            "services.audit_logger.get_async_redis_client",
-            new=AsyncMock(return_value=redis),
-        ):
-            await al.initialize()
-            for i in range(3):
-                await al.log(operation="auth.login", user_id=f"u{i}")
-
-        # Pipeline execute should have been called when batch hit size=3
-        assert pipe.execute.called
+    async def test_audit_log_helper_uses_the_same_path(self) -> None:
+        emit = MagicMock(return_value=True)
+        audit_logger_module._audit_logger = None
+        try:
+            with patch.object(audit_logger_module.canonical, "emit", new=emit):
+                assert await audit_log("config.update", user_id="admin") is True
+        finally:
+            audit_logger_module._audit_logger = None
+        assert emit.call_args.args[0].action == "config.update"
 
     @pytest.mark.asyncio
-    async def test_fallback_log_written_when_redis_unavailable(self, tmp_path) -> None:
-        al = AuditLogger(
-            retention_days=7,
-            batch_size=1,
-            batch_timeout_seconds=60,
-            fallback_log_dir=str(tmp_path / "audit"),
-        )
-        with patch(
-            "services.audit_logger.get_async_redis_client",
-            new=AsyncMock(return_value=None),
+    async def test_a_failing_record_returns_false_and_never_raises(self) -> None:
+        al = AuditLogger()
+        with (
+            patch.object(audit_logger_module.canonical, "emit", side_effect=RuntimeError("boom")),
+            patch.object(audit_logger_module.canonical, "count_since", new=AsyncMock(return_value=0)),
         ):
-            await al.initialize()
-            ok = await al.log(operation="auth.login", user_id="alice")
-
-        assert ok is True
-        fallback_files = list((tmp_path / "audit").glob("audit_*.jsonl"))
-        assert fallback_files, "Expected fallback JSONL file"
-        first_line = fallback_files[0].read_text(encoding="utf-8").splitlines()[0]
-        data = json.loads(first_line)
-        assert "entry" in data
-
-    @pytest.mark.asyncio
-    async def test_flush_drains_queue(self, tmp_path) -> None:
-        al = AuditLogger(
-            retention_days=7,
-            batch_size=100,
-            batch_timeout_seconds=60,
-            fallback_log_dir=str(tmp_path / "audit"),
-        )
-        pipe = _make_pipeline_mock()
-        redis = _make_redis_mock(pipe)
-
-        with patch(
-            "services.audit_logger.get_async_redis_client",
-            new=AsyncMock(return_value=redis),
-        ):
-            await al.initialize()
-            await al.log(operation="config.update")
-            assert len(al._batch_queue) == 1
-            await al.flush()
-            assert len(al._batch_queue) == 0
-
-
-# ---------------------------------------------------------------------------
-# AuditLogger — query helpers
-# ---------------------------------------------------------------------------
+            assert await al.log("auth.login") is False
+            assert (await al.get_statistics())["total_failed"] == 1
 
 
 class TestAuditLoggerQuery:
     @pytest.mark.asyncio
-    async def test_query_returns_empty_when_redis_unavailable(self, tmp_path) -> None:
-        al = AuditLogger(fallback_log_dir=str(tmp_path / "audit"))
-        with patch(
-            "services.audit_logger.get_async_redis_client",
-            new=AsyncMock(return_value=None),
-        ):
-            await al.initialize()
-            results = await al.query(user_id="alice")
-        assert results == []
+    async def test_filters_map_onto_one_canonical_query(self) -> None:
+        query = AsyncMock(return_value=[])
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        end = datetime(2026, 1, 2, tzinfo=timezone.utc)
+        with patch.object(audit_logger_module.canonical, "query_filtered", new=query):
+            await AuditLogger().query(
+                start_time=start, end_time=end, user_id="u", vm_name="backend", result="denied", operation=None, limit=5
+            )
+        flt = query.call_args.args[0]
+        assert (flt.actor_id, flt.outcome, flt.action) == ("u", "denied", None)
+        assert flt.metadata == (("vm_name", "backend"),)
+        assert (flt.from_ts, flt.to_ts) == (start.timestamp(), end.timestamp())
+        assert flt.category is None, "the operation view spans every category -- one trail"
+        assert query.call_args.kwargs == {"limit": 5, "offset": 0}
 
     @pytest.mark.asyncio
-    async def test_query_time_range_parses_json_entries(self, tmp_path) -> None:
-        al = AuditLogger(fallback_log_dir=str(tmp_path / "audit"))
-
-        now = datetime.now(tz=timezone.utc)
-        entry = AuditEntry(
-            operation="session.create",
-            user_id="bob",
-            timestamp=now.timestamp(),
-            date=now.strftime("%Y-%m-%d"),
-        )
-        pipe = _make_pipeline_mock()
-        redis = _make_redis_mock(pipe)
-
-        # #13680: answer only for the key matching this entry's own date.
-        # ``query`` walks one ``audit:log:<date>`` key per UTC day in the window,
-        # so a date-agnostic mock returned the entry twice whenever ``now +- 1h``
-        # straddled UTC midnight — reddening this test for an hour every day.
-        # Keying the mock also makes the per-date lookup an actual assertion
-        # rather than something the test silently ignores.
-        async def _zrange_by_date(key, *_args, **_kwargs):
-            return [entry.to_json().encode()] if key == f"audit:log:{entry.date}" else []
-
-        redis.zrange = AsyncMock(side_effect=_zrange_by_date)
-
-        with patch(
-            "services.audit_logger.get_async_redis_client",
-            new=AsyncMock(return_value=redis),
-        ):
-            await al.initialize()
-            results = await al.query(
-                start_time=now - timedelta(hours=1),
-                end_time=now + timedelta(hours=1),
-            )
-
-        assert len(results) == 1
-        assert results[0].operation == "session.create"
-        assert results[0].user_id == "bob"
+    async def test_results_come_back_as_entries(self) -> None:
+        stored = {"action": "auth.login", "actor_id": "alice", "outcome": "success", "metadata": {}, "occurred_at": 9.0}
+        with patch.object(audit_logger_module.canonical, "query_filtered", new=AsyncMock(return_value=[stored])):
+            entries = await AuditLogger().query()
+        assert [(e.operation, e.user_id) for e in entries] == [("auth.login", "alice")]
 
 
-# ---------------------------------------------------------------------------
-# Singleton helpers
-# ---------------------------------------------------------------------------
+class TestStatisticsAndRetention:
+    @pytest.mark.asyncio
+    async def test_statistics_report_an_unreachable_store(self) -> None:
+        with patch.object(audit_logger_module.canonical, "count_since", new=AsyncMock(return_value=None)):
+            stats = await AuditLogger().get_statistics()
+        assert stats["redis_available"] is False and "entries_last_24h" not in stats
+
+    @pytest.mark.asyncio
+    async def test_statistics_count_the_last_day(self) -> None:
+        with patch.object(audit_logger_module.canonical, "count_since", new=AsyncMock(return_value=4)):
+            stats = await AuditLogger().get_statistics()
+        assert stats["entries_last_24h"] == 4
+
+    @pytest.mark.asyncio
+    async def test_cleanup_goes_through_the_one_purge_path(self) -> None:
+        apply = AsyncMock(return_value=PurgeResult(deleted=2))
+        with patch.object(audit_logger_module.canonical, "apply_retention", new=apply):
+            await AuditLogger().cleanup_old_logs(days_to_keep=30)
+        apply.assert_awaited_once_with(cap_days=30)
 
 
 class TestSingletonHelpers:
     @pytest.mark.asyncio
-    async def test_get_audit_logger_returns_same_instance(self, tmp_path) -> None:
-        with (
-            patch(
-                "services.audit_logger.get_async_redis_client",
-                new=AsyncMock(return_value=None),
-            ),
-            patch(
-                "services.audit_logger.AuditLogger._initialize_impl",
-                new=AsyncMock(return_value=True),
-            ),
-        ):
-            import services.audit_logger as _mod
-
-            # Reset singleton
-            _mod._audit_logger = None
-            a = await get_audit_logger()
-            b = await get_audit_logger()
-            assert a is b
-            _mod._audit_logger = None  # clean up
+    async def test_get_audit_logger_returns_same_instance(self) -> None:
+        audit_logger_module._audit_logger = None
+        try:
+            assert await get_audit_logger() is await get_audit_logger()
+        finally:
+            audit_logger_module._audit_logger = None
 
     @pytest.mark.asyncio
-    async def test_close_audit_logger_resets_singleton(self, tmp_path) -> None:
-        import services.audit_logger as _mod
-
-        _mod._audit_logger = None
-        with (
-            patch(
-                "services.audit_logger.get_async_redis_client",
-                new=AsyncMock(return_value=None),
-            ),
-            patch(
-                "services.audit_logger.AuditLogger._initialize_impl",
-                new=AsyncMock(return_value=True),
-            ),
-            patch(
-                "services.audit_logger.AuditLogger.close",
-                new=AsyncMock(),
-            ),
-        ):
-            await get_audit_logger()
-            assert _mod._audit_logger is not None
-            await close_audit_logger()
-            assert _mod._audit_logger is None
+    async def test_close_audit_logger_resets_singleton(self) -> None:
+        audit_logger_module._audit_logger = None
+        await get_audit_logger()
+        assert audit_logger_module._audit_logger is not None
+        await close_audit_logger()
+        assert audit_logger_module._audit_logger is None
 
 
 # ---------------------------------------------------------------------------

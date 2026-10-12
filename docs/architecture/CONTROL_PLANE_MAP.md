@@ -48,6 +48,7 @@ per-row and the child issue covers both.
 | 15 | Scaling | VM sizing, manual scale triggers, K8s roadmap | `docs/operations/scaling-strategy.md` | *(none — no autoscaling code exists)* | Not a control | — (classification note only) |
 | 16 | Logging | Which logging call pattern is used; blocking raw print/console | `docs/developer/LOGGING_STANDARDS.md` | `.pre-commit-config.yaml:863 no-print-console` hook | Drifted | #16850 |
 | 17 | Rate limiting / cost control | Per-user/tenant request-rate and spend limiting | *(none found)* | `autobot_shared/rate_limiter.py::RateLimiter` (partial); `llc/scheduler/budget_watchdog.py` (LLC-scoped, real) | Drifted | #16845 |
+| 18 | Audit trail | One system of record for who did what to which resource, and one query for "everything for user U in window W" | `docs/developer/AUDIT_SYSTEMS.md` | `autobot-backend/services/audit/audit.py record`, `services/audit/store.py` (Postgres `audit_logs`), `autobot_shared/user_management/audit_rows.py audit_row`; pinned by `repo_tests/audit_writer_single_source_17225_test.py` | Enforced | #17225 (separate stores: #18284, #18285, #18286) |
 
 **Resolving the umbrella's two open questions:**
 - **Tool permissions** (row 5): no comprehensive doc exists — the one cross-reference that names a
@@ -231,6 +232,22 @@ OpenAI/Anthropic-compatible gateways never call cost tracking at all. A separate
 spend limiter exists (`llc/scheduler/budget_watchdog.py`, hard-stops agents/companies at ≥100% of
 budget) but is scoped to the LLC "AI-run companies" feature only, not general chat/API traffic. See
 #16845.
+
+### 18. Audit trail — Enforced
+
+Added by #17225, which found eight audit stores where #6475 had closed on three, and a behaviour sweep
+found five more. Every producer now reaches `services/audit/audit.py record()`, which writes a Postgres
+`audit_logs` row (the system of record, `store_authority.py` `audit_trail`) and then a Redis projection
+(`audit:unified`, rebuilt by `rebuild_projection`). Every `audit_logs` row, from the backend's canonical
+service or from the shared RBAC denial, organisation, team and user services, is built by
+`audit_rows.audit_row`, so one schema serves both backends. Every read is one SQL query on that table.
+The legacy `audit_log`, `event_log` and knowledge stores are deleted, `services/audit_logger.py` is an
+adapter, and `SecurityLayer.audit_log` routes through the service. The writer guard fails on a new
+audit store and on a direct `AuditLog(...)` outside the row builder. Stores that are deliberately
+separate or still being decided are pinned by name and tracked in their own issues (#18284 workflow
+and secrets audit, #18285 A2A trust history, #18286 the compliance manager). Retention of the
+projection comes from one table, `services/audit/retention.py`. `audit_logs` rows are not purged; that
+is an owner decision (#17038).
 
 ## Child issues filed from this survey
 

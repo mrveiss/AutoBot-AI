@@ -31,8 +31,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from autobot_shared.auth.jwt_core import hash_password, verify_password
+from autobot_shared.user_management.audit_rows import audit_row
 from autobot_shared.user_management.base_service import BaseService, TenantContext
-from autobot_shared.user_management.models.audit import AuditLog
 from autobot_shared.user_management.models.role import UserRole
 from autobot_shared.user_management.models.user import UserCore
 
@@ -156,13 +156,12 @@ class UserServiceBase(BaseService):
         outcome: str = "success",
     ) -> None:
         """Add an audit entry; the caller owns the transaction, so no flush."""
-        audit_entry = AuditLog(
-            id=uuid.uuid4(),
+        audit_entry = audit_row(
             org_id=self.context.org_id,
             user_id=self.context.user_id,
             action=action,
             resource_type=resource_type,
-            resource_id=resource_id,
+            resource=resource_id,
             outcome=outcome,
             details=details,
         )

@@ -23,7 +23,8 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_constants import TTL_5_MINUTES
-from autobot_shared.user_management.models.audit import AuditAction, AuditLog, AuditResourceType
+from autobot_shared.user_management.audit_rows import audit_row
+from autobot_shared.user_management.models.audit import AuditAction, AuditResourceType
 
 logger = get_logger(__name__)
 
@@ -393,12 +394,12 @@ async def _emit_permission_denied_audit(
     deps = _require_dependencies()  # outside the try: an unwired audit must fail loudly
     try:
         async with deps.db_session_context() as session:
-            entry = AuditLog(
-                id=uuid.uuid4(),
+            entry = audit_row(
                 user_id=user_id,
                 org_id=org_id,
                 action=AuditAction.PERMISSION_DENIED,
                 resource_type=AuditResourceType.ENDPOINT,
+                resource=path,
                 outcome="denied",
                 details={"permission": permission, "path": path},
                 ip_address=ip_address,

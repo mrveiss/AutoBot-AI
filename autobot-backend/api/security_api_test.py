@@ -5,9 +5,8 @@ Unit tests for Security API endpoints
 Tests REST API functionality for security management
 """
 
-import json
 import logging
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -45,6 +44,8 @@ class TestSecurityAPI:
 
         # Mock enhanced security layer
         self.mock_security_layer = MagicMock()
+        # #17225 D6: the layer's audit readers are async (canonical audit trail).
+        self.mock_security_layer.get_command_history = AsyncMock()
         self.app.state.security_layer = self.mock_security_layer
 
         self.client = TestClient(self.app)
@@ -284,7 +285,7 @@ class TestSecurityAPI:
         assert response.status_code == 200
 
         # Verify filters were passed to security layer
-        self.mock_security_layer.get_command_history.assert_called_once_with(user="test_user", limit=10)
+        self.mock_security_layer.get_command_history.assert_awaited_once_with(user="test_user", limit=10)
 
     def test_get_command_history_default_parameters(self):
         """Test command history with default parameters"""
@@ -295,7 +296,7 @@ class TestSecurityAPI:
         assert response.status_code == 200
 
         # Verify default parameters
-        self.mock_security_layer.get_command_history.assert_called_once_with(user=None, limit=50)
+        self.mock_security_layer.get_command_history.assert_awaited_once_with(user=None, limit=50)
 
     def test_get_command_history_error(self, caplog):
         """Failures answer 500 with a generic detail and log the real cause."""
@@ -309,39 +310,18 @@ class TestSecurityAPI:
         assert "History error" not in response.text
         assert "History error" in caplog.text
 
-    def _write_audit_log(self, tmp_path, lines):
-        """Point the security layer at a real audit log file holding ``lines``.
-
-        api/security.py reads the audit log through ``aiofiles.open``, and
-        aiofiles captures the builtin as ``aiofiles.threadpool.sync_open = open``
-        at import time — so the ``patch("builtins.open", ...)`` these tests used
-        to rely on never intercepted anything and the endpoint was silently
-        reading (and failing to find) a literal ``test_audit.log`` in the CWD.
-        A real file on disk exercises the actual read/parse path.
-        """
-        log_file = tmp_path / "audit.log"
-        log_file.write_text("".join(lines), encoding="utf-8")
-        self.mock_security_layer.audit_log_file = str(log_file)
-        return log_file
-
-    def test_get_audit_log_success(self, tmp_path):
-        """Test successful audit log retrieval"""
+    def test_get_audit_log_success(self):
+        """The endpoint returns the layer's entries from the canonical audit trail (#17225 D6)."""
         audit_entries = [
-            {
-                "timestamp": "2023-01-01T10:00:00",
-                "user": "test_user",
-                "action": "login",
-                "outcome": "success",
-            },
             {
                 "timestamp": "2023-01-01T10:01:00",
                 "user": "test_user",
                 "action": "command_execution",
                 "outcome": "success",
             },
+            {"timestamp": "2023-01-01T10:00:00", "user": "test_user", "action": "login", "outcome": "success"},
         ]
-
-        self._write_audit_log(tmp_path, [json.dumps(entry) + "\n" for entry in audit_entries])
+        self.mock_security_layer.get_audit_entries = AsyncMock(return_value=audit_entries)
 
         response = self.client.get("/api/security/audit-log")
 
@@ -351,68 +331,40 @@ class TestSecurityAPI:
         assert data["count"] == 2
         assert data["audit_entries"] == audit_entries
 
-    def test_get_audit_log_with_limit(self, tmp_path):
-        """Test audit log retrieval with limit parameter"""
-        self._write_audit_log(tmp_path, ['{"entry": 1}\n', '{"entry": 2}\n', '{"entry": 3}\n'])
+    def test_get_audit_log_with_limit(self):
+        """The limit is passed to the store, which returns the most recent entries."""
+        self.mock_security_layer.get_audit_entries = AsyncMock(return_value=[])
 
         response = self.client.get("/api/security/audit-log?limit=2")
 
         assert response.status_code == 200
-        data = response.json()
-        assert data["count"] == 2
-        # The limit keeps the *most recent* entries, not the first two.
-        assert data["audit_entries"] == [{"entry": 2}, {"entry": 3}]
+        self.mock_security_layer.get_audit_entries.assert_awaited_once_with(limit=2)
 
-    def test_get_audit_log_file_not_found(self, tmp_path):
-        """A log that was never written is an empty log, not an error."""
-        self.mock_security_layer.audit_log_file = str(tmp_path / "nonexistent.log")
+    def test_get_audit_log_empty(self):
+        """A trail with nothing recorded is an empty list, not an error."""
+        self.mock_security_layer.get_audit_entries = AsyncMock(return_value=[])
 
         response = self.client.get("/api/security/audit-log")
 
         assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert data["count"] == 0
-        assert data["audit_entries"] == []
+        assert response.json()["audit_entries"] == []
 
-    def test_get_audit_log_malformed_json(self, tmp_path):
-        """Test audit log retrieval with malformed JSON entries"""
-        self._write_audit_log(
-            tmp_path,
-            ['{"valid": "entry1"}\n', "invalid json line\n", '{"valid": "entry2"}\n'],
-        )
+    def test_get_audit_log_error(self, caplog):
+        """An unreadable audit trail is a 500, never a silent empty log (#13258).
 
-        response = self.client.get("/api/security/audit-log")
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert data["count"] == 2
-        # The unparseable line is skipped; the surrounding valid ones survive.
-        assert data["audit_entries"] == [{"valid": "entry1"}, {"valid": "entry2"}]
-
-    def test_get_audit_log_error(self, tmp_path, caplog):
-        """An unreadable audit log is a 500, never a silent empty log.
-
-        Reporting ``count: 0`` when the file could not be read would tell an
-        admin the audit trail is empty when it is merely inaccessible — see
-        #13258. The exception text stays in the log, out of the response.
+        The exception text stays in the log, out of the response.
         """
-        self.mock_security_layer.audit_log_file = str(tmp_path / "audit.log")
+        from services.audit.audit import AuditStoreUnavailable
 
-        with (
-            patch(
-                "api.security.aiofiles.open",
-                side_effect=PermissionError("Permission denied"),
-            ),
-            caplog.at_level(logging.ERROR, logger=SECURITY_LOGGER),
-        ):
+        self.mock_security_layer.get_audit_entries = AsyncMock(side_effect=AuditStoreUnavailable("store down"))
+
+        with caplog.at_level(logging.ERROR, logger=SECURITY_LOGGER):
             response = self.client.get("/api/security/audit-log")
 
         assert response.status_code == 500
         assert response.json()["detail"] == GENERIC_ERROR_DETAIL
-        assert "Permission denied" not in response.text
-        assert "Permission denied" in caplog.text
+        assert "store down" not in response.text
+        assert "store down" in caplog.text
 
 
 class TestSecurityAPIModels:

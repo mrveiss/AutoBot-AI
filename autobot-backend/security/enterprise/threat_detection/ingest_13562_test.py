@@ -262,27 +262,17 @@ def test_every_bus_producer_reaches_that_write_path() -> None:
     """One call site covers the bus only if the producers really funnel through it."""
     tree = _parse(AUDIT_BUS_PATH)
 
-    # Both halves of this assertion used to read `emit`, so the second was dead
-    # (CodeRabbit). Chasing that turned up the larger problem: `audit.py`
-    # defines `emit` TWICE and the pin was reading the shadowed one.
-    shadowed_emit = _function(tree, "emit")
-    effective_emit = _effective_function(tree, "emit")
-    assert shadowed_emit is not effective_emit, (
-        "audit.py no longer defines `emit` twice — simplify this test rather "
-        "than leaving an override check that no longer describes the module"
-    )
-
-    # The first definition writes directly; the override delegates to
-    # `emit_compliance`, which reaches `_emit_real` below. Both are asserted
-    # because either one changing would break the bus for a different caller.
-    assert "record" in _called_names(shadowed_emit)
-    assert "emit_compliance" in _called_names(
-        effective_emit
-    ), "the `emit` callers actually get must still funnel into the bus"
+    # #17225: `audit.py` used to define `emit` twice, and the override (an
+    # EventType bridge) shadowed the real one -- so `emit(AuditEvent(...))`
+    # recorded the event's repr as a COMPLIANCE action. One definition now,
+    # and it is the one every producer reaches.
+    emit = _function(tree, "emit")
+    assert emit is _effective_function(tree, "emit"), "audit.py defines `emit` twice again (#17225)"
+    assert "record" in _called_names(emit)
 
     assert "record" in _called_names(_function(tree, "emit_knowledge"))
     for shim in ("emit_security", "emit_compliance"):
-        assert "_emit_real" in _called_names(_function(tree, shim)), shim
+        assert "emit" in _called_names(_function(tree, shim)), shim
 
     # `audit_record` is a producer too, and nothing asserted its path.
     assert "emit_security" in _called_names(_function(tree, "audit_record"))
