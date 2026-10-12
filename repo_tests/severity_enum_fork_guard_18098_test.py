@@ -74,6 +74,11 @@ DISTINCT_VOCABULARIES = {
         "configures how strictly a sandbox isolates a run (low/medium/high); it grades a "
         "setting the caller picks, not a finding someone detected"
     ),
+    "autobot_shared/risk_tier.py::RiskTier": (
+        "the 4-rung ladder an approval is graded on (#13421, owner decision 2026-10-12): it replaces "
+        "RiskLevel/CommandRisk at the approval seam, cannot alias Severity because it is a strict "
+        "subset, and its values are asserted to stay Severity values"
+    ),
 }
 
 #: Flagged by the value probe and NOT aliased, each with the concrete reason. `KnowledgePriority`
