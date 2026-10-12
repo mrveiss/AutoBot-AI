@@ -20,10 +20,10 @@ stored chunk instead of restarting.
 """
 
 import asyncio
-import hashlib
 import time
 from typing import Any, Dict, List
 
+from autobot_shared.content_digest import content_digest
 from autobot_shared.doc_chunking import chunk_plain_text
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
@@ -130,7 +130,7 @@ async def ingest_document(kb, content: str, metadata: Dict[str, Any], doc_id: st
     total = len(chunks)
     if total == 1:
         return await _ingest_single(kb, content, metadata, doc_id, budget)
-    digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    digest = content_digest(content)
     stored, resumed, first_id = await _plan(kb, doc_id, digest, total)
     offsets = locate_chunks(content, chunks) if "page_spans" in metadata else [None] * total
     deadline = time.monotonic() + budget
