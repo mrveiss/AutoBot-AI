@@ -100,3 +100,79 @@ def test_new_fields_accept_good(field, value):
 def test_new_fields_reject_bad(field, value):
     with pytest.raises(pydantic.ValidationError):
         UserPreferences(**{field: value})
+
+
+# --- HTTP-level: the real route, 422 validation and the auth dependency ---------
+
+_URL = "/api/users/me/preferences"
+
+
+def _http_app(authenticated: bool = True):
+    from fastapi import FastAPI
+
+    from api import users as users_api
+    from auth_middleware import get_current_user
+
+    app = FastAPI()
+    app.include_router(users_api.router, prefix="/api")
+    if authenticated:
+        app.dependency_overrides[get_current_user] = lambda: _USER
+    return app
+
+
+def _http_client(app, redis_client):
+    from fastapi.testclient import TestClient
+
+    return TestClient(app), patch("api.users.get_async_redis_client", new=AsyncMock(return_value=redis_client))
+
+
+@pytest.mark.parametrize("field", ["ui_mode", "theme"])
+def test_http_explicit_null_is_422_and_stored_value_unchanged(field):
+    client, store = _fake_redis()
+    store[f"user:u-partial:preferences:{field}"] = "minimal" if field == "ui_mode" else "dark"
+    before = dict(store)
+    tc, redis_patch = _http_client(_http_app(), client)
+    with redis_patch:
+        res = tc.patch(_URL, json={field: None})
+    assert res.status_code == 422
+    assert store == before
+    client.set.assert_not_awaited()
+
+
+def test_http_unauthenticated_is_401_and_writes_nothing(real_auth_middleware, monkeypatch):
+    """Judged with the REAL get_current_user (the conftest stub always admits)."""
+    from types import SimpleNamespace
+
+    from api import users as users_api
+
+    async def _no_token(_request):
+        return None
+
+    middleware = SimpleNamespace(
+        get_user_from_request=lambda _request: None,
+        _extract_user_from_run_jwt=_no_token,
+        _extract_user_from_device_jwt=_no_token,
+    )
+    monkeypatch.setattr(real_auth_middleware, "get_auth_middleware", lambda: middleware)
+    app = _http_app(authenticated=False)
+    app.dependency_overrides[users_api.get_current_user] = real_auth_middleware.get_current_user
+    client, store = _fake_redis()
+    tc, redis_patch = _http_client(app, client)
+    with redis_patch:
+        res = tc.patch(_URL, json={"ui_mode": "minimal"})
+    assert res.status_code == 401
+    assert store == {}
+    client.set.assert_not_awaited()
+
+
+def test_http_happy_path_returns_merged_full_preferences():
+    client, store = _fake_redis()
+    store["user:u-partial:preferences:theme"] = "dark"
+    tc, redis_patch = _http_client(_http_app(), client)
+    with redis_patch:
+        res = tc.patch(_URL, json={"ui_mode": "minimal"})
+    assert res.status_code == 200
+    prefs = res.json()["data"]["preferences"]
+    assert prefs["ui_mode"] == "minimal" and prefs["theme"] == "dark"
+    assert prefs["font_size"] == "medium" and prefs["ui_start"] == "last"
+    assert store["user:u-partial:preferences:ui_mode"] == "minimal"
