@@ -32,6 +32,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import code_lines
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT = "autobot-frontend/src"
@@ -58,14 +59,10 @@ def _writer_patterns(name: str) -> tuple[re.Pattern[str], ...]:
 _PATTERNS = {name: _writer_patterns(name) for name in _ALLOWED}
 
 
-def _writes(source: str, name: str) -> bool:
+def _writes(source: str, name: str, path: str = "source.ts") -> bool:
     """True when a code line writes the attribute (a comment or a reader does not)."""
-    for line in source.splitlines():
-        if line.strip().startswith(("//", "*", "/*", "<!--")):
-            continue
-        if any(pattern.search(line) for pattern in _PATTERNS[name]):
-            return True
-    return False
+    lines = code_lines(source, name=path, strip_trailing=True)
+    return any(pattern.search(line.text) for line in lines for pattern in _PATTERNS[name])
 
 
 def _is_source(rel: str) -> bool:
@@ -100,7 +97,7 @@ def _writers() -> dict[str, tuple[str, ...]]:
     for rel in REACH.examined(root):
         source = (root / rel).read_text(encoding="utf-8", errors="replace")
         for name in _ALLOWED:
-            if _writes(source, name):
+            if _writes(source, name, rel):
                 found[name].append(rel)
     return {name: tuple(rels) for name, rels in found.items()}
 
@@ -121,7 +118,7 @@ def _writers() -> dict[str, tuple[str, ...]]:
         ("the other attribute", "theme", "root.setAttribute('data-theme-variant', v)\n", False),
         ("a different attribute", "ui", "root.setAttribute('data-ui-density', v)\n", False),
         ("a comment", "theme", "// root.setAttribute('data-theme', t)\n", False),
-        ("a jsdoc line", "ui", " * root.setAttribute('data-ui', m)\n", False),
+        ("a jsdoc line", "ui", "/**\n * root.setAttribute('data-ui', m)\n */\n", False),
     ],
 )
 def test_the_matcher_tells_a_write_from_a_read(label: str, name: str, source: str, expected: bool) -> None:
