@@ -30,9 +30,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # sys.path, so this script raised ModuleNotFoundError on its own import block
 # before doing any work. Add the directory the way the other operator entry
 # points in this tree do (#14129).
-_BACKEND_DIR = Path(__file__).resolve().parents[3] / "autobot-backend"
-if str(_BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(_BACKEND_DIR))
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):  # the backend, and `autobot_shared` (#18289)
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")

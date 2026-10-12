@@ -75,17 +75,20 @@ CATEGORY_METADATA: Dict[str, CategoryMeta] = {
 
 def get_category_display_name(category: str) -> str:
     """Get human-readable category name"""
-    return CATEGORY_METADATA.get(category, {}).get("name", category)
+    meta = CATEGORY_METADATA.get(category)
+    return meta["name"] if meta else category
 
 
 def get_category_icon(category: str) -> str:
     """Get FontAwesome icon class for category"""
-    return CATEGORY_METADATA.get(category, {}).get("icon", "fas fa-folder")
+    meta = CATEGORY_METADATA.get(category)
+    return meta["icon"] if meta else "fas fa-folder"
 
 
 def get_category_color(category: str) -> str:
     """Get color for category"""
-    return CATEGORY_METADATA.get(category, {}).get("color", "#6b7280")
+    meta = CATEGORY_METADATA.get(category)
+    return meta["color"] if meta else "#6b7280"
 
 
 def get_all_categories() -> List[str]:

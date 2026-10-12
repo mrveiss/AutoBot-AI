@@ -38,16 +38,14 @@ from dotenv import load_dotenv
 
 load_dotenv(project_root / ".env")
 
-# #14518: the first-party imports below carried a stale ``backend.`` package
-# prefix -- no ``backend`` package exists -- and autobot-backend was never on
-# sys.path, so this script raised ModuleNotFoundError on its own import block
-# before doing any work. Add the directory the way the other operator entry
-# points in this tree do (#14129).
-_BACKEND_DIR = Path(__file__).resolve().parents[4] / "autobot-backend"
-if str(_BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(_BACKEND_DIR))
+# Runs from any directory with no PYTHONPATH: the repository root provides `autobot_shared`
+# (#18289; #14518 had put autobot-backend on the path for this one import, which now lives in
+# autobot_shared).
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
-from knowledge_categories import get_category_for_source  # noqa: E402
+from autobot_shared.knowledge_categories import get_category_for_source  # noqa: E402
 
 # Configure logging
 logging.basicConfig(

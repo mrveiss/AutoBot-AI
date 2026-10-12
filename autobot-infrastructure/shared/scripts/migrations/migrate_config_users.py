@@ -30,11 +30,12 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Add project root to path
-project_root = Path(__file__).parent.parent.parent
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(_REPO_ROOT / "autobot_shared"))
-sys.path.insert(0, str(project_root))
+# A backend tool (#18288, #18289): it puts the backend and the repository root (for `autobot_shared`)
+# on its own path, so it runs from any directory with no PYTHONPATH.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
 from autobot_shared.time_utils import parse_utc_iso  # noqa: E402
 

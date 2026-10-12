@@ -19,7 +19,8 @@ The test fails on an entry that no longer imports the backend, so this only shri
 
 from __future__ import annotations
 
-_P = "autobot-infrastructure/shared/scripts/"
+_I = "autobot-infrastructure/"
+_P = _I + "shared/scripts/"
 
 BACKEND_TOOLS: dict[str, str] = {
     _P + "analysis/test_service_registry.py": "backend tool: deliberately exercises utils.service_registry",
@@ -71,71 +72,74 @@ BACKEND_TOOLS: dict[str, str] = {
         "backend tool: reports on the backend's project state (project_state_tracker, "
         "phase_progression_manager); CI runs it in phase_validation.yml"
     ),
+    _I
+    + "autobot-backend/scripts/migrations/migrate_secrets_ownership.py": (
+        "backend tool: re-encrypts stored secrets through the backend's encryption_service"
+    ),
+    _P
+    + "automated_testing_procedure.py": (
+        "backend tool: runs the backend app, config and file API through an automated test procedure"
+    ),
+    _P + "demo/demo_codebase_indexing.py": ("backend tool: demonstrates the backend's codebase indexing service"),
+    _P
+    + "migrations/migrate_config_users.py": (
+        "backend tool: migrates configured users into the backend's user_management database"
+    ),
+    _P
+    + "migrations/migrate_sessions_608.py": (
+        "backend tool: migrates chat sessions through the backend's ChatHistoryManager and memory graph"
+    ),
+    _P + "profile_backend.py": ("backend tool: profiles the backend's app_factory startup"),
+    _P + "profile_startup.py": ("backend tool: profiles the backend's startup sequence (app_factory)"),
+    _P
+    + "security/backfill_session_ownership.py": (
+        "backend tool: backfills session ownership through the backend's SessionOwnershipValidator"
+    ),
+    _P + "security/mtls-migrate.py": ("backend tool: drives the backend's pki generator, configurator and distributor"),
+    _P
+    + "setup/knowledge/fresh_kb_setup.py": (
+        "backend tool: resets and re-initialises the backend's KnowledgeBase (the top-level duplicate retired)"
+    ),
+    _P + "startup_timing_analysis.py": ("backend tool: times the backend's app_factory startup"),
+    _P + "test_configuration.py": ("backend tool: checks the backend's configuration package"),
+    _P + "test_llm_awareness.py": ("backend tool: checks the backend's LLM self-awareness and its middleware"),
+    _P + "test_phase2_migration.py": ("backend tool: checks the backend's error boundaries and metrics collectors"),
+    _P + "trace_backend.py": ("backend tool: traces the backend's app_factory startup"),
+    _P + "utilities/manage_classification.py": ("backend tool: manages the backend's workflow classifier"),
+    _P
+    + "utilities/migrate_encryption.py": (
+        "backend tool: migrates chat history through the backend's encryption_service"
+    ),
+    _P + "validate_timeout_config.py": ("backend tool: validates the backend's ConfigManager timeout settings"),
 }
 
 _UNCLASSIFIED_REASON = "not yet classified as shared, backend tool or dead: #18289"
 
 UNCLASSIFIED: frozenset[str] = frozenset(
     {
-        "autobot-infrastructure/autobot-backend/scripts/migrations/migrate_secrets_ownership.py",
         "autobot-infrastructure/shared/docker/ai-stack/ai_api_server.py",
         "autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp/autobot_knowledge_mcp/embedded.py",
-        "autobot-infrastructure/shared/scripts/ai-ml/model_reference_validator.py",
-        "autobot-infrastructure/shared/scripts/automated_testing_procedure.py",
-        "autobot-infrastructure/shared/scripts/comprehensive_log_aggregator.py",
-        "autobot-infrastructure/shared/scripts/demo/demo_codebase_indexing.py",
-        "autobot-infrastructure/shared/scripts/diagnose_backend.py",
         "autobot-infrastructure/shared/scripts/direct_kb_populate.py",
         "autobot-infrastructure/shared/scripts/fix_kb_dimensions.py",
-        "autobot-infrastructure/shared/scripts/fresh_kb_setup.py",
         "autobot-infrastructure/shared/scripts/identity_config_utility.py",
         "autobot-infrastructure/shared/scripts/kb_dimension_utility.py",
-        "autobot-infrastructure/shared/scripts/migrations/migrate_category_indexes.py",
-        "autobot-infrastructure/shared/scripts/migrations/migrate_config_users.py",
-        "autobot-infrastructure/shared/scripts/migrations/migrate_sessions_608.py",
-        "autobot-infrastructure/shared/scripts/monitoring/start_monitoring_category_default_test.py",
-        "autobot-infrastructure/shared/scripts/monitoring_system.py",
         "autobot-infrastructure/shared/scripts/populate_docs_knowledge.py",
-        "autobot-infrastructure/shared/scripts/populate_kb_chromadb.py",
         "autobot-infrastructure/shared/scripts/populate_kb_fixed.py",
         "autobot-infrastructure/shared/scripts/populate_knowledge_base.py",
-        "autobot-infrastructure/shared/scripts/profile_api_endpoints.py",
-        "autobot-infrastructure/shared/scripts/profile_backend.py",
-        "autobot-infrastructure/shared/scripts/profile_startup.py",
         "autobot-infrastructure/shared/scripts/quick_populate_kb.py",
         "autobot-infrastructure/shared/scripts/reset_kb_dimensions.py",
         "autobot-infrastructure/shared/scripts/reset_knowledge_base.py",
-        "autobot-infrastructure/shared/scripts/security/backfill_session_ownership.py",
-        "autobot-infrastructure/shared/scripts/security/mtls-migrate.py",
         "autobot-infrastructure/shared/scripts/security/seed_enforcement_mode.py",
-        "autobot-infrastructure/shared/scripts/seq_log_forwarder.py",
-        "autobot-infrastructure/shared/scripts/setup/knowledge/fresh_kb_setup.py",
-        "autobot-infrastructure/shared/scripts/startup_coordinator.py",
-        "autobot-infrastructure/shared/scripts/startup_timing_analysis.py",
         "autobot-infrastructure/shared/scripts/sync_kb_docs.py",
-        "autobot-infrastructure/shared/scripts/test_configuration.py",
-        "autobot-infrastructure/shared/scripts/test_llm_awareness.py",
-        "autobot-infrastructure/shared/scripts/test_phase2_migration.py",
-        "autobot-infrastructure/shared/scripts/trace_backend.py",
-        "autobot-infrastructure/shared/scripts/utilities/demo_workflow_system.py",
-        "autobot-infrastructure/shared/scripts/utilities/diagnose_backend_timeout.py",
         "autobot-infrastructure/shared/scripts/utilities/index_all_man_pages.py",
         "autobot-infrastructure/shared/scripts/utilities/index_documentation.py",
         "autobot-infrastructure/shared/scripts/utilities/ingest_man_pages.py",
-        "autobot-infrastructure/shared/scripts/utilities/init_memory_graph_redis.py",
         "autobot-infrastructure/shared/scripts/utilities/integrate_system_knowledge.py",
-        "autobot-infrastructure/shared/scripts/utilities/manage_classification.py",
         "autobot-infrastructure/shared/scripts/utilities/manage_system_knowledge.py",
-        "autobot-infrastructure/shared/scripts/utilities/manage_system_knowledge_category_default_test.py",
-        "autobot-infrastructure/shared/scripts/utilities/migrate_codebase_to_chromadb.py",
-        "autobot-infrastructure/shared/scripts/utilities/migrate_encryption.py",
         "autobot-infrastructure/shared/scripts/utilities/migrate_redis_to_chromadb.py",
-        "autobot-infrastructure/shared/scripts/utilities/optimize_gpu_usage.py",
         "autobot-infrastructure/shared/scripts/utilities/quick_test_os_context.py",
-        "autobot-infrastructure/shared/scripts/utilities/settings_diagnostic_utility.py",
         "autobot-infrastructure/shared/scripts/utilities/sync_documentation_kb.py",
         "autobot-infrastructure/shared/scripts/utilities/test-authentication-security.py",
-        "autobot-infrastructure/shared/scripts/utilities/test_autobot_functionality.py",
         "autobot-infrastructure/shared/scripts/utilities/test_man_page_context.py",
         "autobot-infrastructure/shared/scripts/utilities/validate-security-config.py",
         "autobot-infrastructure/shared/scripts/utilities/validate_chat_knowledge.py",
@@ -143,13 +147,11 @@ UNCLASSIFIED: frozenset[str] = frozenset(
         "autobot-infrastructure/shared/scripts/utilities/verify_backend_config.py",
         "autobot-infrastructure/shared/scripts/utilities/verify_ssh_manager.py",
         "autobot-infrastructure/shared/scripts/validate_configuration.py",
-        "autobot-infrastructure/shared/scripts/validate_timeout_config.py",
         "autobot-infrastructure/shared/tests/conftest.py",
         "autobot-infrastructure/shared/tests/distributed/test_db_initialization.py",
         "autobot-infrastructure/shared/tests/fixtures/mocks.py",
         "autobot-infrastructure/shared/tests/integration/test_architecture_compliance.py",
         "autobot-infrastructure/shared/tools/index_documentation.py",
-        "autobot-infrastructure/shared/tools/index_documentation_category_default_test.py",
     }
 )
 

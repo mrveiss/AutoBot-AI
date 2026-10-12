@@ -20,11 +20,14 @@ logger = logging.getLogger(__name__)
 # Issue #380: Module-level tuple for numeric type checks
 _NUMERIC_TYPES = (int, float)
 
-# Add project root to path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+# A backend tool (#18288, #18289): it puts the backend and the repository root (for `autobot_shared`)
+# on its own path, so it runs from any directory with no PYTHONPATH.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
-from config import ConfigManager
+from config import ConfigManager  # noqa: E402
 
 
 def print_section(title: str):

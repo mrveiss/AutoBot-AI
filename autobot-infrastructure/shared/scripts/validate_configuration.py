@@ -22,18 +22,13 @@ logger = logging.getLogger(__name__)
 _HTTP_PROTOCOLS = ("http://", "https://")
 _WS_PROTOCOLS = ("ws://", "wss://")
 
-# Add project root to Python path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
-
-# #14518: the first-party imports below carried a stale ``backend.`` package
-# prefix -- no ``backend`` package exists -- and autobot-backend was never on
-# sys.path, so this script raised ModuleNotFoundError on its own import block
-# before doing any work. Add the directory the way the other operator entry
-# points in this tree do (#14129).
-_BACKEND_DIR = Path(__file__).resolve().parents[3] / "autobot-backend"
-if str(_BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(_BACKEND_DIR))
+# A backend tool (#18288, #18289): it puts the backend and the repository root (for `autobot_shared`)
+# on its own path, so it runs from any directory with no PYTHONPATH.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
+project_root = Path(__file__).parent.parent  # shared/, where docker/compose lives
 
 
 def test_default_configuration():
@@ -41,17 +36,16 @@ def test_default_configuration():
     logger.info("Testing Default Configuration...")
 
     try:
-        from config import (
-            API_BASE_URL,
-            BACKEND_PORT,
-            HTTP_PROTOCOL,
-            OLLAMA_PORT,
-            REDIS_PORT,
-            REDIS_PROTOCOL,
-            REDIS_URL,
-            WS_BASE_URL,
-            WS_PROTOCOL,
-        )
+        # `config` no longer exports the Redis and WebSocket values (#18289): they live in the
+        # shared network constants, which the backend's own config builds on.
+        from autobot_shared.network_constants import NetworkConstants, ServiceURLs
+        from config import API_BASE_URL, BACKEND_PORT, HTTP_PROTOCOL, OLLAMA_PORT
+
+        REDIS_PORT = NetworkConstants.REDIS_PORT
+        REDIS_URL = ServiceURLs.REDIS_VM
+        REDIS_PROTOCOL = REDIS_URL.split("://", 1)[0]
+        WS_BASE_URL = NetworkConstants.get_websocket_url()
+        WS_PROTOCOL = WS_BASE_URL.split("://", 1)[0]
 
         # Test URLs are properly formed (Issue #380: use module-level constants)
         assert API_BASE_URL.startswith(_HTTP_PROTOCOLS)
@@ -76,17 +70,35 @@ def test_default_configuration():
         return False
 
 
+def _reload_config():
+    """Re-read the backend's configuration so a changed environment shows (#18289).
+
+    The values are computed when ``config.compat`` is imported, so reloading the ``config`` package
+    alone returns the cached ones; the registry's own cache is cleared for the same reason.
+    """
+    import importlib
+
+    import config
+    import config.compat
+    from config.registry import ConfigRegistry
+
+    ConfigRegistry.clear_cache()
+    importlib.reload(config.compat)
+    return importlib.reload(config)
+
+
 def test_custom_configuration():
     """Test configuration with custom environment variables"""
     logger.info("Testing Custom Configuration...")
 
-    # Set custom environment variables
+    # The registry reads ``AUTOBOT_<KEY with dots as underscores>`` (config/registry.py): the older
+    # AUTOBOT_BACKEND_PORT / AUTOBOT_OLLAMA_HOST names are not read any more, and the HTTP protocol
+    # is a fixed ``http`` rather than a setting (#18289).
     test_env = {
-        "AUTOBOT_HTTP_PROTOCOL": "https",
-        "AUTOBOT_BACKEND_PORT": "8002",
-        "AUTOBOT_OLLAMA_HOST": "192.168.1.100",
-        "AUTOBOT_OLLAMA_PORT": "11435",
-        "AUTOBOT_REDIS_PORT": "6380",
+        "AUTOBOT_PORT_BACKEND": "8002",
+        "AUTOBOT_VM_OLLAMA": "192.168.1.100",
+        "AUTOBOT_PORT_OLLAMA": "11435",
+        "AUTOBOT_PORT_REDIS": "6380",
     }
 
     # Save original environment
@@ -96,30 +108,18 @@ def test_custom_configuration():
         os.environ[key] = test_env[key]
 
     try:
-        # Reload configuration with new environment
-        import importlib
+        from autobot_shared.network_constants import NetworkConstants
 
-        import config
-
-        importlib.reload(config)
-
-        from config import (
-            API_BASE_URL,
-            BACKEND_PORT,
-            HTTP_PROTOCOL,
-            OLLAMA_HOST_IP,
-            OLLAMA_PORT,
-            REDIS_PORT,
-        )
+        config = _reload_config()
 
         # Verify custom values are applied
-        assert HTTP_PROTOCOL == "https"
-        assert BACKEND_PORT == 8002
-        assert OLLAMA_PORT == 11435
-        assert REDIS_PORT == 6380
-        assert OLLAMA_HOST_IP == "192.168.1.100"
-        assert API_BASE_URL.startswith("https://")
-        assert f":{BACKEND_PORT}" in API_BASE_URL
+        assert config.HTTP_PROTOCOL == "http"
+        assert config.BACKEND_PORT == 8002
+        assert config.OLLAMA_PORT == 11435
+        assert NetworkConstants.REDIS_PORT == 6380
+        assert config.OLLAMA_HOST_IP == "192.168.1.100"
+        assert config.API_BASE_URL.startswith("http://")
+        assert f":{config.BACKEND_PORT}" in config.API_BASE_URL
 
         logger.info("Custom configuration validation passed")
         return True
@@ -129,12 +129,13 @@ def test_custom_configuration():
         return False
 
     finally:
-        # Restore original environment
+        # Restore original environment, and the configuration read from it
         for key, value in original_env.items():
             if value is None:
                 os.environ.pop(key, None)
             else:
                 os.environ[key] = value
+        _reload_config()
 
 
 def test_backend_configuration():

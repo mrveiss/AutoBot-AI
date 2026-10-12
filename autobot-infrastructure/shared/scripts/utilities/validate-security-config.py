@@ -16,9 +16,12 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Add project root to Python path
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
+# A backend tool (#18288, #18289): it puts the backend and the repository root (for `autobot_shared`)
+# on its own path, so it runs from any directory with no PYTHONPATH.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
 
 def _test_auth_and_audit(security) -> bool:
@@ -175,8 +178,11 @@ def test_auth_middleware():
         logger.info("=" * 50)
 
         logger.info("\n1. Testing AuthMiddleware import...")
-        from auth_middleware import auth_middleware
+        # The module-level ``auth_middleware`` instance is gone: the backend builds the middleware
+        # lazily through ``get_auth_middleware()`` (#18289).
+        from auth_middleware import get_auth_middleware
 
+        auth_middleware = get_auth_middleware()
         logger.info("AuthMiddleware imported successfully")
 
         logger.info("\n2. Testing AuthMiddleware configuration...")

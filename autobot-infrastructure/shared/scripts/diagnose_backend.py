@@ -6,11 +6,11 @@
 """Quick backend diagnostic script"""
 
 import logging
-import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -18,9 +18,16 @@ logger = logging.getLogger(__name__)
 
 import requests
 
-# Import configuration from centralized source
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import API_BASE_URL, OLLAMA_URL
+# Runs from any directory with no PYTHONPATH: put the repository root on the path for
+# `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.network_constants import ServiceURLs  # noqa: E402
+
+API_BASE_URL = ServiceURLs.BACKEND_API
+OLLAMA_URL = ServiceURLs.OLLAMA_LOCAL
 
 
 @dataclass

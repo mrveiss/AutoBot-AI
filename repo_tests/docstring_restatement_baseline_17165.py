@@ -98,7 +98,7 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
     "autobot-backend/knowledge/metadata.py": frozenset({"delete_metadata_template"}),
     "autobot-backend/knowledge/rag_benchmarks.py": frozenset({"test_vector_similarity_computation_benchmark"}),
     "autobot-backend/knowledge/relations.py": frozenset({"get_fact_relations"}),
-    "autobot-backend/knowledge_categories.py": frozenset({"get_category_color"}),
+    "autobot_shared/knowledge_categories.py": frozenset({"get_category_color"}),
     "autobot-backend/knowledge_sync_incremental.py": frozenset({"start_background_sync_daemon"}),
     "autobot-backend/memory/compat.py": frozenset({"cleanup_old_memories"}),
     "autobot-backend/modern_ai_integration.py": frozenset({"AnthropicClaudeProvider", "GoogleGeminiProvider"}),

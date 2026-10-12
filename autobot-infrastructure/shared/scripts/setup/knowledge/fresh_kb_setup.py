@@ -11,19 +11,19 @@ import asyncio
 import sys
 from pathlib import Path
 
-from autobot_shared.logging_manager import get_logger
+# A backend tool (#18288, #18289): it drives the backend's KnowledgeBase, so it puts the backend and
+# the repository root (for `autobot_shared`) on its own path and runs from any directory with no
+# PYTHONPATH. #14507: it used to insert its own parent (``scripts/setup``) and then import
+# ``knowledge_base`` from a directory that was never on the path; this script's success message tells
+# the operator to run ``populate_knowledge_base.py`` next, so the pair broke together.
+_REPO_ROOT = Path(__file__).resolve().parents[5]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
+
+from autobot_shared.logging_manager import get_logger  # noqa: E402
 
 logger = get_logger(__name__)
-
-# #14507: this used to insert the script's own parent (``scripts/setup``) and
-# then import ``knowledge_base``, which lives in ``autobot-backend`` -- a
-# directory that was never on the path -- so the KB step died with
-# ModuleNotFoundError. Same defect as ``populate_knowledge_base.py``, which
-# this script's success message tells the operator to run next. Add the
-# directory the way the other operator entry points in this tree do (#14129).
-_BACKEND_DIR = Path(__file__).resolve().parents[5] / "autobot-backend"
-if str(_BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(_BACKEND_DIR))
 
 # Import centralized Redis client
 from autobot_shared.redis_client import get_redis_client  # noqa: E402

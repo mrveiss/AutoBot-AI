@@ -293,7 +293,7 @@ async def test_main_categories(
 
     Issue #744: Requires admin authentication.
     """
-    from knowledge_categories import CATEGORY_METADATA
+    from autobot_shared.knowledge_categories import CATEGORY_METADATA
 
     return TestCategoriesResponse(status="working", categories=list(CATEGORY_METADATA.keys()))
 
@@ -371,7 +371,7 @@ async def get_main_categories(
     The 3 top-level categories are non-sensitive public metadata.
     Issue #5248: response typed as Pydantic model so OpenAPI captures schema.
     """
-    from knowledge_categories import (
+    from autobot_shared.knowledge_categories import (
         CATEGORY_METADATA,
         KnowledgeCategory,
         get_category_for_source,
@@ -2319,7 +2319,7 @@ async def get_facts_by_category(
     if cached_result:
         return cached_result
 
-    from knowledge_categories import KnowledgeCategory
+    from autobot_shared.knowledge_categories import KnowledgeCategory
 
     categories_to_fetch = [category] if category else [c.value for c in KnowledgeCategory]
 
@@ -2427,7 +2427,7 @@ async def _get_facts_by_category_legacy(kb, category: str | None, limit: int, of
     which — unlike the indexed path — is not sorted; "good enough" for this
     already-degraded fallback that only runs when a category has no index).
     """
-    from knowledge_categories import get_category_for_source
+    from autobot_shared.knowledge_categories import get_category_for_source
 
     all_fact_keys = await _scan_all_fact_keys(kb)
     if not all_fact_keys:

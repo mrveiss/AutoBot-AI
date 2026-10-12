@@ -76,9 +76,6 @@ BARE_ENV_CASTS = {
     "autobot-infrastructure/shared/scripts/fix_kb_dimensions.py::_DB_KNOWLEDGE": (
         "#15691 -- DELIBERATE, operator-run script; see module docstring above"
     ),
-    "autobot-infrastructure/shared/scripts/fresh_kb_setup.py::_DB_KNOWLEDGE": (
-        "#15691 -- DELIBERATE, operator-run script; see module docstring above"
-    ),
     "autobot-infrastructure/shared/scripts/utilities/migrate_codebase_to_chromadb.py::_DB_ANALYTICS": (
         "#15691 -- DELIBERATE, operator-run script; see module docstring above"
     ),
