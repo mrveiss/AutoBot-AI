@@ -56,8 +56,8 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "extraction-registry-sweep",
     discover=_source_population,
-    # Mid-window, from REACH.window() = (5233, 5533, 5383) at the pin.
-    floor=5383,
+    # Mid-window, from the failing check's own measurement 2026-10-12: tracked .py under the six roots, population 5666, window (5366, 5666), mid 5516.
+    floor=5516,
     what="python source and tests",
     roots=_ROOTS,
     growth=300,
