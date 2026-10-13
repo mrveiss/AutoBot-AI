@@ -35,11 +35,11 @@ from code_intelligence.conversation_analysis import (  # Types; Classifiers; Ana
     BottleneckType,
     ConversationFlow,
     ConversationFlowAnalyzer,
+    ConversationIntentClassifier,
     ConversationMessage,
     FlowPattern,
     FlowState,
     IntentCategory,
-    IntentClassifier,
     Optimization,
     OptimizationType,
     ResponseClassifier,
@@ -72,7 +72,7 @@ __all__ = [
     "SATISFACTION_SIGNALS",
     "_SATISFACTION_SIGNALS",  # Backward compatibility
     # Classifiers
-    "IntentClassifier",
+    "ConversationIntentClassifier",
     "ResponseClassifier",
     # Analyzer
     "ConversationFlowAnalyzer",

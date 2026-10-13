@@ -19,7 +19,7 @@ Package Structure:
 
 Usage:
     from code_intelligence.doc_generation import (
-        DocFormat, DocSection, ElementType, DocCompleteness, DiagramType,
+        DocFormat, DocSection, CodeElementType, DocCompleteness, DiagramType,
         ParameterDoc, ReturnDoc, ExceptionDoc, ExampleDoc,
         FunctionDoc, ClassDoc, ModuleDoc, PackageDoc,
         DiagramSpec, GeneratedDoc,
@@ -62,11 +62,11 @@ from code_intelligence.doc_generation.module_analyzer import (
 
 # Types and simple data classes
 from code_intelligence.doc_generation.types import (
+    CodeElementType,
     DiagramType,
     DocCompleteness,
     DocFormat,
     DocSection,
-    ElementType,
     ExampleDoc,
     ExceptionDoc,
     ParameterDoc,
@@ -78,7 +78,7 @@ __all__ = [
     # Enums
     "DocFormat",
     "DocSection",
-    "ElementType",
+    "CodeElementType",
     "DocCompleteness",
     "DiagramType",
     # Simple data classes

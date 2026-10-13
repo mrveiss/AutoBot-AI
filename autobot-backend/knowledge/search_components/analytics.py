@@ -18,7 +18,7 @@ from models.task_context import SearchAnalyticsContext
 logger = get_logger(__name__)
 
 
-class SearchAnalytics:
+class SearchAnalyticsRecorder:
     """
     Tracks search analytics for performance monitoring.
 
@@ -103,4 +103,4 @@ class SearchAnalytics:
         )
 
 
-get_analytics = lazy_singleton(SearchAnalytics)
+get_analytics = lazy_singleton(SearchAnalyticsRecorder)

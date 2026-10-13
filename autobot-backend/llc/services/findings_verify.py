@@ -14,7 +14,7 @@ Real LLM service call (services/llm_service.py:179):
     #   .provider: str  — the provider that actually answered (#12618)
     text = response.content           # extract the text
 
-FAIL CLOSED: any failure → Verdict(is_real=False, confidence=0.0, rationale="unverifiable: <reason>")
+FAIL CLOSED: any failure → FindingVerdict(is_real=False, confidence=0.0, rationale="unverifiable: <reason>")
 
 Cross-vendor second-opinion tier (#12618, design: docs/design/2026-07-26-cross-
 vendor-review-gate.md): when ``verify_finding(..., cross_vendor=True)`` and the
@@ -47,7 +47,7 @@ _warned_reasons: set[str] = set()
 
 
 @dataclass(frozen=True)
-class Verdict:
+class FindingVerdict:
     is_real: bool
     confidence: float
     rationale: str
@@ -57,9 +57,9 @@ class Verdict:
     escalate_to_human: bool = False
 
 
-def _fail_closed(reason: str) -> Verdict:
+def _fail_closed(reason: str) -> FindingVerdict:
     """Return the canonical fail-closed verdict."""
-    return Verdict(is_real=False, confidence=0.0, rationale=f"unverifiable: {reason}")
+    return FindingVerdict(is_real=False, confidence=0.0, rationale=f"unverifiable: {reason}")
 
 
 def _warn_once(message: str) -> None:
@@ -108,8 +108,8 @@ def _build_prompt(finding: dict, code_window: str) -> str:
     return "\n".join(parts)
 
 
-def _parse_verdict(text: str) -> Verdict:
-    """Parse a strict-JSON verdict string into a Verdict; raise on any issue.
+def _parse_verdict(text: str) -> FindingVerdict:
+    """Parse a strict-JSON verdict string into a FindingVerdict; raise on any issue.
 
     ``is_real`` MUST be a JSON boolean — a truthy string like "false" is rejected
     (``bool("false")`` is True), so nothing is queued as real unless the engine
@@ -123,17 +123,17 @@ def _parse_verdict(text: str) -> Verdict:
     confidence = float(data["confidence"])
     if not 0.0 <= confidence <= 1.0:
         raise ValueError(f"confidence {confidence!r} out of [0, 1]")
-    return Verdict(is_real=raw, confidence=confidence, rationale=str(data["rationale"]))
+    return FindingVerdict(is_real=raw, confidence=confidence, rationale=str(data["rationale"]))
 
 
 async def _run_single_verification(
     prompt: str, *, provider_name: str | None, use_cache: bool
-) -> tuple[Verdict, str | None]:
-    """Run one LLM verification call. Returns (Verdict, provider that answered).
+) -> tuple[FindingVerdict, str | None]:
+    """Run one LLM verification call. Returns (FindingVerdict, provider that answered).
 
     The provider is None whenever the call errored/produced nothing usable —
     there is nothing genuinely "distinct" about a call that never got an answer.
-    Never raises; any failure is folded into a fail-closed Verdict (unchanged
+    Never raises; any failure is folded into a fail-closed FindingVerdict (unchanged
     contract from the pre-#12618 ``verify_finding``).
     """
     try:
@@ -184,7 +184,7 @@ def select_verifier_provider(
     return candidates[0]
 
 
-def combine_verdicts(a: Verdict, b: Verdict, provider_a: str, provider_b: str) -> Verdict:
+def combine_verdicts(a: FindingVerdict, b: FindingVerdict, provider_a: str, provider_b: str) -> FindingVerdict:
     """Combine two cross-vendor verdicts per the design's agree/disagree rule (#12618).
 
     Agree: auto-resolve using the higher-confidence rationale, UNLESS that
@@ -199,7 +199,7 @@ def combine_verdicts(a: Verdict, b: Verdict, provider_a: str, provider_b: str) -
         best = a if a.confidence >= b.confidence else b
         escalate = best.confidence < config.cross_vendor_low_confidence_threshold
         rationale = f"{tag} agree (confidence={best.confidence:.2f}): {best.rationale}"
-        return Verdict(
+        return FindingVerdict(
             is_real=best.is_real, confidence=best.confidence, rationale=rationale, escalate_to_human=escalate
         )
     rationale = (
@@ -207,12 +207,12 @@ def combine_verdicts(a: Verdict, b: Verdict, provider_a: str, provider_b: str) -
         f"{provider_a} says is_real={a.is_real} (confidence={a.confidence:.2f}, {a.rationale}); "
         f"{provider_b} says is_real={b.is_real} (confidence={b.confidence:.2f}, {b.rationale})"
     )
-    return Verdict(
+    return FindingVerdict(
         is_real=True, confidence=min(a.confidence, b.confidence), rationale=rationale, escalate_to_human=True
     )
 
 
-async def _apply_cross_vendor(prompt: str, verdict_a: Verdict, provider_a: str | None) -> Verdict:
+async def _apply_cross_vendor(prompt: str, verdict_a: FindingVerdict, provider_a: str | None) -> FindingVerdict:
     """Force a second, genuinely distinct verifier call and combine verdicts (#12618).
 
     Fail-closed, not silent degrade, when a distinct provider IS configured and
@@ -245,11 +245,11 @@ async def _apply_cross_vendor(prompt: str, verdict_a: Verdict, provider_a: str |
     return combine_verdicts(verdict_a, verdict_b, provider_a, provider_b)
 
 
-async def verify_finding(finding: dict, clone_path: str, *, cross_vendor: bool = False) -> Verdict:
+async def verify_finding(finding: dict, clone_path: str, *, cross_vendor: bool = False) -> FindingVerdict:
     """Ask the internal SLM engine whether a finding is a real bug.
 
     FAIL CLOSED: any exception, empty/None response, or JSON-parse failure
-    returns Verdict(is_real=False, confidence=0.0, rationale="unverifiable: …").
+    returns FindingVerdict(is_real=False, confidence=0.0, rationale="unverifiable: …").
     This function never raises.
 
     cross_vendor: when True AND config.cross_vendor_review_enabled, forces a

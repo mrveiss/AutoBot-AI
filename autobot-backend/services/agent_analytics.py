@@ -34,7 +34,7 @@ from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
 logger = get_logger(__name__)
 
 
-class AgentType(str, Enum):
+class AnalyticsAgentType(str, Enum):
     """Types of agents in the system"""
 
     CHAT = "chat"

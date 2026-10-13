@@ -48,15 +48,19 @@ from code_intelligence.doc_generation.models import (
     ModuleDoc,
     PackageDoc,
 )
-from code_intelligence.doc_generation.module_analyzer import ModuleAnalyzer
+from code_intelligence.doc_generation.module_analyzer import (
+    ModuleAnalyzer,
+    analyze_module,
+    analyze_package,
+)
 
 # Import types and models from the doc_generation package (Issue #381 refactoring)
 from code_intelligence.doc_generation.types import (
+    CodeElementType,
     DiagramType,
     DocCompleteness,
     DocFormat,
     DocSection,
-    ElementType,
     ExampleDoc,
     ExceptionDoc,
     ParameterDoc,
@@ -70,7 +74,7 @@ __all__ = [
     # Enums
     "DocFormat",
     "DocSection",
-    "ElementType",
+    "CodeElementType",
     "DocCompleteness",
     "DiagramType",
     # Data classes
@@ -246,36 +250,6 @@ class DocGenerator:
 # =============================================================================
 
 
-def analyze_module(file_path: str, **kwargs) -> ModuleDoc | None:
-    """
-    Analyze a Python module and extract documentation.
-
-    Args:
-        file_path: Path to the Python file
-        **kwargs: Additional options for DocGenerator
-
-    Returns:
-        ModuleDoc containing extracted documentation
-    """
-    generator = DocGenerator(**kwargs)
-    return generator.analyze_module(file_path)
-
-
-def analyze_package(package_path: str, **kwargs) -> PackageDoc | None:
-    """
-    Analyze a Python package and all its modules.
-
-    Args:
-        package_path: Path to the package directory
-        **kwargs: Additional options for DocGenerator
-
-    Returns:
-        PackageDoc containing package documentation
-    """
-    generator = DocGenerator(**kwargs)
-    return generator.analyze_package(package_path)
-
-
 def generate_docs(
     path: str,
     output_path: str | None = None,
@@ -330,7 +304,7 @@ def get_doc_sections() -> List[str]:
 
 def get_element_types() -> List[str]:
     """Get available element types."""
-    return [e.value for e in ElementType]
+    return [e.value for e in CodeElementType]
 
 
 def get_diagram_types() -> List[str]:

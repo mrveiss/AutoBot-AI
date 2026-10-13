@@ -88,7 +88,7 @@ from .profiler import INFERENCE_STAGES, LayeredProfiler
 from .prompt_compressor import CompressionConfig, CompressionResult, PromptCompressor
 from .rate_limiter import RateLimitConfig, RateLimitError, RateLimitHandler
 from .router import (
-    OptimizationCategory,
+    LLMServingOptimizationCategory,
     OptimizationConfig,
     OptimizationRouter,
     get_optimization_router,
@@ -113,7 +113,7 @@ from .token_optimizer import (
 __all__ = [
     # Router
     "OptimizationRouter",
-    "OptimizationCategory",
+    "LLMServingOptimizationCategory",
     "OptimizationConfig",
     "get_optimization_router",
     # Flash Attention
