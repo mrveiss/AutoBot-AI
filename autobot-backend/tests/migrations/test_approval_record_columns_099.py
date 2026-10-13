@@ -93,9 +93,9 @@ async def test_downgrade_round_trips_an_untouched_table(fresh_db_url):
 async def test_downgrade_refuses_once_a_new_column_holds_a_value(fresh_db_url, column, value):
     assert run_alembic(["upgrade", _REV], fresh_db_url).returncode == 0
     await _seed(fresh_db_url)
-    await _run(
-        fresh_db_url, f"UPDATE approvals SET {column} = {value} WHERE id = :id", {"id": _ROWS[0]["id"]}
-    )  # nosec B608
+    # column and value come from the parametrize list above, never from input.
+    sql = f"UPDATE approvals SET {column} = {value} WHERE id = :id"  # nosec B608
+    await _run(fresh_db_url, sql, {"id": _ROWS[0]["id"]})
 
     down = run_alembic(["downgrade", _PRE], fresh_db_url)
     assert down.returncode != 0
