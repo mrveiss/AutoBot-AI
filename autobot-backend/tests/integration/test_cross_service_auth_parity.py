@@ -15,9 +15,10 @@ Test strategy
    from ``autobot_shared.auth.permissions`` and do NOT define local Permission
    enums or ROLE_PERMISSIONS dicts.
 
-2. **Enforcement parity (parametrized)** — replicate each backend's
-   role-derivation and permission-check logic in pure Python (no FastAPI import
-   needed) and assert that both agree on every (Role, Permission) pair.
+2. **Enforcement parity (parametrized)** — both services apply the shared
+   evaluator (#18263); assert it agrees on every (Role, Permission) pair for both
+   payload shapes. The services' real bindings are driven end to end by
+   ``repo_tests/cross_service_permission_parity_18263_test.py``.
 
 3. **Completeness** — every Permission member must appear in at least one role's
    permission set (no orphaned permission that can never be granted).
@@ -50,43 +51,25 @@ for p in (_AUTOBOT_BACKEND, str(_AUTOBOT_SHARED)):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
+from autobot_shared.auth.permission_evaluator import permission_allowed
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role, is_admin_role
 
 # ---------------------------------------------------------------------------
-# Helpers — replicate each backend's enforcement path without FastAPI imports
+# Helpers — both services now apply ONE evaluator (#18263). These call it rather
+# than replicate either service: a replica kept the SLM's lenient role fallback
+# "passing" here after the code had dropped it. The real per-service bindings are
+# driven end to end by repo_tests/cross_service_permission_parity_18263_test.py.
 # ---------------------------------------------------------------------------
 
 
 def _backend_has_permission(role_str: str, permission: Permission) -> bool:
-    """Replicate autobot-backend auth_rbac.py::_get_user_permissions + has_permission.
-
-    auth_rbac._get_user_permissions resolves the role via Role(user_role.lower())
-    then looks up ROLE_PERMISSIONS.  The SecurityLayer.check_permission call
-    also ends up consulting ROLE_PERMISSIONS (it delegates to the shared mapping
-    for known roles).  We replicate the canonical path here.
-    """
-    try:
-        role = Role(role_str.lower())
-    except ValueError:
-        return False
-    return permission in ROLE_PERMISSIONS.get(role, [])
+    """The backend's decision for a caller whose ``role`` claim is *role_str*."""
+    return permission_allowed({"role": role_str}, permission)
 
 
 def _slm_has_permission(user_payload: dict, permission: Permission) -> bool:
-    """Replicate autobot-slm-backend services/auth.py::require_permission._check.
-
-    Derives role from 'role' field (preferred) or falls back to 'admin' boolean.
-    Checks membership in ROLE_PERMISSIONS directly.
-    """
-    role_str = user_payload.get("role")
-    if role_str:
-        try:
-            role = Role(role_str)
-        except ValueError:
-            role = Role.USER
-    else:
-        role = Role.ADMIN if user_payload.get("admin", False) else Role.USER
-    return permission in ROLE_PERMISSIONS.get(role, [])
+    """The SLM's decision for a JWT payload."""
+    return permission_allowed(user_payload, permission)
 
 
 # ---------------------------------------------------------------------------
@@ -352,28 +335,23 @@ class TestPermissionNamingConvention:
 
 
 class TestLegacyJWTFallback:
-    """Verify both backends apply the same fallback when JWT has no 'role' field."""
+    """#18263 strict reading: neither service resolves a role the claim does not name exactly."""
 
-    def test_legacy_admin_true_maps_to_admin_role_in_slm(self):
-        payload = {"sub": "old_admin", "admin": True}
-        assert _slm_has_permission(payload, Permission.ADMIN_SYSTEM)
+    def test_a_legacy_admin_flag_without_a_role_is_denied(self):
+        assert not _slm_has_permission({"sub": "old_admin", "admin": True}, Permission.ADMIN_SYSTEM)
 
-    def test_legacy_admin_false_maps_to_user_role_in_slm(self):
-        payload = {"sub": "old_user", "admin": False}
-        assert not _slm_has_permission(payload, Permission.ADMIN_SYSTEM)
+    def test_a_legacy_user_flag_without_a_role_is_denied_even_user_permissions(self):
+        assert not _slm_has_permission({"sub": "old_user", "admin": False}, Permission.CHAT_USE)
 
-    def test_unknown_role_string_falls_back_to_user_in_slm(self):
+    def test_an_unknown_role_is_denied_not_treated_as_user(self):
         payload = {"sub": "attacker", "admin": False, "role": "superadmin_inject"}
-        assert not _slm_has_permission(payload, Permission.ADMIN_SYSTEM)
+        assert not _slm_has_permission(payload, Permission.CHAT_USE)
 
     def test_backend_unknown_role_returns_false(self):
         assert not _backend_has_permission("superadmin_inject", Permission.ADMIN_SYSTEM)
 
-    def test_backend_and_slm_agree_on_admin_legacy_token(self):
-        """Legacy admin=True token: both backends must grant ADMIN_SYSTEM."""
+    def test_backend_and_slm_agree_on_a_legacy_admin_token(self):
+        """Both deny: the stricter of the two former readings won (#18263)."""
         payload = {"sub": "legacy", "admin": True}
-        # backend doesn't support legacy fallback (needs explicit role= string)
-        # but SLM does. Document this known difference explicitly.
-        slm_result = _slm_has_permission(payload, Permission.ADMIN_SYSTEM)
-        # SLM should grant it (legacy fallback)
-        assert slm_result, "SLM must grant ADMIN_SYSTEM for legacy admin=True tokens"
+        assert _slm_has_permission(payload, Permission.ADMIN_SYSTEM) is False
+        assert _backend_has_permission("", Permission.ADMIN_SYSTEM) is False

@@ -638,7 +638,7 @@ class AuthenticationMiddleware:
         if not dev_mode:
             return None
 
-        user_role = request.headers.get("X-User-Role")
+        user_role = (request.headers.get("X-User-Role") or "").strip().lower()  # canonical spelling (#18263)
         if not user_role:
             return None
 

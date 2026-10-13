@@ -187,8 +187,6 @@
     "recover_index_queue",
     "reload_config",
     "require_admin",
-    "require_any_permission",
-    "require_permission",
     "resolve_project_root",
     "restart_fleet_service",
     "route_next",
