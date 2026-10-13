@@ -376,11 +376,6 @@ _STRING_FENCE_CALLS = (
 
 _STRING_FENCE_ALLOWED = {
     "autobot_shared/frontmatter.py": "the canonical parser; `startswith` is its fast reject",
-    "autobot-infrastructure/shared/scripts/utilities/optimize_agents.py": (
-        "a tenth variant, left in place: this tree's sys.path bootstrap is itself broken "
-        "(#18126), so adding an autobot_shared import here would depend on a path that "
-        "does not resolve. Fix #18126 first, then migrate it."
-    ),
 }
 
 

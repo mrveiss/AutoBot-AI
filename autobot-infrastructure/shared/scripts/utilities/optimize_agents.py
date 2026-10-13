@@ -44,6 +44,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from autobot_shared.frontmatter import split_frontmatter  # noqa: E402
 from autobot_shared.paths import scrubbed_git_env  # noqa: E402 - follows the sys.path setup above
 
 # Setup logging
@@ -156,15 +157,15 @@ class AgentOptimizer:
         Returns:
             Tuple of (frontmatter, body)
         """
-        if not content.startswith("---"):
+        yaml_text, body = split_frontmatter(content)
+        if yaml_text is None:
             return "", content
 
-        # Find the closing ---
-        parts = content.split("---", 2)
-        if len(parts) >= 3:
-            return f"---{parts[1]}---", parts[2]
-
-        return "", content
+        # Keep the historical shape: the fenced block (closing ``---`` included, no
+        # trailing newline) and a body that still starts with that newline, so
+        # ``frontmatter + body`` reproduces the input byte-for-byte.
+        frontmatter = content[: len(content) - len(body)].rstrip("\r\n")
+        return frontmatter, content[len(frontmatter) :]
 
     def _strip_code_blocks_from_content(self, content: str) -> Tuple[str, int]:
         """

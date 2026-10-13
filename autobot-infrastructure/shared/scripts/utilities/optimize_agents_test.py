@@ -72,6 +72,16 @@ This is the body content."""
         self.assertTrue(frontmatter.startswith("---"))
         self.assertTrue(frontmatter.endswith("---"))
 
+    def test_extract_frontmatter_keeps_historical_shape_and_round_trips(self):
+        """Same (frontmatter, body) split the old ``split("---", 2)`` produced (#18129)."""
+        content = "---\nname: a\ndescription: b\n---\n# Body\n\ntext --- more\n"
+
+        frontmatter, body = self.optimizer._extract_frontmatter(content)
+
+        self.assertEqual(frontmatter, "---\nname: a\ndescription: b\n---")
+        self.assertEqual(body, "\n# Body\n\ntext --- more\n")
+        self.assertEqual(frontmatter + body, content)
+
     def test_extract_frontmatter_no_frontmatter(self):
         """Test content without frontmatter."""
         content_without_frontmatter = "This is just body content."
