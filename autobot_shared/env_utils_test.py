@@ -249,3 +249,76 @@ class TestEnvFloatClampedPositiveFinite:
         assert env_float_clamped("AUTOBOT_TEST_PF", 30.0, positive_finite=True) == 7.5
         monkeypatch.setenv("AUTOBOT_TEST_PF", "0")
         assert env_float_clamped("AUTOBOT_TEST_PF", 30.0) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# #17855 row 2: pins for the behaviour local copies used to lack
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("raw", ["", "   "])
+def test_blank_flag_keeps_a_default_false_flag_off(monkeypatch, raw):
+    """essential_story's local _env_bool flipped a default-False flag ON for a blank export."""
+    monkeypatch.setenv(_VAR, raw)
+    assert env_flag(_VAR, False) is False
+    assert env_flag(_VAR, True) is True
+
+
+def test_off_reads_as_false_not_true(monkeypatch):
+    """The local copy tested membership in a falsy set, so ``off`` read as True."""
+    monkeypatch.setenv(_VAR, "off")
+    assert env_flag(_VAR, True) is False
+
+
+def test_env_float_reject_nan_is_opt_in(monkeypatch):
+    monkeypatch.setenv(_FLOAT_VAR, "nan")
+    assert env_float(_FLOAT_VAR, 0.5, reject_nan=True) == 0.5
+    assert env_float(_FLOAT_VAR, 0.5) != env_float(_FLOAT_VAR, 0.5)  # NaN passes through by default
+
+
+# ---------------------------------------------------------------------------
+# #17855: a typo must not decide a flag. Pinned per flag class.
+# ---------------------------------------------------------------------------
+
+_TYPOS = ["ture", "enabled", "disabled", "2", "y", "tru"]
+
+
+@pytest.mark.parametrize("raw", _TYPOS)
+def test_protection_flag_defaulting_on_stays_on_for_a_typo(monkeypatch, raw):
+    """Class: safe value True, default True (user scoping, flood guards, ...)."""
+    monkeypatch.setenv(_VAR, raw)
+    assert env_flag(_VAR, True) is True
+
+
+@pytest.mark.parametrize("raw", _TYPOS)
+def test_opt_in_flag_defaulting_off_stays_off_for_a_typo(monkeypatch, raw):
+    """Class: feature or hardening that is opt-in; a typo does not enable it."""
+    monkeypatch.setenv(_VAR, raw)
+    assert env_flag(_VAR, False) is False
+
+
+@pytest.mark.parametrize("raw", _TYPOS)
+def test_permission_widening_flag_reads_a_typo_as_false(monkeypatch, raw):
+    """Class: default True but the SAFE value is False (auto-approve): on_invalid="false"."""
+    monkeypatch.setenv(_VAR, raw)
+    assert env_flag(_VAR, True, on_invalid="false") is False
+
+
+def test_raise_mode_refuses_a_typo_and_still_reads_real_values(monkeypatch):
+    monkeypatch.setenv(_VAR, "ture")
+    with pytest.raises(ValueError):
+        env_flag(_VAR, True, on_invalid="raise")
+    monkeypatch.setenv(_VAR, "off")
+    assert env_flag(_VAR, True, on_invalid="raise") is False
+
+
+def test_an_unknown_on_invalid_mode_is_refused(monkeypatch):
+    with pytest.raises(ValueError):
+        env_flag(_VAR, True, on_invalid="shrug")
+
+
+def test_a_typo_is_announced(monkeypatch, caplog):
+    monkeypatch.setenv(_VAR, "ture")
+    with caplog.at_level(logging.WARNING):
+        env_flag(_VAR, True)
+    assert "Invalid" in caplog.text

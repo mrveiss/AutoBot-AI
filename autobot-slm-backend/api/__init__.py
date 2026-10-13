@@ -31,6 +31,8 @@ from .llm_config import router as llm_config_router
 from .maintenance import router as maintenance_router
 from .mfa import router as mfa_router
 from .monitoring import router as monitoring_router
+from .node_post_sync import router as node_post_sync_router
+from .node_post_sync import runs_router as post_sync_runs_router
 from .nodes import router as nodes_router
 from .nodes_execution import router as nodes_execution_router
 from .npu import router as npu_router
@@ -68,6 +70,14 @@ monitoring_router.include_router(gpu_router)
 # nodes_router's own include-level auth from main.py. Mounted here rather
 # than added to api/nodes.py because that file is at its file-size ceiling.
 nodes_router.include_router(capability_profile_router)
+
+# #17455: node-level post-sync (POST /api/nodes/{node_id}/sync) and the recorded-run
+# read (GET /api/code-sync/post-sync-runs/{run_id}) are mounted on the routers that
+# carry POST /api/code-sync/roles/{role_name}/sync's include-level auth (main.py:
+# _SM_OR_AGENT on both). Mounted here, not added to api/nodes.py or api/code_sync.py,
+# which sit at their file-size ceilings.
+nodes_router.include_router(node_post_sync_router)
+code_sync_router.include_router(post_sync_runs_router)
 
 __all__ = [
     "agents_router",

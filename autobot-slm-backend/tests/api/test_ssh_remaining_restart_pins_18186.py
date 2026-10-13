@@ -112,6 +112,7 @@ _BACKUP_PREFIX = [
     "BatchMode=yes",
     "-p",
     "2222",
+    "--",
     "svc@node.example.test",
 ]
 
@@ -167,6 +168,7 @@ _BG_PREFIX = [
     "BatchMode=yes",
     "-p",
     "2222",
+    "--",
     "svc@node.example.test",
 ]
 
@@ -217,7 +219,7 @@ async def test_code_distributor_restart_argv_or_true_merged_stderr_timeout_60(mo
     await dist._restart_slm_agent("n1", "node.example.test", "svc", 2222)
     assert run.argv == [
         "ssh", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=30", "-p", "2222",
-        "-i", str(key), "svc@node.example.test", "sudo systemctl restart -- slm-agent || true",
+        "-i", str(key), "--", "svc@node.example.test", "sudo systemctl restart -- slm-agent || true",
     ]  # fmt: skip
     assert (run.kwargs["stdout"], run.kwargs["stderr"]) == (asyncio.subprocess.PIPE, asyncio.subprocess.STDOUT)
     assert run.timeouts == [60.0]
@@ -254,6 +256,7 @@ def _orch_prefix(tmp_path):
         "BatchMode=yes",
         "-i",
         str(tmp_path / "id"),
+        "--",
         "autobot@node.example.test",
     ]
 

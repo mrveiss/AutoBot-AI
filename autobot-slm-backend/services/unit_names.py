@@ -26,7 +26,8 @@ _UNIT_NAME_RE = re.compile(r"^[A-Za-z0-9:_.@][A-Za-z0-9:_.@\-]*$")
 _SINCE_RE = re.compile(
     r"(?:\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?"
     r"|-?\d{1,6}\s?(?:s|sec|m|min|h|hr|d|w)(?: ago)?"
-    r"|now|today|yesterday)"
+    r"|now|today|yesterday)",
+    re.ASCII,  # `\d` / `\s` match only ASCII: Arabic-Indic digits and U+2003 are not journalctl input (#18352)
 )
 
 

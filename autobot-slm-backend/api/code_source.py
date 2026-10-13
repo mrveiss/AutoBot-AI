@@ -35,6 +35,7 @@ from models.database import (
 )
 from services.auth import get_current_user
 from services.database import get_db
+from services.ssh_utils import ssh_destination_args
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-source", tags=["code-source"])
@@ -177,6 +178,12 @@ def _is_local_node(node: Node) -> bool:
     return is_local_ip(node.ip_address)
 
 
+def _node_ssh_cmd(node: Node, remote_cmd: str) -> list:
+    """The ssh argv for one remote command on *node*; the destination is validated (#18366)."""
+    opts = ["-o", "ConnectTimeout=10", "-o", "StrictHostKeyChecking=accept-new"]
+    return ["ssh", *opts, *ssh_destination_args(node.ssh_user, node.ip_address), remote_cmd]
+
+
 async def _find_similar_paths(node: Node, target_path: str) -> str | None:
     """Find paths similar to target (case-insensitive match).
 
@@ -197,15 +204,7 @@ async def _find_similar_paths(node: Node, target_path: str) -> str | None:
             logger.debug("Failed to search for similar paths locally: %s", e)
         return None
 
-    ssh_cmd = [
-        "ssh",
-        "-o",
-        "ConnectTimeout=10",
-        "-o",
-        "StrictHostKeyChecking=accept-new",
-        f"{node.ssh_user}@{node.ip_address}",
-        f"test -d {parent_dir} && ls -1 {parent_dir} 2>/dev/null || true",
-    ]
+    ssh_cmd = _node_ssh_cmd(node, f"test -d {parent_dir} && ls -1 {parent_dir} 2>/dev/null || true")
 
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -246,15 +245,7 @@ async def _validate_repo_path(node: Node, repo_path: str) -> None:
         error_detail = f"Repository path does not exist on source node: {repo_path}"
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_detail)
 
-    ssh_cmd = [
-        "ssh",
-        "-o",
-        "ConnectTimeout=10",
-        "-o",
-        "StrictHostKeyChecking=accept-new",
-        f"{node.ssh_user}@{node.ip_address}",
-        f"test -d {repo_path} && echo exists",
-    ]
+    ssh_cmd = _node_ssh_cmd(node, f"test -d {repo_path} && echo exists")
 
     try:
         proc = await asyncio.create_subprocess_exec(
