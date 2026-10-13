@@ -471,3 +471,25 @@ account-handling methods anywhere else is a failure whatever it is called.
 treat a subclass of a shared definition as a binding rather than a second definition.
 
 **Grep check:** `grep -rn "^class \(User\|Organization\|UserService\)\b" autobot-backend/user_management autobot-slm-backend/user_management autobot_shared/user_management` should list `UserService` in `autobot_shared` plus one `UserService`, `User` and `Organization` subclass binding per service.
+
+## `config/loader.py` — Stdlib `logging`, Own YAML Read (not `load_config_file`)
+
+**File:** `autobot-backend/config/loader.py` (`load_yaml_config`)
+**Shared authority it does not use:** `autobot_shared/config_file_loading.py` (`load_config_file`)
+**Issue:** #17855
+
+**Reason:** `config/loader.py` is on the logging-manager initialisation path: it
+uses stdlib `logging` on purpose so that loading configuration cannot deadlock
+waiting on a logger that itself needs configuration (the GH#7765 pattern noted
+at the top of the module). `load_config_file` imports
+`autobot_shared.logging_manager`, so adopting it here would reintroduce exactly
+that cycle. The other YAML config loaders in #17855 row 8 have no such
+constraint and were migrated. This loader never writes defaults back to disk, so
+the behaviour the shared loader exists to guarantee is already met; what it
+lacks is the loaded-versus-defaults distinction (`LoadedConfig.source`).
+
+**Revisit when:** `load_config_file` (or a logging-free core of it) no longer
+imports `logging_manager`, at which point `load_yaml_config` should delegate to
+it and this entry be removed.
+
+**Grep check:** `grep -n "logging_manager" autobot_shared/config_file_loading.py` — if empty, this exception is obsolete.

@@ -17,8 +17,8 @@ from typing import Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.paths import scrubbed_git_env
 from models.database import CodeSource, Setting
+from services.git_subprocess import GIT_TIMEOUT_S, GIT_TRANSPORT_TIMEOUT_S, run_git_capture
 
 logger = logging.getLogger(__name__)
 
@@ -81,8 +81,6 @@ class GitTracker:
         Returns:
             Tuple of (stdout, return_code)
         """
-        cmd = ["git", "-C", self.repo_path, *args]
-
         # Deployments without a local checkout (docker compose / rsync) have no
         # code_source dir. Skip the git invocation and let callers fall back to
         # the DB commit setting, instead of warn-spamming every reconcile cycle
@@ -92,27 +90,11 @@ class GitTracker:
             logger.debug("git_tracker: %s is not a git repo — skipping 'git %s'", self.repo_path, " ".join(args))
             return "", 1
 
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=scrubbed_git_env(),  # #16179
-            )
-            stdout, stderr = await proc.communicate()
-
-            if proc.returncode != 0:
-                logger.warning(
-                    "Git command failed: %s, stderr: %s",
-                    " ".join(cmd),
-                    stderr.decode().strip(),
-                )
-
-            return stdout.decode().strip(), proc.returncode
-
-        except Exception as e:
-            logger.error("Error running git command: %s", e)
-            return "", 1
+        # Strict env + bounded timeout via the shared runner (#17855); fetch and
+        # pull download history, so they get the transport bound.
+        timeout = GIT_TRANSPORT_TIMEOUT_S if args[0] in ("fetch", "pull") else GIT_TIMEOUT_S
+        stdout, returncode = await run_git_capture(self.repo_path, *args, timeout=timeout)
+        return stdout.strip(), returncode
 
     async def get_local_commit(self) -> str | None:
         """

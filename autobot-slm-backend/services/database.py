@@ -18,6 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from config import settings
 from models.database import Base, Setting
+from models.post_sync_action_run import PostSyncActionRun
+
+# Tables whose models live outside models/database.py (its file-size ceiling). Imported
+# here so they are on Base.metadata before create_all runs (#17455).
+_EXTRA_MODELS = (PostSyncActionRun,)
 
 # SSOT-derived seed defaults — env vars match PortConfig/VMConfig aliases
 _BACKEND_HOST = os.getenv("AUTOBOT_BACKEND_HOST", "127.0.0.1")

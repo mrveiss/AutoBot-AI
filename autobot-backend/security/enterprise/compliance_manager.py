@@ -11,7 +11,6 @@ Issue #378: Added threading locks for file operations to prevent race conditions
 
 import asyncio
 import json
-import os
 import threading
 from datetime import datetime
 from enum import Enum
@@ -27,6 +26,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
+from utils.secrets_store_migration import ensure_and_read_shared_key
 
 logger = get_logger(__name__)
 
@@ -233,32 +233,14 @@ class ComplianceManager:
 
     def _get_encryption_key(self) -> bytes | None:
         """Get or generate encryption key for sensitive audit data (thread-safe, Issue #378)"""
-        key_path = self.audit_base_path / ".audit_key"
-
-        # Note: _file_lock not yet initialized during __init__, use local lock
-        with threading.Lock():
-            if key_path.exists():
-                try:
-                    with open(key_path, "rb") as f:
-                        return f.read()
-                except Exception as e:
-                    logger.error("Failed to load encryption key: %s", e)
-
-            # Generate new key
-            try:
-                key = Fernet.generate_key()
-                # Fernet key persists for audit data encryption across
-                # restarts; secured by 0o600 file permissions.
-                with open(key_path, "wb") as f:
-                    f.write(key)
-
-                # Set restrictive permissions
-                os.chmod(key_path, 0o600)
-                logger.info("Generated new audit encryption key")
-                return key
-            except Exception as e:
-                logger.error("Failed to generate encryption key: %s", e)
-                return None
+        # One locked, atomic mint shared with the secrets stores (#17855). The
+        # old body built a fresh threading.Lock() per call, which excludes
+        # nothing, and wrote the key non-atomically.
+        try:
+            return ensure_and_read_shared_key(self.audit_base_path, key_filename=".audit_key")
+        except Exception as e:
+            logger.error("Failed to load or generate encryption key: %s", e)
+            return None
 
     def _load_compliance_requirements(self) -> Dict:
         """Load compliance framework requirements"""

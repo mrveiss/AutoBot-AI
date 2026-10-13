@@ -27,6 +27,7 @@ from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 from models.database import Node, Service, SystemdState
 from services.orchestrator_ssh import report_ssh, spawn_ssh, ssh_base_cmd, systemctl_sudo_call, systemctl_user_cmd
+from services.ssh_utils import ssh_destination_args, ssh_options
 
 logger = logging.getLogger(__name__)
 
@@ -882,15 +883,10 @@ class ServiceOrchestrator:
         """Check if SSH connection is possible."""
         cmd = [
             "ssh",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-o",
-            "ConnectTimeout=3",
-            "-o",
-            "BatchMode=yes",
+            *ssh_options("StrictHostKeyChecking=accept-new", "ConnectTimeout=3", "BatchMode=yes"),
             "-i",
             str(self.ssh_key),
-            f"{self.ssh_user}@{host}",
+            *ssh_destination_args(self.ssh_user, host),
             "echo ok",
         ]
         process = await asyncio.create_subprocess_exec(
