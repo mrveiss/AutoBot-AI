@@ -213,6 +213,7 @@ _DECLARED_SCOPES = {
     "anti-pattern-type-emitters": ("autobot-backend/code_analysis", "autobot-backend/code_intelligence"),
     "chat-history-async-calls-awaited": ("autobot-backend/api",),
     "chat-single-delete-implementation": ("autobot-backend/api",),
+    "ai-line-single-policy": ("autobot-backend", "autobot_shared"),
     "conversation-turn-single-store": ("autobot-backend", "autobot_shared", "autobot-infrastructure"),
     "credential-field-name-only-callers": (
         "autobot-backend",

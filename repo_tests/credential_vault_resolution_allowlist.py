@@ -49,6 +49,9 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         f"{_AUTH_BOOTSTRAP}: internal MCP server shared secret"
     ),
     ("autobot-backend/auth_middleware.py", "jwt_secret"): (f"{_AUTH_BOOTSTRAP}: platform user-session signing key"),
+    ("autobot-backend/services/ai_line_enforcement.py", "jwt_secret"): (
+        f"{_AUTH_BOOTSTRAP}: domain-separated HMAC key derived from the platform session-signing secret"
+    ),
     ("autobot-backend/services/slm_client.py", "jwt_secret"): (
         f"{_AUTH_BOOTSTRAP}: platform user-session signing key, reused to mint SLM service JWTs"
     ),

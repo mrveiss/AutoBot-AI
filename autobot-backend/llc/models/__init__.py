@@ -6,6 +6,7 @@ from autobot_shared.trust_enums import TrustLevel
 
 from .activity import ActorType, LLCActivityLog, LLCBase
 from .agent_wiki import LLCAgentWikiEntry
+from .ai_line import LLCAiLine
 from .approval import LLCApproval
 from .board import LLCBoard, LLCBoardColumn
 from .budget import LLCAgentBudget
@@ -74,6 +75,7 @@ __all__ = [
     "ContextMode",
     "CoWorkerType",
     "CompanyAncestor",
+    "LLCAiLine",
     "LLCCompanyTool",
     "LLCContact",
     "FindingProposalStatus",

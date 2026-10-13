@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from async_chat_workflow import WorkflowMessage
+from autobot_shared.ai_lines import VERIFIED_COMPANY_KEY, VERIFIED_USER_KEY, resolve_scope
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import SENSITIVE_TOOLS, match_tool_name
 
@@ -168,7 +169,7 @@ async def enforce_pre_action_verifier(
     A BLOCK verdict with ``VERIFIER_HARD_BLOCK=1`` hard-blocks the call,
     preserving the original semantics exactly. Without hard-block, the call
     is held pending approval with the verifier's rationale attached — the
-    same ``pending_approval`` shape ``enforce_work_item_approval`` already
+    same ``pending_approval`` shape ``enforce_ai_line`` already
     uses at this seam. A broken or unavailable verifier fails open
     (SKIP/PASS via ``PreActionVerifier.verify``) and never blocks the loop.
     """
@@ -292,56 +293,73 @@ def enforce_repetition(
     )
 
 
-def enforce_work_item_approval(
+def _call_params(tool_call: dict[str, Any]) -> dict[str, Any]:
+    params = tool_call.get("params") or tool_call.get("arguments") or {}
+    return params if isinstance(params, dict) else {"value": repr(params)}
+
+
+async def enforce_ai_line(
     tool_call: dict[str, Any],
     ctx: "LLMIterationContext | None",
     execution_results: list[dict[str, Any]],
 ) -> WorkflowMessage | None:
-    """Hold a tool the work item declared as approval-gated (GH#11160).
+    """Resolve the tool action's AI line at the live seam (#18430; subsumes GH#11160's work-item hold).
 
-    When the run carries a work item whose ``requires_approval_before`` names
-    the action category of this tool, the action is held pending approval — the
-    declared gate is honored at the production seam. No work item / no matching
-    category → ``None``. Categories are resolved onto the context upstream, so
-    this needs no DB round-trip.
+    The three lines, the approval baseline (#18294) and the work item's ``requires_approval_before``
+    (GH#11160) are one decision in ``services.ai_line_enforcement`` -- this seam adds none of its own.
+    Line 1 -> ``None`` (the call runs; the point reports it). Line 2 -> held with a pending approval.
+    Line 3 -> refused. A missing ``ctx`` still enforces, with no company and no declared categories.
     """
-    # Deferred import (mirrors chat_workflow/graph.py's own use of this
-    # symbol): tool_handler imports this module at load time, so importing
-    # `_approval_category_for` from tool_handler back at module scope here
-    # would be circular. By call time both modules are fully loaded.
-    from chat_workflow.tool_handler import _approval_category_for
+    from services.ai_line_enforcement import Outcome, enforce_line
 
-    if ctx is None or not getattr(ctx, "requires_approval_before", None):
-        return None
     tool_name = tool_call.get("name", "")
-    category = _approval_category_for(tool_name, ctx.requires_approval_before)
-    if category is None:
-        return None
-    work_item_id = getattr(ctx, "work_item_id", None)
-    msg = (
-        f"Action '{tool_name}' requires approval before proceeding — the work item "
-        f"declares '{category}' as approval-gated (requires_approval_before)."
+    context = getattr(ctx, "context", None) or {}
+    verdict = await enforce_line(
+        tool_name=tool_name,
+        params=_call_params(tool_call),
+        company_id=context.get(VERIFIED_COMPANY_KEY),  # server-verified, never the request's claim
+        user_id=context.get(VERIFIED_USER_KEY),  # the personal scope of a user with no company
+        requested_by=str(getattr(ctx, "session_id", None) or "chat"),
+        surface="chat_tool",
+        declared_categories=getattr(ctx, "requires_approval_before", None) or (),
+        approved_fingerprints=getattr(ctx, "approved_fingerprints", frozenset()),
     )
-    logger.warning("[GH#11160] Held tool '%s' pending approval — declared category '%s'", tool_name, category)
+    if verdict.outcome is Outcome.RUN:
+        return None
+    refused = verdict.outcome is Outcome.REFUSE
+    meta = {
+        "tool": tool_name,
+        "line": verdict.resolution.line.value,
+        "category": verdict.resolution.floor_category,
+        "approval_id": verdict.approval_id,
+        "work_item_id": getattr(ctx, "work_item_id", None),
+    }
+    logger.warning("[#18430] %s tool '%s' on line %s", verdict.outcome.value, tool_name, verdict.resolution.line.rank)
     execution_results.append(
-        {
-            "tool": tool_name,
-            "status": "pending_approval",
-            "reason": msg,
-            "approval_category": category,
-            "work_item_id": work_item_id,
-        }
+        {"tool": tool_name, "status": "error" if refused else "pending_approval", "reason": verdict.message, **meta}
     )
     return WorkflowMessage(
-        type="approval_required",
-        content=msg,
-        metadata={
-            "tool": tool_name,
-            "approval_required": True,
-            "category": category,
-            "work_item_id": work_item_id,
-        },
+        type="error" if refused else "approval_required",
+        content=verdict.message,
+        metadata={**meta, "error": refused, "approval_required": not refused},
     )
+
+
+NO_VERIFIED_COMPANY_ERROR = (
+    "This tool changes a company's work objects and needs a verified company; there is none for this session."
+)
+
+
+def llc_scope_error(tool_name: str, company_id: Any, execution_results: list[dict[str, Any]]) -> WorkflowMessage | None:
+    """Refuse an LLC work-object tool that has no verified company to scope it by (#18430).
+
+    ``company_id`` must be the AUTHENTICATED company, never the request's own claim; absent or malformed is a
+    refusal, not a fall-through to the user's personal scope (a personal scope owns no company work objects).
+    """
+    if resolve_scope(company_id, None) is not None:
+        return None
+    execution_results.append({"tool": tool_name, "status": "error", "error": NO_VERIFIED_COMPANY_ERROR})
+    return WorkflowMessage(type="error", content=NO_VERIFIED_COMPANY_ERROR, metadata={"tool": tool_name, "error": True})
 
 
 def enforce_peer_messages(ctx: "LLMIterationContext | None") -> None:

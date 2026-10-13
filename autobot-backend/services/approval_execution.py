@@ -38,6 +38,8 @@ from models.approval import ApprovalComment
 from services.audit_logger import audit_log
 
 if TYPE_CHECKING:
+    import uuid
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from models.approval import Approval
@@ -66,7 +68,61 @@ _PROPOSERS: dict[str, str] = {}
 _AUDIT_OPERATION = "approval.post_action_failed"
 
 
-def register_post_approval_action(action: str, handler: PostApprovalAction, *, proposed_by: str) -> None:
+#: Actions only a server-side proposer may create (#18430). A public create route would let a caller write the
+#: approval's payload AND its requester, which defeats any rule about who may decide it.
+_SERVER_ONLY: set[str] = set()
+
+#: Attribute carrying the VERIFIED decider's user id from the decision route to the handler. Never persisted and
+#: never parsed from ``decided_by_user``, which is a display name on one route and a different shape on the other.
+_DECIDER_ATTR = "_verified_decider_id"
+
+
+def is_server_only_action(action: object) -> bool:
+    """Whether *action* may be created only by its own server-side proposer, never through a create route."""
+    return isinstance(action, str) and action in _SERVER_ONLY
+
+
+def set_verified_decider(approval: "Approval", user_id: "uuid.UUID | None") -> None:
+    """Record, for this decision only, the id of the authenticated person who decided *approval*."""
+    setattr(approval, _DECIDER_ATTR, user_id)
+
+
+def verified_decider(approval: "Approval") -> "uuid.UUID | None":
+    """The authenticated decider's user id, or ``None`` when the route did not supply one (the handler refuses)."""
+    return getattr(approval, _DECIDER_ATTR, None)
+
+
+#: action -> the ``context`` keys that are free text the action IGNORES. Every other key of an approval that names
+#: a registered action is what a human reviewed and is frozen: resubmitting after a revision request may not change
+#: it, or the human would approve something other than what they looked at (#17349).
+_FREE_TEXT_KEYS: dict[str, frozenset[str]] = {}
+
+
+def context_change_violation(old: "dict | None", new: "dict | None") -> str | None:
+    """What a resubmit may NOT change, or ``None``: the action, and every reviewed field of a registered action.
+
+    An approval that names no action carries no executable meaning, so its context may change freely.
+    """
+    old, new = old or {}, new or {}
+    if old.get("action") != new.get("action"):
+        return "context.action"
+    if old.get("action") not in _REGISTRY:
+        return None
+    free = _FREE_TEXT_KEYS.get(old["action"], frozenset())
+    for key in sorted((set(old) | set(new)) - free):
+        if old.get(key) != new.get(key):
+            return f"context.{key}"
+    return None
+
+
+def register_post_approval_action(
+    action: str,
+    handler: PostApprovalAction,
+    *,
+    proposed_by: str,
+    server_only: bool = False,
+    free_text_keys: "frozenset[str]" = frozenset(),
+) -> None:
     """Register *handler* to run when an approved gate's context names *action*.
 
     *proposed_by* is the dotted path of the production module that creates
@@ -85,6 +141,9 @@ def register_post_approval_action(action: str, handler: PostApprovalAction, *, p
         raise ValueError(f"action {action!r} must name the production module that proposes it (#17315)")
     _REGISTRY[action] = handler
     _PROPOSERS[action] = proposed_by.strip()
+    if server_only:
+        _SERVER_ONLY.add(action)
+    _FREE_TEXT_KEYS[action] = frozenset(free_text_keys)
 
 
 def register_resume_handler(source: str, handler: PostApprovalAction) -> None:
@@ -119,8 +178,14 @@ def registered_action_proposers() -> dict[str, str]:
     return dict(_PROPOSERS)
 
 
-async def run_post_approval_actions(approval: "Approval", session: "AsyncSession") -> None:
+async def run_post_approval_actions(
+    approval: "Approval", session: "AsyncSession", *, only: "frozenset[str] | None" = None
+) -> None:
     """Dispatch on ``approval.context["action"]``.
+
+    ``only`` restricts a CALLER to a named set of actions (#18430): an action outside it is not run and leaves a
+    durable comment saying so. The LLC decide route passes it, because that route's approvals are self-created
+    with arbitrary payloads (#17161).
 
     Called only after the transition to APPROVED already committed -- see
     ``ApprovalGateService.approve()`` -- so nothing here can prevent or roll
@@ -131,6 +196,11 @@ async def run_post_approval_actions(approval: "Approval", session: "AsyncSession
     """
     action = (approval.context or {}).get("action")
     if not action:
+        return
+    if only is not None and action not in only:
+        await _record_dispatch_failure(
+            approval, session, action=action, reason="this decision route runs only its allowed actions (#17161)"
+        )
         return
     handler = _REGISTRY.get(action)
     if handler is None:

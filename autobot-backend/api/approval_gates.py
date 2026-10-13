@@ -33,13 +33,15 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.risk_tier import RiskTier
 from models.approval import ApprovalSource, ApprovalStatus, ApprovalType
-from services.approval_execution import is_registered_action
+from services.ai_line_change_action import register_ai_line_change_action
+from services.approval_execution import context_change_violation, is_registered_action, is_server_only_action
 from services.approval_gate_service import ApprovalGateService
 from services.knowledge.collection_space_stamp_action import register_stamp_action
 
 logger = get_logger(__name__)
 router = APIRouter()
 register_stamp_action()  # registered with the router so the handler exists before any approve()
+register_ai_line_change_action()  # #18430: a person's approval is what changes an AI line
 
 
 # -- Helpers -----------------------------------------------------------
@@ -103,6 +105,14 @@ def _to_response(approval) -> ApprovalGateResponse:
     )
 
 
+def _user_uuid(current_user: dict) -> uuid.UUID | None:
+    """The authenticated user's id (never a username), or ``None`` if the principal carries none."""
+    try:
+        return uuid.UUID(str(current_user.get("id") or current_user.get("user_id")))
+    except ValueError:
+        return None
+
+
 def _reject_unregistered_action(context: dict | None) -> None:
     """Refuse a ``context.action`` that names no registered handler (#17315).
 
@@ -123,6 +133,11 @@ def _reject_unregistered_action(context: dict | None) -> None:
     action = (context or {}).get("action")
     if action is None:
         return
+    if is_server_only_action(action):
+        # #18430: only the action's own proposer may create it, with a requester taken from the session.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="this action can be proposed only by the server"
+        )
     if not isinstance(action, str) or not is_registered_action(action):
         # Deliberately does not echo the value back or list what IS
         # registered: the caller supplied it, and the set of live actions is
@@ -130,6 +145,37 @@ def _reject_unregistered_action(context: dict | None) -> None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="context.action names no registered post-approval handler",
+        )
+
+
+def _requester_matches(approval, current_user: dict) -> bool:
+    """Whether the AUTHENTICATED caller is the person who made this request (#17349).
+
+    ``requested_by_agent`` is ``<kind>:<user id>`` for server-made proposals and free text elsewhere; either the
+    whole value or the part after the last colon must equal the caller's verified id or username. A request with
+    no recorded requester can be resubmitted by nobody.
+    """
+    requester = str(approval.requested_by_agent or "").strip()
+    if not requester:
+        return False
+    mine = {str(v) for v in (current_user.get("id"), current_user.get("user_id"), current_user.get("username")) if v}
+    return requester in mine or requester.rsplit(":", 1)[-1] in mine
+
+
+def _guard_resubmit(approval, new_context: dict | None, current_user: dict) -> None:
+    """Refuse a resubmit by anyone but the requester, or one that rewrites what was reviewed (#17349, #18430)."""
+    if approval is None:
+        return  # the service reports a missing approval exactly as before
+    if not _requester_matches(approval, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="only the requester can resubmit")
+    if new_context is None:
+        return
+    if (approval.context or {}).get("action") != new_context.get("action"):
+        _reject_unregistered_action(new_context)  # an unregistered or server-only action is refused first, as on create
+    changed = context_change_violation(approval.context, new_context)
+    if changed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=f"{changed} cannot change on resubmit; file a new request"
         )
 
 
@@ -282,6 +328,7 @@ async def approve(
             username,
             body.comment,
             author_type=classify_author_type(current_user),
+            decider_id=_user_uuid(current_user),
         )
     except ValueError:
         raise HTTPException(
@@ -376,6 +423,7 @@ async def resubmit(
 ):
     """Resubmit an approval after revision request (#1402)."""
     svc = ApprovalGateService(session)
+    _guard_resubmit(await svc.get(approval_id), body.context, current_user)
     try:
         approval = await svc.resubmit(
             approval_id,

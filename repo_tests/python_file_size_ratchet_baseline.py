@@ -81,7 +81,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/batch_jobs.py": 964,
     "autobot-backend/api/browser_mcp.py": 1340,
     "autobot-backend/api/cache_management.py": 779,
-    "autobot-backend/api/chat.py": 2776,  # #18316: delete delegates to the canonical path
+    "autobot-backend/api/chat.py": 2712,  # #18316: delete delegates to the canonical path
     "autobot-backend/api/chat_sessions.py": 1938,  # #18293: legacy transcripts only ever proposed
     "autobot-backend/api/code_intelligence.py": 2154,
     "autobot-backend/api/code_search.py": 828,
@@ -157,10 +157,10 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/chat_history/context_overflow.py": 845,
     "autobot-backend/chat_history/session.py": 939,
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
-    "autobot-backend/chat_workflow/graph.py": 1682,
+    "autobot-backend/chat_workflow/graph.py": 1680,
     "autobot-backend/chat_workflow/llm_handler.py": 1343,
     "autobot-backend/chat_workflow/manager.py": 3887,  # #17273: graph turn lifecycle moved to turn_control
-    "autobot-backend/chat_workflow/tool_handler.py": 3731,  # #11542 dispatch merge + #14068 mirror
+    "autobot-backend/chat_workflow/tool_handler.py": 3707,  # #11542 dispatch merge + #14068 mirror
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
     "autobot-backend/circuit_breaker.py": 689,
@@ -319,7 +319,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/security/threat_intelligence.py": 763,
     "autobot-backend/security_layer.py": 717,
     "autobot-backend/services/agent_analytics.py": 686,
-    "autobot-backend/services/agent_terminal/service.py": 951,
+    "autobot-backend/services/agent_terminal/service.py": 945,
     "autobot-backend/services/ai_stack_client.py": 764,
     "autobot-backend/services/analytics_service.py": 835,
     "autobot-backend/services/autoresearch/auto_research_agent.py": 1187,

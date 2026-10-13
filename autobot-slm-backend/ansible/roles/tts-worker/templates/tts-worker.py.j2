@@ -631,6 +631,8 @@ async def create_voice(
         vid = await loop.run_in_executor(None, _run_create_voice, name, tmp_path)
     except Exception as e:
         logger.error("Voice creation error: %s", e)
+        if type(e).__name__ == "LibsndfileError":  # #18477: the reference could not be decoded: the client's file
+            raise HTTPException(422, detail=f"Reference audio could not be decoded: {e}") from e
         raise HTTPException(500, detail=f"Voice creation failed: {e}") from e
     finally:
         os.unlink(tmp_path)
