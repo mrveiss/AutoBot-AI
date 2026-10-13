@@ -22,6 +22,8 @@ from api.user_management.human_decider import require_interactive_human
 from autobot_shared.logging_manager import get_logger
 from llc.deps import assert_company_access, get_session, load_authorized, service_dep
 from models.approval import Approval
+from services.ai_line_change_action import ACTION as LINE_CHANGE_ACTION
+from services.approval_execution import is_server_only_action, run_post_approval_actions, set_verified_decider
 from user_management.services import TenantContext
 
 from ..models.enums import ApprovalStatus, ApprovalType
@@ -93,6 +95,9 @@ async def request_approval(
 ) -> ApprovalResponse:
     """Create a pending approval gate record."""
     assert_company_access(ctx, body.company_id)
+    if is_server_only_action(body.payload.get("action")):
+        # #18430: this route lets the caller write both the payload and the requester; a four-eyes rule would be moot.
+        raise HTTPException(status_code=403, detail="this action can be proposed only by the server")
     async with session.begin():
         approval = await svc.request_approval(
             session,
@@ -154,22 +159,37 @@ async def decide_approval(
     if authorized.company_id is None:
         raise HTTPException(status_code=404, detail="Approval not found")
 
+    # #18430: ``load_authorized`` above already began this session's transaction, so the former
+    # ``async with session.begin()`` raised "a transaction is already begun" for EVERY real decision
+    # (the route's tests mock the session, which hid it): a company-scoped approval could not be decided.
+    # Commit the transaction that is open instead.
     try:
-        async with session.begin():
-            approval = await svc.decide(
-                session,
-                approval_id=aid,
-                decision=body.decision,
-                decided_by=decided_by,
-            )
+        approval = await svc.decide(
+            session,
+            approval_id=aid,
+            decision=body.decision,
+            decided_by=decided_by,
+        )
+        await session.commit()
     except ApprovalNotFoundError as exc:
+        await session.rollback()
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")
     except (ApprovalStateError, ApprovalRequiredError):
+        await session.rollback()
         raise HTTPException(status_code=409, detail="Internal server error")
+    except Exception:
+        await session.rollback()
+        raise
 
     await svc.publish_decided(approval, body.decision)
     await svc.log_decision_to_kb(approval)  # GH#8243: index to decisions KB
+    if body.decision == ApprovalStatus.APPROVED:
+        # #18430: this route decided an approval without ever running what it proposed. Same dispatcher as
+        # the generic route, but ONLY for the AI-line change: approvals here are self-created with arbitrary
+        # payloads, and running any registered action from one is the #17161 class.
+        set_verified_decider(approval, decided_by)  # the verified caller (ctx.user_id), see _verified_decider
+        await run_post_approval_actions(approval, session, only=frozenset({LINE_CHANGE_ACTION}))
     return _to_response(approval)
 
 

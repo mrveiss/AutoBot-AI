@@ -32,6 +32,7 @@ from langchain_core.runnables import RunnableConfig
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_workflow import limits
+from chat_workflow.approval_binding import ai_line_calls_shown, bind_decision
 
 try:
     from langgraph.checkpoint.redis.aio import AsyncRedisSaver
@@ -255,6 +256,9 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
             "tool_call_fingerprints": [],
             "tool_loop_count": 0,
             "tool_loop_warning": "",
+            # #18430: a yes never outlives its turn (the checkpointer would otherwise carry it forward).
+            "approval_decision": None,
+            "pending_approval": None,
         }
     except Exception as exc:
         logger.error("initialize_session failed: %s", exc, exc_info=True)
@@ -421,7 +425,7 @@ def _build_llm_iteration_context(state: ChatState):
     # call evaluated as the default role — which is the bug being fixed.
     auth_role = resolve_auth_role(state.get("context", {}) or {})
 
-    return LLMIterationContext(
+    ctx = LLMIterationContext(
         ollama_endpoint=state["llm_params"]["ollama_endpoint"],
         selected_model=state["llm_params"]["selected_model"],
         session_id=state["session_id"],
@@ -444,6 +448,10 @@ def _build_llm_iteration_context(state: ChatState):
         work_item_id=work_item_id,
         requires_approval_before=approval_cats,
     )
+    # #18430: a person's yes covers exactly the calls request_approval bound it to; line 3 never is.
+    decision = state.get("approval_decision") or {}
+    ctx.approved_fingerprints = frozenset(decision.get("bound") or ()) if decision.get("approved") else frozenset()
+    return ctx
 
 
 async def _run_llm_iteration(manager, ctx, iteration, messages, stream_cb):
@@ -492,21 +500,15 @@ async def _run_llm_iteration(manager, ctx, iteration, messages, stream_cb):
 # ---------------------------------------------------------------------------
 
 
-def _tool_call_needs_approval(tool_call: Dict[str, Any], ctx) -> bool:
-    """Combined work-item + category approval gate for one planned tool call.
+async def _tool_call_needs_approval(tool_call: Dict[str, Any], ctx) -> bool:
+    """Whether a planned tool call must wait for a person (GH#11202, #18430).
 
-    GH#11202: a tool call requires approval when the run carries declared
-    ``requires_approval_before`` categories (from the work item and/or the
-    session, already resolved onto ``ctx``) AND this tool's action category
-    matches one of them, per the existing ``_approval_category_for`` matcher
-    (GH#11160/#11206) — reused verbatim, never reinvented.
+    Not a policy of its own: it asks the AI-line point's resolver (stored line, approval baseline and
+    the work item's declared categories), so the plan-time interrupt and the dispatch seam agree.
     """
-    from chat_workflow.tool_handler import _approval_category_for
+    from services.ai_line_enforcement import call_needs_approval
 
-    declared = getattr(ctx, "requires_approval_before", None) or []
-    if not declared:
-        return False
-    return _approval_category_for(tool_call.get("name", ""), declared) is not None
+    return await call_needs_approval(tool_call, ctx)
 
 
 async def _run_llm_iteration_plan(manager, ctx, iteration, messages, stream_cb):
@@ -622,7 +624,7 @@ async def _generate_response_planned(
 
     tool_calls = tool_calls or []
     for tc in tool_calls:
-        tc["needs_approval"] = _tool_call_needs_approval(tc, ctx)
+        tc["needs_approval"] = await _tool_call_needs_approval(tc, ctx)
 
     if tool_calls:
         emit_plan(tool_calls, session_id=session_id)
@@ -642,6 +644,9 @@ async def _generate_response_planned(
         "tool_calls": tool_calls,
         "workflow_messages": messages,
         "tool_loop_warning": "",
+        # #18430: a yes belongs to the batch it was given for; a new plan starts with none.
+        "approval_decision": None,
+        "pending_approval": None,
     }
 
 
@@ -913,18 +918,10 @@ async def request_approval(state: ChatState, config: RunnableConfig) -> dict:
     and resumes the graph with Command(resume=decision).
     """
     tool_calls = state.get("tool_calls", [])
-    if not tool_calls:
-        return {"pending_approval": None}
-
-    # Find the first tool call needing approval
-    pending = None
-    for tc in tool_calls:
-        if tc.get("needs_approval"):
-            pending = tc
-            break
-
-    if not pending:
-        return {"pending_approval": None}
+    shown = [tc for tc in tool_calls if tc.get("needs_approval")]  # #18430: ALL of them, not the first
+    if not shown:
+        return {"pending_approval": None, "approval_decision": None}
+    pending = shown[0]
 
     stream_cb = config["configurable"].get("stream_callback")
 
@@ -938,6 +935,7 @@ async def request_approval(state: ChatState, config: RunnableConfig) -> dict:
             "risk_level": pending.get("risk_level", "medium"),
             "session_id": state["session_id"],
             "terminal_session_id": state["terminal_session_id"],
+            "calls": ai_line_calls_shown(shown),
         },
     }
     if stream_cb:
@@ -948,7 +946,7 @@ async def request_approval(state: ChatState, config: RunnableConfig) -> dict:
 
     return {
         "pending_approval": pending,
-        "approval_decision": decision,
+        "approval_decision": bind_decision(decision, shown),
     }
 
 
