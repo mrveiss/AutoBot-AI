@@ -240,16 +240,16 @@ def test_the_gate_never_denies_what_the_canonical_mapping_grants(gate):
 
     Exact equality between the two resolvers cannot hold and asserting it would
     be wrong: the gate expands wildcards (``files.*`` matches ``files.delete``)
-    and ``_get_user_permissions`` returns literal strings. So the direction to
-    pin is one-way — a permission the canonical mapping grants must never be
-    denied by the gate. The reverse (the gate granting more, via a wildcard) is
-    the configured-permissions feature working, not drift.
+    and holds SecurityLayer defaults. So the direction to pin is one-way — a
+    permission the shared evaluator's role grant (#18263) gives must never be
+    denied by the gate. The reverse (the gate granting more, via a default or a
+    wildcard) is the configured-permissions feature working, not drift.
     """
-    from auth_rbac import _get_user_permissions
+    from autobot_shared.auth.permission_evaluator import role_grant
 
     denied_despite_being_granted = []
     for role in Role:
-        held = set(_get_user_permissions(role.value))
+        held = {p.value for p in role_grant({"role": role.value})}
         for permission in Permission:
             if permission.value in held and not gate.check_permission(role.value, permission.value):
                 denied_despite_being_granted.append((role.value, permission.value))
@@ -262,16 +262,17 @@ def test_the_gate_never_denies_what_the_canonical_mapping_grants(gate):
 def test_any_extra_the_gate_grants_comes_from_a_wildcard(gate):
     """Names the excess instead of leaving it as an unexplained difference.
 
-    Every case where the gate grants what the literal union does not must be
-    covered by a wildcard in the configured or default permissions. An extra that
-    is *not* wildcard-explained would mean a fourth source nobody has accounted
-    for.
+    Every case where the gate grants what the role grant does not must be
+    covered by a default or a wildcard in the configured or default permissions.
+    An extra that is explained by neither would mean a source nobody has
+    accounted for.
     """
-    from auth_rbac import _get_user_permissions
+    from autobot_shared.auth.permission_evaluator import role_grant
 
     unexplained = []
     for role in Role:
-        held = set(_get_user_permissions(role.value))
+        defaults = set(gate._get_default_role_permissions(role.value))
+        held = {p.value for p in role_grant({"role": role.value})} | defaults
         wildcards = [p for p in gate._get_default_role_permissions(role.value) if p.endswith("*")]
         prefixes = tuple(w[:-1] for w in wildcards)
         for permission in Permission:

@@ -302,8 +302,10 @@ def test_both_known_denial_paths_are_among_the_derived_sites() -> None:
     assert (
         "_emit_permission_denied_audit" in functions
     ), f"the DB-backed denial-audit function is no longer derived, only {sorted(functions)}"
+    # #18263 retired auth_rbac._deny_permission_access (a permission denial now audits through
+    # _emit_permission_denied_audit); require_role's _deny_role_access is the file-backed path left.
     assert (
-        "_deny_permission_access" in functions
+        "_deny_role_access" in functions
     ), f"the file-backed denial-audit function is no longer derived, only {sorted(functions)}"
     assert "audit_log" in callees, f"the file-backed sink is no longer resolved, only {sorted(callees)}"
 

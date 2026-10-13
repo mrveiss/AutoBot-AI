@@ -127,6 +127,15 @@ _ssot_constants_mod = MagicMock()
 _ssot_constants_mod.TTL_5_MINUTES = 300
 sys.modules["autobot_shared.ssot_constants"] = _ssot_constants_mod
 
+# #18338: the middleware scopes DB grants with the import-free grant_scope module. Load it
+# for real under its full name (a path-less MagicMock parent cannot be walked); the
+# restore block below removes it again with every other bootstrap key.
+_GRANT_SCOPE_SPEC = importlib.util.spec_from_file_location(
+    "autobot_shared.user_management.grant_scope", _SHARED_ROOT / "user_management" / "grant_scope.py"
+)
+sys.modules[_GRANT_SCOPE_SPEC.name] = importlib.util.module_from_spec(_GRANT_SCOPE_SPEC)
+_GRANT_SCOPE_SPEC.loader.exec_module(sys.modules[_GRANT_SCOPE_SPEC.name])
+
 # Load the module under test. The restore block MUST run even if exec_module()
 # raises, or a bad stub here (or a future import added to rbac_middleware.py)
 # leaks these MagicMocks into every test collected afterward (#13312).
