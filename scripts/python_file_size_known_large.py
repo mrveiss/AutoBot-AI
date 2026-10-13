@@ -475,9 +475,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/tests/api/test_sso_auth.py": 884,
     "autobot-slm-backend/tests/services/test_role_registry.py": 846,
     "autobot-slm-backend/tests/services/test_self_update_systemd_detach_11492.py": 691,
-    "autobot-slm-backend/tests/services/test_sso_service.py": 1258,
+    "autobot-slm-backend/tests/services/test_sso_service.py": 1257,
     "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
-    "autobot-slm-backend/user_management/services/sso_service.py": 778,
+    "autobot-slm-backend/user_management/services/sso_service.py": 775,
     "autobot_shared/env_registry.py": 1176,  # #13602: +1 sibling import, -14 registration
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
     "autobot_shared/network_constants.py": 616,

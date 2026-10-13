@@ -93,6 +93,17 @@ def is_purpose_bound(claims: Mapping[str, Any]) -> bool:
     return token_type is not None and token_type != LOGIN_TOKEN_TYPE
 
 
+def is_service_token(claims: Mapping[str, Any]) -> bool:
+    """True for a service-to-service token: ``service: true`` and no other purpose (#18338).
+
+    The backend->SLM token (``services/slm_client.py``) is exactly this. A token that
+    also carries ``mfa_pending``, ``aud`` or any other purpose claim, or a
+    ``token_type``, is not one -- so ``service`` cannot launder a pre-MFA token.
+    """
+    other_purposes = NON_LOGIN_CLAIMS - {"service"}
+    return claims.get("service") is True and other_purposes.isdisjoint(claims) and "token_type" not in claims
+
+
 def is_interactive_human(user: Optional[Mapping[str, Any]]) -> bool:
     """True only for a person's interactive login; deny-by-default otherwise.
 

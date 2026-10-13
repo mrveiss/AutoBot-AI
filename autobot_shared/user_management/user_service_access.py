@@ -5,22 +5,26 @@
 """Authentication and role management for the shared ``UserService`` (#15068).
 
 Moved verbatim in behaviour from the two backends' copies, which agreed on
-every line here. ``get_user_permissions`` keeps its ``role.Permission`` lookup
-unchanged on purpose: ``Role`` has no such attribute, so the DB-backed
-permission path raises and the RBAC middleware denies. Fixing that GRANTS
-permissions that are denied today, an authz relaxation that cannot ride a
-refactor. It is #18259.
+every line here, except ``get_user_permissions``. Both forks resolved names with
+``select(role.Permission)``; ``Role`` has no such attribute, so the DB-backed
+permission path raised and the RBAC middleware denied every user holding a
+role with permissions. #18259 fixed it with one join through
+``role_permission_query``. That is a decision change from deny to allow on the
+DB-backed path, reviewed through the grant-change report
+(``permission_grant_report``) rather than shipped silently.
 """
 
 import uuid
 
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from autobot_shared.time_utils import now_utc
+from autobot_shared.user_management.grant_scope import encode_grant, grants_in_scope
+from autobot_shared.user_management.login_eligibility import login_refusal
 from autobot_shared.user_management.models.audit import AuditAction, AuditResourceType
 from autobot_shared.user_management.models.role import Role, UserRole
 from autobot_shared.user_management.models.user import UserCore
+from autobot_shared.user_management.role_permission_query import user_grant_rows_query
 from autobot_shared.user_management.user_service_base import UserServiceBase
 
 
@@ -53,8 +57,9 @@ class UserAccessMixin(UserServiceBase):
 
     async def _validate_user_can_login(self, user: UserCore, password: str, ip_address: str | None) -> bool:
         """Return True only for an active user whose password verifies."""
-        if not user.is_active:
-            await self._log_auth_failure("account_inactive", ip_address, user.id)
+        refusal = login_refusal(user)
+        if refusal:
+            await self._log_auth_failure(refusal, ip_address, user.id)
             return False
         if not user.password_hash:
             await self._log_auth_failure("no_password_set", ip_address, user.id)
@@ -157,26 +162,12 @@ class UserAccessMixin(UserServiceBase):
         )
         return list(result.scalars().all())
 
-    async def get_user_permissions(self, user_id: uuid.UUID) -> set[str]:
-        """All permission names granted to a user through their roles.
+    async def get_user_permission_grants(self, user_id: uuid.UUID) -> set[str]:
+        """Every scoped grant the user holds through their roles, encoded for the cache (#18259, #18338)."""
+        rows = (await self.session.execute(user_grant_rows_query(user_id))).all()
+        grants = (encode_grant(name, org_id, is_system) for name, org_id, is_system in rows)
+        return {grant for grant in grants if grant is not None}
 
-        The ``role.Permission`` lookup below is kept verbatim from both forks;
-        see the module docstring and #18259 before changing it.
-        """
-        permissions: set[str] = set()
-        for role in await self.get_user_roles(user_id):
-            result = await self.session.execute(
-                select(Role).options(selectinload(Role.role_permissions)).where(Role.id == role.id)
-            )
-            role_with_perms = result.scalar_one_or_none()
-            if not role_with_perms:
-                continue
-            for rp in role_with_perms.role_permissions:
-                permission_model = role.Permission  # type: ignore[attr-defined]  # #18259
-                perm_result = await self.session.execute(
-                    select(permission_model).where(permission_model.id == rp.permission_id)
-                )
-                perm = perm_result.scalar_one_or_none()
-                if perm:
-                    permissions.add(perm.name)
-        return permissions
+    async def get_user_permissions(self, user_id: uuid.UUID, org_id: uuid.UUID | None = None) -> set[str]:
+        """Permission names the user holds acting in *org_id*: platform grants, plus that org's (#18338)."""
+        return grants_in_scope(await self.get_user_permission_grants(user_id), org_id)

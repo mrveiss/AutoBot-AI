@@ -38,7 +38,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared import node_proxy
+from autobot_shared.auth.interactive_principal import is_purpose_bound
 from autobot_shared.auth.jwt_core import _peek_alg, decode_jwt_or_none, encode_jwt, hash_password
+from autobot_shared.auth.permission_evaluator import evaluate_permission
+from autobot_shared.auth.permission_gate import PermissionGate
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.time_utils import now_utc
 from autobot_shared.user_management.password_epoch import (
@@ -47,7 +50,7 @@ from autobot_shared.user_management.password_epoch import (
 from config import settings
 from models.schemas import TokenResponse, UserCreate, UserResponse
 from services.api_key_audit import AUDIT_UNAVAILABLE_DETAIL, AuditUnavailable, audit_key_request
-from services.api_key_authority import legacy_grace_deadline, permission_allowed, role_for_user
+from services.api_key_authority import legacy_grace_deadline, role_for_user
 from services.api_key_routes import mark_key_permission
 from services.token_denylist import is_jti_revoked
 from user_management.database import get_slm_db  # noqa: F401 -- re-exported for api.auth
@@ -260,6 +263,13 @@ async def get_current_user(
     token = credentials.credentials
     payload = await auth_service.decode_token_async(token)
 
+    # #18321: a token minted for another purpose -- the MFA-pending temp token issued
+    # BEFORE the second factor, a service token -- is never a session. One choke point,
+    # the shared #17049 predicate; only api/mfa.py accepts the MFA-pending token.
+    if payload and is_purpose_bound(payload):
+        logger.warning("get_current_user: refusing a purpose-bound token for sub=%r", payload.get("sub"))
+        payload = None
+
     if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -270,42 +280,19 @@ async def get_current_user(
     return payload
 
 
-def require_permission(permission: Permission) -> Callable:
-    """FastAPI dependency factory requiring a specific permission.
-
-    Derives the user's role from the JWT 'role' field (preferred) or falls
-    back to the legacy 'admin' boolean flag for tokens issued before role was
-    included.  Raises 403 when the role lacks the required permission.
-
-    Usage::
-
-        @router.post("/endpoint")
-        async def endpoint(
-            _: dict = Depends(require_permission(Permission.ADMIN_CONFIG_WRITE)),
-        ): ...
-    """
-
-    async def _check(current_user: dict = Depends(get_current_user)) -> dict:
-        return _require_permission_or_403(current_user, permission)
-
-    return _check
+# The one shared gate (#18263): the decision is
+# ``autobot_shared.auth.permission_evaluator`` (role grant UNION DB custom-role grants,
+# AND API-key scope narrowing); a denial is audited and answered 403, a missing caller 401.
+# ``require_permission`` / ``require_any_permission`` are re-exported under the names every
+# route already imports, so this service defines neither.
+def _wire_rbac() -> None:
+    """Import this service's RBAC shim, which calls ``configure_rbac`` (DB grants, deny audit)."""
+    import user_management.middleware.rbac_middleware  # noqa: F401, PLC0415
 
 
-def _require_permission_or_403(current_user: dict, permission: Permission) -> dict:
-    """Raise 403 unless the caller may exercise *permission*; else return it.
-
-    The decision is ``services.api_key_authority.permission_allowed``. The
-    caller's role must grant *permission*, and an API-key caller's scopes must
-    also carry it (#16040 AC2). So a key never exceeds its owner's role, nor
-    its own scopes. It lives there, free of FastAPI, so it can be tested
-    directly.
-    """
-    if not permission_allowed(current_user, permission):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Permission denied: {permission.value} required",
-        )
-    return current_user
+_permission_gate = PermissionGate(get_current_user, wire_rbac=_wire_rbac)
+require_permission = _permission_gate.require_permission
+require_any_permission = _permission_gate.require_any_permission
 
 
 # Optional bearer: unlike ``security`` (auto_error=True), this returns None
@@ -330,6 +317,7 @@ def verify_internal_api_key(provided: str | None) -> bool:
 
 
 async def require_service_management_or_internal(
+    request: Request,
     x_internal_api_key: str | None = Header(None, alias="X-Internal-API-Key"),
     credentials: HTTPAuthorizationCredentials | None = Depends(_optional_security),
 ) -> dict:
@@ -354,7 +342,7 @@ async def require_service_management_or_internal(
             headers={"WWW-Authenticate": "Bearer"},
         )
     current_user = await get_current_user(credentials)
-    return _require_permission_or_403(current_user, Permission.SERVICE_MANAGEMENT)
+    return await _permission_gate.enforce(request, current_user, (Permission.SERVICE_MANAGEMENT,))
 
 
 async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
@@ -507,7 +495,7 @@ def require_key_permission(permission: Permission) -> Callable:
     """
 
     async def _check(request: Request, current_user: dict = Depends(get_api_key_user)) -> dict:
-        allowed = permission_allowed(current_user, permission)
+        allowed = await evaluate_permission(current_user, permission)
         await _audit_or_503(
             request,
             action="api_key_request" if allowed else "api_key_refused_scope",
@@ -518,7 +506,9 @@ def require_key_permission(permission: Permission) -> Callable:
             username=current_user.get("sub"),
             permission=permission.value,
         )
-        return _require_permission_or_403(current_user, permission)
+        if not allowed:  # the key-request row above is this denial's audit record
+            raise _permission_gate.forbidden((permission,))
+        return current_user
 
     return mark_key_permission(_check, permission)
 
