@@ -135,11 +135,11 @@ FROM_PRETRAINED_REACH_FLOOR = 15
 SPLAT_ALLOWLIST: dict[tuple[str, int], str] = {
     (
         "autobot-backend/llm_shared/optimization/layer_inference.py",
-        198,
+        190,
     ): "kwargs built two lines above from cache_dir only (#15054)",
     (
         "autobot-backend/llm_shared/optimization/layer_inference.py",
-        565,
+        556,
     ): "kwargs built two lines above from use_fast/cache_dir only (#15054)",
     (
         "autobot-backend/llm_shared/optimization/model_inspector.py",

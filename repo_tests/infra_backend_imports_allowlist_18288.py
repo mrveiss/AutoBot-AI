@@ -132,7 +132,6 @@ UNCLASSIFIED: frozenset[str] = frozenset(
         "autobot-infrastructure/shared/scripts/security/seed_enforcement_mode.py",
         "autobot-infrastructure/shared/scripts/sync_kb_docs.py",
         "autobot-infrastructure/shared/scripts/utilities/index_all_man_pages.py",
-        "autobot-infrastructure/shared/scripts/utilities/index_documentation.py",
         "autobot-infrastructure/shared/scripts/utilities/ingest_man_pages.py",
         "autobot-infrastructure/shared/scripts/utilities/integrate_system_knowledge.py",
         "autobot-infrastructure/shared/scripts/utilities/manage_system_knowledge.py",
@@ -151,7 +150,6 @@ UNCLASSIFIED: frozenset[str] = frozenset(
         "autobot-infrastructure/shared/tests/distributed/test_db_initialization.py",
         "autobot-infrastructure/shared/tests/fixtures/mocks.py",
         "autobot-infrastructure/shared/tests/integration/test_architecture_compliance.py",
-        "autobot-infrastructure/shared/tools/index_documentation.py",
     }
 )
 

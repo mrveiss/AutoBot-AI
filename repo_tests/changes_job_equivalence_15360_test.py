@@ -81,7 +81,11 @@ ISSUE_17822_ENTRIES = tuple(
         (Path(__file__).parent / "fixtures" / "issue_17822_migration_gate_entries.json").read_text(encoding="utf-8")
     )
 )
-assert len(ISSUE_17822_ENTRIES) == 11, "the pinned #17822 set is eleven entries; an emptied fixture would pin nothing"
+# 13 = the eleven #17822 entries plus #13421's two (`services/__init__.py`, `approval_gate_service.py`),
+# which the approval-record migration tests import.
+assert (
+    len(ISSUE_17822_ENTRIES) == 13
+), "the pinned migration-gate set is 13 entries; an emptied fixture would pin nothing"
 ISSUE_17822_WORKFLOW = "migration-gate"
 EVENTS = ("push", "pull_request", "merge_group", "schedule", "workflow_dispatch")
 MG_SHA = "merge-group-base-sha"  # a stand-in value; only its presence or absence is compared
@@ -147,7 +151,13 @@ def filter_source(raw: str, read: ReadFile) -> dict:
 #: `_changes.yml`; so editing it now runs the suite. Nothing else about any path set moves.
 ALLOWED_ADDITIONS = {
     #  + #17822: the migration-gate guard reads migration-gate.yml, so editing it must run the suite.
-    ".github/filters/python-paths.yml": {"python": [f"{WORKFLOWS}/_changes.yml", f"{WORKFLOWS}/migration-gate.yml"]},
+    ".github/filters/python-paths.yml": {
+        "python": [
+            f"{WORKFLOWS}/_changes.yml",
+            f"{WORKFLOWS}/migration-gate.yml",
+            f"{WORKFLOWS}/ai-security-review.yml",
+        ]
+    },
     # frontend_path_filter_mirror_test pins frontend-test.yml's on.push.paths to this file, so the
     # `_changes.yml` entry the workflow gained has to be here too.
     ".github/filters/frontend-paths.yml": {"frontend": [f"{WORKFLOWS}/_changes.yml"]},
