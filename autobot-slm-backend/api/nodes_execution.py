@@ -26,7 +26,6 @@ import asyncio
 import logging
 import os
 import shlex
-import socket
 import time
 import uuid
 from pathlib import Path
@@ -37,11 +36,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.permissions import Permission
+from autobot_shared.network_utils import is_local_ip
 from autobot_shared.ssot_config import config
 from models.database import EventSeverity, EventType, Node, NodeEvent, NodeStatus
 from services.auth import require_permission
 from services.database import get_db
-from services.ssh_utils import _ssh_key_usable
+from services.ssh_utils import _ssh_key_usable, ssh_destination_args
 
 logger = logging.getLogger(__name__)
 
@@ -498,16 +498,12 @@ _SSH_KNOWN_HOSTS_PATH = os.environ.get("SLM_SSH_KNOWN_HOSTS", "/home/autobot/.ss
 # per-user file is absent.  Defined at module level so tests can patch it.
 _SSH_SYSTEM_KNOWN_HOSTS_PATH = "/etc/ssh/ssh_known_hosts"
 
-_LOCAL_ADDRESSES = {"127.0.0.1", "::1", "localhost"}
-try:
-    _LOCAL_ADDRESSES.add(socket.gethostbyname(socket.gethostname()))
-except OSError:
-    pass
-
-
-def _is_local_ip(ip: str) -> bool:
-    """Return True if *ip* resolves to this host."""
-    return ip in _LOCAL_ADDRESSES
+# Local-vs-SSH is decided by the shared authority (#17855): it enumerates interface
+# addresses and the configured external_url host, where the removed local copy
+# trusted gethostbyname(hostname) -- commonly 127.0.1.1. The leading-underscore
+# name stays only because api/monitoring.py (not editable in this change)
+# imports it from here; drop the alias when that import moves to network_utils.
+_is_local_ip = is_local_ip
 
 
 async def _run_command(tokens: list[str], timeout: int) -> tuple[int, str, str]:
@@ -589,7 +585,7 @@ async def _run_via_ssh(
     ]
     if _ssh_key_usable(_SSH_KEY_PATH):
         cmd.extend(["-i", _SSH_KEY_PATH])
-    cmd.append(f"{ssh_user}@{ip}")
+    cmd.extend(ssh_destination_args(ssh_user, ip))
     # Pass the command tokens as individual arguments to avoid any shell
     # interpretation on the remote side.
     cmd.extend(tokens)

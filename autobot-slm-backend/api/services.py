@@ -49,6 +49,7 @@ from services.service_restart import (
     restart_slm_services,
     run_ansible_service_action,
 )
+from services.ssh_utils import ssh_destination_args, ssh_options
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["services"])
@@ -85,17 +86,12 @@ async def _kill_orphan_on_port(node: Node, port: int) -> Tuple[bool, str]:
 
     ssh_cmd = [
         "/usr/bin/ssh",
-        "-o",
-        "StrictHostKeyChecking=accept-new",
-        "-o",
-        "ConnectTimeout=10",
-        "-o",
-        "BatchMode=yes",
+        *ssh_options("StrictHostKeyChecking=accept-new", "ConnectTimeout=10", "BatchMode=yes"),
         "-i",
         ssh_key,
         "-p",
         str(ssh_port),
-        f"{ssh_user}@{node.ip_address}",
+        *ssh_destination_args(ssh_user, node.ip_address),
         kill_cmd,
     ]
 

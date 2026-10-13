@@ -391,6 +391,11 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under one root; the test-file share drifts.",
     ),
+    "shared-authority-callers-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test source is a subset of tracked .py under three roots; the test-file share drifts.",
+    ),
     "one-claim-model-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

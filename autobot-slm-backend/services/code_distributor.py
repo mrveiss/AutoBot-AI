@@ -26,7 +26,7 @@ from autobot_shared.time_utils import utc_timestamp
 from models.database import Setting
 from services.database import db_service
 from services.service_restart import run_systemctl_over_ssh
-from services.ssh_utils import _ssh_key_usable
+from services.ssh_utils import _ssh_key_usable, ssh_destination_args, ssh_remote_path
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +175,7 @@ class CodeDistributor:
             f"sudo mkdir -p {REMOTE_AGENT_PATH}/slm/agent && "
             f"sudo chown -R {shlex.quote(f'{ssh_user}:{ssh_user}')} {REMOTE_AGENT_PATH}"
         )
-        mkdir_cmd.extend([f"{ssh_user}@{ip_address}", mkdir_script])
+        mkdir_cmd.extend([*ssh_destination_args(ssh_user, ip_address), mkdir_script])
 
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -207,7 +207,7 @@ class CodeDistributor:
             '"""SLM Package."""'
         )
         slm_init_script = f"echo -e '{slm_init_content}' > {REMOTE_AGENT_PATH}/slm/__init__.py"
-        slm_init_cmd.extend([f"{ssh_user}@{ip_address}", slm_init_script])
+        slm_init_cmd.extend([*ssh_destination_args(ssh_user, ip_address), slm_init_script])
 
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -256,8 +256,9 @@ class CodeDistributor:
             ".git",
             "-e",
             ssh_opts,
+            "--",
             f"{agent_source}/",
-            f"{ssh_user}@{ip_address}:{REMOTE_AGENT_PATH}/slm/agent/",
+            ssh_remote_path(ssh_user, ip_address, f"{REMOTE_AGENT_PATH}/slm/agent/"),
         ]
 
         try:
@@ -313,7 +314,7 @@ class CodeDistributor:
         version_cmd = self._build_ssh_command(ssh_port)
         version_cmd.extend(
             [
-                f"{ssh_user}@{ip_address}",
+                *ssh_destination_args(ssh_user, ip_address),
                 f"echo {shlex.quote(version_json)} | sudo tee /var/lib/slm-agent/version.json > /dev/null",
             ]
         )
@@ -340,7 +341,10 @@ class CodeDistributor:
             ssh_user: SSH username
             ssh_port: SSH port
         """
-        ssh_base_cmd = [*self._build_ssh_command(ssh_port), f"{ssh_user}@{ip_address}"]  # outside the try, as before
+        ssh_base_cmd = [
+            *self._build_ssh_command(ssh_port),
+            *ssh_destination_args(ssh_user, ip_address),
+        ]  # outside the try, as before
 
         try:
             logger.info("Restarting slm-agent on node %s", node_id)

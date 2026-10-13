@@ -13,9 +13,14 @@ flag, ssh uses its default identity) on ANY doubt, logging an actionable
 WARNING once per path instead of crashing.
 """
 
+import ipaddress
 import logging
 import os
+import re
 from pathlib import Path
+from typing import Annotated
+
+from pydantic import AfterValidator
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +42,69 @@ def _warn_once(path: str, detail: str) -> None:
     )
 
 
+# --- The one validator for an ssh destination (#18366) -----------------------------------------
+# A node row's ssh_user / ip_address go into the local ssh argv. A value starting with '-' is
+# parsed by OpenSSH as an OPTION (``-oProxyCommand=<cmd>`` runs <cmd> on the SLM host before any
+# connection is made), so every destination is validated here and preceded by ``--``.
+_SSH_USER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]{0,31}")  # POSIX portable name, never a leading '-'
+_HOSTNAME_LABEL_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")  # RFC 1123 label
+_HOSTNAME_MAX_LEN = 253
+
+
+class InvalidSshDestination(ValueError):
+    """The ssh user or host is not safe to place in an ssh argv."""
+
+
+def validate_ssh_user(user: object) -> str:
+    """Return *user* when it is a POSIX user name; raise ``InvalidSshDestination`` otherwise."""
+    if isinstance(user, str) and _SSH_USER_RE.fullmatch(user):
+        return user
+    raise InvalidSshDestination("ssh user must be a POSIX user name (letters, digits, '_', '.', '-'; no leading '-')")
+
+
+def validate_ssh_host(host: object) -> str:
+    """Return *host* when it is an IP address or an RFC 1123 hostname; raise otherwise."""
+    if isinstance(host, str) and host:
+        try:
+            ipaddress.ip_address(host)
+            return host
+        except ValueError:
+            pass
+        labels = host.split(".")
+        if len(host) <= _HOSTNAME_MAX_LEN and all(_HOSTNAME_LABEL_RE.fullmatch(label) for label in labels):
+            return host
+    raise InvalidSshDestination("ssh host must be an IP address or a hostname (no leading '-', whitespace or '@')")
+
+
+def ssh_destination(user: object, host: object) -> str:
+    """The validated ``user@host`` ssh destination; the one place that string is built."""
+    return f"{validate_ssh_user(user)}@{validate_ssh_host(host)}"
+
+
+def ssh_destination_args(user: object, host: object) -> list[str]:
+    """``["--", "user@host"]``: the validated destination, after the end-of-options marker.
+
+    ssh, scp and rsync all read ``--`` as "no more options"; every direct-exec argv splices this in
+    where the destination goes so a value that slipped past validation still cannot be an option.
+    """
+    return ["--", ssh_destination(user, host)]
+
+
+def ssh_options(*options: str) -> list[str]:
+    """``["-o", opt, "-o", opt, ...]``: one ``-o`` per ssh option."""
+    return [part for option in options for part in ("-o", option)]
+
+
+def ssh_remote_path(user: object, host: object, path: str) -> str:
+    """``user@host:path``, the scp/rsync remote operand, with the same validated destination."""
+    return f"{ssh_destination(user, host)}:{path}"
+
+
+# Pydantic field types: the node create/update/test-connection schemas reject a bad value with 422.
+SshUser = Annotated[str, AfterValidator(validate_ssh_user)]
+SshHost = Annotated[str, AfterValidator(validate_ssh_host)]
+
+
 def build_ssh_base_cmd(host: str, user: str, port: int, key) -> list:
     """Build the canonical ssh base argv shared by every direct-exec caller.
 
@@ -49,7 +117,8 @@ def build_ssh_base_cmd(host: str, user: str, port: int, key) -> list:
     trailing command / positional args.
 
     Returns ``["ssh", "-o", "StrictHostKeyChecking=accept-new", "-o",
-    "ConnectTimeout=10", "-p", str(port), ["-i", key] if usable, "user@host"]``.
+    "ConnectTimeout=10", "-p", str(port), ["-i", key] if usable, "--", "user@host"]``.
+    Raises ``InvalidSshDestination`` before any process is spawned (#18366).
     """
     cmd = [
         "ssh",
@@ -62,7 +131,7 @@ def build_ssh_base_cmd(host: str, user: str, port: int, key) -> list:
     ]
     if _ssh_key_usable(key):
         cmd.extend(["-i", os.fspath(key)])
-    cmd.append(f"{user}@{host}")
+    cmd.extend(["--", ssh_destination(user, host)])
     return cmd
 
 

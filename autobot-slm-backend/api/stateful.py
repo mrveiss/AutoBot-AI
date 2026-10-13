@@ -37,6 +37,7 @@ from services.database import get_db
 from services.replication import replication_service
 from services.replication_jobs import setup_replication
 from services.secrets_store_snapshot import secrets_runner
+from services.ssh_utils import ssh_destination_args, ssh_options
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/stateful", tags=["stateful"])
@@ -601,11 +602,8 @@ async def _run_redis_ssh_check(host: str):
     """Helper for _verify_redis. Ref: #1088."""
     cmd = [
         "ssh",
-        "-o",
-        "StrictHostKeyChecking=accept-new",
-        "-o",
-        "ConnectTimeout=10",
-        f"autobot@{host}",
+        *ssh_options("StrictHostKeyChecking=accept-new", "ConnectTimeout=10"),
+        *ssh_destination_args("autobot", host),
         "redis-cli PING && redis-cli INFO keyspace && redis-cli DBSIZE",
     ]
     process = await asyncio.create_subprocess_exec(

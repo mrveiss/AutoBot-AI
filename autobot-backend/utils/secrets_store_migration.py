@@ -270,8 +270,8 @@ def migrate_legacy_secrets_store(canonical_dir: Path, filenames: Sequence[str], 
         )
 
 
-def ensure_and_read_shared_key(canonical_dir: Path) -> bytes:
-    """Load the shared Fernet key from ``<canonical_dir>/secrets.key``,
+def ensure_and_read_shared_key(canonical_dir: Path, key_filename: str = "secrets.key") -> bytes:
+    """Load the shared Fernet key from ``<canonical_dir>/<key_filename>``,
     minting and persisting one if it does not exist yet (#14081 review
     round 5).
 
@@ -284,9 +284,13 @@ def ensure_and_read_shared_key(canonical_dir: Path) -> bytes:
     fallback: a key generated on a WARNING and never written to disk,
     indistinguishable from first boot even when a real store already
     existed, and undecryptable by any other process or the next restart.
+
+    ``key_filename`` lets another store (the audit log's ``.audit_key``, #17855)
+    use the same locked, atomic mint instead of carrying its own copy; the
+    default keeps every existing caller on ``secrets.key``.
     """
     canonical_dir = Path(canonical_dir)
-    key_path = canonical_dir / "secrets.key"
+    key_path = canonical_dir / key_filename
 
     if key_path.exists():
         return key_path.read_bytes()
@@ -308,8 +312,9 @@ def ensure_and_read_shared_key(canonical_dir: Path) -> bytes:
         os.replace(str(tmp_path), str(key_path))
 
         logger.warning(
-            "Generated and persisted a new shared secrets-store encryption key at the "
+            "Generated and persisted a new shared secrets-store encryption key %s at the "
             "canonical data directory (#14081 review round 5). Set AUTOBOT_SECRETS_KEY "
-            "for a deployment-managed key instead."
+            "for a deployment-managed key instead.",
+            key_filename,
         )
         return key

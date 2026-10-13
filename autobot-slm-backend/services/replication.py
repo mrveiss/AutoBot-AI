@@ -25,6 +25,7 @@ from autobot_shared.ssot_config import config as ssot_config
 from config import settings
 from models.database import Node, Replication, ReplicationStatus
 from services.redis_cli_auth import RedisCliAuth, redis_cli_auth
+from services.ssh_utils import ssh_destination_args, ssh_options
 
 logger = logging.getLogger(__name__)
 
@@ -697,13 +698,10 @@ class ReplicationService:
         """
         return [
             "/usr/bin/ssh",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-o",
-            "ConnectTimeout=10",
+            *ssh_options("StrictHostKeyChecking=accept-new", "ConnectTimeout=10"),
             "-p",
             str(ssh_port),
-            f"{ssh_user}@{host}",
+            *ssh_destination_args(ssh_user, host),
             remote_command,
         ]
 

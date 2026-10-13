@@ -374,6 +374,21 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_SYNC_GIT_TRANSPORT_TIMEOUT_S",
+        type=float,
+        default=600.0,
+        description=(
+            "Timeout, in seconds, for the SLM git tracker's `git fetch --prune` and "
+            "`git pull` against the code_source remote. Transport commands download "
+            "history, so they get a far longer bound than AUTOBOT_SYNC_GIT_TIMEOUT_S "
+            "(autobot-slm-backend/services/git_tracker.py, #17855)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_CONSTRAINTS_RSYNC_TIMEOUT_S",
         type=float,
         default=30.0,
@@ -412,6 +427,20 @@ register_env_var(
             "component's post-sync migration step. Raising it tolerates a "
             "slower migration; lowering it fails a wedged migration sooner "
             "(autobot-slm-backend/api/code_sync_paths.py, #11255, #16713)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SYNC_RESTART_TIMEOUT_S",
+        type=int,
+        default=60,
+        description=(
+            "Seconds the code-sync orchestrator waits for one `sudo -n systemctl restart` "
+            "over SSH before recording the restart as failed "
+            "(autobot-slm-backend/services/post_sync_runner.py, #17455)."
         ),
         component="slm",
     )

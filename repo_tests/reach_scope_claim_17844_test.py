@@ -297,6 +297,7 @@ _DECLARED_SCOPES = {
     "frontend-model-literal-scan": ("autobot-frontend/src",),
     "one-bm25-formula": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "one-hybrid-search": ("autobot-backend", "autobot_shared"),
+    "shared-authority-callers-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "one-doc-indexer": (
         "autobot-backend",
         "autobot-slm-backend",
