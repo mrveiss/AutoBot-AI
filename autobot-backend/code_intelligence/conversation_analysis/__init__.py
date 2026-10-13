@@ -10,7 +10,7 @@ Provides conversation flow analysis capabilities for AutoBot's chat system.
 
 Package Structure:
 - types.py: Enums and data classes (IntentCategory, FlowState, ConversationFlow, etc.)
-- classifiers.py: IntentClassifier, ResponseClassifier
+- classifiers.py: ConversationIntentClassifier, ResponseClassifier
 - analyzer.py: ConversationFlowAnalyzer main class and convenience functions
 """
 
@@ -27,7 +27,7 @@ from .analyzer import (
 )
 
 # Re-export classifiers
-from .classifiers import IntentClassifier, ResponseClassifier
+from .classifiers import ConversationIntentClassifier, ResponseClassifier
 
 # Re-export all public types
 from .types import (
@@ -60,7 +60,7 @@ __all__ = [
     "AnalysisResult",
     "SATISFACTION_SIGNALS",
     # Classifiers
-    "IntentClassifier",
+    "ConversationIntentClassifier",
     "ResponseClassifier",
     # Analyzer
     "ConversationFlowAnalyzer",

@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Tuple
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
-from .classifiers import IntentClassifier, ResponseClassifier
+from .classifiers import ConversationIntentClassifier, ResponseClassifier
 from .types import (
     SATISFACTION_SIGNALS,
     AnalysisResult,
@@ -105,7 +105,7 @@ class ConversationFlowAnalyzer:
         satisfaction_signal = None
 
         if role == "user":
-            intent, _ = IntentClassifier.classify(content)
+            intent, _ = ConversationIntentClassifier.classify(content)
             if intent == IntentCategory.CLARIFICATION:
                 clarification_inc = 1
             if any(word in content.lower() for word in SATISFACTION_SIGNALS):
@@ -870,7 +870,7 @@ def classify_intent(message: str) -> Tuple[IntentCategory, float]:
     Returns:
         Tuple of (IntentCategory, confidence_score)
     """
-    return IntentClassifier.classify(message)
+    return ConversationIntentClassifier.classify(message)
 
 
 def classify_response(response: str) -> ResponseType:

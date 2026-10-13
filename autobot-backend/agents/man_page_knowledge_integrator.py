@@ -46,7 +46,7 @@ class ManPageInfo:
     machine_id: str | None = None
 
 
-class ManPageParser:
+class RenderedManPageParser:
     """Parser for extracting structured data from man page content"""
 
     def __init__(self):
@@ -330,7 +330,7 @@ class ManPageKnowledgeIntegrator:
 
     def __init__(self):
         """Initialize knowledge integrator (Issue #398: refactored)."""
-        self.parser = ManPageParser()
+        self.parser = RenderedManPageParser()
         self.knowledge_base_dir = Path("data/system_knowledge")
         self.man_cache_dir = self.knowledge_base_dir / "man_pages"
         self.man_cache_dir.mkdir(parents=True, exist_ok=True)

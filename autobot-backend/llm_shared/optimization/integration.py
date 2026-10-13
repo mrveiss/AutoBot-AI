@@ -24,7 +24,7 @@ from .cloud_batcher import CloudRequestBatcher
 from .connection_pool import ConnectionPoolManager, PoolConfig
 from .prompt_compressor import CompressionConfig, PromptCompressor
 from .rate_limiter import RateLimitConfig, RateLimitHandler
-from .router import OptimizationCategory, OptimizationConfig, get_optimization_router
+from .router import LLMServingOptimizationCategory, OptimizationConfig, get_optimization_router
 
 logger = get_logger(__name__)
 
@@ -151,7 +151,7 @@ class OptimizedLLMMiddleware:
     async def _apply_pre_optimizations(self, request: LLMRequest, provider_type: ProviderType) -> LLMRequest:
         """Apply pre-request optimizations."""
         # Apply prompt compression if enabled
-        if self._router.should_apply(OptimizationCategory.PROMPT_COMPRESSION, provider_type):
+        if self._router.should_apply(LLMServingOptimizationCategory.PROMPT_COMPRESSION, provider_type):
             request = await self._compress_request_prompts(request)
 
         return request
@@ -232,7 +232,7 @@ class OptimizedLLMMiddleware:
         provider_name = provider_type.value
 
         # Apply rate limit handling
-        if self._router.should_apply(OptimizationCategory.RATE_LIMIT_HANDLING, provider_type):
+        if self._router.should_apply(LLMServingOptimizationCategory.RATE_LIMIT_HANDLING, provider_type):
             try:
                 response = await self._rate_limiter.execute_with_retry(
                     lambda: handler(request),
