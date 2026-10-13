@@ -15,6 +15,7 @@ from typing import Dict, Set
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
+from autobot_shared.auth.interactive_principal import is_purpose_bound, is_service_token
 from autobot_shared.time_utils import utc_timestamp
 from autobot_shared.websocket_subprotocol import accept_websocket, negotiated_subprotocol, resolve_ws_token
 from services.auth import auth_service
@@ -107,6 +108,11 @@ async def _authenticate_websocket_token(websocket: WebSocket) -> dict | None:
         await accept_websocket(websocket)
         await websocket.close(code=4001, reason="Invalid or expired token")
         return None
+
+    # #18338: a session or the backend's service token -- never a token minted for another
+    # purpose, such as the MFA-pending temp token issued before the second factor.
+    if payload and is_purpose_bound(payload) and not is_service_token(payload):
+        payload = None
 
     if not payload:
         _log_ws_reject_context(websocket, "invalid token")

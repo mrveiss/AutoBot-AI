@@ -11,7 +11,7 @@ Issue #744: Complete Authentication and RBAC System.
 These tests verify:
 - Permission enum definitions
 - Role-to-permission mappings
-- require_permission decorator
+- require_permission / require_any_permission: the shared gate (#18263)
 - require_role decorator
 - SecurityLayer integration
 """
@@ -19,14 +19,13 @@ These tests verify:
 from unittest.mock import Mock, patch
 
 import pytest
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 from auth_rbac import (
     ROLE_PERMISSIONS,
     Permission,
     Role,
-    _get_user_permissions,
-    has_permission,
+    _request_caller,
     require_any_permission,
     require_permission,
     require_role,
@@ -125,78 +124,46 @@ class TestRolePermissionMappings:
                 ), f"Role {role} should not have shell execute permission"
 
 
-class TestHasPermission:
-    """Tests for has_permission function."""
+class TestRequirePermissionIsTheSharedGate:
+    """#18263: the backend's require_permission is the shared gate's, bound to this service's caller."""
 
-    def test_has_permission_with_valid_role(self):
-        """Should return True for valid role with permission."""
-        user_data = {"role": "admin"}
-        # Admin should have API read permission
-        result = has_permission(user_data, Permission.API_READ)
-        # This depends on SecurityLayer being mocked or auth being disabled
-        assert isinstance(result, bool)
-
-    def test_has_permission_with_empty_user(self):
-        """Should return False for empty user data."""
-        result = has_permission({}, Permission.API_READ)
-        assert result is False
-
-    def test_has_permission_with_none_user(self):
-        """Should return False for None user data."""
-        result = has_permission(None, Permission.API_READ)
-        assert result is False
-
-    def test_has_permission_with_missing_role(self):
-        """Should return False for user without role."""
-        user_data = {"username": "test"}
-        result = has_permission(user_data, Permission.API_READ)
-        assert result is False
-
-
-class TestGetUserPermissions:
-    """Tests for _get_user_permissions function."""
-
-    def test_get_admin_permissions(self):
-        """Admin should get all RBAC permissions."""
-        perms = _get_user_permissions("admin")
-        assert len(perms) > 0
-        assert "api.read" in perms
-
-    def test_get_readonly_permissions(self):
-        """Readonly should get limited permissions."""
-        perms = _get_user_permissions("readonly")
-        assert len(perms) > 0
-        assert "api.read" in perms
-        assert "api.write" not in perms
-
-    def test_get_unknown_role_permissions(self):
-        """Unknown role should still get SecurityLayer defaults."""
-        perms = _get_user_permissions("unknown_role")
-        # Should return at least SecurityLayer defaults (possibly empty)
-        assert isinstance(perms, list)
-
-
-class TestRequirePermissionDecorator:
-    """Tests for require_permission decorator."""
-
-    def _create_mock_request(self, headers=None):
-        """Create a mock FastAPI request."""
+    def _request(self):
         request = Mock(spec=Request)
-        request.headers = headers or {}
-        request.client = Mock()
-        request.client.host = "127.0.0.1"
+        request.headers = {}
+        request.client = None
         request.url = Mock()
         request.url.path = "/api/test"
         return request
 
     @patch("auth_rbac.get_auth_middleware")
-    def test_unauthenticated_request_denied(self, mock_mw):
-        """No authenticated user → the decorator raises (full auth always required)."""
-        mock_mw.return_value.get_user_from_request.return_value = None
-        request = self._create_mock_request()
-        dependency = require_permission(Permission.ADMIN_SYSTEM)
-        with pytest.raises(Exception):
-            dependency(request)
+    def test_the_caller_is_the_auth_middlewares_user(self, mock_mw):
+        mock_mw.return_value.get_user_from_request.return_value = {"role": "admin"}
+        assert _request_caller(self._request()) == {"role": "admin"}
+
+    async def test_unauthenticated_is_401(self):
+        with pytest.raises(HTTPException) as exc:
+            await require_permission(Permission.ADMIN_SYSTEM)(request=self._request(), caller=None)
+        assert exc.value.status_code == 401
+
+    async def test_denied_is_audited_then_403(self):
+        with (
+            patch("autobot_shared.auth.permission_gate.audit_permission_denied") as audit,
+            patch("auth_rbac._permission_gate._wire_rbac", lambda: None),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await require_any_permission(Permission.API_WRITE, Permission.ADMIN_SYSTEM)(
+                    request=self._request(), caller={"role": "readonly", "username": "r"}
+                )
+        assert exc.value.status_code == 403
+        audit.assert_awaited_once()
+
+    async def test_allowed_returns_the_caller(self):
+        caller = {"role": "admin"}
+        assert await require_permission(Permission.ADMIN_SYSTEM)(request=self._request(), caller=caller) is caller
+
+    def test_contrast_a_string_permission_fails_at_build_time(self):
+        with pytest.raises(TypeError):
+            require_permission("admin.system")
 
 
 class TestRequireRoleDecorator:
@@ -218,29 +185,6 @@ class TestRequireRoleDecorator:
         mock_mw.return_value.get_user_from_request.return_value = None
         request = self._create_mock_request()
         dependency = require_role(Role.ADMIN)
-        with pytest.raises(Exception):
-            dependency(request)
-
-
-class TestRequireAnyPermission:
-    """Tests for require_any_permission decorator."""
-
-    def _create_mock_request(self, headers=None):
-        """Create a mock FastAPI request."""
-        request = Mock(spec=Request)
-        request.headers = headers or {}
-        request.client = Mock()
-        request.client.host = "127.0.0.1"
-        request.url = Mock()
-        request.url.path = "/api/test"
-        return request
-
-    @patch("auth_rbac.get_auth_middleware")
-    def test_unauthenticated_request_denied(self, mock_mw):
-        """No authenticated user → the decorator raises (full auth always required)."""
-        mock_mw.return_value.get_user_from_request.return_value = None
-        request = self._create_mock_request()
-        dependency = require_any_permission(Permission.ANALYTICS_VIEW, Permission.ADMIN_SYSTEM)
         with pytest.raises(Exception):
             dependency(request)
 

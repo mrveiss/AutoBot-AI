@@ -124,6 +124,8 @@ security = _auth_mod.security  # module-level HTTPBearer() instance
 
 # The gate GET /api/auth/proxy-check depends on (#16374 round 3).
 _admin_system_gate = require_permission(Permission.ADMIN_SYSTEM)
+# The shared gate's dependency takes the request (for the deny audit) and the caller.
+_REQUEST = SimpleNamespace(url=SimpleNamespace(path="/api/auth/proxy-check"), client=None, headers={})
 
 
 def _mint_token(admin: bool, role: str, username: str = "tester") -> str:
@@ -142,7 +144,7 @@ def _credentials(token: str) -> HTTPAuthorizationCredentials:
 
 
 @pytest.fixture(autouse=True)
-def _stub_revocation_checks():
+def deny_audit():
     """services.auth is loaded for REAL here (see module docstring), so
     decode_token_async's two revocation checks reach the real
     token_denylist.is_jti_revoked and password_epoch.is_token_revoked_by_
@@ -155,8 +157,12 @@ def _stub_revocation_checks():
     with (
         patch.object(_auth_mod, "is_jti_revoked", AsyncMock(return_value=False)),
         patch.object(_auth_mod, "is_token_revoked_by_password_change", AsyncMock(return_value=False)),
+        # #18263: a denial is audited by the shared gate; the writer is stood in for here and
+        # asserted in TestProxyCheckGate, and the RBAC shim (a DB layer) is not wired.
+        patch.object(_auth_mod._permission_gate, "_wire_rbac", lambda: None),
+        patch("autobot_shared.auth.permission_gate.audit_permission_denied", AsyncMock()) as audit,
     ):
-        yield
+        yield audit
 
 
 class TestProxyCheckGate:
@@ -165,7 +171,7 @@ class TestProxyCheckGate:
         """An admin session reaches proxy_check's body -- the endpoint's 204 path."""
         token = _mint_token(admin=True, role="admin", username="admin1")
         current_user = await get_current_user(_credentials(token))
-        result = await _admin_system_gate(current_user)
+        result = await _admin_system_gate(request=_REQUEST, caller=current_user)
         assert result["sub"] == "admin1"
         assert result["admin"] is True
 
@@ -175,8 +181,19 @@ class TestProxyCheckGate:
         token = _mint_token(admin=False, role="user", username="u1")
         current_user = await get_current_user(_credentials(token))
         with pytest.raises(HTTPException) as exc:
-            await _admin_system_gate(current_user)
+            await _admin_system_gate(request=_REQUEST, caller=current_user)
         assert exc.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_a_denial_is_audited_and_an_allow_is_not(self, deny_audit):
+        """#18263/#18264: the SLM writes a deny record through the shared gate."""
+        user = await get_current_user(_credentials(_mint_token(admin=False, role="user", username="u2")))
+        with pytest.raises(HTTPException):
+            await _admin_system_gate(request=_REQUEST, caller=user)
+        deny_audit.assert_awaited_once()
+        admin = await get_current_user(_credentials(_mint_token(admin=True, role="admin", username="a2")))
+        await _admin_system_gate(request=_REQUEST, caller=admin)
+        deny_audit.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_readonly_token_gets_403(self):
@@ -184,7 +201,7 @@ class TestProxyCheckGate:
         token = _mint_token(admin=False, role="readonly", username="ro1")
         current_user = await get_current_user(_credentials(token))
         with pytest.raises(HTTPException) as exc:
-            await _admin_system_gate(current_user)
+            await _admin_system_gate(request=_REQUEST, caller=current_user)
         assert exc.value.status_code == 403
 
     @pytest.mark.asyncio
@@ -195,7 +212,7 @@ class TestProxyCheckGate:
         token = _mint_token(admin=True, role="superadmin", username="sa1")
         current_user = await get_current_user(_credentials(token))
         with pytest.raises(HTTPException) as exc:
-            await _admin_system_gate(current_user)
+            await _admin_system_gate(request=_REQUEST, caller=current_user)
         assert exc.value.status_code == 403
 
     @pytest.mark.asyncio
@@ -340,7 +357,7 @@ class TestProxyCheckEndpoint:
         proxy_check = _load_real_proxy_check()
         token = _mint_token(admin=True, role="admin", username="admin2")
         current_user = await get_current_user(_credentials(token))
-        gated = await _admin_system_gate(current_user)
+        gated = await _admin_system_gate(request=_REQUEST, caller=current_user)
         assert await proxy_check(_=gated) is None
 
     def test_route_declares_204_and_depends_on_admin_system_permission(self):
