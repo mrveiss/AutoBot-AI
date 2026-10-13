@@ -25,7 +25,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.security.path_validator import require_path_string
 from config import settings
 from models.database import Backup, BackupStatus, Node
-from services.backup_ssh import run_command, ssh_base_command, systemctl_redis
+from services.backup_ssh import (
+    run_command,
+    scp_download_command,
+    scp_upload_command,
+    ssh_base_command,
+    systemctl_redis,
+)
 from services.redis_cli_auth import RedisCliAuth, redis_cli_auth
 from services.role_units import REDIS_UNIT
 
@@ -265,15 +271,7 @@ class BackupService:
         backup_path = backup.backup_path
 
         # Copy from SLM storage to temporary location
-        scp_cmd = [
-            "/usr/bin/scp",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-P",
-            str(ssh_port),
-            backup_path,
-            f"{ssh_user}@{host}:/tmp/restore.rdb",
-        ]
+        scp_cmd = scp_upload_command(host, ssh_user, ssh_port, backup_path, "/tmp/restore.rdb")
         success, _ = await self._run_command(scp_cmd, timeout=300)
         if not success:
             return False, "Failed to copy backup to target"
@@ -585,17 +583,7 @@ class BackupService:
         backup_filename = f"{backup_id}_{timestamp}{suffix}"
         backup_path = BACKUP_STORAGE_DIR / backup_filename
 
-        scp_cmd = [
-            "/usr/bin/scp",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-o",
-            "ConnectTimeout=30",
-            "-P",
-            str(ssh_port),
-            f"{ssh_user}@{host}:{rdb_path}",
-            str(backup_path),
-        ]
+        scp_cmd = scp_download_command(host, ssh_user, ssh_port, rdb_path, str(backup_path))
         success, scp_output = await self._run_command(scp_cmd, timeout=300)
         return success, backup_path, scp_output
 

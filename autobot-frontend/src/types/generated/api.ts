@@ -11317,7 +11317,7 @@ export interface paths {
         put?: never;
         /**
          * Call Realtime Tool
-         * @description Route a Realtime tool call through the MCP bridge (#7343).
+         * @description Route a Realtime tool call through the MCP bridge (#7343); its AI line is resolved first (#18430).
          */
         post: operations["call_realtime_tool_api_voice_realtime_tools_call_post"];
         delete?: never;
@@ -49788,6 +49788,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/ai-lines/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read My Lines
+         * @description The signed-in user's own lines: the scope of a user with no company (#18430).
+         */
+        get: operations["read_my_lines_api_llc_ai_lines_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/ai-lines/me/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose My Change
+         * @description Propose a change to a personal line. Only the same person can approve it (self-approval, audit-flagged).
+         */
+        post: operations["propose_my_change_api_llc_ai_lines_me_changes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/ai-lines/{company_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Lines */
+        get: operations["read_lines_api_llc_ai_lines__company_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/ai-lines/{company_id}/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Propose Change */
+        post: operations["propose_change_api_llc_ai_lines__company_id__changes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/approvals": {
         parameters: {
             query?: never;
@@ -57118,6 +57192,44 @@ export interface components {
             action: "summarize" | "key_facts" | "protocol" | "custom";
             /** Custom Question */
             custom_question?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AiLine
+         * @description The three lines. ``rank`` orders them from loosest to strictest.
+         * @enum {string}
+         */
+        AiLine: "autonomous" | "draft_then_send" | "never";
+        /**
+         * AiLineEntry
+         * @description One tool action: the stored line (if any), what it really resolves to, and why.
+         */
+        AiLineEntry: {
+            /** Action Key */
+            action_key: string;
+            stored_line?: components["schemas"]["AiLine"] | null;
+            effective_line: components["schemas"]["AiLine"];
+            /** Is Set */
+            is_set: boolean;
+            /** Reason */
+            reason: string;
+            /** Floor Category */
+            floor_category?: string | null;
+            /** Approval Id */
+            approval_id?: string | null;
+            /** Decided By */
+            decided_by?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** AiLinesResponse */
+        AiLinesResponse: {
+            /** Company Id */
+            company_id: string;
+            default_line: components["schemas"]["AiLine"];
+            /** Entries */
+            entries: components["schemas"]["AiLineEntry"][];
         } & {
             [key: string]: unknown;
         };
@@ -90134,6 +90246,31 @@ export interface components {
             prompts: unknown[];
             /** Defaults */
             defaults: unknown;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ProposeLineChange */
+        ProposeLineChange: {
+            /**
+             * Action Key
+             * @description '<tool>' or '<tool>:<action>'
+             */
+            action_key: string;
+            line: components["schemas"]["AiLine"];
+            /** Reason */
+            reason?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ProposedLineChange */
+        ProposedLineChange: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Action Key */
+            action_key: string;
+            line: components["schemas"]["AiLine"];
         } & {
             [key: string]: unknown;
         };
@@ -170993,6 +171130,125 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+        };
+    };
+    read_my_lines_api_llc_ai_lines_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiLinesResponse"];
+                };
+            };
+        };
+    };
+    propose_my_change_api_llc_ai_lines_me_changes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposeLineChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposedLineChange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_lines_api_llc_ai_lines__company_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiLinesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propose_change_api_llc_ai_lines__company_id__changes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposeLineChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposedLineChange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

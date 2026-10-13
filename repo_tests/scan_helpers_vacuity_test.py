@@ -355,7 +355,13 @@ def _run_isolated(repo: Path, checker: str, *args: str) -> subprocess.CompletedP
     )
 
 
-@pytest.mark.parametrize(("checker", "source", "finding", "rel"), _PLANTED)
+@pytest.mark.parametrize(
+    ("checker", "source", "finding", "rel"),
+    _PLANTED,
+    # Named by checker, never by source: a planted literal (e.g. a fleet address split in the
+    # source above) would otherwise be rejoined into the node id and land in .test_durations.
+    ids=[f"{row[0]}-{row[3]}" for row in _PLANTED],
+)
 def test_a_planted_violation_still_exits_one(
     thin_repo: Path, checker: str, source: str, finding: str, rel: str
 ) -> None:

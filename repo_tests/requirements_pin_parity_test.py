@@ -162,12 +162,12 @@ def test_the_protobuf_cap_matches_what_opentelemetry_proto_declares():
     two lines are asserted together here.
     """
     root = checker.parse_direct_requirements(REPO_ROOT / "requirements.txt")
-    assert root["opentelemetry-proto"] == "==1.44.0", (
+    assert root["opentelemetry-proto"] == "==1.45.1", (
         "opentelemetry-proto moved. Re-read its Requires-Dist for protobuf and "
         "update BOTH the protobuf constraint and its rationale (#15070)."
     )
     # >=7.36.2 since this bump. Verified against the metadata rather than argued
-    # from the interval: `opentelemetry-proto==1.44.0` declares
+    # from the interval: `opentelemetry-proto==1.45.1` declares
     # `Requires-Dist: protobuf<8.0,>=5.0`, so it admits [5.0, 8.0) and both the
     # old floor and this one sit inside it. The CAP is the half #15070 is about
     # and it is unchanged at <8.0.0, which still matches otel's <8.0 exactly --

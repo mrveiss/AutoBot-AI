@@ -213,6 +213,7 @@ _DECLARED_SCOPES = {
     "anti-pattern-type-emitters": ("autobot-backend/code_analysis", "autobot-backend/code_intelligence"),
     "chat-history-async-calls-awaited": ("autobot-backend/api",),
     "chat-single-delete-implementation": ("autobot-backend/api",),
+    "ai-line-single-policy": ("autobot-backend", "autobot_shared"),
     "conversation-turn-single-store": ("autobot-backend", "autobot_shared", "autobot-infrastructure"),
     "credential-field-name-only-callers": (
         "autobot-backend",
@@ -297,6 +298,7 @@ _DECLARED_SCOPES = {
     "frontend-model-literal-scan": ("autobot-frontend/src",),
     "one-bm25-formula": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "one-hybrid-search": ("autobot-backend", "autobot_shared"),
+    "shared-authority-callers-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "one-doc-indexer": (
         "autobot-backend",
         "autobot-slm-backend",

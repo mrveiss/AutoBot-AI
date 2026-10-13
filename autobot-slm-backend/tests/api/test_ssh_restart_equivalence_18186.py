@@ -31,12 +31,15 @@ from autobot_shared.ssot_config import config
 # MagicMocks, and `models.database` with them. Load the three modules under test for real, the
 # way test_restart_all_session_lifetime_15611.py does, so the sites run their own code.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-_real_orm = importlib.import_module("_real_orm_import")
-SLM_ROOT, import_modules_with_real_orm = _real_orm.SLM_ROOT, _real_orm.import_modules_with_real_orm
+_orm = importlib.import_module("_real_orm_import")  # a sibling helper, not on the package path
+SLM_ROOT = _orm.SLM_ROOT
+import_modules_with_real_orm = _orm.import_modules_with_real_orm
 
-service_restart, sync_orchestrator, roles = import_modules_with_real_orm(
-    ("services.sync_orchestrator", "api.roles"),
-    path_loaded={"services.service_restart": SLM_ROOT / "services" / "service_restart.py"},
+service_restart, post_sync_runner, node_post_sync, roles = import_modules_with_real_orm(
+    ("services.post_sync_runner", "api.node_post_sync", "api.roles"),
+    path_loaded={
+        "services.service_restart": SLM_ROOT / "services" / "service_restart.py",
+    },
 )
 
 _KEY = config.path.ssh_key_path
@@ -53,6 +56,7 @@ _FULL_SSH_PREFIX = [
     _KEY,
     "-p",
     "2222",
+    "--",
     "svc@node.example.test",
 ]
 
@@ -96,74 +100,76 @@ class _Runner:
         monkeypatch.setattr(asyncio, "wait_for", wait)
 
 
-def _ctx(units=("a.service", "b.service"), restart=True):
-    ctx = sync_orchestrator.SyncNodeContext()
-    ctx.node_ip, ctx.node_user, ctx.node_port = "node.example.test", "svc", 2222
-    ctx.auto_restart, ctx.systemd_service = restart, list(units) if units else None
-    return ctx
+_UNITS = ("a.service", "b.service")
+
+
+async def _restart(units=_UNITS):
+    base = post_sync_runner.restart_ssh_base("node.example.test", "svc", 2222)
+    return await post_sync_runner.restart_units(base, list(units))
 
 
 @pytest.fixture
 def orch_logger(monkeypatch, tmp_path):
     fake = create_autospec(logging.Logger, instance=True, spec_set=True)
-    monkeypatch.setattr(sync_orchestrator, "logger", fake)
-    # SyncOrchestrator() creates its cache dir; the default is a host path a CI runner lacks.
-    monkeypatch.setattr(sync_orchestrator, "CODE_CACHE_DIR", tmp_path / "code-cache")
+    monkeypatch.setattr(post_sync_runner, "logger", fake)
     return fake
 
 
-@pytest.fixture
-def usable_key(monkeypatch, tmp_path):
-    key = tmp_path / "id"
-    key.write_text("k", encoding="utf-8")
-    monkeypatch.setattr(sync_orchestrator, "SSH_KEY_PATH", key)
-    return key
+async def test_orchestrator_argv_has_sudo_n_batchmode_one_call_all_units_env_backed_60_17455(monkeypatch, orch_logger):
+    """#17455 (owner decision 2026-10-10) re-pins #18186's zero-change argv: `sudo -n`, `BatchMode=yes`.
 
-
-async def test_orchestrator_argv_has_no_dash_n_one_call_all_units_and_literal_60(monkeypatch, orch_logger, usable_key):
+    The restart moved from `sync_orchestrator` to `post_sync_runner.restart_units` (one execution path).
+    """
     run = _Runner(monkeypatch)
-    await sync_orchestrator.SyncOrchestrator()._restart_systemd_service(_ctx(), "n1", True)
+    await _restart()
     assert run.argv == [
-        "ssh",
-        "-o",
-        "StrictHostKeyChecking=accept-new",
-        "-o",
-        "ConnectTimeout=10",
-        "-p",
-        "2222",
-        "-i",
-        str(usable_key),
+        *_FULL_SSH_PREFIX[:-1],
         "svc@node.example.test",
-        "sudo systemctl restart -- a.service b.service",
+        "sudo -n systemctl restart -- a.service b.service",
     ]
     assert run.kwargs == {"stdout": asyncio.subprocess.PIPE, "stderr": asyncio.subprocess.STDOUT}
     assert run.timeout == 60
 
 
-async def test_orchestrator_swallows_a_nonzero_exit_and_logs_restarted(monkeypatch, orch_logger, usable_key):
-    _Runner(monkeypatch, rc=1)
-    assert await sync_orchestrator.SyncOrchestrator()._restart_systemd_service(_ctx(), "n1", True) is None
-    orch_logger.info.assert_called_once_with("Restarted %s on %s", "a.service b.service", "n1")
-    orch_logger.warning.assert_not_called()
+async def test_orchestrator_records_a_nonzero_exit_as_a_failure_not_restarted_17455(monkeypatch, orch_logger):
+    """#17455: a non-zero exit used to log "Restarted"; it is now a failed outcome and a warning."""
+    _Runner(monkeypatch, rc=1, out=b"sudo: a password is required")
+    outcome = await _restart()
+    assert (outcome.success, outcome.exit_code, outcome.error) == (False, 1, "exit 1")
+    assert "password is required" in outcome.output_tail
+    orch_logger.info.assert_not_called()
+    orch_logger.warning.assert_called_once_with("Service restart failed: %s", "exit 1")
 
 
 @pytest.mark.parametrize("failure", [{"timeout": True}, {"spawn_error": OSError("no ssh")}])
-async def test_orchestrator_turns_a_timeout_or_error_into_one_warning(monkeypatch, orch_logger, usable_key, failure):
+async def test_orchestrator_turns_a_timeout_or_error_into_a_failed_outcome_and_one_warning(
+    monkeypatch, orch_logger, failure
+):
     _Runner(monkeypatch, **failure)
-    assert await sync_orchestrator.SyncOrchestrator()._restart_systemd_service(_ctx(), "n1", True) is None
+    outcome = await _restart()
+    assert (outcome.success, outcome.exit_code) == (False, None)  # #17455: returned, not swallowed
     assert orch_logger.warning.call_count == 1
     assert orch_logger.warning.call_args.args[0] == "Service restart failed: %s"
     orch_logger.info.assert_not_called()
 
 
+def _role(units=_UNITS, auto_restart=True):
+    return SimpleNamespace(
+        name="r",
+        display_name="R",
+        post_sync_cmd=None,
+        systemd_service=list(units) if units else None,
+        auto_restart=auto_restart,
+    )
+
+
 @pytest.mark.parametrize(
-    ("ctx", "restart"),
-    [(_ctx(), False), (_ctx(restart=False), True), (_ctx(units=None), True)],
+    ("role", "restart"),
+    [(_role(), False), (_role(auto_restart=False), True), (_role(units=None), True)],
 )
-async def test_orchestrator_spawns_nothing_when_not_configured(monkeypatch, orch_logger, ctx, restart):
-    run = _Runner(monkeypatch)
-    await sync_orchestrator.SyncOrchestrator()._restart_systemd_service(ctx, "n1", restart)
-    assert run.calls == 0
+def test_no_restart_action_is_planned_when_not_configured(role, restart):
+    """The gate moved from the orchestrator's restart method to the plan builder (#17455)."""
+    assert node_post_sync.build_node_actions([role], restart) == []
 
 
 def _action_request(category="restart"):

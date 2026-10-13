@@ -1388,6 +1388,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/code-sync/post-sync-runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Post Sync Run
+         * @description The rows a sync run recorded, in execution order; 404 when no row carries *run_id*.
+         */
+        get: operations["get_post_sync_run_api_code_sync_post_sync_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/code-sync/pull": {
         parameters: {
             query?: never;
@@ -3993,6 +4013,29 @@ export interface paths {
          * @description Stop a service on a node.
          */
         post: operations["stop_service_api_nodes__node_id__services__service_name__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/nodes/{node_id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Node Post Sync Plan
+         * @description Sync every ACTIVE role on a node and run ONE ordered post-sync plan (#17455).
+         *
+         *     A failed install/schema/build aborts the plan (no restarts, no role marked synced); a
+         *     failed restart is recorded and reported in ``actions[*].success`` without failing the sync.
+         */
+        post: operations["sync_node_post_sync_plan_api_nodes__node_id__sync_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10654,6 +10697,44 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * NodePostSyncResponse
+         * @description Result of syncing every ACTIVE role on a node as one ordered plan.
+         */
+        NodePostSyncResponse: {
+            /**
+             * Aborted
+             * @default false
+             */
+            aborted: boolean;
+            /**
+             * Actions
+             * @default []
+             */
+            actions: components["schemas"]["PostSyncActionRunResponse"][];
+            /** Commit */
+            commit?: string | null;
+            /** Message */
+            message: string;
+            /** Node Id */
+            node_id: string;
+            /**
+             * Roles
+             * @default []
+             */
+            roles: components["schemas"]["NodeRoleSyncResult"][];
+            /** Run Id */
+            run_id: string;
+            /**
+             * Skipped
+             * @default []
+             */
+            skipped: string[];
+            /** Success */
+            success: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * NodeResponse
          * @description Node response.
          */
@@ -10771,6 +10852,20 @@ export interface components {
             status: string;
             /** Unreachable Roles */
             unreachable_roles?: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * NodeRoleSyncResult
+         * @description File-sync outcome for one role on the node.
+         */
+        NodeRoleSyncResult: {
+            /** Message */
+            message: string;
+            /** Role Name */
+            role_name: string;
+            /** Success */
+            success: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -11135,6 +11230,61 @@ export interface components {
             role_name: string;
             /** Systemd Service */
             systemd_service?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * PostSyncActionRunResponse
+         * @description One recorded post-sync action. `success` is None when the action was only issued.
+         */
+        PostSyncActionRunResponse: {
+            /** Category */
+            category: string;
+            /** Command */
+            command?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Exit Code */
+            exit_code?: number | null;
+            /**
+             * Finished At
+             * Format: date-time
+             */
+            finished_at: string;
+            /** Label */
+            label: string;
+            /** Node Id */
+            node_id: string;
+            /**
+             * Output Tail
+             * @default
+             */
+            output_tail: string;
+            /** Role Name */
+            role_name: string;
+            /** Run Id */
+            run_id: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Success */
+            success?: boolean | null;
+            /** Units */
+            units?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * PostSyncRunResponse
+         * @description Every recorded action of one run, in execution order.
+         */
+        PostSyncRunResponse: {
+            /** Actions */
+            actions: components["schemas"]["PostSyncActionRunResponse"][];
+            /** Run Id */
+            run_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -16712,6 +16862,39 @@ export interface operations {
             };
         };
     };
+    get_post_sync_run_api_code_sync_post_sync_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostSyncRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     pull_from_source_api_code_sync_pull_post: {
         parameters: {
             query?: never;
@@ -21116,6 +21299,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["models__schemas__ServiceActionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_node_post_sync_plan_api_nodes__node_id__sync_post: {
+        parameters: {
+            query?: {
+                restart?: boolean;
+            };
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodePostSyncResponse"];
                 };
             };
             /** @description Validation Error */

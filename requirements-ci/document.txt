@@ -1,6 +1,6 @@
 # Document processing and text extraction
 python-docx==1.2.0
-pypdf==6.19.0
+pypdf==6.20.0
 reportlab>=5.0.1            # MVA-2174: PDF export for transcripts
 # #15600: `markdown` was declared here and required by nothing. It is the
 # mirror image of the nltk entry below, and the same instrument settled both:
@@ -30,7 +30,7 @@ markdownify==1.2.3
 # pytesseract is the binding; the tesseract binary is installed by the
 # "Install CI system packages" step in .github/actions/setup-python-suite.
 pytesseract>=0.3.13
-pypdfium2>=5.13.0          # renders PDF pages for OCR; Apache-2.0/BSD, bundles pdfium
+pypdfium2>=5.14.0          # renders PDF pages for OCR; Apache-2.0/BSD, bundles pdfium
 pdfplumber>=0.11.10         # PDF table extraction (#14232); see the note above on why both files need it
 # #14551: production dep (autobot-backend/requirements.txt, Live Canvas
 # HTML->PDF export). transcriber/tests/test_export_api.py gates on
@@ -39,7 +39,7 @@ weasyprint>=69.0
 # #14551: production dep (autobot-backend/requirements.txt, #10932 content-reach
 # readable-article extraction, lazy). tests/content_reach/sources/test_web_page.py
 # gates on pytest.importorskip("trafilatura") — silently skipping without this.
-trafilatura>=2.3.0
+trafilatura>=2.3.1
 # #14551: production dep (autobot-backend/requirements.txt, code-graph AST
 # parsing). services/knowledge/code_indexer_test.py, impact_analysis_test.py,
 # code_indexer_extensions_test.py, code_indexer_shape_test.py and

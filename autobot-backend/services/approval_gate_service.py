@@ -22,7 +22,11 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.store_authority import system_of_record
 from autobot_shared.time_utils import now_utc
 from models.approval import Approval, ApprovalComment, ApprovalStatus, TaskApprovalLink
-from services.approval_execution import resume_decided_approval, run_post_approval_actions
+from services.approval_execution import (
+    resume_decided_approval,
+    run_post_approval_actions,
+    set_verified_decider,
+)
 from services.approval_record_fields import payload_hash_of, record_fields
 
 logger = get_logger(__name__)
@@ -61,6 +65,7 @@ class ApprovalGateService:
         workflow_step: str | None = None,
         context: Dict[str, Any] | None = None,
         task_ids: List[str] | None = None,
+        company_id: uuid.UUID | None = None,
         *,
         source: str | None = None,
         risk_tier: Any = None,
@@ -69,12 +74,13 @@ class ApprovalGateService:
         resume_ref: str | None = None,
         owner_user: str | None = None,
     ) -> Approval:
-        """Create a new approval gate request.
+        """Create a new approval gate request (company-scoped when *company_id* is given, #18430).
 
         The keyword-only record fields (#13421) are for server-side emitters; they are validated
         by ``record_fields`` and are deliberately not accepted from the HTTP create route.
         """
         approval = Approval(
+            company_id=company_id,
             title=title,
             description=description,
             approval_type=approval_type,
@@ -114,8 +120,12 @@ class ApprovalGateService:
         comment: str | None = None,
         *,
         author_type: str,
+        decider_id: uuid.UUID | None = None,
     ) -> Approval:
         """Approve a pending approval gate, then run whatever it proposed (#17038/#17043).
+
+        ``decider_id`` is the authenticated person's user id (#18430); handlers that care who decided compare it,
+        never ``decided_by`` (a display name).
 
         The transition itself commits first; ``run_post_approval_actions``
         cannot fail the approval decision, only what happens after it.
@@ -127,6 +137,7 @@ class ApprovalGateService:
             comment,
             author_type,
         )
+        set_verified_decider(approval, decider_id)
         await run_post_approval_actions(approval, self.session)
         return approval
 
@@ -488,7 +499,11 @@ class ApprovalGateService:
         event_type: str,
         approval: Approval,
     ) -> None:
-        """Publish WebSocket notification via get_event_manager()."""
+        """Publish the notification: the approval on ``global``, its workflow identity on ``workflow:{id}``.
+
+        ``global`` reaches every authenticated client, so it carries no workflow id (#17354); a subscriber that is
+        entitled to a workflow reads those two fields from that workflow's own channel.
+        """
         try:
             from events.bus import PersistStrategy, publish_event
 
@@ -502,14 +517,24 @@ class ApprovalGateService:
                     "status": approval.status,
                     "requested_by_agent": approval.requested_by_agent,
                     "decided_by_user": approval.decided_by_user,
-                    "workflow_id": approval.workflow_id,
-                    "workflow_step": approval.workflow_step,
                     "source": approval.source,
                     "risk_tier": approval.risk_tier,
                     "expires_at": approval.expires_at.isoformat() if approval.expires_at else None,
                 },
                 persist=PersistStrategy.NONE,
             )
+            if approval.workflow_id:
+                await publish_event(
+                    f"workflow:{approval.workflow_id}",
+                    event_type=event_type,
+                    payload={
+                        "approval_id": str(approval.id),
+                        "status": approval.status,
+                        "workflow_id": approval.workflow_id,
+                        "workflow_step": approval.workflow_step,
+                    },
+                    persist=PersistStrategy.NONE,
+                )
         except Exception as exc:
             logger.warning(
                 "Failed to publish %s notification: %s",

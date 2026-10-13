@@ -31,6 +31,7 @@ import uuid
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from api.chat_streaming import _stream_chat_workflow_messages, _stream_direct_response, principal_scope
 from api.schemas_chat import (
     ChatCapabilitiesData,
     ChatData,
@@ -54,7 +55,6 @@ from api.user_management.dependencies import require_org_context
 from api.websockets import NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 from chat_history.message_schema import llm_role, message_text, message_type
 
@@ -1497,38 +1497,6 @@ def _validate_chat_services(chat_history_manager, chat_workflow_manager) -> None
         )
 
 
-async def _stream_chat_workflow_messages(
-    chat_workflow_manager,
-    chat_id: str,
-    message: str,
-    context: dict,
-    request_id: str,
-    auth_role: str | None = None,
-):
-    """Stream chat workflow messages as SSE events (Issue #398: extracted)."""
-    try:
-        logger.debug("[%s] Starting stream for chat_id=%s", request_id, chat_id)
-        evt = {"type": "start", "session_id": chat_id, "request_id": request_id}
-        yield f"data: {json.dumps(evt)}\n\n"
-
-        logger.debug("[%s] Processing message: %s...", request_id, message[:50])
-        message_count = 0
-        async for msg in chat_workflow_manager.process_message_stream(
-            session_id=chat_id, message=message, context=context, auth_role=auth_role
-        ):
-            message_count += 1
-            msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
-            yield f"data: {json.dumps(msg_data)}\n\n"
-
-        logger.info("[%s] Stream complete: %d messages", request_id, message_count)
-        yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"
-
-    except Exception as e:
-        logger.error("[%s] Streaming error: %s", request_id, e, exc_info=True)
-        evt = {"type": "error", "content": safe_http_detail(e, "stream_error"), "request_id": request_id}
-        yield f"data: {json.dumps(evt)}\n\n"
-
-
 def _create_streaming_response(generator):
     """Create a StreamingResponse with SSE headers (Issue #398: extracted)."""
     return StreamingResponse(
@@ -1540,40 +1508,6 @@ def _create_streaming_response(generator):
             "X-Accel-Buffering": "no",
         },
     )
-
-
-async def _stream_direct_response(
-    chat_workflow_manager,
-    chat_id: str,
-    message: str,
-    remember_choice: bool,
-    request_id: str,
-    auth_role: str | None = None,
-):
-    """Stream direct response for approvals/denials (Issue #398: extracted)."""
-    try:
-        start_evt = {"type": "start", "session_id": chat_id, "request_id": request_id}
-        yield f"data: {json.dumps(start_evt)}\n\n"
-
-        async for msg in chat_workflow_manager.process_message_stream(
-            session_id=chat_id,
-            message=message,
-            context={"remember_choice": remember_choice},
-            auth_role=auth_role,
-        ):
-            msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
-            yield f"data: {json.dumps(msg_data)}\n\n"
-
-        yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"
-
-    except Exception as e:
-        logger.error("[%s] Direct response streaming error: %s", request_id, e, exc_info=True)
-        error_data = {
-            "type": "error",
-            "content": "Error processing command approval",
-            "request_id": request_id,
-        }
-        yield f"data: {json.dumps(error_data)}\n\n"
 
 
 def _validate_workflow_manager(chat_workflow_manager) -> None:
@@ -1658,6 +1592,7 @@ async def send_chat_message_by_id(
             # request_data — `context` above is the caller's own bag and is
             # explicitly not trusted for this.
             auth_role=(current_user or {}).get("role"),
+            auth_scope=principal_scope(current_user),  # #18430: the AI lines' scope, server-verified
         )
     )
 
@@ -1995,6 +1930,7 @@ async def send_direct_chat_response(
             request_id,
             # #13821: server-side identity, same as the message endpoint.
             auth_role=(current_user or {}).get("role"),
+            auth_scope=principal_scope(current_user),
         )
     )
 

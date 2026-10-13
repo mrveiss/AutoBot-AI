@@ -191,6 +191,16 @@ class MCPDispatcher:
         """Return the cached tool entry for tool_name, or None if not found."""
         return self._tool_cache.get(tool_name)
 
+    async def ensure_loaded(self) -> None:
+        """Load the tool cache once if it never has been (#18430: one public way, not ``_cache_loaded``)."""
+        if not self._cache_loaded:
+            await self.refresh_tool_cache()
+
+    async def has_tool(self, tool_name: str) -> bool:
+        """Whether *tool_name* is in the registry, loading the cache first if needed."""
+        await self.ensure_loaded()
+        return self.find_tool(tool_name) is not None
+
     # ------------------------------------------------------------------
     # Dispatch
     # ------------------------------------------------------------------

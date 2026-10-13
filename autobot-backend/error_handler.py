@@ -6,7 +6,7 @@
 Error Handling Utilities for AutoBot
 
 This module provides utilities for consistent error handling,
-including logging, retry mechanisms, and error recovery strategies.
+including logging, circuit breaking, and error recovery strategies (retry lives in autobot_shared.retry_mechanism).
 """
 
 import asyncio
@@ -137,175 +137,6 @@ def with_default_on_error(
         if asyncio.iscoroutinefunction(func):
             return async_wrapper
         return wrapper
-
-    return decorator
-
-
-# (Issue #315 - extracted) Helper function for retry logging and delay
-def _handle_retry_attempt(
-    exception: Exception,
-    attempt: int,
-    max_attempts: int,
-    func_name: str,
-    on_retry: Callable[[Exception, int], None] | None,
-) -> None:
-    """Handle logging and callback for retry attempt. Issue #620."""
-    if on_retry:
-        on_retry(exception, attempt + 1)
-    logger.warning(
-        f"Retry {attempt + 1}/{max_attempts} for " f"{func_name} after {type(exception).__name__}: {exception}"
-    )
-
-
-# (Issue #315 - extracted) Helper function for max retry logging
-def _log_max_retries_exceeded(max_attempts: int, func_name: str) -> None:
-    """Log when max retries are exceeded. Issue #620."""
-    logger.error("Max retries (%s) exceeded for %s", max_attempts, func_name)
-
-
-def _should_retry_on_exception(attempt: int, max_attempts: int, func_name: str) -> bool:
-    """Check if retry should continue or log final failure. Issue #620.
-
-    Args:
-        attempt: Current attempt number (0-indexed)
-        max_attempts: Maximum number of attempts allowed
-        func_name: Name of the function being retried
-
-    Returns:
-        True if should retry, False if max attempts reached.
-    """
-    if attempt >= max_attempts - 1:
-        _log_max_retries_exceeded(max_attempts, func_name)
-        return False
-    return True
-
-
-def _process_retry_exception(
-    exception: Exception,
-    attempt: int,
-    max_attempts: int,
-    func_name: str,
-    on_retry: Callable[[Exception, int], None] | None,
-    current_delay: float,
-    backoff: float,
-) -> tuple:
-    """Process exception during retry and calculate next delay.
-
-    Issue #620.
-
-    Args:
-        exception: The caught exception
-        attempt: Current attempt number (0-indexed)
-        max_attempts: Maximum number of attempts allowed
-        func_name: Name of the function being retried
-        on_retry: Optional callback called on each retry
-        current_delay: Current delay between retries
-        backoff: Multiplier for delay after each retry
-
-    Returns:
-        Tuple of (sleep_delay, next_delay) where sleep_delay is 0 if should not retry. Issue #620.
-    """
-    if not _should_retry_on_exception(attempt, max_attempts, func_name):
-        return (0, current_delay)
-    _handle_retry_attempt(exception, attempt, max_attempts, func_name, on_retry)
-    return (current_delay, current_delay * backoff)
-
-
-def _select_retry_wrapper(func: Callable, sync_wrapper: Callable, async_wrapper: Callable) -> Callable:
-    """Select appropriate wrapper based on whether function is async. Issue #620."""
-    return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
-
-
-def _create_sync_retry_wrapper(
-    func: Callable[..., T],
-    max_attempts: int,
-    delay: float,
-    backoff: float,
-    exceptions: tuple,
-    on_retry: Callable[[Exception, int], None] | None,
-) -> Callable[..., T]:
-    """Create synchronous retry wrapper for a function. Issue #620."""
-
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> T:
-        last_exception, current_delay = None, delay
-        for attempt in range(max_attempts):
-            try:
-                return func(*args, **kwargs)
-            except exceptions as e:
-                last_exception = e
-                sleep_delay, current_delay = _process_retry_exception(
-                    e,
-                    attempt,
-                    max_attempts,
-                    func.__name__,
-                    on_retry,
-                    current_delay,
-                    backoff,
-                )
-                if sleep_delay > 0:
-                    time.sleep(sleep_delay)
-        raise last_exception
-
-    return wrapper
-
-
-def _create_async_retry_wrapper(
-    func: Callable[..., T],
-    max_attempts: int,
-    delay: float,
-    backoff: float,
-    exceptions: tuple,
-    on_retry: Callable[[Exception, int], None] | None,
-) -> Callable[..., T]:
-    """Create asynchronous retry wrapper for a function. Issue #620."""
-
-    @functools.wraps(func)
-    async def async_wrapper(*args, **kwargs) -> T:
-        last_exception, current_delay = None, delay
-        for attempt in range(max_attempts):
-            try:
-                return await func(*args, **kwargs)
-            except exceptions as e:
-                last_exception = e
-                sleep_delay, current_delay = _process_retry_exception(
-                    e,
-                    attempt,
-                    max_attempts,
-                    func.__name__,
-                    on_retry,
-                    current_delay,
-                    backoff,
-                )
-                if sleep_delay > 0:
-                    await asyncio.sleep(sleep_delay)
-        raise last_exception
-
-    return async_wrapper
-
-
-def retry(
-    max_attempts: int = 3,
-    delay: float = 1.0,
-    backoff: float = 2.0,
-    exceptions: tuple = (Exception,),
-    on_retry: Callable[[Exception, int], None] | None = None,
-):
-    """Decorator for retrying functions with exponential backoff. Issue #620.
-
-    Args:
-        max_attempts: Maximum number of retry attempts
-        delay: Initial delay between retries in seconds
-        backoff: Multiplier for delay after each retry
-        exceptions: Tuple of exceptions to catch and retry
-        on_retry: Optional callback called on each retry with (exception, attempt)
-    """
-
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        """Inner decorator that wraps function with retry logic. Issue #620."""
-        sync_wrapper = _create_sync_retry_wrapper(func, max_attempts, delay, backoff, exceptions, on_retry)
-        async_wrapper = _create_async_retry_wrapper(func, max_attempts, delay, backoff, exceptions, on_retry)
-        return _select_retry_wrapper(func, sync_wrapper, async_wrapper)
 
     return decorator
 
@@ -475,12 +306,6 @@ def format_traceback(exc: Exception, limit: int = 10) -> str:
 def get_user_data(user_id: str) -> list:
     # This will log errors and return [] on failure
     return fetch_from_database(user_id)
-
-# Using retry decorator
-@retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
-async def call_external_api():
-    # This will retry up to 3 times with exponential backoff
-    return await make_api_request()
 
 # Using circuit breaker
 @CircuitBreakerDecorator(failure_threshold=5, recovery_timeout=TimingConstants.STANDARD_TIMEOUT)

@@ -33,6 +33,7 @@ from typing import Any, Dict, List
 import aiohttp
 import yaml
 
+from autobot_shared.config_file_loading import load_config_file
 from autobot_shared.http_client import get_http_client
 from autobot_shared.service_registry_core import (
     SERVICE_DEFINITIONS,
@@ -205,11 +206,8 @@ class ServiceRegistry:
     def _load_config_file(self, config_file: str):
         """Load services from configuration file"""
         try:
-            with open(config_file, "r", encoding="utf-8") as f:
-                if config_file.endswith(".yaml") or config_file.endswith(".yml"):
-                    config = yaml.safe_load(f)
-                else:
-                    config = json.load(f)
+            parser = yaml.safe_load if config_file.endswith((".yaml", ".yml")) else json.load
+            config = load_config_file(config_file, dict, "Service registry", parser=parser).values
 
             services_config = config.get("services", {})
             for service_name, service_data in services_config.items():

@@ -215,12 +215,18 @@ async def ingest_response_done(session_id: str, body: ResponseDoneRequest) -> di
 
 
 @router.post("/tools/call")
-async def call_realtime_tool(body: ToolCallRequest) -> dict:
-    """Route a Realtime tool call through the MCP bridge (#7343)."""
+async def call_realtime_tool(body: ToolCallRequest, current_user: dict = Depends(get_current_user)) -> dict:
+    """Route a Realtime tool call through the MCP bridge (#7343); its AI line is resolved first (#18430)."""
     from services.realtime_mcp_bridge import get_realtime_bridge
 
     bridge = await get_realtime_bridge()
-    result = await bridge.call_tool(name=body.name, arguments=body.arguments, session_id=body.session_id)
+    result = await bridge.call_tool(
+        name=body.name,
+        arguments=body.arguments,
+        session_id=body.session_id,
+        user_id=current_user.get("id") or current_user.get("sub"),
+        company_id=current_user.get("org_id"),
+    )
     return {"call_id": body.call_id, "content": result.content, "is_error": result.is_error}
 
 

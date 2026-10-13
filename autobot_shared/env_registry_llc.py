@@ -125,3 +125,17 @@ env_registry.register_env_var(
         component="orchestrator",
     )
 )
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_VOICE_REFERENCE_MAX_SECONDS",
+        type=float,
+        default=120.0,
+        description=(
+            "Longest reference audio, in seconds, kept when a new voice is created; ffmpeg cuts the decoded "
+            "output there, so a decompression bomb cannot outlive the request. Must be positive and finite, "
+            "else the default is used (media/audio/reference_wav.py, #18477)."
+        ),
+        component="voice",
+    )
+)

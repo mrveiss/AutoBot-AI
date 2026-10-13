@@ -35,7 +35,13 @@ import pytest
 # Dev-host stub for models.schemas so api.code_sync imports without a full venv.
 # ---------------------------------------------------------------------------
 _MODELS_SNAPSHOT = {_k: sys.modules.get(_k) for _k in ("models", "models.schemas")}
-if "models" not in sys.modules or isinstance(sys.modules.get("models"), MagicMock):
+# Stub when `models` is absent/a MagicMock, OR when it is a real package whose `models.schemas` is still the
+# root conftest's MagicMock (tests/services/conftest.py makes `models` real; main fails the same way, #17455).
+if (
+    "models" not in sys.modules
+    or isinstance(sys.modules.get("models"), MagicMock)
+    or isinstance(sys.modules.get("models.schemas"), MagicMock)
+):
     from pydantic import BaseModel as _BM
 
     def _pydantic_stub(name: str, **fields) -> type:

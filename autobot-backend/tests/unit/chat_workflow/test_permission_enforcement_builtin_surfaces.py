@@ -21,6 +21,7 @@ browser VM call) is stubbed. A test that only proved the extension's own
 logic would have passed before this fix; these prove the *call site* denies.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -273,7 +274,12 @@ class TestLLCToolDenial:
             AsyncMock(return_value={"status": "success", "entity_type": "work_item", "entity_id": "wi-1"}),
         ) as mock_dispatch:
             async for _msg in handler._handle_llc_tool(
-                "create_task", self._tool_call(), [], None, session_id="sess-1", role="operator"
+                "create_task",
+                self._tool_call(),
+                [],
+                SimpleNamespace(context={"verified_company_id": "00000000-0000-0000-0000-0000000000c1"}),
+                session_id="sess-1",
+                role="operator",
             ):
                 pass
 
