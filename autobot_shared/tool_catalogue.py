@@ -179,6 +179,19 @@ class ApprovalCategory(str, Enum):
 _VALID_APPROVAL_CATEGORIES = frozenset(c.value for c in ApprovalCategory)
 
 
+def approval_category_for(tool_name: str, categories: Iterable[str]) -> Optional[str]:
+    """Return the first of *categories* that gates *tool_name*, else ``None`` (GH#11160, #18430).
+
+    The one matcher every approval surface uses (the chat seam, the plan-time interrupt and the
+    AI-line enforcement point). Word-boundary matching (GH#11206): ``deploy`` gates
+    ``deploy_service`` but not ``deployment_status``. A false positive only ever adds a hold.
+    """
+    for category in categories:
+        if match_tool_name(tool_name, APPROVAL_CATEGORY_TOOLS.get(category, ()), word_boundary=True):
+            return category
+    return None
+
+
 def valid_approval_categories() -> "frozenset[str]":
     """Return the set of valid ``requires_approval_before`` category strings."""
     return _VALID_APPROVAL_CATEGORIES
@@ -246,6 +259,22 @@ TOOL_EFFECTS: "dict[str, ToolEffect]" = {
     **_entries(("semantic_search", "search_knowledge"), _E.READ),
     **_entries(("web_search", "scrape_url", "map_site", "extract_structured_data"), _E.READ | _E.ISOLATED_READ),
     **_entries(("sleep", "wait", "poll", "check_status"), _E.POLL),
+    # #18430: tools the live seam dispatches that were declared nowhere. The AI lines treat an unknown tool as
+    # mutating (fail closed), so every builtin that only observes must be KNOWN to be a read.
+    **_entries(
+        (
+            "get_text",
+            "get_attribute",
+            "screenshot",
+            "browser_state",
+            "wait_for_selector",
+            "hover",
+            "extract_content",
+            "crawl_site",
+            "read_spilled_output",
+        ),
+        _E.READ,
+    ),
 }
 
 #: Tools whose arguments name a file path (artifact capture, config guard, fact-forcing).
@@ -262,6 +291,11 @@ for _tool in _IN_PLACE_EDIT_TOOLS:
 TOOL_ALIASES: "dict[str, str]" = {
     "delete_directory": "remove_directory",
     "list_dir": "list_directory",
+    # #18430: the index-addressed browser variants are the same action as their selector form.
+    "click_index": "click",
+    "fill_index": "fill",
+    "select_index": "select",
+    "hover_index": "hover",
 }
 
 

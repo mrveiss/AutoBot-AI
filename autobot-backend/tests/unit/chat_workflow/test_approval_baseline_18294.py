@@ -12,7 +12,7 @@ import pytest
 
 from autobot_shared.tool_catalogue import valid_approval_categories
 from chat_workflow import approval_baseline as ab
-from chat_workflow.tool_dispatch_guards import enforce_work_item_approval
+from tests.unit.chat_workflow.test_ai_line_support import run_guard
 
 _ONE_TOOL_PER_CATEGORY = [
     ("executing code", "run_shell"),
@@ -35,14 +35,14 @@ def _ctx(categories) -> SimpleNamespace:
 @pytest.mark.parametrize(("category", "tool"), _ONE_TOOL_PER_CATEGORY)
 def test_a_default_run_raises_an_approval_request_for_the_category(category, tool):
     results: list = []
-    msg = enforce_work_item_approval({"name": tool, "params": {}}, _ctx(_baseline_with(None)), results)
-    assert msg is not None and msg.type == "approval_required"
-    assert results[0]["approval_category"] == category and results[0]["status"] == "pending_approval"
+    msg, filed = run_guard({"name": tool, "params": {}}, _ctx([]), results)
+    assert msg is not None and msg.type == "approval_required" and filed == 1
+    assert results[0]["category"] == category and results[0]["status"] == "pending_approval"
 
 
 @pytest.mark.parametrize("tool", ["read_file", "web_search", "list_dir", "sleep"])
 def test_a_read_tool_raises_no_approval_request(tool):
-    assert enforce_work_item_approval({"name": tool, "params": {}}, _ctx(_baseline_with(None)), []) is None
+    assert run_guard({"name": tool, "params": {}}, _ctx([]), []) == (None, 0)
 
 
 def test_the_baseline_is_every_category_when_nothing_is_relaxed():
@@ -55,13 +55,10 @@ def test_the_slm_setting_relaxes_exactly_the_named_categories():
         baseline = _baseline_with(value)
         assert "browser actions" not in baseline
         assert set(baseline) == valid_approval_categories() - {"browser actions"}
-    results: list = []
-    assert (
-        enforce_work_item_approval(
-            {"name": "navigate", "params": {}}, _ctx(_baseline_with(["browser actions"])), results
-        )
-        is None
-    )
+    # Relaxed by the administrator: the category floor lifts, and an unset navigate is still a
+    # mutating action, so it is line 2 by the unset default -- never silently line 1.
+    msg, filed = run_guard({"name": "navigate", "params": {}}, _ctx([]), [], slm_relaxed=["browser actions"])
+    assert msg is not None and filed == 1 and msg.metadata["category"] is None
 
 
 @pytest.mark.parametrize("bad", ["browser actions", 7, {"categories": "browser actions"}, ["no such category"]])

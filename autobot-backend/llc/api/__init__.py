@@ -10,6 +10,7 @@ from .agent_api import router as agent_router
 from .agent_hires import router as agent_hires_router
 from .agent_wiki import router as agent_wiki_router
 from .agents import router as agents_router
+from .ai_lines import router as ai_lines_router
 from .api_keys import router as api_keys_router
 from .approvals import router as approvals_router
 from .backlog import router as backlog_router
@@ -51,6 +52,7 @@ router = APIRouter(prefix="/llc", tags=["llc"])
 router.include_router(activity_router)
 router.include_router(boards_router)
 router.include_router(adapters_router)
+router.include_router(ai_lines_router)
 router.include_router(approvals_router)
 router.include_router(backlog_router)
 router.include_router(budget_router)

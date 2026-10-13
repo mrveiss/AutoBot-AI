@@ -3709,7 +3709,7 @@ before summarizing.
         return error_msg
 
     async def _apply_session_role(
-        self, session_id: str, context: Dict[str, Any] | None, auth_role: str | None = None
+        self, session_id: str, context: Dict[str, Any] | None, auth_role: str | None = None, scope: dict | None = None
     ) -> Dict[str, Any] | None:
         """Overlay the trusted per-session governance onto the chat context (GH#11186/#11202).
 
@@ -3717,9 +3717,8 @@ before summarizing.
         pinned agent's ``forbidden_work`` is enforced at the tool seam and cannot be
         lifted by the caller. GH#11202: when the approval gate flag is on and the
         session declares approval categories, they are overlaid as
-        ``requires_approval_before`` so the existing ``_enforce_work_item_approval``
-        seam gate holds matching tools BEFORE they execute — the correct
-        pre-execution stage. Backend decides; the frontend only calls the endpoints.
+        ``requires_approval_before`` so the AI-line point (``_enforce_ai_line``, #18430) holds
+        matching tools BEFORE they execute — the correct pre-execution stage. The backend decides.
         """
         from chat_workflow.approval_baseline import with_baseline_categories
         from chat_workflow.session_role import (
@@ -3734,7 +3733,7 @@ before summarizing.
         # #13821: the authenticated caller's RBAC role, from the endpoint's
         # server-side identity. Applied unconditionally (it strips on a missing
         # role) so a client-supplied auth_role can never reach the tool seam.
-        context = apply_auth_role(context, auth_role)
+        context = apply_auth_role(context, auth_role, scope)  # scope: #18430, the AI lines' verified principal
         context = apply_role(context, await svc.get_role(session_id))
         # #13704: same trust model for the work-item binding. A server-set value
         # overrides any client-supplied work_item_id, and an unbound session has
@@ -3752,6 +3751,7 @@ before summarizing.
         message: str,
         context: Dict[str, Any] | None = None,
         auth_role: str | None = None,
+        auth_scope: dict | None = None,
     ):
         """Process a message via LangGraph StateGraph.
 
@@ -3763,7 +3763,7 @@ before summarizing.
         """
         # GH#11186: apply the trusted per-session role once here, so both the graph
         # and legacy paths carry the governed identity into the tool seam.
-        context = await self._apply_session_role(session_id, context, auth_role)
+        context = await self._apply_session_role(session_id, context, auth_role, auth_scope)
         self._active_streams += 1
         try:
             try:
