@@ -73,6 +73,22 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_PREPUSH_PYTEST_WORKERS",
+        type=int,
+        default=4,
+        description=(
+            "Number of pytest-xdist workers the pre-push gate runs the selected tests with "
+            "(`-n N --dist loadscope`). 0 runs serially. A non-integer or negative value falls "
+            "back to 4 with a warning. Capped (never `-n auto`) because the dev box runs many "
+            "parallel sessions at load 20-30; the budget uses the per-file cost of the mode "
+            "actually chosen (#17451)."
+        ),
+        component="testing",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_UPSERT_COMMENT_TIMEOUT",
         type=float,
         default=30.0,
