@@ -301,6 +301,11 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test .ts/.vue/.js source is a subset of tracked files under the user frontend; test share drifts.",
     ),
+    "one-playwright-server-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked .js under three roots is a subset of those trees; the unrelated-script share drifts.",
+    ),
     "post-commit-seed-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

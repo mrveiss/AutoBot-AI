@@ -62,6 +62,7 @@ import repo_tests.one_hybrid_search_17599_test as _hybrid_search_guard  # noqa: 
 import repo_tests.one_internal_api_key_reader_17856_test as _internal_key_reader_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_paths_filter_job_15360_test as _paths_filter_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_permission_gate_18263_test as _permission_gate_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_playwright_server_18549_test as _playwright_server_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_semantic_chunker_14485_test as _semantic_chunker_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_session_ownership_validator_14016_test as _ownership_validator_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_session_scope_15068_test as _session_scope_guard  # noqa: F401 -- registers its scope
@@ -286,6 +287,11 @@ _DECLARED_SCOPES = {
     ),
     "llc-actor-id-scan": ("autobot-backend/llc",),
     "post-commit-seed-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "one-playwright-server-scan": (
+        "autobot-browser-worker",
+        "autobot-infrastructure",
+        "autobot-frontend",
+    ),
     "fact-read-authorization-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "one-permission-gate-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "infra-backend-import-scan": ("autobot-infrastructure",),

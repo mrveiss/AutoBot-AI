@@ -36,6 +36,11 @@ echo "[1/5] Copying systemd service files..."
 copy_to_browser_vm "$SCRIPT_DIR/browser-vnc.service" "/tmp/browser-vnc.service"
 copy_to_browser_vm "$SCRIPT_DIR/browser-vnc-websockify.service" "/tmp/browser-vnc-websockify.service"
 copy_to_browser_vm "$SCRIPT_DIR/browser-playwright.service" "/tmp/browser-playwright.service"
+# One canonical server (+ the two modules it requires) from autobot-browser-worker (#18549)
+BROWSER_WORKER_DIR="${SCRIPT_DIR}/../../../../autobot-browser-worker"
+for f in playwright-server.js session-store.js element-index.js; do
+    copy_to_browser_vm "${BROWSER_WORKER_DIR}/${f}" "${f}"
+done
 echo "✓ Service files copied"
 
 # Step 2: Install services to systemd
