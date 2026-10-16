@@ -18,6 +18,7 @@
  */
 
 import { getSLMAdminUrl } from '@/config/ssot-config';
+import { ICONS } from '@/components/ui/Icon.vue';
 
 // iconRule is typed as a literal union to satisfy SVG fill-rule / clip-rule prop types (#4699)
 export type SvgFillRule = 'evenodd' | 'nonzero' | 'inherit';
@@ -141,13 +142,15 @@ export const profileMenuItems: NavItem[] = [
 
 // ─── Header icon cluster (#18240) ────────────────────────────────────────────
 // Icon-only controls right of the primary links: Secrets and Preferences moved
+// (Preferences draws Icon.vue's cog -- the one icon for every settings control;
+// the old rays read as a light/dark switch, design doc #18238)
 // here from the profile menu, Platform admin replaces the SLM text link. The
 // Plugins entry is gone on purpose -- plugins live in the SLM console's own
 // nav (see INTENTIONALLY_HIDDEN in nav-items-coverage.test.ts). Routes of the
 // internal entries must carry hideInNav: true in router/index.ts.
 export const navIconItems: NavIconItem[] = [
   { to: '/secrets', labelKey: 'nav.secrets', ariaKey: 'nav.secrets', tipKey: 'nav.vaultTip', adv: true, keywords: ['nav.keywords.vault'], iconPaths: ['M4 12a4 4 0 108 0 4 4 0 00-8 0z', 'M12 12h9M18 12v3M21 12v2'], iconViewBox: '0 0 24 24', iconStroke: true },
-  { to: '/preferences', labelKey: 'nav.preferences', ariaKey: 'nav.preferences', tipKey: 'nav.preferencesTip', keywords: ['nav.keywords.preferences'], iconPaths: ['M9 12a3 3 0 106 0 3 3 0 00-6 0z', 'M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1'], iconViewBox: '0 0 24 24', iconStroke: true },
+  { to: '/preferences', labelKey: 'nav.preferences', ariaKey: 'nav.preferences', tipKey: 'nav.preferencesTip', keywords: ['nav.keywords.preferences'], iconPaths: [ICONS.cog], iconViewBox: '0 0 24 24', iconStroke: true },
   // Platform admin: the SLM console, in a new tab. The permission gate is the
   // old SLM link's (admin and operator roles carry service.management).
   { href: getSLMAdminUrl, labelKey: 'nav.platformAdmin', ariaKey: 'nav.platformAdminAria', tipKey: 'nav.platformAdminTip', adv: true, requires: 'serviceManagement', afterToggle: true, iconPaths: ['M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z', 'M9 12l2 2 4-4'], iconViewBox: '0 0 24 24', iconStroke: true },

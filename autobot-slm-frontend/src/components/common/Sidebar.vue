@@ -46,7 +46,7 @@ const hasCombinedUpdates = computed(() => combinedUpdateCount.value > 0)
 
 // Badge color: orange when system updates present, amber when only code sync
 const badgeColor = computed(() =>
-  systemUpdates.updateCount.value > 0 ? '#f97316' : '#f59e0b',
+  systemUpdates.updateCount.value > 0 ? 'var(--slm-orange-500)' : 'var(--slm-amber-500)',
 )
 
 interface NavItem {
