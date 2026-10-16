@@ -9688,5 +9688,62 @@
       "pushFailed": "Nie udało się dodać tego nagrania do bazy wiedzy. Spróbuj ponownie.",
       "collectionNotJoined": "Zapisano, ale nie znaleziono wskazanej kolekcji — transkrypcja jest w bazie wiedzy, ale nie w tej kolekcji."
     }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "Wykryto problemy systemu",
+      "warnings": "Ostrzeżenia systemu",
+      "ok": "Wszystkie systemy działają"
+    },
+    "tooltip": {
+      "issues": "Kliknij, aby zobaczyć problemy systemu",
+      "warnings": "Kliknij, aby zobaczyć ostrzeżenia systemu",
+      "ok": "Kliknij, aby zobaczyć stan systemu – wszystkie usługi działają"
+    },
+    "aria": {
+      "issues": "Stan systemu: wykryto problemy",
+      "warnings": "Stan systemu: są ostrzeżenia",
+      "ok": "Stan systemu: wszystkie usługi działają"
+    },
+    "description": {
+      "servicesDown": "{n} usługa nie działa | {n} usługi nie działają",
+      "warnings": "{n} ostrzeżenie | {n} ostrzeżenia",
+      "withWarnings": "{n} usługa z ostrzeżeniami | {n} usługi z ostrzeżeniami",
+      "downAndWarnings": "{down} i {warnings}",
+      "ok": "Wszystkie usługi działają prawidłowo"
+    },
+    "service": {
+      "backend": "API backendu",
+      "frontend": "Frontend",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "Worker NPU",
+      "browser": "Usługa przeglądarki",
+      "chromadb": "Stos AI (ChromaDB)",
+      "other": "Inne usługi"
+    },
+    "state": {
+      "running": "Działa",
+      "connected": "Połączono",
+      "statusUnknown": "Stan nieznany",
+      "connectionFailed": "Połączenie nieudane",
+      "timeout": "Przekroczono czas",
+      "connectionRefused": "Połączenie odrzucone",
+      "unreachable": "Nieosiągalny",
+      "unhealthy": "Niesprawny",
+      "warning": "Ostrzeżenie",
+      "pending": "Oczekuje",
+      "available": "Dostępny",
+      "unavailable": "Niedostępny",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "Ograniczony – sprawdzanie stanu przekroczyło czas, backend odpowiada",
+      "degradedAsOf": "Ograniczony – sprawdzanie stanu przekroczyło czas, backend odpowiada – stan z {time}",
+      "unreachable": "Nieosiągalny – stan usług nieznany",
+      "unreachableAsOf": "Nieosiągalny – stan usług nieznany – stan z {time}"
+    },
+    "lastKnown": "{text} (ostatni znany)"
   }
 }

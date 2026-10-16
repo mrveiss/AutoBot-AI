@@ -9688,5 +9688,62 @@
       "pushFailed": "Impossible d'ajouter cet enregistrement à la base de connaissances. Veuillez réessayer.",
       "collectionNotJoined": "Enregistré, mais la collection indiquée est introuvable — la transcription est dans la base de connaissances et non dans cette collection."
     }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "Problèmes système détectés",
+      "warnings": "Avertissements système",
+      "ok": "Tous les systèmes sont opérationnels"
+    },
+    "tooltip": {
+      "issues": "Cliquez pour voir les problèmes système",
+      "warnings": "Cliquez pour voir les avertissements système",
+      "ok": "Cliquez pour voir l'état du système : tous les services sont opérationnels"
+    },
+    "aria": {
+      "issues": "État du système : problèmes détectés",
+      "warnings": "État du système : avertissements présents",
+      "ok": "État du système : tous les services sont opérationnels"
+    },
+    "description": {
+      "servicesDown": "{n} service en panne | {n} services en panne",
+      "warnings": "{n} avertissement | {n} avertissements",
+      "withWarnings": "{n} service avec avertissements | {n} services avec avertissements",
+      "downAndWarnings": "{down} et {warnings}",
+      "ok": "Tous les services fonctionnent normalement"
+    },
+    "service": {
+      "backend": "API backend",
+      "frontend": "Frontend",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "Worker NPU",
+      "browser": "Service navigateur",
+      "chromadb": "Pile IA (ChromaDB)",
+      "other": "Autres services"
+    },
+    "state": {
+      "running": "En cours d'exécution",
+      "connected": "Connecté",
+      "statusUnknown": "État inconnu",
+      "connectionFailed": "Échec de la connexion",
+      "timeout": "Délai dépassé",
+      "connectionRefused": "Connexion refusée",
+      "unreachable": "Injoignable",
+      "unhealthy": "Défaillant",
+      "warning": "Avertissement",
+      "pending": "En attente",
+      "available": "Disponible",
+      "unavailable": "Indisponible",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "Dégradé — les vérifications d'état ont expiré, le backend répond",
+      "degradedAsOf": "Dégradé — les vérifications d'état ont expiré, le backend répond — état à {time}",
+      "unreachable": "Injoignable — état des services inconnu",
+      "unreachableAsOf": "Injoignable — état des services inconnu — état à {time}"
+    },
+    "lastKnown": "{text} (dernier état connu)"
   }
 }

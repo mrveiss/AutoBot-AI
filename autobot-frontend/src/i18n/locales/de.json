@@ -9688,5 +9688,62 @@
       "pushFailed": "Diese Aufnahme konnte nicht zur Wissensdatenbank hinzugefügt werden. Bitte erneut versuchen.",
       "collectionNotJoined": "Gespeichert, aber die angegebene Sammlung wurde nicht gefunden — das Transkript ist in der Wissensdatenbank, aber nicht in dieser Sammlung."
     }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "Systemprobleme erkannt",
+      "warnings": "Systemwarnungen",
+      "ok": "Alle Systeme betriebsbereit"
+    },
+    "tooltip": {
+      "issues": "Klicken, um Systemprobleme anzuzeigen",
+      "warnings": "Klicken, um Systemwarnungen anzuzeigen",
+      "ok": "Klicken, um den Systemstatus anzuzeigen – alle Dienste betriebsbereit"
+    },
+    "aria": {
+      "issues": "Systemstatus: Probleme erkannt",
+      "warnings": "Systemstatus: Warnungen vorhanden",
+      "ok": "Systemstatus: alle Dienste betriebsbereit"
+    },
+    "description": {
+      "servicesDown": "{n} Dienst ausgefallen | {n} Dienste ausgefallen",
+      "warnings": "{n} Warnung | {n} Warnungen",
+      "withWarnings": "{n} Dienst mit Warnungen | {n} Dienste mit Warnungen",
+      "downAndWarnings": "{down} und {warnings}",
+      "ok": "Alle Dienste laufen normal"
+    },
+    "service": {
+      "backend": "Backend-API",
+      "frontend": "Frontend",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "NPU-Worker",
+      "browser": "Browser-Dienst",
+      "chromadb": "KI-Stack (ChromaDB)",
+      "other": "Weitere Dienste"
+    },
+    "state": {
+      "running": "Läuft",
+      "connected": "Verbunden",
+      "statusUnknown": "Status unbekannt",
+      "connectionFailed": "Verbindung fehlgeschlagen",
+      "timeout": "Zeitüberschreitung",
+      "connectionRefused": "Verbindung abgelehnt",
+      "unreachable": "Nicht erreichbar",
+      "unhealthy": "Fehlerhaft",
+      "warning": "Warnung",
+      "pending": "Ausstehend",
+      "available": "Verfügbar",
+      "unavailable": "Nicht verfügbar",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "Eingeschränkt – Statusprüfungen überschritten, Backend antwortet",
+      "degradedAsOf": "Eingeschränkt – Statusprüfungen überschritten, Backend antwortet – Stand {time}",
+      "unreachable": "Nicht erreichbar – Dienststatus unbekannt",
+      "unreachableAsOf": "Nicht erreichbar – Dienststatus unbekannt – Stand {time}"
+    },
+    "lastKnown": "{text} (zuletzt bekannt)"
   }
 }

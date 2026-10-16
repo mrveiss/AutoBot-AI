@@ -9688,5 +9688,62 @@
       "pushFailed": "לא ניתן היה להוסיף הקלטה זו למסד הידע. נסה שוב.",
       "collectionNotJoined": "נשמר, אך האוסף שציינת לא נמצא — התמלול נמצא במאגר הידע אך לא באוסף הזה."
     }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "זוהו בעיות במערכת",
+      "warnings": "אזהרות מערכת",
+      "ok": "כל המערכות פועלות"
+    },
+    "tooltip": {
+      "issues": "לחצו להצגת בעיות המערכת",
+      "warnings": "לחצו להצגת אזהרות המערכת",
+      "ok": "לחצו להצגת מצב המערכת - כל השירותים פועלים"
+    },
+    "aria": {
+      "issues": "מצב המערכת: זוהו בעיות",
+      "warnings": "מצב המערכת: קיימות אזהרות",
+      "ok": "מצב המערכת: כל השירותים פועלים"
+    },
+    "description": {
+      "servicesDown": "שירות {n} מושבת | {n} שירותים מושבתים",
+      "warnings": "אזהרה {n} | {n} אזהרות",
+      "withWarnings": "שירות {n} עם אזהרות | {n} שירותים עם אזהרות",
+      "downAndWarnings": "{down} ו-{warnings}",
+      "ok": "כל השירותים פועלים כרגיל"
+    },
+    "service": {
+      "backend": "API של השרת",
+      "frontend": "ממשק קדמי",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "עובד NPU",
+      "browser": "שירות דפדפן",
+      "chromadb": "מחסנית בינה מלאכותית (ChromaDB)",
+      "other": "שירותים אחרים"
+    },
+    "state": {
+      "running": "פועל",
+      "connected": "מחובר",
+      "statusUnknown": "המצב לא ידוע",
+      "connectionFailed": "החיבור נכשל",
+      "timeout": "תם הזמן",
+      "connectionRefused": "החיבור נדחה",
+      "unreachable": "לא נגיש",
+      "unhealthy": "לא תקין",
+      "warning": "אזהרה",
+      "pending": "ממתין",
+      "available": "זמין",
+      "unavailable": "לא זמין",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "פגוע — בדיקות המצב חרגו מהזמן, השרת מגיב",
+      "degradedAsOf": "פגוע — בדיקות המצב חרגו מהזמן, השרת מגיב — מצב נכון ל-{time}",
+      "unreachable": "לא נגיש — מצב השירותים לא ידוע",
+      "unreachableAsOf": "לא נגיש — מצב השירותים לא ידוע — מצב נכון ל-{time}"
+    },
+    "lastKnown": "{text} (ידוע לאחרונה)"
   }
 }

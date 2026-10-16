@@ -9688,5 +9688,62 @@
       "pushFailed": "Não foi possível adicionar esta gravação à base de conhecimento. Tente novamente.",
       "collectionNotJoined": "Guardado, mas a coleção indicada não foi encontrada — a transcrição está na base de conhecimento e não nessa coleção."
     }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "Problemas do sistema detetados",
+      "warnings": "Avisos do sistema",
+      "ok": "Todos os sistemas operacionais"
+    },
+    "tooltip": {
+      "issues": "Clique para ver os problemas do sistema",
+      "warnings": "Clique para ver os avisos do sistema",
+      "ok": "Clique para ver o estado do sistema: todos os serviços operacionais"
+    },
+    "aria": {
+      "issues": "Estado do sistema: problemas detetados",
+      "warnings": "Estado do sistema: há avisos",
+      "ok": "Estado do sistema: todos os serviços operacionais"
+    },
+    "description": {
+      "servicesDown": "{n} serviço em baixo | {n} serviços em baixo",
+      "warnings": "{n} aviso | {n} avisos",
+      "withWarnings": "{n} serviço com avisos | {n} serviços com avisos",
+      "downAndWarnings": "{down} e {warnings}",
+      "ok": "Todos os serviços a funcionar normalmente"
+    },
+    "service": {
+      "backend": "API do backend",
+      "frontend": "Frontend",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "Worker NPU",
+      "browser": "Serviço de navegador",
+      "chromadb": "Pilha de IA (ChromaDB)",
+      "other": "Outros serviços"
+    },
+    "state": {
+      "running": "Em execução",
+      "connected": "Ligado",
+      "statusUnknown": "Estado desconhecido",
+      "connectionFailed": "Falha na ligação",
+      "timeout": "Tempo esgotado",
+      "connectionRefused": "Ligação recusada",
+      "unreachable": "Inacessível",
+      "unhealthy": "Não saudável",
+      "warning": "Aviso",
+      "pending": "Pendente",
+      "available": "Disponível",
+      "unavailable": "Indisponível",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "Degradado — as verificações de estado excederam o tempo, o backend responde",
+      "degradedAsOf": "Degradado — as verificações de estado excederam o tempo, o backend responde — estado às {time}",
+      "unreachable": "Inacessível — estado dos serviços desconhecido",
+      "unreachableAsOf": "Inacessível — estado dos serviços desconhecido — estado às {time}"
+    },
+    "lastKnown": "{text} (último conhecido)"
   }
 }

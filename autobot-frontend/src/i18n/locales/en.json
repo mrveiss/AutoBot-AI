@@ -9688,5 +9688,62 @@
       "pushFailed": "Could not add this recording to the knowledge base. Please try again.",
       "collectionNotJoined": "Stored, but the collection you named was not found — the transcript is in the Knowledge Base and is not in that collection."
     }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "System Issues Detected",
+      "warnings": "System Warnings",
+      "ok": "All Systems Operational"
+    },
+    "tooltip": {
+      "issues": "Click to view system issues",
+      "warnings": "Click to view system warnings",
+      "ok": "Click to view system status - all services operational"
+    },
+    "aria": {
+      "issues": "System status: issues detected",
+      "warnings": "System status: warnings present",
+      "ok": "System status: all services operational"
+    },
+    "description": {
+      "servicesDown": "{n} service down | {n} services down",
+      "warnings": "{n} warning | {n} warnings",
+      "withWarnings": "{n} service with warnings | {n} services with warnings",
+      "downAndWarnings": "{down} and {warnings}",
+      "ok": "All services running normally"
+    },
+    "service": {
+      "backend": "Backend API",
+      "frontend": "Frontend",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "NPU Worker",
+      "browser": "Browser Service",
+      "chromadb": "AI Stack (ChromaDB)",
+      "other": "Other Services"
+    },
+    "state": {
+      "running": "Running",
+      "connected": "Connected",
+      "statusUnknown": "Status Unknown",
+      "connectionFailed": "Connection Failed",
+      "timeout": "Timeout",
+      "connectionRefused": "Connection refused",
+      "unreachable": "Unreachable",
+      "unhealthy": "Unhealthy",
+      "warning": "Warning",
+      "pending": "Pending",
+      "available": "Available",
+      "unavailable": "Unavailable",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "Degraded — status checks timed out, backend responding",
+      "degradedAsOf": "Degraded — status checks timed out, backend responding — status as of {time}",
+      "unreachable": "Unreachable — service status unknown",
+      "unreachableAsOf": "Unreachable — service status unknown — status as of {time}"
+    },
+    "lastKnown": "{text} (last known)"
   }
 }

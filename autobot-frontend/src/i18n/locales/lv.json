@@ -9688,5 +9688,62 @@
       "pushFailed": "Neizdevās pievienot šo ierakstu zināšanu bāzei. Lūdzu, mēģiniet vēlreiz.",
       "collectionNotJoined": "Saglabāts, bet norādītā kolekcija netika atrasta — transkripts ir zināšanu bāzē, taču nav šajā kolekcijā."
     }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "Konstatētas sistēmas problēmas",
+      "warnings": "Sistēmas brīdinājumi",
+      "ok": "Visas sistēmas darbojas"
+    },
+    "tooltip": {
+      "issues": "Noklikšķiniet, lai skatītu sistēmas problēmas",
+      "warnings": "Noklikšķiniet, lai skatītu sistēmas brīdinājumus",
+      "ok": "Noklikšķiniet, lai skatītu sistēmas statusu — visi pakalpojumi darbojas"
+    },
+    "aria": {
+      "issues": "Sistēmas statuss: konstatētas problēmas",
+      "warnings": "Sistēmas statuss: ir brīdinājumi",
+      "ok": "Sistēmas statuss: visi pakalpojumi darbojas"
+    },
+    "description": {
+      "servicesDown": "{n} pakalpojums nedarbojas | {n} pakalpojumi nedarbojas",
+      "warnings": "{n} brīdinājums | {n} brīdinājumi",
+      "withWarnings": "{n} pakalpojums ar brīdinājumiem | {n} pakalpojumi ar brīdinājumiem",
+      "downAndWarnings": "{down} un {warnings}",
+      "ok": "Visi pakalpojumi darbojas normāli"
+    },
+    "service": {
+      "backend": "Aizmugursistēmas API",
+      "frontend": "Priekšgals",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "NPU apstrādātājs",
+      "browser": "Pārlūka pakalpojums",
+      "chromadb": "MI steks (ChromaDB)",
+      "other": "Citi pakalpojumi"
+    },
+    "state": {
+      "running": "Darbojas",
+      "connected": "Savienots",
+      "statusUnknown": "Statuss nezināms",
+      "connectionFailed": "Savienojums neizdevās",
+      "timeout": "Noildze",
+      "connectionRefused": "Savienojums atteikts",
+      "unreachable": "Nav sasniedzams",
+      "unhealthy": "Nav veselīgs",
+      "warning": "Brīdinājums",
+      "pending": "Gaida",
+      "available": "Pieejams",
+      "unavailable": "Nav pieejams",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "Pasliktināts — statusa pārbaudēm iestājās noildze, aizmugursistēma atbild",
+      "degradedAsOf": "Pasliktināts — statusa pārbaudēm iestājās noildze, aizmugursistēma atbild — statuss {time}",
+      "unreachable": "Nav sasniedzams — pakalpojumu statuss nezināms",
+      "unreachableAsOf": "Nav sasniedzams — pakalpojumu statuss nezināms — statuss {time}"
+    },
+    "lastKnown": "{text} (pēdējais zināmais)"
   }
 }
