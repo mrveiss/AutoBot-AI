@@ -32,7 +32,7 @@ MIRROR_PATH = "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/healt
 CANONICAL_SOURCE_PATH = "autobot-slm-backend/slm/agent/health_collector.py"
 #: A different Ansible role's mirrored files -- an ignore "widened beyond that path" would
 #: also start skipping this, and nothing guards ITS drift.
-SIBLING_ROLE_MIRROR_PATH = "autobot-slm-backend/ansible/roles/backend/files/permission_rules.yaml"
+SIBLING_ROLE_MIRROR_PATH = "autobot-slm-backend/ansible/roles/backend/templates/backend.env.j2"
 
 
 def _slm_scope_run() -> str:

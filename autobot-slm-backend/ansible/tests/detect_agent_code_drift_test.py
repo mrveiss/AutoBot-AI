@@ -23,9 +23,6 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[3] / "pipeline-scripts" / "detect-agent-code-drift.sh"
 
-PERMISSION_RULES = "role: admin\n"
-ERROR_MESSAGES = "not_found: Resource not found\n"
-
 
 def _build_synced_tree(root: Path) -> None:
     """Populate every canonical/mirror pair this script checks, identically."""
@@ -37,16 +34,6 @@ def _build_synced_tree(root: Path) -> None:
     (agent_mirror / "health_collector_state_change_test.py").write_text("# test\n", encoding="utf-8")
     # Deliberately canonical-tree-only -- must NOT be required in the mirror.
     (agent_src / "health_collector_probe_test.py").write_text("# probe\n", encoding="utf-8")
-
-    for rel, content in (
-        ("autobot-backend/config/permission_rules.yaml", PERMISSION_RULES),
-        ("autobot-slm-backend/ansible/roles/backend/files/permission_rules.yaml", PERMISSION_RULES),
-        ("autobot-backend/static/error_messages.yaml", ERROR_MESSAGES),
-        ("autobot-slm-backend/ansible/roles/backend/files/error_messages.yaml", ERROR_MESSAGES),
-    ):
-        path = root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
 
 
 def _run(root: Path) -> subprocess.CompletedProcess:
@@ -100,14 +87,6 @@ def test_missing_mirror_directory_fails_loudly(tmp_path: Path) -> None:
     result = _run(tmp_path)
     assert result.returncode != 0
     assert "mirror directory not found" in result.stdout
-
-
-def test_missing_canonical_backend_yaml_fails_loudly(tmp_path: Path) -> None:
-    _build_synced_tree(tmp_path)
-    (tmp_path / "autobot-backend/config/permission_rules.yaml").unlink()
-    result = _run(tmp_path)
-    assert result.returncode != 0
-    assert "canonical file not found" in result.stdout
 
 
 def test_zero_registered_pairs_fails_loudly(tmp_path: Path) -> None:

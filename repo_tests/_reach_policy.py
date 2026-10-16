@@ -306,6 +306,11 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Tracked .js under three roots is a subset of those trees; the unrelated-script share drifts.",
     ),
+    "one-static-data-copy-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Watched-basename files are a subset of tracked files under five roots; same-named unrelated files drift.",
+    ),
     "post-commit-seed-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
