@@ -12,16 +12,16 @@ Contains decorators for function-level error boundaries and API error handling.
 import asyncio
 import functools
 import time
-from typing import Callable
+from typing import Any, Callable, Optional, cast
 
 from fastapi import HTTPException
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
-from constants.threshold_constants import RetryConfig, exponential_backoff_delay
-from utils.cancel_tokens import begin_cancel_scope, end_cancel_scope, signal_cancel_scope
+from autobot_shared.ssot_constants import RetryConfig, exponential_backoff_delay
 
 from .boundary_manager import get_error_boundary_manager
+from .hooks import get_cancel_scope_provider
 from .types import APIErrorResponse, ErrorCategory, ErrorContext, PassThroughError, RecoveryStrategy
 
 logger = get_logger(__name__)
@@ -196,8 +196,8 @@ def _create_sync_boundary_wrapper(
 
 
 def error_boundary(
-    component: str = None,
-    function: str = None,
+    component: Optional[str] = None,
+    function: Optional[str] = None,
     recovery_strategy: RecoveryStrategy = RecoveryStrategy.RETRY,
     max_retries: int = RetryConfig.DEFAULT_RETRIES,
 ):
@@ -363,7 +363,8 @@ def bounded(seconds: float = DEFAULT_ROUTE_DEADLINE_SECONDS, *, operation: str |
 
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
-            scope = begin_cancel_scope()
+            provider = get_cancel_scope_provider()
+            scope = provider.begin_cancel_scope()
             try:
                 return await asyncio.wait_for(func(*args, **kwargs), timeout=seconds)
             except asyncio.TimeoutError:
@@ -379,7 +380,7 @@ def bounded(seconds: float = DEFAULT_ROUTE_DEADLINE_SECONDS, *, operation: str |
                 # signal every cancel token this call dispatched so pooled work
                 # stops cooperatively instead of running to completion for a
                 # result nobody reads (#14244).
-                signal_cancel_scope(f"route deadline for {name} exceeded {seconds:.1f}s")
+                provider.signal_cancel_scope(f"route deadline for {name} exceeded {seconds:.1f}s")
                 raise HTTPException(
                     status_code=504,
                     detail={
@@ -397,12 +398,12 @@ def bounded(seconds: float = DEFAULT_ROUTE_DEADLINE_SECONDS, *, operation: str |
                 # Reachable via graceful shutdown or an outer deadline tighter
                 # than this one -- same treatment as a timeout (#14256): signal,
                 # then re-raise. Never swallowed.
-                signal_cancel_scope(f"{name} was cancelled before its {seconds:.1f}s deadline")
+                provider.signal_cancel_scope(f"{name} was cancelled before its {seconds:.1f}s deadline")
                 raise
             finally:
-                end_cancel_scope(scope)
+                provider.end_cancel_scope(scope)
 
-        wrapper.__route_deadline_seconds__ = seconds
+        cast(Any, wrapper).__route_deadline_seconds__ = seconds
         return wrapper
 
     return decorator
@@ -410,7 +411,7 @@ def bounded(seconds: float = DEFAULT_ROUTE_DEADLINE_SECONDS, *, operation: str |
 
 def with_error_handling(
     category: ErrorCategory = ErrorCategory.SERVER_ERROR,
-    operation: str = None,
+    operation: Optional[str] = None,
     error_code_prefix: str = "API",
 ):
     """

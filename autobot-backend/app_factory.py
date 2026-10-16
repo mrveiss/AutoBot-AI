@@ -42,6 +42,7 @@ from initialization.integrity_handlers import register_integrity_handlers
 from initialization.registry_handlers import register_registry_handlers
 from initialization.router_registry.route_dependencies import dependencies_for
 from knowledge.upload_rejections import UploadRejection, upload_rejection_handler
+from utils.error_boundaries import register_backend_hooks
 
 # Store logger for app usage
 logger = get_logger(__name__)
@@ -229,6 +230,8 @@ def create_app(**kwargs) -> FastAPI:
         app = create_app(title="My App", version="2.0.0")
         ```
     """
+    # #18554: the shared boundaries get cancel scopes and error metrics only by registration.
+    register_backend_hooks()
     factory = AppFactory()
     return factory.create_fastapi_app(**kwargs)
 
