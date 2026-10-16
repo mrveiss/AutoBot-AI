@@ -9745,5 +9745,104 @@
       "unreachableAsOf": "Inaccesible: estado de los servicios desconocido; estado a las {time}"
     },
     "lastKnown": "{text} (último conocido)"
+  },
+  "schedule": {
+    "title": "Programación",
+    "repeats": "Se repite",
+    "repeat": {
+      "minutes": "Cada pocos minutos",
+      "hourly": "Cada hora",
+      "daily": "Diariamente",
+      "weekly": "Semanalmente",
+      "monthly": "Mensualmente",
+      "once": "Una vez"
+    },
+    "every": "Cada",
+    "minutesUnit": "minutos",
+    "onlyBetween": "Solo entre",
+    "windowFrom": "Desde",
+    "windowTo": "Hasta",
+    "and": "y",
+    "onDays": "En los días (opcional)",
+    "daysHintAny": "Sin selección significa todos los días.",
+    "onDaysRequired": "En los días",
+    "atMinute": "En el minuto",
+    "at": "A las",
+    "hour": "Hora",
+    "minute": "Minuto",
+    "weekdaysOnly": "Solo días laborables",
+    "monthly": {
+      "which": "Qué día del mes",
+      "day": "Día del mes",
+      "lastDay": "Último día",
+      "nth": "Día de la semana del mes",
+      "onDay": "El día",
+      "onThe": "El"
+    },
+    "nth": {
+      "1": "primer",
+      "2": "segundo",
+      "3": "tercer",
+      "4": "cuarto",
+      "last": "último"
+    },
+    "weekday": "Día de la semana",
+    "shortMonths": "Los meses sin este día se ejecutan el último día del mes.",
+    "date": "Fecha",
+    "timezone": "Zona horaria",
+    "zone": {
+      "company": "hora de la empresa",
+      "usesCompany": "Usa la zona horaria de la empresa."
+    },
+    "summary": {
+      "minutes": "Cada {every} minutos",
+      "minutesWeekdays": "Cada {every} minutos en días laborables",
+      "minutesDays": "Cada {every} minutos, {days}",
+      "minutesWindow": "Cada {every} minutos entre las {from} y las {to}",
+      "minutesWindowWeekdays": "Cada {every} minutos entre las {from} y las {to} en días laborables",
+      "minutesWindowDays": "Cada {every} minutos entre las {from} y las {to}, {days}",
+      "hourly": "Cada hora en el minuto {minute}",
+      "daily": "Todos los días a las {time}",
+      "dailyWeekdays": "Todos los días laborables a las {time}",
+      "weekly": "Cada {days} a las {time}",
+      "monthlyDay": "El día {day} de cada mes a las {time}",
+      "monthlyLastDay": "El último día de cada mes a las {time}",
+      "monthlyNth1": "El primer {weekday} de cada mes a las {time}",
+      "monthlyNth2": "El segundo {weekday} de cada mes a las {time}",
+      "monthlyNth3": "El tercer {weekday} de cada mes a las {time}",
+      "monthlyNth4": "El cuarto {weekday} de cada mes a las {time}",
+      "monthlyNthLast": "El último {weekday} de cada mes a las {time}",
+      "once": "Una vez el {date} a las {time}",
+      "withZone": "{summary} ({zone})",
+      "custom": "Programación personalizada"
+    },
+    "customNote": "Esta programación no se puede mostrar con clics.",
+    "editCron": "Editar como cron",
+    "doneEditing": "Terminar edición",
+    "nextRuns": "Próximas ejecuciones",
+    "noRuns": "No hay ejecuciones próximas.",
+    "previewLoading": "Consultando al servidor...",
+    "previewApprox": "Aproximado: el servidor confirma las horas exactas al guardar.",
+    "previewUnavailable": "No se puede previsualizar esta programación.",
+    "advanced": "Avanzado: se guarda como",
+    "saved": {
+      "cron": "Cron estándar",
+      "calendar": "Regla de calendario",
+      "once": "Ejecución única"
+    },
+    "savedAs": "Programación guardada",
+    "savedNote": {
+      "once": "Se ejecuta una vez. No se guarda ningún cron recurrente."
+    },
+    "cronLabel": "Expresión cron",
+    "cronHint": "Solo cron estándar de cinco campos: minuto, hora, día del mes, mes, día de la semana. El selector y este campo permanecen sincronizados.",
+    "cron_extension_unsupported": "{token} no es cron estándar. Use el selector para programaciones como el último viernes del mes.",
+    "invalid_timezone": "No se reconoce esta zona horaria.",
+    "once_in_past": "Esa fecha y hora ya han pasado.",
+    "invalid_rrule": "Esta regla de calendario no es válida.",
+    "invalid_cron": "Introduzca un cron estándar de cinco campos, por ejemplo 0 9 * * 1-5.",
+    "invalid_generic": "Esta programación no es válida.",
+    "conflicting_fields": "Una programación se guarda como cron o como regla de calendario o ejecución única, nunca ambas.",
+    "gatedNote": "El último día, el día de la semana del mes, los días 29 a 31 y las ejecuciones únicas estarán disponibles cuando se actualice el planificador."
   }
 }

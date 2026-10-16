@@ -9745,5 +9745,104 @@
       "unreachableAsOf": "Injoignable — état des services inconnu — état à {time}"
     },
     "lastKnown": "{text} (dernier état connu)"
+  },
+  "schedule": {
+    "title": "Planification",
+    "repeats": "Se répète",
+    "repeat": {
+      "minutes": "Toutes les quelques minutes",
+      "hourly": "Toutes les heures",
+      "daily": "Tous les jours",
+      "weekly": "Toutes les semaines",
+      "monthly": "Tous les mois",
+      "once": "Une fois"
+    },
+    "every": "Toutes les",
+    "minutesUnit": "minutes",
+    "onlyBetween": "Uniquement entre",
+    "windowFrom": "De",
+    "windowTo": "À",
+    "and": "et",
+    "onDays": "Les jours (facultatif)",
+    "daysHintAny": "Sans sélection, tous les jours sont concernés.",
+    "onDaysRequired": "Les jours",
+    "atMinute": "À la minute",
+    "at": "À",
+    "hour": "Heure",
+    "minute": "Minute",
+    "weekdaysOnly": "Jours ouvrés uniquement",
+    "monthly": {
+      "which": "Quel jour du mois",
+      "day": "Jour du mois",
+      "lastDay": "Dernier jour",
+      "nth": "Jour de la semaine du mois",
+      "onDay": "Le jour",
+      "onThe": "Le"
+    },
+    "nth": {
+      "1": "premier",
+      "2": "deuxième",
+      "3": "troisième",
+      "4": "quatrième",
+      "last": "dernier"
+    },
+    "weekday": "Jour de la semaine",
+    "shortMonths": "Les mois sans ce jour s'exécutent le dernier jour du mois.",
+    "date": "Date",
+    "timezone": "Fuseau horaire",
+    "zone": {
+      "company": "heure de l'entreprise",
+      "usesCompany": "Utilise le fuseau horaire de l'entreprise."
+    },
+    "summary": {
+      "minutes": "Toutes les {every} minutes",
+      "minutesWeekdays": "Toutes les {every} minutes, les jours ouvrés",
+      "minutesDays": "Toutes les {every} minutes, le {days}",
+      "minutesWindow": "Toutes les {every} minutes entre {from} et {to}",
+      "minutesWindowWeekdays": "Toutes les {every} minutes entre {from} et {to}, les jours ouvrés",
+      "minutesWindowDays": "Toutes les {every} minutes entre {from} et {to}, le {days}",
+      "hourly": "Toutes les heures à la minute {minute}",
+      "daily": "Tous les jours à {time}",
+      "dailyWeekdays": "Tous les jours ouvrés à {time}",
+      "weekly": "Chaque {days} à {time}",
+      "monthlyDay": "Le {day} de chaque mois à {time}",
+      "monthlyLastDay": "Le dernier jour de chaque mois à {time}",
+      "monthlyNth1": "Le premier {weekday} de chaque mois à {time}",
+      "monthlyNth2": "Le deuxième {weekday} de chaque mois à {time}",
+      "monthlyNth3": "Le troisième {weekday} de chaque mois à {time}",
+      "monthlyNth4": "Le quatrième {weekday} de chaque mois à {time}",
+      "monthlyNthLast": "Le dernier {weekday} de chaque mois à {time}",
+      "once": "Une fois le {date} à {time}",
+      "withZone": "{summary} ({zone})",
+      "custom": "Planification personnalisée"
+    },
+    "customNote": "Cette planification ne peut pas être affichée en clics.",
+    "editCron": "Modifier en cron",
+    "doneEditing": "Terminer la modification",
+    "nextRuns": "Prochaines exécutions",
+    "noRuns": "Aucune exécution à venir.",
+    "previewLoading": "Vérification auprès du serveur...",
+    "previewApprox": "Approximatif : le serveur confirme les heures exactes à l'enregistrement.",
+    "previewUnavailable": "Aucun aperçu n'est possible pour cette planification.",
+    "advanced": "Avancé : enregistré comme",
+    "saved": {
+      "cron": "Cron standard",
+      "calendar": "Règle de calendrier",
+      "once": "Exécution unique"
+    },
+    "savedAs": "Planification enregistrée",
+    "savedNote": {
+      "once": "S'exécute une fois. Aucun cron récurrent n'est enregistré."
+    },
+    "cronLabel": "Expression cron",
+    "cronHint": "Cron standard à cinq champs uniquement : minute, heure, jour du mois, mois, jour de la semaine. Le sélecteur et ce champ restent synchronisés.",
+    "cron_extension_unsupported": "{token} n'est pas du cron standard. Utilisez le sélecteur pour des planifications comme le dernier vendredi du mois.",
+    "invalid_timezone": "Ce fuseau horaire n'est pas reconnu.",
+    "once_in_past": "Cette date et cette heure sont déjà passées.",
+    "invalid_rrule": "Cette règle de calendrier n'est pas valide.",
+    "invalid_cron": "Saisissez un cron standard à cinq champs, par exemple 0 9 * * 1-5.",
+    "invalid_generic": "Cette planification n'est pas valide.",
+    "conflicting_fields": "Une planification est enregistrée soit en cron, soit en règle de calendrier ou exécution unique, jamais les deux.",
+    "gatedNote": "Le dernier jour, le jour de la semaine du mois, les jours 29 à 31 et les exécutions uniques seront disponibles une fois le planificateur mis à jour."
   }
 }

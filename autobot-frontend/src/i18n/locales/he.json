@@ -9745,5 +9745,104 @@
       "unreachableAsOf": "לא נגיש — מצב השירותים לא ידוע — מצב נכון ל-{time}"
     },
     "lastKnown": "{text} (ידוע לאחרונה)"
+  },
+  "schedule": {
+    "title": "תזמון",
+    "repeats": "חזרה",
+    "repeat": {
+      "minutes": "כל כמה דקות",
+      "hourly": "כל שעה",
+      "daily": "יומי",
+      "weekly": "שבועי",
+      "monthly": "חודשי",
+      "once": "פעם אחת"
+    },
+    "every": "כל",
+    "minutesUnit": "דקות",
+    "onlyBetween": "רק בין",
+    "windowFrom": "מ־",
+    "windowTo": "עד",
+    "and": "ו",
+    "onDays": "בימים (אופציונלי)",
+    "daysHintAny": "אם לא נבחר דבר, התזמון חל בכל יום.",
+    "onDaysRequired": "בימים",
+    "atMinute": "בדקה",
+    "at": "בשעה",
+    "hour": "שעה",
+    "minute": "דקה",
+    "weekdaysOnly": "ימי עבודה בלבד",
+    "monthly": {
+      "which": "איזה יום בחודש",
+      "day": "יום בחודש",
+      "lastDay": "היום האחרון",
+      "nth": "יום בשבוע בחודש",
+      "onDay": "ביום",
+      "onThe": "ב־"
+    },
+    "nth": {
+      "1": "הראשון",
+      "2": "השני",
+      "3": "השלישי",
+      "4": "הרביעי",
+      "last": "האחרון"
+    },
+    "weekday": "יום בשבוע",
+    "shortMonths": "חודשים שאין בהם יום זה ירוצו ביום האחרון של החודש.",
+    "date": "תאריך",
+    "timezone": "אזור זמן",
+    "zone": {
+      "company": "שעון החברה",
+      "usesCompany": "משתמש באזור הזמן של החברה."
+    },
+    "summary": {
+      "minutes": "כל {every} דקות",
+      "minutesWeekdays": "כל {every} דקות בימי עבודה",
+      "minutesDays": "כל {every} דקות, בימים: {days}",
+      "minutesWindow": "כל {every} דקות בין {from} ל־{to}",
+      "minutesWindowWeekdays": "כל {every} דקות בין {from} ל־{to} בימי עבודה",
+      "minutesWindowDays": "כל {every} דקות בין {from} ל־{to}, בימים: {days}",
+      "hourly": "כל שעה בדקה {minute}",
+      "daily": "כל יום בשעה {time}",
+      "dailyWeekdays": "כל יום עבודה בשעה {time}",
+      "weekly": "כל שבוע: {days}, בשעה {time}",
+      "monthlyDay": "ביום {day} בכל חודש בשעה {time}",
+      "monthlyLastDay": "ביום האחרון של כל חודש בשעה {time}",
+      "monthlyNth1": "ב{weekday} הראשון של כל חודש בשעה {time}",
+      "monthlyNth2": "ב{weekday} השני של כל חודש בשעה {time}",
+      "monthlyNth3": "ב{weekday} השלישי של כל חודש בשעה {time}",
+      "monthlyNth4": "ב{weekday} הרביעי של כל חודש בשעה {time}",
+      "monthlyNthLast": "ב{weekday} האחרון של כל חודש בשעה {time}",
+      "once": "פעם אחת ב־{date} בשעה {time}",
+      "withZone": "{summary} ({zone})",
+      "custom": "תזמון מותאם אישית"
+    },
+    "customNote": "לא ניתן להציג תזמון זה באמצעות לחיצות.",
+    "editCron": "עריכה כ־cron",
+    "doneEditing": "סיום העריכה",
+    "nextRuns": "ההרצות הבאות",
+    "noRuns": "אין הרצות קרובות.",
+    "previewLoading": "בודק מול השרת...",
+    "previewApprox": "משוער: השרת מאשר את השעות המדויקות בעת השמירה.",
+    "previewUnavailable": "לא ניתן להציג תצוגה מקדימה לתזמון זה.",
+    "advanced": "מתקדם: נשמר כ־",
+    "saved": {
+      "cron": "cron רגיל",
+      "calendar": "כלל לוח שנה",
+      "once": "הרצה חד־פעמית"
+    },
+    "savedAs": "התזמון שנשמר",
+    "savedNote": {
+      "once": "רץ פעם אחת. לא נשמר cron חוזר."
+    },
+    "cronLabel": "ביטוי cron",
+    "cronHint": "cron רגיל בעל חמישה שדות בלבד: דקה, שעה, יום בחודש, חודש, יום בשבוע. הבורר והשדה הזה נשארים מסונכרנים.",
+    "cron_extension_unsupported": "{token} אינו cron רגיל. השתמשו בבורר לתזמונים כמו יום שישי האחרון בחודש.",
+    "invalid_timezone": "אזור הזמן הזה אינו מוכר.",
+    "once_in_past": "התאריך והשעה האלה כבר עברו.",
+    "invalid_rrule": "כלל לוח השנה הזה אינו תקין.",
+    "invalid_cron": "הזינו cron רגיל בעל חמישה שדות, למשל 0 9 * * 1-5.",
+    "invalid_generic": "התזמון הזה אינו תקין.",
+    "conflicting_fields": "תזמון נשמר כ־cron או ככלל לוח שנה או כהרצה חד־פעמית, אף פעם לא כשניהם.",
+    "gatedNote": "היום האחרון, יום בשבוע בחודש, הימים 29 עד 31 והרצות חד־פעמיות יהיו זמינים לאחר עדכון המתזמן."
   }
 }

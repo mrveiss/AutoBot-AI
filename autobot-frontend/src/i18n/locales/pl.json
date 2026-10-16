@@ -9745,5 +9745,104 @@
       "unreachableAsOf": "Nieosiągalny – stan usług nieznany – stan z {time}"
     },
     "lastKnown": "{text} (ostatni znany)"
+  },
+  "schedule": {
+    "title": "Harmonogram",
+    "repeats": "Powtarzaj",
+    "repeat": {
+      "minutes": "Co kilka minut",
+      "hourly": "Co godzinę",
+      "daily": "Codziennie",
+      "weekly": "Co tydzień",
+      "monthly": "Co miesiąc",
+      "once": "Jednorazowo"
+    },
+    "every": "Co",
+    "minutesUnit": "minut",
+    "onlyBetween": "Tylko między",
+    "windowFrom": "Od",
+    "windowTo": "Do",
+    "and": "a",
+    "onDays": "W dni (opcjonalnie)",
+    "daysHintAny": "Brak wyboru oznacza każdy dzień.",
+    "onDaysRequired": "W dni",
+    "atMinute": "W minucie",
+    "at": "O",
+    "hour": "Godzina",
+    "minute": "Minuta",
+    "weekdaysOnly": "Tylko dni robocze",
+    "monthly": {
+      "which": "Który dzień miesiąca",
+      "day": "Dzień miesiąca",
+      "lastDay": "Ostatni dzień",
+      "nth": "Dzień tygodnia w miesiącu",
+      "onDay": "W dniu",
+      "onThe": "W"
+    },
+    "nth": {
+      "1": "pierwsze",
+      "2": "drugie",
+      "3": "trzecie",
+      "4": "czwarte",
+      "last": "ostatnie"
+    },
+    "weekday": "Dzień tygodnia",
+    "shortMonths": "Miesiące bez tego dnia uruchamiają się w ostatnim dniu miesiąca.",
+    "date": "Data",
+    "timezone": "Strefa czasowa",
+    "zone": {
+      "company": "czas firmy",
+      "usesCompany": "Używa strefy czasowej firmy."
+    },
+    "summary": {
+      "minutes": "Co {every} min",
+      "minutesWeekdays": "Co {every} min w dni robocze",
+      "minutesDays": "Co {every} min, w dni: {days}",
+      "minutesWindow": "Co {every} min między {from} a {to}",
+      "minutesWindowWeekdays": "Co {every} min między {from} a {to} w dni robocze",
+      "minutesWindowDays": "Co {every} min między {from} a {to}, w dni: {days}",
+      "hourly": "Co godzinę w minucie {minute}",
+      "daily": "Codziennie o {time}",
+      "dailyWeekdays": "Każdego dnia roboczego o {time}",
+      "weekly": "Co tydzień: {days}, o {time}",
+      "monthlyDay": "{day}. dnia każdego miesiąca o {time}",
+      "monthlyLastDay": "Ostatniego dnia każdego miesiąca o {time}",
+      "monthlyNth1": "Co miesiąc: {weekday}, wystąpienie nr 1, o {time}",
+      "monthlyNth2": "Co miesiąc: {weekday}, wystąpienie nr 2, o {time}",
+      "monthlyNth3": "Co miesiąc: {weekday}, wystąpienie nr 3, o {time}",
+      "monthlyNth4": "Co miesiąc: {weekday}, wystąpienie nr 4, o {time}",
+      "monthlyNthLast": "Co miesiąc: {weekday}, ostatnie wystąpienie, o {time}",
+      "once": "Jednorazowo dnia {date} o {time}",
+      "withZone": "{summary} ({zone})",
+      "custom": "Harmonogram niestandardowy"
+    },
+    "customNote": "Tego harmonogramu nie można pokazać za pomocą kliknięć.",
+    "editCron": "Edytuj jako cron",
+    "doneEditing": "Zakończ edycję",
+    "nextRuns": "Następne uruchomienia",
+    "noRuns": "Brak nadchodzących uruchomień.",
+    "previewLoading": "Sprawdzanie na serwerze...",
+    "previewApprox": "Przybliżone: serwer potwierdzi dokładne godziny przy zapisie.",
+    "previewUnavailable": "Dla tego harmonogramu nie można wyświetlić podglądu.",
+    "advanced": "Zaawansowane: zapisano jako",
+    "saved": {
+      "cron": "Standardowy cron",
+      "calendar": "Reguła kalendarzowa",
+      "once": "Uruchomienie jednorazowe"
+    },
+    "savedAs": "Zapisany harmonogram",
+    "savedNote": {
+      "once": "Uruchamia się raz. Nie zapisuje się cyklicznego crona."
+    },
+    "cronLabel": "Wyrażenie cron",
+    "cronHint": "Tylko standardowy cron z pięcioma polami: minuta, godzina, dzień miesiąca, miesiąc, dzień tygodnia. Selektor i to pole pozostają zsynchronizowane.",
+    "cron_extension_unsupported": "{token} nie jest standardowym cronem. Użyj selektora dla harmonogramów takich jak ostatni piątek miesiąca.",
+    "invalid_timezone": "Ta strefa czasowa nie jest rozpoznawana.",
+    "once_in_past": "Ta data i godzina już minęły.",
+    "invalid_rrule": "Ta reguła kalendarzowa jest nieprawidłowa.",
+    "invalid_cron": "Wpisz standardowy cron z pięcioma polami, na przykład 0 9 * * 1-5.",
+    "invalid_generic": "Ten harmonogram jest nieprawidłowy.",
+    "conflicting_fields": "Harmonogram zapisuje się albo jako cron, albo jako reguła kalendarzowa lub uruchomienie jednorazowe, nigdy jako oba.",
+    "gatedNote": "Ostatni dzień, dzień tygodnia w miesiącu, dni 29–31 i uruchomienia jednorazowe będą dostępne po aktualizacji harmonogramatora."
   }
 }

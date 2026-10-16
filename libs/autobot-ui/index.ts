@@ -103,3 +103,6 @@ export type { DurationStyle } from './src/utils/duration'
 // apps' utils/debugUtils.ts re-export these rather than re-declaring them.
 export { log, createLogger } from './src/utils/logger'
 export type { LogLevel } from './src/utils/logger'
+
+export { default as SchedulePicker } from './src/components/SchedulePicker.vue'
+export * from './src/schedule'
