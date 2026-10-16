@@ -13,9 +13,8 @@
  *    or '/slm/api' when co-located. Endpoints are passed relative to that base
  *    (e.g. `get('/nodes')` → `/api/nodes`), matching the existing SLM axios
  *    composable convention so Phase 2 call sites drop only the base prefix.
- *  - Auth token read exactly as existing SLM fetch/axios sites do:
- *    `sessionStorage.getItem('slm_access_token')` with a `localStorage`
- *    fallback (mirrors `stores/auth.ts` token initialisation).
+ *  - Auth token read through `utils/authStorage` (sessionStorage, then the
+ *    legacy localStorage copy) -- the same reader `stores/auth.ts` uses.
  *  - 401 handling matches SLM's convention: clear the session keys and redirect
  *    to `/login` (the target of `authStore.logout()`), but only when the request
  *    actually carried a bearer token and did not target an auth/mfa endpoint.
@@ -29,14 +28,11 @@
 
 import { createLogger } from '@/utils/debugUtils'
 import { getSlmApiBase } from '@/config/ssot-config'
+import { clearSlmSession, readSlmToken } from '@/utils/authStorage'
 import type { GetPath, GetResponse } from '@autobot/ui'
 import type { paths } from '@/types/generated/api'
 
 const logger = createLogger('SlmApiClient')
-
-// SLM auth storage keys — kept in sync with stores/auth.ts (TOKEN_KEY/USER_KEY).
-const TOKEN_KEY = 'slm_access_token'
-const USER_KEY = 'slm_user'
 
 // Login route users are redirected to on session rejection (authStore.logout()).
 const LOGIN_PATH = '/login'
@@ -107,15 +103,11 @@ export class SlmApiClient {
   }
 
   // ==================================================================================
-  // AUTH TOKEN — mirrors stores/auth.ts init (sessionStorage, localStorage fallback)
+  // AUTH TOKEN — the one SLM reader (utils/authStorage, #17856 row 8)
   // ==================================================================================
 
   private getAuthToken(): string | null {
-    try {
-      return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY)
-    } catch {
-      return null
-    }
+    return readSlmToken()
   }
 
   // Auth/MFA endpoints must never trigger a session-clearing 401 handler — a 401
@@ -136,14 +128,7 @@ export class SlmApiClient {
       return
     }
     logger.warn('401 Unauthorized, clearing SLM session:', endpoint)
-    try {
-      sessionStorage.removeItem(TOKEN_KEY)
-      sessionStorage.removeItem(USER_KEY)
-      localStorage.removeItem(TOKEN_KEY)
-      localStorage.removeItem(USER_KEY)
-    } catch {
-      /* storage unavailable — nothing to clear */
-    }
+    clearSlmSession()
     if (
       typeof window !== 'undefined' &&
       !window.location.pathname.includes(LOGIN_PATH)

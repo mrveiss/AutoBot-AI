@@ -11,8 +11,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
-const { push, query, rawRequest, checkAuth } = vi.hoisted(() => ({
+const { push, query, rawRequest, checkAuth, adoptToken } = vi.hoisted(() => ({
   push: vi.fn(),
+  adoptToken: vi.fn(),
   query: {} as Record<string, string>,
   rawRequest: vi.fn(),
   checkAuth: vi.fn(),
@@ -22,7 +23,7 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push }),
   useRoute: () => ({ query }),
 }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ checkAuth }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ checkAuth, adoptToken }) }))
 vi.mock('@/utils/ApiClient', () => ({ slmApiClient: { rawRequest } }))
 
 import SSOCallbackView from './SSOCallbackView.vue'
@@ -46,7 +47,9 @@ describe('SSOCallbackView (#18394)', () => {
     mountView()
     await flushPromises()
     expect(rawRequest).toHaveBeenCalledWith('/auth/sso/exchange', { method: 'POST', body: { code: 'abc' } })
-    expect(sessionStorage.getItem('slm_access_token')).toBe('jwt')
+    // The store adopts the token before checkAuth reads it (#17856 row 8)
+    expect(adoptToken).toHaveBeenCalledWith('jwt')
+    expect(adoptToken.mock.invocationCallOrder[0]).toBeLessThan(checkAuth.mock.invocationCallOrder[0])
     expect(window.location.search).toBe('')
     expect(push).toHaveBeenCalledWith('/')
   })
@@ -57,7 +60,7 @@ describe('SSOCallbackView (#18394)', () => {
     mountView()
     await flushPromises()
     expect(rawRequest).not.toHaveBeenCalled()
-    expect(sessionStorage.getItem('slm_access_token')).toBeNull()
+    expect(adoptToken).not.toHaveBeenCalled()
     expect(window.location.search).toBe('')
     expect(push).toHaveBeenCalledWith({ name: 'login', query: { error: 'no_token' } })
   })
@@ -67,7 +70,7 @@ describe('SSOCallbackView (#18394)', () => {
     rawRequest.mockResolvedValue({ ok: false })
     mountView()
     await flushPromises()
-    expect(sessionStorage.getItem('slm_access_token')).toBeNull()
+    expect(adoptToken).not.toHaveBeenCalled()
     expect(push).toHaveBeenCalledWith({ name: 'login', query: { error: 'sso_failed' } })
   })
 })

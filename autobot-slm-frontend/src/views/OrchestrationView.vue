@@ -31,6 +31,7 @@
 
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { readSlmToken } from '@/utils/authStorage'
 import { useOrchestrationManagement } from '@/composables/useOrchestrationManagement'
 import {
   useRoles,
@@ -948,11 +949,10 @@ function toggleAutoRefresh(): void {
 
 onMounted(async () => {
   logger.info('OrchestrationView mounted - checking auth')
-  const token = sessionStorage.getItem('slm_access_token')
+  const token = readSlmToken()
   logger.info('Auth token present:', !!token)
   if (!token) {
-    logger.error('NO AUTH TOKEN - Please log in first')
-    logger.error('Please navigate to /login to authenticate')
+    logger.error('No auth token: log in at /login first')
   }
 
   logger.info('Calling refresh()')

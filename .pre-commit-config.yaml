@@ -125,6 +125,9 @@ repos:
       - id: mypy
         name: mypy (autobot_shared - strict)
         files: ^autobot_shared/
+        # Mirrors [tool.mypy].exclude: pre-commit names changed files on the
+        # command line, where mypy's own `exclude` does not apply (#17856).
+        exclude: (_test\.py$|/tests/|conftest\.py$)
         args: [--config-file=pyproject.toml]
         additional_dependencies: [
           pydantic-settings,
@@ -138,6 +141,7 @@ repos:
       - id: mypy
         name: mypy (backends - informational)
         files: ^(autobot-backend|autobot-slm-backend)/
+        exclude: (_test\.py$|/tests/|conftest\.py$|^autobot-backend/code_analysis/)
         args: [--config-file=pyproject.toml]
         additional_dependencies: [
           pydantic-settings,

@@ -275,6 +275,26 @@ describe('authStore — canonical-client transport (#13140)', () => {
     expect(sessionStorage.getItem('slm_access_token')).toBe('new-token')
   })
 
+  it('a token written to storage behind the store is invisible to checkAuth (the #17856 defect)', async () => {
+    // LoginView (LDAP/AD) and SSOCallbackView used to do exactly this.
+    const store = useAuthStore()
+    sessionStorage.setItem('slm_access_token', 'ldap-token')
+
+    expect(await store.checkAuth()).toBe(false)
+    expect(mockFetch).not.toHaveBeenCalled()
+  })
+
+  it('adoptToken makes a token issued outside login() visible to checkAuth and persists it', async () => {
+    const store = useAuthStore()
+    mockFetch.mockResolvedValueOnce(jsonResponse({ username: 'admin', is_admin: true }))
+
+    store.adoptToken('ldap-token')
+
+    expect(await store.checkAuth()).toBe(true)
+    expect(authHeaderOf(0)).toBe('Bearer ldap-token')
+    expect(sessionStorage.getItem('slm_access_token')).toBe('ldap-token')
+  })
+
   it('revokes server-side with the bearer still attached, then clears locally', async () => {
     sessionStorage.setItem('slm_access_token', 'live-token')
     sessionStorage.setItem('slm_user', '{"username":"admin","isAdmin":true}')

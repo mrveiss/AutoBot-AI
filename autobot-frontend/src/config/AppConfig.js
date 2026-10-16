@@ -10,7 +10,7 @@
 import ServiceDiscovery from './ServiceDiscovery.js';
 import { NetworkConstants } from '../constants/network.ts';
 import { createLogger } from '@/utils/debugUtils';
-import { getApiBase } from '@/config/ssot-config';
+import { getApiBase, getApiTimeout } from '@/config/ssot-config';
 
 const logger = createLogger('AppConfig');
 
@@ -132,8 +132,8 @@ export class AppConfigService {
       // API Configuration - SINGLE SOURCE OF TRUTH for all timeouts (Issue #598)
       // All timeout values in milliseconds
       api: {
-        // Default timeout for standard API calls (30 seconds)
-        timeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
+        // Default timeout for standard API calls: the SSOT value (#17856 row 6)
+        timeout: getApiTimeout(),
         retryAttempts: parseInt(import.meta.env.VITE_API_RETRY_ATTEMPTS || '3'),
         retryDelay: parseInt(import.meta.env.VITE_API_RETRY_DELAY || '1000'),
         cacheBustVersion: import.meta.env.VITE_APP_VERSION || Date.now().toString(),
@@ -145,7 +145,7 @@ export class AppConfigService {
         // These are THE source of truth - all ApiClient implementations MUST use these
         timeouts: {
           // Standard API operations (30s)
-          default: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
+          default: getApiTimeout(),
           // Knowledge base / vectorization operations (5 minutes)
           knowledge: parseInt(import.meta.env.VITE_KNOWLEDGE_TIMEOUT || '300000'),
           // File upload operations (5 minutes)

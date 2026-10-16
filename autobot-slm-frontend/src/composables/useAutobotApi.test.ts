@@ -115,37 +115,22 @@ describe('useAutobotApi transport contract (#13079)', () => {
     expect(applyRequestInterceptor().Authorization).toBe('Bearer slm-token')
   })
 
-  it('falls back to the autobot_access_token in localStorage — the #13079 defect', () => {
-    // This is precisely the case the private `fetch` forks got wrong: an
-    // autobot-issued token present, no SLM token, so they sent
-    // `Bearer null` / `Bearer undefined` and the backend replied 401.
+  it('ignores a stray autobot_access_token: the SLM session token is the only bearer (#17856 row 8)', () => {
+    // Nothing writes this key; the old fallback to it is gone.
     h.state.token = null
     localStorage.setItem('autobot_access_token', 'autobot-token')
 
-    expect(applyRequestInterceptor().Authorization).toBe('Bearer autobot-token')
+    expect(applyRequestInterceptor().Authorization).toBeUndefined()
   })
 
   it('sends no Authorization header when neither token exists', () => {
     expect(applyRequestInterceptor().Authorization).toBeUndefined()
   })
 
-  it('clears the stale autobot_access_token on a 401 and still rejects', async () => {
+  it('installs no response interceptor: the dead autobot_access_token 401 cleanup is gone (#17856 row 8)', () => {
     useAutobotApi()
-    localStorage.setItem('autobot_access_token', 'expired-token')
 
-    const err = { response: { status: 401 } }
-    await expect(h.state.responseErrorInterceptor!(err)).rejects.toBe(err)
-    expect(localStorage.getItem('autobot_access_token')).toBeNull()
-  })
-
-  it('keeps the token on a non-401 failure', async () => {
-    useAutobotApi()
-    localStorage.setItem('autobot_access_token', 'good-token')
-
-    await expect(
-      h.state.responseErrorInterceptor!({ response: { status: 500 } }),
-    ).rejects.toBeTruthy()
-    expect(localStorage.getItem('autobot_access_token')).toBe('good-token')
+    expect(h.state.responseErrorInterceptor).toBeNull()
   })
 })
 

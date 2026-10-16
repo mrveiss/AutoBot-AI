@@ -691,8 +691,8 @@ class TimeoutConfig(RedactedSettings):
     # Legacy / frontend aliases (milliseconds)                             #
     # ------------------------------------------------------------------ #
 
-    # Kept for backward compat — frontend reads this as ms
-    api: int = Field(default=10000, alias="AUTOBOT_API_TIMEOUT")
+    # Frontend API timeout (ms): the SSOT VITE_API_TIMEOUT derives from (#17856)
+    api: int = Field(default=60000, alias="AUTOBOT_API_TIMEOUT")
     api_retry_attempts: int = Field(default=3, alias="AUTOBOT_API_RETRY_ATTEMPTS")
     api_retry_delay: int = Field(default=1000, alias="AUTOBOT_API_RETRY_DELAY")
 
