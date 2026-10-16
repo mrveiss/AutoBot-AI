@@ -157,6 +157,11 @@ python:
   # report green while the guard that counts its constructor never ran. (The two deploy scripts
   # it also names sit under the ansible tree above.)
   - 'autobot-backend/code_analysis/install.sh'
+  # #15469: one_brand_mark_and_announcer_18240_test.py pins these icons to the kit mark (byte
+  # identity / a sha256 pair). A change confined to one touches no `**/*.py`, so the guard must still run.
+  - 'autobot-frontend/public/favicon.ico'
+  - 'autobot-frontend/public/favicon.svg'
+  - 'autobot-slm-frontend/public/favicon.svg'
 
   # #16249: the CI wrappers under pipeline-scripts/ and the one library they
   # source. Each has a python-suite test that runs the script, so a change
