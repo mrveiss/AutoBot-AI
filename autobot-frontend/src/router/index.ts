@@ -638,7 +638,7 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/views/SettingsView.vue'),
     meta: {
       title: 'Preferences',
-      icon: 'fas fa-sliders-h',
+      icon: 'fas fa-cog',
       description: 'Customize your AutoBot experience',
       requiresAuth: true,
       hideInNav: true,

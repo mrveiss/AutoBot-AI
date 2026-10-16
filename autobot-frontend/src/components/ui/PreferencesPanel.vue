@@ -12,7 +12,7 @@ Issue #3286: Comprehensive Theming System
   <form class="preferences-panel" @submit.prevent>
     <div class="panel-header">
       <h3 class="panel-title">
-        <Icon name="sliders-h" size="md" />
+        <Icon name="cog" size="md" />
         {{ t('ui.preferences.title') }}
       </h3>
       <button
