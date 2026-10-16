@@ -4,11 +4,12 @@
 # Author: mrveiss
 """Company OS agent ledger: who is working on what, for the caller's company (#18391).
 
-Read-only. The routes show what the coordination stores already hold --
-presence (#16947), work claims, the waitlist (#15948), pending peer messages
+Read-only except one write. The routes show what the coordination stores already
+hold -- presence (#16947), work claims, the waitlist (#15948), pending peer messages
 (#16948) and idle subscriptions (#16949) -- and change none of it. There is no
 force-release and no delete; claims are released by their holder, and the one
-human action the design allows, asking a holder to release, is not here yet.
+human action the design allows, asking a holder to release (#18599), only publishes
+a request.
 
 TENANCY. The company comes from `require_org_context`, never from a request
 parameter. Presence, peer messages and idle subscriptions are keyed by tenant and
@@ -24,11 +25,12 @@ An unreachable store answers HTTP 503 with a typed body, never an empty list
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 
 from fastapi import APIRouter, Depends, Query
 
-from api.user_management.dependencies import get_current_user, require_org_context
+from api.user_management.dependencies import get_current_user, get_current_user_id, require_org_context
 from autobot_shared.coordination import ledger_read
 from autobot_shared.coordination.ledger_http import UNAVAILABLE_RESPONSES, serve_ledger, valid_kind
 from autobot_shared.coordination.ledger_schemas import (
@@ -42,10 +44,14 @@ from autobot_shared.coordination.ledger_schemas import (
     PresenceResponse,
     PresenceRow,
     WaitlistsResponse,
+    YieldRequestBody,
+    YieldRequestResponse,
 )
+from autobot_shared.coordination.yield_ask import ask_holder_to_release
 from protocols.agent_presence import get_presence_registry
 from protocols.idle_notice import active_subscriptions
 from protocols.peer_inbox import get_peer_inbox_directory
+from services.claim_yield import request_yield
 from user_management.services import TenantContext
 
 router = APIRouter(dependencies=[Depends(get_current_user)], responses=UNAVAILABLE_RESPONSES)
@@ -144,3 +150,26 @@ async def ledger_idle_subscribers(scope: CompanyScope = Depends(company_scope)) 
         if s.tenant_id == scope.org_id
     ]
     return IdleSubscribersResponse(subscribers=rows, count=len(rows))
+
+
+@router.post(
+    "/ledger/claims/yield-request",
+    response_model=YieldRequestResponse,
+    responses={404: {"description": "No such claim for this caller"}, 429: {"description": "Asked too recently"}},
+)
+@serve_ledger
+async def ledger_yield_request(
+    body: YieldRequestBody,
+    scope: CompanyScope = Depends(company_scope),
+    user_id: uuid.UUID = Depends(get_current_user_id),
+) -> YieldRequestResponse:
+    """Ask the holder of one of the company's claims to release it. Publishes a request; releases nothing."""
+    token = await ask_holder_to_release(
+        scope.org_id,
+        user_id=str(user_id),
+        scope=body.scope,
+        holder_task_id=body.holder_task_id,
+        reason=body.reason,
+        issue=request_yield,
+    )
+    return YieldRequestResponse(token=token)

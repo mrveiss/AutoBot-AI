@@ -54,3 +54,31 @@ register_env_var(
         range=(32, 2000),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LEDGER_YIELD_ASK_WINDOW_S",
+        type=int,
+        default=60,
+        description=(
+            "Seconds over which one person may ask the holder of one claim to release it at most "
+            "AUTOBOT_LEDGER_YIELD_ASK_LIMIT times (#18599). Keyed by user and scope."
+        ),
+        component="orchestration",
+        range=(1, 86400),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LEDGER_YIELD_ASK_LIMIT",
+        type=int,
+        default=1,
+        description=(
+            "How many times one person may ask the holder of one claim to release it inside "
+            "AUTOBOT_LEDGER_YIELD_ASK_WINDOW_S (#18599); further asks answer HTTP 429."
+        ),
+        component="orchestration",
+        range=(1, 100),
+    )
+)

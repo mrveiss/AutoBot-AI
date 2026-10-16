@@ -178,3 +178,15 @@ class LedgerSourceStatus(BaseModel):
 
 class LedgerSourcesResponse(BaseModel):
     sources: list[LedgerSourceStatus]
+
+
+class YieldRequestBody(BaseModel):
+    """A person asks the holder of a claim to release it (#18599). Asking never releases anything."""
+
+    scope: str = Field(description="The claimed scope, e.g. `path:src/app.py`")
+    holder_task_id: str = Field(description="The task that holds the claim, as the claims screen shows it")
+    reason: str = Field("", description="Why; cut to the ledger's free-text cap")
+
+
+class YieldRequestResponse(BaseModel):
+    token: str = Field(description="Identifies the request; the holder's answer is recorded under it")
