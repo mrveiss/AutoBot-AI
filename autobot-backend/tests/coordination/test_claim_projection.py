@@ -298,4 +298,8 @@ def test_the_router_is_authenticated_and_mounted():
     assert router.dependencies, "the claim table must not be readable unauthenticated"
     mounted = {name: prefix for _, prefix, _, name in load_core_routers()}
     assert mounted.get("coordination") == "/coordination"
-    assert [r.path for r in router.routes] == ["/claims"]
+    # The claim table is mounted; the agent ledger (#18391) is an included child router, so the routes
+    # are read through effective_routes(), which resolves nesting (router.routes would hold a wrapper).
+    from autobot_shared.api_routing.router_routes import effective_routes
+
+    assert "/claims" in [r.path for r in effective_routes(router)]

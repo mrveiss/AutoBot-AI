@@ -327,81 +327,42 @@ onMounted(() => {
 }
 
 /*
- * Syntax highlighting, from the shared design tokens (#14853). Reuses
- * canvas/CodeCell.vue's --codecell-syntax-* palette (#14770) rather than
- * this file's own prior hex: AC2 (one token set for both CodeCells) and the
- * literal "colours unchanged" reading of AC4 could not both hold once
- * compared value-by-value -- see the coordinator's decision on #14853.
- * --codecell-syntax-tag-* is new: neither prior palette had a tag category.
+ * Syntax highlighting from the active theme (#14853, #18497): the shared
+ * --codecell-syntax-* tokens resolve to the theme's own --code-* palette, so
+ * there is one rule set and no switch on the OS colour scheme.
  */
-@media (prefers-color-scheme: light) {
-  .code-container {
-    background: var(--bg-primary);
-    color: var(--text-primary);
-  }
-
-  :deep(.hljs-string),
-  :deep(.hljs-bullet) {
-    color: var(--codecell-syntax-string-light);
-  }
-
-  :deep(.hljs-number),
-  :deep(.hljs-literal) {
-    color: var(--codecell-syntax-number-light);
-  }
-
-  :deep(.hljs-attr),
-  :deep(.hljs-variable) {
-    color: var(--codecell-syntax-attr-light);
-  }
-
-  :deep(.hljs-comment) {
-    color: var(--codecell-syntax-comment-light);
-  }
-
-  :deep(.hljs-tag) {
-    color: var(--codecell-syntax-tag-light);
-  }
-
-  :deep(.hljs-keyword) {
-    color: var(--codecell-syntax-keyword-light);
-  }
+:deep(.hljs-string),
+:deep(.hljs-bullet) {
+  color: var(--codecell-syntax-string);
 }
 
-@media (prefers-color-scheme: dark) {
-  :deep(.hljs-string) {
-    color: var(--codecell-syntax-string-dark);
-  }
+:deep(.hljs-number),
+:deep(.hljs-literal) {
+  color: var(--codecell-syntax-number);
+}
 
-  :deep(.hljs-number),
-  :deep(.hljs-literal) {
-    color: var(--codecell-syntax-number-dark);
-  }
+:deep(.hljs-attr),
+:deep(.hljs-variable) {
+  color: var(--codecell-syntax-attr);
+}
 
-  :deep(.hljs-attr),
-  :deep(.hljs-variable) {
-    color: var(--codecell-syntax-attr-dark);
-  }
+:deep(.hljs-comment) {
+  color: var(--codecell-syntax-comment);
+  font-style: var(--codecell-syntax-comment-style);
+}
 
-  :deep(.hljs-comment) {
-    color: var(--codecell-syntax-comment-dark);
-  }
+:deep(.hljs-tag) {
+  color: var(--codecell-syntax-tag);
+}
 
-  :deep(.hljs-tag) {
-    color: var(--codecell-syntax-tag-dark);
-  }
+:deep(.hljs-keyword) {
+  color: var(--codecell-syntax-keyword);
+  font-weight: var(--codecell-syntax-keyword-weight);
+}
 
-  :deep(.hljs-keyword) {
-    color: var(--codecell-syntax-keyword-dark);
-  }
-
-  :deep(.hljs-function) {
-    color: var(--codecell-syntax-callable-dark);
-  }
-
-  :deep(.hljs-built_in) {
-    color: var(--codecell-syntax-callable-dark);
-  }
+:deep(.hljs-function),
+:deep(.hljs-built_in) {
+  color: var(--codecell-syntax-callable);
 }
 
 /* Accessible copy status - visually hidden but announced to screen readers */

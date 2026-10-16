@@ -22,7 +22,10 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from api.agent_ledger import CompanyScope, company_scope
+from api.agent_ledger import router as agent_ledger_router  # #18391
 from api.user_management.dependencies import get_current_user
+from autobot_shared.coordination.ledger_read import visible
 from autobot_shared.coordination.work_claims import ScopeError
 from autobot_shared.logging_manager import get_logger
 from services.claim_projection import claim_table
@@ -33,6 +36,8 @@ logger = get_logger(__name__)
 # which agent is doing what, which is operational detail about the running
 # system rather than public information.
 router = APIRouter(dependencies=[Depends(get_current_user)])
+# The company-scoped agent ledger (#18391) rides this router: same read-only claim table, same gate.
+router.include_router(agent_ledger_router)
 
 
 @router.get("/claims")
@@ -40,8 +45,9 @@ async def get_claims(
     agent_id: Optional[str] = Query(None, description="Only claims held by this agent"),
     scope: Optional[str] = Query(None, description="Only claims at or under this scope, segment-aligned"),
     kind: Optional[str] = Query(None, description="Only claims of this scope kind"),
+    company: CompanyScope = Depends(company_scope),
 ) -> dict[str, Any]:
-    """The live claim table, optionally filtered.
+    """The caller's company's live claim table, optionally filtered (install-wide claims are SLM-only).
 
     A malformed `scope` or unknown `kind` is the caller's error and is reported
     as 400 rather than silently returning everything -- a filter that fails open
@@ -52,4 +58,6 @@ async def get_claims(
         claims = await claim_table(agent_id=agent_id, scope_prefix=scope, kind=kind)
     except ScopeError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    # #18410: only the caller's company's agents, by the same rule as `/ledger/claims`.
+    claims = [c for c in claims if visible(company.org_id, c["company_id"])]
     return {"claims": claims, "count": len(claims)}

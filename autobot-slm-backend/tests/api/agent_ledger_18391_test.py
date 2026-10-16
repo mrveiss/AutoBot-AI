@@ -1,0 +1,186 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""SLM agent ledger: admin only, install-wide, unreachable vs empty, honest about gaps (#18391).
+
+Real `work_claims` / `claim_waitlist` / `dev_loop_actions` against fakeredis; the
+real `require_permission(ADMIN_SYSTEM)` gate decides who gets in, with only the
+JWT -> user step (`get_current_user`) replaced.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import secrets
+import sys
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+import pytest_asyncio
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+_ROOT = Path(__file__).resolve().parents[3]
+for _p in (str(_ROOT), str(_ROOT / "autobot-slm-backend")):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+import autobot_shared.logging_manager as _logging_manager  # noqa: E402
+
+
+class _NoConfig:
+    """What `get_logger` needs from a config manager when the SLM conftest has stubbed `config` as a MagicMock."""
+
+    @staticmethod
+    def get_nested(_key, default=None):
+        return default
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _real_auth_import import load_real_auth  # noqa: E402
+
+_auth = load_real_auth(secrets.token_hex(32))
+get_current_user = _auth.get_current_user
+
+# This SLM conftest replaces `config` with a MagicMock, which `logging_manager` reads rotation sizes from
+# (`'>' not supported between 'MagicMock' and 'int'`). The shared coordination modules log through
+# `get_logger` as the rest of the repo does, so the harness is bridged here for the import only.
+with patch.object(_logging_manager, "_get_config_manager", lambda: _NoConfig()):
+    from autobot_shared.coordination import claim_waitlist as wl_mod
+    from autobot_shared.coordination import dev_loop_actions as dla
+    from autobot_shared.coordination import ledger_read
+    from autobot_shared.coordination import work_claims as wc_mod
+    from autobot_shared.coordination.claim_waitlist import join
+    from autobot_shared.coordination.work_claims import release_scope, renew, try_acquire
+
+    _spec = importlib.util.spec_from_file_location(
+        "slm_agent_ledger_18391", _ROOT / "autobot-slm-backend/api/agent_ledger.py"
+    )
+    ledger_api = importlib.util.module_from_spec(_spec)
+    # The conftest stubs `services.auth` (a MagicMock gate gates nothing); the router is loaded against the real one.
+    with patch.dict(sys.modules, {"services.auth": _auth}):
+        _spec.loader.exec_module(ledger_api)
+
+try:
+    import fakeredis
+    import fakeredis.aioredis as fakeredis_async
+except ImportError:  # pragma: no cover
+    fakeredis_async = None
+    fakeredis = None  # type: ignore[assignment]
+
+READ_PATHS = ("claims", "waitlists", "contention", "conflicts", "activity", "dev-loop", "dev-loop/5", "sources")
+
+
+def _client(role: str) -> TestClient:
+    app = FastAPI()
+    app.include_router(ledger_api.router, prefix="/api/monitoring")
+    app.dependency_overrides[get_current_user] = lambda: {"sub": "someone", "role": role, "admin": role == "admin"}
+    return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest_asyncio.fixture
+async def redis(monkeypatch):
+    if fakeredis_async is None:
+        pytest.skip("fakeredis[lua] not installed")
+    client = fakeredis_async.FakeRedis(server=fakeredis.FakeServer(), decode_responses=True)
+
+    async def _client_fn(database: str = "main"):
+        return client
+
+    for module in (wc_mod, wl_mod, dla, ledger_read):
+        monkeypatch.setattr(module, "get_async_redis_client", _client_fn)
+    yield client
+    await client.flushall()
+
+
+@pytest.mark.parametrize("path", READ_PATHS)
+def test_a_non_admin_is_refused_on_every_route(path):
+    assert _client("readonly").get(f"/api/monitoring/agent-ledger/{path}").status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_an_admin_sees_every_companys_claims_waiters_contention_and_dev_loop(redis):
+    await try_acquire("path:a/f", agent_id="co-a-agent", task_id="t", intent="a work")
+    await try_acquire("path:b/f", agent_id="co-b-agent", task_id="t", intent="b work")
+    await try_acquire("provider:anthropic", agent_id="dev-session", task_id="t", intent="quota")
+    await join("provider:anthropic", agent_id="co-a-agent", task_id="t2", intent="needs quota")
+    assert await renew("path:a/f", agent_id="co-a-agent", task_id="t")
+    await dla.record(
+        dla.build_action(5, intent="triage", outcome=dla.OUTCOME_SKIPPED_CLAIMED, estimated_tokens=0, reason="held")
+    )
+    api = _client("admin")
+
+    claims = api.get("/api/monitoring/agent-ledger/claims").json()
+    assert {c["agent_id"] for c in claims["claims"]} == {"co-a-agent", "co-b-agent", "dev-session"}
+    assert {c["scope"]: c["renewals"] for c in claims["claims"]}["path:a/f"] == 1
+    assert [c["scope"] for c in api.get("/api/monitoring/agent-ledger/claims?kind=provider").json()["claims"]] == [
+        "provider:anthropic"
+    ]
+    assert api.get("/api/monitoring/agent-ledger/waitlists").json()["waiters"][0]["agent_id"] == "co-a-agent"
+    resource = api.get("/api/monitoring/agent-ledger/contention").json()["resources"]
+    assert [(r["scope"], r["contended"], [h["agent_id"] for h in r["holders"]]) for r in resource] == [
+        ("provider:anthropic", True, ["dev-session"])
+    ]
+    assert api.get("/api/monitoring/agent-ledger/dev-loop").json()["issues"] == [5]
+    assert api.get("/api/monitoring/agent-ledger/dev-loop/5").json()["actions"][0]["outcome"] == "skipped_claimed"
+    assert (
+        api.get("/api/monitoring/agent-ledger/dev-loop/6").json()["actions"] == []
+    )  # untouched issue: read fine, nothing there
+
+
+@pytest.mark.asyncio
+async def test_conflicts_report_a_refused_release(redis):
+    await try_acquire("path:a/f", agent_id="owner", task_id="t", intent="x")
+    await release_scope("path:a/f", agent_id="intruder", task_id="s")
+    body = _client("admin").get("/api/monitoring/agent-ledger/conflicts").json()
+    assert [(c["kind"], c["agent_id"], c["other_agent_id"]) for c in body["conflicts"]] == [
+        ("release_refused", "intruder", "owner")
+    ]
+
+
+@pytest.mark.asyncio
+async def test_an_empty_ledger_is_200_empty_and_an_unreachable_one_is_503(redis, monkeypatch):
+    await try_acquire(
+        "path:z/f", agent_id="x", task_id="t", intent="control"
+    )  # control: the read path works and sees data
+    api = _client("admin")
+    assert api.get("/api/monitoring/agent-ledger/claims").json()["count"] == 1
+    await redis.flushall()
+    for path, key in (
+        ("claims", "claims"),
+        ("waitlists", "waiters"),
+        ("conflicts", "conflicts"),
+        ("dev-loop", "issues"),
+    ):
+        response = api.get(f"/api/monitoring/agent-ledger/{path}")
+        assert (response.status_code, response.json()[key]) == (200, []), path
+
+    async def _none(database: str = "main"):
+        return None
+
+    for module in (wc_mod, wl_mod, dla, ledger_read):
+        monkeypatch.setattr(module, "get_async_redis_client", _none)
+    for path in ("claims", "waitlists", "contention", "conflicts", "activity", "dev-loop", "dev-loop/5"):
+        response = api.get(f"/api/monitoring/agent-ledger/{path}")
+        assert response.status_code == 503, path
+        assert response.json()["error"] == "ledger_unavailable" and response.json()["detail"]
+
+
+def test_sources_name_what_is_unreachable_instead_of_showing_it_empty(monkeypatch):
+    async def _none(database: str = "main"):
+        return None
+
+    for module in (wc_mod, wl_mod, dla, ledger_read):
+        monkeypatch.setattr(module, "get_async_redis_client", _none)
+    sources = {s["source"]: s for s in _client("admin").get("/api/monitoring/agent-ledger/sources").json()["sources"]}
+    assert not any(s["reachable"] for s in sources.values())
+    assert {"claims", "waitlists", "events", "dev_loop"} <= set(sources)
+    for gap in ("presence", "ai_stack_agents", "live_sessions", "peer_messages", "idle_subscribers"):
+        assert sources[gap]["reachable"] is False and "process-local" in sources[gap]["reason"]
+
+
+def test_the_slm_ledger_is_read_only():
+    unsafe = {m for r in ledger_api.router.routes for m in r.methods} - {"GET", "HEAD"}
+    assert unsafe == set()

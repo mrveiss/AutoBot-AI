@@ -64,7 +64,7 @@ greenlet>=3.5.6  # SQLAlchemy async engine dependency -- see the note above
 psycopg2-binary>=2.9.13  # Sync PostgreSQL driver for migrations
 
 # Data validation
-pydantic[email]>=2.14.0
+pydantic[email]>=2.14.1
 pydantic-settings>=2.15.0
 typing_extensions>=4.16.0  # For Python 3.8 compatibility
 
@@ -92,7 +92,7 @@ httpx>=0.28.1  # health checks, general async HTTP calls
 # import it (lazily, at call time) — a fresh install was already broken the
 # first time any of those code paths ran; this was just never surfaced
 # until CI started building the app to verify generated types (#13118).
-aiohttp>=3.14.4  # SECURITY UPDATE — matches autobot-backend/requirements.txt pin
+aiohttp>=3.14.5  # SECURITY UPDATE — matches autobot-backend/requirements.txt pin
 
 # System metrics
 psutil>=7.2.2

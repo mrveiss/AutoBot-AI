@@ -2836,6 +2836,166 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/monitoring/agent-ledger/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger Activity
+         * @description Recent coordination activity across the install, newest first.
+         */
+        get: operations["ledger_activity_api_monitoring_agent_ledger_activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/agent-ledger/claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger Claims
+         * @description Every held claim across the install: scope, mode, intent, expiry, renewals.
+         */
+        get: operations["ledger_claims_api_monitoring_agent_ledger_claims_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/agent-ledger/conflicts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger Conflicts
+         * @description Refused releases, claims expired while held, unanswered yields, lapsed dev-loop actions.
+         */
+        get: operations["ledger_conflicts_api_monitoring_agent_ledger_conflicts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/agent-ledger/contention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger Contention
+         * @description Shared-resource scopes (provider, cpu, queue): holders and who waits.
+         */
+        get: operations["ledger_contention_api_monitoring_agent_ledger_contention_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/agent-ledger/dev-loop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger Dev Loop Issues
+         * @description Issues the dev loop has a recorded action history for.
+         */
+        get: operations["ledger_dev_loop_issues_api_monitoring_agent_ledger_dev_loop_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/agent-ledger/dev-loop/{issue}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger Dev Loop History
+         * @description One issue's dev-loop action history, newest first, including refused and skipped attempts.
+         */
+        get: operations["ledger_dev_loop_history_api_monitoring_agent_ledger_dev_loop__issue__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/agent-ledger/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger Sources
+         * @description Which coordination stores this view can read right now, and which it never can.
+         */
+        get: operations["ledger_sources_api_monitoring_agent_ledger_sources_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/agent-ledger/waitlists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger Waitlists
+         * @description Every queued agent behind a held scope, in position order.
+         */
+        get: operations["ledger_waitlists_api_monitoring_agent_ledger_waitlists_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/monitoring/alerts": {
         parameters: {
             query?: never;
@@ -7262,6 +7422,35 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** ActivityResponse */
+        ActivityResponse: {
+            /** Activity */
+            activity: components["schemas"]["ActivityRow"][];
+            /** Count */
+            count: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ActivityRow */
+        ActivityRow: {
+            /** Agent Id */
+            agent_id?: string | null;
+            /** At */
+            at: string;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /** Scope */
+            scope?: string | null;
+            /** Task Id */
+            task_id?: string | null;
+            /** Type */
+            type: string;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * AgentCreateRequest
          * @description Request to create an agent.
@@ -8230,6 +8419,47 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** ClaimRow */
+        ClaimRow: {
+            /** Acquired At */
+            acquired_at: string;
+            /** Agent Id */
+            agent_id: string;
+            /**
+             * Company Id
+             * @description Stamped at write time; null = install-wide or legacy
+             */
+            company_id?: string | null;
+            /** Expires At */
+            expires_at: string;
+            /** Intent */
+            intent: string;
+            /** Kind */
+            kind: string;
+            /** Mode */
+            mode: string;
+            /**
+             * Renewals
+             * @description Explicit renewals since the claim was acquired
+             * @default 0
+             */
+            renewals: number;
+            /** Scope */
+            scope: string;
+            /** Task Id */
+            task_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ClaimsResponse */
+        ClaimsResponse: {
+            /** Claims */
+            claims: components["schemas"]["ClaimRow"][];
+            /** Count */
+            count: number;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * CleanupResponse
          * @description Cleanup operation response.
@@ -8547,6 +8777,43 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** ConflictRow */
+        ConflictRow: {
+            /** Agent Id */
+            agent_id?: string | null;
+            /** At */
+            at: string;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "release_refused" | "claim_expired" | "yield_unanswered" | "claim_lapsed_during_action";
+            /**
+             * Other Agent Id
+             * @description The holder, for a refused release
+             */
+            other_agent_id?: string | null;
+            /** Scope */
+            scope?: string | null;
+            /** Task Id */
+            task_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ConflictsResponse */
+        ConflictsResponse: {
+            /** Conflicts */
+            conflicts: components["schemas"]["ConflictRow"][];
+            /** Count */
+            count: number;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * ConnectionTestRequest
          * @description SSH connection test request.
@@ -8589,6 +8856,36 @@ export interface components {
             os_info?: string | null;
             /** Success */
             success: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ContentionResponse */
+        ContentionResponse: {
+            /** Count */
+            count: number;
+            /** Resources */
+            resources: components["schemas"]["ContentionRow"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /** ContentionRow */
+        ContentionRow: {
+            /**
+             * Contended
+             * @description True when anyone is queued behind this resource
+             */
+            contended: boolean;
+            /** Holders */
+            holders: components["schemas"]["ClaimRow"][];
+            /**
+             * Kind
+             * @description provider, cpu or queue
+             */
+            kind: string;
+            /** Scope */
+            scope: string;
+            /** Waiters */
+            waiters: components["schemas"]["WaiterRow"][];
         } & {
             [key: string]: unknown;
         };
@@ -8767,6 +9064,43 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DevLoopActionRow */
+        DevLoopActionRow: {
+            /** At */
+            at: string;
+            /** Estimated Tokens */
+            estimated_tokens: number;
+            /** Intent */
+            intent: string;
+            /** Issue */
+            issue: number;
+            /** Outcome */
+            outcome: string;
+            /** Reason */
+            reason: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DevLoopHistoryResponse */
+        DevLoopHistoryResponse: {
+            /** Actions */
+            actions: components["schemas"]["DevLoopActionRow"][];
+            /** Count */
+            count: number;
+            /** Issue */
+            issue: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DevLoopIssuesResponse */
+        DevLoopIssuesResponse: {
+            /** Count */
+            count: number;
+            /** Issues */
+            issues: number[];
         } & {
             [key: string]: unknown;
         };
@@ -9715,6 +10049,51 @@ export interface components {
             provider: string;
             /** Success */
             success: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * LedgerSourceStatus
+         * @description What the SLM can and cannot read, so a screen never shows a gap as 'none'.
+         */
+        LedgerSourceStatus: {
+            /** Reachable */
+            reachable: boolean;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Source */
+            source: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** LedgerSourcesResponse */
+        LedgerSourcesResponse: {
+            /** Sources */
+            sources: components["schemas"]["LedgerSourceStatus"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * LedgerUnavailable
+         * @description The typed 503 body: the source could not be read, which is not 'nothing there'.
+         */
+        LedgerUnavailable: {
+            /** Detail */
+            detail: string;
+            /**
+             * Error
+             * @default ledger_unavailable
+             * @constant
+             */
+            error: "ledger_unavailable";
+            /**
+             * Source
+             * @description Which store could not be read (claims, waitlists, dev_loop, events)
+             */
+            source: string;
         } & {
             [key: string]: unknown;
         };
@@ -14339,6 +14718,46 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** WaiterRow */
+        WaiterRow: {
+            /** Agent Id */
+            agent_id: string;
+            /**
+             * Company Id
+             * @description Stamped at write time; null = install-wide or legacy
+             */
+            company_id?: string | null;
+            /** Expires At */
+            expires_at: string;
+            /** Intent */
+            intent: string;
+            /** Joined At */
+            joined_at: string;
+            /** Mode */
+            mode: string;
+            /**
+             * Position
+             * @description 1-based position in the scope's queue
+             */
+            position: number;
+            /** Priority */
+            priority: number;
+            /** Scope */
+            scope: string;
+            /** Task Id */
+            task_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** WaitlistsResponse */
+        WaitlistsResponse: {
+            /** Count */
+            count: number;
+            /** Waiters */
+            waiters: components["schemas"]["WaiterRow"][];
         } & {
             [key: string]: unknown;
         };
@@ -19280,6 +19699,274 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ledger_activity_api_monitoring_agent_ledger_activity_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
+                };
+            };
+        };
+    };
+    ledger_claims_api_monitoring_agent_ledger_claims_get: {
+        parameters: {
+            query?: {
+                /** @description Only claims of this scope kind */
+                kind?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaimsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
+                };
+            };
+        };
+    };
+    ledger_conflicts_api_monitoring_agent_ledger_conflicts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConflictsResponse"];
+                };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
+                };
+            };
+        };
+    };
+    ledger_contention_api_monitoring_agent_ledger_contention_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentionResponse"];
+                };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
+                };
+            };
+        };
+    };
+    ledger_dev_loop_issues_api_monitoring_agent_ledger_dev_loop_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevLoopIssuesResponse"];
+                };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
+                };
+            };
+        };
+    };
+    ledger_dev_loop_history_api_monitoring_agent_ledger_dev_loop__issue__get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                issue: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevLoopHistoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
+                };
+            };
+        };
+    };
+    ledger_sources_api_monitoring_agent_ledger_sources_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerSourcesResponse"];
+                };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
+                };
+            };
+        };
+    };
+    ledger_waitlists_api_monitoring_agent_ledger_waitlists_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitlistsResponse"];
+                };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
                 };
             };
         };

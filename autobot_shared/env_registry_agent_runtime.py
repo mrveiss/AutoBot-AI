@@ -593,3 +593,5 @@ register_env_var(
         component="voice",
     )
 )
+
+from autobot_shared import env_registry_ledger  # noqa: E402,F401 -- registers #18391 vars; see its docstring

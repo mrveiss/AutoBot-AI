@@ -99,14 +99,14 @@ BASELINE = {
     # cross-referencing sibling admin views) -- this pair is documented above
     # as measuring page SIZE, not duplication, and is interim until #15455
     # replaces them with a real duplication measure.
-    "distinct_class_names": 5613,  # #17565: App.vue's hand-rolled .skip-links/.skip-link
+    "distinct_class_names": 5612,  # #17565: App.vue's hand-rolled .skip-links/.skip-link
     # replaced by the shared kit SkipLink (lowered from 5615). Earlier: #17020,
     # Terminal.vue removed -- pure deletion of dead code, lowered, not held.
     # Total CSS rule declarations.
     #
     # #16972/#15455: same owner-approved, one-off exception as distinct_class_names
     # directly above -- see that comment.
-    "css_rule_declarations": 9374,  # #14785: density reuses the existing
+    "css_rule_declarations": 9372,  # #14785: density reuses the existing
     # [data-layout-density] attribute (no .density-* classes), and the dead
     # assets/main.css .sr-only rule went with that file (lowered from 9379).
     # #17565: the App.vue skip-link rules moved to the kit (lowered from 9381);

@@ -140,6 +140,34 @@ node_modules_usable() {
 vitest_ran_nothing() {
   ! printf '%s\n' "$1" | grep -qE "Test Files| FAIL "
 }
+
+# #17961: what a blocked push shows is the failing tests, not the last 25
+# lines. vitest prints failures BEFORE its summary, and the dependency-floor
+# report follows the summary, so a fixed tail showed only "Start at" and
+# "Duration". This keeps the failing test lines (vitest FAIL/x, pytest
+# FAILED/ERROR), assertions, timeouts, a short window after each unhandled
+# error (vitest exits 1 on those even when every test passed), and the
+# summary counts. An output in no shape it knows falls back to the tail, so a
+# failure is never reported with nothing under it.
+failure_excerpt() {
+  local clean excerpt summary
+  clean=$(printf '%s\n' "$1" | sed 's/\x1b\[[0-9;]*m//g')
+  # Summary counts are collected apart and always appended, so a long failure
+  # list cannot crowd them out of the cap.
+  summary=$(printf '%s\n' "$clean" | grep -E '^ +(Test Files|Tests|Errors) |^=+ .*(failed|error)' | tail -4)
+  excerpt=$(printf '%s\n' "$clean" | awk -v cap="${FAILURE_EXCERPT_LINES:-60}" '
+    /Unhandled (Error|Rejection)/ { ctx = 8 }
+    ctx > 0 || /^ *(FAIL |× |✗ |FAILED |ERROR )/ || /^E   / \
+      || /AssertionError|Error: |Test timed out/ {
+      if (!seen[$0]++ && n < cap) { print; n++ }
+      if (ctx > 0) ctx--
+    }')
+  if [ -n "$excerpt$summary" ]; then
+    printf '%s\n' "$excerpt" "$summary" | grep -v '^$'
+  else
+    printf '%s\n' "$1" | tail -25
+  fi
+}
 ok()    { printf "${GRN}[pre-push OK]${CLR} %s\n" "$*" >&2; }
 
 EXIT_CODE=0
@@ -547,7 +575,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
           "exited ${vitest_exit} before running a single test: $(printf '%s\n' "$vitest_output" | grep -m1 -E 'Error|error' || printf '%s\n' "$vitest_output" | tail -1)"
       elif [ "$vitest_exit" != "0" ]; then
         fail "vitest failures (${project}, #5142):"
-        echo "$vitest_output" | tail -25 >&2
+        failure_excerpt "$vitest_output" >&2
         EXIT_CODE=1
       else
         ok "vitest (${project}): all relevant tests pass"
@@ -575,7 +603,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         did_not_run "vitest related (${project})" "${TEST_TIMEOUT}"
       elif [ "$kit_exit" != "0" ]; then
         fail "vitest failures after a ${KIT_TREE} change (${project}, #17959):"
-        echo "$kit_output" | tail -25 >&2
+        failure_excerpt "$kit_output" >&2
         EXIT_CODE=1
       else
         ok "vitest related (${project}): tests depending on ${KIT_TREE} pass"
@@ -687,7 +715,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
           else
             pytest_failed=1
             fail "pytest failures (#5142):"
-            echo "$group_output" | tail -25 >&2
+            failure_excerpt "$group_output" >&2
           fi
         fi
       done

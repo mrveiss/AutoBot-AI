@@ -8,6 +8,7 @@ SLM API Package
 FastAPI routers for the SLM backend.
 """
 
+from .agent_ledger import router as agent_ledger_router
 from .agents import router as agents_router
 from .api_keys import router as api_keys_router
 from .auth import router as auth_router
@@ -64,6 +65,12 @@ from .websocket import router as websocket_router
 # mounted here gets exactly that and nothing more. Mounted here because
 # api/monitoring.py and main.py are both at their file-size ceilings.
 monitoring_router.include_router(gpu_router)
+
+# #18391: the agent ledger is install-wide monitoring, so it is served as
+# /api/monitoring/agent-ledger/*. Guard = main.py's include-level `_SM` on
+# monitoring_router, plus the router's own admin-only `ADMIN_SYSTEM` dependency
+# on every route. Mounted here because main.py is at its file-size ceiling.
+monitoring_router.include_router(agent_ledger_router)
 
 # #15495: a node's capability profile belongs on the node resource itself, so
 # it is served as /api/nodes/{node_id}/capability-profile, inheriting
