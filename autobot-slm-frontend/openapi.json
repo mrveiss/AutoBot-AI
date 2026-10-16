@@ -15604,6 +15604,47 @@
         "title": "WizardStatus",
         "type": "object"
       },
+      "YieldRequestBody": {
+        "description": "A person asks the holder of a claim to release it (#18599). Asking never releases anything.",
+        "properties": {
+          "holder_task_id": {
+            "description": "The task that holds the claim, as the claims screen shows it",
+            "title": "Holder Task Id",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "description": "Why; cut to the ledger's free-text cap",
+            "title": "Reason",
+            "type": "string"
+          },
+          "scope": {
+            "description": "The claimed scope, e.g. `path:src/app.py`",
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "holder_task_id"
+        ],
+        "title": "YieldRequestBody",
+        "type": "object"
+      },
+      "YieldRequestResponse": {
+        "properties": {
+          "token": {
+            "description": "Identifies the request; the holder's answer is recorded under it",
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "YieldRequestResponse",
+        "type": "object"
+      },
       "api__orchestration__ServiceActionResponse": {
         "description": "Response for a service action.",
         "properties": {
@@ -24002,6 +24043,70 @@
           }
         ],
         "summary": "Ledger Claims",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/claims/yield-request": {
+      "post": {
+        "description": "Ask the holder of any claim to release it. Publishes a request; releases nothing.",
+        "operationId": "ledger_yield_request_api_monitoring_agent_ledger_claims_yield_request_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/YieldRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YieldRequestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No such claim"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "description": "Asked too recently"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Yield Request",
         "tags": [
           "monitoring",
           "agent-ledger"

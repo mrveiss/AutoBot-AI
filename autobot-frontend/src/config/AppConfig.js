@@ -144,7 +144,7 @@ export class AppConfigService {
         // Operation-specific timeouts (Issue #598: centralized timeout management)
         // These are THE source of truth - all ApiClient implementations MUST use these
         timeouts: {
-          // Standard API operations (30s)
+          // Standard API operations: the SSOT timeout (#17856 row 6)
           default: getApiTimeout(),
           // Knowledge base / vectorization operations (5 minutes)
           knowledge: parseInt(import.meta.env.VITE_KNOWLEDGE_TIMEOUT || '300000'),
@@ -454,7 +454,7 @@ export class AppConfigService {
    * Get timeout for specific operation (Issue #598: SINGLE SOURCE OF TRUTH)
    *
    * Available operations:
-   * - 'default': Standard API calls (30s)
+   * - 'default': Standard API calls (the SSOT timeout, TimeoutConfig.api)
    * - 'knowledge': Vectorization/knowledge base operations (5min)
    * - 'upload': File uploads (5min)
    * - 'health': Health checks (5s)

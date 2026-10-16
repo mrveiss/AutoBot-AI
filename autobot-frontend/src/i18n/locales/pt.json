@@ -8043,7 +8043,8 @@
       "tip": "Interface mínima — oculta os recursos avançados",
       "announceMinimal": "Interface mínima ativada. Recursos avançados ocultos.",
       "announceFull": "Interface completa ativada. Todos os recursos exibidos."
-    }
+    },
+    "llcLedger": "Registo de agentes"
   },
   "llcCompanyStatus": {
     "showArchived": "Mostrar arquivadas",
@@ -8931,6 +8932,63 @@
       "retry": "Tentar novamente",
       "loadingItem": "A carregar item de trabalho…",
       "itemLoadFailed": "Não foi possível carregar este item"
+    },
+    "ledger": {
+      "title": "Registo de agentes",
+      "subtitle": "Quem está a trabalhar em quê nesta empresa, e quem espera.",
+      "tabsAria": "Vistas do registo",
+      "tabs": {
+        "now": "A trabalhar agora",
+        "claims": "Reservas",
+        "contention": "Contenção",
+        "activity": "Atividade"
+      },
+      "col": {
+        "agent": "Agente",
+        "kind": "Tipo",
+        "status": "Estado",
+        "detail": "Detalhe",
+        "scope": "Âmbito",
+        "mode": "Modo",
+        "intent": "Intenção",
+        "expires": "Expira",
+        "renewals": "Renovações"
+      },
+      "busy": "Ocupado",
+      "idle": "Inativo",
+      "peerMessages": "Mensagens entre pares pendentes",
+      "idleSubscribers": "Subscrições de inatividade",
+      "pendingFor": "{n} pendentes para {name}",
+      "waitsForIdle": "{who} espera que {target} fique inativo",
+      "heldBy": "Retido por {agent}",
+      "waitlistAria": "Lista de espera por ordem",
+      "silenceMeansHold": "Pedir não é libertar: o silêncio significa manter, e uma reserva não renovada expira sozinha.",
+      "ask": "Pedir ao titular que liberte",
+      "askAria": "Pedir ao titular de {scope} que o liberte",
+      "askUnavailable": "Ainda não disponível: o pedido está a ser adicionado ao registo.",
+      "conflicts": "Conflitos",
+      "recent": "Atividade recente",
+      "conflict": {
+        "release_refused": "Uma libertação foi recusada",
+        "claim_expired": "Uma reserva expirou enquanto retida",
+        "yield_unanswered": "Um pedido de cedência ficou sem resposta",
+        "claim_lapsed_during_action": "Uma reserva expirou durante uma ação"
+      },
+      "empty": {
+        "presence": "Nenhum agente se registou",
+        "peerMessages": "Sem mensagens pendentes",
+        "idleSubscribers": "Sem subscrições de inatividade",
+        "claims": "Sem reservas",
+        "contention": "Nada está em contenção",
+        "conflicts": "Sem conflitos",
+        "activity": "Sem atividade recente"
+      },
+      "state": {
+        "loading": "A ler o registo…",
+        "unavailableTitle": "Não foi possível ler o registo",
+        "unavailableBody": "O armazenamento {source} não respondeu. Não é o mesmo que não ter entradas.",
+        "errorTitle": "Ocorreu um erro ao carregar esta secção"
+      }
     }
   },
   "code": {
@@ -9688,5 +9746,62 @@
       "pushFailed": "Não foi possível adicionar esta gravação à base de conhecimento. Tente novamente.",
       "collectionNotJoined": "Guardado, mas a coleção indicada não foi encontrada — a transcrição está na base de conhecimento e não nessa coleção."
     }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "Problemas do sistema detetados",
+      "warnings": "Avisos do sistema",
+      "ok": "Todos os sistemas operacionais"
+    },
+    "tooltip": {
+      "issues": "Clique para ver os problemas do sistema",
+      "warnings": "Clique para ver os avisos do sistema",
+      "ok": "Clique para ver o estado do sistema: todos os serviços operacionais"
+    },
+    "aria": {
+      "issues": "Estado do sistema: problemas detetados",
+      "warnings": "Estado do sistema: há avisos",
+      "ok": "Estado do sistema: todos os serviços operacionais"
+    },
+    "description": {
+      "servicesDown": "{n} serviço em baixo | {n} serviços em baixo",
+      "warnings": "{n} aviso | {n} avisos",
+      "withWarnings": "{n} serviço com avisos | {n} serviços com avisos",
+      "downAndWarnings": "{down} e {warnings}",
+      "ok": "Todos os serviços a funcionar normalmente"
+    },
+    "service": {
+      "backend": "API do backend",
+      "frontend": "Frontend",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "Worker NPU",
+      "browser": "Serviço de navegador",
+      "chromadb": "Pilha de IA (ChromaDB)",
+      "other": "Outros serviços"
+    },
+    "state": {
+      "running": "Em execução",
+      "connected": "Ligado",
+      "statusUnknown": "Estado desconhecido",
+      "connectionFailed": "Falha na ligação",
+      "timeout": "Tempo esgotado",
+      "connectionRefused": "Ligação recusada",
+      "unreachable": "Inacessível",
+      "unhealthy": "Não saudável",
+      "warning": "Aviso",
+      "pending": "Pendente",
+      "available": "Disponível",
+      "unavailable": "Indisponível",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "Degradado — as verificações de estado excederam o tempo, o backend responde",
+      "degradedAsOf": "Degradado — as verificações de estado excederam o tempo, o backend responde — estado às {time}",
+      "unreachable": "Inacessível — estado dos serviços desconhecido",
+      "unreachableAsOf": "Inacessível — estado dos serviços desconhecido — estado às {time}"
+    },
+    "lastKnown": "{text} (último conhecido)"
   }
 }

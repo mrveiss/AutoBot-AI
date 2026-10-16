@@ -73,6 +73,37 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_PREPUSH_TYPE_CHECK_TIMEOUT",
+        type=int,
+        default=450,
+        description=(
+            "Seconds the pre-push gate allows vue-tsc per frontend project. vue-tsc checks the "
+            "whole project whatever the changeset (111 s idle, ~294 s under load measured), so "
+            "the budget is project-sized, not changeset-scaled. A non-integer or zero value falls "
+            "back to 450 with a warning; capped at the hook's MAX_BUDGET (#18578)."
+        ),
+        component="testing",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PREPUSH_PYTEST_WORKERS",
+        type=int,
+        default=4,
+        description=(
+            "Number of pytest-xdist workers the pre-push gate runs the selected tests with "
+            "(`-n N --dist loadscope`). 0 runs serially. A non-integer or negative value falls "
+            "back to 4 with a warning. Capped (never `-n auto`) because the dev box runs many "
+            "parallel sessions at load 20-30; the budget uses the per-file cost of the mode "
+            "actually chosen (#17451)."
+        ),
+        component="testing",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_UPSERT_COMMENT_TIMEOUT",
         type=float,
         default=30.0,

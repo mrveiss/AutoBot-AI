@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # #14518: the path insert here pointed at a ``src`` directory that does not
 # exist beside this script, and ``llm_interface`` is a pre-restructure module
-# name. LLMInterface now lives in autobot-backend/llm_multi_provider.py. Add
+# name. The canonical entry point is services.llm_service.get_llm_service (#18552). Add
 # autobot-backend the way the other operator entry points in this tree do
 # (#14129).
 # A backend tool (#18289): it also puts the repository root on the path (for `autobot_shared`), so it
@@ -66,9 +66,9 @@ async def test_classification_without_communication():
 
     try:
         # Import just the LLM interface directly
-        from llm_multi_provider import LLMInterface
+        from services.llm_service import get_llm_service
 
-        llm = LLMInterface()
+        llm = get_llm_service()
 
         # Create a simple classification request
         messages = [
@@ -85,10 +85,10 @@ async def test_classification_without_communication():
         logger.info("   Making direct LLM interface call...")
 
         # Call LLM interface directly
-        response = await asyncio.wait_for(llm.chat_completion(messages, llm_type="task"), timeout=15.0)
+        response = await asyncio.wait_for(llm.chat(messages, llm_type="task"), timeout=15.0)
 
         logger.info("✅ Direct LLM interface response:")
-        logger.info("   Response: %s...", response.get("response", "No response")[:100])
+        logger.info("   Response: %s...", (response.content or "No response")[:100])
 
         return True
 

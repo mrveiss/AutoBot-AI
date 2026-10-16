@@ -20,7 +20,7 @@ from datetime import datetime
 
 import pytest
 
-from code_intelligence.conversation_flow_analyzer import (
+from code_intelligence.conversation_analysis import (
     AnalysisResult,
     Bottleneck,
     BottleneckType,

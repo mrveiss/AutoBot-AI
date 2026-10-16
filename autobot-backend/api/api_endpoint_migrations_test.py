@@ -29167,7 +29167,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_create_workflow_simple_pattern(self):
         """Verify create_workflow endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.create_workflow)
         self.assertIn("@with_error_handling", source)
@@ -29177,7 +29177,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_start_workflow_simple_pattern(self):
         """Verify start_workflow endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.start_workflow)
         self.assertIn("@with_error_handling", source)
@@ -29187,7 +29187,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_control_workflow_simple_pattern(self):
         """Verify control_workflow endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.control_workflow)
         self.assertIn("@with_error_handling", source)
@@ -29197,7 +29197,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_get_workflow_status_simple_pattern(self):
         """Verify get_workflow_status endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.get_workflow_status)
         self.assertIn("@with_error_handling", source)
@@ -29207,7 +29207,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_get_active_workflows_simple_pattern(self):
         """Verify get_active_workflows endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.get_active_workflows)
         self.assertIn("@with_error_handling", source)
@@ -29217,7 +29217,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_create_workflow_from_chat_simple_pattern(self):
         """Verify create_workflow_from_chat endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.create_workflow_from_chat)
         self.assertIn("@with_error_handling", source)
@@ -29227,7 +29227,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_workflow_websocket_simple_pattern(self):
         """Verify workflow_websocket endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.workflow_websocket)
         self.assertIn("@with_error_handling", source)
@@ -29237,7 +29237,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_all_workflow_automation_endpoints_have_decorator(self):
         """Verify all workflow_automation endpoints have @with_error_handling decorator"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         endpoint_functions = [
             workflow_automation.create_workflow,
@@ -29259,7 +29259,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_workflow_automation_100_percent_milestone(self):
         """Verify workflow_automation.py has reached 100% migration"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         endpoint_functions = [
             workflow_automation.create_workflow,
@@ -29284,7 +29284,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_migration_preserves_pydantic_models(self):
         """Verify migration preserves Pydantic request models"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         # Verify models are defined
         self.assertTrue(hasattr(workflow_automation, "WorkflowStepRequest"))
@@ -29301,7 +29301,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_migration_preserves_enums(self):
         """Verify migration preserves WorkflowStepStatus and AutomationMode enums"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         # Verify enums are defined
         self.assertTrue(hasattr(workflow_automation, "WorkflowStepStatus"))
@@ -29313,7 +29313,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_migration_preserves_llm_judges_integration(self):
         """Verify migration preserves LLM judges integration for workflow evaluation"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         # Issue #10880: JUDGES_AVAILABLE was removed; judge availability now
         # lives in services.workflow_automation.step_evaluator via a try/except
@@ -29341,7 +29341,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_migration_preserves_workflow_templates(self):
         """Verify migration preserves workflow template functionality"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         # Verify WorkflowAutomationManager has workflow template methods
         manager_class = workflow_automation.WorkflowAutomationManager
@@ -29359,7 +29359,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_migration_preserves_websocket_functionality(self):
         """Verify migration preserves WebSocket workflow communication"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         # Verify WebSocket endpoint exists
         source = inspect.getsource(workflow_automation.workflow_websocket)
@@ -29398,7 +29398,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_migration_preserves_dataclasses(self):
         """Verify migration preserves WorkflowStep and ActiveWorkflow dataclasses"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         # Verify dataclasses are defined
         self.assertTrue(hasattr(workflow_automation, "WorkflowStep"))

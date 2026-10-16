@@ -130,7 +130,7 @@ class PhaseValidationCriteria:
                 "Handle LLM timeout and error scenarios",
             ],
             "files": [
-                "autobot-backend/llm_multi_provider.py",
+                "autobot-backend/services/llm_service.py",
                 "autobot-backend/prompt_manager.py",
             ],
             "directories": ["autobot-backend/llm_shared/"],  # renamed from llm_interface_pkg in #6941

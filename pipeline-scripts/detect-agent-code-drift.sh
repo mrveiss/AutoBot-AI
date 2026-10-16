@@ -28,10 +28,8 @@
 #      its own docstring says it is canonical-tree-only -- and stays absent
 #      from the mirror on purpose.
 #
-#   2. autobot-backend/{config/permission_rules.yaml,static/error_messages.yaml}
-#      (canonical) mirror to the matching basenames under
-#      autobot-slm-backend/ansible/roles/backend/files/, deployed by
-#      roles/backend/tasks/main.yml.
+#   (#18556: the backend permission_rules.yaml / error_messages.yaml mirrors are gone;
+#   roles/backend/tasks/main.yml copies them straight from autobot-backend/.)
 #
 # They MUST stay byte-identical. This fails loudly on: content drift (naming
 # both paths and a unified diff), either side of a pair going missing, and
@@ -79,40 +77,10 @@ compare_dir_pair() {
     PAIRS_COMPARED=$((PAIRS_COMPARED + count))
 }
 
-# compare_file_pair <label> <canonical_file> <mirror_file>
-compare_file_pair() {
-    local label="$1" canonical="$2" mirror="$3"
-    if [ ! -f "$canonical" ]; then
-        echo "ERROR: $label -- canonical file not found: $canonical"
-        exit 1
-    fi
-    if [ ! -f "$mirror" ]; then
-        echo "ERROR: $label -- mirror file MISSING: $mirror (canonical exists at $canonical)"
-        exit 1
-    fi
-    local diff_out
-    if ! diff_out=$(diff -u "$canonical" "$mirror" 2>&1); then
-        echo "DRIFT DETECTED ($label):"
-        echo "  canonical: $canonical"
-        echo "  mirror:    $mirror"
-        echo "$diff_out"
-        exit 1
-    fi
-    PAIRS_COMPARED=$((PAIRS_COMPARED + 1))
-}
-
 compare_dir_pair "slm_agent" \
     "autobot-slm-backend/slm/agent" \
     "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent" \
     "health_collector_probe_test.py"
-
-compare_file_pair "backend permission_rules.yaml" \
-    "autobot-backend/config/permission_rules.yaml" \
-    "autobot-slm-backend/ansible/roles/backend/files/permission_rules.yaml"
-
-compare_file_pair "backend error_messages.yaml" \
-    "autobot-backend/static/error_messages.yaml" \
-    "autobot-slm-backend/ansible/roles/backend/files/error_messages.yaml"
 
 if [ "$PAIRS_COMPARED" -eq 0 ]; then
     echo "ERROR: resolved zero canonical/mirror file pairs -- refusing to report clean on an empty result"

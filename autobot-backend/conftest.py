@@ -973,11 +973,9 @@ for _ci_sub in [
     "code_intelligence.typescript_analyzer",
     "code_intelligence.vue_analyzer",
     "code_intelligence.doc_generator",
-    "code_intelligence.llm_code_generator",
     "code_intelligence.code_fingerprinting",
     "code_intelligence.code_review_engine",
     "code_intelligence.base_analyzer",
-    "code_intelligence.conversation_flow_analyzer",
 ]:
     if _ci_sub not in sys.modules:
         sys.modules[_ci_sub] = _make_pkg_stub(_ci_sub)

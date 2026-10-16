@@ -8,6 +8,7 @@ services:
     environment:
       - DISPLAY=:99
       - HEADLESS=false
+      - PLAYWRIGHT_PORT=3000  # the canonical server defaults to 9001; healthcheck and port map expect 3000 (#18549)
       - VNC_SERVER_PASSWORD=${VNC_PASSWORD:-autobot123}
       - SCREEN_WIDTH=1920
       - SCREEN_HEIGHT=1080
@@ -15,7 +16,10 @@ services:
       - DEBIAN_FRONTEND=noninteractive
       - TZ=UTC
     volumes:
-      - ./playwright-server.js:/app/server.js
+      # One canonical server + its two local modules (#18549)
+      - ../../../../autobot-browser-worker/playwright-server.js:/app/server.js
+      - ../../../../autobot-browser-worker/session-store.js:/app/session-store.js
+      - ../../../../autobot-browser-worker/element-index.js:/app/element-index.js
     ports:
       - "3000:3000"    # Playwright API
       - "5901:5901"    # VNC port (avoiding Kali's default 5900)

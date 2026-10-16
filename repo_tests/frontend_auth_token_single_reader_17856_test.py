@@ -23,6 +23,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines
+
 _ROOT = repo_root()
 _MAIN_SRC = _ROOT / "autobot-frontend" / "src"
 _SLM_SRC = _ROOT / "autobot-slm-frontend" / "src"
@@ -56,16 +58,11 @@ def _sources(src: Path):
 
 def _hits(src: Path, pattern: re.Pattern[str]) -> set[str]:
     """Source files whose code (not comments) matches; comments may name a key to explain it."""
-    out = set()
-    for path in _sources(src):
-        for line in path.read_text(encoding="utf-8").splitlines():
-            code = line.strip()
-            if code.startswith(("//", "*", "/*")):
-                continue
-            if pattern.search(code):
-                out.add(path.relative_to(src).as_posix())
-                break
-    return out
+    return {
+        path.relative_to(src).as_posix()
+        for path in _sources(src)
+        if any(pattern.search(line.text) for line in code_lines(path, strip_trailing=True))
+    }
 
 
 @pytest.mark.parametrize(

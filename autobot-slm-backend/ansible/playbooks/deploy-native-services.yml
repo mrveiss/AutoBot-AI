@@ -842,9 +842,10 @@
           User=autobot-service
           WorkingDirectory={{ deployed_src_root }}
           ExecStartPre=/usr/bin/Xvfb :99 -screen 0 1920x1080x24 &
-          ExecStart=/usr/bin/node playwright-server.js
+          ExecStart=/usr/bin/node {{ deployed_src_root }}/autobot-browser-worker/playwright-server.js
+          Environment="PLAYWRIGHT_PORT={{ browser_port }}"
           Environment="DISPLAY=:99"
-          Environment="PLAYWRIGHT_SERVER_PORT=3000"
+          Environment="PLAYWRIGHT_SERVER_PORT={{ browser_port }}"
           Environment="REDIS_HOST={{ redis_host }}"
           Environment="REDIS_PORT={{ redis_port }}"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"

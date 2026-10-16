@@ -38,13 +38,13 @@ import fakeredis
 import fakeredis.aioredis as fakeredis_async
 
 from api.terminal_handlers import TerminalWebSocket
-from api.workflow_automation import (
+from secure_command_executor import CommandRisk, SecureCommandExecutor
+from services.workflow_automation import (
     AutomationMode,
     WorkflowAutomationManager,
     WorkflowControlRequest,
     WorkflowStep,
 )
-from secure_command_executor import CommandRisk, SecureCommandExecutor
 
 
 class TestSessionTakeover:

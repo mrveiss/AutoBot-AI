@@ -60,7 +60,7 @@ export interface AgentTerminalSessionConfig {
 }
 
 export interface TerminalCommandOptions {
-  timeout?: number;
+  timeout?: number; // ms; omitted, the backend's own default applies
   cwd?: string;
   env?: Record<string, string>;
 }
@@ -766,9 +766,9 @@ export class ApiClient {
   async executeTerminalCommand(command: string, options: TerminalCommandOptions = {}): Promise<Record<string, unknown>> {
     return await this.post(`${getApiBase()}/terminal/command`, {
       command,
-      timeout: options.timeout || 30000,
-      cwd: options.cwd || null,
-      env: options.env || {},
+      timeout: options.timeout != null ? options.timeout / 1000 : undefined, // CommandRequest: seconds (#17856)
+      working_directory: options.cwd ?? null,
+      environment: options.env ?? null,
     });
   }
 

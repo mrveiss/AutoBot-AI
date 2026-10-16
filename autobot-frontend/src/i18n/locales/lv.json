@@ -8043,7 +8043,8 @@
       "tip": "Minimāls interfeiss — paslēpt papildu funkcijas",
       "announceMinimal": "Minimālais interfeiss ieslēgts. Papildu funkcijas paslēptas.",
       "announceFull": "Pilnais interfeiss ieslēgts. Parādītas visas funkcijas."
-    }
+    },
+    "llcLedger": "Aģentu žurnāls"
   },
   "llcCompanyStatus": {
     "showArchived": "Rādīt arhivētos",
@@ -8931,6 +8932,63 @@
       "retry": "Mēģināt vēlreiz",
       "loadingItem": "Ielādē darba vienumu…",
       "itemLoadFailed": "Neizdevās ielādēt šo darba vienumu"
+    },
+    "ledger": {
+      "title": "Aģentu žurnāls",
+      "subtitle": "Kurš šajā uzņēmumā pie kā strādā un kurš gaida.",
+      "tabsAria": "Žurnāla skati",
+      "tabs": {
+        "now": "Pašlaik strādā",
+        "claims": "Pieprasījumi",
+        "contention": "Konkurence",
+        "activity": "Darbības"
+      },
+      "col": {
+        "agent": "Aģents",
+        "kind": "Veids",
+        "status": "Statuss",
+        "detail": "Sīkāk",
+        "scope": "Tvērums",
+        "mode": "Režīms",
+        "intent": "Nolūks",
+        "expires": "Beidzas",
+        "renewals": "Atjaunojumi"
+      },
+      "busy": "Aizņemts",
+      "idle": "Brīvs",
+      "peerMessages": "Neizlasītās ziņas",
+      "idleSubscribers": "Dīkstāves abonementi",
+      "pendingFor": "{n} gaida lietotāju {name}",
+      "waitsForIdle": "{who} gaida, kamēr {target} būs dīkstāvē",
+      "heldBy": "Tur {agent}",
+      "waitlistAria": "Gaidīšanas rinda secībā",
+      "silenceMeansHold": "Lūgums nav atbrīvošana: klusēšana nozīmē turēšanu, un neatjaunots pieprasījums beidzas pats.",
+      "ask": "Lūgt turētāju atbrīvot",
+      "askAria": "Lūgt {scope} turētāju to atbrīvot",
+      "askUnavailable": "Vēl nav pieejams: lūgums tiek pievienots žurnālam.",
+      "conflicts": "Konflikti",
+      "recent": "Nesenās darbības",
+      "conflict": {
+        "release_refused": "Atbrīvošana tika atteikta",
+        "claim_expired": "Pieprasījums beidzās, kamēr tika turēts",
+        "yield_unanswered": "Lūgums atbrīvot palika bez atbildes",
+        "claim_lapsed_during_action": "Pieprasījums beidzās darbības laikā"
+      },
+      "empty": {
+        "presence": "Neviens aģents nav pieteicies",
+        "peerMessages": "Nav neizlasītu ziņu",
+        "idleSubscribers": "Nav dīkstāves abonementu",
+        "claims": "Nav pieprasījumu",
+        "contention": "Nekas netiek konkurēts",
+        "conflicts": "Nav konfliktu",
+        "activity": "Nav nesenu darbību"
+      },
+      "state": {
+        "loading": "Lasa žurnālu…",
+        "unavailableTitle": "Neizdevās nolasīt žurnālu",
+        "unavailableBody": "Krātuve {source} neatbildēja. Tas nav tas pats, kas tukšs saraksts.",
+        "errorTitle": "Ielādējot šo sadaļu, radās kļūda"
+      }
     }
   },
   "code": {
@@ -9688,5 +9746,62 @@
       "pushFailed": "Neizdevās pievienot šo ierakstu zināšanu bāzei. Lūdzu, mēģiniet vēlreiz.",
       "collectionNotJoined": "Saglabāts, bet norādītā kolekcija netika atrasta — transkripts ir zināšanu bāzē, taču nav šajā kolekcijā."
     }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "Konstatētas sistēmas problēmas",
+      "warnings": "Sistēmas brīdinājumi",
+      "ok": "Visas sistēmas darbojas"
+    },
+    "tooltip": {
+      "issues": "Noklikšķiniet, lai skatītu sistēmas problēmas",
+      "warnings": "Noklikšķiniet, lai skatītu sistēmas brīdinājumus",
+      "ok": "Noklikšķiniet, lai skatītu sistēmas statusu — visi pakalpojumi darbojas"
+    },
+    "aria": {
+      "issues": "Sistēmas statuss: konstatētas problēmas",
+      "warnings": "Sistēmas statuss: ir brīdinājumi",
+      "ok": "Sistēmas statuss: visi pakalpojumi darbojas"
+    },
+    "description": {
+      "servicesDown": "{n} pakalpojums nedarbojas | {n} pakalpojumi nedarbojas",
+      "warnings": "{n} brīdinājums | {n} brīdinājumi",
+      "withWarnings": "{n} pakalpojums ar brīdinājumiem | {n} pakalpojumi ar brīdinājumiem",
+      "downAndWarnings": "{down} un {warnings}",
+      "ok": "Visi pakalpojumi darbojas normāli"
+    },
+    "service": {
+      "backend": "Aizmugursistēmas API",
+      "frontend": "Priekšgals",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "NPU apstrādātājs",
+      "browser": "Pārlūka pakalpojums",
+      "chromadb": "MI steks (ChromaDB)",
+      "other": "Citi pakalpojumi"
+    },
+    "state": {
+      "running": "Darbojas",
+      "connected": "Savienots",
+      "statusUnknown": "Statuss nezināms",
+      "connectionFailed": "Savienojums neizdevās",
+      "timeout": "Noildze",
+      "connectionRefused": "Savienojums atteikts",
+      "unreachable": "Nav sasniedzams",
+      "unhealthy": "Nav veselīgs",
+      "warning": "Brīdinājums",
+      "pending": "Gaida",
+      "available": "Pieejams",
+      "unavailable": "Nav pieejams",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "Pasliktināts — statusa pārbaudēm iestājās noildze, aizmugursistēma atbild",
+      "degradedAsOf": "Pasliktināts — statusa pārbaudēm iestājās noildze, aizmugursistēma atbild — statuss {time}",
+      "unreachable": "Nav sasniedzams — pakalpojumu statuss nezināms",
+      "unreachableAsOf": "Nav sasniedzams — pakalpojumu statuss nezināms — statuss {time}"
+    },
+    "lastKnown": "{text} (pēdējais zināmais)"
   }
 }

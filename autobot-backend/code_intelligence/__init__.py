@@ -81,6 +81,28 @@ from .code_fingerprinting import (
     get_clone_types,
     get_fingerprint_types,
 )
+from .code_generation import (
+    CodeContext,
+    CodeValidator,
+    DiffGenerator,
+    GeneratedCode,
+    GenerationStatus,
+    LLMCodeGenerator,
+    PromptTemplate,
+    PromptTemplateManager,
+    RefactoringRequest,
+    RefactoringResult,
+    RefactoringType,
+    ValidationResult,
+    ValidationStatus,
+    generate_diff,
+    get_generation_statuses,
+    get_refactoring_types,
+    get_validation_statuses,
+    list_prompt_templates,
+    refactor_code,
+    validate_code,
+)
 from .code_review_engine import (
     CodeReviewEngine,
     DiffFile,
@@ -98,7 +120,7 @@ from .code_review_engine import (
     review_file,
     review_staged,
 )
-from .conversation_flow_analyzer import (
+from .conversation_analysis import (
     AnalysisResult,
     Bottleneck,
     BottleneckType,
@@ -111,8 +133,8 @@ from .conversation_flow_analyzer import (
     IntentCategory,
     Optimization,
 )
-from .conversation_flow_analyzer import OptimizationType as ConversationOptimizationType
-from .conversation_flow_analyzer import (
+from .conversation_analysis import OptimizationType as ConversationOptimizationType
+from .conversation_analysis import (
     ResponseClassifier,
     ResponseType,
     analyze_conversations,
@@ -148,28 +170,6 @@ from .doc_generator import (
     get_doc_formats,
     get_doc_sections,
     get_element_types,
-)
-from .llm_code_generator import (
-    CodeContext,
-    CodeValidator,
-    DiffGenerator,
-    GeneratedCode,
-    GenerationStatus,
-    LLMCodeGenerator,
-    PromptTemplate,
-    PromptTemplateManager,
-    RefactoringRequest,
-    RefactoringResult,
-    RefactoringType,
-    ValidationResult,
-    ValidationStatus,
-    generate_diff,
-    get_generation_statuses,
-    get_refactoring_types,
-    get_validation_statuses,
-    list_prompt_templates,
-    refactor_code,
-    validate_code,
 )
 from .llm_pattern_analyzer import (
     BatchingAnalyzer,

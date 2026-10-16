@@ -117,3 +117,25 @@ def test_every_report_site_uses_the_excerpt() -> None:
     assert sorted(calls) == ["group_output", "kit_output", "vitest_output"]
     body = _FUNC.search(source).group(0)
     assert source.count("tail -25") == body.count("tail -25") == 1
+
+
+#: #18579: the app logs that tests provoke on purpose, ahead of the real failures.
+_LOG_NOISE = "".join(
+    f"[2026-10-16T10:13:{i % 60:02d}.941Z] [ERROR] [SessionCollaboration] Failed: TypeError: boom {i}\n"
+    for i in range(70)
+)
+
+
+def test_app_log_noise_cannot_crowd_out_the_failing_tests() -> None:
+    """53 such lines once filled the cap and cut both test names (#18579)."""
+    out = _excerpt(
+        _LOG_NOISE
+        + "     × shows the new name only after the refetch resolves 215ms\n"
+        + "     × translates the collection placeholder 90ms\n"
+        + " Tests  2 failed | 2879 passed (2881)\n"
+        + _FLOOR
+    )
+    assert "× shows the new name only after the refetch resolves" in out
+    assert "× translates the collection placeholder" in out
+    assert "[SessionCollaboration]" not in out
+    assert "Tests  2 failed | 2879 passed" in out

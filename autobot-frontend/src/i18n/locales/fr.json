@@ -8043,7 +8043,8 @@
       "tip": "Interface minimale : masquer les fonctions avancées",
       "announceMinimal": "Interface minimale activée. Fonctions avancées masquées.",
       "announceFull": "Interface complète activée. Toutes les fonctions sont affichées."
-    }
+    },
+    "llcLedger": "Registre des agents"
   },
   "llcCompanyStatus": {
     "showArchived": "Afficher les archivées",
@@ -8931,6 +8932,63 @@
       "retry": "Réessayer",
       "loadingItem": "Chargement de l'élément…",
       "itemLoadFailed": "Impossible de charger cet élément"
+    },
+    "ledger": {
+      "title": "Registre des agents",
+      "subtitle": "Qui travaille sur quoi dans cette entreprise, et qui attend.",
+      "tabsAria": "Vues du registre",
+      "tabs": {
+        "now": "En cours",
+        "claims": "Réservations",
+        "contention": "Contention",
+        "activity": "Activité"
+      },
+      "col": {
+        "agent": "Agent",
+        "kind": "Type",
+        "status": "Statut",
+        "detail": "Détail",
+        "scope": "Portée",
+        "mode": "Mode",
+        "intent": "Intention",
+        "expires": "Expire",
+        "renewals": "Renouvellements"
+      },
+      "busy": "Occupé",
+      "idle": "Inactif",
+      "peerMessages": "Messages entre pairs en attente",
+      "idleSubscribers": "Abonnements d'inactivité",
+      "pendingFor": "{n} en attente pour {name}",
+      "waitsForIdle": "{who} attend que {target} soit inactif",
+      "heldBy": "Détenu par {agent}",
+      "waitlistAria": "Liste d'attente dans l'ordre",
+      "silenceMeansHold": "Demander n'est pas libérer : le silence vaut maintien, et une réservation non renouvelée expire d'elle-même.",
+      "ask": "Demander au détenteur de libérer",
+      "askAria": "Demander au détenteur de {scope} de le libérer",
+      "askUnavailable": "Pas encore disponible : la demande est en cours d'ajout au registre.",
+      "conflicts": "Conflits",
+      "recent": "Activité récente",
+      "conflict": {
+        "release_refused": "Une libération a été refusée",
+        "claim_expired": "Une réservation a expiré pendant sa détention",
+        "yield_unanswered": "Une demande de cession est restée sans réponse",
+        "claim_lapsed_during_action": "Une réservation a expiré pendant une action"
+      },
+      "empty": {
+        "presence": "Aucun agent ne s'est signalé",
+        "peerMessages": "Aucun message en attente",
+        "idleSubscribers": "Aucun abonnement d'inactivité",
+        "claims": "Aucune réservation",
+        "contention": "Rien n'est en contention",
+        "conflicts": "Aucun conflit",
+        "activity": "Aucune activité récente"
+      },
+      "state": {
+        "loading": "Lecture du registre…",
+        "unavailableTitle": "Impossible de lire le registre",
+        "unavailableBody": "Le stockage {source} n'a pas répondu. Ce n'est pas la même chose qu'une liste vide.",
+        "errorTitle": "Un problème est survenu lors du chargement de cette section"
+      }
     }
   },
   "code": {
@@ -9688,5 +9746,62 @@
       "pushFailed": "Impossible d'ajouter cet enregistrement à la base de connaissances. Veuillez réessayer.",
       "collectionNotJoined": "Enregistré, mais la collection indiquée est introuvable — la transcription est dans la base de connaissances et non dans cette collection."
     }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "Problèmes système détectés",
+      "warnings": "Avertissements système",
+      "ok": "Tous les systèmes sont opérationnels"
+    },
+    "tooltip": {
+      "issues": "Cliquez pour voir les problèmes système",
+      "warnings": "Cliquez pour voir les avertissements système",
+      "ok": "Cliquez pour voir l'état du système : tous les services sont opérationnels"
+    },
+    "aria": {
+      "issues": "État du système : problèmes détectés",
+      "warnings": "État du système : avertissements présents",
+      "ok": "État du système : tous les services sont opérationnels"
+    },
+    "description": {
+      "servicesDown": "{n} service en panne | {n} services en panne",
+      "warnings": "{n} avertissement | {n} avertissements",
+      "withWarnings": "{n} service avec avertissements | {n} services avec avertissements",
+      "downAndWarnings": "{down} et {warnings}",
+      "ok": "Tous les services fonctionnent normalement"
+    },
+    "service": {
+      "backend": "API backend",
+      "frontend": "Frontend",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "Worker NPU",
+      "browser": "Service navigateur",
+      "chromadb": "Pile IA (ChromaDB)",
+      "other": "Autres services"
+    },
+    "state": {
+      "running": "En cours d'exécution",
+      "connected": "Connecté",
+      "statusUnknown": "État inconnu",
+      "connectionFailed": "Échec de la connexion",
+      "timeout": "Délai dépassé",
+      "connectionRefused": "Connexion refusée",
+      "unreachable": "Injoignable",
+      "unhealthy": "Défaillant",
+      "warning": "Avertissement",
+      "pending": "En attente",
+      "available": "Disponible",
+      "unavailable": "Indisponible",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "Dégradé — les vérifications d'état ont expiré, le backend répond",
+      "degradedAsOf": "Dégradé — les vérifications d'état ont expiré, le backend répond — état à {time}",
+      "unreachable": "Injoignable — état des services inconnu",
+      "unreachableAsOf": "Injoignable — état des services inconnu — état à {time}"
+    },
+    "lastKnown": "{text} (dernier état connu)"
   }
 }

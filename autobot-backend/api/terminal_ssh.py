@@ -199,7 +199,7 @@ async def _init_ssh_redis_client():
         Redis client or None if unavailable
     """
     try:
-        from dependencies import get_async_redis_client
+        from autobot_shared.redis_client import get_async_redis_client
 
         return await get_async_redis_client(database="main")
     except Exception as e:

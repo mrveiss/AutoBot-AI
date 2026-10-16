@@ -194,11 +194,13 @@ def test_an_unreachable_ledger_is_503_with_a_typed_body_never_an_empty_list(monk
 def test_the_ledger_routes_are_read_only_and_authenticated(world):
     app = FastAPI()
     app.include_router(agent_ledger.router, prefix="/coordination")
-    unsafe = {m for r in app.routes for m in getattr(r, "methods", set())} - {"GET", "HEAD"}
-    assert unsafe == set(), "the ledger must expose no mutating verb"
+    # The router's own routes: `app.routes` can defer an included router (#15093), which made this vacuous.
+    unsafe = {(m, r.path) for r in agent_ledger.router.routes for m in getattr(r, "methods", set()) - {"GET", "HEAD"}}
+    # The one write is a request to a holder (#18599): it never releases or deletes.
+    assert unsafe == {("POST", "/ledger/claims/yield-request")}, "the ledger's only write is the yield request"
     assert any(d.dependency is get_current_user for d in agent_ledger.router.dependencies)
     client = _client(CO_A)
-    assert client.post("/coordination/ledger/claims").status_code == 405
+    assert client.post("/coordination/ledger/claims").status_code == 405  # only the yield-request path takes POST
     assert client.delete("/coordination/ledger/claims").status_code == 405
 
 

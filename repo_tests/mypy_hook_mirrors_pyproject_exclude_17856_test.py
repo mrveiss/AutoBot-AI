@@ -20,15 +20,9 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
-_ROOT = repo_root()
+from tools.lint._scan_helpers import tracked_paths
 
-#: One path per pyproject pattern, each of which that pattern excludes.
-_SAMPLES = [
-    "autobot_shared/ssot_config_test.py",
-    "autobot-backend/tests/test_x.py",
-    "autobot-backend/conftest.py",
-    "autobot-backend/code_analysis/src/x.py",
-]
+_ROOT = repo_root()
 
 
 def _mypy_hooks() -> list[dict]:
@@ -43,14 +37,23 @@ def _pyproject_excludes() -> list[str]:
     return data["tool"]["mypy"]["exclude"]
 
 
-def test_every_sample_is_excluded_by_pyproject():
-    """Contrast: the samples really are what the config means to skip."""
-    for path in _SAMPLES:
-        assert any(re.search(p, path) for p in _pyproject_excludes()), path
+def _excluded_tracked_files() -> dict[str, list[str]]:
+    """Every tracked .py file each pyproject pattern excludes -- real files, not samples."""
+    files = tracked_paths(_ROOT, "*.py")
+    return {p: [f for f in files if re.search(p, f)] for p in _pyproject_excludes()}
+
+
+def test_every_pyproject_pattern_excludes_a_real_file() -> None:
+    """A pattern matching nothing tracked is checked against nothing -- say so instead."""
+    for pattern, matched in _excluded_tracked_files().items():
+        assert (
+            matched
+        ), f"{pattern!r} excludes no tracked .py file: retire it from pyproject or this guard checks nothing for it"
 
 
 @pytest.mark.parametrize("hook", _mypy_hooks(), ids=lambda h: h.get("name", "mypy"))
-def test_hook_skips_what_pyproject_skips(hook):
+def test_hook_skips_every_tracked_file_pyproject_skips(hook):
     files, exclude = re.compile(hook["files"]), re.compile(hook.get("exclude", r"(?!)"))
-    for path in (p for p in _SAMPLES if files.search(p)):
-        assert exclude.search(path), f"{hook['name']} would type-check {path}, which pyproject excludes"
+    for pattern, matched in _excluded_tracked_files().items():
+        leaked = [f for f in matched if files.search(f) and not exclude.search(f)]
+        assert not leaked, f"{hook['name']} would type-check {leaked[:3]}, which pyproject excludes via {pattern!r}"

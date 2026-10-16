@@ -204,23 +204,6 @@ def get_cached_orchestrator(config: ConfigManager = Depends(provide_config_manag
     return dependency_cache.get_or_create("orchestrator", _create_orchestrator)
 
 
-async def get_async_redis_client(database: str = "main"):
-    """
-    Dependency injection provider for async Redis client.
-
-    Issue #666: Added async version to avoid blocking I/O in async contexts.
-
-    Args:
-        database: Named database for logical separation. Default: "main"
-
-    Returns:
-        Async Redis client instance
-    """
-    from autobot_shared.redis_client import get_async_redis_client as _get_async_redis_client
-
-    return await _get_async_redis_client(database=database)
-
-
 # Type aliases for cleaner dependency annotations
 ConfigDep = Depends(provide_config_manager)
 DiagnosticsDep = Depends(get_diagnostics)
