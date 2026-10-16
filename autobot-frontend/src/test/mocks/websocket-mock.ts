@@ -13,7 +13,12 @@ export class MockWebSocket {
   public onmessage: ((event: MessageEvent) => void) | null = null
   public onerror: ((event: Event) => void) | null = null
   public send: Mock = vi.fn()
-  public close: Mock = vi.fn()
+  // #17638: closing cancels the pending simulated `open`, as a real socket
+  // closed while CONNECTING never opens.
+  public close: Mock = vi.fn(() => this.cancelPendingOpen())
+
+  // #17638: handle of the simulated `open`, so teardown can cancel it.
+  private _openTimer: ReturnType<typeof setTimeout> | null = null
 
   // WebSocket ready states
   static readonly CONNECTING = 0
@@ -64,7 +69,8 @@ export class MockWebSocket {
     MockWebSocket.instances.push(this)
 
     // Simulate connection after a short delay
-    setTimeout(() => {
+    this._openTimer = setTimeout(() => {
+      this._openTimer = null
       this.readyState = MockWebSocket.OPEN
       const event = new Event('open')
       if (this.onopen) {
@@ -72,6 +78,14 @@ export class MockWebSocket {
       }
       this._dispatch('open', event)
     }, 10)
+  }
+
+  /** Cancel the simulated `open` if it has not fired yet (#17638). */
+  public cancelPendingOpen() {
+    if (this._openTimer !== null) {
+      clearTimeout(this._openTimer)
+      this._openTimer = null
+    }
   }
 
   // Helper methods for testing
@@ -111,6 +125,7 @@ export class MockWebSocket {
   }
 
   static clearInstances() {
+    this.instances.forEach((ws) => ws.cancelPendingOpen())
     this.instances = []
   }
 
@@ -119,6 +134,10 @@ export class MockWebSocket {
   }
 
   static restoreImplementation() {
+    // #17638: an `open` firing after teardown reaches code that reads the
+    // global WebSocket this method removes -- an unhandled ReferenceError
+    // that exits vitest 1 with every test passing.
+    this.instances.forEach((ws) => ws.cancelPendingOpen())
     // Restore original WebSocket if available
     if ('WebSocket' in globalThis) {
       delete (globalThis as { WebSocket?: typeof WebSocket }).WebSocket
