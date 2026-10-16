@@ -79,12 +79,8 @@ backend:
   - 'pipeline-scripts/**'
   - 'tools/lint/**'
   - 'autobot-infrastructure/shared/scripts/**'
-  # #14584: was 'autobot-infrastructure/ansible/roles/slm_agent/files/**', a
-  # path that never existed (autobot-infrastructure/ has no ansible/ tree at
-  # all) -- a stranded entry that matched nothing since it was added. Corrected
-  # to the real mirror path, and widened to the second canonical/mirror pair
-  # detect-agent-code-drift.sh now also checks.
-  - 'autobot-slm-backend/ansible/roles/slm_agent/files/**'
+  # #18548: the slm_agent role no longer carries a files/ mirror of the agent;
+  # it deploys autobot-slm-backend/slm/agent/ directly.
   - 'autobot-slm-backend/ansible/roles/backend/files/**'
   - 'autobot-backend/config/permission_rules.yaml'
   - 'autobot-backend/static/error_messages.yaml'

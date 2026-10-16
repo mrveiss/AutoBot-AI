@@ -70,7 +70,7 @@ _SYNC_THEN_DELETE_SITES: tuple[tuple[str, str], ...] = (
     # update-all-nodes.yml plays (see test_slm_agent_role_is_imported_in_full
     # below) -- unlike backend/frontend, this one IS reachable from the
     # update path through its own main.yml.
-    ("roles/slm_agent/tasks/main.yml", "SLM Agent | Copy agent source - heartbeat_payload.py"),
+    ("roles/slm_agent/tasks/main.yml", "SLM Agent | Copy agent source modules from code_source (#18548)"),
     # update-all-nodes.yml PLAY 1 (SLM self-update).
     (_UPDATE_ALL_PLAYBOOK, "SLM | Deploy autobot-slm-frontend"),
     # update-all-nodes.yml PLAY 2 (fleet update) -- every component it syncs.
