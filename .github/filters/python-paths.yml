@@ -33,6 +33,22 @@ python:
   # bypassed: a PR touching only this workflow computes `python != true`,
   # python-suite reports green, and the test guarding it never runs.
   - '.github/workflows/duplication-guard.yml'
+  # #17856: frontend_api_timeout_ssot_17856_test.py reads both files' API
+  # timeout and holds them equal to TimeoutConfig.api; an edit confined to one
+  # must run it.
+  - '.env.example'
+  - 'autobot-frontend/.env.example'
+  # #18592: install_preflight_and_source_18581_test.py reads INSTALL.md; compose_slm_gui_profile_18585_test.py reads the root compose file and the frontend Dockerfile.
+  - 'INSTALL.md'
+  - 'docker-compose.yml'
+  - 'docker/frontend/Dockerfile'
+  # #18556: one_static_data_copy_18556_test.py reads the canonical static data files.
+  - 'autobot-backend/config/permission_rules.yaml'
+  - 'autobot-backend/static/error_messages.yaml'
+  - 'autobot-monitoring/prometheus.yml'
+  # #18549: one_playwright_server_18549_test.py reads the canonical server and its store.
+  - 'autobot-browser-worker/playwright-server.js'
+  - 'autobot-browser-worker/session-store.js'
   # #17329: frontend_path_filter_mirror_test.py PARSES this file and compares it
   # to frontend-test.yml's push paths, so its verdict depends on the content --
   # a real dependency, covered here rather than recorded as a bypass.
@@ -135,6 +151,12 @@ python:
   - 'autobot-slm-backend/ansible/**'
   - 'tools/git-hooks/**'
   - 'scripts/install-git-hooks.sh'
+
+  # #18553: redis_direct_constructor_baseline_18553.py names this shell script, which embeds a
+  # direct Redis client. A change confined to it touches no `**/*.py`, so python-suite would
+  # report green while the guard that counts its constructor never ran. (The two deploy scripts
+  # it also names sit under the ansible tree above.)
+  - 'autobot-backend/code_analysis/install.sh'
 
   # #16249: the CI wrappers under pipeline-scripts/ and the one library they
   # source. Each has a python-suite test that runs the script, so a change

@@ -11,7 +11,7 @@ implemented as part of Issue #228 under EPIC #217.
 
 import pytest
 
-from code_intelligence.llm_code_generator import (
+from code_intelligence.code_generation import (
     CodeContext,
     CodeValidator,
     DiffGenerator,

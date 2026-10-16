@@ -170,6 +170,12 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
         "Non-test modules under `autobot-backend/api`; the api package's tests grow at their own "
         "rate, so a share of all its `.py` files would drift with nothing wrong (#18316).",
     ),
+    "compat-module-needs-importer": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test backend modules whose docstring declares backward compatibility; a subset of the "
+        "backend's `.py` files whose share drifts as facades are retired (#18552).",
+    ),
     "chromadb-compose-port-sites": (ABSOLUTE, "NOT_PATHS", "Parsed `ports:` entries, not files."),
     "chromadb-compose-services": (ABSOLUTE, "NOT_PATHS", "Parsed compose services, not files."),
     "collectable-modules-inert-on-import": (
@@ -300,6 +306,21 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Non-test .ts/.vue/.js source is a subset of tracked files under the user frontend; test share drifts.",
+    ),
+    "one-playwright-server-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked .js under three roots is a subset of those trees; the unrelated-script share drifts.",
+    ),
+    "one-static-data-copy-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Watched-basename files are a subset of tracked files under five roots; same-named unrelated files drift.",
+    ),
+    "redis-direct-constructor-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test .py/.sh under the scan roots is a subset of tracked files; the test-file share drifts.",
     ),
     "post-commit-seed-scan": (
         ABSOLUTE,

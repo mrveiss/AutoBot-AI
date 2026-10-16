@@ -23,7 +23,7 @@
         <ul class="space-y-2">
           <li
             v-for="service in systemServices"
-            :key="service.name"
+            :key="service.id"
             class="flex items-center justify-between rounded border border-autobot-border p-2"
           >
             <span class="flex items-center text-sm font-medium text-autobot-text-primary">

@@ -2876,6 +2876,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/monitoring/agent-ledger/claims/yield-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ledger Yield Request
+         * @description Ask the holder of any claim to release it. Publishes a request; releases nothing.
+         */
+        post: operations["ledger_yield_request_api_monitoring_agent_ledger_claims_yield_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/monitoring/agent-ledger/conflicts": {
         parameters: {
             query?: never;
@@ -14782,6 +14802,40 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * YieldRequestBody
+         * @description A person asks the holder of a claim to release it (#18599). Asking never releases anything.
+         */
+        YieldRequestBody: {
+            /**
+             * Holder Task Id
+             * @description The task that holds the claim, as the claims screen shows it
+             */
+            holder_task_id: string;
+            /**
+             * Reason
+             * @description Why; cut to the ledger's free-text cap
+             * @default
+             */
+            reason: string;
+            /**
+             * Scope
+             * @description The claimed scope, e.g. `path:src/app.py`
+             */
+            scope: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** YieldRequestResponse */
+        YieldRequestResponse: {
+            /**
+             * Token
+             * @description Identifies the request; the holder's answer is recorded under it
+             */
+            token: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * ServiceActionResponse
          * @description Response for a service action.
          */
@@ -19772,6 +19826,62 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
+                };
+            };
+        };
+    };
+    ledger_yield_request_api_monitoring_agent_ledger_claims_yield_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["YieldRequestBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YieldRequestResponse"];
+                };
+            };
+            /** @description No such claim */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Asked too recently */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description The ledger could not be read (not the same as empty) */
             503: {

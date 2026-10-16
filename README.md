@@ -81,7 +81,7 @@ cd AutoBot-AI
 cp .env.example .env
 docker compose up -d
 ```
-User UI at **http://localhost**, SLM admin at **http://localhost/slm**.
+User UI at **http://localhost**, SLM admin at **http://localhost/slm/**.
 
 → Full install options and the two-phase deployment flow: [INSTALL.md](INSTALL.md).
 
@@ -157,7 +157,7 @@ inference, and workers — across one or more machines:
 | **Operate** | Upgrades, health monitoring, recovery, certificate rotation, configuration |
 | **Scale** | Add fleet nodes, add NPU workers, assign roles, provision new capacity |
 
-The SLM dashboard lives at **http://localhost/slm**. See
+The SLM dashboard lives at **http://localhost/slm/**. See
 [SLM deployment](docs/guides/slm-docker-ansible-deployment.md).
 
 ## Modules
@@ -293,7 +293,7 @@ Once running, navigate to **http://localhost** to access:
 
 The **Service Lifecycle Manager (SLM)** — AutoBot's management layer for deploying,
 operating, and scaling your AI infrastructure (vector DB, cache, database, inference, and
-workers) — lives at **http://localhost/slm**.
+workers) — lives at **http://localhost/slm/**.
 
 ### Example: Managing a Fleet
 ```bash

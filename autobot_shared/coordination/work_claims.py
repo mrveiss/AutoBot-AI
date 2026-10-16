@@ -62,7 +62,7 @@ from types import MappingProxyType
 from typing import Any
 
 from autobot_shared.coordination.claim_company import resolve_company
-from autobot_shared.coordination.ledger_events import note_refused_release, record_expired_members
+from autobot_shared.coordination.ledger_events import cap_text, note_refused_release, record_expired_members
 from autobot_shared.coordination.work_claims_lua import _ACQUIRE_LUA, _RELEASE_LUA, _RENEW_LUA
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
@@ -357,7 +357,7 @@ def _build(
         agent_id=agent_id,
         task_id=task_id,
         mode=mode.value,
-        intent=intent,
+        intent=cap_text(intent),
         acquired_at=acquired.isoformat(),
         expires_at=(acquired + timedelta(seconds=ttl_s)).isoformat(),
         company_id=resolve_company(company_id),

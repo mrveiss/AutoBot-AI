@@ -4,7 +4,7 @@ import appConfig from '@/config/AppConfig.js';
 import { createLogger } from '@/utils/debugUtils';
 import { getApiBase } from '@/config/ssot-config';
 import { getSelectedCompanyId } from '@/utils/orgContext';
-import { isRealAuthToken } from '@/utils/authToken';
+import { clearStoredAuth, readStoredAuthToken } from '@/utils/authToken';
 import { CircuitBreakerError, runWithCircuitBreaker } from '@/utils/apiCircuitBreaker';
 import { extractErrorInfo } from '@/utils/apiErrorInfo';
 
@@ -60,7 +60,7 @@ export interface AgentTerminalSessionConfig {
 }
 
 export interface TerminalCommandOptions {
-  timeout?: number;
+  timeout?: number; // ms; omitted, the backend's own default applies
   cwd?: string;
   env?: Record<string, string>;
 }
@@ -219,24 +219,7 @@ export class ApiClient {
   // ==================================================================================
 
   private _getAuthToken(): string | null {
-    try {
-      const stored = localStorage.getItem('autobot_auth');
-      if (!stored) return null;
-      const auth = JSON.parse(stored);
-      if (isRealAuthToken(auth.token)) {
-        // Check expiry before returning — expired tokens cause widespread 401s (#979)
-        if (auth.expiresAt && new Date(auth.expiresAt) <= new Date()) {
-          logger.warn('Auth token expired, clearing stale localStorage');
-          localStorage.removeItem('autobot_auth');
-          localStorage.removeItem('autobot_user');
-          return null;
-        }
-        return auth.token;
-      }
-      return null;
-    } catch {
-      return null;
-    }
+    return readStoredAuthToken();
   }
 
   // Handle 401 — clear stored auth and redirect to login (#827).
@@ -251,8 +234,7 @@ export class ApiClient {
       return;
     }
     logger.warn('401 Unauthorized, clearing auth:', endpoint);
-    localStorage.removeItem('autobot_auth');
-    localStorage.removeItem('autobot_user');
+    clearStoredAuth();
     // Also clear Pinia store to prevent stale isAuthenticated blocking login redirect (#972)
     import('@/stores/useUserStore').then(({ useUserStore }) => {
       try { useUserStore().logout(); } catch { /* ignore if store unavailable */ }
@@ -784,9 +766,9 @@ export class ApiClient {
   async executeTerminalCommand(command: string, options: TerminalCommandOptions = {}): Promise<Record<string, unknown>> {
     return await this.post(`${getApiBase()}/terminal/command`, {
       command,
-      timeout: options.timeout || 30000,
-      cwd: options.cwd || null,
-      env: options.env || {},
+      timeout: options.timeout != null ? options.timeout / 1000 : undefined, // CommandRequest: seconds (#17856)
+      working_directory: options.cwd ?? null,
+      environment: options.env ?? null,
     });
   }
 

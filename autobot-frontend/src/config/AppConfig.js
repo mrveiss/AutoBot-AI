@@ -10,7 +10,7 @@
 import ServiceDiscovery from './ServiceDiscovery.js';
 import { NetworkConstants } from '../constants/network.ts';
 import { createLogger } from '@/utils/debugUtils';
-import { getApiBase } from '@/config/ssot-config';
+import { getApiBase, getApiTimeout } from '@/config/ssot-config';
 
 const logger = createLogger('AppConfig');
 
@@ -132,8 +132,8 @@ export class AppConfigService {
       // API Configuration - SINGLE SOURCE OF TRUTH for all timeouts (Issue #598)
       // All timeout values in milliseconds
       api: {
-        // Default timeout for standard API calls (30 seconds)
-        timeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
+        // Default timeout for standard API calls: the SSOT value (#17856 row 6)
+        timeout: getApiTimeout(),
         retryAttempts: parseInt(import.meta.env.VITE_API_RETRY_ATTEMPTS || '3'),
         retryDelay: parseInt(import.meta.env.VITE_API_RETRY_DELAY || '1000'),
         cacheBustVersion: import.meta.env.VITE_APP_VERSION || Date.now().toString(),
@@ -144,8 +144,8 @@ export class AppConfigService {
         // Operation-specific timeouts (Issue #598: centralized timeout management)
         // These are THE source of truth - all ApiClient implementations MUST use these
         timeouts: {
-          // Standard API operations (30s)
-          default: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
+          // Standard API operations: the SSOT timeout (#17856 row 6)
+          default: getApiTimeout(),
           // Knowledge base / vectorization operations (5 minutes)
           knowledge: parseInt(import.meta.env.VITE_KNOWLEDGE_TIMEOUT || '300000'),
           // File upload operations (5 minutes)
@@ -454,7 +454,7 @@ export class AppConfigService {
    * Get timeout for specific operation (Issue #598: SINGLE SOURCE OF TRUTH)
    *
    * Available operations:
-   * - 'default': Standard API calls (30s)
+   * - 'default': Standard API calls (the SSOT timeout, TimeoutConfig.api)
    * - 'knowledge': Vectorization/knowledge base operations (5min)
    * - 'upload': File uploads (5min)
    * - 'health': Health checks (5s)

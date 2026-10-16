@@ -131,7 +131,7 @@ class TestTimeoutConfig:
 
         with patch.dict(os.environ, {}, clear=True):
             config = TimeoutConfig(_env_file=None)
-            assert config.api == 10000
+            assert config.api == 60000
             assert config.llm == 30.0
             assert config.health_check == 3.0
 

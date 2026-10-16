@@ -15,6 +15,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
+import { clearSlmSession, readSlmToken, readSlmUserRaw, writeSlmToken, writeSlmUser } from '@/utils/authStorage'
 import type { components } from '@/types/generated/api'
 
 const logger = createLogger('AuthStore')
@@ -56,17 +57,14 @@ function isMfaChallenge(data: LoginResponse): data is MfaChallengeResponse {
   return data.requires_mfa === true && typeof data.temp_token === 'string'
 }
 
-const TOKEN_KEY = 'slm_access_token'
-const USER_KEY = 'slm_user'
-
 export const useAuthStore = defineStore('auth', () => {
   const router = useRouter()
 
   // Session-scoped storage: tokens are cleared when the browser tab closes
-  const token = ref<string | null>(sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY))
+  const token = ref<string | null>(readSlmToken())
   const user = ref<User | null>(
     (() => {
-      const raw = sessionStorage.getItem(USER_KEY) || localStorage.getItem(USER_KEY)
+      const raw = readSlmUserRaw()
       return raw ? JSON.parse(raw) : null
     })()
   )
@@ -107,8 +105,7 @@ export const useAuthStore = defineStore('auth', () => {
         return false
       }
 
-      token.value = data.access_token
-      sessionStorage.setItem(TOKEN_KEY, data.access_token)
+      adoptToken(data.access_token)
 
       await fetchCurrentUser()
       return true
@@ -140,8 +137,7 @@ export const useAuthStore = defineStore('auth', () => {
         throw new Error(data.detail || 'MFA verification failed')
       }
       const data: TokenResponse = await response.json()
-      token.value = data.access_token
-      sessionStorage.setItem(TOKEN_KEY, data.access_token)
+      adoptToken(data.access_token)
       mfaPending.value = false
       mfaTempToken.value = ''
       await fetchCurrentUser()
@@ -164,10 +160,9 @@ export const useAuthStore = defineStore('auth', () => {
     if (!token.value) return
 
     try {
-      // The client attaches the bearer itself, reading sessionStorage with a
-      // localStorage fallback — the same pair this store initialises `token`
-      // from (line 65) — so a session restored from localStorage no longer
-      // depends on the ref having been hydrated first.
+      // The client attaches the bearer itself via readSlmToken() -- the same
+      // reader this store initialises `token` from -- so a session restored
+      // from localStorage does not depend on the ref having been hydrated first.
       const response = await slmApiClient.rawRequest('/auth/me')
 
       if (!response.ok) {
@@ -179,7 +174,7 @@ export const useAuthStore = defineStore('auth', () => {
         username: data.username,
         isAdmin: data.is_admin,
       }
-      sessionStorage.setItem(USER_KEY, JSON.stringify(user.value))
+      writeSlmUser(JSON.stringify(user.value))
     } catch {
       logout()
     }
@@ -198,8 +193,7 @@ export const useAuthStore = defineStore('auth', () => {
       }
 
       const data: TokenResponse = await response.json()
-      token.value = data.access_token
-      sessionStorage.setItem(TOKEN_KEY, data.access_token)
+      adoptToken(data.access_token)
       return true
     } catch {
       logout()
@@ -239,10 +233,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     token.value = null
     user.value = null
-    sessionStorage.removeItem(TOKEN_KEY)
-    sessionStorage.removeItem(USER_KEY)
-    localStorage.removeItem(TOKEN_KEY)
-    localStorage.removeItem(USER_KEY)
+    clearSlmSession()
 
     if (logoutUrl) {
       // RP-initiated logout: end the IdP session too
@@ -259,6 +250,15 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /**
+   * Take a token issued outside login() -- LDAP/AD and the SSO callback -- so
+   * the store and storage agree before checkAuth() reads token.value (#17856).
+   */
+  function adoptToken(accessToken: string): void {
+    token.value = accessToken
+    writeSlmToken(accessToken)
+  }
+
   async function checkAuth(): Promise<boolean> {
     if (!token.value) return false
 
@@ -272,6 +272,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     token,
+    adoptToken,
     user,
     loading,
     error,

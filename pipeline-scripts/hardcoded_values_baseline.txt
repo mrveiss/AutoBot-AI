@@ -350,7 +350,6 @@
 1|other|autobot-backend/llc/services/work_product_service.py|50
 1|other|autobot-backend/llc/tests/conftest.py|"/opt/autobot/data/code-sources/{source_id}/
 1|other|autobot-backend/llc/tests/conftest.py|http://test
-3|other|autobot-backend/llm_multi_provider.py|"user"
 1|other|autobot-backend/llm_shared/adapters/ai_stack_adapter.py|"user"
 1|other|autobot-backend/llm_shared/adapters/layer_inference_adapter.py|"user"
 1|other|autobot-backend/llm_shared/adapters/process_adapter.py|"system"
@@ -722,17 +721,10 @@
 1|other|autobot-infrastructure/shared/config/rollback.yml|300
 1|other|autobot-infrastructure/shared/config/security/threat_detection.yaml|http://data.phishtank.com/data/online-valid.csv
 1|other|autobot-infrastructure/shared/config/security/threat_detection.yaml|https://urlhaus.abuse.ch/downloads/text/
-1|other|autobot-infrastructure/shared/docker/compose/docker-compose.playwright-backup.yml|https://duckduckgo.com
-1|other|autobot-infrastructure/shared/docker/compose/docker-compose.playwright-backup.yml|https://duckduckgo.com/?q=
-1|other|autobot-infrastructure/shared/docker/compose/docker-compose.playwright-backup.yml|https://www.bing.com/search?q=
-1|other|autobot-infrastructure/shared/docker/compose/docker-compose.playwright-backup.yml|https://www.google.com/search?q=
-1|ssot|autobot-infrastructure/shared/docker/compose/docker-compose.playwright-backup.yml|:3000
 1|other|autobot-infrastructure/shared/docker/compose/docker-compose.playwright-vnc.yml|/home/autobot
 1|other|autobot-infrastructure/shared/docker/compose/docker-compose.playwright-vnc.yml|https://github.com/novnc/noVNC/archive/refs/tags/v1.7.0.tar.gz
 1|ssot|autobot-infrastructure/shared/docker/compose/docker-compose.playwright-vnc.yml|:3000
 1|ssot|autobot-infrastructure/shared/docker/compose/docker-compose.playwright.yml|:3000
-1|ssot|autobot-infrastructure/shared/docker/monitoring/prometheus.yml|:8001
-1|ssot|autobot-infrastructure/shared/docker/monitoring/prometheus.yml|:9090
 1|other|autobot-infrastructure/shared/mcp/servers/prometheus-mcp/server.py|30
 1|other|autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp/autobot_knowledge_mcp/embedded.py|10
 1|other|autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp/autobot_knowledge_mcp/server.py|10
@@ -791,8 +783,6 @@
 2|ssot|autobot-infrastructure/shared/scripts/fix_search.py|:8001
 1|ssot|autobot-infrastructure/shared/scripts/infrastructure/deploy_browser_vnc_services.sh|:3000
 1|ssot|autobot-infrastructure/shared/scripts/infrastructure/deploy_browser_vnc_services.sh|:6080
-1|other|autobot-infrastructure/shared/scripts/infrastructure/playwright-server.js|https://duckduckgo.com
-1|other|autobot-infrastructure/shared/scripts/infrastructure/playwright-server.js|https://duckduckgo.com/?q=
 1|other|autobot-infrastructure/shared/scripts/install-bare-metal.sh|"/opt/autobot
 2|other|autobot-infrastructure/shared/scripts/install-bare-metal.sh|http://backend;
 1|other|autobot-infrastructure/shared/scripts/install-bare-metal.sh|http://slm/;
@@ -904,9 +894,6 @@
 2|other|autobot-infrastructure/shared/tests/external/novnc-tests/test.rfb.js|offset=0
 1|ssot|autobot-infrastructure/shared/tests/frontend-test-via-playwright-api.js|:5173
 1|other|autobot-infrastructure/shared/tests/mock_llm_interface.py|"user"
-1|other|autobot-infrastructure/shared/tests/playwright-server.js|https://duckduckgo.com
-1|other|autobot-infrastructure/shared/tests/playwright-server.js|https://duckduckgo.com/?q=
-2|ssot|autobot-infrastructure/shared/tests/playwright-server.js|:5173
 2|ssot|autobot-infrastructure/shared/tests/playwright.config.js|:5173
 1|ssot|autobot-infrastructure/shared/tests/quick_frontend_test.js|:5173
 1|ssot|autobot-infrastructure/shared/tests/quick_frontend_test.js|:8001

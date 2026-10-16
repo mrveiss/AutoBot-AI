@@ -117,8 +117,8 @@ _load_real_submodule("performance_analyzer")
 # Mirrors the security_analyzer real-load above.
 _load_real_submodule("bug_predictor")
 
-# code_intelligence.code_generation real package (#13111) — llm_code_generator.py is a
-# pure facade that re-exports this package's entire public API, so while the top-level
+# code_intelligence.code_generation real package (#13111) — the former llm_code_generator.py was a
+# pure facade (retired in #18552) over this package's entire public API, so while the top-level
 # conftest's leaf-only stub (empty __path__) is bound, every symbol
 # llm_code_generator_test.py imports is a MagicMock. Drop the package stub so the real
 # __init__.py loads (its submodules resolve now that code_intelligence.__path__ is
@@ -133,7 +133,7 @@ _load_real_submodule("bug_predictor")
 # mint a second class and break isinstance identity for the earlier importer (#12839).
 # _is_conftest_stub — NOT `getattr(..., "__file__", None) is None` — decides what to drop:
 # the stub's catch-all __getattr__ answers "__file__" with a MagicMock, so the getattr form
-# kept the stub, importlib.import_module handed it straight back, and llm_code_generator
+# kept the stub, importlib.import_module handed it straight back, and the facade
 # re-exported 25 MagicMocks (#13233).
 _cg_pkg = sys.modules.get("code_intelligence.code_generation")
 if _cg_pkg is not None and _is_conftest_stub(_cg_pkg):
@@ -143,12 +143,12 @@ if _cg_diff is not None and _is_conftest_stub(_cg_diff):
     _stubs.evict("code_intelligence.code_generation.diff", descendants=False)
 _real_cg = _stubs.import_real("code_intelligence.code_generation")
 if _is_conftest_stub(_real_cg):
-    # Fail loudly rather than let llm_code_generator re-export MagicMocks again (#13233):
+    # Fail loudly rather than let code_generation consumers see MagicMocks again (#13233):
     # a stub here silently turns every assertion in llm_code_generator_test.py into a
     # comparison against mock attributes, which reads as 68 ordinary test failures.
     raise RuntimeError(
         "code_intelligence.code_generation is still a conftest stub after real-load; "
-        "llm_code_generator would re-export MagicMocks (#13233)"
+        "code_generation consumers would see MagicMocks (#13233)"
     )
 setattr(sys.modules["code_intelligence"], "code_generation", _real_cg)
 if "code_intelligence.code_generation.diff" in sys.modules:
@@ -172,8 +172,6 @@ for _leaf in [
     "code_evolution_miner",
     "code_fingerprinting",
     "code_review_engine",
-    "conversation_flow_analyzer",
-    "llm_code_generator",
     "llm_pattern_analyzer",
     "log_pattern_miner",
     "precommit_analyzer",

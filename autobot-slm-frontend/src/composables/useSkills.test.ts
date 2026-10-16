@@ -118,27 +118,13 @@ describe('useSkills — migrated onto useAutobotApi (#13079)', () => {
   // ===========================================================================
 
   describe('transport the private axios instances lacked', () => {
-    it('attaches the autobot_access_token from localStorage when no SLM token exists', () => {
-      // The private interceptors read `authStore.token` and nothing else, so an
-      // operator holding only an autobot-issued token sent NO Authorization
-      // header at all and every skills call 401'd.
+    it('sends only the SLM session token, never a stray autobot_access_token (#17856 row 8)', () => {
       localStorage.setItem('autobot_access_token', 'autobot-token')
       useSkills()
 
       const headers = h.state.requestInterceptor!({ headers: {} }).headers
 
-      expect(headers.Authorization).toBe('Bearer autobot-token')
-    })
-
-    it('clears the autobot_access_token on a 401', async () => {
-      localStorage.setItem('autobot_access_token', 'stale-token')
-      useSkills()
-
-      await expect(
-        h.state.responseErrorInterceptor!({ response: { status: 401 } })
-      ).rejects.toBeDefined()
-
-      expect(localStorage.getItem('autobot_access_token')).toBeNull()
+      expect(headers.Authorization).toBeUndefined()
     })
 
     it('drops the unexplained blanket 15s budget for the client default', () => {

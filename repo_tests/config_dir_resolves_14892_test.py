@@ -29,7 +29,7 @@ from autobot_shared.ssot_constants import PATH
 #: Named individually so a rename fails here rather than silently shrinking the
 #: sweep to nothing.
 TRACKED_CONFIG_FILES = (
-    "error_messages.yaml",
+    "agents.yaml",
     "config.yaml",
     "security/compliance.yaml",
     "security/domain_security.yaml",

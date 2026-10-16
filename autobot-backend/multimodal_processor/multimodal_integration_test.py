@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from context_aware_decision_system import DecisionType, context_aware_decision_system
+from context_aware_decision import DecisionType, context_aware_decision_system
 
 # Import multi-modal components
 from multimodal_processor import (

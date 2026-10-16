@@ -950,9 +950,9 @@ class TerminalService {
   async executeCommand(command: string, options: ExecuteOptions = {}): Promise<any> {
     try {
       return await apiClient.executeTerminalCommand(command, {
-        timeout: options.timeout || 30_000,
+        timeout: options.timeout,
         cwd: options.cwd,
-        env: options.env || {},
+        env: options.env,
       })
     } catch (error) {
       logger.error('Error executing command:', error)

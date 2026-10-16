@@ -181,6 +181,75 @@ def test_sources_name_what_is_unreachable_instead_of_showing_it_empty(monkeypatc
         assert sources[gap]["reachable"] is False and "process-local" in sources[gap]["reason"]
 
 
-def test_the_slm_ledger_is_read_only():
-    unsafe = {m for r in ledger_api.router.routes for m in r.methods} - {"GET", "HEAD"}
-    assert unsafe == set()
+def test_the_slm_ledgers_only_write_is_the_yield_request_18599():
+    unsafe = {(m, r.path) for r in ledger_api.router.routes for m in r.methods - {"GET", "HEAD"}}
+    assert unsafe == {("POST", "/agent-ledger/claims/yield-request")}
+
+
+YIELD_URL = "/api/monitoring/agent-ledger/claims/yield-request"
+
+
+@pytest_asyncio.fixture
+async def yield_env(redis, monkeypatch):
+    """The ledger fixture plus the rate limiter and the SLM's own publish/record on the same fakeredis."""
+    from autobot_shared import rate_limiter as rl_mod
+
+    async def _client_fn(database: str = "main"):
+        return redis
+
+    monkeypatch.setattr(rl_mod, "get_async_redis_client", _client_fn)
+    monkeypatch.setattr(ledger_api, "get_async_redis_client", _client_fn)
+    pubsub = redis.pubsub()
+    await pubsub.subscribe("a2a:events:t-u")
+    await pubsub.get_message(timeout=1)  # the subscribe confirmation
+    yield redis, pubsub
+
+
+def _ask(role: str, holder: str = "t-u", scope: str = "path:u/f"):
+    return _client(role).post(YIELD_URL, json={"scope": scope, "holder_task_id": holder, "reason": "r" * 1000})
+
+
+@pytest.mark.asyncio
+async def test_an_admin_asks_for_an_install_wide_claim_and_it_is_published_capped_recorded_and_kept_18599(yield_env):
+    from autobot_shared.coordination import ledger_events
+
+    redis, pubsub = yield_env
+    await try_acquire("path:u/f", agent_id="dev-session", task_id="t-u", intent="x")
+    response = _ask("admin")
+    assert response.status_code == 200
+    message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1)
+    import json as _json
+
+    sent = _json.loads(message["data"])
+    assert (sent["event"], sent["token"], sent["requester_agent_id"]) == (
+        "work_claim_yield_request",
+        response.json()["token"],
+        "user:someone",
+    )
+    assert sent["reason"] == "r" * ledger_events.TEXT_CAP
+    assert [e["type"] for e in await ledger_events.read_events(redis)] == ["yield_requested"]
+    assert [c.task_id for c in await wc_mod.list_claims()] == ["t-u"]  # asking released nothing
+    assert _ask("admin").status_code == 429  # a repeat inside the window
+
+
+@pytest.mark.asyncio
+async def test_the_yield_request_is_admin_only_and_404s_for_a_wrong_holder_or_no_claim_18599(yield_env):
+    await try_acquire("path:u/f", agent_id="dev-session", task_id="t-u", intent="x")
+    assert _ask("readonly").status_code == 403
+    assert _ask("admin", holder="other").status_code == 404
+    assert _ask("admin", scope="path:none/f").status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_an_unreachable_store_while_asking_is_the_typed_503_not_a_500_18599(yield_env, monkeypatch):
+    from autobot_shared.coordination.work_claims import ClaimUnavailable
+
+    await try_acquire("path:u/f", agent_id="dev-session", task_id="t-u", intent="x")
+
+    async def _down(*_args, **_kwargs):
+        raise ClaimUnavailable("redis down")
+
+    monkeypatch.setattr(ledger_api, "_publish", _down)
+    response = _ask("admin")
+    assert response.status_code == 503
+    assert "redis down" not in response.text  # the cause stays in the log

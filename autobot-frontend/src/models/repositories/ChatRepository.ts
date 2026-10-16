@@ -3,6 +3,7 @@
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { clearStoredAuth } from '@/utils/authToken'
 import type { ApiResponse } from '@/types/models'
 import type { ChatMessage } from '@/types/api'
 
@@ -647,8 +648,7 @@ export class ChatRepository {
       !window.location.pathname.includes('/login')
     ) {
       logger.warn('401 Unauthorized — clearing auth and redirecting to login')
-      localStorage.removeItem('autobot_auth')
-      localStorage.removeItem('autobot_user')
+      clearStoredAuth()
       const redirect = encodeURIComponent(window.location.pathname)
       window.location.href = `/login?redirect=${redirect}`
     }

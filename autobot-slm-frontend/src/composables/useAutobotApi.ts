@@ -669,25 +669,14 @@ export function useAutobotApi() {
 
   // Add auth token to all requests
   client.interceptors.request.use((config) => {
-    // Try SLM token first, fallback to AutoBot token
-    const token = authStore.token || localStorage.getItem('autobot_access_token')
+    // The SLM session token; nothing writes `autobot_access_token`, so the old
+    // fallback to it is gone (#17856 row 8)
+    const token = authStore.token
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
     return config
   })
-
-  // Response interceptor for error handling
-  client.interceptors.response.use(
-    (response) => response,
-    (error) => {
-      if (error.response?.status === 401) {
-        // Token expired or invalid
-        localStorage.removeItem('autobot_access_token')
-      }
-      return Promise.reject(error)
-    }
-  )
 
   // =============================================================================
   // Settings API
@@ -1766,9 +1755,8 @@ export function useAutobotApi() {
    * Reachability probe behind the "Test connection" control (#13079).
    *
    * `validateStatus` accepts every status code so the probe reports
-   * "reachable but rejected" rather than throwing, and — critically — never
-   * trips the response interceptor that clears `autobot_access_token`: a
-   * connectivity diagnostic must not be able to log the operator out.
+   * "reachable but rejected" rather than throwing: a connectivity diagnostic
+   * reports the status, it does not raise on a 4xx/5xx.
    */
   async function probeBackendHealth(): Promise<BackendHealthProbe> {
     const response = await client.get('/health', { validateStatus: () => true })

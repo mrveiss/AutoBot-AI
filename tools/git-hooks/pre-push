@@ -21,10 +21,68 @@ set -uo pipefail  # NOT -e: we want to capture exit codes and report
 # `unset GIT_DIR` (#15246). Same resolution as the commit-msg hook (#17032).
 REPO_ROOT="$PWD"
 
-# Time-box each check. Frontend type-check on the whole project takes ~60s;
-# we'd rather warn than block forever.
-TYPE_CHECK_TIMEOUT=90
+# #18578: git_tracked_files (scripts/lib/git-root.sh) -- `git ls-files` with the
+# ambient GIT_DIR & co. unset; inside a hook git exports GIT_DIR, which outranks
+# `-C` (#14896, #15506). Located from the HOOK's own path, not $REPO_ROOT: two
+# levels up is the repository both for tools/git-hooks/pre-push and for the
+# installed .git/hooks/pre-push, while a push from a fixture repo has no
+# scripts/lib of its own.
+_HOOK_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)/scripts/lib/git-root.sh"
+# shellcheck source=../../scripts/lib/git-root.sh
+if ! . "$_HOOK_LIB"; then
+    echo "[pre-push FAIL] cannot load $_HOOK_LIB" >&2
+    exit 1
+fi
+
+# Time-box each check; we'd rather warn than block forever.
 TEST_TIMEOUT=120
+
+# #17451: pytest budget model, defined once. The two per-file costs are measured, not
+# guessed: K=3 s/file parallel from 117.84 s over 46 files under `-n auto`; K=6 s/file
+# serial from the 6-8 s per file seen under `-xvs`. MAX_BUDGET caps every timeout the
+# hook computes (vitest at the changeset, pytest at the selection).
+MAX_BUDGET=600
+PYTEST_COST_SERIAL=6
+PYTEST_COST_PARALLEL=3
+
+# #18578: the other two budgets follow their work too. vue-tsc type-checks the WHOLE
+# project whatever the changeset: measured 111 s idle (load ~5) and ~294 s under load on
+# autobot-frontend, so a changeset-scaled budget (99 s for 3 files) could never pass a
+# small PR. A project-sized budget, AUTOBOT_PREPUSH_TYPE_CHECK_TIMEOUT (default 450),
+# validated like the workers knob and capped at MAX_BUDGET.
+type_check_timeout() {
+    local t="${AUTOBOT_PREPUSH_TYPE_CHECK_TIMEOUT:-450}"
+    # Read as base 10 (no octal from a leading 0) and reject <= 0: `timeout 0` (or 00)
+    # means NO timeout to GNU timeout, which would silently drop the budget.
+    case "$t" in
+        ''|*[!0-9]*) t=0 ;;
+        *) t=$((10#$t)) ;;
+    esac
+    if [ "$t" -le 0 ]; then
+        warn "AUTOBOT_PREPUSH_TYPE_CHECK_TIMEOUT='${AUTOBOT_PREPUSH_TYPE_CHECK_TIMEOUT}' is not a positive integer -- using 450"
+        t=450
+    fi
+    [ "$t" -gt "$MAX_BUDGET" ] && t=$MAX_BUDGET
+    printf '%s' "$t"
+}
+# A libs/autobot-ui change runs `vitest related` over every test that reaches the kit;
+# a barrel change reaches nearly all of them. vitest 4 has no cheap related count
+# (`vitest list` takes no --related), so the selection bound is the project's tracked
+# test files. Per file: measured 212 s / 262 files idle (0.8 s) and 492 s / 259 at
+# load ~45 (1.9 s) -> 2 s.
+VITEST_COST_PER_FILE=2
+
+# #18578: budget for `vitest related` in <project-dir>: its tracked test files x
+# VITEST_COST_PER_FILE, at least TEST_TIMEOUT, capped at MAX_BUDGET.
+kit_related_budget() {
+    local files budget
+    files=$(git_tracked_files "$1" -- '*.test.ts' '*.spec.ts' '*.test.tsx' '*.spec.tsx' '*.test.mts' '*.spec.mts' \
+        '*.test.js' '*.spec.js' 2>/dev/null | grep -c .)
+    budget=$(( files * VITEST_COST_PER_FILE ))
+    [ "$budget" -lt "$TEST_TIMEOUT" ] && budget=$TEST_TIMEOUT
+    [ "$budget" -gt "$MAX_BUDGET" ] && budget=$MAX_BUDGET
+    printf '%s' "$budget"
+}
 
 # Color helpers (no-op when not a tty)
 if [ -t 1 ]; then
@@ -121,6 +179,42 @@ pick_python() {
 }
 PYTEST_PYTHON="$(pick_python)"
 
+# #17451: the pytest budget follows the SELECTED work, not the changeset. A hub file
+# changes one path and selects dozens of guards, so the changed-file count under-sizes
+# exactly the pushes with the widest fan-out. Args: <budget-so-far> <selected> <parallel 0|1>.
+# Per selected file: PYTEST_COST_SERIAL or PYTEST_COST_PARALLEL (the mode actually chosen);
+# capped at MAX_BUDGET.
+pytest_budget() {
+    local per_file=$PYTEST_COST_SERIAL
+    [ "$3" = "1" ] && per_file=$PYTEST_COST_PARALLEL
+    local budget=$(( $1 + ($2 * per_file) ))
+    [ "$budget" -gt "$MAX_BUDGET" ] && budget=$MAX_BUDGET
+    printf '%s' "$budget"
+}
+# Parallel only when xdist is importable by the interpreter that runs pytest; else serial.
+pytest_xdist_available() {
+    "$PYTEST_PYTHON" -c 'import xdist' 2>/dev/null
+}
+# xdist worker count from AUTOBOT_PREPUSH_PYTEST_WORKERS (default 4; 0 = serial). The box runs
+# many sessions at load 20-30, so `-n auto` is never used. Non-integer or negative -> 4 + warning.
+pytest_workers() {
+    local w="${AUTOBOT_PREPUSH_PYTEST_WORKERS:-4}"
+    case "$w" in
+        ''|*[!0-9]*) warn "AUTOBOT_PREPUSH_PYTEST_WORKERS='${w}' is not a non-negative integer -- using 4"; w=4 ;;
+        *) w=$((10#$w)) ;;  # base 10: "08" is 8, not an octal error
+    esac
+    printf '%s' "$w"
+}
+# Prints the xdist args, or nothing when the run must be serial (workers=0 or xdist missing).
+# loadscope keeps a module's tests on one worker (the suite is proven stable with it, #10398).
+pytest_xdist_args() {
+    local w
+    w="$(pytest_workers)"
+    if [ "$w" -gt 0 ] && pytest_xdist_available; then
+        printf -- '-n %s --dist loadscope' "$w"
+    fi
+}
+
 
 # A dependency root is usable only if it can be TRAVERSED. A directory that is
 # present but carries no execute bit answers `-d` yes and denies everything
@@ -155,12 +249,19 @@ failure_excerpt() {
   # Summary counts are collected apart and always appended, so a long failure
   # list cannot crowd them out of the cap.
   summary=$(printf '%s\n' "$clean" | grep -E '^ +(Test Files|Tests|Errors) |^=+ .*(failed|error)' | tail -4)
+  # #18579: two tiers. Failing-test lines and unhandled-error windows come first and
+  # are never displaced; assertion/`Error:` context fills what the cap leaves. The
+  # app's own log lines (`[<ISO time>] [ERROR] ...`, provoked on purpose by tests)
+  # are not context -- 53 of them once filled the cap and cut both test names.
   excerpt=$(printf '%s\n' "$clean" | awk -v cap="${FAILURE_EXCERPT_LINES:-60}" '
     /Unhandled (Error|Rejection)/ { ctx = 8 }
-    ctx > 0 || /^ *(FAIL |× |✗ |FAILED |ERROR )/ || /^E   / \
-      || /AssertionError|Error: |Test timed out/ {
-      if (!seen[$0]++ && n < cap) { print; n++ }
-      if (ctx > 0) ctx--
+    seen[$0]++ { if (ctx > 0) ctx--; next }
+    ctx > 0 || /^ *(FAIL |× |✗ |FAILED |ERROR )/ || /^E   / { first[++a] = $0; if (ctx > 0) ctx--; next }
+    /^\[[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[^]]*\] \[[A-Z]+\]/ { next }
+    /AssertionError|Error: |Test timed out/ { rest[++b] = $0 }
+    END {
+      for (i = 1; i <= a && n < cap; i++) { print first[i]; n++ }
+      for (i = 1; i <= b && n < cap; i++) { print rest[i]; n++ }
     }')
   if [ -n "$excerpt$summary" ]; then
     printf '%s\n' "$excerpt" "$summary" | grep -v '^$'
@@ -411,10 +512,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   # and large ones timed out, so the pushes most worth verifying went unverified.
   changed_count=$(printf '%s\n' "$changed" | grep -c . || true)
   TEST_TIMEOUT=$(( TEST_TIMEOUT + (changed_count * 4) ))
-  [ "$TEST_TIMEOUT" -gt 600 ] && TEST_TIMEOUT=600
-  TYPE_CHECK_TIMEOUT=$(( TYPE_CHECK_TIMEOUT + (changed_count * 3) ))
-  [ "$TYPE_CHECK_TIMEOUT" -gt 450 ] && TYPE_CHECK_TIMEOUT=450
-  log "changeset ${changed_count} file(s) -> pytest/vitest budget ${TEST_TIMEOUT}s, vue-tsc ${TYPE_CHECK_TIMEOUT}s"
+  [ "$TEST_TIMEOUT" -gt "$MAX_BUDGET" ] && TEST_TIMEOUT=$MAX_BUDGET
+  TYPE_CHECK_TIMEOUT=$(type_check_timeout)
+  log "changeset ${changed_count} file(s) -> vitest budget ${TEST_TIMEOUT}s (pytest is sized after selection, #17451), vue-tsc ${TYPE_CHECK_TIMEOUT}s"
   if [ -z "$changed" ]; then
     log "no changed files in range — skipping Phase 0c"
     continue
@@ -593,14 +693,15 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     # the selection is exactly the tests that import a changed kit file.
     if [ -n "$kit_changed" ] && node_modules_usable "$project_dir"; then
       kit_rel=$(echo "$kit_changed" | sed 's|^|../|')
-      log "${project}: ${KIT_TREE} changed — running vitest related (timeout ${TEST_TIMEOUT}s)"
+      kit_timeout=$(kit_related_budget "$project_dir")
+      log "${project}: ${KIT_TREE} changed — running vitest related (timeout ${kit_timeout}s, #18578)"
       kit_exit=0
       kit_output=$(
         cd "$project_dir" \
-        && timeout "$TEST_TIMEOUT" npx vitest related --run --passWithNoTests $(echo "$kit_rel") 2>&1
+        && timeout "$kit_timeout" npx vitest related --run --passWithNoTests $(echo "$kit_rel") 2>&1
       ) || kit_exit=$?
       if [ "$kit_exit" = "124" ]; then
-        did_not_run "vitest related (${project})" "${TEST_TIMEOUT}"
+        did_not_run "vitest related (${project})" "${kit_timeout}"
       elif [ "$kit_exit" != "0" ]; then
         fail "vitest failures after a ${KIT_TREE} change (${project}, #17959):"
         failure_excerpt "$kit_output" >&2
@@ -646,8 +747,11 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   if [ -n "$all_py_tests" ]; then
     # The selection can outgrow the changeset, so the budget follows it too (#15985).
     selected_count=$(printf '%s\n' "$all_py_tests" | grep -c . || true)
-    TEST_TIMEOUT=$(( TEST_TIMEOUT + (selected_count * 2) ))
-    [ "$TEST_TIMEOUT" -gt 600 ] && TEST_TIMEOUT=600
+    PYTEST_XDIST_ARGS="$(pytest_xdist_args)"
+    pytest_parallel=0
+    [ -n "$PYTEST_XDIST_ARGS" ] && pytest_parallel=1
+    PYTEST_TIMEOUT=$(pytest_budget "$TEST_TIMEOUT" "$selected_count" "$pytest_parallel")
+    log "pytest selected ${selected_count} file(s) -> budget ${PYTEST_TIMEOUT}s ($([ "$pytest_parallel" = 1 ] && echo "parallel, ${PYTEST_XDIST_ARGS%% --dist*}" || echo 'serial (AUTOBOT_PREPUSH_PYTEST_WORKERS=0 or no xdist for '"$PYTEST_PYTHON)"))"
 
     # #16069: autobot-slm-backend must be a SEPARATE pytest invocation.
     # pytest.ini says so in as many words: the two backends define top-level
@@ -689,7 +793,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
           # no marker and still runs here; the floor-versus-population half is a ratchet and
           # runs in CI. `reach_declarations_test` asserts BOTH ends of that split, so the
           # marker cannot quietly become a way of running the check nowhere.
-          timeout "$TEST_TIMEOUT" "$PYTEST_PYTHON" -m pytest -xvs -m "not reach_floor" $group 2>&1
+          timeout "$PYTEST_TIMEOUT" "$PYTEST_PYTHON" -m pytest -xvs $PYTEST_XDIST_ARGS -m "not reach_floor" $group 2>&1
         ) || group_exit=$?
         if [ "$group_exit" = "124" ]; then
           pytest_timed_out=1
@@ -723,7 +827,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       if [ "$pytest_failed" != "0" ]; then
         EXIT_CODE=1
       elif [ "$pytest_timed_out" != "0" ]; then
-        did_not_run "pytest" "${TEST_TIMEOUT}"
+        did_not_run "pytest" "${PYTEST_TIMEOUT}"
       elif [ -n "$pytest_unrunnable" ]; then
         could_not_run "pytest" "$pytest_unrunnable"
       else

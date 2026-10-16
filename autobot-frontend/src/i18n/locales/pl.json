@@ -8043,7 +8043,8 @@
       "tip": "Interfejs minimalny — ukryj funkcje zaawansowane",
       "announceMinimal": "Włączono interfejs minimalny. Funkcje zaawansowane są ukryte.",
       "announceFull": "Włączono pełny interfejs. Wyświetlane są wszystkie funkcje."
-    }
+    },
+    "llcLedger": "Rejestr agentów"
   },
   "llcCompanyStatus": {
     "showArchived": "Pokaż zarchiwizowane",
@@ -8931,6 +8932,63 @@
       "retry": "Ponów",
       "loadingItem": "Wczytywanie elementu…",
       "itemLoadFailed": "Nie udało się wczytać tego elementu"
+    },
+    "ledger": {
+      "title": "Rejestr agentów",
+      "subtitle": "Kto w tej firmie nad czym pracuje i kto czeka.",
+      "tabsAria": "Widoki rejestru",
+      "tabs": {
+        "now": "Teraz pracuje",
+        "claims": "Rezerwacje",
+        "contention": "Rywalizacja",
+        "activity": "Aktywność"
+      },
+      "col": {
+        "agent": "Agent",
+        "kind": "Rodzaj",
+        "status": "Stan",
+        "detail": "Szczegóły",
+        "scope": "Zakres",
+        "mode": "Tryb",
+        "intent": "Zamiar",
+        "expires": "Wygasa",
+        "renewals": "Odnowienia"
+      },
+      "busy": "Zajęty",
+      "idle": "Bezczynny",
+      "peerMessages": "Oczekujące wiadomości",
+      "idleSubscribers": "Subskrypcje bezczynności",
+      "pendingFor": "{n} oczekuje na {name}",
+      "waitsForIdle": "{who} czeka, aż {target} będzie bezczynny",
+      "heldBy": "Trzyma {agent}",
+      "waitlistAria": "Kolejka w kolejności",
+      "silenceMeansHold": "Prośba to nie zwolnienie: milczenie oznacza trzymanie, a nieodnowiona rezerwacja wygasa sama.",
+      "ask": "Poproś właściciela o zwolnienie",
+      "askAria": "Poproś właściciela {scope} o zwolnienie",
+      "askUnavailable": "Jeszcze niedostępne: prośba jest dodawana do rejestru.",
+      "conflicts": "Konflikty",
+      "recent": "Ostatnia aktywność",
+      "conflict": {
+        "release_refused": "Odmówiono zwolnienia",
+        "claim_expired": "Rezerwacja wygasła w trakcie trzymania",
+        "yield_unanswered": "Prośba o ustąpienie pozostała bez odpowiedzi",
+        "claim_lapsed_during_action": "Rezerwacja wygasła w trakcie działania"
+      },
+      "empty": {
+        "presence": "Żaden agent się nie zgłosił",
+        "peerMessages": "Brak oczekujących wiadomości",
+        "idleSubscribers": "Brak subskrypcji bezczynności",
+        "claims": "Brak rezerwacji",
+        "contention": "Nic nie jest przedmiotem rywalizacji",
+        "conflicts": "Brak konfliktów",
+        "activity": "Brak ostatniej aktywności"
+      },
+      "state": {
+        "loading": "Odczytywanie rejestru…",
+        "unavailableTitle": "Nie udało się odczytać rejestru",
+        "unavailableBody": "Magazyn {source} nie odpowiedział. To nie to samo co brak wpisów.",
+        "errorTitle": "Podczas ładowania tej sekcji wystąpił błąd"
+      }
     }
   },
   "code": {
@@ -9688,5 +9746,62 @@
       "pushFailed": "Nie udało się dodać tego nagrania do bazy wiedzy. Spróbuj ponownie.",
       "collectionNotJoined": "Zapisano, ale nie znaleziono wskazanej kolekcji — transkrypcja jest w bazie wiedzy, ale nie w tej kolekcji."
     }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "Wykryto problemy systemu",
+      "warnings": "Ostrzeżenia systemu",
+      "ok": "Wszystkie systemy działają"
+    },
+    "tooltip": {
+      "issues": "Kliknij, aby zobaczyć problemy systemu",
+      "warnings": "Kliknij, aby zobaczyć ostrzeżenia systemu",
+      "ok": "Kliknij, aby zobaczyć stan systemu – wszystkie usługi działają"
+    },
+    "aria": {
+      "issues": "Stan systemu: wykryto problemy",
+      "warnings": "Stan systemu: są ostrzeżenia",
+      "ok": "Stan systemu: wszystkie usługi działają"
+    },
+    "description": {
+      "servicesDown": "{n} usługa nie działa | {n} usługi nie działają",
+      "warnings": "{n} ostrzeżenie | {n} ostrzeżenia",
+      "withWarnings": "{n} usługa z ostrzeżeniami | {n} usługi z ostrzeżeniami",
+      "downAndWarnings": "{down} i {warnings}",
+      "ok": "Wszystkie usługi działają prawidłowo"
+    },
+    "service": {
+      "backend": "API backendu",
+      "frontend": "Frontend",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "Worker NPU",
+      "browser": "Usługa przeglądarki",
+      "chromadb": "Stos AI (ChromaDB)",
+      "other": "Inne usługi"
+    },
+    "state": {
+      "running": "Działa",
+      "connected": "Połączono",
+      "statusUnknown": "Stan nieznany",
+      "connectionFailed": "Połączenie nieudane",
+      "timeout": "Przekroczono czas",
+      "connectionRefused": "Połączenie odrzucone",
+      "unreachable": "Nieosiągalny",
+      "unhealthy": "Niesprawny",
+      "warning": "Ostrzeżenie",
+      "pending": "Oczekuje",
+      "available": "Dostępny",
+      "unavailable": "Niedostępny",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "Ograniczony – sprawdzanie stanu przekroczyło czas, backend odpowiada",
+      "degradedAsOf": "Ograniczony – sprawdzanie stanu przekroczyło czas, backend odpowiada – stan z {time}",
+      "unreachable": "Nieosiągalny – stan usług nieznany",
+      "unreachableAsOf": "Nieosiągalny – stan usług nieznany – stan z {time}"
+    },
+    "lastKnown": "{text} (ostatni znany)"
   }
 }

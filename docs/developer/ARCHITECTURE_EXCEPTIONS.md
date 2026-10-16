@@ -493,3 +493,22 @@ imports `logging_manager`, at which point `load_yaml_config` should delegate to
 it and this entry be removed.
 
 **Grep check:** `grep -n "logging_manager" autobot_shared/config_file_loading.py` — if empty, this exception is obsolete.
+
+---
+
+## Direct Redis Health Probes
+
+**Files:** `autobot-backend/utils/distributed_service_discovery.py`, `autobot-backend/utils/service_discovery.py`,
+`autobot-backend/utils/redis_immediate_connection.py`
+**Canonical it does not use:** `autobot_shared/redis_client.py`
+**Issue:** #18553
+
+**Reason:** each builds a fresh `redis.Redis(...)` to ask "is THIS endpoint answering" for a host and
+port supplied by the caller, with its own short (or, for the diagnostic, no) timeouts, and closes it
+afterwards. The canonical client addresses named databases on the configured Redis through pooled,
+circuit-broken connections, so it cannot probe an arbitrary endpoint and would report the pool's
+state instead of the endpoint's. The sites are frozen in `repo_tests/redis_direct_constructor_baseline_18553.py`.
+
+**Revisit when:** the canonical layer grows an endpoint-probe entry point; delete these constructors then.
+
+**Grep check:** `grep -n "redis.Redis(" autobot-backend/utils/distributed_service_discovery.py autobot-backend/utils/service_discovery.py autobot-backend/utils/redis_immediate_connection.py` — if empty, this exception is obsolete.

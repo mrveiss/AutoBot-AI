@@ -761,7 +761,7 @@ async def _init_terminal_handler(
     # Issue #666: Use async Redis client since TerminalLogger uses await with Redis ops
     redis_client = None
     try:
-        from dependencies import get_async_redis_client
+        from autobot_shared.redis_client import get_async_redis_client
 
         redis_client = await get_async_redis_client(database="main")
     except Exception as e:

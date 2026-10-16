@@ -8043,7 +8043,8 @@
       "tip": "Minimale Oberfläche — erweiterte Funktionen ausblenden",
       "announceMinimal": "Minimale Oberfläche aktiv. Erweiterte Funktionen ausgeblendet.",
       "announceFull": "Vollständige Oberfläche aktiv. Alle Funktionen angezeigt."
-    }
+    },
+    "llcLedger": "Agenten-Ledger"
   },
   "llcCompanyStatus": {
     "showArchived": "Archivierte anzeigen",
@@ -8931,6 +8932,63 @@
       "retry": "Erneut versuchen",
       "loadingItem": "Arbeitselement wird geladen…",
       "itemLoadFailed": "Dieses Arbeitselement konnte nicht geladen werden"
+    },
+    "ledger": {
+      "title": "Agenten-Ledger",
+      "subtitle": "Wer in diesem Unternehmen woran arbeitet und wer wartet.",
+      "tabsAria": "Ledger-Ansichten",
+      "tabs": {
+        "now": "Arbeitet gerade",
+        "claims": "Ansprüche",
+        "contention": "Konkurrenz",
+        "activity": "Aktivität"
+      },
+      "col": {
+        "agent": "Agent",
+        "kind": "Art",
+        "status": "Status",
+        "detail": "Details",
+        "scope": "Bereich",
+        "mode": "Modus",
+        "intent": "Absicht",
+        "expires": "Läuft ab",
+        "renewals": "Verlängerungen"
+      },
+      "busy": "Beschäftigt",
+      "idle": "Untätig",
+      "peerMessages": "Ausstehende Peer-Nachrichten",
+      "idleSubscribers": "Untätigkeits-Abos",
+      "pendingFor": "{n} ausstehend für {name}",
+      "waitsForIdle": "{who} wartet, bis {target} untätig ist",
+      "heldBy": "Gehalten von {agent}",
+      "waitlistAria": "Warteliste in Reihenfolge",
+      "silenceMeansHold": "Bitten ist keine Freigabe: Schweigen heißt Halten, und ein nicht verlängerter Anspruch läuft von selbst ab.",
+      "ask": "Inhaber um Freigabe bitten",
+      "askAria": "Den Inhaber von {scope} um Freigabe bitten",
+      "askUnavailable": "Noch nicht verfügbar: die Anfrage wird dem Ledger hinzugefügt.",
+      "conflicts": "Konflikte",
+      "recent": "Letzte Aktivität",
+      "conflict": {
+        "release_refused": "Eine Freigabe wurde verweigert",
+        "claim_expired": "Ein Anspruch lief während des Haltens ab",
+        "yield_unanswered": "Eine Freigabebitte blieb unbeantwortet",
+        "claim_lapsed_during_action": "Ein Anspruch lief während einer Aktion ab"
+      },
+      "empty": {
+        "presence": "Keine Agenten gemeldet",
+        "peerMessages": "Keine ausstehenden Nachrichten",
+        "idleSubscribers": "Keine Untätigkeits-Abos",
+        "claims": "Keine Ansprüche",
+        "contention": "Nichts ist umkämpft",
+        "conflicts": "Keine Konflikte",
+        "activity": "Keine aktuelle Aktivität"
+      },
+      "state": {
+        "loading": "Ledger wird gelesen…",
+        "unavailableTitle": "Ledger konnte nicht gelesen werden",
+        "unavailableBody": "Der Speicher {source} hat nicht geantwortet. Das ist nicht dasselbe wie keine Einträge.",
+        "errorTitle": "Beim Laden dieses Abschnitts ist ein Fehler aufgetreten"
+      }
     }
   },
   "code": {
@@ -9688,5 +9746,62 @@
       "pushFailed": "Diese Aufnahme konnte nicht zur Wissensdatenbank hinzugefügt werden. Bitte erneut versuchen.",
       "collectionNotJoined": "Gespeichert, aber die angegebene Sammlung wurde nicht gefunden — das Transkript ist in der Wissensdatenbank, aber nicht in dieser Sammlung."
     }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "Systemprobleme erkannt",
+      "warnings": "Systemwarnungen",
+      "ok": "Alle Systeme betriebsbereit"
+    },
+    "tooltip": {
+      "issues": "Klicken, um Systemprobleme anzuzeigen",
+      "warnings": "Klicken, um Systemwarnungen anzuzeigen",
+      "ok": "Klicken, um den Systemstatus anzuzeigen – alle Dienste betriebsbereit"
+    },
+    "aria": {
+      "issues": "Systemstatus: Probleme erkannt",
+      "warnings": "Systemstatus: Warnungen vorhanden",
+      "ok": "Systemstatus: alle Dienste betriebsbereit"
+    },
+    "description": {
+      "servicesDown": "{n} Dienst ausgefallen | {n} Dienste ausgefallen",
+      "warnings": "{n} Warnung | {n} Warnungen",
+      "withWarnings": "{n} Dienst mit Warnungen | {n} Dienste mit Warnungen",
+      "downAndWarnings": "{down} und {warnings}",
+      "ok": "Alle Dienste laufen normal"
+    },
+    "service": {
+      "backend": "Backend-API",
+      "frontend": "Frontend",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "NPU-Worker",
+      "browser": "Browser-Dienst",
+      "chromadb": "KI-Stack (ChromaDB)",
+      "other": "Weitere Dienste"
+    },
+    "state": {
+      "running": "Läuft",
+      "connected": "Verbunden",
+      "statusUnknown": "Status unbekannt",
+      "connectionFailed": "Verbindung fehlgeschlagen",
+      "timeout": "Zeitüberschreitung",
+      "connectionRefused": "Verbindung abgelehnt",
+      "unreachable": "Nicht erreichbar",
+      "unhealthy": "Fehlerhaft",
+      "warning": "Warnung",
+      "pending": "Ausstehend",
+      "available": "Verfügbar",
+      "unavailable": "Nicht verfügbar",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "Eingeschränkt – Statusprüfungen überschritten, Backend antwortet",
+      "degradedAsOf": "Eingeschränkt – Statusprüfungen überschritten, Backend antwortet – Stand {time}",
+      "unreachable": "Nicht erreichbar – Dienststatus unbekannt",
+      "unreachableAsOf": "Nicht erreichbar – Dienststatus unbekannt – Stand {time}"
+    },
+    "lastKnown": "{text} (zuletzt bekannt)"
   }
 }
