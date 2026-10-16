@@ -21,6 +21,9 @@
 name: Auto-fix Generated Types
 
 on:
+  # #18500: a merge train dispatches this on its branch to get the api.ts patch for the
+  # combined tree from one job, before it spends a full CI suite on the PR.
+  workflow_dispatch:
   pull_request:
     paths:
       # Backend changes can alter the OpenAPI schema that api.ts is generated from.
@@ -65,7 +68,7 @@ on:
 # nothing when the types already match, and a stale one's push, if it made one,
 # would be rejected as a non-fast-forward.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref }}${{ endsWith(github.actor, '[bot]') && github.actor != 'dependabot[bot]' && format('-regen-{0}', github.event.pull_request.head.sha) || '' }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}${{ endsWith(github.actor, '[bot]') && github.actor != 'dependabot[bot]' && format('-regen-{0}', github.event.pull_request.head.sha) || '' }}
   cancel-in-progress: true
 
 # #15362: `read`, not `write`. `autofix-types` used to commit the regenerated types
@@ -89,13 +92,14 @@ jobs:
     # never grants. Skip rather than fail. (auto-fix-formatting.yml carried the
     # identical guard until #15934 removed it as redundant; this is now the
     # only workflow of the shape.)
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # A dispatch (#18500) runs on this repo's own branch, so the fork guard is satisfied by definition.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
       - name: Checkout PR branch
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.head_ref || github.ref }}
           # #13791: prefer a token attributed to a human. Pushing with the
           # default GITHUB_TOKEN attributes the commit to github-actions[bot],
           # and this repository's fork-PR policy (all_external_contributors)
