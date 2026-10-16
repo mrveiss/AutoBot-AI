@@ -3,6 +3,7 @@
 import '@testing-library/jest-dom'
 import { vi, afterAll, afterEach } from 'vitest'
 import { enableAutoUnmount } from '@vue/test-utils'
+import { installMonotonicDateNow } from './utils/monotonicClock'
 
 // #14842/#14613: destroy every mounted component tree after the test that made
 // it. The `beforeEach` below resets `document.body.innerHTML`, which DETACHES a
@@ -23,6 +24,10 @@ import { enableAutoUnmount } from '@vue/test-utils'
 // idempotent — and against a test that depends on a previous test's DOM,
 // because the `beforeEach` below already made that impossible.
 enableAutoUnmount(afterEach)
+
+// #18254: a wall clock that steps backwards (WSL2 time correction, under load)
+// makes Vue's event invoker drop clicks; see utils/monotonicClock.ts.
+installMonotonicDateNow()
 
 // Prevent cross-file pollution: some test files call vi.stubGlobal() (e.g. window,
 // navigator, EventSource) at module scope without restoring. Under parallel file
