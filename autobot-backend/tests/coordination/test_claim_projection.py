@@ -298,4 +298,6 @@ def test_the_router_is_authenticated_and_mounted():
     assert router.dependencies, "the claim table must not be readable unauthenticated"
     mounted = {name: prefix for _, prefix, _, name in load_core_routers()}
     assert mounted.get("coordination") == "/coordination"
-    assert [r.path for r in router.routes] == ["/claims"]
+    # Directly declared routes: still only the claim table. The agent ledger (#18391) is a separate,
+    # included router (its own tests pin that it is GET-only), so it is not a path on this one.
+    assert [r.path for r in router.routes if hasattr(r, "path")] == ["/claims"]

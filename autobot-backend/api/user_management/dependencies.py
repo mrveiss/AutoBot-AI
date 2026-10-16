@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth_middleware import get_auth_middleware
 from autobot_shared.auth.permissions import Permission, is_admin_role, role_has_permission
+from autobot_shared.coordination.claim_company import set_company
 from user_management.database import get_async_session
 from user_management.services import (
     OrganizationService,
@@ -190,6 +191,13 @@ async def get_tenant_context(
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> TenantContext:
+    """Resolve the verified tenant context and stamp its company on coordination writes (#18391)."""
+    context = await _resolve_tenant_context(request, current_user, session)
+    set_company(str(context.org_id) if context.org_id else None)
+    return context
+
+
+async def _resolve_tenant_context(request: Request, current_user: dict, session: AsyncSession) -> TenantContext:
     """Build tenant context from current request and user (#10750 A5).
 
     Resolution precedence for ``org_id``:

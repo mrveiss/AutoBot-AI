@@ -324,6 +324,83 @@
         "title": "ActiveProviderResponse",
         "type": "object"
       },
+      "ActivityResponse": {
+        "properties": {
+          "activity": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityRow"
+            },
+            "title": "Activity",
+            "type": "array"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "activity",
+          "count"
+        ],
+        "title": "ActivityResponse",
+        "type": "object"
+      },
+      "ActivityRow": {
+        "properties": {
+          "agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "at": {
+            "title": "At",
+            "type": "string"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "type"
+        ],
+        "title": "ActivityRow",
+        "type": "object"
+      },
       "AgentCreateRequest": {
         "description": "Request to create an agent.",
         "properties": {
@@ -2606,6 +2683,93 @@
         "title": "CertificateResponse",
         "type": "object"
       },
+      "ClaimRow": {
+        "properties": {
+          "acquired_at": {
+            "title": "Acquired At",
+            "type": "string"
+          },
+          "agent_id": {
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "company_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stamped at write time; null = install-wide or legacy",
+            "title": "Company Id"
+          },
+          "expires_at": {
+            "title": "Expires At",
+            "type": "string"
+          },
+          "intent": {
+            "title": "Intent",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "renewals": {
+            "default": 0,
+            "description": "Explicit renewals since the claim was acquired",
+            "title": "Renewals",
+            "type": "integer"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "task_id": {
+            "title": "Task Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "kind",
+          "agent_id",
+          "task_id",
+          "mode",
+          "intent",
+          "acquired_at",
+          "expires_at"
+        ],
+        "title": "ClaimRow",
+        "type": "object"
+      },
+      "ClaimsResponse": {
+        "properties": {
+          "claims": {
+            "items": {
+              "$ref": "#/components/schemas/ClaimRow"
+            },
+            "title": "Claims",
+            "type": "array"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "claims",
+          "count"
+        ],
+        "title": "ClaimsResponse",
+        "type": "object"
+      },
       "CleanupResponse": {
         "description": "Cleanup operation response.",
         "properties": {
@@ -3224,6 +3388,101 @@
         "title": "ComponentsResponse",
         "type": "object"
       },
+      "ConflictRow": {
+        "properties": {
+          "agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "at": {
+            "title": "At",
+            "type": "string"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "release_refused",
+              "claim_expired",
+              "yield_unanswered",
+              "claim_lapsed_during_action"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "other_agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The holder, for a refused release",
+            "title": "Other Agent Id"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          }
+        },
+        "required": [
+          "at",
+          "kind"
+        ],
+        "title": "ConflictRow",
+        "type": "object"
+      },
+      "ConflictsResponse": {
+        "properties": {
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/ConflictRow"
+            },
+            "title": "Conflicts",
+            "type": "array"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "conflicts",
+          "count"
+        ],
+        "title": "ConflictsResponse",
+        "type": "object"
+      },
       "ConnectionTestRequest": {
         "description": "SSH connection test request.",
         "properties": {
@@ -3314,6 +3573,68 @@
           "message"
         ],
         "title": "ConnectionTestResponse",
+        "type": "object"
+      },
+      "ContentionResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "resources": {
+            "items": {
+              "$ref": "#/components/schemas/ContentionRow"
+            },
+            "title": "Resources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "resources",
+          "count"
+        ],
+        "title": "ContentionResponse",
+        "type": "object"
+      },
+      "ContentionRow": {
+        "properties": {
+          "contended": {
+            "description": "True when anyone is queued behind this resource",
+            "title": "Contended",
+            "type": "boolean"
+          },
+          "holders": {
+            "items": {
+              "$ref": "#/components/schemas/ClaimRow"
+            },
+            "title": "Holders",
+            "type": "array"
+          },
+          "kind": {
+            "description": "provider, cpu or queue",
+            "title": "Kind",
+            "type": "string"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "waiters": {
+            "items": {
+              "$ref": "#/components/schemas/WaiterRow"
+            },
+            "title": "Waiters",
+            "type": "array"
+          }
+        },
+        "required": [
+          "scope",
+          "kind",
+          "holders",
+          "waiters",
+          "contended"
+        ],
+        "title": "ContentionRow",
         "type": "object"
       },
       "DashboardOverview": {
@@ -3659,6 +3980,91 @@
           "updated_at"
         ],
         "title": "DeploymentResponse",
+        "type": "object"
+      },
+      "DevLoopActionRow": {
+        "properties": {
+          "at": {
+            "title": "At",
+            "type": "string"
+          },
+          "estimated_tokens": {
+            "title": "Estimated Tokens",
+            "type": "integer"
+          },
+          "intent": {
+            "title": "Intent",
+            "type": "string"
+          },
+          "issue": {
+            "title": "Issue",
+            "type": "integer"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue",
+          "intent",
+          "outcome",
+          "estimated_tokens",
+          "reason",
+          "at"
+        ],
+        "title": "DevLoopActionRow",
+        "type": "object"
+      },
+      "DevLoopHistoryResponse": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/DevLoopActionRow"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "issue": {
+            "title": "Issue",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issue",
+          "actions",
+          "count"
+        ],
+        "title": "DevLoopHistoryResponse",
+        "type": "object"
+      },
+      "DevLoopIssuesResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "issues": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Issues",
+            "type": "array"
+          }
+        },
+        "required": [
+          "issues",
+          "count"
+        ],
+        "title": "DevLoopIssuesResponse",
         "type": "object"
       },
       "DriftResolveJobResponse": {
@@ -5481,6 +5887,72 @@
           "provider"
         ],
         "title": "LLMTestResponse",
+        "type": "object"
+      },
+      "LedgerSourceStatus": {
+        "description": "What the SLM can and cannot read, so a screen never shows a gap as 'none'.",
+        "properties": {
+          "reachable": {
+            "title": "Reachable",
+            "type": "boolean"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "reachable"
+        ],
+        "title": "LedgerSourceStatus",
+        "type": "object"
+      },
+      "LedgerSourcesResponse": {
+        "properties": {
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/LedgerSourceStatus"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sources"
+        ],
+        "title": "LedgerSourcesResponse",
+        "type": "object"
+      },
+      "LedgerUnavailable": {
+        "description": "The typed 503 body: the source could not be read, which is not 'nothing there'.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "error": {
+            "const": "ledger_unavailable",
+            "default": "ledger_unavailable",
+            "title": "Error",
+            "type": "string"
+          },
+          "source": {
+            "description": "Which store could not be read (claims, waitlists, dev_loop, events)",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "detail"
+        ],
+        "title": "LedgerUnavailable",
         "type": "object"
       },
       "LogEntry": {
@@ -15007,6 +15479,93 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "WaiterRow": {
+        "properties": {
+          "agent_id": {
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "company_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stamped at write time; null = install-wide or legacy",
+            "title": "Company Id"
+          },
+          "expires_at": {
+            "title": "Expires At",
+            "type": "string"
+          },
+          "intent": {
+            "title": "Intent",
+            "type": "string"
+          },
+          "joined_at": {
+            "title": "Joined At",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "position": {
+            "description": "1-based position in the scope's queue",
+            "title": "Position",
+            "type": "integer"
+          },
+          "priority": {
+            "title": "Priority",
+            "type": "integer"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "task_id": {
+            "title": "Task Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "position",
+          "agent_id",
+          "task_id",
+          "mode",
+          "intent",
+          "priority",
+          "joined_at",
+          "expires_at"
+        ],
+        "title": "WaiterRow",
+        "type": "object"
+      },
+      "WaitlistsResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "waiters": {
+            "items": {
+              "$ref": "#/components/schemas/WaiterRow"
+            },
+            "title": "Waiters",
+            "type": "array"
+          }
+        },
+        "required": [
+          "waiters",
+          "count"
+        ],
+        "title": "WaitlistsResponse",
+        "type": "object"
+      },
       "WizardStatus": {
         "description": "Current state of the setup wizard.",
         "properties": {
@@ -23316,6 +23875,398 @@
         "summary": "Verify Mfa Setup",
         "tags": [
           "mfa"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/activity": {
+      "get": {
+        "description": "Recent coordination activity across the install, newest first.",
+        "operationId": "ledger_activity_api_monitoring_agent_ledger_activity_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Activity",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/claims": {
+      "get": {
+        "description": "Every held claim across the install: scope, mode, intent, expiry, renewals.",
+        "operationId": "ledger_claims_api_monitoring_agent_ledger_claims_get",
+        "parameters": [
+          {
+            "description": "Only claims of this scope kind",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only claims of this scope kind",
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Claims",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/conflicts": {
+      "get": {
+        "description": "Refused releases, claims expired while held, unanswered yields, lapsed dev-loop actions.",
+        "operationId": "ledger_conflicts_api_monitoring_agent_ledger_conflicts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Conflicts",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/contention": {
+      "get": {
+        "description": "Shared-resource scopes (provider, cpu, queue): holders and who waits.",
+        "operationId": "ledger_contention_api_monitoring_agent_ledger_contention_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Contention",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/dev-loop": {
+      "get": {
+        "description": "Issues the dev loop has a recorded action history for.",
+        "operationId": "ledger_dev_loop_issues_api_monitoring_agent_ledger_dev_loop_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevLoopIssuesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Dev Loop Issues",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/dev-loop/{issue}": {
+      "get": {
+        "description": "One issue's dev-loop action history, newest first, including refused and skipped attempts.",
+        "operationId": "ledger_dev_loop_history_api_monitoring_agent_ledger_dev_loop__issue__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Issue",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevLoopHistoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Dev Loop History",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/sources": {
+      "get": {
+        "description": "Which coordination stores this view can read right now, and which it never can.",
+        "operationId": "ledger_sources_api_monitoring_agent_ledger_sources_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerSourcesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Sources",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/waitlists": {
+      "get": {
+        "description": "Every queued agent behind a held scope, in position order.",
+        "operationId": "ledger_waitlists_api_monitoring_agent_ledger_waitlists_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaitlistsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Waitlists",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
         ]
       }
     },

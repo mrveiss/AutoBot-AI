@@ -36,19 +36,21 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
+from redis.exceptions import RedisError
+
 from a2a.task_manager import get_task_manager
 from autobot_shared.coordination.claim_waitlist import Waiter, next_waiter
+from autobot_shared.coordination.ledger_events import (
+    YIELD_ANSWERED,
+    YIELD_REQUESTED,
+    YIELD_TIMEOUT_S,
+    record_ledger_event,
+)
 from autobot_shared.coordination.work_claims import ClaimUnavailable, Scope
-from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
 logger = get_logger(__name__)
-
-#: How long a requester waits for a holder to answer before treating it as a
-#: refusal. Short: the requester is blocked while it waits, and a holder that
-#: has not answered in this long is busy working -- which is itself the answer.
-YIELD_TIMEOUT_S = env_int_clamped("AUTOBOT_WORK_CLAIM_YIELD_TIMEOUT_S", 30, min_v=1, max_v=600)
 
 #: Poll interval while awaiting an answer. Redis pub/sub would avoid the poll,
 #: but the decision is a single small value with a bounded wait, and a
@@ -114,7 +116,24 @@ async def request_yield(
             "reason": reason,
         },
     )
+    await _record(
+        YIELD_REQUESTED,
+        token=request.token,
+        scope=request.scope,
+        holder_task_id=holder_task_id,
+        requester_agent_id=requester_agent_id,
+        requester_task_id=requester_task_id,
+        reason=reason,
+    )
     return request
+
+
+async def _record(event_type: str, **fields: Any) -> None:
+    """Mirror a yield step into the ledger (#18391). Best-effort: the negotiation is the fact."""
+    try:
+        await record_ledger_event(await _redis(), event_type, **fields)
+    except (ClaimUnavailable, RedisError, OSError):
+        logger.warning("claim_yield: ledger event %s not recorded; Redis unavailable", event_type)
 
 
 async def answer_yield(token: str, decision: str, *, ttl_s: int | None = None) -> None:
@@ -127,6 +146,7 @@ async def answer_yield(token: str, decision: str, *, ttl_s: int | None = None) -
         decision,
         ex=YIELD_TIMEOUT_S if ttl_s is None else ttl_s,
     )
+    await _record(YIELD_ANSWERED, token=token, decision=decision)
 
 
 async def await_decision(request: YieldRequest, *, timeout_s: float | None = None) -> str:
