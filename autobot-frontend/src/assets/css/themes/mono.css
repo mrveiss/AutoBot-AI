@@ -10,8 +10,9 @@
  * Corporate theme: neutral zinc greys, no hue; the accent is the ink colour.
  * Activated via [data-theme="mono"] on document root (useTheme.ts).
  * Light-based: themes/light.css supplies the non-colour-name tokens (charts,
- * code syntax, badges, scrollbars) for this theme too. Surfaces, text and
- * borders reach the existing names through themes/refined-map.css.
+ * badges, scrollbars) for this theme too; code syntax is this theme's own.
+ * Surfaces, text and borders reach the existing names through
+ * themes/refined-map.css.
  */
 
 [data-theme="mono"] {
@@ -73,6 +74,21 @@
 
   /* Light supplies a slate strong border; mono borders stay neutral grey, strong is the ink. */
   --border-strong: var(--stroke);
+  /* Code syntax (#18497): no hue -- this theme's three inks, with keywords set
+     bold and comments italic so categories still read apart. */
+  --code-bg: #FAFAFA;
+  --code-text: #18181B;
+  --code-keyword: #18181B;
+  --code-operator: #18181B;
+  --code-string: #3F3F46;
+  --code-number: #3F3F46;
+  --code-comment: #52525B;
+  --code-function: #18181B;
+  --code-variable: #3F3F46;
+  --code-class: #18181B;
+  --code-tag: #18181B;
+  --code-attribute: #3F3F46;
+  --code-keyword-weight: 700;
 }
 
 /* Monochrome means no hue: the accent preset (accents.css) does not apply. */

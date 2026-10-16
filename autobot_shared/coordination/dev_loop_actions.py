@@ -181,6 +181,24 @@ async def recent(issue: int, *, limit: int = DEFAULT_RECENT_LIMIT) -> list[DevLo
     return [_decode(entry) for entry in raw]
 
 
+async def issues_with_history() -> list[int]:
+    """Every issue that has a recorded action history, ascending (#18391).
+
+    Raises ``RuntimeError`` when Redis is unreachable, like :func:`recent`: an
+    empty list means no issue was ever acted on, not that nobody could look.
+    """
+    client = await get_async_redis_client(database="main")
+    if client is None:
+        raise RuntimeError("dev-loop actions: Redis client unavailable; the issue list cannot be read")
+    prefix = _ACTIONS_KEY.format(issue="")
+    try:
+        keys = [k async for k in client.scan_iter(match=f"{prefix}*")]
+    except Exception as exc:  # noqa: BLE001 -- re-raised as the contract's type, see `recent`
+        raise RuntimeError("dev-loop actions: the issue list cannot be read") from exc
+    numbers = (k.decode() if isinstance(k, bytes) else k for k in keys)
+    return sorted(int(n[len(prefix) :]) for n in numbers if n[len(prefix) :].isdigit())
+
+
 def _decode(raw: Any) -> DevLoopAction:
     if isinstance(raw, bytes):
         raw = raw.decode()
@@ -218,6 +236,7 @@ __all__ = [
     "OUTCOME_SKIPPED_CLAIMED",
     "action_payload",
     "build_action",
+    "issues_with_history",
     "last_refusal",
     "recent",
     "record",

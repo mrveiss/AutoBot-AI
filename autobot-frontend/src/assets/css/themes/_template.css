@@ -165,4 +165,19 @@
   --badge-sprint-active-bg: #d1fae5;    --badge-sprint-active-fg: #065f46;
   --badge-sprint-review-bg: #ddd6fe;    --badge-sprint-review-fg: #5b21b6;
   --badge-sprint-closed-bg: #f3f4f6;    --badge-sprint-closed-fg: #374151;
+
+  /* ============================================
+   * CODE SYNTAX (optional, #18497)
+   * Code cells and code blocks colour syntax from these. Omit the block and
+   * the theme inherits its base (light or dark) palette; set it to give the
+   * theme its own. Weight and style tokens let a no-hue palette still
+   * separate keywords and comments.
+   * ============================================ */
+  /* --code-bg: #0d1117;  --code-text: #c9d1d9;
+     --code-keyword: #ff7b72;  --code-operator: #ff7b72;
+     --code-string: #a5d6ff;   --code-number: #79c0ff;
+     --code-comment: #8b949e;  --code-function: #d2a8ff;
+     --code-variable: #ffa657; --code-class: #7ee787;
+     --code-tag: #7ee787;      --code-attribute: #79c0ff;
+     --code-keyword-weight: 400; --code-comment-style: italic; */
 }

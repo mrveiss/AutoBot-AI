@@ -30,7 +30,7 @@
         :class="[
           'p-4 rounded-b rounded-none bg-bg-card border border-t-0 border-border-secondary overflow-auto',
           'text-xs leading-relaxed font-mono',
-          isDark ? 'hljs-dark' : 'hljs-light',
+          'hljs-theme',
         ]"
         role="region"
         aria-label="Code block"
@@ -84,10 +84,6 @@ const copyTimeout = ref<number>()
 // #14770: third inline reader of this preference in the codebase; all three
 // now go through the composable, which also makes them reactive.
 const { prefersReducedMotion } = useReducedMotion()
-
-const isDark = typeof window !== 'undefined'
-  ? window.matchMedia('(prefers-color-scheme: dark)').matches
-  : false
 
 const codeContent = computed(() => props.richPayload?.code)
 const codeLanguage = computed(() => props.richPayload?.language || '')
@@ -210,81 +206,45 @@ button:focus-visible {
   border-width: 0;
 }
 
-/* Highlight.js theme: dark mode */
-.hljs-dark {
+/* Highlight.js colours from the active theme (#18497): one rule set, no
+   dark/light switch on the OS colour scheme. */
+.hljs-theme {
   background-color: var(--bg-card);
   color: var(--text-primary);
 }
 
-.hljs-dark :deep(.hljs-attr),
-.hljs-dark :deep(.hljs-attribute) {
-  color: var(--codecell-syntax-attr-dark);
+.hljs-theme :deep(.hljs-attr),
+.hljs-theme :deep(.hljs-attribute) {
+  color: var(--codecell-syntax-attr);
 }
 
-.hljs-dark :deep(.hljs-literal),
-.hljs-dark :deep(.hljs-number) {
-  color: var(--codecell-syntax-number-dark);
+.hljs-theme :deep(.hljs-literal),
+.hljs-theme :deep(.hljs-number) {
+  color: var(--codecell-syntax-number);
 }
 
-.hljs-dark :deep(.hljs-string) {
-  color: var(--codecell-syntax-string-dark);
+.hljs-theme :deep(.hljs-string) {
+  color: var(--codecell-syntax-string);
 }
 
-.hljs-dark :deep(.hljs-built_in),
-.hljs-dark :deep(.hljs-builtin-name) {
-  color: var(--codecell-syntax-callable-dark);
+.hljs-theme :deep(.hljs-built_in),
+.hljs-theme :deep(.hljs-builtin-name),
+.hljs-theme :deep(.hljs-title),
+.hljs-theme :deep(.hljs-function) {
+  color: var(--codecell-syntax-callable);
 }
 
-.hljs-dark :deep(.hljs-title),
-.hljs-dark :deep(.hljs-function) {
-  color: var(--codecell-syntax-callable-dark);
+.hljs-theme :deep(.hljs-keyword) {
+  color: var(--codecell-syntax-keyword);
+  font-weight: var(--codecell-syntax-keyword-weight);
 }
 
-.hljs-dark :deep(.hljs-keyword) {
-  color: var(--codecell-syntax-keyword-dark);
+.hljs-theme :deep(.hljs-comment) {
+  color: var(--codecell-syntax-comment);
+  font-style: var(--codecell-syntax-comment-style);
 }
 
-.hljs-dark :deep(.hljs-comment) {
-  color: var(--codecell-syntax-comment-dark);
-  font-style: italic;
-}
-
-/* Highlight.js theme: light mode */
-.hljs-light {
-  background-color: var(--bg-card);
-  color: var(--text-primary);
-}
-
-.hljs-light :deep(.hljs-attr),
-.hljs-light :deep(.hljs-attribute) {
-  color: var(--codecell-syntax-attr-light);
-}
-
-.hljs-light :deep(.hljs-literal),
-.hljs-light :deep(.hljs-number) {
-  color: var(--codecell-syntax-number-light);
-}
-
-.hljs-light :deep(.hljs-string) {
-  color: var(--codecell-syntax-string-light);
-}
-
-.hljs-light :deep(.hljs-built_in),
-.hljs-light :deep(.hljs-builtin-name) {
-  color: var(--codecell-syntax-callable-light);
-}
-
-.hljs-light :deep(.hljs-title),
-.hljs-light :deep(.hljs-function) {
-  color: var(--codecell-syntax-callable-light);
-}
-
-.hljs-light :deep(.hljs-keyword) {
-  color: var(--codecell-syntax-keyword-light);
-}
-
-.hljs-light :deep(.hljs-comment) {
-  color: var(--codecell-syntax-comment-light);
-  font-style: italic;
+.hljs-theme :deep(.hljs-tag) {
+  color: var(--codecell-syntax-tag);
 }
 </style>

@@ -61,12 +61,9 @@ from __future__ import annotations
 #: venv_reconcile), the remaining 47 confirmed by a full-population sweep
 #: (run 34760508167) dispatched specifically to check every listed module,
 #: not just the ones one PR's diff happened to touch.
-HAS_IMPORT_EFFECT: frozenset[tuple[str, str]] = frozenset(
-    {
-        ("autobot-backend", "api.multimodal"),
-        ("autobot-backend", "api.vision"),
-    }
-)
+#: Emptied on the train-15d tree: the hermeticity sweep found api.multimodal and api.vision
+#: import inertly, and this list only shrinks.
+HAS_IMPORT_EFFECT: frozenset[tuple[str, str]] = frozenset()
 
 #: 1 -- a facade doing ``from utils.error_boundaries import ...``. That ``utils`` is the
 #: backend's top-level package, so the module imports only with ``autobot-backend`` on

@@ -139,7 +139,8 @@ def test_the_router_is_mounted_on_the_monitoring_router():
 
     mounts = _include_router_calls(tree, "monitoring_router")
 
-    assert [ast.unparse(call.args[0]) for call in mounts] == ["gpu_router"]
+    # The GPU router is mounted here; other routers may share monitoring_router (#18391 adds the ledger).
+    assert "gpu_router" in [ast.unparse(call.args[0]) for call in mounts]
 
 
 def test_main_includes_the_monitoring_router_behind_service_management():

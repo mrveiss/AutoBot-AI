@@ -177,7 +177,8 @@ def test_the_expansion_attributes_routes_to_the_registered_router() -> None:
 #: module that composes with `router.include_router(other)` mounts routes this
 #: never visits, so the pair count below is a floor, not a total.
 #:
-#: Sixteen non-test modules, measured. An earlier count of 77 was this same
+#: Seventeen non-test modules, measured (16 until #18391: api/coordination now
+#: composes the agent-ledger router with include_router). An earlier count of 77 was this same
 #: grep including `*_test.py`, which is why the pin is computed and asserted
 #: rather than written down from a shell one-liner.
 #:
@@ -193,7 +194,7 @@ def test_the_expansion_attributes_routes_to_the_registered_router() -> None:
 #: Until then the blind spot is PINNED, so it cannot quietly grow: if a module
 #: starts composing with include_router, this fails and the next person learns
 #: the guard got blinder rather than discovering it years later.
-COMPOSING_MODULES_PIN = 16
+COMPOSING_MODULES_PIN = 17
 
 
 def _modules_using_include_router() -> list[str]:
