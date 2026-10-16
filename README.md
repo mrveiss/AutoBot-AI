@@ -79,7 +79,8 @@ adding fleet nodes, enrolling agents, assigning roles, and provisioning.
 git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
 cp .env.example .env
-docker compose up -d
+bash docker/generate-secrets.sh   # per-host secrets + a free network range
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d
 ```
 User UI at **http://localhost**, SLM admin at **http://localhost/slm/**.
 
@@ -249,7 +250,8 @@ graph TB
 Fastest way to get started. Includes all services pre-configured.
 
 ```bash
-docker compose up -d
+bash docker/generate-secrets.sh
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d
 ```
 
 ### Native Installation
@@ -258,7 +260,8 @@ For development or custom setups. See [INSTALL.md](INSTALL.md).
 ### Development Mode
 For contributing to AutoBot:
 ```bash
-docker compose -f docker-compose.dev.yml up -d
+cp docker-compose.override.example.yml docker-compose.override.yml
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d
 ```
 
 ---

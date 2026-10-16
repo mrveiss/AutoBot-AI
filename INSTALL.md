@@ -98,6 +98,7 @@ Environment variables skip the matching interactive prompt:
 | `AUTOBOT_SLM_ADMIN_PASSWORD=<pass>` | Same as `--admin-pass=` |
 | `AUTOBOT_INSTALL_INTERFACE=<iface>` | Pick the network interface by name instead of the menu |
 | `OVERRIDE_IP=<ip>` | Skip IP detection and use this address |
+| `NETWORK_SUBNET=<cidr>` / `NETWORK_GATEWAY=<ip>` | Use this network instead of detecting it. The subnet is the source the firewall rules allow, so if it cannot be detected the installer stops and asks for these instead of guessing |
 
 ### Log Files
 
@@ -115,10 +116,24 @@ the legacy `docker-compose` v1). Memory depends on what you start — the figure
 the containers' configured memory limits (ceilings, not measured use), and building the
 images needs headroom on top:
 
-| What you start | Containers | Memory limits (sum) | Host RAM |
-|----------------|------------|---------------------|----------|
-| SLM web GUI only (`--profile slm`) | SLM, its GUI, Redis, PostgreSQL | ~3.1 GB | 4 GB+ free |
-| Full stack | backend, worker, celery-beat, SLM, frontend, Redis, PostgreSQL, ChromaDB | ~9 GB | 16 GB recommended |
+| What you start | Containers | Memory limits (sum) | Measured use | Host RAM |
+|----------------|------------|---------------------|--------------|----------|
+| SLM web GUI only (`--profile slm`) | SLM, its GUI, Redis, PostgreSQL | ~3.1 GB | ~215 MiB just after start, idle (CI) | 4 GB+ free |
+| Full stack | backend, worker, celery-beat, SLM, frontend, Redis, PostgreSQL, ChromaDB | ~9 GB | not measured | 16 GB recommended |
+
+### First: per-host secrets and network range
+
+```bash
+bash docker/generate-secrets.sh
+```
+
+This writes the gitignored `docker/.env.secrets`: unique signing secrets and passwords,
+and `AUTOBOT_DOCKER_MGMT_PREFIX`, a private `/24` for the stack's management network that
+overlaps none of this host's routes or existing Docker networks. Compose refuses to start
+without it; there is no built-in default range, because a fixed one can collide with your
+LAN and cut the host off the network. To choose the range yourself, set
+`AUTOBOT_DOCKER_MGMT_PREFIX=<first three octets>` (e.g. `10.77.3`) before running the
+script. Keep the file: every command below passes it.
 
 ### SLM web GUI first (smallest start)
 
@@ -128,7 +143,8 @@ from the GUI's Setup Wizard:
 ```bash
 git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
-docker compose --profile slm up -d --build autobot-slm-gui
+bash docker/generate-secrets.sh
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets --profile slm up -d --build autobot-slm-gui
 ```
 
 The SLM GUI is then at **http://localhost/slm/**. It binds port 80, like the full stack's
@@ -137,7 +153,7 @@ frontend — run one or the other, not both.
 ### Full stack
 
 ```bash
-docker compose up -d --build
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d --build
 ```
 
 This starts the core services: backend, SLM, frontend, Redis, PostgreSQL, and
@@ -149,10 +165,10 @@ Optional services are activated with `--profile`:
 
 ```bash
 # Add a local Ollama LLM server
-docker compose --profile ollama up -d --build
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets --profile ollama up -d --build
 
 # Add Prometheus + Grafana monitoring
-docker compose --profile monitoring up -d --build
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets --profile monitoring up -d --build
 ```
 
 ### Exposed Services
@@ -172,7 +188,7 @@ Copy the override template to enable live-reload for frontend and backend code:
 
 ```bash
 cp docker-compose.override.example.yml docker-compose.override.yml
-docker compose up -d
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d
 ```
 
 Edit source files on the host and changes are reflected inside the containers
