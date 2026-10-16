@@ -54,8 +54,13 @@ readonly REPO_SLUG="mrveiss/AutoBot-AI"
 readonly DEFAULT_REPO="https://${REPO_HOST}/${REPO_SLUG}.git"
 readonly NODESOURCE_HOST="deb.nodesource.com"
 readonly DEFAULT_BRANCH="main"
+# #18586: where this script was started from, resolved before any cd; empty under `curl | bash`
+SCRIPT_DIR=""
+[[ -f "${BASH_SOURCE[0]:-}" ]] && SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
 readonly REQUIRED_DISK_MB=5120
 readonly REQUIRED_MEM_MB=1536   # SLM control plane only (#17875): postgres + slm-backend + nginx
+readonly PROC_VERSION_FILE="/proc/version"  # #18583: WSL detection reads this
 
 # Runtime flags
 UNATTENDED=false
@@ -315,11 +320,18 @@ Examples:
        $0 --reinstall                        # Fully scripted reinstall (#7057)
 
 Post-Install:
-  1. Open https://<server-ip> in a browser
+  1. Open https://<server-ip>/slm/ in a browser
   2. Log in with the admin credentials shown at the end
   3. Follow the Setup Wizard to add and configure fleet nodes
 
 EOF
+}
+
+# #18583: name the requirement and the way out for this host — not a WSL2-only hint for all
+systemd_missing_hint() {
+    local fix="Use a Debian/Ubuntu VM or bare-metal host booted with systemd; in a container or a host without systemd, use the Docker path in INSTALL.md instead."
+    grep -qi microsoft "${PROC_VERSION_FILE}" 2>/dev/null && fix="On WSL2 (WSL1 cannot run systemd): add [boot] systemd=true to /etc/wsl.conf and restart WSL."
+    echo "systemd must be running as PID 1 (see Requirements in INSTALL.md). ${fix}"
 }
 
 # =============================================================================
@@ -336,7 +348,7 @@ preflight_checks() {
 
     # pidof fails on WSL2 (can't resolve /proc/1/exe), use ps fallback
     if ! pidof systemd &>/dev/null && [[ "$(ps -p 1 -o comm= 2>/dev/null)" != "systemd" ]]; then
-        fatal "systemd is required. On WSL2: add [boot] systemd=true to /etc/wsl.conf and restart WSL"
+        fatal "$(systemd_missing_hint)"
     fi
     success "systemd is running"
 
@@ -498,8 +510,20 @@ system_setup() {
 # Phase 3: Code Deployment
 # =============================================================================
 
+# #18586: ./install.sh run from a clone installs ${DEFAULT_REPO} at ${GIT_BRANCH}, not the commit
+# on disk — say so before cloning. install.sh sits at the repo root, so SCRIPT_DIR is the checkout;
+# an inherited GIT_DIR is dropped, and safe.directory covers sudo running as root in a user's clone.
+report_local_checkout() {
+    local sha
+    [[ -n "${SCRIPT_DIR}" && "${SCRIPT_DIR}" != "${CODE_SOURCE}" ]] && command -v git &>/dev/null || return 0
+    sha="$(env -u GIT_DIR -u GIT_WORK_TREE git -c safe.directory="${SCRIPT_DIR}" -C "${SCRIPT_DIR}" rev-parse --short HEAD 2>/dev/null)" || return 0
+    warn "Run from a local checkout (${SCRIPT_DIR} @ ${sha}): this installs ${DEFAULT_REPO} branch ${GIT_BRANCH}, not that checkout."
+    warn "Pass --branch=<name> to install another pushed branch; local unpushed commits are not installed."
+}
+
 code_deployment() {
     phase "Code Deployment"
+    report_local_checkout
 
     if [[ -d "${CODE_SOURCE}/.git" ]]; then
         info "Updating existing repository..."
@@ -524,6 +548,10 @@ code_deployment() {
         run_ok "Cloning AutoBot repository (branch: ${GIT_BRANCH})" \
             sudo -u "${AUTOBOT_USER}" git clone -b "${GIT_BRANCH}" "${DEFAULT_REPO}" "${CODE_SOURCE}"
     fi
+
+    local installed_sha  # #18586: record exactly what was installed
+    installed_sha="$(sudo -u "${AUTOBOT_USER}" git -C "${CODE_SOURCE}" rev-parse HEAD)"
+    success "Installing ${DEFAULT_REPO} branch ${GIT_BRANCH} @ ${installed_sha}"
 
     # Copy code from code_source to service directories where Ansible expects them
     info "Distributing code to service directories..."
@@ -1184,15 +1212,8 @@ uninstall() {
         pg_dropcluster --stop "${pg_version}" main >> "${LOG_FILE}" 2>&1 || true
     fi
 
-    local packages=(
-        "postgresql-${pg_version}"
-        "postgresql-client-${pg_version}"
-        "postgresql-contrib-${pg_version}"
-        python3-psycopg2
-        grafana
-        ansible
-        nodejs
-    )
+    local packages=("postgresql-${pg_version}" "postgresql-client-${pg_version}"
+        "postgresql-contrib-${pg_version}" python3-psycopg2 grafana ansible nodejs)
     for pkg in "${packages[@]}"; do
         if dpkg -l "${pkg}" &>/dev/null 2>&1; then
             env DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq "${pkg}" >> "${LOG_FILE}" 2>&1 \
@@ -1206,18 +1227,7 @@ uninstall() {
 
     # ---- Phase 4: Remove APT repositories ----
     info "Removing APT repositories..."
-    local repo_files=(
-        /etc/apt/sources.list.d/pgdg.list
-        /etc/apt/sources.list.d/pgdg.sources
-        /etc/apt/sources.list.d/deadsnakes-*.list
-        /etc/apt/sources.list.d/deadsnakes-*.sources
-        /etc/apt/sources.list.d/nodesource.list
-        /etc/apt/sources.list.d/nodesource.sources
-        /etc/apt/sources.list.d/grafana.list
-        /etc/apt/sources.list.d/grafana.sources
-        /etc/apt/sources.list.d/ansible-*.list
-        /etc/apt/sources.list.d/ansible-*.sources
-    )
+    local repo_files=(/etc/apt/sources.list.d/{pgdg,deadsnakes-*,nodesource,grafana,ansible-*}.{list,sources})
     for pattern in "${repo_files[@]}"; do
         # shellcheck disable=SC2086
         for f in ${pattern}; do
@@ -1235,16 +1245,7 @@ uninstall() {
 
     # ---- Phase 5: Remove directories and files ----
     info "Removing AutoBot directories and files..."
-    local dirs=(
-        /opt/autobot
-        /var/lib/slm
-        /var/log/autobot
-        /etc/autobot
-        /var/lib/postgresql
-        /etc/postgresql
-        /var/lib/grafana
-        /etc/grafana
-    )
+    local dirs=(/opt/autobot /var/lib/slm /var/log/autobot /etc/autobot /var/lib/postgresql /etc/postgresql /var/lib/grafana /etc/grafana)
     for dir in "${dirs[@]}"; do
         if [[ -d "${dir}" ]]; then
             rm -rf "${dir}"
@@ -1253,14 +1254,11 @@ uninstall() {
     done
 
     # Remove credential and config files
-    rm -f /root/autobot-credentials.txt 2>/dev/null || true
-    rm -f /etc/sudoers.d/autobot 2>/dev/null || true
-    rm -f /tmp/.autobot_detected_ip 2>/dev/null || true
+    rm -f /root/autobot-credentials.txt /etc/sudoers.d/autobot /tmp/.autobot_detected_ip 2>/dev/null || true
 
     # Remove nginx site config (but leave nginx installed)
-    rm -f /etc/nginx/sites-available/autobot-slm 2>/dev/null || true
-    rm -f /etc/nginx/sites-enabled/autobot-slm 2>/dev/null || true
-    rm -f /etc/systemd/system/nginx.service.d/ssl-cert-check.conf 2>/dev/null || true
+    rm -f /etc/nginx/sites-available/autobot-slm /etc/nginx/sites-enabled/autobot-slm \
+          /etc/systemd/system/nginx.service.d/ssl-cert-check.conf 2>/dev/null || true
 
     # ---- Phase 6: Remove autobot user ----
     info "Removing ${AUTOBOT_USER} user..."

@@ -26,10 +26,16 @@ ready to run the core and install modules.
 | Requirement | Minimum |
 |-------------|---------|
 | OS | Debian 11+ / Ubuntu 22.04+ |
-| RAM | 4 GB |
-| Disk | 20 GB free |
+| Init system | **systemd running as PID 1** — the installer manages every service as a systemd unit |
+| RAM | 1.5 GB (the installer refuses to run below this; SLM control plane only) |
+| Disk | 5 GB free (the installer refuses to run below this); 20 GB recommended |
 | Access | Root (or sudo) |
 | Network | Internet access for package downloads |
+
+**Supported hosts:** a Debian/Ubuntu VM or bare-metal machine booted with systemd, or
+WSL2 with systemd enabled (`[boot] systemd=true` in `/etc/wsl.conf`). **Not supported by
+`install.sh`:** containers and other hosts where systemd is not PID 1 — use the
+[Docker deployment](#docker-deployment) there instead.
 
 ---
 
@@ -51,25 +57,47 @@ The installer takes 10-20 minutes depending on network speed and hardware.
 
 ## Installer Phases
 
-The install script runs six phases automatically:
+The install script runs seven phases automatically:
 
 | Phase | Description |
 |-------|-------------|
-| 1/6 Pre-flight | Checks OS, disk, memory, internet, existing installs |
-| 2/6 System Setup | Installs system packages, creates `autobot` user, sets up directories |
-| 3/6 Code Deployment | Clones the repository to `/opt/autobot/code_source`, creates a Python venv |
-| 4/6 Ansible Deployment | Runs `deploy-slm-manager.yml` locally (PostgreSQL, SLM backend, nginx, monitoring) |
-| 5/6 Service Verification | Waits for the SLM backend to become healthy (up to 2 minutes) |
-| 6/6 Finalize | Writes the install marker, prints access URL and credentials |
+| 1/7 Pre-flight | Checks root, systemd, OS, disk, memory, internet, existing installs |
+| 2/7 System Setup | Installs system packages, creates `autobot` user, sets up directories |
+| 3/7 Code Deployment | Clones the repository to `/opt/autobot/code_source`, creates a Python venv |
+| 4/7 Ansible Deployment | Runs `deploy-slm-manager.yml` locally (PostgreSQL, SLM backend, nginx, monitoring) |
+| 5/7 Service Verification | Waits for the SLM backend to become healthy (up to 2 minutes) |
+| 6/7 Register Local Node | Registers this host with the SLM as its first node and assigns the code source |
+| 7/7 Finalize | Writes the install marker, prints access URL and credentials |
+
+**Which code is installed:** phase 3 clones `main` from GitHub (or the branch given with
+`--branch=`), even when you run `./install.sh` from a local clone — the installer warns when
+that happens. Only pushed branches can be installed. The installed commit is printed and
+logged.
 
 ### Installer Options
 
-```
-sudo ./install.sh              # Standard interactive install
-sudo ./install.sh --unattended # Skip all prompts (CI/automation)
-sudo ./install.sh --reinstall  # Re-run on an already-installed system
-sudo ./install.sh --help       # Show help
-```
+| Option | Effect |
+|--------|--------|
+| *(none)* | Standard interactive install |
+| `--unattended` | Run without prompts, use all defaults (CI/automation) |
+| `--reinstall` | Force a reinstall over an existing installation |
+| `--uninstall` | Completely remove AutoBot and its dependencies (asks for confirmation) |
+| `--yes`, `-y` | Skip confirmation prompts (use with `--uninstall`) |
+| `--validate` | Verify installation integrity (required service directories present) |
+| `--branch=BRANCH` | Git branch to install (default: `main`) |
+| `--admin-pass=PASS` | SLM admin password (auto-generated if not set) |
+| `--ip=IP` | Override the auto-detected IP address (multi-interface hosts) |
+| `--rotate-secrets` | On reinstall, replace the existing SLM admin password. By default a reinstall keeps the password set in the wizard and ignores `--admin-pass=` |
+| `--help`, `-h` | Show help |
+
+Environment variables skip the matching interactive prompt:
+
+| Variable | Effect |
+|----------|--------|
+| `AUTOBOT_INSTALL_BRANCH=<branch>` | Same as `--branch=` |
+| `AUTOBOT_SLM_ADMIN_PASSWORD=<pass>` | Same as `--admin-pass=` |
+| `AUTOBOT_INSTALL_INTERFACE=<iface>` | Pick the network interface by name instead of the menu |
+| `OVERRIDE_IP=<ip>` | Skip IP detection and use this address |
 
 ### Log Files
 
@@ -79,12 +107,36 @@ All output is logged to `/var/log/autobot/install-<timestamp>.log`.
 
 ## Docker Deployment
 
-For single-node or development setups, Docker Compose runs the full stack without
-the installer or Ansible:
+For single-node or development setups, Docker Compose runs the stack without the
+installer, Ansible or systemd.
+
+**Requirements:** Docker Engine 24.0+ with the Compose v2 plugin (`docker compose`, not
+the legacy `docker-compose` v1). Memory depends on what you start — the figures below are
+the containers' configured memory limits (ceilings, not measured use), and building the
+images needs headroom on top:
+
+| What you start | Containers | Memory limits (sum) | Host RAM |
+|----------------|------------|---------------------|----------|
+| SLM web GUI only (`--profile slm`) | SLM, its GUI, Redis, PostgreSQL | ~3.1 GB | 4 GB+ free |
+| Full stack | backend, worker, celery-beat, SLM, frontend, Redis, PostgreSQL, ChromaDB | ~9 GB | 16 GB recommended |
+
+### SLM web GUI first (smallest start)
+
+Start only the Service Lifecycle Manager and its web GUI, then add the rest of the fleet
+from the GUI's Setup Wizard:
 
 ```bash
 git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
+docker compose --profile slm up -d --build autobot-slm-gui
+```
+
+The SLM GUI is then at **http://localhost/slm/**. It binds port 80, like the full stack's
+frontend — run one or the other, not both.
+
+### Full stack
+
+```bash
 docker compose up -d --build
 ```
 
@@ -108,7 +160,7 @@ docker compose --profile monitoring up -d --build
 | Service | URL |
 |---------|-----|
 | Frontend (user UI) | http://localhost |
-| SLM Admin | http://localhost/slm |
+| SLM Admin | http://localhost/slm/ |
 | Backend API | http://localhost/api |
 | RedisInsight | http://localhost:8001 |
 | Ollama | http://localhost:11434 (profile: `ollama`) |
@@ -138,7 +190,7 @@ Docker Compose reads `.env.docker` by default. Copy `.env.example` to
 After the installer finishes, open the SLM web UI in your browser:
 
 ```
-https://<server-ip>
+https://<server-ip>/slm/
 ```
 
 Log in with the admin credentials printed at the end of the install. On first
