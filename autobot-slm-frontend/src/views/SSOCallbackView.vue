@@ -56,7 +56,7 @@ onMounted(async () => {
       router.push({ name: 'login', query: { error: 'sso_failed' } })
       return
     }
-    sessionStorage.setItem('slm_access_token', token)
+    authStore.adoptToken(token)
     await authStore.checkAuth()
     router.push('/')
   } catch (e) {

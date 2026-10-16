@@ -33,6 +33,11 @@ python:
   # bypassed: a PR touching only this workflow computes `python != true`,
   # python-suite reports green, and the test guarding it never runs.
   - '.github/workflows/duplication-guard.yml'
+  # #17856: frontend_api_timeout_ssot_17856_test.py reads both files' API
+  # timeout and holds them equal to TimeoutConfig.api; an edit confined to one
+  # must run it.
+  - '.env.example'
+  - 'autobot-frontend/.env.example'
   # #17329: frontend_path_filter_mirror_test.py PARSES this file and compares it
   # to frontend-test.yml's push paths, so its verdict depends on the content --
   # a real dependency, covered here rather than recorded as a bypass.

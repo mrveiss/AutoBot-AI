@@ -156,6 +156,9 @@ ALLOWED_ADDITIONS = {
             f"{WORKFLOWS}/_changes.yml",
             f"{WORKFLOWS}/migration-gate.yml",
             f"{WORKFLOWS}/ai-security-review.yml",
+            # #17856: frontend_api_timeout_ssot_17856_test reads both .env.example files.
+            ".env.example",
+            "autobot-frontend/.env.example",
         ]
     },
     # frontend_path_filter_mirror_test pins frontend-test.yml's on.push.paths to this file, so the

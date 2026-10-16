@@ -17,6 +17,7 @@ import type { SLMWebSocketMessage, NodeHealth } from '@/types/slm'
 import { getConfig } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
+import { readSlmToken } from '@/utils/authStorage'
 import { HEALTH_PROBE_TIMEOUT_MS } from '@/constants/api-timeouts'
 
 const logger = createLogger('SlmWebSocket')
@@ -108,7 +109,7 @@ function doConnect(): void {
   }
 
   try {
-    const token = sessionStorage.getItem('slm_access_token')
+    const token = readSlmToken()
     socket.value = token
       ? new WebSocket(WS_URL, ['bearer', token])
       : new WebSocket(WS_URL)
