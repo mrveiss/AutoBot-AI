@@ -118,7 +118,7 @@ _SYNC_THEN_DELETE_SITES: tuple[tuple[str, str, str, str], ...] = (
     ),
     (
         "roles/slm_agent/tasks/main.yml",
-        "SLM Agent | Copy agent source - heartbeat_payload.py",
+        "SLM Agent | Copy agent source modules from code_source (#18548)",
         "{{ slm_agent_dir }}/slm/agent",
         "SLM Agent",
     ),

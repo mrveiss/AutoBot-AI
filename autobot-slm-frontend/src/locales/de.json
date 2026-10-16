@@ -344,7 +344,7 @@
     "runRsyncFromTo": "Run rsync from {source} to {dest}",
     "running": "Wird ausgeführt...",
     "sLMManagerRestarting": "SLM Manager Restarting",
-    "schedule": "Schedule",
+    "schedule": "Zeitplan",
     "scheduledUpdates": "Scheduled Updates",
     "showDetails": "Show details",
     "slmSelfUpdateStage": "SLM server",

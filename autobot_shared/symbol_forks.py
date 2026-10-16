@@ -37,10 +37,6 @@ FORK_EXCLUDED_PARTS = frozenset({"__pycache__", "node_modules", "venv", ".venv",
 #: Names whose repetition across modules is the intended design, not a fork.
 FORK_EXCLUDED_NAMES = frozenset({"main", "upgrade", "downgrade", "migrate"})
 
-#: A MANDATORY byte-identical mirror, not a fork (#16401): the ansible payload
-#: copy of ``autobot-slm-backend/slm/agent/``.
-FORK_MIRRORED_PREFIX = "autobot-slm-backend/ansible/roles/slm_agent/files/"
-
 _GIT_LS_FILES_TIMEOUT_SECONDS = 60
 
 
@@ -90,16 +86,9 @@ def fork_is_test_file(path: Path) -> bool:
     return name.endswith("_test.py") or name.startswith("test_") or "tests" in path.parts
 
 
-def fork_is_mandatory_mirror(path: Path) -> bool:
-    """True for the ansible payload copy of ``autobot-slm-backend/slm/agent/``."""
-    return path.as_posix().startswith(FORK_MIRRORED_PREFIX)
-
-
 def fork_in_population(path: Path) -> bool:
     """The declared boundary, in one place so every caller shares it."""
     if FORK_EXCLUDED_PARTS & set(path.parts):
-        return False
-    if fork_is_mandatory_mirror(path):
         return False
     return not fork_is_test_file(path)
 

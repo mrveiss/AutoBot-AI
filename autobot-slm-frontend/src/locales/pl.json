@@ -344,7 +344,7 @@
     "runRsyncFromTo": "Run rsync from {source} to {dest}",
     "running": "Uruchomiono...",
     "sLMManagerRestarting": "SLM Manager Restarting",
-    "schedule": "Schedule",
+    "schedule": "Harmonogram",
     "scheduledUpdates": "Scheduled Updates",
     "showDetails": "Show details",
     "slmSelfUpdateStage": "SLM server",

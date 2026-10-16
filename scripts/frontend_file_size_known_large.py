@@ -167,7 +167,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/llc/OrgChart.vue": 1527,
     "autobot-frontend/src/views/llc/ProjectBrowserView.vue": 1379,
     "autobot-frontend/src/views/llc/RolesView.vue": 1030,
-    "autobot-frontend/src/views/llc/RoutinesView.vue": 691,
+    "autobot-frontend/src/views/llc/RoutinesView.vue": 688,
     "autobot-frontend/src/views/llc/SprintBoardView.vue": 681,
     "autobot-frontend/src/views/llc/WorkItemDetail.vue": 1069,
     "autobot-infrastructure/shared/ide-extensions/vscode-autobot/src/extension.ts": 741,

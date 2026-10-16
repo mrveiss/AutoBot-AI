@@ -9803,5 +9803,104 @@
       "unreachableAsOf": "Nav sasniedzams — pakalpojumu statuss nezināms — statuss {time}"
     },
     "lastKnown": "{text} (pēdējais zināmais)"
+  },
+  "schedule": {
+    "title": "Grafiks",
+    "repeats": "Atkārtojas",
+    "repeat": {
+      "minutes": "Ik pēc dažām minūtēm",
+      "hourly": "Katru stundu",
+      "daily": "Katru dienu",
+      "weekly": "Katru nedēļu",
+      "monthly": "Katru mēnesi",
+      "once": "Vienreiz"
+    },
+    "every": "Ik pēc",
+    "minutesUnit": "minūtēm",
+    "onlyBetween": "Tikai starp",
+    "windowFrom": "No",
+    "windowTo": "Līdz",
+    "and": "un",
+    "onDays": "Dienās (nav obligāti)",
+    "daysHintAny": "Ja nekas nav izvēlēts, ir katra diena.",
+    "onDaysRequired": "Dienās",
+    "atMinute": "Minūtē",
+    "at": "Plkst.",
+    "hour": "Stunda",
+    "minute": "Minūte",
+    "weekdaysOnly": "Tikai darbdienās",
+    "monthly": {
+      "which": "Kura mēneša diena",
+      "day": "Mēneša diena",
+      "lastDay": "Pēdējā diena",
+      "nth": "Nedēļas diena mēnesī",
+      "onDay": "Dienā",
+      "onThe": "Šajā"
+    },
+    "nth": {
+      "1": "pirmajā",
+      "2": "otrajā",
+      "3": "trešajā",
+      "4": "ceturtajā",
+      "last": "pēdējā"
+    },
+    "weekday": "Nedēļas diena",
+    "shortMonths": "Mēnešos bez šīs dienas darbība notiek mēneša pēdējā dienā.",
+    "date": "Datums",
+    "timezone": "Laika josla",
+    "zone": {
+      "company": "uzņēmuma laiks",
+      "usesCompany": "Izmanto uzņēmuma laika joslu."
+    },
+    "summary": {
+      "minutes": "Ik pēc {every} minūtēm",
+      "minutesWeekdays": "Ik pēc {every} minūtēm darbdienās",
+      "minutesDays": "Ik pēc {every} minūtēm: {days}",
+      "minutesWindow": "Ik pēc {every} minūtēm no {from} līdz {to}",
+      "minutesWindowWeekdays": "Ik pēc {every} minūtēm no {from} līdz {to} darbdienās",
+      "minutesWindowDays": "Ik pēc {every} minūtēm no {from} līdz {to}: {days}",
+      "hourly": "Katru stundu {minute}. minūtē",
+      "daily": "Katru dienu plkst. {time}",
+      "dailyWeekdays": "Katru darbdienu plkst. {time}",
+      "weekly": "Katru nedēļu: {days}, plkst. {time}",
+      "monthlyDay": "Katra mēneša {day}. datumā plkst. {time}",
+      "monthlyLastDay": "Katra mēneša pēdējā dienā plkst. {time}",
+      "monthlyNth1": "Katra mēneša pirmā {weekday}, plkst. {time}",
+      "monthlyNth2": "Katra mēneša otrā {weekday}, plkst. {time}",
+      "monthlyNth3": "Katra mēneša trešā {weekday}, plkst. {time}",
+      "monthlyNth4": "Katra mēneša ceturtā {weekday}, plkst. {time}",
+      "monthlyNthLast": "Katra mēneša pēdējā {weekday}, plkst. {time}",
+      "once": "Vienreiz {date} plkst. {time}",
+      "withZone": "{summary} ({zone})",
+      "custom": "Pielāgots grafiks"
+    },
+    "customNote": "Šo grafiku nevar parādīt ar klikšķiem.",
+    "editCron": "Rediģēt kā cron",
+    "doneEditing": "Pabeigt rediģēšanu",
+    "nextRuns": "Nākamās izpildes",
+    "noRuns": "Nav gaidāmu izpilžu.",
+    "previewLoading": "Notiek pārbaude serverī...",
+    "previewApprox": "Aptuveni: serveris precīzos laikus apstiprinās saglabājot.",
+    "previewUnavailable": "Šim grafikam priekšskatījums nav pieejams.",
+    "advanced": "Papildu: saglabāts kā",
+    "saved": {
+      "cron": "Standarta cron",
+      "calendar": "Kalendāra noteikums",
+      "once": "Vienreizēja izpilde"
+    },
+    "savedAs": "Saglabātais grafiks",
+    "savedNote": {
+      "once": "Darbojas vienreiz. Atkārtots cron netiek saglabāts."
+    },
+    "cronLabel": "Cron izteiksme",
+    "cronHint": "Tikai standarta cron ar pieciem laukiem: minūte, stunda, mēneša diena, mēnesis, nedēļas diena. Atlasītājs un šis lauks paliek sinhronizēti.",
+    "cron_extension_unsupported": "{token} nav standarta cron. Izmantojiet atlasītāju tādiem grafikiem kā mēneša pēdējā piektdiena.",
+    "invalid_timezone": "Šī laika josla netiek atpazīta.",
+    "once_in_past": "Šis datums un laiks jau ir pagājis.",
+    "invalid_rrule": "Šis kalendāra noteikums nav derīgs.",
+    "invalid_cron": "Ievadiet standarta cron ar pieciem laukiem, piemēram, 0 9 * * 1-5.",
+    "invalid_generic": "Šis grafiks nav derīgs.",
+    "conflicting_fields": "Grafiks tiek saglabāts vai nu kā cron, vai kā kalendāra noteikums vai vienreizēja izpilde, nekad abi.",
+    "gatedNote": "Pēdējā diena, nedēļas diena mēnesī, 29.–31. datums un vienreizējas izpildes būs pieejamas pēc plānotāja atjaunināšanas."
   }
 }

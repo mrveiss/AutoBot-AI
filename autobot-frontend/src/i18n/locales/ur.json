@@ -9803,5 +9803,104 @@
       "unreachableAsOf": "ناقابل رسائی — سروسز کی حالت نامعلوم — حالت بوقت {time}"
     },
     "lastKnown": "{text} (آخری معلوم)"
+  },
+  "schedule": {
+    "title": "شیڈول",
+    "repeats": "دہراؤ",
+    "repeat": {
+      "minutes": "ہر چند منٹ بعد",
+      "hourly": "ہر گھنٹے",
+      "daily": "روزانہ",
+      "weekly": "ہفتہ وار",
+      "monthly": "ماہانہ",
+      "once": "ایک بار"
+    },
+    "every": "ہر",
+    "minutesUnit": "منٹ",
+    "onlyBetween": "صرف اس کے درمیان",
+    "windowFrom": "از",
+    "windowTo": "تا",
+    "and": "اور",
+    "onDays": "دنوں میں (اختیاری)",
+    "daysHintAny": "کچھ منتخب نہ ہو تو ہر دن مراد ہے۔",
+    "onDaysRequired": "دنوں میں",
+    "atMinute": "منٹ پر",
+    "at": "وقت",
+    "hour": "گھنٹہ",
+    "minute": "منٹ",
+    "weekdaysOnly": "صرف کام کے دن",
+    "monthly": {
+      "which": "مہینے کا کون سا دن",
+      "day": "مہینے کا دن",
+      "lastDay": "آخری دن",
+      "nth": "مہینے میں ہفتے کا دن",
+      "onDay": "دن",
+      "onThe": "مہینے کے"
+    },
+    "nth": {
+      "1": "پہلے",
+      "2": "دوسرے",
+      "3": "تیسرے",
+      "4": "چوتھے",
+      "last": "آخری"
+    },
+    "weekday": "ہفتے کا دن",
+    "shortMonths": "جن مہینوں میں یہ دن نہیں ہوتا ان میں شیڈول مہینے کے آخری دن چلتا ہے۔",
+    "date": "تاریخ",
+    "timezone": "ٹائم زون",
+    "zone": {
+      "company": "کمپنی کا وقت",
+      "usesCompany": "کمپنی کا ٹائم زون استعمال کرتا ہے۔"
+    },
+    "summary": {
+      "minutes": "ہر {every} منٹ بعد",
+      "minutesWeekdays": "ہر {every} منٹ بعد، کام کے دنوں میں",
+      "minutesDays": "ہر {every} منٹ بعد، دنوں میں: {days}",
+      "minutesWindow": "ہر {every} منٹ بعد، {from} اور {to} کے درمیان",
+      "minutesWindowWeekdays": "ہر {every} منٹ بعد، {from} اور {to} کے درمیان، کام کے دنوں میں",
+      "minutesWindowDays": "ہر {every} منٹ بعد، {from} اور {to} کے درمیان، دنوں میں: {days}",
+      "hourly": "ہر گھنٹے {minute} منٹ پر",
+      "daily": "ہر روز {time} بجے",
+      "dailyWeekdays": "ہر کام کے دن {time} بجے",
+      "weekly": "ہر ہفتے {days} کو {time} بجے",
+      "monthlyDay": "ہر مہینے کی {day} تاریخ کو {time} بجے",
+      "monthlyLastDay": "ہر مہینے کے آخری دن {time} بجے",
+      "monthlyNth1": "ہر مہینے {weekday} (نمبر 1) کو {time} بجے",
+      "monthlyNth2": "ہر مہینے {weekday} (نمبر 2) کو {time} بجے",
+      "monthlyNth3": "ہر مہینے {weekday} (نمبر 3) کو {time} بجے",
+      "monthlyNth4": "ہر مہینے {weekday} (نمبر 4) کو {time} بجے",
+      "monthlyNthLast": "ہر مہینے آخری {weekday} کو {time} بجے",
+      "once": "ایک بار {date} کو {time} بجے",
+      "withZone": "{summary}، {zone}",
+      "custom": "حسبِ ضرورت شیڈول"
+    },
+    "customNote": "اس شیڈول کو کلکس سے نہیں دکھایا جا سکتا۔",
+    "editCron": "cron کے طور پر ترمیم کریں",
+    "doneEditing": "ترمیم مکمل کریں",
+    "nextRuns": "اگلی کارروائیاں",
+    "noRuns": "کوئی آئندہ کارروائی نہیں۔",
+    "previewLoading": "سرور سے تصدیق ہو رہی ہے...",
+    "previewApprox": "تخمینی: محفوظ کرتے وقت سرور درست اوقات کی تصدیق کرے گا۔",
+    "previewUnavailable": "اس شیڈول کا پیش منظر ممکن نہیں۔",
+    "advanced": "ایڈوانسڈ: بطور محفوظ",
+    "saved": {
+      "cron": "معیاری cron",
+      "calendar": "کیلنڈر اصول",
+      "once": "ایک بار کی کارروائی"
+    },
+    "savedAs": "محفوظ شدہ شیڈول",
+    "savedNote": {
+      "once": "ایک بار چلتا ہے۔ کوئی بار بار چلنے والا cron محفوظ نہیں ہوتا۔"
+    },
+    "cronLabel": "cron عبارت",
+    "cronHint": "صرف پانچ خانوں والا معیاری cron: منٹ، گھنٹہ، مہینے کا دن، مہینہ، ہفتے کا دن۔ سلیکٹر اور یہ خانہ ہم آہنگ رہتے ہیں۔",
+    "cron_extension_unsupported": "{token} معیاری cron نہیں ہے۔ مہینے کے آخری جمعہ جیسے شیڈول کے لیے سلیکٹر استعمال کریں۔",
+    "invalid_timezone": "یہ ٹائم زون پہچانا نہیں گیا۔",
+    "once_in_past": "وہ تاریخ اور وقت گزر چکے ہیں۔",
+    "invalid_rrule": "یہ کیلنڈر اصول درست نہیں ہے۔",
+    "invalid_cron": "پانچ خانوں والا معیاری cron درج کریں، مثلاً 0 9 * * 1-5۔",
+    "invalid_generic": "یہ شیڈول درست نہیں ہے۔",
+    "conflicting_fields": "شیڈول یا تو cron کے طور پر محفوظ ہوتا ہے یا کیلنڈر اصول یا ایک بار کی کارروائی کے طور پر، دونوں نہیں۔",
+    "gatedNote": "آخری دن، مہینے میں ہفتے کا دن، 29 تا 31 تاریخیں اور ایک بار کی کارروائیاں شیڈیولر کی اپ ڈیٹ کے بعد دستیاب ہوں گی۔"
   }
 }

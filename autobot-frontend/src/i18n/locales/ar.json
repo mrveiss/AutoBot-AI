@@ -9803,5 +9803,104 @@
       "unreachableAsOf": "يتعذر الوصول — حالة الخدمات غير معروفة — الحالة عند {time}"
     },
     "lastKnown": "{text} (آخر حالة معروفة)"
+  },
+  "schedule": {
+    "title": "الجدولة",
+    "repeats": "التكرار",
+    "repeat": {
+      "minutes": "كل بضع دقائق",
+      "hourly": "كل ساعة",
+      "daily": "يوميًا",
+      "weekly": "أسبوعيًا",
+      "monthly": "شهريًا",
+      "once": "مرة واحدة"
+    },
+    "every": "كل",
+    "minutesUnit": "دقيقة",
+    "onlyBetween": "فقط بين",
+    "windowFrom": "من",
+    "windowTo": "إلى",
+    "and": "و",
+    "onDays": "في الأيام (اختياري)",
+    "daysHintAny": "عدم تحديد أي يوم يعني كل الأيام.",
+    "onDaysRequired": "في الأيام",
+    "atMinute": "عند الدقيقة",
+    "at": "في الساعة",
+    "hour": "الساعة",
+    "minute": "الدقيقة",
+    "weekdaysOnly": "أيام العمل فقط",
+    "monthly": {
+      "which": "أي يوم من الشهر",
+      "day": "يوم من الشهر",
+      "lastDay": "اليوم الأخير",
+      "nth": "يوم من أيام الأسبوع في الشهر",
+      "onDay": "في اليوم",
+      "onThe": "في"
+    },
+    "nth": {
+      "1": "الأول",
+      "2": "الثاني",
+      "3": "الثالث",
+      "4": "الرابع",
+      "last": "الأخير"
+    },
+    "weekday": "يوم الأسبوع",
+    "shortMonths": "الأشهر التي لا تحتوي هذا اليوم تُنفَّذ في آخر يوم من الشهر.",
+    "date": "التاريخ",
+    "timezone": "المنطقة الزمنية",
+    "zone": {
+      "company": "توقيت الشركة",
+      "usesCompany": "تستخدم المنطقة الزمنية للشركة."
+    },
+    "summary": {
+      "minutes": "كل {every} دقيقة",
+      "minutesWeekdays": "كل {every} دقيقة في أيام العمل",
+      "minutesDays": "كل {every} دقيقة، في أيام: {days}",
+      "minutesWindow": "كل {every} دقيقة بين {from} و{to}",
+      "minutesWindowWeekdays": "كل {every} دقيقة بين {from} و{to} في أيام العمل",
+      "minutesWindowDays": "كل {every} دقيقة بين {from} و{to}، في أيام: {days}",
+      "hourly": "كل ساعة عند الدقيقة {minute}",
+      "daily": "كل يوم في الساعة {time}",
+      "dailyWeekdays": "كل يوم عمل في الساعة {time}",
+      "weekly": "كل أسبوع: {days}، في الساعة {time}",
+      "monthlyDay": "في اليوم {day} من كل شهر في الساعة {time}",
+      "monthlyLastDay": "في آخر يوم من كل شهر في الساعة {time}",
+      "monthlyNth1": "في {weekday} الأول من كل شهر في الساعة {time}",
+      "monthlyNth2": "في {weekday} الثاني من كل شهر في الساعة {time}",
+      "monthlyNth3": "في {weekday} الثالث من كل شهر في الساعة {time}",
+      "monthlyNth4": "في {weekday} الرابع من كل شهر في الساعة {time}",
+      "monthlyNthLast": "في {weekday} الأخير من كل شهر في الساعة {time}",
+      "once": "مرة واحدة في {date} في الساعة {time}",
+      "withZone": "{summary}، {zone}",
+      "custom": "جدولة مخصصة"
+    },
+    "customNote": "لا يمكن عرض هذه الجدولة بالنقرات.",
+    "editCron": "تحرير بصيغة cron",
+    "doneEditing": "إنهاء التحرير",
+    "nextRuns": "عمليات التشغيل القادمة",
+    "noRuns": "لا توجد عمليات تشغيل قادمة.",
+    "previewLoading": "جارٍ التحقق من الخادم...",
+    "previewApprox": "تقريبي: يؤكد الخادم الأوقات الدقيقة عند الحفظ.",
+    "previewUnavailable": "لا يمكن معاينة عمليات التشغيل لهذه الجدولة.",
+    "advanced": "متقدم: تُحفظ بصيغة",
+    "saved": {
+      "cron": "cron قياسي",
+      "calendar": "قاعدة تقويم",
+      "once": "تشغيل لمرة واحدة"
+    },
+    "savedAs": "الجدولة المحفوظة",
+    "savedNote": {
+      "once": "تعمل مرة واحدة. لا يُحفظ أي cron متكرر."
+    },
+    "cronLabel": "تعبير cron",
+    "cronHint": "cron قياسي بخمسة حقول فقط: الدقيقة، الساعة، يوم الشهر، الشهر، يوم الأسبوع. يبقى المحدد وهذا الحقل متزامنين.",
+    "cron_extension_unsupported": "{token} ليس بصيغة cron قياسية. استخدم المحدد لجداول مثل آخر جمعة في الشهر.",
+    "invalid_timezone": "هذه المنطقة الزمنية غير معروفة.",
+    "once_in_past": "هذا التاريخ والوقت قد مضيا بالفعل.",
+    "invalid_rrule": "قاعدة التقويم هذه غير صالحة.",
+    "invalid_cron": "أدخل cron قياسيًا بخمسة حقول، مثل 0 9 * * 1-5.",
+    "invalid_generic": "هذه الجدولة غير صالحة.",
+    "conflicting_fields": "تُحفظ الجدولة إما بصيغة cron أو كقاعدة تقويم أو تشغيل لمرة واحدة، وليس كليهما.",
+    "gatedNote": "سيتوفر اليوم الأخير ويوم الأسبوع من الشهر والأيام من 29 إلى 31 والتشغيل لمرة واحدة بعد تحديث المجدول."
   }
 }

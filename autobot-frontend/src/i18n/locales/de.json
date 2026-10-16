@@ -9803,5 +9803,104 @@
       "unreachableAsOf": "Nicht erreichbar – Dienststatus unbekannt – Stand {time}"
     },
     "lastKnown": "{text} (zuletzt bekannt)"
+  },
+  "schedule": {
+    "title": "Zeitplan",
+    "repeats": "Wiederholt sich",
+    "repeat": {
+      "minutes": "Alle paar Minuten",
+      "hourly": "Stündlich",
+      "daily": "Täglich",
+      "weekly": "Wöchentlich",
+      "monthly": "Monatlich",
+      "once": "Einmalig"
+    },
+    "every": "Alle",
+    "minutesUnit": "Minuten",
+    "onlyBetween": "Nur zwischen",
+    "windowFrom": "Von",
+    "windowTo": "Bis",
+    "and": "und",
+    "onDays": "An Tagen (optional)",
+    "daysHintAny": "Ohne Auswahl gilt jeder Tag.",
+    "onDaysRequired": "An Tagen",
+    "atMinute": "In Minute",
+    "at": "Um",
+    "hour": "Stunde",
+    "minute": "Minute",
+    "weekdaysOnly": "Nur werktags",
+    "monthly": {
+      "which": "Welcher Tag des Monats",
+      "day": "Tag des Monats",
+      "lastDay": "Letzter Tag",
+      "nth": "Wochentag im Monat",
+      "onDay": "Am Tag",
+      "onThe": "Am"
+    },
+    "nth": {
+      "1": "ersten",
+      "2": "zweiten",
+      "3": "dritten",
+      "4": "vierten",
+      "last": "letzten"
+    },
+    "weekday": "Wochentag",
+    "shortMonths": "Monate ohne diesen Tag laufen am letzten Tag des Monats.",
+    "date": "Datum",
+    "timezone": "Zeitzone",
+    "zone": {
+      "company": "Firmenzeit",
+      "usesCompany": "Verwendet die Zeitzone des Unternehmens."
+    },
+    "summary": {
+      "minutes": "Alle {every} Minuten",
+      "minutesWeekdays": "Alle {every} Minuten, werktags",
+      "minutesDays": "Alle {every} Minuten, jeweils {days}",
+      "minutesWindow": "Alle {every} Minuten zwischen {from} und {to}",
+      "minutesWindowWeekdays": "Alle {every} Minuten zwischen {from} und {to}, werktags",
+      "minutesWindowDays": "Alle {every} Minuten zwischen {from} und {to}, jeweils {days}",
+      "hourly": "Jede Stunde in Minute {minute}",
+      "daily": "Jeden Tag um {time} Uhr",
+      "dailyWeekdays": "Jeden Werktag um {time} Uhr",
+      "weekly": "Jeden {days} um {time} Uhr",
+      "monthlyDay": "Am {day}. Tag jedes Monats um {time} Uhr",
+      "monthlyLastDay": "Am letzten Tag jedes Monats um {time} Uhr",
+      "monthlyNth1": "Am ersten {weekday} jedes Monats um {time} Uhr",
+      "monthlyNth2": "Am zweiten {weekday} jedes Monats um {time} Uhr",
+      "monthlyNth3": "Am dritten {weekday} jedes Monats um {time} Uhr",
+      "monthlyNth4": "Am vierten {weekday} jedes Monats um {time} Uhr",
+      "monthlyNthLast": "Am letzten {weekday} jedes Monats um {time} Uhr",
+      "once": "Einmal am {date} um {time} Uhr",
+      "withZone": "{summary} ({zone})",
+      "custom": "Benutzerdefinierter Zeitplan"
+    },
+    "customNote": "Dieser Zeitplan lässt sich nicht per Klick darstellen.",
+    "editCron": "Als Cron bearbeiten",
+    "doneEditing": "Bearbeitung beenden",
+    "nextRuns": "Nächste Ausführungen",
+    "noRuns": "Keine anstehenden Ausführungen.",
+    "previewLoading": "Der Server wird gefragt ...",
+    "previewApprox": "Näherungswert: Der Server bestätigt die genauen Zeiten beim Speichern.",
+    "previewUnavailable": "Für diesen Zeitplan ist keine Vorschau möglich.",
+    "advanced": "Erweitert: gespeichert als",
+    "saved": {
+      "cron": "Standard-Cron",
+      "calendar": "Kalenderregel",
+      "once": "Einmalige Ausführung"
+    },
+    "savedAs": "Gespeicherter Zeitplan",
+    "savedNote": {
+      "once": "Läuft einmal. Es wird kein wiederkehrender Cron gespeichert."
+    },
+    "cronLabel": "Cron-Ausdruck",
+    "cronHint": "Nur Standard-Cron mit fünf Feldern: Minute, Stunde, Tag des Monats, Monat, Wochentag. Auswahl und dieses Feld bleiben synchron.",
+    "cron_extension_unsupported": "{token} ist kein Standard-Cron. Nutzen Sie die Auswahl für Zeitpläne wie den letzten Freitag des Monats.",
+    "invalid_timezone": "Diese Zeitzone wird nicht erkannt.",
+    "once_in_past": "Dieser Zeitpunkt liegt bereits in der Vergangenheit.",
+    "invalid_rrule": "Diese Kalenderregel ist ungültig.",
+    "invalid_cron": "Geben Sie Standard-Cron mit fünf Feldern ein, zum Beispiel 0 9 * * 1-5.",
+    "invalid_generic": "Dieser Zeitplan ist ungültig.",
+    "conflicting_fields": "Ein Zeitplan wird entweder als Cron oder als Kalenderregel bzw. einmalige Ausführung gespeichert, nie beides.",
+    "gatedNote": "Letzter Tag, Wochentag im Monat, die Tage 29 bis 31 und einmalige Ausführungen stehen zur Verfügung, sobald der Scheduler aktualisiert ist."
   }
 }

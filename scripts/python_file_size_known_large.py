@@ -427,7 +427,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/workers/audit_tasks_test.py": 1197,
     "autobot-backend/workflow_scheduler.py": 1070,
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
-    "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 630,
     "autobot-slm-backend/api/code_source.py": 710,
     "autobot-slm-backend/api/code_sync.py": 5819,  # #18052: six path/rsync helpers moved to api/_rsync_paths.py
     "autobot-slm-backend/api/errors.py": 866,
@@ -454,7 +453,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/monitoring/performance_optimizer.py": 773,
     "autobot-slm-backend/services/backup.py": 777,
     "autobot-slm-backend/services/blue_green.py": 1282,
-    "autobot-slm-backend/services/deployment.py": 1016,
+    "autobot-slm-backend/services/deployment.py": 712,
     "autobot-slm-backend/services/drift_checker.py": 839,
     "autobot-slm-backend/services/drift_checker_test.py": 1351,
     "autobot-slm-backend/services/inventory_builder.py": 710,

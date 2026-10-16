@@ -9803,5 +9803,104 @@
       "unreachableAsOf": "غیرقابل دسترس — وضعیت سرویس‌ها نامشخص — وضعیت در {time}"
     },
     "lastKnown": "{text} (آخرین وضعیت شناخته‌شده)"
+  },
+  "schedule": {
+    "title": "زمان‌بندی",
+    "repeats": "تکرار",
+    "repeat": {
+      "minutes": "هر چند دقیقه",
+      "hourly": "ساعتی",
+      "daily": "روزانه",
+      "weekly": "هفتگی",
+      "monthly": "ماهانه",
+      "once": "یک‌بار"
+    },
+    "every": "هر",
+    "minutesUnit": "دقیقه",
+    "onlyBetween": "فقط بین",
+    "windowFrom": "از",
+    "windowTo": "تا",
+    "and": "و",
+    "onDays": "در روزهای (اختیاری)",
+    "daysHintAny": "اگر چیزی انتخاب نشود، هر روز اجرا می‌شود.",
+    "onDaysRequired": "در روزهای",
+    "atMinute": "در دقیقه",
+    "at": "در ساعت",
+    "hour": "ساعت",
+    "minute": "دقیقه",
+    "weekdaysOnly": "فقط روزهای کاری",
+    "monthly": {
+      "which": "کدام روز ماه",
+      "day": "روز ماه",
+      "lastDay": "آخرین روز",
+      "nth": "روز هفته در ماه",
+      "onDay": "در روز",
+      "onThe": "در"
+    },
+    "nth": {
+      "1": "اولین",
+      "2": "دومین",
+      "3": "سومین",
+      "4": "چهارمین",
+      "last": "آخرین"
+    },
+    "weekday": "روز هفته",
+    "shortMonths": "ماه‌هایی که این روز را ندارند در آخرین روز ماه اجرا می‌شوند.",
+    "date": "تاریخ",
+    "timezone": "منطقه زمانی",
+    "zone": {
+      "company": "زمان شرکت",
+      "usesCompany": "از منطقه زمانی شرکت استفاده می‌کند."
+    },
+    "summary": {
+      "minutes": "هر {every} دقیقه",
+      "minutesWeekdays": "هر {every} دقیقه در روزهای کاری",
+      "minutesDays": "هر {every} دقیقه، در روزهای {days}",
+      "minutesWindow": "هر {every} دقیقه بین {from} و {to}",
+      "minutesWindowWeekdays": "هر {every} دقیقه بین {from} و {to} در روزهای کاری",
+      "minutesWindowDays": "هر {every} دقیقه بین {from} و {to}، در روزهای {days}",
+      "hourly": "هر ساعت در دقیقه {minute}",
+      "daily": "هر روز ساعت {time}",
+      "dailyWeekdays": "هر روز کاری ساعت {time}",
+      "weekly": "هر هفته {days} ساعت {time}",
+      "monthlyDay": "روز {day} هر ماه ساعت {time}",
+      "monthlyLastDay": "آخرین روز هر ماه ساعت {time}",
+      "monthlyNth1": "اولین {weekday} هر ماه ساعت {time}",
+      "monthlyNth2": "دومین {weekday} هر ماه ساعت {time}",
+      "monthlyNth3": "سومین {weekday} هر ماه ساعت {time}",
+      "monthlyNth4": "چهارمین {weekday} هر ماه ساعت {time}",
+      "monthlyNthLast": "آخرین {weekday} هر ماه ساعت {time}",
+      "once": "یک‌بار در {date} ساعت {time}",
+      "withZone": "{summary}، {zone}",
+      "custom": "زمان‌بندی سفارشی"
+    },
+    "customNote": "این زمان‌بندی را نمی‌توان با کلیک نمایش داد.",
+    "editCron": "ویرایش به‌صورت cron",
+    "doneEditing": "پایان ویرایش",
+    "nextRuns": "اجراهای بعدی",
+    "noRuns": "اجرای آینده‌ای وجود ندارد.",
+    "previewLoading": "در حال بررسی با سرور...",
+    "previewApprox": "تقریبی: سرور هنگام ذخیره، زمان‌های دقیق را تأیید می‌کند.",
+    "previewUnavailable": "برای این زمان‌بندی پیش‌نمایش ممکن نیست.",
+    "advanced": "پیشرفته: ذخیره‌شده به‌صورت",
+    "saved": {
+      "cron": "cron استاندارد",
+      "calendar": "قانون تقویم",
+      "once": "اجرای یک‌باره"
+    },
+    "savedAs": "زمان‌بندی ذخیره‌شده",
+    "savedNote": {
+      "once": "یک‌بار اجرا می‌شود. هیچ cron تکرارشونده‌ای ذخیره نمی‌شود."
+    },
+    "cronLabel": "عبارت cron",
+    "cronHint": "فقط cron استاندارد پنج‌فیلدی: دقیقه، ساعت، روز ماه، ماه، روز هفته. انتخابگر و این فیلد همگام می‌مانند.",
+    "cron_extension_unsupported": "{token} در cron استاندارد وجود ندارد. برای زمان‌بندی‌هایی مانند آخرین جمعه ماه از انتخابگر استفاده کنید.",
+    "invalid_timezone": "این منطقه زمانی شناخته نشد.",
+    "once_in_past": "آن تاریخ و ساعت گذشته است.",
+    "invalid_rrule": "این قانون تقویم معتبر نیست.",
+    "invalid_cron": "یک cron استاندارد پنج‌فیلدی وارد کنید، مثلاً 0 9 * * 1-5.",
+    "invalid_generic": "این زمان‌بندی معتبر نیست.",
+    "conflicting_fields": "زمان‌بندی یا به‌صورت cron ذخیره می‌شود یا به‌صورت قانون تقویم یا اجرای یک‌باره، نه هر دو.",
+    "gatedNote": "آخرین روز، روز هفته در ماه، روزهای ۲۹ تا ۳۱ و اجرای یک‌باره پس از به‌روزرسانی زمان‌بند در دسترس خواهند بود."
   }
 }

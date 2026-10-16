@@ -76,6 +76,7 @@ import repo_tests.provider_key_env_reads_route_through_vault_18094_test as _prov
 import repo_tests.redis_direct_constructor_18553_test as _redis_constructor_guard  # noqa: F401 -- registers its scope
 import repo_tests.root_resolver_single_source_18101_test as _root_resolver_guard  # noqa: F401 -- registers its scope
 import repo_tests.single_attribute_writer_18240_test as _attribute_writer_guard  # noqa: F401 -- registers its scope
+import repo_tests.slm_backend_no_embedded_playbook_18606_test as _embedded_playbook_guard  # noqa: F401 -- registers its scope
 from repo_tests._paths import repo_root
 from repo_tests._reach import Reach, ReachScopeError, declare
 from repo_tests._reach_scope import relative_paths, scope_complaint
@@ -312,6 +313,7 @@ _DECLARED_SCOPES = {
         "libs",
         "debug",
     ),
+    "slm-backend-embedded-playbook-scan": ("autobot-slm-backend",),
     "one-playwright-server-scan": (
         "autobot-browser-worker",
         "autobot-infrastructure",
