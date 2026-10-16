@@ -159,6 +159,17 @@ ALLOWED_ADDITIONS = {
             # #17856: frontend_api_timeout_ssot_17856_test reads both .env.example files.
             ".env.example",
             "autobot-frontend/.env.example",
+            # #18592: install_preflight_and_source_18581_test.py reads INSTALL.md; compose_slm_gui_profile_18585_test.py reads the root compose file and the frontend Dockerfile.
+            "INSTALL.md",
+            "docker-compose.yml",
+            "docker/frontend/Dockerfile",
+            # #18556: one_static_data_copy_18556_test.py reads the canonical static data files.
+            "autobot-backend/config/permission_rules.yaml",
+            "autobot-backend/static/error_messages.yaml",
+            "autobot-monitoring/prometheus.yml",
+            # #18549: one_playwright_server_18549_test.py reads the canonical server and its store.
+            "autobot-browser-worker/playwright-server.js",
+            "autobot-browser-worker/session-store.js",
         ]
     },
     # frontend_path_filter_mirror_test pins frontend-test.yml's on.push.paths to this file, so the
