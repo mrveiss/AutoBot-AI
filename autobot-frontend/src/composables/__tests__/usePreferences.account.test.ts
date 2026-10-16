@@ -6,9 +6,7 @@
  * PATCH, so a save must still send every field it owns, and a load must apply
  * the three new ones.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-
-vi.setConfig({ testTimeout: 30_000 }) // first dynamic import of the preference stack is cold under CI load
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
 
 const apiGet = vi.fn()
 const apiPatch = vi.fn()
@@ -30,6 +28,17 @@ async function fresh() {
   const variant = (await import('../useThemeVariant')).useThemeVariant()
   return { prefs, ui, variant }
 }
+
+/**
+ * Each test resets modules and re-imports the preference stack. The first import
+ * also pays the cold transform of the whole graph, which under load outran the
+ * default 10 s test timeout (pre-push, #18254). Warm the transform once here, with
+ * its own budget, so every test measures only its own work.
+ */
+const COLD_IMPORT_MS = 60_000
+beforeAll(async () => {
+  await Promise.all([import('../usePreferences'), import('../useUiMode'), import('../useThemeVariant')])
+}, COLD_IMPORT_MS)
 
 beforeEach(() => {
   localStorage.clear()
