@@ -4,51 +4,49 @@
 # Author: mrveiss
 """``python -m autobot_shared.error_boundaries`` -- the facade's management CLI."""
 
+import argparse
 import json
-import logging
 
 from autobot_shared.error_boundaries import error_boundary, get_error_statistics
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
+
+def _run_stats() -> None:
+    """Print the error statistics as JSON."""
+    logger.info("Error Statistics:")
+    logger.info(json.dumps(get_error_statistics(), indent=2))
+
+
+def _run_self_test() -> None:
+    """Exercise one boundary-wrapped function on a normal and a failing input."""
+    logger.info("Testing Error Boundary System...")
+
+    @error_boundary(component="test", function="divide")
+    def test_divide(a, b):
+        """Test division function."""
+        return a / b
+
+    logger.info("Normal operation: 10 / 2 = %s", test_divide(10, 2))
+    try:
+        logger.info("Error handling: 10 / 0 = %s", test_divide(10, 0))
+    except Exception as e:
+        logger.info("Error caught: %s", e)
+    logger.info("Error boundary system test completed")
 
 
 def main() -> None:
     """Run the error boundary management CLI."""
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    import argparse
-
     parser = argparse.ArgumentParser(description="AutoBot Error Boundary Management")
     parser.add_argument("--stats", action="store_true", help="Show error statistics")
     parser.add_argument("--test", action="store_true", help="Test error boundary system")
-
     args = parser.parse_args()
 
     if args.stats:
-        stats = get_error_statistics()
-        logger.info("Error Statistics:")
-        logger.info(json.dumps(stats, indent=2))
-
+        _run_stats()
     elif args.test:
-        logger.info("Testing Error Boundary System...")
-
-        @error_boundary(component="test", function="divide")
-        def test_divide(a, b):
-            """Test division function."""
-            return a / b
-
-        # Test normal operation
-        result = test_divide(10, 2)
-        logger.info(f"Normal operation: 10 / 2 = {result}")
-
-        # Test error handling
-        try:
-            result = test_divide(10, 0)
-            logger.info(f"Error handling: 10 / 0 = {result}")
-        except Exception as e:
-            logger.info(f"Error caught: {e}")
-
-        logger.info("Error boundary system test completed")
-
+        _run_self_test()
     else:
         logger.info("Use --stats to show statistics or --test to test the system")
 
