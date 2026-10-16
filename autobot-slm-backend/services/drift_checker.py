@@ -45,11 +45,11 @@ _INCLUDE_EXTENSIONS: frozenset[str] = _BACKEND_EXTENSIONS | _FRONTEND_EXTENSIONS
 #: Files present in a component's SOURCE that its deploying role deliberately
 #: never copies, per component (#14283).
 #:
-#: Only the slm_agent role needs this: it copies its source file-by-file
-#: (roles/slm_agent/tasks/main.yml) and omits the co-located tests, so the walk
-#: found `health_collector_state_change_test.py` and `version_test.py` in
-#: code_source, absent on the node, and reported `autobot-slm-agent` stale
-#: forever — a condition no amount of syncing can clear.
+#: Only the slm_agent role needs this: it copies only the production modules
+#: of slm/agent/ (roles/slm_agent/tasks/main.yml) and omits the co-located
+#: tests, so the walk found `health_collector_state_change_test.py` and
+#: `version_test.py` in code_source, absent on the node, and reported
+#: `autobot-slm-agent` stale forever — a condition no amount of syncing can clear.
 #:
 #: Deliberately NOT global. The backend components rsync their whole tree, so
 #: their co-located tests ARE deployed and ARE comparable — 1382 files under
@@ -195,13 +195,13 @@ _NONSTANDARD_COMPONENT_PATHS: dict[str, tuple[str, str]] = {
         "autobot-ai-stack",
     ),
     # slm-agent has no top-level code_source/autobot-slm-agent dir either;
-    # its source of truth is the individual per-file `copy:` tasks in the
-    # slm_agent role, all of which live under files/slm/agent/ and land at
-    # <slm_agent_dir>/slm/agent/ (ansible/roles/slm_agent/tasks/main.yml
-    # ~132-213). config.yaml/role.json/version.json are Jinja2 templates
+    # the slm_agent role copies the production modules of
+    # autobot-slm-backend/slm/agent/ (its one source tree, #18548) to
+    # <slm_agent_dir>/slm/agent/ (ansible/roles/slm_agent/tasks/main.yml).
+    # config.yaml/role.json/version.json are Jinja2 templates
     # (not raw source files) and are intentionally excluded from this scan.
     "autobot-slm-agent": (
-        "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent",
+        "autobot-slm-backend/slm/agent",
         "autobot-slm-agent/slm/agent",
     ),
     # plugins/ ships at the repo root, a SIBLING of autobot-backend/, and is

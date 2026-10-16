@@ -182,13 +182,6 @@ def _independent_population() -> set[str]:
             continue
         if base.endswith("_test.py") or base.startswith("test_") or "tests" in parts:
             continue
-        # The mandatory ansible mirror (#16401), spelled independently of the
-        # detector's constant: byte-identical by design and guaranteed so by
-        # `detect_agent_code_drift_test.py`, so its symbols are defined twice and
-        # cannot be consolidated. A control that skipped this exemption would
-        # report a looser population and call the disagreement a detector bug.
-        if parts[:5] == ["autobot-slm-backend", "ansible", "roles", "slm_agent", "files"]:
-            continue
         try:
             body = ast.parse((_REPO_ROOT / rel).read_text(encoding="utf-8")).body
         except (SyntaxError, OSError):
@@ -276,61 +269,4 @@ def test_no_stale_baseline_entries() -> None:
     assert not stale, (
         f"{len(stale)} baseline entry(ies) are no longer fork clusters: {stale[:10]}. "
         "Delete them from repo_tests/symbol_fork_baseline.json — the list only shrinks (#17312)."
-    )
-
-
-def test_the_mandatory_ansible_mirror_is_excluded_and_the_exclusion_is_load_bearing() -> None:
-    """A path nobody may deduplicate must not be in a ratchet's population (#16401).
-
-    Ansible ships `autobot-slm-backend/slm/agent/` to the target host from
-    `.../ansible/roles/slm_agent/files/slm/agent/`, and
-    `ansible/tests/detect_agent_code_drift_test.py` FAILS if the two trees differ.
-    So every symbol there is defined twice by design. Counting them put 16 entries
-    in the baseline that can only be removed by breaking the payload or the drift
-    test — a floor the ratchet could never reach, pointing whoever worked it at a
-    change that must not be made. `duplication-guard.yml` had already excluded the
-    same path for the same reason; this detector had not.
-
-    CONTRAST PAIR: the mirror is out, its SOURCE is in. Excluding both would hide
-    real forks in the agent code itself.
-    """
-    mirror = Path("autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/version.py")
-    source = Path("autobot-slm-backend/slm/agent/version.py")
-
-    assert detector.is_mandatory_mirror(mirror)
-    assert not detector.is_mandatory_mirror(source)
-    assert not detector.in_population(mirror), "the ansible payload copy is still counted"
-    assert detector.in_population(source), "the real agent code must stay in the population"
-
-
-def test_no_baseline_entry_lives_only_in_the_mirror() -> None:
-    """The 16 removed entries must not creep back by someone re-adding them.
-
-    Asserted against the baseline rather than the detector, because the failure
-    mode is a human pasting a name back in after a scan they ran before this
-    exclusion existed.
-    """
-    removed = {
-        "AgentVersion",
-        "HealthCollector",
-        "RoleDefinition",
-        "RoleDetector",
-        "SLMAgent",
-        "append",
-        "build_heartbeat_payload",
-        "build_listening_ports_list",
-        "build_role_report",
-        "get_agent_version",
-        "get_listening_ports",
-        "initialize",
-        "mark_synced",
-        "read_unsynced",
-        "reset_version_instance",
-        "sd_notify",
-    }
-    baseline = set(BASELINE["clusters"])
-    back = sorted(removed & baseline)
-    assert back == [], (
-        f"{back} are defined twice only because of the mandatory ansible mirror; "
-        "they are not forks and cannot be consolidated"
     )

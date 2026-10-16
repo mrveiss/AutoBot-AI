@@ -83,11 +83,9 @@ _SHARED_NAMES = {
     "ROOTS": "FORK_ROOTS",
     "EXCLUDED_PARTS": "FORK_EXCLUDED_PARTS",
     "EXCLUDED_NAMES": "FORK_EXCLUDED_NAMES",
-    "MIRRORED_PREFIX": "FORK_MIRRORED_PREFIX",
     "Definition": "ForkDefinition",
     "Cluster": "ForkCluster",
     "is_test_file": "fork_is_test_file",
-    "is_mandatory_mirror": "fork_is_mandatory_mirror",
     "in_population": "fork_in_population",
     "is_route_handler": "fork_is_route_handler",
 }

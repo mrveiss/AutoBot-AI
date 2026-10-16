@@ -354,7 +354,7 @@ def test_the_commit_path_reports_an_unreadable_staged_file(hook, tmp_path, monke
 #: this constant -- a comparison cannot police what moves with it -- applies to
 #: the sum one step further out, so the per-entry direction check still has no
 #: fixed reference. Do not read a falling total as "no ceiling was raised".
-MAX_CEILING_TOTAL = 181154  # #18391: router/index.ts 1631 -> 1506, the company child routes moved to router/llcRoutes.ts (-125); train-16: #17856 ApiClient.ts 834->816, useAutobotApi.ts 2092->2080 (-30) and #18353 useSystemStatus.ts 622 left the list (-622), measured on the union; train-8: #18441 measured; #18240 App.vue 1144 left the list (-1144 off main's 183687); merge train: #18274/#15502 -37 (ssot-config.ts, ssot-config.spec.ts) and #18262 -615 off 184350; #17983/#15008: SecretsManager.vue 2947 -> 2775 (unenforced controls removed); merged with #18065's useVoiceConversation 986
+MAX_CEILING_TOTAL = 181151  # #18432: RoutinesView 691 -> 688 (-3); #18391: router/index.ts 1631 -> 1506, the company child routes moved to router/llcRoutes.ts (-125); train-16: #17856 ApiClient.ts 834->816, useAutobotApi.ts 2092->2080 (-30) and #18353 useSystemStatus.ts 622 left the list (-622), measured on the union; train-8: #18441 measured; #18240 App.vue 1144 left the list (-1144 off main's 183687); merge train: #18274/#15502 -37 (ssot-config.ts, ssot-config.spec.ts) and #18262 -615 off 184350; #17983/#15008: SecretsManager.vue 2947 -> 2775 (unenforced controls removed); merged with #18065's useVoiceConversation 986
 
 
 def test_the_ceiling_total_only_shrinks(hook):

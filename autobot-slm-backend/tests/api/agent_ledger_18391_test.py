@@ -60,8 +60,18 @@ with patch.object(_logging_manager, "_get_config_manager", lambda: _NoConfig()):
     )
     ledger_api = importlib.util.module_from_spec(_spec)
     # The conftest stubs `services.auth` (a MagicMock gate gates nothing); the router is loaded against the real one.
-    with patch.dict(sys.modules, {"services.auth": _auth}):
+    # Only that key is swapped and restored: `patch.dict(sys.modules)` would also evict every module the router
+    # imports (yield_ask, rate_limiter), so the tests' `rate_limiter` patch could land on a different module
+    # instance than the router's limiter whenever no earlier test had imported it.
+    _prev_auth = sys.modules.get("services.auth")
+    sys.modules["services.auth"] = _auth
+    try:
         _spec.loader.exec_module(ledger_api)
+    finally:
+        if _prev_auth is None:
+            sys.modules.pop("services.auth", None)
+        else:
+            sys.modules["services.auth"] = _prev_auth
 
 try:
     import fakeredis

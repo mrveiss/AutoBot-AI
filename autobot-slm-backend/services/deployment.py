@@ -9,9 +9,11 @@ Manages Ansible-based role deployments to nodes.
 """
 
 import asyncio
+import json
 import logging
 import os
 import shutil
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,296 +29,12 @@ from models.database import Deployment, DeploymentStatus, Node, NodeStatus
 from models.schemas import DeploymentCreate, DeploymentResponse
 from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
 from services.encryption import decrypt_data
+from services.yaml_scalar import yaml_double_quoted
 
 logger = logging.getLogger(__name__)
 
-# Enrollment playbook template (Issue #665)
-# This YAML template is used to deploy the SLM agent to nodes during enrollment
-_ENROLLMENT_PLAYBOOK_TEMPLATE = """  # canonical: ignore py-hardcoded-url - agent template for remote nodes
-# AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
-# Author: mrveiss
-#
-# SLM Agent Enrollment Playbook
-# This playbook:
-# 1. Creates the autobot user for agent operations
-# 2. Sets up SSH key-based authentication for future passwordless access
-# 3. Installs and configures the SLM agent
-# 4. Starts the agent service for heartbeat reporting
----
-- name: Enroll Node - Deploy SLM Agent
-  hosts: all
-  become: true
-  gather_facts: true
-
-  vars:
-    slm_agent_dir: /opt/autobot
-    slm_agent_data_dir: /var/lib/autobot
-    slm_agent_user: autobot
-    slm_agent_group: autobot
-    slm_agent_python_packages:
-      - psutil
-      - requests
-      - pyyaml
-    slm_server_pubkey: "__SLM_PUBKEY_PLACEHOLDER__"
-
-  tasks:
-    # ==========================================================
-    # User and Directory Setup (must come first)
-    # ==========================================================
-    - name: Create autobot user
-      user:
-        name: "{{ slm_agent_user }}"
-        system: yes
-        shell: /bin/bash
-        home: "/home/{{ slm_agent_user }}"
-        create_home: yes
-
-    # ==========================================================
-    # SSH Key Setup for Passwordless Future Access
-    # ==========================================================
-    - name: Ensure .ssh directory exists for autobot user
-      file:
-        path: "/home/{{ slm_agent_user }}/.ssh"
-        state: directory
-        owner: "{{ slm_agent_user }}"
-        group: "{{ slm_agent_group }}"
-        mode: '0700'
-      when: slm_server_pubkey | length > 0
-
-    - name: Deploy SLM server SSH public key for passwordless access
-      authorized_key:
-        user: "{{ slm_agent_user }}"
-        key: "{{ slm_server_pubkey }}"
-        state: present
-        comment: "SLM Server - AutoBot Fleet Management"
-      when: slm_server_pubkey | length > 0
-
-    - name: Verify SSH key deployment succeeded
-      command: grep -q "SLM Server" /home/{{ slm_agent_user }}/.ssh/authorized_keys
-      register: ssh_key_check
-      changed_when: false
-      failed_when: ssh_key_check.rc != 0
-      when: slm_server_pubkey | length > 0
-
-    # ==========================================================
-    # Passwordless Sudo Configuration (#722)
-    # ==========================================================
-    - name: Configure passwordless sudo for autobot user
-      copy:
-        dest: /etc/sudoers.d/autobot-nopasswd
-        content: "{{ slm_agent_user }} ALL=(ALL) NOPASSWD: ALL"
-        mode: '0440'
-        validate: '/usr/sbin/visudo -cf %s'
-
-    - name: Create agent directories
-      file:
-        path: "{{ item }}"
-        state: directory
-        owner: "{{ slm_agent_user }}"
-        group: "{{ slm_agent_group }}"
-        mode: '0755'
-      loop:
-        - "{{ slm_agent_dir }}"
-        - "{{ slm_agent_dir }}/slm"
-        - "{{ slm_agent_dir }}/slm/agent"
-        - "{{ slm_agent_data_dir }}"
-
-    - name: Install Python dependencies via apt (preferred)
-      apt:
-        name:
-          - python3-psutil
-          - python3-requests
-          - python3-yaml
-          - python3-urllib3
-        state: present
-        update_cache: yes
-      ignore_errors: yes
-
-    - name: Install Python dependencies via pip (fallback)
-      pip:
-        name: "{{ slm_agent_python_packages }}"
-        state: present
-        executable: pip3
-        extra_args: --break-system-packages
-      when: ansible_os_family != "Debian"
-
-    - name: Deploy agent __init__.py (slm package)
-      copy:
-        content: |
-          # AutoBot - AI-Powered Automation Platform
-          # Copyright (c) 2025 mrveiss
-          '''SLM Package.'''
-        dest: "{{ slm_agent_dir }}/slm/__init__.py"
-        owner: "{{ slm_agent_user }}"
-        group: "{{ slm_agent_group }}"
-        mode: '0644'
-
-    - name: Deploy agent __init__.py (agent module)
-      copy:
-        content: |
-          # AutoBot - AI-Powered Automation Platform
-          # Copyright (c) 2025 mrveiss
-          '''SLM Agent Module.'''
-          from .agent import SLMAgent
-          __all__ = ["SLMAgent"]
-        dest: "{{ slm_agent_dir }}/slm/agent/__init__.py"
-        owner: "{{ slm_agent_user }}"
-        group: "{{ slm_agent_group }}"
-        mode: '0644'
-
-    - name: Deploy agent.py
-      copy:
-        src: "{{ playbook_dir }}/../roles/slm-agent/files/slm/agent/agent.py"
-        dest: "{{ slm_agent_dir }}/slm/agent/agent.py"
-        owner: "{{ slm_agent_user }}"
-        group: "{{ slm_agent_group }}"
-        mode: '0644'
-      when: false  # Skip - use inline content instead
-
-    - name: Deploy agent.py (inline)
-      copy:
-        content: |
-          #!/usr/bin/env python3
-          # AutoBot - AI-Powered Automation Platform
-          # Copyright (c) 2025 mrveiss
-          '''SLM Node Agent - Lightweight heartbeat agent.'''
-
-          import logging
-          import os
-          import platform
-          import signal
-          import sys
-          import time
-
-          import psutil
-          import requests
-          import yaml
-
-          logging.basicConfig(
-              level=logging.INFO,
-              format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-          )
-          logger = logging.getLogger("slm-agent")
-
-          # TLS verification for heartbeat calls to the SLM admin (#2852).
-          # Set AUTOBOT_SKIP_TLS_VERIFY=true ONLY in dev/test with self-signed certs.
-          _VERIFY_TLS = os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() != "true"
-
-
-          class SLMAgent:
-              '''SLM Node Agent.'''
-
-              def __init__(self, config_path: str = "/opt/autobot/config.yaml"):
-                  self.running = False
-                  self.config = self._load_config(config_path)
-
-              def _load_config(self, path: str) -> dict:
-                  if os.path.exists(path):
-                      with open(path, encoding="utf-8") as f:
-                          return yaml.safe_load(f)
-                  return {
-                      "node_id": os.environ.get("SLM_NODE_ID", "unknown"),
-                      "admin_url": os.environ.get("SLM_ADMIN_URL", "http://127.0.0.1:8000"),
-                      "heartbeat_interval": int(os.environ.get("SLM_HEARTBEAT_INTERVAL", "30")),
-                  }
-
-              def collect_health(self) -> dict:
-                  return {
-                      "cpu_percent": psutil.cpu_percent(interval=1),
-                      "memory_percent": psutil.virtual_memory().percent,
-                      "disk_percent": psutil.disk_usage("/").percent,
-                      "agent_version": "1.0.0",
-                      "os_info": f"{platform.system()} {platform.release()}",
-                  }
-
-              def send_heartbeat(self) -> bool:
-                  try:
-                      health = self.collect_health()
-                      url = f"{self.config['admin_url']}/api/nodes/{self.config['node_id']}/heartbeat"
-                      response = requests.post(url, json=health, timeout=10, verify=_VERIFY_TLS)
-                      response.raise_for_status()
-                      logger.debug("Heartbeat sent successfully")
-                      return True
-                  except Exception as e:
-                      logger.error("Heartbeat failed: %s", e)
-                      return False
-
-              def run(self):
-                  self.running = True
-                  signal.signal(signal.SIGTERM, lambda *_: setattr(self, "running", False))
-                  signal.signal(signal.SIGINT, lambda *_: setattr(self, "running", False))
-
-                  logger.info("SLM Agent starting - Node: %s", self.config["node_id"])
-                  logger.info("Admin URL: %s", self.config["admin_url"])
-                  logger.info("Heartbeat interval: %ds", self.config["heartbeat_interval"])
-
-                  while self.running:
-                      self.send_heartbeat()
-                      time.sleep(self.config["heartbeat_interval"])
-
-                  logger.info("SLM Agent stopped")
-
-
-          if __name__ == "__main__":
-              agent = SLMAgent()
-              agent.run()
-        dest: "{{ slm_agent_dir }}/slm/agent/agent.py"
-        owner: "{{ slm_agent_user }}"
-        group: "{{ slm_agent_group }}"
-        mode: '0755'
-
-    - name: Deploy agent configuration
-      copy:
-        content: |
-          # SLM Agent Configuration
-          node_id: "{{ slm_node_id }}"
-          admin_url: "{{ slm_admin_url }}"
-          heartbeat_interval: {{ slm_heartbeat_interval | default(30) }}
-        dest: "{{ slm_agent_dir }}/config.yaml"
-        owner: "{{ slm_agent_user }}"
-        group: "{{ slm_agent_group }}"
-        mode: '0640'
-
-    - name: Deploy systemd service
-      copy:
-        content: |
-          [Unit]
-          Description=AutoBot SLM Agent
-          After=network.target
-
-          [Service]
-          Type=simple
-          User={{ slm_agent_user }}
-          Group={{ slm_agent_group }}
-          WorkingDirectory={{ slm_agent_dir }}
-          ExecStart=/usr/bin/python3 -m slm.agent.agent
-          Restart=always
-          RestartSec=10
-          Environment=PYTHONPATH={{ slm_agent_dir }}
-
-          [Install]
-          WantedBy=multi-user.target
-        dest: /etc/systemd/system/autobot-agent.service
-        owner: root
-        group: root
-        mode: '0644'
-      notify: Restart agent
-
-    - name: Enable and start agent service
-      systemd:
-        name: autobot-agent
-        enabled: yes
-        state: started
-        daemon_reload: yes
-
-  handlers:
-    - name: Restart agent
-      systemd:
-        name: autobot-agent
-        state: restarted
-        daemon_reload: yes
-"""
+# Tracked enrollment playbook (#18606), relative to settings.ansible_dir.
+_ENROLLMENT_PLAYBOOK = "playbooks/enroll-slm-agent.yml"
 
 
 class DeploymentService:
@@ -697,23 +415,7 @@ class DeploymentService:
 
         logger.debug("Running deployment: %s", " ".join(cmd[:10]) + " ...")
 
-        env = self._get_ansible_environment()
-
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            cwd=str(self.ansible_dir),
-            env=env,
-        )
-
-        stdout, _ = await process.communicate()
-        output = stdout.decode("utf-8", errors="replace")
-
-        if process.returncode != 0:
-            raise RuntimeError(f"Ansible playbook failed:\n{output}")
-
-        return output
+        return await self._run_ansible_command(cmd, "Ansible playbook failed")
 
     def _get_effective_password(self, node: Node, ssh_password: str | None) -> str | None:
         """Get SSH password from parameter or decrypt from node storage.
@@ -835,6 +537,33 @@ class DeploymentService:
             await db.commit()
             return False, "Node enrollment failed"
 
+    def _enrollment_var_args(
+        self,
+        host: str,
+        node_id: str,
+        ssh_user: str,
+        ssh_port: int,
+        admin_url: str,
+        slm_pubkey: str,
+    ) -> List[str]:
+        """The non-secret `-e` extra-vars of the enrollment command (#18606).
+
+        The SLM public key travels as a JSON extra-var (it contains spaces), never
+        by substitution into playbook text.
+        """
+        pairs = [
+            f"ansible_host={host}",
+            f"ansible_user={ssh_user}",
+            f"ansible_port={ssh_port}",
+            f"slm_node_id={node_id}",
+            f"slm_admin_url={admin_url}",
+            f"slm_heartbeat_interval={settings.heartbeat_interval}",
+            "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new -o ControlPath=none'",
+            "ansible_ssh_pipelining=false",
+            json.dumps({"slm_server_pubkey": slm_pubkey}),
+        ]
+        return [arg for pair in pairs for arg in ("-e", pair)]
+
     def _build_enrollment_command(
         self,
         playbook_path: Path,
@@ -843,50 +572,49 @@ class DeploymentService:
         ssh_user: str,
         ssh_port: int,
         admin_url: str,
+        slm_pubkey: str = "",
     ) -> List[str]:
         """Build the ansible-playbook command for enrollment.
 
         Helper for _execute_enrollment_playbook (Issue #665).
         """
-        ansible_cmd = self._find_ansible_playbook()
         return [
-            ansible_cmd,
+            self._find_ansible_playbook(),
             str(playbook_path),
             "-i",
             f"{host},",
-            "-e",
-            f"ansible_host={host}",
-            "-e",
-            f"ansible_user={ssh_user}",
-            "-e",
-            f"ansible_port={ssh_port}",
-            "-e",
-            f"slm_node_id={node_id}",
-            "-e",
-            f"slm_admin_url={admin_url}",
-            "-e",
-            f"slm_heartbeat_interval={settings.heartbeat_interval}",
-            "-e",
-            "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new -o ControlPath=none'",
-            "-e",
-            "ansible_ssh_pipelining=false",
+            *self._enrollment_var_args(host, node_id, ssh_user, ssh_port, admin_url, slm_pubkey),
         ]
 
-    def _add_enrollment_password_auth(self, cmd: List[str], ssh_password: str) -> None:
-        """Add password authentication options to enrollment command.
-
-        Helper for _execute_enrollment_playbook (Issue #665).
-        """
+    def _write_enrollment_secrets(self, ssh_password: str) -> str:
+        """Write the password to a 0600 `!unsafe` YAML vars file (`-e @file`, never argv); return its path."""
         if not shutil.which("sshpass"):
             raise RuntimeError("Password auth requires 'sshpass'. Install: sudo apt install sshpass")
-        cmd.extend(
-            [
-                "-e",
-                "ansible_ssh_pass=" + ssh_password,
-                "-e",
-                "ansible_become_pass=" + ssh_password,
-            ]
+        fd, path = tempfile.mkstemp(prefix="enroll-secrets-", suffix=".yml")
+        try:
+            os.fchmod(fd, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                quoted = yaml_double_quoted(ssh_password)
+                handle.write(f"ansible_ssh_pass: !unsafe {quoted}\nansible_become_pass: !unsafe {quoted}\n")
+        except BaseException:
+            Path(path).unlink(missing_ok=True)
+            raise
+        return path
+
+    async def _run_ansible_command(self, cmd: List[str], failure: str) -> str:
+        """Run an ansible-playbook command; return its output or raise on non-zero exit."""
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            cwd=str(self.ansible_dir),
+            env=self._get_ansible_environment(),
         )
+        stdout, _ = await process.communicate()
+        output = stdout.decode("utf-8", errors="replace")
+        if process.returncode != 0:
+            raise RuntimeError(f"{failure}:\n{output}")
+        return output
 
     async def _execute_enrollment_playbook(
         self,
@@ -897,41 +625,23 @@ class DeploymentService:
         ssh_password: str | None = None,
     ) -> str:
         """Execute the SLM agent enrollment playbook."""
-        playbook_path = self.ansible_dir / "enroll.yml"
-
-        # Create enrollment playbook if it doesn't exist
+        playbook_path = self.ansible_dir / _ENROLLMENT_PLAYBOOK
         if not playbook_path.exists():
-            await self._create_enrollment_playbook(playbook_path)
-
-        # Use external_url from config for the admin URL that nodes will use
-        admin_url = settings.external_url
-
-        # Build the ansible command
-        cmd = self._build_enrollment_command(playbook_path, host, node_id, ssh_user, ssh_port, admin_url)
-
-        # Add password authentication if provided
-        if ssh_password:
-            self._add_enrollment_password_auth(cmd, ssh_password)
-
-        logger.debug("Running enrollment: %s", " ".join(cmd[:10]) + " ...")
-
-        # Execute playbook with appropriate environment
-        env = self._get_ansible_environment()
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            cwd=str(self.ansible_dir),
-            env=env,
+            raise FileNotFoundError(f"Enrollment playbook not found: {playbook_path}")
+        slm_pubkey = await self._get_slm_public_key()
+        # external_url is the admin URL that nodes use
+        cmd = self._build_enrollment_command(
+            playbook_path, host, node_id, ssh_user, ssh_port, settings.external_url, slm_pubkey
         )
-
-        stdout, _ = await process.communicate()
-        output = stdout.decode("utf-8", errors="replace")
-
-        if process.returncode != 0:
-            raise RuntimeError(f"Enrollment playbook failed:\n{output}")
-
-        return output
+        secrets_path = self._write_enrollment_secrets(ssh_password) if ssh_password else None
+        try:
+            if secrets_path:
+                cmd.extend(["-e", "@" + secrets_path])
+            logger.debug("Running enrollment: %s", " ".join(cmd[:10]) + " ...")
+            return await self._run_ansible_command(cmd, "Enrollment playbook failed")
+        finally:
+            if secrets_path:
+                Path(secrets_path).unlink(missing_ok=True)
 
     async def _get_slm_public_key(self) -> str:
         """
@@ -954,7 +664,7 @@ class DeploymentService:
         # Try to read existing public key
         if pubkey_path.exists():
             try:
-                return pubkey_path.read_text(encoding="utf-8").strip()
+                return (await asyncio.to_thread(pubkey_path.read_text, encoding="utf-8")).strip()
             except Exception as e:
                 logger.warning("Failed to read SSH public key: %s", e)
 
@@ -991,26 +701,12 @@ class DeploymentService:
 
                 # Read the newly generated public key
                 if pubkey_path.exists():
-                    return pubkey_path.read_text(encoding="utf-8").strip()
+                    return (await asyncio.to_thread(pubkey_path.read_text, encoding="utf-8")).strip()
 
             except Exception as e:
                 logger.error("Error generating SSH key pair: %s", e)
 
         return ""
-
-    def _get_enrollment_playbook_content(self, slm_pubkey: str) -> str:
-        """Get enrollment playbook content with SSH pubkey substituted.
-
-        Helper for _create_enrollment_playbook (Issue #665).
-        """
-        return _ENROLLMENT_PLAYBOOK_TEMPLATE.replace("__SLM_PUBKEY_PLACEHOLDER__", slm_pubkey)
-
-    async def _create_enrollment_playbook(self, path: Path) -> None:
-        """Create the enrollment playbook for deploying SLM agent."""
-        slm_pubkey = await self._get_slm_public_key()
-        playbook_content = self._get_enrollment_playbook_content(slm_pubkey)
-        path.write_text(playbook_content, encoding="utf-8")
-        logger.info("Created enrollment playbook: %s", path)
 
 
 deployment_service = DeploymentService()

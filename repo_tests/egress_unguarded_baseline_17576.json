@@ -104,8 +104,6 @@
   "autobot-npu-worker/resources/windows-npu-worker/gui/controllers/worker_controller.py": 3,
   "autobot-npu-worker/resources/windows-npu-worker/gui/widgets/benchmark_widget.py": 2,
   "autobot-npu-worker/workers/pipeline_parallel.py": 2,
-  "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 4,
-  "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/health_collector.py": 1,
   "autobot-slm-backend/api/browser.py": 3,
   "autobot-slm-backend/api/code_sync.py": 1,
   "autobot-slm-backend/api/llm_config.py": 2,
