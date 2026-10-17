@@ -207,6 +207,78 @@ async def list_batch_jobs(
     return BatchJobList(jobs=jobs, total_count=total_count, status_counts=status_counts)
 
 
+@router.get("/status", response_model=BatchStatusResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_batch_status",
+    error_code_prefix="BATCH_JOBS",
+)
+async def get_batch_status(current_user: dict = Depends(get_current_user)):
+    """Get batch processing service status (authenticated: its shadowing removal must not open it, #18720)."""
+    return {
+        "status": "healthy",
+        "service": "batch_processor",
+        "capabilities": ["batch_load", "chat_init"],
+        "max_batch_size": 10,
+        "timeout": 30,
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+
+@router.get("/chat-init", response_model=BatchChatInitResponse)
+@router.post("/chat-init", response_model=BatchChatInitResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="batch_chat_initialization",
+    error_code_prefix="BATCH_JOBS",
+)
+async def batch_chat_initialization(request: Request, current_user: dict = Depends(get_current_user)):
+    """
+    Optimized endpoint for chat interface initialization.
+    Returns all data needed to start the chat in one request.
+    Supports both GET and POST methods.
+
+    ``request`` lets the helpers below reach live app state (#13558); it adds
+    no field to the request or response schema.
+    """
+    import time
+
+    start_time = time.time()
+    logger.info("Starting batch chat initialization...")
+
+    try:
+        results = await asyncio.gather(
+            get_chat_sessions(request.app),
+            get_system_health(),
+            get_service_health_legacy(),
+            get_settings(request.app),
+            return_exceptions=True,
+        )
+
+        chat_sessions = results[0] if not isinstance(results[0], Exception) else {"sessions": []}
+        system_health = results[1] if not isinstance(results[1], Exception) else {"status": "unknown"}
+        service_health = results[2] if not isinstance(results[2], Exception) else {"status": "unknown"}
+        settings = results[3] if not isinstance(results[3], Exception) else {}
+
+        response = {
+            "chat_sessions": chat_sessions,
+            "system_health": system_health,
+            "service_health": service_health,
+            "settings": settings,
+            "timing": {"total_ms": (time.time() - start_time) * 1000},
+        }
+
+        logger.info(
+            "Batch chat init completed in %.2fms",
+            (time.time() - start_time) * 1000,
+        )
+        return response
+
+    except Exception as e:
+        logger.error("Batch chat initialization failed: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.get("/{job_id}", response_model=BatchJob)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -763,31 +835,13 @@ def _process_session_file(filename: str, chats_directory: str):
         return None
 
 
-@router.get("/status", response_model=BatchStatusResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_batch_status",
-    error_code_prefix="BATCH_JOBS",
-)
-async def get_batch_status():
-    """Get batch processing service status"""
-    return {
-        "status": "healthy",
-        "service": "batch_processor",
-        "capabilities": ["batch_load", "chat_init"],
-        "max_batch_size": 10,
-        "timeout": 30,
-        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-    }
-
-
 @router.post("/load", response_model=BatchLoadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="batch_load",
     error_code_prefix="BATCH_JOBS",
 )
-async def batch_load(batch_request: APIBatchRequest):
+async def batch_load(batch_request: APIBatchRequest, current_user: dict = Depends(get_current_user)):
     """Execute multiple API calls in parallel and return combined results."""
     import time
 
@@ -833,60 +887,6 @@ async def batch_load(batch_request: APIBatchRequest):
     await asyncio.gather(*tasks, return_exceptions=True)
 
     return APIBatchResponse(responses=responses, errors=errors, timing=timing)
-
-
-@router.get("/chat-init", response_model=BatchChatInitResponse)
-@router.post("/chat-init", response_model=BatchChatInitResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="batch_chat_initialization",
-    error_code_prefix="BATCH_JOBS",
-)
-async def batch_chat_initialization(request: Request):
-    """
-    Optimized endpoint for chat interface initialization.
-    Returns all data needed to start the chat in one request.
-    Supports both GET and POST methods.
-
-    ``request`` lets the helpers below reach live app state (#13558); it adds
-    no field to the request or response schema.
-    """
-    import time
-
-    start_time = time.time()
-    logger.info("Starting batch chat initialization...")
-
-    try:
-        results = await asyncio.gather(
-            get_chat_sessions(request.app),
-            get_system_health(),
-            get_service_health_legacy(),
-            get_settings(request.app),
-            return_exceptions=True,
-        )
-
-        chat_sessions = results[0] if not isinstance(results[0], Exception) else {"sessions": []}
-        system_health = results[1] if not isinstance(results[1], Exception) else {"status": "unknown"}
-        service_health = results[2] if not isinstance(results[2], Exception) else {"status": "unknown"}
-        settings = results[3] if not isinstance(results[3], Exception) else {}
-
-        response = {
-            "chat_sessions": chat_sessions,
-            "system_health": system_health,
-            "service_health": service_health,
-            "settings": settings,
-            "timing": {"total_ms": (time.time() - start_time) * 1000},
-        }
-
-        logger.info(
-            "Batch chat init completed in %.2fms",
-            (time.time() - start_time) * 1000,
-        )
-        return response
-
-    except Exception as e:
-        logger.error("Batch chat initialization failed: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def get_chat_sessions(app):

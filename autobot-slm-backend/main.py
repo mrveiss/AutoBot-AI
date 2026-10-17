@@ -649,9 +649,9 @@ app.include_router(scim_router)
 # --- Service-management–gated routers ---
 app.include_router(browser_router, prefix="/api", dependencies=_SM)
 app.include_router(agents_router, prefix="/api", dependencies=_SM)
+app.include_router(services_router, prefix="/api", dependencies=_SM)
 app.include_router(nodes_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(nodes_execution_router, prefix="/api", dependencies=_SM)  # Issue #3406
-app.include_router(services_router, prefix="/api", dependencies=_SM)
 app.include_router(fleet_services_router, prefix="/api", dependencies=_SM)
 app.include_router(deployments_router, prefix="/api", dependencies=_SM)
 app.include_router(blue_green_router, prefix="/api", dependencies=_SM)
