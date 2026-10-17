@@ -37,7 +37,6 @@
     "TaskArtifact",
     "TaskQueue",
     "TaskResult",
-    "ToolCall",
     "User",
     "UserCreate",
     "UserResponse",

@@ -115,7 +115,7 @@ def _assertion_summary_tokens(ctx: TaskContext) -> int:
 
 
 @dataclass
-class ToolCall:
+class BenchmarkToolCall:
     tool_name: str
     args: dict[str, Any]
     output: dict[str, Any]
@@ -129,7 +129,7 @@ class TaskScenario:
     name: str
     focus: str
     # Ordered sequence of tool calls the agent would make
-    tool_calls: list[ToolCall]
+    tool_calls: list[BenchmarkToolCall]
     # Expected number of LLM iterations (each "decide + execute" round)
     iterations: int = 0
 
@@ -158,13 +158,9 @@ def _hash_call(tool_name: str, args: dict) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
-def build_scenarios() -> list[TaskScenario]:
-    """Build 5 representative task scenarios with realistic tool call sequences."""
-
-    # ------------------------------------------------------------------
-    # Task 1: Find backend port from process list + config file
-    # ------------------------------------------------------------------
-    lsof_output_1 = {
+def _task1_outputs() -> tuple[dict, dict]:
+    """Task 1 fixtures: the lsof listing and the config file it is confirmed against."""
+    lsof = {
         "command": "lsof -i -P -n",
         "exit_code": 0,
         "stdout": (
@@ -173,149 +169,145 @@ def build_scenarios() -> list[TaskScenario]:
             "node     5678  root    6u  IPv4  12346      0t0  TCP *:3000 (LISTEN)\n"
         ),
     }
-    config_output_1 = {
+    config = {
         "path": "/app/config.yaml",
         "content": "server:\n  port: 8080\n  host: 0.0.0.0\n",
     }
-    # Agent redundantly re-reads config and re-runs lsof to "confirm"
-    lsof_output_1_repeat = dict(lsof_output_1)  # identical repeat
+    return lsof, config
 
-    task1 = TaskScenario(
+
+def _build_task1() -> TaskScenario:
+    """Task 1: Find backend port from process list + config file."""
+    lsof, config = _task1_outputs()
+    lsof_repeat = dict(lsof)  # identical repeat
+    return TaskScenario(
         number=1,
         name="Find backend port from process list + config file",
         focus="Port extraction, cross-tool confirmation",
         iterations=4,
         tool_calls=[
-            ToolCall("run_command", {"command": "lsof -i -P -n"}, lsof_output_1),
-            ToolCall("read_file", {"path": "/app/config.yaml"}, config_output_1),
+            BenchmarkToolCall("run_command", {"command": "lsof -i -P -n"}, lsof),
+            BenchmarkToolCall("read_file", {"path": "/app/config.yaml"}, config),
             # Agent repeats lsof to "double-check" — hallucinated re-query
-            ToolCall("run_command", {"command": "lsof -i -P -n"}, lsof_output_1_repeat, is_repeat=True),
+            BenchmarkToolCall("run_command", {"command": "lsof -i -P -n"}, lsof_repeat, is_repeat=True),
             # Agent re-reads config to "confirm" — hallucinated re-query
-            ToolCall(
-                "read_file",
-                {"path": "/app/config.yaml"},
-                config_output_1,
-                is_repeat=True,
-            ),
+            BenchmarkToolCall("read_file", {"path": "/app/config.yaml"}, config, is_repeat=True),
         ],
     )
 
-    # ------------------------------------------------------------------
-    # Task 2: Read 3 files, summarize content differences
-    # ------------------------------------------------------------------
+
+def _build_task2() -> TaskScenario:
+    """Task 2: Read 3 files, summarize content differences."""
     file_a = {"path": "/src/api.py", "content": "def get_users(): return db.query(User).all()"}
     file_b = {"path": "/src/models.py", "content": "class User(Base):\n    id = Column(Integer, primary_key=True)"}
     file_c = {"path": "/src/routes.py", "content": "router.add_route('/users', get_users)"}
-    # Agent re-reads api.py (same hash will be detected)
-    file_a_reread = dict(file_a)
-
-    task2 = TaskScenario(
+    file_a_reread = dict(file_a)  # same hash will be detected
+    return TaskScenario(
         number=2,
         name="Read 3 files, summarize content differences",
         focus="File-exists assertions, content-hash dedup",
         iterations=5,
         tool_calls=[
-            ToolCall("read_file", {"path": "/src/api.py"}, file_a),
-            ToolCall("read_file", {"path": "/src/models.py"}, file_b),
-            ToolCall("read_file", {"path": "/src/routes.py"}, file_c),
+            BenchmarkToolCall("read_file", {"path": "/src/api.py"}, file_a),
+            BenchmarkToolCall("read_file", {"path": "/src/models.py"}, file_b),
+            BenchmarkToolCall("read_file", {"path": "/src/routes.py"}, file_c),
             # Agent re-reads api.py to "verify" before summarising
-            ToolCall("read_file", {"path": "/src/api.py"}, file_a_reread, is_repeat=True),
+            BenchmarkToolCall("read_file", {"path": "/src/api.py"}, file_a_reread, is_repeat=True),
             # Agent re-reads models.py
-            ToolCall("read_file", {"path": "/src/models.py"}, file_b, is_repeat=True),
+            BenchmarkToolCall("read_file", {"path": "/src/models.py"}, file_b, is_repeat=True),
         ],
     )
 
-    # ------------------------------------------------------------------
-    # Task 3: Run git commands, report branch/commit state
-    # ------------------------------------------------------------------
-    git_status = {
-        "command": "git status --short",
-        "exit_code": 0,
-        "stdout": "M  src/api.py\n?? debug.log\n",
-    }
-    git_log = {
+
+def _task3_outputs() -> tuple[dict, dict, dict]:
+    """Task 3 fixtures: git status, log and current-branch outputs."""
+    status = {"command": "git status --short", "exit_code": 0, "stdout": "M  src/api.py\n?? debug.log\n"}
+    log = {
         "command": "git log --oneline -5",
         "exit_code": 0,
         "stdout": ("abc1234 fix: update user query\n" "def5678 feat: add route\n" "ghi9012 chore: init\n"),
     }
-    git_branch = {
+    branch = {
         "command": "git branch --show-current",
         "exit_code": 0,
         "stdout": "feature/belief-state-prototype\n",
     }
-    # Agent re-runs git status (same exact command)
-    git_status_repeat = dict(git_status)
+    return status, log, branch
 
-    task3 = TaskScenario(
+
+def _build_task3() -> TaskScenario:
+    """Task 3: Run git commands, report branch/commit state."""
+    git_status, git_log, git_branch = _task3_outputs()
+    git_status_repeat = dict(git_status)  # agent re-runs the same exact command
+    return TaskScenario(
         number=3,
         name="Run git commands, report branch/commit state",
         focus="Exit-code assertions, command repetition",
         iterations=4,
         tool_calls=[
-            ToolCall("run_command", {"command": "git status --short"}, git_status),
-            ToolCall("run_command", {"command": "git log --oneline -5"}, git_log),
-            ToolCall("run_command", {"command": "git branch --show-current"}, git_branch),
+            BenchmarkToolCall("run_command", {"command": "git status --short"}, git_status),
+            BenchmarkToolCall("run_command", {"command": "git log --oneline -5"}, git_log),
+            BenchmarkToolCall("run_command", {"command": "git branch --show-current"}, git_branch),
             # Repeat git status — common in agents that re-verify state
-            ToolCall("run_command", {"command": "git status --short"}, git_status_repeat, is_repeat=True),
+            BenchmarkToolCall("run_command", {"command": "git status --short"}, git_status_repeat, is_repeat=True),
         ],
     )
 
-    # ------------------------------------------------------------------
-    # Task 4: Web search 3 topics, answer composite question
-    # ------------------------------------------------------------------
-    search_python = {
+
+def _task4_outputs() -> tuple[dict, dict, dict]:
+    """Task 4 fixtures: the Python, FastAPI and Redis search results."""
+    python = {
         "query": "Python async best practices 2024",
         "results": [
             {"title": "Real Python: Async IO in Python", "url": "https://realpython.com/async-io-python/"},
             {"title": "Python Docs: asyncio", "url": "https://docs.python.org/3/library/asyncio.html"},
         ],
     }
-    search_fastapi = {
+    fastapi = {
         "query": "FastAPI performance optimization",
         "results": [
             {"title": "FastAPI Docs: Performance", "url": "https://fastapi.tiangolo.com/"},
         ],
     }
-    search_redis = {
+    redis = {
         "query": "Redis caching patterns Python",
         "results": [
             {"title": "Redis: Python client examples", "url": "https://redis.io/docs/clients/python/"},
         ],
     }
-    # Agent re-searches the same Python query
-    search_python_repeat = dict(search_python)
+    return python, fastapi, redis
 
-    task4 = TaskScenario(
+
+def _build_task4() -> TaskScenario:
+    """Task 4: Web search 3 topics, answer composite question."""
+    search_python, search_fastapi, search_redis = _task4_outputs()
+    search_python_repeat = dict(search_python)  # agent re-searches the same Python query
+    py_args = {"query": "Python async best practices 2024"}
+    fa_args = {"query": "FastAPI performance optimization"}
+    return TaskScenario(
         number=4,
         name="Web search 3 topics, answer composite question",
         focus="Search-topic reuse suppression",
         iterations=5,
         tool_calls=[
-            ToolCall("web_search", {"query": "Python async best practices 2024"}, search_python),
-            ToolCall("web_search", {"query": "FastAPI performance optimization"}, search_fastapi),
-            ToolCall("web_search", {"query": "Redis caching patterns Python"}, search_redis),
+            BenchmarkToolCall("web_search", {"query": "Python async best practices 2024"}, search_python),
+            BenchmarkToolCall("web_search", {"query": "FastAPI performance optimization"}, search_fastapi),
+            BenchmarkToolCall("web_search", {"query": "Redis caching patterns Python"}, search_redis),
             # Repeat Python search — topic already answered
-            ToolCall(
-                "web_search",
-                {"query": "Python async best practices 2024"},
-                search_python_repeat,
-                is_repeat=True,
-            ),
+            BenchmarkToolCall("web_search", py_args, search_python_repeat, is_repeat=True),
             # Repeat FastAPI search
-            ToolCall(
-                "web_search",
-                {"query": "FastAPI performance optimization"},
-                search_fastapi,
-                is_repeat=True,
-            ),
+            BenchmarkToolCall("web_search", fa_args, search_fastapi, is_repeat=True),
         ],
     )
 
-    # ------------------------------------------------------------------
-    # Task 5: Multi-step debug — find error in log, read log, identify fix
-    # ------------------------------------------------------------------
+
+_TASK5_LOG_SCAN_COMMAND = "grep -n 'ERROR\\|CRITICAL' /var/log/app.log | tail -20"
+
+
+def _task5_outputs() -> tuple[dict, dict, dict]:
+    """Task 5 fixtures: the log scan, the log file, and a config that contradicts the log."""
     log_scan = {
-        "command": "grep -n 'ERROR\\|CRITICAL' /var/log/app.log | tail -20",
+        "command": _TASK5_LOG_SCAN_COMMAND,
         "exit_code": 0,
         "stdout": (
             "1042:ERROR:app:Database connection timeout after 30s\n"
@@ -333,41 +325,35 @@ def build_scenarios() -> list[TaskScenario]:
             "2024-01-15 10:30:44 INFO  Shutting down\n"
         ),
     }
-    # Contradiction scenario: agent reads config which says timeout=5s (contradicts prior belief)
-    config_with_contradicting_timeout = {
-        "path": "/app/database.yaml",
-        "content": "database:\n  timeout: 5\n  host: db.internal\n",
-    }
-    # Agent first assumes timeout=30 from log, then reads config showing timeout=5
-    # This is a genuine contradiction (30 vs 5) — belief state should surface it
-    log_scan_repeat = dict(log_scan)
+    # Log implies timeout=30; the config says timeout=5 — a genuine contradiction
+    config = {"path": "/app/database.yaml", "content": "database:\n  timeout: 5\n  host: db.internal\n"}
+    return log_scan, log_file, config
 
-    task5 = TaskScenario(
+
+def _build_task5() -> TaskScenario:
+    """Task 5: Multi-step debug — find error in log, read log, identify fix."""
+    log_scan, log_file, config = _task5_outputs()
+    scan_args = {"command": _TASK5_LOG_SCAN_COMMAND}
+    return TaskScenario(
         number=5,
         name="Multi-step debug: find error in log, read log, identify fix",
         focus="Contradiction handling when output varies",
         iterations=6,
         tool_calls=[
-            ToolCall(
-                "run_command",
-                {"command": "grep -n 'ERROR\\|CRITICAL' /var/log/app.log | tail -20"},
-                log_scan,
-            ),
-            ToolCall("read_file", {"path": "/var/log/app.log"}, log_file),
-            ToolCall("read_file", {"path": "/app/database.yaml"}, config_with_contradicting_timeout),
+            BenchmarkToolCall("run_command", {"command": _TASK5_LOG_SCAN_COMMAND}, log_scan),
+            BenchmarkToolCall("read_file", {"path": "/var/log/app.log"}, log_file),
+            BenchmarkToolCall("read_file", {"path": "/app/database.yaml"}, config),
             # Agent re-scans log (repeat — same command)
-            ToolCall(
-                "run_command",
-                {"command": "grep -n 'ERROR\\|CRITICAL' /var/log/app.log | tail -20"},
-                log_scan_repeat,
-                is_repeat=True,
-            ),
+            BenchmarkToolCall("run_command", scan_args, dict(log_scan), is_repeat=True),
             # Agent re-reads log file after reading config
-            ToolCall("read_file", {"path": "/var/log/app.log"}, log_file, is_repeat=True),
+            BenchmarkToolCall("read_file", {"path": "/var/log/app.log"}, log_file, is_repeat=True),
         ],
     )
 
-    return [task1, task2, task3, task4, task5]
+
+def build_scenarios() -> list[TaskScenario]:
+    """Build 5 representative task scenarios with realistic tool call sequences."""
+    return [_build_task1(), _build_task2(), _build_task3(), _build_task4(), _build_task5()]
 
 
 # ---------------------------------------------------------------------------

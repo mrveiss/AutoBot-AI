@@ -153,7 +153,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/autobot_memory_graph/property_graph.py": 630,
     "autobot-backend/autobot_memory_graph/relations.py": 641,
     "autobot-backend/autobot_memory_graph/semantic_search.py": 706,
-    "autobot-backend/benchmarks/benchmark_belief_state.py": 742,
+    "autobot-backend/benchmarks/benchmark_belief_state.py": 728,
     "autobot-backend/chat_history/context_overflow.py": 845,
     "autobot-backend/chat_history/session.py": 939,
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
