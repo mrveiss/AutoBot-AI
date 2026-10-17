@@ -87,7 +87,7 @@ class AnomalyType(Enum):
 
 @dataclass
 class ParsedLogEntry:
-    """Parsed log entry."""
+    """One log line split into level, logger, message and timing fields for pattern mining (#17312)."""
 
     timestamp: datetime
     level: LogLevel
