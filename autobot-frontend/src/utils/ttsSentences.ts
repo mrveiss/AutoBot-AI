@@ -114,9 +114,10 @@ interface OpenFence {
 // A fence line per CommonMark: up to 3 spaces of indent, then 3+ backticks or
 // tildes. A backtick fence's info string may not itself contain a backtick.
 const FENCE_LINE_RE = /^[ \t]{0,3}(`{3,}|~{3,})(.*)$/
-// A line that so far is only a 1-2 character marker run: it may become a
-// fence once the next slice arrives, so it is held rather than shaped.
-const PARTIAL_FENCE_RE = /^[ \t]{0,3}(?:`{1,2}|~{1,2})$/
+// A line start whose kind is not yet known: only indentation, a lone list
+// marker, or a 1-2 character fence run. It may become a fence, indented code
+// or a list item once the next slice arrives, so it is held, not classified.
+const UNDECIDED_LINE_RE = /^[ \t]*(?:[-*+]|\d+[.)]?|`{1,2}|~{1,2})?$/
 
 /** Opens a fence? Returns the fence, or null for an ordinary line. */
 function openingFence(line: string): OpenFence | null {
@@ -131,6 +132,39 @@ function closesFence(line: string, fence: OpenFence): boolean {
   return !!m && m[1][0] === fence.char && m[1].length >= fence.len && m[2].trim() === ''
 }
 
+const INDENTED_RE = /^(?: {4}| {0,3}\t)/
+const LIST_ITEM_RE = /^[ \t]*(?:[-*+]|\d+[.)])[ \t]/
+
+/**
+ * Indented code blocks (#17953), conservatively: a run of lines indented 4+
+ * spaces (or a tab) that follows a blank line and is not list content. An
+ * indented line straight after prose continues the paragraph, and indented
+ * lines under a list item are nested list content -- both stay spoken.
+ */
+function createIndentedCodeTracker() {
+  let prevBlank = true
+  let inList = false
+  let inCode = false
+  return {
+    inCode: () => inCode,
+    /** Records a complete line start; returns whether it is speakable as far as indented code goes. */
+    recordLine(line: string, eligible: boolean): boolean {
+      const blank = line.trim() === ''
+      const indented = INDENTED_RE.test(line)
+      if (inCode && !blank && !indented) inCode = false
+      if (!inCode && eligible && prevBlank && indented && !blank && !inList) inCode = true
+      if (!blank) inList = LIST_ITEM_RE.test(line) || (inList && indented)
+      prevBlank = blank
+      return !inCode
+    },
+    reset() {
+      prevBlank = true
+      inList = false
+      inCode = false
+    },
+  }
+}
+
 /**
  * Stateful speech shaper for one reply. `push()` takes successive streamed
  * slices and returns the speakable text. Fenced code blocks (``` or ~~~) are
@@ -142,34 +176,42 @@ export function createSpeechShaper(ph: SpeechPlaceholders) {
   let fence: OpenFence | null = null
   let atLineStart = true
   let held = ''
+  const indentedCode = createIndentedCodeTracker()
 
   const keepLine = (line: string, lineStart: boolean): boolean => {
+    if (!lineStart) return !fence && !indentedCode.inCode()
     if (fence) {
-      if (lineStart && closesFence(line, fence)) fence = null
+      if (closesFence(line, fence)) fence = null
+      indentedCode.recordLine(line, false)
       return false
     }
-    const opened = lineStart ? openingFence(line) : null
+    const opened = indentedCode.inCode() ? null : openingFence(line)
     if (opened) fence = opened
-    return !opened
+    return indentedCode.recordLine(line, !opened) && !opened
   }
 
   return {
     push(slice: string): string {
-      let text = held + slice
-      const lastBreak = text.lastIndexOf('\n')
-      const tailStart = lastBreak + 1
-      const tailAtLineStart = lastBreak >= 0 || atLineStart
-      held = tailAtLineStart && PARTIAL_FENCE_RE.test(text.slice(tailStart)) ? text.slice(tailStart) : ''
-      if (held) text = text.slice(0, tailStart)
-      const kept = text.split('\n').filter((line, i) => keepLine(line, i > 0 || atLineStart))
-      atLineStart = held !== '' || text.endsWith('\n')
+      const text = held + slice
+      const tailStart = text.lastIndexOf('\n') + 1
+      const tail = text.slice(tailStart)
+      // An undecided line start is held whole -- never recorded twice, never
+      // mistaken for a blank line just because a slice ended after a newline.
+      const holdTail = (tailStart > 0 || atLineStart) && UNDECIDED_LINE_RE.test(tail)
+      held = holdTail ? tail : ''
+      const body = holdTail ? text.slice(0, tailStart) : text
+      const lines = body === '' ? [] : body.split('\n')
+      if (body.endsWith('\n')) lines.pop()
+      const kept = lines.filter((line, i) => keepLine(line, i > 0 || atLineStart))
+      atLineStart = holdTail || body.endsWith('\n')
       return shapeProse(kept.join('\n'), ph).replace(/\s+/g, ' ').trim()
     },
-    /** End of reply: a held partial marker is only backticks or tildes -- never spoken. */
+    /** End of reply: a held undecided line start is markup or indent -- never spoken. */
     flush(): string {
       held = ''
       fence = null
       atLineStart = true
+      indentedCode.reset()
       return ''
     },
   }
@@ -178,4 +220,78 @@ export function createSpeechShaper(ph: SpeechPlaceholders) {
 /** Shape a complete (non-streamed) text for speech. */
 export function shapeForSpeech(text: string, ph: SpeechPlaceholders): string {
   return createSpeechShaper(ph).push(text)
+}
+
+// ─── Opening-chunk fast start (#13103) ───────────────────────────────────
+
+/**
+ * Minimum chars a terminated sentence needs before it is dispatched (#1485).
+ * Short fragments like "Hello there! " (13 chars) sound choppy spoken alone, so
+ * they wait to merge with the next sentence or flush as the remainder.
+ */
+export const MIN_TTS_SENTENCE_CHARS = 20
+/**
+ * The opening chunk of a reply may go out at a clause boundary (`,` `;` `:`
+ * `—` `–`) once it is this long. MODEL-SPECIFIC: too short an opening renders in
+ * a different timbre on some TTS models, so this is set by a listening test
+ * against our TTS worker (#13103), not by a unit test.
+ */
+export const OPENING_CLAUSE_MIN_CHARS = 16
+/** With no early clause boundary, the opening goes out at a word boundary once this long. */
+export const OPENING_WORD_MIN_CHARS = 48
+
+interface SpeechChunk {
+  spans: string[]
+  consumed: number
+}
+
+/** A cut here would split a markdown link, so the shaper could not rejoin it. */
+const insideLink = (span: string): boolean => /\[[^\]]*$|\]\([^)]*$/.test(span)
+
+/**
+ * The opening chunk of `text`, released before any sentence terminates, or
+ * null. Null whenever a terminator is present: the standard rule owns that
+ * text, and a short terminated sentence there is HELD for merging -- an early
+ * opening must never jump ahead of it.
+ */
+export function extractOpeningChunk(text: string): SpeechChunk | null {
+  if (/[.!?]\s/.test(text)) return null
+  const clause = /[,;:—–]\s+/g
+  let m: RegExpExecArray | null
+  while ((m = clause.exec(text)) !== null) {
+    const end = m.index + m[0].length
+    if (m.index + 1 < OPENING_CLAUSE_MIN_CHARS || insideLink(text.slice(0, end))) continue
+    return { spans: [text.slice(0, end)], consumed: end }
+  }
+  if (text.length < OPENING_WORD_MIN_CHARS) return null
+  const lastGap = /\s+(?=\S*$)/.exec(text)
+  if (!lastGap || lastGap.index === 0) return null
+  const end = lastGap.index + lastGap[0].length
+  if (insideLink(text.slice(0, end))) return null
+  return { spans: [text.slice(0, end)], consumed: end }
+}
+
+/**
+ * Per-reply TTS chunking: the opening chunk on a weaker signal, then the
+ * standard terminated-sentence rule for everything after it. `next()` takes
+ * the unspoken tail and returns the spans to speak plus the exact span
+ * consumed, so the caller's cursor never drifts (#12502).
+ *
+ * @param alreadyOpened  true for a reply already under way (e.g. voice enabled
+ *                       mid-reply), which must not get a second "opening".
+ */
+export function createTtsStream(alreadyOpened = false) {
+  let opened = alreadyOpened
+  return {
+    next(text: string): SpeechChunk {
+      const standard = extractCompleteSentences(text, MIN_TTS_SENTENCE_CHARS)
+      if (opened || standard.spans.length > 0) {
+        opened = true
+        return { spans: standard.spans, consumed: standard.consumed }
+      }
+      const opening = extractOpeningChunk(text)
+      if (opening) opened = true
+      return opening ?? { spans: [], consumed: 0 }
+    },
+  }
 }
