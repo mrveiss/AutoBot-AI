@@ -392,7 +392,7 @@ get_workflow_manager = lazy_singleton(WorkflowManager)
 
 
 # Convenience function
-async def process_chat_message(user_message: str, chat_id: str = "default") -> ChatWorkflowResult:
+async def process_chat_message_with_timeout(user_message: str, chat_id: str = "default") -> ChatWorkflowResult:
     """Process chat message through async workflow"""
     try:
         # Add timeout protection to prevent hanging - maximum 25 seconds

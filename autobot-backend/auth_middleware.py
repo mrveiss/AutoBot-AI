@@ -18,8 +18,8 @@ from typing import Dict, Tuple
 from fastapi import HTTPException, Request, status
 
 from auth_revocation import reject_if_revoked_by_password_change
-from autobot_shared import node_proxy
 from autobot_shared.auth.interactive_principal import LOGIN_TOKEN_TYPE, is_login_token, is_purpose_bound
+from autobot_shared.auth.internal_api_key import verify_internal_api_key
 from autobot_shared.auth.jwt_core import (
     decode_jwt_multi,
     encode_jwt,
@@ -945,18 +945,6 @@ async def get_current_user(request: Request) -> Dict:
         return device_user
 
     raise_auth_error("AUTH_0002")
-
-
-def verify_internal_api_key(provided: str | None) -> bool:
-    """Constant-time check of the trusted internal-service API key (Issue #1145).
-
-    True only when the key (``node_proxy.internal_api_key()``, its one reader, #17856) is configured AND
-    ``provided`` matches it exactly; ``compare_digest`` blocks timing inference; a missing header never matches.
-    """
-    expected = node_proxy.internal_api_key()
-    if not expected or not provided:
-        return False
-    return secrets.compare_digest(provided, expected)
 
 
 def check_admin_permission(request: Request) -> bool:

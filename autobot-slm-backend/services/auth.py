@@ -37,8 +37,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared import node_proxy
 from autobot_shared.auth.interactive_principal import is_purpose_bound
+from autobot_shared.auth.internal_api_key import verify_internal_api_key  # noqa: F401 (re-export)
 from autobot_shared.auth.jwt_core import _peek_alg, decode_jwt_or_none, encode_jwt, hash_password
 from autobot_shared.auth.permission_evaluator import evaluate_permission
 from autobot_shared.auth.permission_gate import PermissionGate
@@ -300,21 +300,6 @@ require_any_permission = _permission_gate.require_any_permission
 # instead of 401 when no Authorization header is present, so a machine caller
 # authenticating via the internal API key is not rejected first (#11450).
 _optional_security = HTTPBearer(auto_error=False)
-
-
-def verify_internal_api_key(provided: str | None) -> bool:
-    """Constant-time check of the trusted internal-service API key (#11450).
-
-    Mirrors autobot-backend ``auth_middleware.verify_internal_api_key`` (#1145):
-    the slm-agent and sibling services authenticate machine-to-machine with the
-    shared ``AUTOBOT_INTERNAL_API_KEY`` (#10263/#10492), never a user JWT.
-    Returns True only when the key is configured AND *provided* matches exactly;
-    ``secrets.compare_digest`` prevents timing inference and a None can't match.
-    """
-    expected = node_proxy.internal_api_key()
-    if not expected or not provided:
-        return False
-    return secrets.compare_digest(provided, expected)
 
 
 async def require_service_management_or_internal(

@@ -20,7 +20,7 @@ from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.feature_flags import require_admin
+from api.feature_flags import require_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.audit_logger import audit_log
@@ -54,7 +54,7 @@ def _require_registered(name: str) -> None:
     operation="list_scheduler_toggles",
     error_code_prefix="SCHEDULER_TOGGLES",
 )
-async def list_schedulers(_admin: Dict = Depends(require_admin)) -> SchedulerStateResponse:
+async def list_schedulers(_admin: Dict = Depends(require_admin_role)) -> SchedulerStateResponse:
     """List every registered scheduler with its effective state and declared default."""
     return SchedulerStateResponse(schedulers=await list_scheduler_states())
 
@@ -68,7 +68,7 @@ async def list_schedulers(_admin: Dict = Depends(require_admin)) -> SchedulerSta
 async def set_scheduler(
     name: str,
     update: SchedulerToggleUpdate,
-    admin: Dict = Depends(require_admin),
+    admin: Dict = Depends(require_admin_role),
 ) -> SchedulerToggleUpdateResponse:
     """Override a scheduler's state. Takes effect on the job's next cycle."""
     _require_registered(name)
@@ -95,7 +95,7 @@ async def set_scheduler(
 )
 async def clear_scheduler(
     name: str,
-    admin: Dict = Depends(require_admin),
+    admin: Dict = Depends(require_admin_role),
 ) -> SchedulerToggleUpdateResponse:
     """Clear the override so the scheduler reverts to its registry default."""
     _require_registered(name)

@@ -15,12 +15,12 @@ from transcriber.database import Database
 
 # Owner stamped on every row written before #15758: until then no route resolved
 # a caller, so every request -- with or without credentials -- fell back to this
-# value. Kept as a real owner so those rows stay addressable; can_access decides
+# value. Kept as a real owner so those rows stay addressable; can_access_transcriber_row decides
 # who may reach them.
 DEFAULT_USER = "default"
 
 
-async def get_db(request: Request) -> Database:
+async def get_transcriber_db_from_request(request: Request) -> Database:
     return request.app.state.transcriber_db
 
 
@@ -70,7 +70,7 @@ def caller_is_admin(request: Request) -> bool:
     return bool(getattr(getattr(request.state, "user", None), "is_admin", False))
 
 
-def require_admin(request: Request) -> None:
+def require_transcriber_admin(request: Request) -> None:
     """Route dependency: 403 unless the authenticated caller is an admin.
 
     For transcriber routes that change process-wide state rather than one
@@ -83,7 +83,7 @@ def require_admin(request: Request) -> None:
         raise HTTPException(status_code=403, detail="Admin privileges required")
 
 
-def can_access(row: dict, caller_id: str, *, is_admin: bool = False) -> bool:
+def can_access_transcriber_row(row: dict, caller_id: str, *, is_admin: bool = False) -> bool:
     """Strict ownership policy for transcriber rows (recordings/projects).
 
     - owner == caller_id                  -> allow
@@ -112,5 +112,5 @@ def can_access(row: dict, caller_id: str, *, is_admin: bool = False) -> bool:
 
 
 def caller_can_access(row: dict, request: Request) -> bool:
-    """can_access for the caller of *request* -- the one path routes use."""
-    return can_access(row, caller_id_of(request), is_admin=caller_is_admin(request))
+    """can_access_transcriber_row for the caller of *request* -- the one path routes use."""
+    return can_access_transcriber_row(row, caller_id_of(request), is_admin=caller_is_admin(request))

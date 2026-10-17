@@ -81,7 +81,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/batch_jobs.py": 964,
     "autobot-backend/api/browser_mcp.py": 1323,
     "autobot-backend/api/cache_management.py": 779,
-    "autobot-backend/api/chat.py": 2712,  # #18316: delete delegates to the canonical path
+    "autobot-backend/api/chat.py": 2708,  # #18316: delete delegates to the canonical path
     "autobot-backend/api/chat_sessions.py": 1938,  # #18293: legacy transcripts only ever proposed
     "autobot-backend/api/code_intelligence.py": 2154,
     "autobot-backend/api/code_search.py": 828,
@@ -149,7 +149,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/vnc_mcp.py": 763,
     "autobot-backend/api/websockets.py": 1120,  # #16457: accepts routed through websocket_subprotocol.accept_websocket
     "autobot-backend/api/workflow.py": 1027,
-    "autobot-backend/auth_middleware.py": 1088,  # #16457: bearer parsing moved to websocket_subprotocol.py
+    "autobot-backend/auth_middleware.py": 1076,  # #16457: bearer parsing moved to websocket_subprotocol.py
     "autobot-backend/autobot_memory_graph/property_graph.py": 630,
     "autobot-backend/autobot_memory_graph/relations.py": 641,
     "autobot-backend/autobot_memory_graph/semantic_search.py": 706,

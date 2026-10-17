@@ -552,7 +552,7 @@ async def _init_transcriber_db(app: FastAPI) -> None:
     Skipped entirely when TRANSCRIBER_ENABLED != true.
     Sets ``app.state.transcriber_db``, ``app.state.transcriber_upload_dir``,
     and ``app.state.transcriber_export_dir`` for use by the dependency
-    injection layer (``transcriber.deps.get_db``).
+    injection layer (``transcriber.deps.get_transcriber_db_from_request``).
     """
     import os
     from pathlib import Path as _Path

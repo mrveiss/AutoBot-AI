@@ -51,7 +51,7 @@ router = APIRouter(tags=["admin", "feature-flags"])
 
 
 # Dependency for admin authentication
-async def require_admin(
+async def require_admin_role(
     current_user: Dict = Depends(get_current_user),
 ) -> Dict:
     """
@@ -91,7 +91,7 @@ async def require_admin(
     error_code_prefix="FEATURE_FLAGS",
 )
 async def get_feature_flags_status(
-    admin: Dict = Depends(require_admin),
+    admin: Dict = Depends(require_admin_role),
     flags: FeatureFlags = Depends(get_feature_flags),
 ):
     """
@@ -117,7 +117,7 @@ async def get_feature_flags_status(
 )
 async def update_enforcement_mode(
     update: EnforcementModeUpdate,
-    admin: Dict = Depends(require_admin),
+    admin: Dict = Depends(require_admin_role),
     flags: FeatureFlags = Depends(get_feature_flags),
 ):
     """
@@ -182,7 +182,7 @@ async def update_enforcement_mode(
 async def set_endpoint_enforcement(
     endpoint: str,
     update: EnforcementModeUpdate,
-    admin: Dict = Depends(require_admin),
+    admin: Dict = Depends(require_admin_role),
     flags: FeatureFlags = Depends(get_feature_flags),
 ):
     """
@@ -233,7 +233,7 @@ async def set_endpoint_enforcement(
 )
 async def remove_endpoint_enforcement(
     endpoint: str,
-    admin: Dict = Depends(require_admin),
+    admin: Dict = Depends(require_admin_role),
     flags: FeatureFlags = Depends(get_feature_flags),
 ):
     """
@@ -275,7 +275,7 @@ async def remove_endpoint_enforcement(
 async def get_access_control_metrics(
     days: int = Query(7, ge=1, le=30, description="Number of days to include"),
     include_details: bool = Query(False, description="Include recent violation details"),
-    admin: Dict = Depends(require_admin),
+    admin: Dict = Depends(require_admin_role),
     metrics: AccessControlMetrics = Depends(get_metrics_service),
     flags: FeatureFlags = Depends(get_feature_flags),
 ):
@@ -319,7 +319,7 @@ async def get_access_control_metrics(
 async def get_endpoint_metrics(
     endpoint: str,
     days: int = Query(7, ge=1, le=30),
-    admin: Dict = Depends(require_admin),
+    admin: Dict = Depends(require_admin_role),
     metrics: AccessControlMetrics = Depends(get_metrics_service),
 ):
     """
@@ -351,7 +351,7 @@ async def get_endpoint_metrics(
 async def get_user_metrics(
     username: str,
     days: int = Query(7, ge=1, le=30),
-    admin: Dict = Depends(require_admin),
+    admin: Dict = Depends(require_admin_role),
     metrics: AccessControlMetrics = Depends(get_metrics_service),
 ):
     """
@@ -381,7 +381,7 @@ async def get_user_metrics(
     error_code_prefix="FEATURE_FLAGS",
 )
 async def cleanup_old_metrics(
-    admin: Dict = Depends(require_admin),
+    admin: Dict = Depends(require_admin_role),
     metrics: AccessControlMetrics = Depends(get_metrics_service),
 ):
     """

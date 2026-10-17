@@ -25605,9 +25605,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify migration preserves admin authentication dependency"""
         from api import feature_flags
 
-        # Verify require_admin is used in endpoints
+        # Verify require_admin_role is used in endpoints
         status_source = inspect.getsource(feature_flags.get_feature_flags_status)
-        self.assertIn("require_admin", status_source)
+        self.assertIn("require_admin_role", status_source)
         self.assertIn("admin", status_source)
 
     def test_batch_152_migration_preserves_feature_flags_service(self):
