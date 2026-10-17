@@ -21,7 +21,7 @@ from autobot_shared.logging_manager import get_logger
 from ..models import LLMRequest, LLMResponse
 from ..types import ProviderType
 from .cloud_batcher import CloudRequestBatcher
-from .connection_pool import ConnectionPoolManager, PoolConfig
+from .connection_pool import ConnectionPoolManager, HttpPoolConfig
 from .prompt_compressor import CompressionConfig, PromptCompressor
 from .rate_limiter import RateLimitConfig, RateLimitHandler
 from .router import LLMServingOptimizationCategory, OptimizationConfig, get_optimization_router
@@ -62,7 +62,7 @@ class OptimizedLLMMiddleware:
         self,
         optimization_config: OptimizationConfig = None,
         compression_config: CompressionConfig = None,
-        pool_config: PoolConfig = None,
+        pool_config: HttpPoolConfig = None,
         rate_limit_config: RateLimitConfig = None,
     ):
         """

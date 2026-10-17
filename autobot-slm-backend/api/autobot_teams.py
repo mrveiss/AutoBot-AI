@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.permissions import Permission
 from services.auth import require_permission
-from user_management.database import get_autobot_session
+from user_management.database import get_autobot_db
 from user_management.services import TeamService, TenantContext
 
 logger = logging.getLogger(__name__)
@@ -69,12 +69,6 @@ class TeamMemberAdd(BaseModel):
 
     user_id: uuid.UUID
     role: str = "member"
-
-
-async def get_autobot_db():
-    """Dependency for AutoBot database session."""
-    async with get_autobot_session() as session:
-        yield session
 
 
 @router.post("", response_model=TeamResponse, status_code=status.HTTP_201_CREATED)

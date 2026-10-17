@@ -29,8 +29,8 @@ from autobot_shared.logging_manager import get_logger
 
 from .attention_backend import (
     AttentionBackendSelector,
+    AttentionModelConfig,
 )
-from .attention_backend import ModelConfig as AttentionModelConfig
 from .hf_quantizer import HfQuantizerWrapper
 from .kv_cache import KVCacheConfig, KVCacheManager, LayerKVCache
 from .layer_inference import LayerInferenceConfig, LayerInferenceEngine

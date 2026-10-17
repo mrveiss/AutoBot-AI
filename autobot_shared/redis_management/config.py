@@ -6,7 +6,7 @@
 Redis Configuration Module (#2313).
 
 Contains configuration classes for Redis connection management:
-- RedisConfig: Database configuration dataclass
+- RedisDbConfig: Database configuration dataclass
 - RedisConfigLoader: Multi-source configuration loader
 - PoolConfig: Connection pool configuration
 
@@ -45,7 +45,7 @@ _BACKOFF_BASE = 2.0
 
 
 @dataclass
-class RedisConfig:
+class RedisDbConfig:
     """
     Redis database configuration.
 
@@ -146,13 +146,13 @@ class RedisConfigLoader:
         return None
 
     @staticmethod
-    def _parse_database_config(db_name: str, db_config: Dict[str, Any]) -> RedisConfig:
+    def _parse_database_config(db_name: str, db_config: Dict[str, Any]) -> RedisDbConfig:
         """
         Parse a single database configuration from YAML data.
 
         Issue #620.
         """
-        return RedisConfig(
+        return RedisDbConfig(
             name=db_name,
             db=db_config.get("db", 0),
             host=db_config.get("host", NetworkConstants.REDIS_VM_IP),
@@ -171,7 +171,7 @@ class RedisConfigLoader:
         )
 
     @staticmethod
-    def load_from_yaml(yaml_path: str | None = None) -> Dict[str, RedisConfig]:
+    def load_from_yaml(yaml_path: str | None = None) -> Dict[str, RedisDbConfig]:
         """
         Load configurations from YAML file.
 
@@ -185,7 +185,7 @@ class RedisConfigLoader:
             yaml_path: Optional explicit path to YAML config file
 
         Returns:
-            Dict mapping database names to RedisConfig objects
+            Dict mapping database names to RedisDbConfig objects
         """
         resolved_path = RedisConfigLoader._resolve_yaml_path(yaml_path)
 
@@ -216,12 +216,12 @@ class RedisConfigLoader:
             return {}
 
     @staticmethod
-    def load_from_service_registry() -> Dict[str, RedisConfig]:
+    def load_from_service_registry() -> Dict[str, RedisDbConfig]:
         """
         Load configurations from service registry.
 
         Returns:
-            Dict mapping database names to RedisConfig objects
+            Dict mapping database names to RedisDbConfig objects
         """
         try:
             from utils.service_registry import get_service_registry
@@ -230,9 +230,9 @@ class RedisConfigLoader:
             redis_config = registry.get_service_config("redis")
 
             if redis_config:
-                # Convert service registry format to RedisConfig
+                # Convert service registry format to RedisDbConfig
                 return {
-                    "main": RedisConfig(
+                    "main": RedisDbConfig(
                         name="main",
                         db=0,
                         host=redis_config.host,

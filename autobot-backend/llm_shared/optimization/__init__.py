@@ -23,16 +23,14 @@ from . import (  # noqa: E402,F401  # intentional re-export
     ssm_kernels,
     token_optimizer,
 )
-from .attention_backend import AttentionBackend as ModelAttentionBackend
 from .attention_backend import (
     AttentionBackendSelector,
-)
-from .attention_backend import ModelConfig as AttentionModelConfig
-from .attention_backend import (
+    AttentionModelConfig,
+    ModelAttentionBackend,
     get_attention_backend_selector,
 )
 from .cloud_batcher import BatchResult, CloudRequestBatcher
-from .connection_pool import ConnectionPoolManager, PoolConfig
+from .connection_pool import ConnectionPoolManager, HttpPoolConfig
 from .flash_attention import (
     AttentionBackend,
     AttentionOutput,
@@ -129,7 +127,7 @@ __all__ = [
     "BatchResult",
     # Connection Pool
     "ConnectionPoolManager",
-    "PoolConfig",
+    "HttpPoolConfig",
     # Rate Limiter
     "RateLimitHandler",
     "RateLimitConfig",

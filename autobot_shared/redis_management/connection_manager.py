@@ -42,8 +42,8 @@ from redis.retry import Retry
 from autobot_shared.network_constants import NetworkConstants
 from autobot_shared.redis_management.config import (
     PoolConfig,
-    RedisConfig,
     RedisConfigLoader,
+    RedisDbConfig,
 )
 from autobot_shared.redis_management.database_names import database_number, validated_name
 from autobot_shared.redis_management.statistics import (
@@ -308,7 +308,7 @@ class RedisConnectionManager:
         "main" uses the same resolution chain (config-manager -> env ->
         NetworkConstants -> ssot_config -> loopback, see
         ``_load_redis_config``/``_ssot_redis_host``) as every other
-        not-yet-configured database — instead of ``RedisConfig.host``'s
+        not-yet-configured database — instead of ``RedisDbConfig.host``'s
         dataclass field default, which is a *class-body* expression evaluated
         once at whichever process happens to import
         ``redis_management.config`` first, and empty outside autobot-backend.
@@ -317,7 +317,7 @@ class RedisConnectionManager:
         self._config = self._load_redis_config()
 
         # Load configurations from multiple sources
-        self._configs: Dict[str, RedisConfig] = {}
+        self._configs: Dict[str, RedisDbConfig] = {}
         self._load_configurations()
 
         self._pool_config = self._load_pool_config()
@@ -476,9 +476,9 @@ class RedisConnectionManager:
 
         # Priority 3: Default configuration with timeout config
         timeout_config = RedisConfigLoader.load_timeout_config()
-        # #14299: host/port come from self._config, not RedisConfig's dataclass
+        # #14299: host/port come from self._config, not RedisDbConfig's dataclass
         # defaults (untrustworthy outside autobot-backend; see _init_configurations).
-        default_config = RedisConfig(
+        default_config = RedisDbConfig(
             name="main",
             db=0,
             host=self._config["host"],
@@ -534,7 +534,7 @@ class RedisConnectionManager:
         logger.error("Redis '%s' did not become ready within %ss", database_name, max_wait)
         return False
 
-    def _build_async_pool_params(self, config: RedisConfig, database_name: str) -> dict:
+    def _build_async_pool_params(self, config: RedisDbConfig, database_name: str) -> dict:
         """
         Build connection pool parameters for async Redis.
 
@@ -578,7 +578,7 @@ class RedisConnectionManager:
 
         return pool_params
 
-    async def _try_create_async_pool(self, database_name: str, config: RedisConfig) -> async_redis.ConnectionPool:
+    async def _try_create_async_pool(self, database_name: str, config: RedisDbConfig) -> async_redis.ConnectionPool:
         """Single attempt to build and verify one async connection pool.
 
         Extracted from _create_async_pool_with_retry so retry logic can be
@@ -599,7 +599,7 @@ class RedisConnectionManager:
         return pool
 
     async def _create_async_pool_with_retry(
-        self, database_name: str, config: RedisConfig
+        self, database_name: str, config: RedisDbConfig
     ) -> async_redis.ConnectionPool:
         """
         Create async pool with retry logic.
@@ -631,7 +631,7 @@ class RedisConnectionManager:
             operation_name=f"create_async_pool[{database_name}]",
         )
 
-    def _apply_tls_params(self, pool_params: Dict[str, Any], config: RedisConfig, database_name: str) -> None:
+    def _apply_tls_params(self, pool_params: Dict[str, Any], config: RedisDbConfig, database_name: str) -> None:
         """Apply TLS parameters to pool configuration if TLS is enabled.
 
         Args:
@@ -652,7 +652,7 @@ class RedisConnectionManager:
         pool_params["ssl_cert_reqs"] = config.ssl_cert_reqs or "required"
         logger.info(f"TLS enabled for sync Redis connection '{database_name}'")
 
-    def _create_sync_pool_with_keepalive(self, database_name: str, config: RedisConfig) -> redis.ConnectionPool:
+    def _create_sync_pool_with_keepalive(self, database_name: str, config: RedisDbConfig) -> redis.ConnectionPool:
         """
         Create sync pool with TCP keepalive tuning.
 
@@ -901,7 +901,7 @@ class RedisConnectionManager:
             config = self._configs[database_name]
         else:
             db_number = self._get_database_number(database_name)
-            config = RedisConfig(
+            config = RedisDbConfig(
                 name=database_name,
                 db=db_number,
                 host=self._config["host"],
@@ -918,7 +918,7 @@ class RedisConnectionManager:
         self._validate_config_host(database_name, config)
         return self._create_sync_pool_with_keepalive(database_name, config)
 
-    def _validate_config_host(self, database_name: str, config: "RedisConfig") -> None:
+    def _validate_config_host(self, database_name: str, config: "RedisDbConfig") -> None:
         """Reject blank Redis hosts before any connect attempt (#11449).
 
         An empty host (e.g. unresolvable ``vm.redis`` in a process that cannot
@@ -955,13 +955,13 @@ class RedisConnectionManager:
         This pool is created ONCE per database and stored in self._async_pools.
         All subsequent get_async_client() calls for this database reuse this pool.
 
-        Sizing, timeouts, keepalive and retry come from PoolConfig / RedisConfig.
+        Sizing, timeouts, keepalive and retry come from PoolConfig / RedisDbConfig.
         """
         if database_name in self._configs:
             config = self._configs[database_name]
         else:
             db_number = self._get_database_number(database_name)
-            config = RedisConfig(
+            config = RedisDbConfig(
                 name=database_name,
                 db=db_number,
                 host=self._config["host"],
