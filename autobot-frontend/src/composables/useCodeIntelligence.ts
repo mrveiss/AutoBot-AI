@@ -66,6 +66,19 @@ export interface CodeSuggestion {
   impact: string
 }
 
+/** Wire shape of POST /api/code-intelligence/scan-file (bare JSON, one file). */
+export interface CodeScanFileResult {
+  status: string
+  timestamp: string
+  file_path: string
+  patterns: Array<Record<string, unknown>>
+  statistics: {
+    class_count: number
+    function_count: number
+    issues_found: number
+  }
+}
+
 export interface QualityScore {
   overall_score: number
   metrics: {
@@ -75,8 +88,31 @@ export interface QualityScore {
     testing: number
     security: number
   }
-  grade: 'A+' | 'A' | 'B' | 'C' | 'D' | 'F'
-  trend: 'improving' | 'stable' | 'declining'
+  grade: string
+  /** The served score is a point-in-time value; no trend is reported. */
+  trend?: 'improving' | 'stable' | 'declining'
+}
+
+/** Wire shape of GET /api/analytics/code/metrics/quality-score (bare JSON, codebase-wide). */
+interface CodebaseQualityScoreResponse {
+  overall_score: number
+  grade: string
+  quality_factors: Record<string, unknown>
+}
+
+function toQualityScore(raw: CodebaseQualityScoreResponse): QualityScore {
+  const factor = (key: string): number => Number(raw.quality_factors?.[key] ?? 0)
+  return {
+    overall_score: raw.overall_score,
+    grade: raw.grade,
+    metrics: {
+      complexity: factor('complexity'),
+      maintainability: factor('maintainability'),
+      documentation: factor('documentation'),
+      testing: factor('test_coverage'),
+      security: factor('security'),
+    },
+  }
 }
 
 export interface CodeHealthScore {
@@ -205,10 +241,12 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     }
   }
 
-  async function getQualityScore(code: string, language?: string): Promise<QualityScore | null> {
+  /** Codebase-wide quality score (admin); the server scores the last analysis, not a snippet. */
+  async function getQualityScore(): Promise<QualityScore | null> {
     startLoading()
     try {
-      const data = await ApiClient.post<QualityScore>(`${getApiBase()}/code-intelligence/quality-score`, { code, language })
+      const raw = await ApiClient.get<CodebaseQualityScoreResponse>(`${getApiBase()}/analytics/code/metrics/quality-score`)
+      const data = toQualityScore(raw)
       qualityScore.value = data
       logger.debug('Quality score:', data)
       return data
@@ -351,6 +389,23 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     }
   }
 
+  /** Quick-scan one Python file by server-side path (admin, .py only). */
+  async function scanFile(filePath: string): Promise<CodeScanFileResult | null> {
+    startLoading()
+    try {
+      const data = await ApiClient.post<CodeScanFileResult>(`${getApiBase()}/code-intelligence/scan-file`, { file_path: filePath })
+      logger.debug('File scan complete:', data.statistics)
+      return data
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to scan file'
+      logger.error('Failed to scan file:', err)
+      errors.value = [...errors.value, message]
+      return null
+    } finally {
+      stopLoading()
+    }
+  }
+
   /** Clear all accumulated errors. */
   function clearErrors(): void {
     errors.value = []
@@ -395,6 +450,7 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     getAnalysisHistory,
     deleteAnalysis,
     batchAnalyze,
+    scanFile,
     clearErrors,
   }
 }

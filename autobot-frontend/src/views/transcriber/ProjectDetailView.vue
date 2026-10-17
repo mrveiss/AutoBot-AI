@@ -16,6 +16,9 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('TranscriberProjectDetailView')
 
+// Live progress returns with its route (#18746): the SSE /recordings/{id}/progress route is not served.
+const LIVE_PROGRESS_ENABLED = false
+
 const route = useRoute()
 const router = useRouter()
 const api = useTranscriberApi()
@@ -146,7 +149,7 @@ onMounted(load)
           </span>
 
           <ProcessingProgress
-            v-if="isInProgress(recording)"
+            v-if="LIVE_PROGRESS_ENABLED && isInProgress(recording)"
             :recording-id="recording.id"
             class="recording-progress"
             @complete="onProcessingSettled(recording.id)"
@@ -222,7 +225,7 @@ onMounted(load)
 
 .project-detail-desc {
   margin: 0;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .recordings-state {
@@ -231,12 +234,12 @@ onMounted(load)
   align-items: center;
   gap: 0.5rem;
   padding: 2rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   text-align: center;
 }
 
 .recordings-error {
-  color: var(--color-danger-600, #dc2626);
+  color: var(--color-error);
 }
 
 .recordings-list {
@@ -254,9 +257,9 @@ onMounted(load)
   justify-content: space-between;
   gap: 1rem;
   padding: 0.75rem 1rem;
-  border: 1px solid var(--border-color, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
-  background: var(--bg-primary, #fff);
+  background: var(--bg-card);
 }
 
 .recording-main {
@@ -280,7 +283,7 @@ onMounted(load)
   flex-wrap: wrap;
   gap: 0.75rem;
   font-size: var(--text-xs, 0.75rem);
-  color: var(--text-tertiary, #9ca3af);
+  color: var(--text-tertiary);
 }
 
 .recording-status {
@@ -289,16 +292,16 @@ onMounted(load)
 }
 
 .recording-status-complete {
-  color: var(--color-success-600, #16a34a);
+  color: var(--color-success);
 }
 
 .recording-status-processing,
 .recording-status-pending {
-  color: var(--color-warning-600, #d97706);
+  color: var(--color-warning);
 }
 
 .recording-status-error {
-  color: var(--color-danger-600, #dc2626);
+  color: var(--color-error);
 }
 
 .recording-progress {
@@ -307,7 +310,7 @@ onMounted(load)
 
 .recording-failure {
   font-size: var(--text-sm, 0.875rem);
-  color: var(--color-danger-600, #dc2626);
+  color: var(--color-error);
 }
 
 .recording-actions {

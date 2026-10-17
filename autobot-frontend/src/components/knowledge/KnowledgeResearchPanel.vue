@@ -23,8 +23,12 @@ import { useUserStore } from '@/stores/useUserStore'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
 import { usePollingJob } from '@/composables/usePollingJob'
+import type { Board, SourceCard } from './knowledgeResearchTypes'
 
 const logger = createLogger('KnowledgeResearchPanel')
+
+// Accept returns with its route (#18745): no backend route ingests a research source yet.
+const ACCEPT_SOURCE_ENABLED = false
 const userStore = useUserStore()
 
 const { t } = useI18n()
@@ -48,10 +52,6 @@ const statusText = ref(t('knowledge.research.statusReady'))
 const errorMsg = ref<string | null>(null)
 
 // Issue #3242: board selector state
-interface Board {
-  board_id: string
-  name: string
-}
 const boards = ref<Board[]>([])
 const selectedBoardId = ref<string>('__global__')
 
@@ -106,16 +106,6 @@ const {
     }
   },
 })
-
-interface SourceCard {
-  url: string
-  title: string
-  snippet: string
-  score: number | null
-  domain: string
-  recommendation: string | null
-  decision: 'accepted' | 'rejected' | null
-}
 
 const sources = ref<SourceCard[]>([])
 
@@ -524,7 +514,7 @@ onUnmounted(() => {
               </a>
 
               <div class="card-actions" v-if="!card.decision">
-                <button class="btn-accept" @click="acceptSource(card)" :title="$t('knowledge.research.acceptTitle')">
+                <button v-if="ACCEPT_SOURCE_ENABLED" class="btn-accept" @click="acceptSource(card)" :title="$t('knowledge.research.acceptTitle')">
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                   </svg>
