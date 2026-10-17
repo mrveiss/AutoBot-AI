@@ -6865,7 +6865,7 @@ export interface paths {
          *         _: Admin permission check -- the raw explorer bypasses fact visibility (#16666)
          *
          *     Returns:
-         *         SearchResponse with matching documents and similarity scores
+         *         ChromaSearchResponse with matching documents and similarity scores
          *
          *     Raises:
          *         HTTPException: 400 for invalid parameters, 404 if collection not found,
@@ -23880,12 +23880,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Analyze Codebase
+         * Predict Bug Risk For Codebase
          * @description Analyze codebase for bug risk (Issue #543: no demo data).
          *     Issue #744: Requires admin authentication.
          *     Issue #1341: Results cached in Redis for 5 minutes.
          */
-        get: operations["analyze_codebase_api_analytics_bug_prediction_analyze_get"];
+        get: operations["predict_bug_risk_for_codebase_api_analytics_bug_prediction_analyze_get"];
         put?: never;
         /**
          * Start Bug Analysis
@@ -38889,13 +38889,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Analyze Codebase
+         * Analyze Code Anti Patterns
          * @description Analyze code for anti-patterns and quality issues.
          *
          *     Accepts either a directory path for bulk analysis or inline code.
          *     Issue #1008: Added inline code analysis support.
          */
-        post: operations["analyze_codebase_api_code_intelligence_analyze_post"];
+        post: operations["analyze_code_anti_patterns_api_code_intelligence_analyze_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -56376,6 +56376,27 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AgentGoalResponse
+         * @description Response for POST /intelligent-agent/process.
+         */
+        AgentGoalResponse: {
+            /** Success */
+            success: boolean;
+            /** Result */
+            result: string;
+            /** Execution Time */
+            execution_time: number;
+            /**
+             * Metadata
+             * @default {}
+             */
+            metadata: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AgentHealthResponse
          * @description Response for GET /health/detailed.
          */
@@ -63658,6 +63679,51 @@ export interface components {
             run_id?: string | null;
             /** Work Intent */
             work_intent?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ChromaSearchRequest
+         * @description Request for similarity search.
+         */
+        ChromaSearchRequest: {
+            /**
+             * Query
+             * @description Query text for similarity search
+             */
+            query: string;
+            /**
+             * N Results
+             * @description Number of results to return
+             * @default 10
+             */
+            n_results: number;
+            /**
+             * Where
+             * @description Metadata filter (ChromaDB where clause)
+             */
+            where?: {
+                [key: string]: unknown;
+            } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ChromaSearchResponse
+         * @description Response for similarity search.
+         */
+        ChromaSearchResponse: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            /** Data */
+            data?: components["schemas"]["SearchResultItem"][] | null;
+            /** Query */
+            query?: string | null;
+            /** Error */
+            error?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -74779,6 +74845,33 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * ExportRequest
+         * @description Request model for knowledge base export
+         */
+        ExportRequest: {
+            /** @default json */
+            format: components["schemas"]["ExportFormat"];
+            filters?: components["schemas"]["ExportFilters"] | null;
+            /**
+             * Include Metadata
+             * @default true
+             */
+            include_metadata: boolean;
+            /**
+             * Include Tags
+             * @default true
+             */
+            include_tags: boolean;
+            /**
+             * Include Embeddings
+             * @description Include vector embeddings (large file size)
+             * @default false
+             */
+            include_embeddings: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * ExternalPMType
          * @description External project management system type (GH#8257).
          * @enum {string}
@@ -76934,6 +77027,42 @@ export interface components {
             context: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
+        };
+        /** GoalResponse */
+        GoalResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Company Id */
+            company_id: string;
+            /** Parent Goal Id */
+            parent_goal_id: string | null;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string | null;
+            /** Level */
+            level: string;
+            /** Status */
+            status: string;
+            /** Owner Agent Id */
+            owner_agent_id: string | null;
+            /** Due Date */
+            due_date: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         } & {
             [key: string]: unknown;
         };
@@ -84978,7 +85107,7 @@ export interface components {
         MemorySearchResponse: {
             /** Success */
             success: boolean;
-            data: components["schemas"]["api__schemas_knowledge__SearchResponse"];
+            data: components["schemas"]["SearchResponse"];
             /** Request Id */
             request_id: string;
         } & {
@@ -90021,6 +90150,25 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * ProbeHealthResponse
+         * @description Response for GET /health and GET /system/health.
+         *
+         *     Issue #6909: status uses probe vocabulary ("ok"/"degraded"/"down") — the
+         *     legacy "healthy"/"unhealthy" mapping was removed. Extra fields
+         *     (cpu_percent, memory_percent, probes, etc.) are allowed through.
+         */
+        ProbeHealthResponse: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "degraded" | "down" | "not_applicable" | "idle";
+            /** Timestamp */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** ProcessCreate */
         ProcessCreate: {
             /** Process Key */
@@ -90292,6 +90440,36 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** ProjectCreate */
+        ProjectCreate: {
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+            /** Program Id */
+            program_id?: string | null;
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Lead Agent Id */
+            lead_agent_id?: string | null;
+            /** Lead User Id */
+            lead_user_id?: string | null;
+            /** Target Date */
+            target_date?: string | null;
+            /** Env */
+            env?: {
+                [key: string]: unknown;
+            } | null;
+            /** Auto Rollover */
+            auto_rollover?: boolean | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** ProjectOut */
         ProjectOut: {
             /** Id */
@@ -90536,6 +90714,29 @@ export interface components {
             items: components["schemas"]["TimelineItem"][];
             /** Edges */
             edges: components["schemas"]["TimelineEdge"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /** ProjectUpdate */
+        ProjectUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Lead Agent Id */
+            lead_agent_id?: string | null;
+            /** Lead User Id */
+            lead_user_id?: string | null;
+            /** Target Date */
+            target_date?: string | null;
+            /** Env */
+            env?: {
+                [key: string]: unknown;
+            } | null;
+            /** Auto Rollover */
+            auto_rollover?: boolean | null;
         } & {
             [key: string]: unknown;
         };
@@ -94648,6 +94849,207 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * SearchRequest
+         * @description Canonical request model for knowledge-base vector/document search (#78, #685, #555, #10654, #10666).
+         *
+         *     Consolidates the former SearchRequest, SearchRequest, SearchRequest,
+         *     and SearchRequest into one model.  All added fields carry defaults so existing
+         *     callers that only set query/limit/category remain fully backward-compatible.
+         *
+         *     ``limit`` accepts the legacy ``top_k`` wire name via ``validation_alias`` so JSON
+         *     payloads that send ``{"top_k": 10}`` continue to parse without change.
+         */
+        SearchRequest: {
+            /**
+             * Query
+             * @description Search query
+             */
+            query: string;
+            /**
+             * Limit
+             * @description Max results to return (also accepts legacy 'top_k' wire name)
+             * @default 10
+             */
+            limit: number;
+            /**
+             * Offset
+             * @description Pagination offset
+             * @default 0
+             */
+            offset: number;
+            /** Category */
+            category?: string | null;
+            /**
+             * Tags
+             * @description Filter results by tags (facts must have ALL specified tags)
+             */
+            tags?: string[] | null;
+            /**
+             * Tags Match Any
+             * @description If True, match facts with ANY tag. If False (default), match ALL tags.
+             * @default false
+             */
+            tags_match_any: boolean;
+            /**
+             * Mode
+             * @description Search mode: 'semantic' (vector only), 'keyword' (text only), 'hybrid' (both, default), 'auto' (intelligent selection)
+             * @default hybrid
+             */
+            mode: string;
+            /**
+             * Enable Reranking
+             * @description Enable cross-encoder reranking for better relevance
+             * @default false
+             */
+            enable_reranking: boolean;
+            /**
+             * Min Score
+             * @description Minimum similarity score threshold (0.0-1.0)
+             * @default 0
+             */
+            min_score: number;
+            /**
+             * Access Level
+             * @description Filter by access level: all, autobot, general, system, user
+             * @default all
+             */
+            access_level: string;
+            /**
+             * Board Id
+             * @description Project-scoped board ID for namespaced search. None / '__global__' searches all boards.
+             */
+            board_id?: string | null;
+            /**
+             * Enable Rag
+             * @description Enable RAG enhancement for synthesized responses
+             * @default false
+             */
+            enable_rag: boolean;
+            /**
+             * Reformulate Query
+             * @description Use RAG agent to expand/reformulate query for better coverage
+             * @default false
+             */
+            reformulate_query: boolean;
+            /**
+             * Return Context
+             * @description Return optimized context for RAG (useful for chat integration)
+             * @default false
+             */
+            return_context: boolean;
+            /**
+             * Created After
+             * @description Filter facts created after this date (ISO format: YYYY-MM-DD)
+             */
+            created_after?: string | null;
+            /**
+             * Created Before
+             * @description Filter facts created before this date (ISO format: YYYY-MM-DD)
+             */
+            created_before?: string | null;
+            /**
+             * Exclude Terms
+             * @description Exclude results containing these terms
+             */
+            exclude_terms?: string[] | null;
+            /**
+             * Require Terms
+             * @description Only include results containing ALL of these terms
+             */
+            require_terms?: string[] | null;
+            /**
+             * Include Documentation
+             * @description Also search project documentation
+             * @default false
+             */
+            include_documentation: boolean;
+            /**
+             * Include Relations
+             * @description Include related facts in results
+             * @default false
+             */
+            include_relations: boolean;
+            /**
+             * Doc Results
+             * @description Max documentation results (multi-source search)
+             * @default 3
+             */
+            doc_results: number;
+            /**
+             * Expand Relations
+             * @description Include related facts via graph (multi-source search)
+             * @default true
+             */
+            expand_relations: boolean;
+            /**
+             * Include Sources
+             * @description Which sources to search: facts, relations, documentation
+             * @default [
+             *       "facts",
+             *       "relations",
+             *       "documentation"
+             *     ]
+             */
+            include_sources: string[];
+            /**
+             * Track Analytics
+             * @description Track this search for analytics (default: true)
+             * @default true
+             */
+            track_analytics: boolean;
+            /**
+             * Session Id
+             * @description Session ID for analytics correlation
+             */
+            session_id?: string | null;
+            /**
+             * Enable Query Expansion
+             * @description Expand query with synonyms/related terms before searching
+             * @default false
+             */
+            enable_query_expansion: boolean;
+            /**
+             * Enable Relevance Scoring
+             * @description Apply additional relevance scoring on top of vector similarity
+             * @default false
+             */
+            enable_relevance_scoring: boolean;
+            /**
+             * Enable Clustering
+             * @description Cluster results by topic before returning
+             * @default false
+             */
+            enable_clustering: boolean;
+            /**
+             * Exclude Sources
+             * @description Exclude results from these source identifiers
+             */
+            exclude_sources?: string[] | null;
+            /**
+             * Verified Only
+             * @description Return only facts that have been verified/approved
+             * @default false
+             */
+            verified_only: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /** SearchResponse */
+        SearchResponse: {
+            /** Entities */
+            entities: components["schemas"]["EntityResponse"][];
+            /** Total Count */
+            total_count: number;
+            /** Query */
+            query: string;
+            /** Filters */
+            filters: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * SearchResultItem
          * @description A single search result.
          */
@@ -98695,25 +99097,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * SystemHealthResponse
-         * @description Response for GET /health and GET /system/health.
-         *
-         *     Issue #6909: status uses probe vocabulary ("ok"/"degraded"/"down") — the
-         *     legacy "healthy"/"unhealthy" mapping was removed. Extra fields
-         *     (cpu_percent, memory_percent, probes, etc.) are allowed through.
-         */
-        SystemHealthResponse: {
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "ok" | "degraded" | "down" | "not_applicable" | "idle";
-            /** Timestamp */
-            timestamp: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * SystemInfo
          * @description System information model.
          */
@@ -100948,6 +101331,55 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** TranscriberExportRequest */
+        TranscriberExportRequest: {
+            /**
+             * Format
+             * @enum {string}
+             */
+            format: "docx" | "pdf" | "srt" | "vtt";
+            /**
+             * Include Timestamps
+             * @default true
+             */
+            include_timestamps: boolean;
+            /**
+             * Include Notes
+             * @default true
+             */
+            include_notes: boolean;
+            /**
+             * Include Speaker Names
+             * @default true
+             */
+            include_speaker_names: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /** TranscriberProjectCreate */
+        TranscriberProjectCreate: {
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** TranscriberProjectUpdate */
+        TranscriberProjectUpdate: {
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
         } & {
             [key: string]: unknown;
         };
@@ -105144,51 +105576,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * SearchRequest
-         * @description Request for similarity search.
-         */
-        api__knowledge_chroma__SearchRequest: {
-            /**
-             * Query
-             * @description Query text for similarity search
-             */
-            query: string;
-            /**
-             * N Results
-             * @description Number of results to return
-             * @default 10
-             */
-            n_results: number;
-            /**
-             * Where
-             * @description Metadata filter (ChromaDB where clause)
-             */
-            where?: {
-                [key: string]: unknown;
-            } | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * SearchResponse
-         * @description Response for similarity search.
-         */
-        api__knowledge_chroma__SearchResponse: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            /** Data */
-            data?: components["schemas"]["SearchResultItem"][] | null;
-            /** Query */
-            query?: string | null;
-            /** Error */
-            error?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * ApprovalDecision
          * @description Request body for approving or rejecting a skill approval record.
          */
@@ -105202,27 +105589,6 @@ export interface components {
              * @default
              */
             notes: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * GoalResponse
-         * @description Response for POST /intelligent-agent/process.
-         */
-        api__schemas_agent__GoalResponse: {
-            /** Success */
-            success: boolean;
-            /** Result */
-            result: string;
-            /** Execution Time */
-            execution_time: number;
-            /**
-             * Metadata
-             * @default {}
-             */
-            metadata: {
-                [key: string]: unknown;
-            };
         } & {
             [key: string]: unknown;
         };
@@ -105259,33 +105625,6 @@ export interface components {
              * @description Retrieval relevance score (0–1)
              */
             score: number;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * ExportRequest
-         * @description Request model for knowledge base export
-         */
-        api__schemas_knowledge__ExportRequest: {
-            /** @default json */
-            format: components["schemas"]["ExportFormat"];
-            filters?: components["schemas"]["ExportFilters"] | null;
-            /**
-             * Include Metadata
-             * @default true
-             */
-            include_metadata: boolean;
-            /**
-             * Include Tags
-             * @default true
-             */
-            include_tags: boolean;
-            /**
-             * Include Embeddings
-             * @description Include vector embeddings (large file size)
-             * @default false
-             */
-            include_embeddings: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -105342,207 +105681,6 @@ export interface components {
              * @default true
              */
             dry_run: boolean;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * SearchRequest
-         * @description Canonical request model for knowledge-base vector/document search (#78, #685, #555, #10654, #10666).
-         *
-         *     Consolidates the former SearchRequest, SearchRequest, SearchRequest,
-         *     and SearchRequest into one model.  All added fields carry defaults so existing
-         *     callers that only set query/limit/category remain fully backward-compatible.
-         *
-         *     ``limit`` accepts the legacy ``top_k`` wire name via ``validation_alias`` so JSON
-         *     payloads that send ``{"top_k": 10}`` continue to parse without change.
-         */
-        api__schemas_knowledge__SearchRequest: {
-            /**
-             * Query
-             * @description Search query
-             */
-            query: string;
-            /**
-             * Limit
-             * @description Max results to return (also accepts legacy 'top_k' wire name)
-             * @default 10
-             */
-            limit: number;
-            /**
-             * Offset
-             * @description Pagination offset
-             * @default 0
-             */
-            offset: number;
-            /** Category */
-            category?: string | null;
-            /**
-             * Tags
-             * @description Filter results by tags (facts must have ALL specified tags)
-             */
-            tags?: string[] | null;
-            /**
-             * Tags Match Any
-             * @description If True, match facts with ANY tag. If False (default), match ALL tags.
-             * @default false
-             */
-            tags_match_any: boolean;
-            /**
-             * Mode
-             * @description Search mode: 'semantic' (vector only), 'keyword' (text only), 'hybrid' (both, default), 'auto' (intelligent selection)
-             * @default hybrid
-             */
-            mode: string;
-            /**
-             * Enable Reranking
-             * @description Enable cross-encoder reranking for better relevance
-             * @default false
-             */
-            enable_reranking: boolean;
-            /**
-             * Min Score
-             * @description Minimum similarity score threshold (0.0-1.0)
-             * @default 0
-             */
-            min_score: number;
-            /**
-             * Access Level
-             * @description Filter by access level: all, autobot, general, system, user
-             * @default all
-             */
-            access_level: string;
-            /**
-             * Board Id
-             * @description Project-scoped board ID for namespaced search. None / '__global__' searches all boards.
-             */
-            board_id?: string | null;
-            /**
-             * Enable Rag
-             * @description Enable RAG enhancement for synthesized responses
-             * @default false
-             */
-            enable_rag: boolean;
-            /**
-             * Reformulate Query
-             * @description Use RAG agent to expand/reformulate query for better coverage
-             * @default false
-             */
-            reformulate_query: boolean;
-            /**
-             * Return Context
-             * @description Return optimized context for RAG (useful for chat integration)
-             * @default false
-             */
-            return_context: boolean;
-            /**
-             * Created After
-             * @description Filter facts created after this date (ISO format: YYYY-MM-DD)
-             */
-            created_after?: string | null;
-            /**
-             * Created Before
-             * @description Filter facts created before this date (ISO format: YYYY-MM-DD)
-             */
-            created_before?: string | null;
-            /**
-             * Exclude Terms
-             * @description Exclude results containing these terms
-             */
-            exclude_terms?: string[] | null;
-            /**
-             * Require Terms
-             * @description Only include results containing ALL of these terms
-             */
-            require_terms?: string[] | null;
-            /**
-             * Include Documentation
-             * @description Also search project documentation
-             * @default false
-             */
-            include_documentation: boolean;
-            /**
-             * Include Relations
-             * @description Include related facts in results
-             * @default false
-             */
-            include_relations: boolean;
-            /**
-             * Doc Results
-             * @description Max documentation results (multi-source search)
-             * @default 3
-             */
-            doc_results: number;
-            /**
-             * Expand Relations
-             * @description Include related facts via graph (multi-source search)
-             * @default true
-             */
-            expand_relations: boolean;
-            /**
-             * Include Sources
-             * @description Which sources to search: facts, relations, documentation
-             * @default [
-             *       "facts",
-             *       "relations",
-             *       "documentation"
-             *     ]
-             */
-            include_sources: string[];
-            /**
-             * Track Analytics
-             * @description Track this search for analytics (default: true)
-             * @default true
-             */
-            track_analytics: boolean;
-            /**
-             * Session Id
-             * @description Session ID for analytics correlation
-             */
-            session_id?: string | null;
-            /**
-             * Enable Query Expansion
-             * @description Expand query with synonyms/related terms before searching
-             * @default false
-             */
-            enable_query_expansion: boolean;
-            /**
-             * Enable Relevance Scoring
-             * @description Apply additional relevance scoring on top of vector similarity
-             * @default false
-             */
-            enable_relevance_scoring: boolean;
-            /**
-             * Enable Clustering
-             * @description Cluster results by topic before returning
-             * @default false
-             */
-            enable_clustering: boolean;
-            /**
-             * Exclude Sources
-             * @description Exclude results from these source identifiers
-             */
-            exclude_sources?: string[] | null;
-            /**
-             * Verified Only
-             * @description Return only facts that have been verified/approved
-             * @default false
-             */
-            verified_only: boolean;
-        } & {
-            [key: string]: unknown;
-        };
-        /** SearchResponse */
-        api__schemas_knowledge__SearchResponse: {
-            /** Entities */
-            entities: components["schemas"]["EntityResponse"][];
-            /** Total Count */
-            total_count: number;
-            /** Query */
-            query: string;
-            /** Filters */
-            filters: {
-                [key: string]: unknown;
-            };
         } & {
             [key: string]: unknown;
         };
@@ -105655,42 +105793,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** GoalResponse */
-        llc__api__goals__GoalResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Company Id */
-            company_id: string;
-            /** Parent Goal Id */
-            parent_goal_id: string | null;
-            /** Title */
-            title: string;
-            /** Description */
-            description: string | null;
-            /** Level */
-            level: string;
-            /** Status */
-            status: string;
-            /** Owner Agent Id */
-            owner_agent_id: string | null;
-            /** Due Date */
-            due_date: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        } & {
-            [key: string]: unknown;
-        };
         /** RoleResponse */
         llc__api__roles__RoleResponse: {
             /**
@@ -105712,59 +105814,6 @@ export interface components {
              * @default false
              */
             is_system: boolean;
-        } & {
-            [key: string]: unknown;
-        };
-        /** ProjectCreate */
-        llc__api__sprints__ProjectCreate: {
-            /**
-             * Company Id
-             * Format: uuid
-             */
-            company_id: string;
-            /** Program Id */
-            program_id?: string | null;
-            /** Goal Id */
-            goal_id?: string | null;
-            /** Name */
-            name: string;
-            /** Description */
-            description?: string | null;
-            /** Lead Agent Id */
-            lead_agent_id?: string | null;
-            /** Lead User Id */
-            lead_user_id?: string | null;
-            /** Target Date */
-            target_date?: string | null;
-            /** Env */
-            env?: {
-                [key: string]: unknown;
-            } | null;
-            /** Auto Rollover */
-            auto_rollover?: boolean | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** ProjectUpdate */
-        llc__api__sprints__ProjectUpdate: {
-            /** Name */
-            name?: string | null;
-            /** Description */
-            description?: string | null;
-            /** Status */
-            status?: string | null;
-            /** Lead Agent Id */
-            lead_agent_id?: string | null;
-            /** Lead User Id */
-            lead_user_id?: string | null;
-            /** Target Date */
-            target_date?: string | null;
-            /** Env */
-            env?: {
-                [key: string]: unknown;
-            } | null;
-            /** Auto Rollover */
-            auto_rollover?: boolean | null;
         } & {
             [key: string]: unknown;
         };
@@ -105846,55 +105895,6 @@ export interface components {
             options?: {
                 [key: string]: unknown;
             };
-        } & {
-            [key: string]: unknown;
-        };
-        /** ExportRequest */
-        transcriber__models__ExportRequest: {
-            /**
-             * Format
-             * @enum {string}
-             */
-            format: "docx" | "pdf" | "srt" | "vtt";
-            /**
-             * Include Timestamps
-             * @default true
-             */
-            include_timestamps: boolean;
-            /**
-             * Include Notes
-             * @default true
-             */
-            include_notes: boolean;
-            /**
-             * Include Speaker Names
-             * @default true
-             */
-            include_speaker_names: boolean;
-        } & {
-            [key: string]: unknown;
-        };
-        /** ProjectCreate */
-        transcriber__models__ProjectCreate: {
-            /** Name */
-            name: string;
-            /**
-             * Description
-             * @default
-             */
-            description: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /** ProjectUpdate */
-        transcriber__models__ProjectUpdate: {
-            /** Name */
-            name: string;
-            /**
-             * Description
-             * @default
-             */
-            description: string;
         } & {
             [key: string]: unknown;
         };
@@ -109231,7 +109231,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SystemHealthResponse"];
+                    "application/json": components["schemas"]["ProbeHealthResponse"];
                 };
             };
         };
@@ -109251,7 +109251,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SystemHealthResponse"];
+                    "application/json": components["schemas"]["ProbeHealthResponse"];
                 };
             };
         };
@@ -109271,7 +109271,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SystemHealthResponse"];
+                    "application/json": components["schemas"]["ProbeHealthResponse"];
                 };
             };
         };
@@ -109291,7 +109291,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SystemHealthResponse"];
+                    "application/json": components["schemas"]["ProbeHealthResponse"];
                 };
             };
         };
@@ -109444,7 +109444,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SystemHealthResponse"];
+                    "application/json": components["schemas"]["ProbeHealthResponse"];
                 };
             };
         };
@@ -113735,7 +113735,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["api__schemas_knowledge__ExportRequest"];
+                "application/json": components["schemas"]["ExportRequest"];
             };
         };
         responses: {
@@ -114403,7 +114403,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["api__schemas_knowledge__SearchRequest"];
+                "application/json": components["schemas"]["SearchRequest"];
             };
         };
         responses: {
@@ -115036,7 +115036,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["api__knowledge_chroma__SearchRequest"];
+                "application/json": components["schemas"]["ChromaSearchRequest"];
             };
         };
         responses: {
@@ -115046,7 +115046,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__knowledge_chroma__SearchResponse"];
+                    "application/json": components["schemas"]["ChromaSearchResponse"];
                 };
             };
             /** @description Validation Error */
@@ -115069,7 +115069,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["api__schemas_knowledge__SearchRequest"];
+                "application/json": components["schemas"]["SearchRequest"];
             };
         };
         responses: {
@@ -121130,7 +121130,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["transcriber__models__ExportRequest"];
+                "application/json": components["schemas"]["TranscriberExportRequest"];
             };
         };
         responses: {
@@ -121261,7 +121261,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["transcriber__models__ProjectCreate"];
+                "application/json": components["schemas"]["TranscriberProjectCreate"];
             };
         };
         responses: {
@@ -121356,7 +121356,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["transcriber__models__ProjectUpdate"];
+                "application/json": components["schemas"]["TranscriberProjectUpdate"];
             };
         };
         responses: {
@@ -128203,7 +128203,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__schemas_agent__GoalResponse"];
+                    "application/json": components["schemas"]["AgentGoalResponse"];
                 };
             };
             /** @description Validation Error */
@@ -137002,7 +137002,7 @@ export interface operations {
             };
         };
     };
-    analyze_codebase_api_analytics_bug_prediction_analyze_get: {
+    predict_bug_risk_for_codebase_api_analytics_bug_prediction_analyze_get: {
         parameters: {
             query?: {
                 /** @description Path to analyze */
@@ -157118,7 +157118,7 @@ export interface operations {
             };
         };
     };
-    analyze_codebase_api_code_intelligence_analyze_post: {
+    analyze_code_anti_patterns_api_code_intelligence_analyze_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -163109,7 +163109,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["api__schemas_knowledge__ExportRequest"];
+                "application/json": components["schemas"]["ExportRequest"];
             };
         };
         responses: {
@@ -173733,7 +173733,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["llc__api__goals__GoalResponse"][];
+                    "application/json": components["schemas"]["GoalResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -173766,7 +173766,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["llc__api__goals__GoalResponse"];
+                    "application/json": components["schemas"]["GoalResponse"];
                 };
             };
             /** @description Validation Error */
@@ -173829,7 +173829,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["llc__api__goals__GoalResponse"];
+                    "application/json": components["schemas"]["GoalResponse"];
                 };
             };
             /** @description Validation Error */
@@ -173893,7 +173893,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["llc__api__goals__GoalResponse"];
+                    "application/json": components["schemas"]["GoalResponse"];
                 };
             };
             /** @description Validation Error */
@@ -173924,7 +173924,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["llc__api__goals__GoalResponse"][];
+                    "application/json": components["schemas"]["GoalResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -173955,7 +173955,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["llc__api__goals__GoalResponse"][];
+                    "application/json": components["schemas"]["GoalResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -175560,7 +175560,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["llc__api__sprints__ProjectCreate"];
+                "application/json": components["schemas"]["ProjectCreate"];
             };
         };
         responses: {
@@ -175706,7 +175706,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["llc__api__sprints__ProjectUpdate"];
+                "application/json": components["schemas"]["ProjectUpdate"];
             };
         };
         responses: {
