@@ -126,3 +126,19 @@ register_env_var(
         range=(1, 100),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ISSUE_CLAIM_SESSION_TTL_S",
+        type=int,
+        default=14400,
+        description=(
+            "How long a developer session's claim on a GitHub issue survives without a ledger "
+            "heartbeat (#17098). The session ledger writes through to the work-claims registry "
+            "for its issue kind; a crashed session frees the issue after this long. Mirrors the "
+            "ledger's own 4h default."
+        ),
+        component="orchestration",
+        range=(60, 172800),
+    )
+)
