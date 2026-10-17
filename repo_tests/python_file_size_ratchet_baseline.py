@@ -55,7 +55,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/agent.py": 1370,
     "autobot-backend/api/agent_config.py": 1371,
     "autobot-backend/api/agent_terminal.py": 773,
-    "autobot-backend/api/analytics.py": 1283,
+    "autobot-backend/api/analytics.py": 1281,
     "autobot-backend/api/analytics_architecture.py": 1264,
     "autobot-backend/api/analytics_bug_prediction.py": 1438,
     "autobot-backend/api/analytics_cfg.py": 1331,
@@ -83,7 +83,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/cache_management.py": 779,
     "autobot-backend/api/chat.py": 2708,  # #18316: delete delegates to the canonical path
     "autobot-backend/api/chat_sessions.py": 1938,  # #18293: legacy transcripts only ever proposed
-    "autobot-backend/api/code_intelligence.py": 2154,
+    "autobot-backend/api/code_intelligence.py": 2151,
     "autobot-backend/api/code_search.py": 828,
     "autobot-backend/api/codebase_analytics/analyzers.py": 1684,
     "autobot-backend/api/codebase_analytics/api_endpoint_scanner.py": 1444,
@@ -91,7 +91,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1119,
     "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 756,
     "autobot-backend/api/codebase_analytics/endpoints/environment.py": 698,  # #13602: sanitised traversal log
-    "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 827,
+    "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 817,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2266,
     "autobot-backend/api/codebase_analytics/endpoints/stats.py": 663,
     "autobot-backend/api/conversation_files.py": 996,
