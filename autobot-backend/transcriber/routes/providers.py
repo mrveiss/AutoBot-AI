@@ -29,23 +29,23 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["transcriber-providers"], dependencies=[Depends(authenticate)])
 
 
-class ProviderInfo(BaseModel):
+class TranscriberProviderInfo(BaseModel):
     id: str
     name: str
     configured: bool
     languages: List[str]
 
 
-class ProvidersResponse(BaseModel):
+class TranscriberProvidersResponse(BaseModel):
     selected: Optional[str]
-    providers: List[ProviderInfo]
+    providers: List[TranscriberProviderInfo]
 
 
 class SetProviderRequest(BaseModel):
     provider: Optional[str]
 
 
-@router.get("/providers", response_model=ProvidersResponse)
+@router.get("/providers", response_model=TranscriberProvidersResponse)
 async def list_providers() -> Dict[str, Any]:
     """List all cloud ASR providers and the currently active selection.
 

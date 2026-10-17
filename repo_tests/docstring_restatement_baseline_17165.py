@@ -214,7 +214,9 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
             "update_node_roles",
         }
     ),
-    "autobot-slm-backend/api/orchestration.py": frozenset({"ServiceActionResponse", "ServiceDefinitionResponse"}),
+    "autobot-slm-backend/api/orchestration.py": frozenset(
+        {"OrchestrationServiceActionResponse", "ServiceDefinitionResponse"}
+    ),
     "autobot-slm-backend/api/performance.py": frozenset(
         {"AlertRuleModel", "AlertRuleUpdateRequest", "delete_alert_rule"}
     ),

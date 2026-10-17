@@ -62,13 +62,13 @@ from services.llm_fallback_chain import (
 from services.llm_usage_recording import record_response_usage
 
 try:
-    from services.provider_health import ProviderHealthManager, ProviderStatus
+    from services.provider_health import ProviderHealthManager, ProviderHealthStatus
 
     _HEALTH_CHECK_AVAILABLE = True
 except Exception:  # pragma: no cover
     _HEALTH_CHECK_AVAILABLE = False
     ProviderHealthManager = None  # type: ignore[assignment]
-    ProviderStatus = None  # type: ignore[assignment]
+    ProviderHealthStatus = None  # type: ignore[assignment]
 
 # OTel tracer shared with llm_shared — same span names so traces merge.
 _llm_tracer = get_tracer("autobot.llm")
@@ -828,7 +828,7 @@ class LLMService:
                 health_result = await ProviderHealthManager.check_provider_health(
                     provider_name, timeout=2.0, use_cache=True
                 )
-                if health_result.status == ProviderStatus.UNAVAILABLE:
+                if health_result.status == ProviderHealthStatus.UNAVAILABLE:
                     return (
                         False,
                         f"{provider_name} unavailable: {health_result.message}",

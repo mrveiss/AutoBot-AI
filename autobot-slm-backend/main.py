@@ -589,7 +589,7 @@ app = FastAPI(
     forwarded_allow_ips=settings.trusted_proxies,
 )
 # #16428 review: FastAPI's default 422 body echoes the submitted payload --
-# UserCreate.password and VNCCredentialCreate.password have the same
+# SlmAdminUserCreate.password and VNCCredentialCreate.password have the same
 # exposure the audit found on autobot-backend's secrets endpoint.
 register_validation_error_handlers(app)
 

@@ -23,7 +23,7 @@ from typing import Any, Dict, List
 import aiofiles
 import aiohttp
 import psutil
-from metrics_types import DatabaseMetrics, InterVMMetrics, ServiceMetrics, SystemMetrics
+from metrics_types import DatabaseMetrics, HostPerformanceMetrics, InterVMMetrics, ServiceMetrics
 
 from autobot_shared.network_constants import NetworkConstants
 from autobot_shared.redis_client import get_redis_client
@@ -120,7 +120,7 @@ class FleetPerformanceMonitor:
             self.logger.error(f"❌ Failed to connect to Redis for metrics: {e}")
             self.redis_client = None
 
-    async def collect_system_metrics(self, hostname: str = "localhost") -> SystemMetrics:
+    async def collect_system_metrics(self, hostname: str = "localhost") -> HostPerformanceMetrics:
         """Collect comprehensive system performance metrics."""
         try:
             # CPU and memory metrics
@@ -141,7 +141,7 @@ class FleetPerformanceMonitor:
             # NPU metrics (Intel NPU if available)
             npu_util = await self.get_npu_metrics()
 
-            return SystemMetrics(
+            return HostPerformanceMetrics(
                 timestamp=utc_timestamp(),
                 hostname=hostname,
                 cpu_percent=cpu_percent,

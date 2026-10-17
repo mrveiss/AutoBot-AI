@@ -1237,7 +1237,7 @@ class WorkflowApprovalResponse(BaseModel):
     timestamp: float
 
 
-class WorkflowStatusUpdate(BaseModel):
+class WorkflowStepStatusUpdate(BaseModel):
     workflow_id: str
     step_id: str
     status: str
@@ -1479,7 +1479,7 @@ class WorkflowState(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class ConnectionTestRequest(BaseModel):
+class ProjectManagementConnectionTestRequest(BaseModel):
     """Request to test project management connection."""
 
     provider: str = Field(..., description="Provider: jira, trello, or asana")

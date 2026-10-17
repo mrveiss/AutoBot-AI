@@ -50,7 +50,7 @@ class MfaChallengeResponse(BaseModel):
     temp_token: str
 
 
-class UserCreate(BaseModel):
+class SlmAdminUserCreate(BaseModel):
     """User creation request."""
 
     username: str = Field(..., min_length=3, max_length=64)
@@ -58,7 +58,7 @@ class UserCreate(BaseModel):
     is_admin: bool = False
 
 
-class UserResponse(BaseModel):
+class SlmAdminUserResponse(BaseModel):
     """User response (excludes password)."""
 
     id: Any

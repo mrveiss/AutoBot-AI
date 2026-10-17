@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/roles", tags=["roles"])
 
 
-class RoleResponse(BaseModel):
+class RoleDefinitionResponse(BaseModel):
     """Role response schema."""
 
     name: str
@@ -53,7 +53,7 @@ class RoleResponse(BaseModel):
         from_attributes = True
 
 
-class RoleCreate(BaseModel):
+class RoleDefinitionCreate(BaseModel):
     """Role creation schema."""
 
     name: str = Field(..., min_length=1, max_length=50)
@@ -72,7 +72,7 @@ class RoleCreate(BaseModel):
     ansible_playbook: str | None = None
 
 
-class RoleUpdate(BaseModel):
+class RoleDefinitionUpdate(BaseModel):
     """Role update schema."""
 
     display_name: str | None = None
@@ -137,11 +137,11 @@ _SSH_ACTION_TIMEOUT_S = 120.0  # kept as-is: unifying the restart timeouts is th
 _ROLES_LIST_TIMEOUT = 10.0  # seconds; guards against slow DB / detection hangs (#11360)
 
 
-@router.get("", response_model=List[RoleResponse])
+@router.get("", response_model=List[RoleDefinitionResponse])
 async def get_roles(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-) -> List[RoleResponse]:
+) -> List[RoleDefinitionResponse]:
     """List all role definitions."""
     try:
         roles = await asyncio.wait_for(list_roles(db), timeout=_ROLES_LIST_TIMEOUT)
@@ -151,7 +151,7 @@ async def get_roles(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail="Role listing timed out — DB may be under heavy load",
         )
-    return [RoleResponse.model_validate(r) for r in roles]
+    return [RoleDefinitionResponse.model_validate(r) for r in roles]
 
 
 @router.get("/definitions")
@@ -261,12 +261,12 @@ def _classify_fleet_health(all_roles: list, active_role_names: set) -> FleetHeal
     return FleetHealthResponse(health="healthy", required_down=[], optional_down=[], detail="All roles active")
 
 
-@router.get("/{role_name}", response_model=RoleResponse)
+@router.get("/{role_name}", response_model=RoleDefinitionResponse)
 async def get_role_by_name(
     role_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-) -> RoleResponse:
+) -> RoleDefinitionResponse:
     """Get a specific role by name."""
     result = await db.execute(select(Role).where(Role.name == role_name))
     role = result.scalar_one_or_none()
@@ -277,15 +277,15 @@ async def get_role_by_name(
             detail=f"Role not found: {role_name}",
         )
 
-    return RoleResponse.model_validate(role)
+    return RoleDefinitionResponse.model_validate(role)
 
 
-@router.post("", response_model=RoleResponse)
+@router.post("", response_model=RoleDefinitionResponse)
 async def create_role(
-    role_data: RoleCreate,
+    role_data: RoleDefinitionCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-) -> RoleResponse:
+) -> RoleDefinitionResponse:
     """Create a new role definition."""
     result = await db.execute(select(Role).where(Role.name == role_data.name))
     if result.scalar_one_or_none():
@@ -300,16 +300,16 @@ async def create_role(
     await db.refresh(role)
 
     logger.info("Created role: %s", role.name)
-    return RoleResponse.model_validate(role)
+    return RoleDefinitionResponse.model_validate(role)
 
 
-@router.put("/{role_name}", response_model=RoleResponse)
+@router.put("/{role_name}", response_model=RoleDefinitionResponse)
 async def update_role(
     role_name: str,
-    role_data: RoleUpdate,
+    role_data: RoleDefinitionUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-) -> RoleResponse:
+) -> RoleDefinitionResponse:
     """Update a role definition."""
     result = await db.execute(select(Role).where(Role.name == role_name))
     role = result.scalar_one_or_none()
@@ -327,7 +327,7 @@ async def update_role(
     await db.refresh(role)
 
     logger.info("Updated role: %s", role.name)
-    return RoleResponse.model_validate(role)
+    return RoleDefinitionResponse.model_validate(role)
 
 
 @router.delete("/{role_name}")

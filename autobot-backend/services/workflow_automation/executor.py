@@ -51,7 +51,7 @@ from .safety_limits import (
     StepTimeoutEnforcer,
     WorkflowLimits,
 )
-from .state_machine import WorkflowPhase, WorkflowStateMachine
+from .state_machine import AutomationWorkflowStateMachine, WorkflowPhase
 from .step_evaluator import WorkflowStepEvaluator
 from .vision_step_handler import VISION_STEP_TYPES, execute_vision_step
 
@@ -222,7 +222,7 @@ class WorkflowExecutor:
         # Issue #1367: Called when a workflow finishes (completed/cancelled)
         self.on_workflow_finished: Callable[[str], None] | None = None
         # Issue #1380: State machine for explicit routing
-        self.state_machine = WorkflowStateMachine()
+        self.state_machine = AutomationWorkflowStateMachine()
         # Issue #2159: Safety limits infrastructure
         self.limits = WorkflowLimits()
         self.cost_tracker = CostTracker()

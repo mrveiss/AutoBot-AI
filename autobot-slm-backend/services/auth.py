@@ -48,7 +48,7 @@ from autobot_shared.user_management.password_epoch import (
     is_token_revoked_by_password_change,
 )
 from config import settings
-from models.schemas import TokenResponse, UserCreate, UserResponse
+from models.schemas import SlmAdminUserCreate, SlmAdminUserResponse, TokenResponse
 from services.api_key_audit import AUDIT_UNAVAILABLE_DETAIL, AuditUnavailable, audit_key_request
 from services.api_key_authority import legacy_grace_deadline, role_for_user
 from services.api_key_routes import mark_key_permission
@@ -206,7 +206,7 @@ class AuthService:
         logger.warning("decode_token_async: rejecting token with unsupported alg=%r", alg)
         return None
 
-    async def create_user(self, db: AsyncSession, user_data: UserCreate) -> UserResponse:
+    async def create_user(self, db: AsyncSession, user_data: SlmAdminUserCreate) -> SlmAdminUserResponse:
         """Create a new user."""
         result = await db.execute(select(User).where(User.username == user_data.username))
         if result.scalar_one_or_none():
@@ -229,7 +229,7 @@ class AuthService:
         await db.commit()
         await db.refresh(user)
 
-        return UserResponse.model_validate(user)
+        return SlmAdminUserResponse.model_validate(user)
 
     async def get_user_by_username(self, db: AsyncSession, username: str) -> User | None:
         """Get a user by username."""

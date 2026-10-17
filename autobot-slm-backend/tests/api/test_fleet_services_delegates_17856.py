@@ -57,7 +57,7 @@ def _db() -> _FakeDb:
 
 @pytest.mark.asyncio
 async def test_legacy_route_returns_the_orchestration_response() -> None:
-    legacy = await _services_api.get_fleet_services(_db(), _PRINCIPAL)
+    legacy = await _services_api.legacy_fleet_services(_db(), _PRINCIPAL)
     public = await _orchestration_api.get_fleet_services(_db(), _PRINCIPAL)
     assert legacy.model_dump() == public.model_dump()
 
@@ -65,7 +65,7 @@ async def test_legacy_route_returns_the_orchestration_response() -> None:
 @pytest.mark.asyncio
 async def test_node_rows_carry_address_and_port() -> None:
     """The legacy route exposed ip_address and port; the one implementation must keep them."""
-    result = await _services_api.get_fleet_services(_db(), _PRINCIPAL)
+    result = await _services_api.legacy_fleet_services(_db(), _PRINCIPAL)
     node = result.services[0].nodes[0]
     assert (node.hostname, node.ip_address, node.port) == ("alpha", "10.0.0.1", 6379)
     assert (result.services[0].running_count, result.services[0].failed_count) == (1, 1)
