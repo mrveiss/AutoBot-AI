@@ -40,7 +40,7 @@ for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
 from autobot_shared.time_utils import parse_utc_iso  # noqa: E402
 
 from config import ConfigManager
-from user_management.config import DeploymentMode, get_deployment_config
+from user_management.config import UserManagementMode, get_deployment_config
 from user_management.database import db_session_context, init_database
 from user_management.models import Organization, Permission, Role, User, UserRole
 from user_management.models.role import SYSTEM_PERMISSIONS, SYSTEM_ROLES
@@ -82,7 +82,7 @@ class ConfigUserMigrator:
         """
         deployment_config = get_deployment_config()
 
-        if deployment_config.mode == DeploymentMode.SINGLE_USER:
+        if deployment_config.mode == UserManagementMode.SINGLE_USER:
             logger.warning(
                 "Deployment mode is 'single_user'. User management system is not "
                 "needed in this mode. Set AUTOBOT_USER_MODE to single_company,"

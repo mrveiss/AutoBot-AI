@@ -32,7 +32,7 @@ from autobot_shared.user_management.middleware.rbac_middleware import (  # noqa:
     configure_rbac,
     rbac_middleware,
 )
-from user_management.config import get_deployment_config
+from user_management.config import get_rbac_deployment_config
 from user_management.database import db_session_context
 from user_management.services import TenantContext, UserService
 
@@ -44,7 +44,7 @@ configure_rbac(
         db_session_context=db_session_context,
         user_service_cls=UserService,
         tenant_context_cls=TenantContext,
-        get_deployment_config=get_deployment_config,
+        get_deployment_config=get_rbac_deployment_config,
     )
 )
 

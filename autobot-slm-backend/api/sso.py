@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.sso_deps import get_audit_db
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.env_utils import env_int
-from models.database import AuditLog
+from models.database import SlmNodeAuditLog
 from services.auth import require_permission
 from services.step_up_auth import require_step_up
 from user_management.database import get_slm_db
@@ -133,15 +133,15 @@ async def get_providers_health(
     # Single grouped aggregation over the window
     agg_result = await audit_db.execute(
         select(
-            AuditLog.resource_id,
-            func.count(AuditLog.id).filter(AuditLog.success.is_(True)).label("success_count"),
-            func.count(AuditLog.id).filter(AuditLog.success.is_(False)).label("failure_count"),
-            func.max(AuditLog.timestamp).filter(AuditLog.success.is_(True)).label("last_success_at"),
+            SlmNodeAuditLog.resource_id,
+            func.count(SlmNodeAuditLog.id).filter(SlmNodeAuditLog.success.is_(True)).label("success_count"),
+            func.count(SlmNodeAuditLog.id).filter(SlmNodeAuditLog.success.is_(False)).label("failure_count"),
+            func.max(SlmNodeAuditLog.timestamp).filter(SlmNodeAuditLog.success.is_(True)).label("last_success_at"),
         )
-        .where(AuditLog.category == "sso")
-        .where(AuditLog.action == "login")
-        .where(AuditLog.timestamp >= window_start)
-        .group_by(AuditLog.resource_id)
+        .where(SlmNodeAuditLog.category == "sso")
+        .where(SlmNodeAuditLog.action == "login")
+        .where(SlmNodeAuditLog.timestamp >= window_start)
+        .group_by(SlmNodeAuditLog.resource_id)
     )
     rows = {row.resource_id: row for row in agg_result.all()}
 

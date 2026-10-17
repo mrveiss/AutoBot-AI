@@ -20,7 +20,7 @@ from services.audit import audit, store
 from services.audit.projection import UNIFIED_KEY, category_key
 from services.audit.purge import purge_expired
 from services.audit.retention import RETENTION_DAYS, ttl_seconds
-from services.audit.taxonomy import AuditAction, AuditCategory, AuditEvent, AuditFilter, EventType
+from services.audit.taxonomy import AuditAction, AuditCategory, AuditEvent, AuditFilter, ComplianceEventType
 
 _DAY = 24 * 3600
 
@@ -53,7 +53,7 @@ async def _record_of(emit_call) -> AuditEvent:
 class TestEveryProducerRecordsItsOwnEvent:
     @pytest.mark.asyncio
     async def test_emit_of_an_audit_event_keeps_its_category_and_action(self) -> None:
-        """#17225 regression: `emit` was shadowed by an EventType bridge, so this was COMPLIANCE/repr."""
+        """#17225 regression: `emit` was shadowed by a ComplianceEventType bridge, so this was COMPLIANCE/repr."""
         ev = _event(category=AuditCategory.GOVERNANCE, action="task.claim")
         got = await _record_of(lambda: audit.emit(ev))
         assert got is ev
@@ -61,7 +61,7 @@ class TestEveryProducerRecordsItsOwnEvent:
 
     @pytest.mark.asyncio
     async def test_emit_compliance_takes_an_event_type(self) -> None:
-        got = await _record_of(lambda: audit.emit_compliance(EventType.USER_LOGIN, "bob", ip_address="ip"))
+        got = await _record_of(lambda: audit.emit_compliance(ComplianceEventType.USER_LOGIN, "bob", ip_address="ip"))
         assert (got.category, got.action, got.actor_id) == (AuditCategory.COMPLIANCE, "user.login", "bob")
 
     @pytest.mark.asyncio

@@ -36,7 +36,7 @@ from services.audit.taxonomy import (  # noqa: F401 -- re-exported vocabulary
     AuditEvent,
     AuditEventType,
     AuditFilter,
-    EventType,
+    ComplianceEventType,
     action_name,
     event_from_dict,
 )
@@ -117,7 +117,7 @@ def emit(event: AuditEvent) -> bool:
     running loop before any loop was seen -- which is logged at ERROR. A sync
     FastAPI handler or a worker thread hands the write to the serving loop.
 
-    #17225: this name used to be redefined further down as an ``EventType``
+    #17225: this name used to be redefined further down as a ``ComplianceEventType``
     bridge, so ``emit(AuditEvent(...))`` -- the call every direct producer made
     -- was recorded as a COMPLIANCE event whose action was the event's repr.
     """
@@ -227,7 +227,7 @@ def emit_compliance(
     metadata: Dict[str, Any] | None = None,
     ip_address: str | None = None,
 ) -> bool:
-    """Record a COMPLIANCE event; *action* may be an ``EventType`` or a string."""
+    """Record a COMPLIANCE event; *action* may be a ``ComplianceEventType`` or a string."""
     return emit(
         AuditEvent(
             category=AuditCategory.COMPLIANCE,

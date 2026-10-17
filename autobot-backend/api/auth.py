@@ -41,7 +41,7 @@ from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.security.password_weakness import check_password_weakness
 from autobot_shared.user_management.password_epoch import set_password_epoch
 from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
-from services.audit.audit import EventType
+from services.audit.audit import ComplianceEventType
 from services.audit.audit import emit_compliance as _emit_event  # #17225
 from user_management.database import db_session_context
 from user_management.middleware.rate_limit import SESSION_MAX_ATTEMPTS, SESSION_WINDOW_SECONDS  # #15757
@@ -149,7 +149,7 @@ async def login(request: Request, login_data: LoginRequest):
             logger.info("Login soft-warning for user '%s': weak password detected", login_data.username)
 
         _emit_event(
-            EventType.USER_LOGIN,
+            ComplianceEventType.USER_LOGIN,
             safe_user_data["user_id"],
             ip_address=ip_address,
         )
@@ -190,7 +190,7 @@ async def logout(request: Request, logout_data: LogoutRequest):
 
         user_data = get_auth_middleware().get_user_from_request(request)
         user_id = user_data.get("user_id", user_data.get("username", "unknown")) if user_data else "unknown"
-        _emit_event(EventType.USER_LOGOUT, user_id, ip_address=ip_address)
+        _emit_event(ComplianceEventType.USER_LOGOUT, user_id, ip_address=ip_address)
 
         return {"success": True, "message": "Logged out successfully"}
 

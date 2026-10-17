@@ -21,7 +21,7 @@ from sqlalchemy import select
 from autobot_shared.time_utils import now_utc
 from autobot_shared.user_management.grant_scope import encode_grant, grants_in_scope
 from autobot_shared.user_management.login_eligibility import login_refusal
-from autobot_shared.user_management.models.audit import AuditAction, AuditResourceType
+from autobot_shared.user_management.models.audit import AuditResourceType, IdentityAuditAction
 from autobot_shared.user_management.models.role import Role, UserRole
 from autobot_shared.user_management.models.user import UserCore
 from autobot_shared.user_management.role_permission_query import user_grant_rows_query
@@ -46,7 +46,7 @@ class UserAccessMixin(UserServiceBase):
         details = {"reason": reason, "ip_address": ip_address}
         if username_or_email:
             details["username_or_email"] = username_or_email
-        await self._audit_log(AuditAction.LOGIN_FAILED, AuditResourceType.USER, user_id, details)
+        await self._audit_log(IdentityAuditAction.LOGIN_FAILED, AuditResourceType.USER, user_id, details)
 
     async def _lookup_user_for_auth(self, username_or_email: str) -> UserCore | None:
         """Find the login subject by email first, then by username."""
@@ -88,7 +88,9 @@ class UserAccessMixin(UserServiceBase):
 
         user.last_login_at = now_utc()
         await self.session.flush()
-        await self._audit_log(AuditAction.LOGIN_SUCCESS, AuditResourceType.USER, user.id, {"ip_address": ip_address})
+        await self._audit_log(
+            IdentityAuditAction.LOGIN_SUCCESS, AuditResourceType.USER, user.id, {"ip_address": ip_address}
+        )
         return user
 
     # -------------------------------------------------------------------------
@@ -136,7 +138,9 @@ class UserAccessMixin(UserServiceBase):
         self.session.add(user_role)
         await self.session.flush()
         await self._clear_permission_cache(user_id)
-        await self._audit_log(AuditAction.ROLE_ASSIGNED, AuditResourceType.USER, user_id, {"role_id": str(role_id)})
+        await self._audit_log(
+            IdentityAuditAction.ROLE_ASSIGNED, AuditResourceType.USER, user_id, {"role_id": str(role_id)}
+        )
         return True
 
     async def revoke_role(self, user_id: uuid.UUID, role_id: uuid.UUID) -> bool:
@@ -147,7 +151,9 @@ class UserAccessMixin(UserServiceBase):
         await self.session.delete(user_role)
         await self.session.flush()
         await self._clear_permission_cache(user_id)
-        await self._audit_log(AuditAction.ROLE_REVOKED, AuditResourceType.USER, user_id, {"role_id": str(role_id)})
+        await self._audit_log(
+            IdentityAuditAction.ROLE_REVOKED, AuditResourceType.USER, user_id, {"role_id": str(role_id)}
+        )
         return True
 
     async def _assign_roles(self, user_id: uuid.UUID, role_ids: list[uuid.UUID]) -> None:

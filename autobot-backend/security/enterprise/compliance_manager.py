@@ -52,7 +52,7 @@ class ComplianceFramework(Enum):
     PCI_DSS = "pci_dss"
 
 
-class AuditEventType(Enum):
+class ComplianceAuditEventType(Enum):
     """Types of auditable events"""
 
     AUTHENTICATION = "authentication"
@@ -247,11 +247,11 @@ class ComplianceManager:
         return {
             ComplianceFramework.SOC2: {
                 "required_events": [
-                    AuditEventType.AUTHENTICATION,
-                    AuditEventType.AUTHORIZATION,
-                    AuditEventType.DATA_ACCESS,
-                    AuditEventType.SYSTEM_CONFIGURATION,
-                    AuditEventType.ADMIN_ACTION,
+                    ComplianceAuditEventType.AUTHENTICATION,
+                    ComplianceAuditEventType.AUTHORIZATION,
+                    ComplianceAuditEventType.DATA_ACCESS,
+                    ComplianceAuditEventType.SYSTEM_CONFIGURATION,
+                    ComplianceAuditEventType.ADMIN_ACTION,
                 ],
                 "retention_days": 2555,  # 7 years
                 "encryption_required": True,
@@ -259,9 +259,9 @@ class ComplianceManager:
             },
             ComplianceFramework.GDPR: {
                 "required_events": [
-                    AuditEventType.DATA_ACCESS,
-                    AuditEventType.DATA_MODIFICATION,
-                    AuditEventType.PRIVACY_EVENT,
+                    ComplianceAuditEventType.DATA_ACCESS,
+                    ComplianceAuditEventType.DATA_MODIFICATION,
+                    ComplianceAuditEventType.PRIVACY_EVENT,
                 ],
                 "retention_days": 2555,
                 "pii_tracking": True,
@@ -270,10 +270,10 @@ class ComplianceManager:
             },
             ComplianceFramework.ISO27001: {
                 "required_events": [
-                    AuditEventType.SECURITY_INCIDENT,
-                    AuditEventType.SYSTEM_CONFIGURATION,
-                    AuditEventType.ADMIN_ACTION,
-                    AuditEventType.AUTHORIZATION,
+                    ComplianceAuditEventType.SECURITY_INCIDENT,
+                    ComplianceAuditEventType.SYSTEM_CONFIGURATION,
+                    ComplianceAuditEventType.ADMIN_ACTION,
+                    ComplianceAuditEventType.AUTHORIZATION,
                 ],
                 "retention_days": 2190,  # 6 years
                 "risk_assessment": True,
@@ -306,7 +306,7 @@ class ComplianceManager:
 
     def _build_base_audit_event(
         self,
-        event_type: AuditEventType,
+        event_type: ComplianceAuditEventType,
         user_id: str,
         action: str,
         resource: str,
@@ -362,7 +362,7 @@ class ComplianceManager:
 
     async def log_audit_event(
         self,
-        event_type: AuditEventType,
+        event_type: ComplianceAuditEventType,
         user_id: str,
         action: str,
         resource: str,
@@ -590,8 +590,8 @@ class ComplianceManager:
 
         # Encrypt sensitive events
         sensitive_events = [
-            AuditEventType.PRIVACY_EVENT.value,
-            AuditEventType.SECURITY_INCIDENT.value,
+            ComplianceAuditEventType.PRIVACY_EVENT.value,
+            ComplianceAuditEventType.SECURITY_INCIDENT.value,
         ]
 
         if event_type in sensitive_events or audit_event["data_classification"] in {
@@ -646,10 +646,10 @@ class ComplianceManager:
         event_type = audit_event["event_type"]
         self.stats["events_by_type"][event_type] = self.stats["events_by_type"].get(event_type, 0) + 1
 
-        if audit_event["event_type"] == AuditEventType.AUTHENTICATION.value and audit_event["outcome"] == "failure":
+        if event_type == ComplianceAuditEventType.AUTHENTICATION.value and audit_event["outcome"] == "failure":
             self.stats["failed_authentications"] += 1
 
-        if audit_event["event_type"] == AuditEventType.SECURITY_INCIDENT.value:
+        if audit_event["event_type"] == ComplianceAuditEventType.SECURITY_INCIDENT.value:
             self.stats["security_incidents"] += 1
 
     async def _check_compliance_violations(self, audit_event: Dict):
@@ -683,7 +683,7 @@ class ComplianceManager:
 
         # Example: Check for unauthorized administrative actions
         if (
-            audit_event["event_type"] == AuditEventType.ADMIN_ACTION.value
+            audit_event["event_type"] == ComplianceAuditEventType.ADMIN_ACTION.value
             and audit_event["outcome"] == "success"
             and "unauthorized" in audit_event.get("details", {}).get("flags", [])
         ):
@@ -771,16 +771,16 @@ class ComplianceManager:
         thresholds = self.config.get("notification_thresholds", {})
 
         # Check failed authentication rate
-        if audit_event["event_type"] == AuditEventType.AUTHENTICATION.value and audit_event["outcome"] == "failure":
-            recent_failures = await self._count_recent_events(AuditEventType.AUTHENTICATION, outcome="failure", hours=1)
+        auth = ComplianceAuditEventType.AUTHENTICATION
+        if audit_event["event_type"] == auth.value and audit_event["outcome"] == "failure":
+            recent_failures = await self._count_recent_events(auth, outcome="failure", hours=1)
 
             if recent_failures >= thresholds.get("failed_authentication_rate", 10):
                 await self._send_security_alert("High authentication failure rate detected")
 
-    async def _count_recent_events(self, event_type: AuditEventType, outcome: str = None, hours: int = 1) -> int:
+    async def _count_recent_events(self, event_type: ComplianceAuditEventType, outcome: str = None, hours=1) -> int:
         """Count recent events of specific type"""
-        # This would query the audit logs for recent events
-        # For now, return a placeholder
+        # Placeholder: would query the audit logs for recent events
         return 0
 
     async def _send_security_alert(self, message: str):
