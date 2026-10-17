@@ -28,14 +28,14 @@ User Request -> Classification Agent -> Orchestrator -> Multi-Agent Execution ->
 
 1. **Extend BaseAgent**:
 ```python
-from src.agents.base_agent import BaseAgent, AgentRequest, AgentResponse
+from src.agents.base_agent import BaseAgent, AgentRequest, StandardizedAgentResponse
 
 class YourAgent(BaseAgent):
     def __init__(self):
-        super().__init__("your_agent", DeploymentMode.LOCAL)
+        super().__init__("your_agent", AgentDeploymentMode.LOCAL)
         self.capabilities = ["capability1", "capability2"]
 
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
+    async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
         # Your implementation here
         pass
 
@@ -124,10 +124,10 @@ AGENT_RISK_LEVELS = {
 Always validate inputs and implement security controls:
 ```python
 class SecureAgent(BaseAgent):
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
+    async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
         # Input validation
         if not self._validate_request(request):
-            return AgentResponse(
+            return StandardizedAgentResponse(
                 request_id=request.request_id,
                 agent_type=self.agent_type,
                 status="error",
@@ -138,7 +138,7 @@ class SecureAgent(BaseAgent):
         # Risk assessment
         risk_level = self._assess_risk(request)
         if risk_level == "HIGH" and not request.context.get("approved"):
-            return AgentResponse(
+            return StandardizedAgentResponse(
                 request_id=request.request_id,
                 agent_type=self.agent_type,
                 status="approval_required",
@@ -148,7 +148,7 @@ class SecureAgent(BaseAgent):
         # Safe execution
         try:
             result = await self._safe_execute(request)
-            return AgentResponse(
+            return StandardizedAgentResponse(
                 request_id=request.request_id,
                 agent_type=self.agent_type,
                 status="success",
@@ -156,7 +156,7 @@ class SecureAgent(BaseAgent):
             )
         except Exception as e:
             logger.error(f"Agent execution failed: {e}")
-            return AgentResponse(
+            return StandardizedAgentResponse(
                 request_id=request.request_id,
                 agent_type=self.agent_type,
                 status="error",
@@ -185,7 +185,7 @@ async def execute_high_risk_operation(self, request: AgentRequest):
         # Proceed with operation
         return await self._execute_operation(request)
     else:
-        return AgentResponse(status="denied", error="Operation denied by user")
+        return StandardizedAgentResponse(status="denied", error="Operation denied by user")
 ```
 
 ## Performance Optimization
@@ -205,7 +205,7 @@ class OptimizedAgent(BaseAgent):
         if not self._connection_pool:
             self._connection_pool = await create_connection_pool()
 
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
+    async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
         await self._initialize_resources()
 
         # Use pooled resources
@@ -251,7 +251,7 @@ class CommunicatingAgent(BaseAgent):
         super().__init__("communicating_agent")
         self.coordinator = DistributedAgentCoordinator()
 
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
+    async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
         # Step 1: Get information from research agent
         research_request = AgentRequest(
             request_id=f"{request.request_id}_research",
@@ -283,7 +283,7 @@ class CommunicatingAgent(BaseAgent):
                             rag_response.metadata.get("confidence", 1.0))
         }
 
-        return AgentResponse(
+        return StandardizedAgentResponse(
             request_id=request.request_id,
             agent_type=self.agent_type,
             status="success",
@@ -298,9 +298,9 @@ class CommunicatingAgent(BaseAgent):
 # For agents requiring isolation
 class ContainerizedAgent(BaseAgent):
     def __init__(self):
-        super().__init__("containerized_agent", DeploymentMode.CONTAINER)
+        super().__init__("containerized_agent", AgentDeploymentMode.CONTAINER)
 
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
+    async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
         # This agent runs in a separate container
         # Communication happens via HTTP API calls
 
@@ -310,7 +310,7 @@ class ContainerizedAgent(BaseAgent):
                 json=request.__dict__
             ) as response:
                 result = await response.json()
-                return AgentResponse(**result)
+                return StandardizedAgentResponse(**result)
 ```
 
 ### **NPU-Accelerated Agent**
@@ -318,17 +318,17 @@ class ContainerizedAgent(BaseAgent):
 # For agents using hardware acceleration
 class NPUAgent(BaseAgent):
     def __init__(self):
-        super().__init__("npu_agent", DeploymentMode.REMOTE)
+        super().__init__("npu_agent", AgentDeploymentMode.REMOTE)
         self.npu_client = NPUWorkerClient()
 
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
+    async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
         # Route to NPU worker for hardware-accelerated inference
         npu_response = await self.npu_client.infer(
             model_id="specialized_model",
             input_data=request.payload
         )
 
-        return AgentResponse(
+        return StandardizedAgentResponse(
             request_id=request.request_id,
             agent_type=self.agent_type,
             status="success",
@@ -378,7 +378,7 @@ async def test_agent_integration():
 from src.metrics.workflow_metrics import workflow_metrics
 
 class MonitoredAgent(BaseAgent):
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
+    async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
         # Start timing
         start_time = time.time()
 
@@ -411,7 +411,7 @@ class LearningAgent(BaseAgent):
         super().__init__("learning_agent")
         self.performance_history = []
 
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
+    async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
         response = await self._execute_request(request)
 
         # Learn from execution

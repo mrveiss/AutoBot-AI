@@ -5051,7 +5051,7 @@ from datetime import datetime as _datetime
 from services.audit.audit import AuditEventType as _AuditEventType  # GH#8290 Phase 2
 
 
-class AuditEvent(BaseModel):
+class KnowledgeAuditEventRecord(BaseModel):
     """Audit event model."""
 
     id: str

@@ -24,7 +24,7 @@ from autobot_shared.prompt_rules import LEDGER_VS_EXECUTOR_RULE
 from memory.manager import MemoryManager
 from prompt_manager import get_language_instruction, resolve_language
 
-from .base_agent import AgentRequest, AgentResponse, BaseAgent, DeploymentMode
+from .base_agent import AgentDeploymentMode, AgentRequest, BaseAgent, StandardizedAgentResponse
 
 logger = get_logger(__name__)
 
@@ -51,7 +51,7 @@ class StandardizedAgent(BaseAgent):
     - Built-in request validation
     """
 
-    def __init__(self, agent_type: str, deployment_mode: DeploymentMode = DeploymentMode.LOCAL):
+    def __init__(self, agent_type: str, deployment_mode: AgentDeploymentMode = AgentDeploymentMode.LOCAL):
         """Initialize standardized agent with action handlers and metrics."""
         super().__init__(agent_type, deployment_mode)
         self.logger = get_logger(f"{__name__}.{agent_type}")
@@ -97,7 +97,7 @@ class StandardizedAgent(BaseAgent):
 
     def _validate_action_and_handler(
         self, request: AgentRequest
-    ) -> tuple[AgentResponse | None, ActionHandler | None, Callable | None]:
+    ) -> tuple[StandardizedAgentResponse | None, ActionHandler | None, Callable | None]:
         """Validate action and get handler method (Issue #398: extracted).
 
         Returns:
@@ -158,9 +158,11 @@ class StandardizedAgent(BaseAgent):
         lang_code = resolve_language(language)
         return base + "\n\n" + LEDGER_VS_EXECUTOR_RULE + "\n\n" + get_language_instruction(lang_code)
 
-    def _build_success_response(self, request: AgentRequest, result: Any, processing_time: float) -> AgentResponse:
+    def _build_success_response(
+        self, request: AgentRequest, result: Any, processing_time: float
+    ) -> StandardizedAgentResponse:
         """Build successful response (Issue #398: extracted)."""
-        return AgentResponse(
+        return StandardizedAgentResponse(
             request_id=request.request_id,
             agent_type=self.agent_type,
             status="success",
@@ -197,7 +199,27 @@ class StandardizedAgent(BaseAgent):
             result:  The handler return value (may be None on error).
         """
 
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
+    async def _run_before_hook(self, request: AgentRequest) -> Dict[str, Any]:
+        """Run the _before_process hook; a hook failure is logged and ignored."""
+        context = dict(request.context or {})
+        try:
+            t0 = time.time()
+            context = await self._before_process(context)
+            self.logger.debug("_before_process for %s took %.3fs", request.request_id, time.time() - t0)
+        except Exception as hook_exc:
+            self.logger.warning("_before_process hook failed for %s (ignored): %s", request.request_id, hook_exc)
+        return context
+
+    async def _run_after_hook(self, request: AgentRequest, context: Dict[str, Any], result: Any) -> None:
+        """Run the _after_process hook; a hook failure is logged and ignored."""
+        try:
+            t0 = time.time()
+            await self._after_process(context, result)
+            self.logger.debug("_after_process for %s took %.3fs", request.request_id, time.time() - t0)
+        except Exception as hook_exc:
+            self.logger.warning("_after_process hook failed for %s (ignored): %s", request.request_id, hook_exc)
+
+    async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
         """Standardized request processing (Issue #398: refactored to use helpers)."""
         start_time = time.time()
 
@@ -213,21 +235,7 @@ class StandardizedAgent(BaseAgent):
             )
 
             # --- memory lifecycle: before ---
-            context = dict(request.context or {})
-            try:
-                t0 = time.time()
-                context = await self._before_process(context)
-                self.logger.debug(
-                    "_before_process for %s took %.3fs",
-                    request.request_id,
-                    time.time() - t0,
-                )
-            except Exception as hook_exc:
-                self.logger.warning(
-                    "_before_process hook failed for %s (ignored): %s",
-                    request.request_id,
-                    hook_exc,
-                )
+            context = await self._run_before_hook(request)
 
             # Note: enriched context is available to _after_process.
             # Handlers access request.payload directly; context carries
@@ -245,20 +253,7 @@ class StandardizedAgent(BaseAgent):
             result = await self._call_handler_safely(handler_method, request)
 
             # --- memory lifecycle: after ---
-            try:
-                t0 = time.time()
-                await self._after_process(context, result)
-                self.logger.debug(
-                    "_after_process for %s took %.3fs",
-                    request.request_id,
-                    time.time() - t0,
-                )
-            except Exception as hook_exc:
-                self.logger.warning(
-                    "_after_process hook failed for %s (ignored): %s",
-                    request.request_id,
-                    hook_exc,
-                )
+            await self._run_after_hook(request, context, result)
 
             processing_time = time.time() - start_time
             async with self._async_stats_lock:
@@ -317,7 +312,7 @@ class StandardizedAgent(BaseAgent):
         error_message: str,
         error_type: str,
         extra_metadata: Dict = None,
-    ) -> AgentResponse:
+    ) -> StandardizedAgentResponse:
         """Create a standardized error response"""
         metadata = {
             "error_type": error_type,
@@ -327,7 +322,7 @@ class StandardizedAgent(BaseAgent):
         if extra_metadata:
             metadata.update(extra_metadata)
 
-        return AgentResponse(
+        return StandardizedAgentResponse(
             request_id=request.request_id,
             agent_type=self.agent_type,
             status="error",

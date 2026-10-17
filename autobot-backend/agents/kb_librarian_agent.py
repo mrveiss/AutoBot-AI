@@ -31,7 +31,7 @@ from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service
 
-from .base_agent import DeploymentMode
+from .base_agent import AgentDeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
@@ -45,7 +45,7 @@ class KBLibrarianAgent(StandardizedAgent):
 
     def __init__(self):
         """Initialize KB librarian agent (#3387: migrated to StandardizedAgent)."""
-        super().__init__("kb_librarian", DeploymentMode.LOCAL)
+        super().__init__("kb_librarian", AgentDeploymentMode.LOCAL)
         self.knowledge_base = KnowledgeBase()
         self.llm = get_llm_service()
 

@@ -34,10 +34,10 @@ logger = get_logger(__name__)
 
 from agents.base_agent_types import (  # noqa: F401
     AVAILABLE_AGENT_STATUSES,
+    AgentDeploymentMode,
     AgentHealth,
     AgentRequest,
-    AgentResponse,
-    DeploymentMode,
+    StandardizedAgentResponse,
     create_agent_request,
     deserialize_agent_request,
     deserialize_agent_response,
@@ -59,7 +59,7 @@ class BaseAgent(ABC):
     Designed for hybrid local/container deployment.
     """
 
-    def __init__(self, agent_type: str, deployment_mode: DeploymentMode = DeploymentMode.LOCAL):
+    def __init__(self, agent_type: str, deployment_mode: AgentDeploymentMode = AgentDeploymentMode.LOCAL):
         """Initialize base agent with type, deployment mode, and tracking."""
         self.agent_type = agent_type
         self.deployment_mode = deployment_mode
@@ -87,7 +87,7 @@ class BaseAgent(ABC):
         logger.info("Initialized %s agent in %s mode", agent_type, deployment_mode.value)
 
     @abstractmethod
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
+    async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
         """
         Main request processing method.
         Must be implemented by all agents.
@@ -208,7 +208,7 @@ class BaseAgent(ABC):
         """
         return []
 
-    async def execute_with_tracking(self, request: AgentRequest) -> AgentResponse:
+    async def execute_with_tracking(self, request: AgentRequest) -> StandardizedAgentResponse:
         """
         Wrapper that adds performance tracking to request processing.
         Used by agent clients for monitoring.
@@ -257,7 +257,7 @@ class BaseAgent(ABC):
                 return refused_response(request, held.conflict, agent_type=self.agent_type)
             return await self._tracked_process(request, task_id, start_time, analytics)
 
-    async def _tracked_process(self, request, task_id, start_time, analytics) -> AgentResponse:
+    async def _tracked_process(self, request, task_id, start_time, analytics) -> StandardizedAgentResponse:
         """The original tracked execution, unchanged, now inside the claim."""
         try:
             response = await self.process_request(request)
@@ -327,7 +327,7 @@ class BaseAgent(ABC):
                     logger.debug("Analytics failure record failed: %s", analytics_err)
 
             logger.error("Agent %s error: %s", self.agent_type, e)
-            return AgentResponse(
+            return StandardizedAgentResponse(
                 request_id=request.request_id,
                 agent_type=self.agent_type,
                 status="error",
@@ -339,7 +339,7 @@ class BaseAgent(ABC):
     async def _publish_completion_observation(
         self,
         request: AgentRequest,
-        response: AgentResponse,
+        response: StandardizedAgentResponse,
         task_id: str,
     ) -> None:
         """
@@ -443,7 +443,7 @@ class BaseAgent(ABC):
             with acting_for(origin) if origin else contextlib.nullcontext():
                 response = await self.execute_with_tracking(agent_request)
 
-            # Convert AgentResponse back to communication message
+            # Convert StandardizedAgentResponse back to communication message
             response_message = StandardMessage(
                 header=MessageHeader(message_type=MessageType.RESPONSE),
                 payload=MessagePayload(
@@ -560,7 +560,7 @@ class LocalAgent(BaseAgent):
 
     def __init__(self, agent_type: str):
         """Initialize local agent with given type in local deployment mode."""
-        super().__init__(agent_type, DeploymentMode.LOCAL)
+        super().__init__(agent_type, AgentDeploymentMode.LOCAL)
 
     async def is_available(self) -> bool:
         """Check if agent is available for processing.
@@ -579,7 +579,7 @@ class ContainerAgent(BaseAgent):
 
     def __init__(self, agent_type: str, container_url: str):
         """Initialize container agent with type and remote container URL."""
-        super().__init__(agent_type, DeploymentMode.CONTAINER)
+        super().__init__(agent_type, AgentDeploymentMode.CONTAINER)
         self.container_url = container_url
         self.session = None  # Will be initialized with aiohttp session
 

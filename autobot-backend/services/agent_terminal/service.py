@@ -15,7 +15,7 @@ from autobot_logging.terminal_logger import TerminalLogger
 from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
 from monitoring.prometheus_metrics import get_metrics_manager
-from secure_command_executor import SecureCommandExecutor, SecurityPolicy
+from secure_command_executor import CommandSecurityPolicy, SecureCommandExecutor
 from services.command_approval_manager import AgentRole, CommandApprovalManager
 from services.command_execution_queue import get_command_queue
 from type_defs.common import Metadata
@@ -60,7 +60,7 @@ class AgentTerminalService:
             command_queue: Command execution queue (default: singleton instance)
         """
         self.redis_client = redis_client
-        self.security_policy = SecurityPolicy()
+        self.security_policy = CommandSecurityPolicy()
 
         self.chat_history_manager = ChatHistoryManager()
 
