@@ -152,7 +152,7 @@ def _build_file_risk_dict(
     """
     Build a file risk analysis dict with standardized structure.
 
-    Issue #281: Extracted helper to reduce repetition in analyze_codebase.
+    Issue #281: Extracted helper to reduce repetition in predict_bug_risk_for_codebase.
 
     Args:
         file_path: Relative path to the file
@@ -772,8 +772,8 @@ async def _safe_store_prediction_history(
 async def _run_bug_analysis(path: str, include_pattern: str, limit: int) -> dict[str, Any]:
     """Run full bug prediction analysis pipeline.
 
-    Issue #1341: Extracted from analyze_codebase to keep endpoint under
-    65-line limit. Ref: analyze_codebase.
+    Issue #1341: Extracted from predict_bug_risk_for_codebase to keep endpoint under
+    65-line limit. Ref: predict_bug_risk_for_codebase.
     """
     bug_history, change_freq, files_to_analyze = await asyncio.gather(
         get_git_bug_history(),
@@ -819,7 +819,7 @@ async def _run_bug_analysis(path: str, include_pattern: str, limit: int) -> dict
     operation="analyze_codebase",
     error_code_prefix="ANALYTICS_BUG_PREDICTION",
 )
-async def analyze_codebase(
+async def predict_bug_risk_for_codebase(
     admin_check: bool = Depends(check_admin_permission),
     path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),

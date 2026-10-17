@@ -62,7 +62,7 @@ _NORMALIZE_PATH_RE = re.compile(r"[/\\][\w/\\.-]+\.\w+")
 _NORMALIZE_NUMBER_RE = re.compile(r"\b\d+\b")
 
 
-class PatternType(Enum):
+class LogPatternType(Enum):
     """Types of detected patterns."""
 
     ERROR_SEQUENCE = "error_sequence"
@@ -86,7 +86,7 @@ class AnomalyType(Enum):
 
 
 @dataclass
-class LogEntry:
+class ParsedLogEntry:
     """Parsed log entry."""
 
     timestamp: datetime
@@ -120,17 +120,17 @@ class LogEntry:
 
 
 @dataclass
-class LogPattern:
+class DetectedLogPattern:
     """Detected pattern in logs."""
 
     id: str
-    pattern_type: PatternType
+    pattern_type: LogPatternType
     description: str
     occurrences: int
     first_seen: datetime
     last_seen: datetime
     affected_components: list[str] = field(default_factory=list)
-    sample_entries: list[LogEntry] = field(default_factory=list)
+    sample_entries: list[ParsedLogEntry] = field(default_factory=list)
     severity: LogLevel = LogLevel.INFO
     extra_data: dict[str, Any] = field(default_factory=dict)
 
@@ -163,7 +163,7 @@ class Anomaly:
     expected_value: float
     actual_value: float
     deviation_percent: float
-    related_entries: list[LogEntry] = field(default_factory=list)
+    related_entries: list[ParsedLogEntry] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -215,7 +215,7 @@ class MiningResult:
     files_analyzed: int
     total_entries: int
     time_range: tuple[datetime, datetime]
-    patterns: list[LogPattern] = field(default_factory=list)
+    patterns: list[DetectedLogPattern] = field(default_factory=list)
     anomalies: list[Anomaly] = field(default_factory=list)
     sessions: list[SessionFlow] = field(default_factory=list)
     statistics: dict[str, Any] = field(default_factory=dict)
@@ -288,7 +288,7 @@ class LogParser:
     SLOW_REQUEST_THRESHOLD_MS = 100.0
 
     @classmethod
-    def parse_line(cls, line: str, line_number: int, file_path: str | None = None) -> LogEntry | None:
+    def parse_line(cls, line: str, line_number: int, file_path: str | None = None) -> ParsedLogEntry | None:
         """Parse a single log line."""
         line = line.strip()
         if not line:
@@ -313,8 +313,8 @@ class LogParser:
         raw_line: str,
         line_number: int,
         file_path: str | None,
-    ) -> LogEntry:
-        """Create LogEntry from standard format match."""
+    ) -> ParsedLogEntry:
+        """Create ParsedLogEntry from standard format match."""
         timestamp_str, logger_name, level_str, message = match.groups()
 
         try:
@@ -345,7 +345,7 @@ class LogParser:
             if duration_match:
                 duration_ms = float(duration_match.group(1))
 
-        return LogEntry(
+        return ParsedLogEntry(
             timestamp=timestamp,
             level=level,
             logger_name=logger_name,
@@ -366,11 +366,11 @@ class LogParser:
         raw_line: str,
         line_number: int,
         file_path: str | None,
-    ) -> LogEntry:
-        """Create LogEntry from Python logging format match."""
+    ) -> ParsedLogEntry:
+        """Create ParsedLogEntry from Python logging format match."""
         level_str, logger_name, message = match.groups()
 
-        return LogEntry(
+        return ParsedLogEntry(
             timestamp=datetime.now(tz=timezone.utc),
             level=LogLevel(level_str.lower()),
             logger_name=logger_name,
@@ -415,12 +415,12 @@ class LogPatternMiner:
         self.anomaly_deviation_threshold = anomaly_deviation_threshold
         self.min_pattern_occurrences = min_pattern_occurrences
 
-        self.entries: list[LogEntry] = []
-        self.patterns: list[LogPattern] = []
+        self.entries: list[ParsedLogEntry] = []
+        self.patterns: list[DetectedLogPattern] = []
         self.anomalies: list[Anomaly] = []
         self.sessions: dict[str, SessionFlow] = {}
 
-    def parse_file(self, file_path: str) -> list[LogEntry]:
+    def parse_file(self, file_path: str) -> list[ParsedLogEntry]:
         """
         Parse a log file.
 
@@ -447,7 +447,7 @@ class LogPatternMiner:
 
         return entries
 
-    def parse_content(self, content: str, source: str = "inline") -> list[LogEntry]:
+    def parse_content(self, content: str, source: str = "inline") -> list[ParsedLogEntry]:
         """
         Parse log content from string.
 
@@ -583,7 +583,7 @@ class LogPatternMiner:
             return
 
         # Group errors by normalized message
-        error_groups: dict[str, list[LogEntry]] = defaultdict(list)
+        error_groups: dict[str, list[ParsedLogEntry]] = defaultdict(list)
 
         for entry in error_entries:
             # Normalize message by removing variable parts
@@ -596,9 +596,9 @@ class LogPatternMiner:
                 affected_components = list(set(e.logger_name for e in entries))
 
                 self.patterns.append(
-                    LogPattern(
+                    DetectedLogPattern(
                         id=f"ERR-{len(self.patterns) + 1}",
-                        pattern_type=PatternType.RECURRING_ERROR,
+                        pattern_type=LogPatternType.RECURRING_ERROR,
                         description=f"Recurring error: {normalized_msg[:100]}",
                         occurrences=len(entries),
                         first_seen=entries[0].timestamp,
@@ -621,7 +621,7 @@ class LogPatternMiner:
             return
 
         # Group by endpoint
-        endpoint_groups: dict[str, list[LogEntry]] = defaultdict(list)
+        endpoint_groups: dict[str, list[ParsedLogEntry]] = defaultdict(list)
 
         for entry in slow_requests:
             key = entry.endpoint or entry.logger_name
@@ -634,9 +634,9 @@ class LogPatternMiner:
                 avg_duration = mean(durations) if durations else 0
 
                 self.patterns.append(
-                    LogPattern(
+                    DetectedLogPattern(
                         id=f"PERF-{len(self.patterns) + 1}",
-                        pattern_type=PatternType.PERFORMANCE_BOTTLENECK,
+                        pattern_type=LogPatternType.PERFORMANCE_BOTTLENECK,
                         description=f"Slow endpoint: {endpoint} (avg: {avg_duration:.1f}ms)",
                         occurrences=len(entries),
                         first_seen=entries[0].timestamp,
@@ -678,24 +678,24 @@ class LogPatternMiner:
                 stats["status_codes"].append(entry.status_code)
         return endpoint_stats
 
-    def _create_api_pattern(self, endpoint: str, stats: dict[str, Any]) -> LogPattern:
+    def _create_api_pattern(self, endpoint: str, stats: dict[str, Any]) -> DetectedLogPattern:
         """
-        Create a LogPattern for a high-traffic API endpoint.
+        Create a DetectedLogPattern for a high-traffic API endpoint.
 
         Args:
             endpoint: The API endpoint path
             stats: Statistics collected for this endpoint
 
         Returns:
-            LogPattern object for the endpoint
+            DetectedLogPattern object for the endpoint
 
         Issue #620.
         """
         durations = stats["durations"]
         error_count = len([c for c in stats["status_codes"] if c >= 400])
-        return LogPattern(
+        return DetectedLogPattern(
             id=f"API-{len(self.patterns) + 1}",
-            pattern_type=PatternType.API_USAGE,
+            pattern_type=LogPatternType.API_USAGE,
             description=f"High-traffic endpoint: {endpoint}",
             occurrences=stats["count"],
             first_seen=stats["entries"][0].timestamp,
@@ -757,9 +757,9 @@ class LogPatternMiner:
         error_sessions = [s for s in self.sessions.values() if s.errors]
         if len(error_sessions) >= self.min_pattern_occurrences:
             self.patterns.append(
-                LogPattern(
+                DetectedLogPattern(
                     id=f"SESS-{len(self.patterns) + 1}",
-                    pattern_type=PatternType.SESSION_FLOW,
+                    pattern_type=LogPatternType.SESSION_FLOW,
                     description=f"Sessions with errors: {len(error_sessions)} sessions",
                     occurrences=len(error_sessions),
                     first_seen=min(s.start_time for s in error_sessions),
@@ -991,14 +991,14 @@ def get_pattern_types() -> list[dict[str, Any]]:
         List of pattern type definitions
     """
     descriptions = {
-        PatternType.ERROR_SEQUENCE: "Sequence of related errors",
-        PatternType.PERFORMANCE_BOTTLENECK: "Slow performance patterns",
-        PatternType.API_USAGE: "API usage and traffic patterns",
-        PatternType.SESSION_FLOW: "User session flow patterns",
-        PatternType.RECURRING_ERROR: "Frequently occurring errors",
-        PatternType.ANOMALY: "Unusual behavior patterns",
-        PatternType.REDIS_OPERATION: "Redis operation patterns",
-        PatternType.LLM_CALL: "LLM API call patterns",
+        LogPatternType.ERROR_SEQUENCE: "Sequence of related errors",
+        LogPatternType.PERFORMANCE_BOTTLENECK: "Slow performance patterns",
+        LogPatternType.API_USAGE: "API usage and traffic patterns",
+        LogPatternType.SESSION_FLOW: "User session flow patterns",
+        LogPatternType.RECURRING_ERROR: "Frequently occurring errors",
+        LogPatternType.ANOMALY: "Unusual behavior patterns",
+        LogPatternType.REDIS_OPERATION: "Redis operation patterns",
+        LogPatternType.LLM_CALL: "LLM API call patterns",
     }
 
     return [
@@ -1007,7 +1007,7 @@ def get_pattern_types() -> list[dict[str, Any]]:
             "name": pt.value.replace("_", " ").title(),
             "description": descriptions.get(pt, ""),
         }
-        for pt in PatternType
+        for pt in LogPatternType
     ]
 
 

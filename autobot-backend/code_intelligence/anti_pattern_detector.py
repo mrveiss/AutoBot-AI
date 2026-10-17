@@ -64,7 +64,7 @@ from .anti_pattern_detection import (  # Types and enums; Data models; Severity 
     ImportInfo,
     NamingDetector,
     Thresholds,
-    analyze_codebase,
+    analyze_codebase_anti_patterns,
     get_complex_conditional_severity,
     get_data_clump_severity,
     get_feature_envy_severity,
@@ -122,7 +122,7 @@ __all__ = [
     "NamingDetector",
     # Main analyzer
     "AntiPatternDetector",
-    "analyze_codebase",
+    "analyze_codebase_anti_patterns",
     # Backward compatibility
     "_SNAKE_CASE_RE",
     "_CAMEL_CASE_RE",

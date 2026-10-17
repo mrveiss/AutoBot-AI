@@ -20,13 +20,13 @@ import pytest
 from code_intelligence.log_pattern_miner import (
     Anomaly,
     AnomalyType,
-    LogEntry,
+    DetectedLogPattern,
     LogLevel,
     LogParser,
-    LogPattern,
     LogPatternMiner,
+    LogPatternType,
     MiningResult,
-    PatternType,
+    ParsedLogEntry,
     SessionFlow,
     analyze_logs,
     get_anomaly_types,
@@ -119,20 +119,20 @@ class TestLogLevel:
 
 
 class TestPatternType:
-    """Tests for PatternType enum."""
+    """Tests for LogPatternType enum."""
 
     def test_pattern_type_values(self):
         """Test pattern type enum values."""
-        assert PatternType.ERROR_SEQUENCE.value == "error_sequence"
-        assert PatternType.PERFORMANCE_BOTTLENECK.value == "performance_bottleneck"
-        assert PatternType.API_USAGE.value == "api_usage"
-        assert PatternType.SESSION_FLOW.value == "session_flow"
-        assert PatternType.RECURRING_ERROR.value == "recurring_error"
-        assert PatternType.ANOMALY.value == "anomaly"
+        assert LogPatternType.ERROR_SEQUENCE.value == "error_sequence"
+        assert LogPatternType.PERFORMANCE_BOTTLENECK.value == "performance_bottleneck"
+        assert LogPatternType.API_USAGE.value == "api_usage"
+        assert LogPatternType.SESSION_FLOW.value == "session_flow"
+        assert LogPatternType.RECURRING_ERROR.value == "recurring_error"
+        assert LogPatternType.ANOMALY.value == "anomaly"
 
     def test_pattern_type_count(self):
         """Test number of pattern types."""
-        assert len(PatternType) == 8
+        assert len(LogPatternType) == 8
 
 
 class TestAnomalyType:
@@ -156,11 +156,11 @@ class TestAnomalyType:
 
 
 class TestLogEntry:
-    """Tests for LogEntry dataclass."""
+    """Tests for ParsedLogEntry dataclass."""
 
     def test_entry_creation(self):
         """Test creating a log entry."""
-        entry = LogEntry(
+        entry = ParsedLogEntry(
             timestamp=datetime.now(),
             level=LogLevel.INFO,
             logger_name="test",
@@ -174,7 +174,7 @@ class TestLogEntry:
 
     def test_entry_to_dict(self):
         """Test entry conversion to dictionary."""
-        entry = LogEntry(
+        entry = ParsedLogEntry(
             timestamp=datetime.now(),
             level=LogLevel.ERROR,
             logger_name="api",
@@ -192,13 +192,13 @@ class TestLogEntry:
 
 
 class TestLogPattern:
-    """Tests for LogPattern dataclass."""
+    """Tests for DetectedLogPattern dataclass."""
 
     def test_pattern_creation(self):
         """Test creating a log pattern."""
-        pattern = LogPattern(
+        pattern = DetectedLogPattern(
             id="ERR-1",
-            pattern_type=PatternType.RECURRING_ERROR,
+            pattern_type=LogPatternType.RECURRING_ERROR,
             description="Recurring error",
             occurrences=10,
             first_seen=datetime.now(),
@@ -206,14 +206,14 @@ class TestLogPattern:
             severity=LogLevel.ERROR,
         )
         assert pattern.id == "ERR-1"
-        assert pattern.pattern_type == PatternType.RECURRING_ERROR
+        assert pattern.pattern_type == LogPatternType.RECURRING_ERROR
         assert pattern.occurrences == 10
 
     def test_pattern_to_dict(self):
         """Test pattern conversion to dictionary."""
-        pattern = LogPattern(
+        pattern = DetectedLogPattern(
             id="PERF-1",
-            pattern_type=PatternType.PERFORMANCE_BOTTLENECK,
+            pattern_type=LogPatternType.PERFORMANCE_BOTTLENECK,
             description="Slow endpoint",
             occurrences=5,
             first_seen=datetime.now(),
@@ -455,7 +455,7 @@ class TestPatternExtraction:
         miner = LogPatternMiner(min_pattern_occurrences=3)
         result = miner.analyze(content=content)
 
-        error_patterns = [p for p in result.patterns if p.pattern_type == PatternType.RECURRING_ERROR]
+        error_patterns = [p for p in result.patterns if p.pattern_type == LogPatternType.RECURRING_ERROR]
         assert len(error_patterns) >= 1
 
     def test_extract_performance_patterns(self, sample_mixed_logs):
@@ -466,7 +466,7 @@ class TestPatternExtraction:
         )
         result = miner.analyze(content=sample_mixed_logs)
 
-        perf_patterns = [p for p in result.patterns if p.pattern_type == PatternType.PERFORMANCE_BOTTLENECK]
+        perf_patterns = [p for p in result.patterns if p.pattern_type == LogPatternType.PERFORMANCE_BOTTLENECK]
         assert len(perf_patterns) >= 1
 
     def test_extract_api_patterns(self, sample_standard_logs):
@@ -474,7 +474,7 @@ class TestPatternExtraction:
         miner = LogPatternMiner(min_pattern_occurrences=1)
         result = miner.analyze(content=sample_standard_logs)
 
-        api_patterns = [p for p in result.patterns if p.pattern_type == PatternType.API_USAGE]
+        api_patterns = [p for p in result.patterns if p.pattern_type == LogPatternType.API_USAGE]
         # Should detect API call patterns
         assert len(api_patterns) >= 0  # May or may not find depending on threshold
 

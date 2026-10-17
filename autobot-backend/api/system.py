@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
 from api.schemas_system import (
+    ProbeHealthResponse,
     SystemAdminCheckResponse,
     SystemBackupStatusResponse,
     SystemCacheActivityResponse,
@@ -27,7 +28,6 @@ from api.schemas_system import (
     SystemCacheStatsResponse,
     SystemDynamicImportResponse,
     SystemFrontendConfigResponse,
-    SystemHealthResponse,
     SystemInfoResponse,
     SystemMetricsResponse,
     SystemPromptReloadResponse,
@@ -317,18 +317,18 @@ async def get_frontend_config(admin_check: bool = Depends(check_admin_permission
 # operation_ids. A single api_route carrying both methods makes FastAPI reuse
 # ONE unique_id for both operations, producing a colliding operationId that
 # openapi-typescript emits twice (duplicate identifier → vue-tsc-baseline red).
-@router.api_route("/health", methods=["GET"], response_model=SystemHealthResponse, operation_id="get_system_health")
-@router.api_route("/health", methods=["HEAD"], response_model=SystemHealthResponse, operation_id="head_system_health")
+@router.api_route("/health", methods=["GET"], response_model=ProbeHealthResponse, operation_id="get_system_health")
+@router.api_route("/health", methods=["HEAD"], response_model=ProbeHealthResponse, operation_id="head_system_health")
 @router.api_route(  # Frontend compatibility alias
     "/system/health",
     methods=["GET"],
-    response_model=SystemHealthResponse,
+    response_model=ProbeHealthResponse,
     operation_id="get_system_health_alias",
 )
 @router.api_route(  # Frontend compatibility alias
     "/system/health",
     methods=["HEAD"],
-    response_model=SystemHealthResponse,
+    response_model=ProbeHealthResponse,
     operation_id="head_system_health_alias",
 )
 @with_error_handling(
@@ -614,7 +614,7 @@ async def dynamic_import(
     }
 
 
-@router.get("/health/detailed", response_model=SystemHealthResponse)
+@router.get("/health/detailed", response_model=ProbeHealthResponse)
 @cache_response(cache_key="system_health_detailed", ttl=30)  # Cache for 30 seconds
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

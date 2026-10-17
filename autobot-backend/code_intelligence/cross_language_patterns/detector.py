@@ -36,13 +36,13 @@ from knowledge.index_embedding_space import index_embedding_space
 from .extractors import PythonPatternExtractor, TypeScriptPatternExtractor
 from .models import (
     APIContractMismatch,
+    CrossLangMatch,
+    CrossLangPatternCategory,
+    CrossLangPatternType,
     CrossLanguageAnalysis,
     CrossLanguagePattern,
     DTOMismatch,
-    PatternCategory,
-    PatternMatch,
     PatternSeverity,
-    PatternType,
     ValidationDuplication,
 )
 
@@ -308,27 +308,27 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
 
         This creates a semantic description that can be compared across languages.
         """
-        pattern_type = pattern.get("type", PatternType.UTILITY_FUNCTION)
+        pattern_type = pattern.get("type", CrossLangPatternType.UTILITY_FUNCTION)
         name = pattern.get("name", "unknown")
         # Note: code extracted for potential future use in semantic analysis
         _ = pattern.get("code", "")
 
         # Build normalized representation based on pattern type
-        if pattern_type == PatternType.DTO_DEFINITION:
+        if pattern_type == CrossLangPatternType.DTO_DEFINITION:
             fields = pattern.get("fields", [])
             field_strs = [f"{f.get('name')}:{f.get('type', 'any')}{'?' if f.get('optional') else ''}" for f in fields]
             return f"DATA_TYPE {name} FIELDS({', '.join(field_strs)})"
 
-        elif pattern_type == PatternType.API_ENDPOINT or pattern_type == PatternType.API_CALL:
+        elif pattern_type == CrossLangPatternType.API_ENDPOINT or pattern_type == CrossLangPatternType.API_CALL:
             method = pattern.get("method", "GET")
             path = pattern.get("path", "")
             return f"API {method} {path}"
 
-        elif pattern_type == PatternType.VALIDATION_RULE:
+        elif pattern_type == CrossLangPatternType.VALIDATION_RULE:
             validation_type = pattern.get("validation_type", "custom")
             return f"VALIDATION {validation_type} {name}"
 
-        elif pattern_type == PatternType.UTILITY_FUNCTION:
+        elif pattern_type == CrossLangPatternType.UTILITY_FUNCTION:
             params = pattern.get("parameters", [])
             param_str = ", ".join(f"{p.get('name', 'arg')}:{p.get('type', 'any')}" for p in params) if params else ""
             is_async = "ASYNC " if pattern.get("is_async") else ""
@@ -443,8 +443,8 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         mismatches = []
 
         # Get all DTOs
-        python_dtos = {p["name"]: p for p in python_patterns if p.get("type") == PatternType.DTO_DEFINITION}
-        ts_dtos = {p["name"]: p for p in typescript_patterns if p.get("type") == PatternType.DTO_DEFINITION}
+        python_dtos = {p["name"]: p for p in python_patterns if p.get("type") == CrossLangPatternType.DTO_DEFINITION}
+        ts_dtos = {p["name"]: p for p in typescript_patterns if p.get("type") == CrossLangPatternType.DTO_DEFINITION}
 
         # Find common DTOs and check for mismatches
         common_names = set(python_dtos.keys()) & set(ts_dtos.keys())
@@ -625,8 +625,8 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         duplications = []
 
         # Filter validation patterns
-        py_validations = [p for p in python_patterns if p.get("type") == PatternType.VALIDATION_RULE]
-        ts_validations = [p for p in typescript_patterns if p.get("type") == PatternType.VALIDATION_RULE]
+        py_validations = [p for p in python_patterns if p.get("type") == CrossLangPatternType.VALIDATION_RULE]
+        ts_validations = [p for p in typescript_patterns if p.get("type") == CrossLangPatternType.VALIDATION_RULE]
 
         # Group by validation type
         py_by_type = self._group_validations_by_type(py_validations)
@@ -706,13 +706,13 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         backend_endpoints = {
             (p.get("method", "GET"), self._normalize_path(p.get("path", ""))): p
             for p in python_patterns
-            if p.get("type") == PatternType.API_ENDPOINT
+            if p.get("type") == CrossLangPatternType.API_ENDPOINT
         }
 
         frontend_calls = {
             (p.get("method", "GET"), self._normalize_path(p.get("path", ""))): p
             for p in typescript_patterns
-            if p.get("type") == PatternType.API_CALL
+            if p.get("type") == CrossLangPatternType.API_CALL
         }
 
         mismatches = self._find_orphaned_endpoints(backend_endpoints, frontend_calls)
@@ -813,7 +813,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         3. Validators
         4. Other patterns (by code length for significance)
         """
-        from .models import PatternType
+        from .models import CrossLangPatternType
 
         # Separate by priority
         high_priority = []  # DTOs, APIs, Validators
@@ -822,10 +822,10 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         for p in patterns:
             pattern_type = p.get("type")
             if pattern_type in (
-                PatternType.DTO_DEFINITION,
-                PatternType.API_ENDPOINT,
-                PatternType.VALIDATION_RULE,
-                PatternType.TYPE_DEFINITION,
+                CrossLangPatternType.DTO_DEFINITION,
+                CrossLangPatternType.API_ENDPOINT,
+                CrossLangPatternType.VALIDATION_RULE,
+                CrossLangPatternType.TYPE_DEFINITION,
             ):
                 high_priority.append(p)
             else:
@@ -934,13 +934,13 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
 
         return await self._individual_insert_patterns(collection, patterns)
 
-    def _create_pattern_match(self, py_pattern: Dict, ts_pattern: Dict, similarity: float) -> PatternMatch:
+    def _create_pattern_match(self, py_pattern: Dict, ts_pattern: Dict, similarity: float) -> CrossLangMatch:
         """
-        Create a PatternMatch object from Python and TypeScript patterns.
+        Create a CrossLangMatch object from Python and TypeScript patterns.
 
         Issue #620.
         """
-        return PatternMatch(
+        return CrossLangMatch(
             pattern_id=f"match_{uuid.uuid4().hex[:8]}",
             similarity_score=similarity,
             source_location=py_pattern["pattern"].get("location"),
@@ -956,7 +956,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
             },
         )
 
-    def _process_query_results(self, results: Dict, py_pattern: Dict, ts_pattern_lookup: Dict) -> List[PatternMatch]:
+    def _process_query_results(self, results: Dict, py_pattern: Dict, ts_pattern_lookup: Dict) -> List[CrossLangMatch]:
         """
         Process ChromaDB query results and create pattern matches.
 
@@ -983,7 +983,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         collection,
         python_patterns: List[Dict],
         typescript_patterns: List[Dict],
-    ) -> List[PatternMatch]:
+    ) -> List[CrossLangMatch]:
         """
         Query for similar patterns across Python and TypeScript.
 
@@ -1019,7 +1019,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         self,
         python_patterns: List[Dict],
         typescript_patterns: List[Dict],
-    ) -> List[PatternMatch]:
+    ) -> List[CrossLangMatch]:
         """Find semantically similar patterns using embeddings."""
         if not self.use_llm:
             return []
@@ -1135,13 +1135,13 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
     def _convert_to_cross_language_patterns(self, patterns: list, analysis: CrossLanguageAnalysis) -> None:
         """Convert extracted patterns to CrossLanguagePattern objects."""
         for p in patterns:
-            pattern_type = p.get("type", PatternType.UTILITY_FUNCTION)
-            if not isinstance(pattern_type, PatternType):
+            pattern_type = p.get("type", CrossLangPatternType.UTILITY_FUNCTION)
+            if not isinstance(pattern_type, CrossLangPatternType):
                 continue
 
-            category = p.get("category", PatternCategory.UTILITIES)
-            if not isinstance(category, PatternCategory):
-                category = PatternCategory.UTILITIES
+            category = p.get("category", CrossLangPatternCategory.UTILITIES)
+            if not isinstance(category, CrossLangPatternCategory):
+                category = CrossLangPatternCategory.UTILITIES
 
             location = p.get("location")
             if not location:

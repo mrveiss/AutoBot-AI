@@ -47,7 +47,7 @@ _PROJECT_ROOT = Path(__file__).parent
 
 
 @dataclass
-class FileInfo:
+class UploadInfo:
     """Issue #375: Dataclass to group file-related parameters and reduce function signatures.
 
     Groups commonly passed file attributes to reduce long parameter lists across
@@ -716,8 +716,8 @@ class ConversationFileManager:
             (session_id, file_id, message_id, association_type),
         )
 
-    async def _handle_deduplicated_file(self, connection, existing_file, file_info: FileInfo) -> Dict[str, Any]:
-        """Handle case where file already exists (Issue #375: uses FileInfo dataclass)."""
+    async def _handle_deduplicated_file(self, connection, existing_file, file_info: UploadInfo) -> Dict[str, Any]:
+        """Handle case where file already exists (Issue #375: uses UploadInfo dataclass)."""
         existing_file_id = existing_file["file_id"]
         existing_path = Path(existing_file["file_path"])
 
@@ -743,8 +743,8 @@ class ConversationFileManager:
         )
         await self._invalidate_session_cache(file_info.session_id)
 
-        # Create response FileInfo with existing file data
-        response_info = FileInfo(
+        # Create response UploadInfo with existing file data
+        response_info = UploadInfo(
             file_id=existing_file_id,
             session_id=file_info.session_id,
             original_filename=file_info.original_filename,
@@ -766,8 +766,8 @@ class ConversationFileManager:
             logger.error("Failed to write file to disk %s: %s", file_path, e)
             raise RuntimeError(f"Failed to write file to disk: {e}")
 
-    async def _insert_file_record(self, connection, file_info: FileInfo) -> None:
-        """Insert file record into database (Issue #375: uses FileInfo dataclass)."""
+    async def _insert_file_record(self, connection, file_info: UploadInfo) -> None:
+        """Insert file record into database (Issue #375: uses UploadInfo dataclass)."""
         await connection.execute(
             """
             INSERT INTO conversation_files
@@ -791,12 +791,12 @@ class ConversationFileManager:
                 metadata_records,
             )
 
-    def _build_file_response(self, file_info: FileInfo) -> Dict[str, Any]:
-        """Build standard file response dictionary (Issue #375: uses FileInfo dataclass)."""
+    def _build_file_response(self, file_info: UploadInfo) -> Dict[str, Any]:
+        """Build standard file response dictionary (Issue #375: uses UploadInfo dataclass)."""
         return file_info.to_response_dict()
 
-    async def _store_new_file(self, connection, file_info: FileInfo, file_content: bytes) -> Dict[str, Any]:
-        """Store a new file to disk and database (Issue #375: uses FileInfo dataclass)."""
+    async def _store_new_file(self, connection, file_info: UploadInfo, file_content: bytes) -> Dict[str, Any]:
+        """Store a new file to disk and database (Issue #375: uses UploadInfo dataclass)."""
         await self._write_file_to_disk(file_info.file_path, file_content)
         logger.info("Stored file: %s (%d bytes)", file_info.stored_filename, file_info.file_size)
 
@@ -824,8 +824,8 @@ class ConversationFileManager:
 
         return self._build_file_response(file_info)
 
-    def _prepare_file_info(self, session_id: str, file_content: bytes, original_filename: str, **kwargs) -> FileInfo:
-        """Prepare FileInfo for add_file.
+    def _prepare_file_info(self, session_id: str, file_content: bytes, original_filename: str, **kwargs) -> UploadInfo:
+        """Prepare UploadInfo for add_file.
 
         Helper for add_file (Issue #70, #375).
         """
@@ -834,7 +834,7 @@ class ConversationFileManager:
         file_id = str(uuid.uuid4())
         stored_filename = self._generate_stored_filename(original_filename, file_hash)
         session_dir = self.get_session_dir(session_id)
-        return FileInfo(
+        return UploadInfo(
             file_id=file_id,
             session_id=session_id,
             original_filename=original_filename,

@@ -710,7 +710,7 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
         )
 
 
-def analyze_codebase(
+def analyze_codebase_anti_patterns(
     directory: str,
     exclude_dirs: List[str] | None = None,
     detect_circular: bool = True,
