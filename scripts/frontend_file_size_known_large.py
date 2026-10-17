@@ -177,7 +177,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-frontend/src/components/RoleManagementModal.vue": 614,
     "autobot-slm-frontend/src/components/fleet/DecommissionModal.vue": 699,
     "autobot-slm-frontend/src/components/fleet/NodeLifecyclePanel.vue": 984,
-    "autobot-slm-frontend/src/composables/useAutobotApi.ts": 2080,
+    "autobot-slm-frontend/src/composables/useAutobotApi.ts": 2068,
     "autobot-slm-frontend/src/composables/useCodeSync.ts": 1078,
     "autobot-slm-frontend/src/composables/useOrchestrationManagement.ts": 693,
     "autobot-slm-frontend/src/composables/usePrometheusMetrics.ts": 622,
@@ -200,7 +200,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-frontend/src/views/settings/SecuritySettings.vue": 807,
     "autobot-slm-frontend/src/views/settings/admin/DataHygieneView.vue": 669,
     "autobot-slm-frontend/src/views/settings/admin/LogForwardingSettings.vue": 736,
-    "autobot-slm-frontend/src/views/settings/admin/NPUWorkersSettings.vue": 737,
+    "autobot-slm-frontend/src/views/settings/admin/NPUWorkersSettings.vue": 733,
     "autobot-slm-frontend/src/views/settings/admin/SSOSettings.vue": 869,
-    "autobot-slm-frontend/src/views/settings/admin/UserManagementSettings.vue": 1235,
+    "autobot-slm-frontend/src/views/settings/admin/UserManagementSettings.vue": 1099,
 }

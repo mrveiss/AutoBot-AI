@@ -90,20 +90,6 @@ const newProviderForm = reactive({
   default_role: 'user',
 })
 
-// Preferences
-const preferences = reactive({
-  enableNotifications: true,
-  autoSaveSettings: true,
-  theme: 'auto' as 'auto' | 'light' | 'dark',
-  language: 'en',
-})
-
-// Security settings
-const securitySettings = reactive({
-  sessionTimeout: 30,
-  requireReauth: true,
-})
-
 // RBAC state
 const rbacStatus = reactive({
   initialized: false,
@@ -371,36 +357,6 @@ async function initializeRbac(): Promise<void> {
   }
 }
 
-// ===========================================================================
-// Settings
-// ===========================================================================
-
-async function savePreferences(): Promise<void> {
-  saving.value = true
-  error.value = null
-  try {
-    await autobotApi.updateSettingsSection('preferences', preferences)
-    showSuccess('Preferences saved successfully')
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save preferences'
-  } finally {
-    saving.value = false
-  }
-}
-
-async function saveSecuritySettings(): Promise<void> {
-  saving.value = true
-  error.value = null
-  try {
-    await autobotApi.updateSettingsSection('security', securitySettings)
-    showSuccess('Security settings saved successfully')
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save security settings'
-  } finally {
-    saving.value = false
-  }
-}
-
 function logout(): void {
   authStore.logout()
 }
@@ -577,94 +533,12 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
       </div>
     </div>
 
-    <!-- User Preferences -->
-    <div v-if="authStore.isAuthenticated" class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.userPreferences') }}</h2>
-
-      <div class="space-y-4">
-        <div class="flex items-center justify-between pb-4 border-b border-gray-100">
-          <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.theme') }}</label>
-            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.userManagementSettings.chooseYourPreferredColor') }}</p>
-          </div>
-          <select v-model="preferences.theme" class="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-            <option value="auto">{{ $t('settings.admin.userManagementSettings.autoSystem') }}</option>
-            <option value="light">{{ $t('settings.admin.userManagementSettings.light') }}</option>
-            <option value="dark">{{ $t('settings.admin.userManagementSettings.dark') }}</option>
-          </select>
-        </div>
-
-        <div class="flex items-center justify-between pb-4 border-b border-gray-100">
-          <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.language') }}</label>
-            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.userManagementSettings.interfaceLanguage') }}</p>
-          </div>
-          <select v-model="preferences.language" class="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-            <option value="en">{{ $t('settings.admin.userManagementSettings.english') }}</option>
-            <option value="es">{{ $t('settings.admin.userManagementSettings.spanish') }}</option>
-            <option value="fr">{{ $t('settings.admin.userManagementSettings.french') }}</option>
-            <option value="de">{{ $t('settings.admin.userManagementSettings.german') }}</option>
-          </select>
-        </div>
-
-        <div class="flex items-center justify-between pb-4 border-b border-gray-100">
-          <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.enableNotifications') }}</label>
-            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.userManagementSettings.receiveSystemNotifications') }}</p>
-          </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" v-model="preferences.enableNotifications" class="sr-only peer" />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-          </label>
-        </div>
-
-        <div class="flex items-center justify-between">
-          <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.autoSaveSettings') }}</label>
-            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.userManagementSettings.automaticallySaveChanges') }}</p>
-          </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" v-model="preferences.autoSaveSettings" class="sr-only peer" />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-          </label>
-        </div>
-      </div>
-
-      <div class="mt-6 flex justify-end">
-        <button @click="savePreferences" :disabled="saving" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
-          <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          {{ $t('settings.admin.userManagementSettings.savePreferences') }}
-        </button>
-      </div>
-    </div>
-
+    <!-- Preferences, session timeout and re-auth are hidden until a backend stores them (#18733). -->
     <!-- Security Settings -->
     <div v-if="authStore.isAuthenticated" class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.security') }}</h2>
 
       <div class="space-y-4">
-        <div class="flex items-center justify-between pb-4 border-b border-gray-100">
-          <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.sessionTimeout') }}</label>
-            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.userManagementSettings.autoLogoutAfterInactivity') }}</p>
-          </div>
-          <input v-model.number="securitySettings.sessionTimeout" type="number" min="5" max="1440" class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
-        </div>
-
-        <div class="flex items-center justify-between pb-4 border-b border-gray-100">
-          <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.requireReAuthentication') }}</label>
-            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.userManagementSettings.forSensitiveOperations') }}</p>
-          </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" v-model="securitySettings.requireReauth" class="sr-only peer" />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-          </label>
-        </div>
-
         <div class="flex items-center justify-between">
           <div>
             <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.password') }}</label>
@@ -677,16 +551,6 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
             {{ $t('settings.admin.userManagementSettings.changePassword') }}
           </button>
         </div>
-      </div>
-
-      <div class="mt-6 flex justify-end">
-        <button @click="saveSecuritySettings" :disabled="saving" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
-          <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          {{ $t('settings.admin.userManagementSettings.saveSecuritySettings') }}
-        </button>
       </div>
     </div>
 

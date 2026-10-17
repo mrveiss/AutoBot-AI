@@ -83,31 +83,19 @@ _SERVICES = {
 _RESOLVED_FLOOR = 115
 
 # (repo-relative file, service, normalised path) — exact, shrink-only.
-# #15536 covers every `useAutobotApi.ts` entry; #15236/#15230 covers the terminal one.
 _KNOWN_UNSERVED = frozenset(
+    # #15536 repointed every useAutobotApi call that has a served route. These 7 have none;
+    # each is on #18736 (or #18725 for the NPU restart) for a build-or-retire decision.
+    # #15236/#15230 covers the terminal one.
     {
         ("autobot-slm-frontend/src/composables/useAutobotApi.ts", "main", p)
         for p in (
-            "/api/agents",
-            "/api/batch/status",
-            "/api/files/write",
-            "/api/llm-providers/fallback-status",
-            "/api/mcp/servers",
-            "/api/mcp/servers/{param}",
             "/api/mcp/servers/{param}/restart",
             "/api/mcp/servers/{param}/start",
             "/api/mcp/servers/{param}/stop",
             "/api/monitoring/hardware",
-            "/api/monitoring/system",
-            "/api/npu-workers",
-            "/api/npu-workers/load-balancing/config",
-            "/api/npu-workers/{param}",
-            "/api/npu-workers/{param}/pair",
             "/api/npu-workers/{param}/restart",
-            "/api/npu-workers/{param}/test",
             "/api/permissions/rules/{param}",
-            "/api/users",
-            "/api/users/{param}",
             "/api/voice/config",
         )
     }
