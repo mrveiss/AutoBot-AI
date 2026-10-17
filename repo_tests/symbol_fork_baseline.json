@@ -44,7 +44,6 @@
     "WorkflowState",
     "WorkflowStateMachine",
     "WorkflowStatusUpdate",
-    "check_admin_permission",
     "get_current_user",
     "get_deployment_config",
     "get_fleet_services",
