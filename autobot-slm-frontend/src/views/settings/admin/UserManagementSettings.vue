@@ -22,7 +22,7 @@ import {
 import {
   useSlmUserApi,
   type SlmUserResponse,
-  type TeamResponse,
+  type AutobotTeamResponse,
 } from '@/composables/useSlmUserApi'
 import {
   useSsoApi,
@@ -48,7 +48,7 @@ const activeTab = ref<'slm-admins' | 'autobot-users' | 'teams' | 'sso'>('slm-adm
 // User list state
 const slmUsers = ref<SlmUserResponse[]>([])
 const autobotUsers = ref<SlmUserResponse[]>([])
-const teams = ref<TeamResponse[]>([])
+const teams = ref<AutobotTeamResponse[]>([])
 const ssoProviders = ref<SSOProviderResponse[]>([])
 const selectedUser = ref<SlmUserResponse | null>(null)
 const selectedUserType = ref<'slm' | 'autobot'>('slm')

@@ -43,9 +43,9 @@ export type CreateUserPayload =
   components['schemas']['autobot_shared__user_management__schemas__user__UserCreate']
 export type PasswordChange = components['schemas']['PasswordChange']
 
-export type TeamResponse = components['schemas']['TeamResponse']
-export type TeamListResponse = components['schemas']['TeamListResponse']
-export type CreateTeamPayload = components['schemas']['TeamCreate']
+export type AutobotTeamResponse = components['schemas']['AutobotTeamResponse']
+export type AutobotTeamListResponse = components['schemas']['AutobotTeamListResponse']
+export type CreateTeamPayload = components['schemas']['AutobotTeamCreate']
 export type TeamMemberAdd = components['schemas']['TeamMemberAdd']
 
 // Serialise pagination params onto the endpoint (the canonical client takes a
@@ -105,12 +105,12 @@ export function useSlmUserApi() {
   // AutoBot Teams
   // ===========================================================================
 
-  async function getTeams(skip = 0, limit = 100): Promise<TeamListResponse> {
-    return slmApiClient.get<TeamListResponse>(withPaging('/autobot-teams', skip, limit))
+  async function getTeams(skip = 0, limit = 100): Promise<AutobotTeamListResponse> {
+    return slmApiClient.get<AutobotTeamListResponse>(withPaging('/autobot-teams', skip, limit))
   }
 
-  async function createTeam(data: CreateTeamPayload): Promise<TeamResponse> {
-    return slmApiClient.post<TeamResponse>('/autobot-teams', data)
+  async function createTeam(data: CreateTeamPayload): Promise<AutobotTeamResponse> {
+    return slmApiClient.post<AutobotTeamResponse>('/autobot-teams', data)
   }
 
   async function deleteTeam(teamId: string): Promise<void> {
