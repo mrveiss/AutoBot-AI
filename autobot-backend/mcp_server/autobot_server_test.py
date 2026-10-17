@@ -8,7 +8,7 @@ Unit tests for AutoBotMCPServer (Issue #5072).
 Covers:
 - tools/list returns tool manifest for valid token
 - kb.list_categories delegates to KB and returns result
-- Rate limiting rejects the 51st request in the same window
+- (rate limiting: see autobot_server_rate_limit_18087_test.py)
 - Unknown tool returns JSON-RPC error -32602
 - Invalid / missing token returns JSON-RPC error -32001
 """
@@ -104,25 +104,6 @@ async def test_kb_list_categories():
 
     content = json.loads(resp["result"]["content"][0]["text"])
     assert "tree" in content
-
-
-# ---------------------------------------------------------------------------
-# Rate limiting
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_rate_limit_after_50_requests():
-    server = make_server()
-    # Exhaust the 50-request window
-    for _ in range(50):
-        r = await server.handle_request("tools/list", {}, VALID_TOKEN)
-        assert "result" in r, "should succeed within limit"
-
-    # 51st request should be rate-limited
-    r = await server.handle_request("tools/list", {}, VALID_TOKEN)
-    assert "error" in r
-    assert r["error"]["code"] == -32029
 
 
 # ---------------------------------------------------------------------------

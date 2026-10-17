@@ -79,7 +79,7 @@ def _en_message_keys(root: Path | None = None) -> list[str]:
 REACH = declare(
     "slm-frontend-locale-keys",
     discover=_en_message_keys,
-    floor=3_161,
+    floor=3_244,  # train 22b: #18633 added the SLM agent-ledger keys; mid-window on 3,274
     what="message keys in autobot-slm-frontend's en.json",
     growth=60,
 )

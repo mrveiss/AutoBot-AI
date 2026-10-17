@@ -8965,7 +8965,6 @@
       "silenceMeansHold": "Prośba to nie zwolnienie: milczenie oznacza trzymanie, a nieodnowiona rezerwacja wygasa sama.",
       "ask": "Poproś właściciela o zwolnienie",
       "askAria": "Poproś właściciela {scope} o zwolnienie",
-      "askUnavailable": "Jeszcze niedostępne: prośba jest dodawana do rejestru.",
       "conflicts": "Konflikty",
       "recent": "Ostatnia aktywność",
       "conflict": {
@@ -8988,6 +8987,14 @@
         "unavailableTitle": "Nie udało się odczytać rejestru",
         "unavailableBody": "Magazyn {source} nie odpowiedział. To nie to samo co brak wpisów.",
         "errorTitle": "Podczas ładowania tej sekcji wystąpił błąd"
+      },
+      "askState": {
+        "sending": "Wysyłanie…",
+        "sent": "Prośba wysłana — decyduje właściciel; milczenie oznacza trzymanie.",
+        "tooSoon": "Pytałeś o tę rezerwację przed chwilą; spróbuj ponownie za minutę.",
+        "notFound": "To zadanie nie trzyma już tej rezerwacji — odśwież, aby zobaczyć, kto ją trzyma.",
+        "unavailable": "Nie można połączyć się z rejestrem; nic nie wysłano.",
+        "error": "Coś poszło nie tak i nie udało się potwierdzić doręczenia. Odśwież, aby sprawdzić, czy blokada jest nadal utrzymywana."
       }
     }
   },

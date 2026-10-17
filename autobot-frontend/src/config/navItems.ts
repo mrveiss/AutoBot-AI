@@ -142,9 +142,9 @@ export const profileMenuItems: NavItem[] = [
 
 // ─── Header icon cluster (#18240) ────────────────────────────────────────────
 // Icon-only controls right of the primary links: Secrets and Preferences moved
-// (Preferences draws Icon.vue's cog -- the one icon for every settings control;
-// the old rays read as a light/dark switch, design doc #18238)
-// here from the profile menu, Platform admin replaces the SLM text link. The
+// here from the profile menu, Platform admin replaces the SLM text link.
+// Preferences draws Icon.vue's cog -- the one icon for every settings control;
+// the old rays read as a light/dark switch (design doc #18238). The
 // Plugins entry is gone on purpose -- plugins live in the SLM console's own
 // nav (see INTENTIONALLY_HIDDEN in nav-items-coverage.test.ts). Routes of the
 // internal entries must carry hideInNav: true in router/index.ts.

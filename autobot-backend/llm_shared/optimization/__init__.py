@@ -82,7 +82,7 @@ from .meta_eviction import (
     evict_layer_to_meta,
     get_gpu_memory_allocated,
 )
-from .model_inspector import ModelInfo, clear_cache, inspect_model
+from .model_inspector import ModelArchitectureInfo, clear_cache, inspect_model
 from .pipeline import LayerInferencePipeline, PipelineConfig, PreparedPipeline
 from .profiler import INFERENCE_STAGES, LayeredProfiler
 from .prompt_compressor import CompressionConfig, CompressionResult, PromptCompressor
@@ -190,7 +190,7 @@ __all__ = [
     "PipelineConfig",
     "PreparedPipeline",
     # Empty-weight Model Inspector (Issue #1945)
-    "ModelInfo",
+    "ModelArchitectureInfo",
     "inspect_model",
     "clear_cache",
     # SSM / Linear / Hybrid kernels (Issue #10724)

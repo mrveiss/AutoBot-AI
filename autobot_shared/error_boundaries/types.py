@@ -163,7 +163,7 @@ class APIErrorResponse:
         Returns:
             Dictionary with error information formatted for API response
         """
-        response = {
+        response: Dict[str, Any] = {
             "error": {
                 "category": self.category.value,
                 "message": self.message,

@@ -265,3 +265,92 @@ register_env_var(
         component="security",
     )
 )
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MCP_GIT_RATE_LIMIT",
+        type=int,
+        default=60,
+        description=(
+            "Requests per 60-second window accepted by the Git MCP bridge (/api/git_mcp/*), shared by all workers "
+            "(#18087). One Redis-backed count across all workers; over it the caller is refused "
+            "(HTTP 429, or JSON-RPC -32029 on the MCP server). Fails open while Redis is unreachable."
+        ),
+        component="security",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MCP_BROWSER_RATE_LIMIT",
+        type=int,
+        default=60,
+        description=(
+            "Requests per 60-second window accepted by the browser automation MCP bridge, shared by all workers "
+            "(#18087). One Redis-backed count across all workers; over it the caller is refused "
+            "(HTTP 429, or JSON-RPC -32029 on the MCP server). Fails open while Redis is unreachable."
+        ),
+        component="security",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MCP_DATABASE_RATE_LIMIT",
+        type=int,
+        default=60,
+        description=(
+            "Requests per 60-second window accepted by the database MCP bridge, shared by all workers "
+            "(#18087). One Redis-backed count across all workers; over it the caller is refused "
+            "(HTTP 429, or JSON-RPC -32029 on the MCP server). Fails open while Redis is unreachable."
+        ),
+        component="security",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MCP_HTTP_CLIENT_RATE_LIMIT",
+        type=int,
+        default=120,
+        description=(
+            "Requests per 60-second window accepted by the HTTP client MCP bridge, shared by all workers "
+            "(#18087). One Redis-backed count across all workers; over it the caller is refused "
+            "(HTTP 429, or JSON-RPC -32029 on the MCP server). Fails open while Redis is unreachable."
+        ),
+        component="security",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MCP_SERVER_RATE_LIMIT",
+        type=int,
+        default=50,
+        description=(
+            "Requests per 60-second window accepted per token by the AutoBot MCP server (post-auth), shared by all "
+            "workers (#18087). One Redis-backed count across all workers; over it the caller is refused "
+            "(HTTP 429, or JSON-RPC -32029 on the MCP server). Fails open while Redis is unreachable."
+        ),
+        component="security",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_RATE_LIMITER_FAIL_OPEN_WARN_INTERVAL",
+        type=float,
+        default=60.0,
+        description=(
+            "Minimum seconds between fail-open warnings per rate-limiter instance (#18617). While Redis is "
+            "unreachable the limiters allow requests; the warning names only the limiter scope and is emitted "
+            "at most once per interval so an outage cannot flood the log."
+        ),
+        component="security",
+    )
+)

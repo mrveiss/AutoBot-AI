@@ -252,7 +252,7 @@ def test_no_duplicate_class_names_across_schema_modules() -> None:
 def test_no_new_hardcoded_status_strings_in_agents() -> None:
     """Agent code must not add new 'status': 'success' / 'error' literals (#6703).
 
-    The AgentStatus enum in agents/payloads.py is the canonical source.
+    The AgentOutcome enum in agents/payloads.py is the canonical source.
     Hardcoded status strings bypass the type system — the structural cause of
     #6648 / #6650.
 
@@ -276,7 +276,7 @@ def test_no_new_hardcoded_status_strings_in_agents() -> None:
     EXCLUDED: set[str] = {"agents/payloads.py"}
 
     # Baseline total violation count at the time payloads.py was introduced (#6703).
-    # Should only decrease as files are migrated to AgentStatus. Never increase.
+    # Should only decrease as files are migrated to AgentOutcome. Never increase.
     KNOWN_BASELINE: int = 85
 
     backend_root = Path(__file__).resolve().parent.parent
@@ -297,7 +297,7 @@ def test_no_new_hardcoded_status_strings_in_agents() -> None:
     assert len(violations) <= KNOWN_BASELINE, (
         f"New hardcoded status string(s) added to agent code (#6703). "
         f"Count {len(violations)} > baseline {KNOWN_BASELINE}. "
-        f"Use AgentStatus enum from agents/payloads.py instead.\n"
+        f"Use AgentOutcome enum from agents/payloads.py instead.\n"
         f"All current violations:\n  " + "\n  ".join(violations)
     )
 

@@ -8965,7 +8965,6 @@
       "silenceMeansHold": "Lūgums nav atbrīvošana: klusēšana nozīmē turēšanu, un neatjaunots pieprasījums beidzas pats.",
       "ask": "Lūgt turētāju atbrīvot",
       "askAria": "Lūgt {scope} turētāju to atbrīvot",
-      "askUnavailable": "Vēl nav pieejams: lūgums tiek pievienots žurnālam.",
       "conflicts": "Konflikti",
       "recent": "Nesenās darbības",
       "conflict": {
@@ -8988,6 +8987,14 @@
         "unavailableTitle": "Neizdevās nolasīt žurnālu",
         "unavailableBody": "Krātuve {source} neatbildēja. Tas nav tas pats, kas tukšs saraksts.",
         "errorTitle": "Ielādējot šo sadaļu, radās kļūda"
+      },
+      "askState": {
+        "sending": "Sūta…",
+        "sent": "Lūgums nosūtīts — lemj turētājs; klusēšana nozīmē turēšanu.",
+        "tooSoon": "Jūs tikko jau lūdzāt par šo pieprasījumu; mēģiniet vēlreiz pēc minūtes.",
+        "notFound": "Šis uzdevums vairs netur šo pieprasījumu — atsvaidziniet, lai redzētu, kurš to tur tagad.",
+        "unavailable": "Neizdevās sasniegt žurnālu; nekas netika nosūtīts.",
+        "error": "Radās kļūda, un piegādi nevarēja apstiprināt. Atsvaidziniet, lai redzētu, vai rezervācija joprojām ir spēkā."
       }
     }
   },

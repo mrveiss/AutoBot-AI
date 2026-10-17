@@ -1326,6 +1326,93 @@
       "services": "Services",
       "systemHealth": "System Health",
       "systemMonitoring": "مراقبة النظام"
+    },
+    "agentLedger": {
+      "title": "سجل الوكلاء",
+      "subtitle": "Every company's agent coordination: shared resources, claims, conflicts and dev-loop history.",
+      "refresh": "تحديث",
+      "tabsAria": "طرق عرض السجل",
+      "tabs": {
+        "contention": "التنافس",
+        "claims": "الحجوزات",
+        "conflicts": "التعارضات",
+        "devLoop": "Dev loop",
+        "activity": "النشاط"
+      },
+      "col": {
+        "scope": "النطاق",
+        "agent": "Agent",
+        "company": "Company",
+        "mode": "الوضع",
+        "intent": "الغرض",
+        "expires": "ينتهي",
+        "renewals": "التجديدات"
+      },
+      "installWide": "Install-wide",
+      "heldBy": "Held by {agent} ({company})",
+      "waiting": "{n} waiting",
+      "waitlistAria": "قائمة الانتظار بالترتيب",
+      "silenceMeansHold": "الطلب ليس إفراجاً: الصمت يعني الاحتفاظ، والحجز غير المجدد ينتهي من تلقاء نفسه.",
+      "ask": "اطلب من المالك الإفراج",
+      "askAria": "اطلب من مالك {scope} الإفراج عنه",
+      "askState": {
+        "sending": "جارٍ الإرسال…",
+        "sent": "أُرسل الطلب — القرار للمالك؛ الصمت يعني الاحتفاظ.",
+        "tooSoon": "سألت عن هذا الحجز للتو؛ حاول مرة أخرى بعد دقيقة.",
+        "notFound": "لم تعد هذه المهمة تحتفظ بالحجز — حدّث الصفحة لترى من يحتفظ به الآن.",
+        "unavailable": "تعذّر الوصول إلى السجل؛ لم يُرسل شيء.",
+        "error": "حدث خطأ ولم يمكن تأكيد التسليم. حدّث الصفحة لمعرفة ما إذا كانت المطالبة لا تزال محجوزة."
+      },
+      "conflict": {
+        "release_refused": "رُفض إفراج",
+        "claim_expired": "انتهى حجز أثناء الاحتفاظ به",
+        "yield_unanswered": "بقي طلب تنازل بلا رد",
+        "claim_lapsed_during_action": "انتهى حجز أثناء إجراء"
+      },
+      "devLoop": {
+        "issue": "Issue",
+        "choose": "Choose an issue",
+        "col": {
+          "at": "When",
+          "intent": "الغرض",
+          "outcome": "Outcome",
+          "tokens": "Estimated tokens",
+          "reason": "السبب"
+        }
+      },
+      "empty": {
+        "contention": "لا يوجد تنافس",
+        "claims": "لا توجد حجوزات",
+        "conflicts": "لا توجد تعارضات",
+        "activity": "لا يوجد نشاط حديث",
+        "devLoop": "No dev-loop history",
+        "devLoopActions": "No actions recorded for this issue"
+      },
+      "notes": {
+        "title": "What this view cannot see",
+        "neverReadable": "The SLM cannot read {sources}: they live inside the AutoBot backend process, so they are missing here, not empty.",
+        "storeDown": "Couldn't read the {source} store just now. Its entries are missing here, not empty.",
+        "sourcesUnknown": "Couldn't check which ledger sources are readable.",
+        "peerIdentity": "Agents have no per-peer identity yet: an agent that is refused an action can ask another agent to do it (#16950).",
+        "busAuth": "Messages between agents are not authenticated yet, so this view cannot prove who sent one (#16962)."
+      },
+      "source": {
+        "presence": "agent presence",
+        "ai_stack_agents": "AI-stack agents",
+        "live_sessions": "live sessions",
+        "peer_messages": "pending peer messages",
+        "idle_subscribers": "idle subscriptions",
+        "claims": "claims",
+        "waitlists": "waitlists",
+        "events": "ledger activity",
+        "dev_loop": "dev-loop history"
+      },
+      "state": {
+        "loading": "جارٍ قراءة السجل…",
+        "unavailableTitle": "تعذّرت قراءة السجل",
+        "unavailableBody": "لم يستجب مخزن {source}. هذا ليس مثل عدم وجود إدخالات.",
+        "errorTitle": "حدث خطأ أثناء تحميل هذا القسم"
+      }
     }
   },
   "monitoringView": {
@@ -1334,7 +1421,17 @@
     "monitoring": "المراقبة",
     "monitoringSections": "Monitoring sections",
     "systemHealthStatusAria": "System health: {status}",
-    "value0AlertPlural": "{value0} Alert{plural}"
+    "value0AlertPlural": "{value0} Alert{plural}",
+    "tabs": {
+      "system": "النظام",
+      "logs": "Logs",
+      "dashboards": "Dashboards",
+      "alerts": "Alerts",
+      "errors": "الأخطاء",
+      "backendHealth": "Backend Health",
+      "performance": "الأداء",
+      "agentLedger": "سجل الوكلاء"
+    }
   },
   "orchestration": {
     "nodeHealthCard": {

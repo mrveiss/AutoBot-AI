@@ -99,12 +99,6 @@ from typing import Any, AsyncGenerator, Dict
 import redis
 import redis.asyncio as async_redis
 
-# NOTE: The imports below require autobot-backend on PYTHONPATH.
-# redis_management/ lives in autobot-backend/utils/ and depends on backend-only
-# modules (constants.network_constants, constants.redis_constants,
-# constants.threshold_constants, config, monitoring.prometheus_metrics).
-# Moving redis_management/ to autobot_shared would require pulling in those
-# backend modules too — the dependency chain is deep.
 # redis_management now lives in autobot_shared (Issue #2313).
 from autobot_shared.redis_management.config import (
     PoolConfig,
@@ -153,6 +147,7 @@ __all__ = [
     "get_metrics_redis",
     "get_main_redis",
     "get_redis_health",
+    "is_redis_circuit_open",
     "get_redis_metrics",
     "get_connection_info",
     "test_redis_connection",
@@ -335,6 +330,11 @@ async def get_async_redis_client(
 def get_redis_health() -> Dict[str, Any]:
     """Get Redis health status."""
     return _get_connection_manager().get_health_status()
+
+
+def is_redis_circuit_open(database: str = "main") -> bool:
+    """Breaker open and its timeout not elapsed; no Redis call needed (#18553)."""
+    return _get_connection_manager().is_circuit_open(database)
 
 
 def get_redis_metrics(database: str | None = None) -> Dict[str, Any]:

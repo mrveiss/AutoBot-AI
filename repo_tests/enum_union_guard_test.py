@@ -411,7 +411,7 @@ def test_every_deliberate_severity_literal_file_still_has_one():
     ("rel", "alias"),
     [
         ("autobot-backend/utils/monitoring_alerts.py", "AlertSeverity"),
-        ("autobot-backend/utils/error_boundaries/types.py", "ErrorSeverity"),
+        ("autobot_shared/error_boundaries/types.py", "ErrorSeverity"),
     ],
 )
 def test_the_severity_aliases_still_point_at_the_canonical_enum(rel, alias):

@@ -14,7 +14,7 @@ const { rawRequest } = vi.hoisted(() => ({ rawRequest: vi.fn() }))
 vi.mock('@/utils/ApiClient', () => ({ default: { rawRequest } }))
 vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api' }))
 
-import { groupByScope, useAgentLedger, type ClaimRow, type WaiterRow } from '../useAgentLedger'
+import { askHolderToRelease, groupByScope, useAgentLedger, type ClaimRow, type WaiterRow } from '../useAgentLedger'
 
 const json = (status: number, body: unknown) => ({ status, ok: status < 400, json: async () => body })
 
@@ -97,5 +97,31 @@ describe('groupByScope', () => {
     expect(rows.map((r) => r.scope)).toEqual(['provider:openai', 'queue:ingest', 'cpu:build'])
     expect(rows[0].waiters.map((w) => w.agent_id)).toEqual(['a3', 'a4'])
     expect(rows[1]).toMatchObject({ scope: 'queue:ingest', kind: 'queue', holders: [] })
+  })
+})
+
+describe('askHolderToRelease (#18391 AC4, route #18599)', () => {
+  beforeEach(() => {
+    rawRequest.mockReset()
+  })
+
+  it.each([
+    [200, { token: 'tok-1' }, { state: 'sent', token: 'tok-1' }],
+    [429, {}, { state: 'too-soon' }],
+    [404, {}, { state: 'not-found' }],
+    [503, { error: 'ledger_unavailable', source: 'claims', detail: 'x' }, { state: 'unavailable' }],
+    [503, { detail: 'proxy' }, { state: 'error' }],
+    [200, {}, { state: 'error' }],
+  ])('%s %j -> %j', async (status, body, outcome) => {
+    rawRequest.mockResolvedValueOnce(json(status, body))
+    expect(await askHolderToRelease('provider:openai', 't1', 'need it')).toEqual(outcome)
+    expect(rawRequest).toHaveBeenCalledWith('/api/coordination/ledger/claims/yield-request', {
+      method: 'POST', body: { scope: 'provider:openai', holder_task_id: 't1', reason: 'need it' },
+    })
+  })
+
+  it('a network failure is error, not sent', async () => {
+    rawRequest.mockRejectedValueOnce(new Error('offline'))
+    expect(await askHolderToRelease('provider:openai', 't1')).toEqual({ state: 'error' })
   })
 })

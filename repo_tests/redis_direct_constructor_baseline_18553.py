@@ -49,11 +49,6 @@ BASELINE: dict[str, tuple[int, str, str]] = {
         "#18553 slice 3, held: db 9 is `temp` but redis.asyncio.from_url returns bytes (decode_responses=False) "
         "while the canonical client decodes, so checkpoint_manager's keys()/hget() results would change type",
     ),
-    "autobot-backend/utils/redis_immediate_connection.py": (
-        1,
-        EXCEPTION,
-        "diagnostic connectivity probe, no timeouts, arbitrary host (#620); its unwired breaker is #18553 slice 4",
-    ),
     # --- worker, infrastructure, shell --------------------------------------------------------
     "autobot-npu-worker/resources/windows-npu-worker/app/utils/redis_client.py": (
         2,
@@ -107,4 +102,4 @@ BASELINE: dict[str, tuple[int, str, str]] = {
 }
 
 #: Sum of the site counts above. It may only go DOWN.
-FROZEN_TOTAL = 40
+FROZEN_TOTAL = 39

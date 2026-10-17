@@ -53,7 +53,7 @@ from datetime import datetime
 from typing import Optional
 import uuid
 
-class StepStatus(Enum):
+class PlanStepStatus(Enum):
     """Status of a plan step"""
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
@@ -75,7 +75,7 @@ class PlanStep:
     pseudocode: str = ""  # Detailed implementation hint
 
     # Status
-    status: StepStatus = StepStatus.PENDING
+    status: PlanStepStatus = PlanStepStatus.PENDING
 
     # Dependencies
     depends_on: list[str] = field(default_factory=list)  # Step IDs this depends on
@@ -119,7 +119,7 @@ class PlanStep:
             step_number=data["step_number"],
             description=data["description"],
             pseudocode=data.get("pseudocode", ""),
-            status=StepStatus(data["status"]),
+            status=PlanStepStatus(data["status"]),
             depends_on=data.get("depends_on", []),
             blocks=data.get("blocks", []),
             started_at=datetime.fromisoformat(data["started_at"]) if data.get("started_at") else None,
@@ -181,17 +181,17 @@ class ExecutionPlan:
     def get_current_step(self) -> Optional[PlanStep]:
         """Get the currently active step"""
         for step in self.steps:
-            if step.status == StepStatus.IN_PROGRESS:
+            if step.status == PlanStepStatus.IN_PROGRESS:
                 return step
         return None
 
     def get_next_executable_steps(self) -> list[PlanStep]:
         """Get steps that can be executed (dependencies satisfied)"""
-        completed_ids = {s.step_id for s in self.steps if s.status == StepStatus.COMPLETED}
+        completed_ids = {s.step_id for s in self.steps if s.status == PlanStepStatus.COMPLETED}
         executable = []
 
         for step in self.steps:
-            if step.status != StepStatus.PENDING:
+            if step.status != PlanStepStatus.PENDING:
                 continue
             # Check if all dependencies are completed
             if all(dep_id in completed_ids for dep_id in step.depends_on):
@@ -221,12 +221,12 @@ class ExecutionPlan:
     def update_metrics(self):
         """Recalculate plan metrics"""
         self.total_steps = len(self.steps)
-        self.completed_steps = sum(1 for s in self.steps if s.status == StepStatus.COMPLETED)
-        self.failed_steps = sum(1 for s in self.steps if s.status == StepStatus.FAILED)
+        self.completed_steps = sum(1 for s in self.steps if s.status == PlanStepStatus.COMPLETED)
+        self.failed_steps = sum(1 for s in self.steps if s.status == PlanStepStatus.FAILED)
 
         # Update current step number
         for i, step in enumerate(self.steps):
-            if step.status == StepStatus.IN_PROGRESS:
+            if step.status == PlanStepStatus.IN_PROGRESS:
                 self.current_step_number = i + 1
                 break
         else:
@@ -257,12 +257,12 @@ class ExecutionPlan:
         lines = [f"# Plan: {self.task_description}", ""]
         for step in self.steps:
             status_marker = {
-                StepStatus.PENDING: "[ ]",
-                StepStatus.IN_PROGRESS: "[→]",
-                StepStatus.COMPLETED: "[✓]",
-                StepStatus.BLOCKED: "[⊗]",
-                StepStatus.FAILED: "[✗]",
-                StepStatus.SKIPPED: "[-]",
+                PlanStepStatus.PENDING: "[ ]",
+                PlanStepStatus.IN_PROGRESS: "[→]",
+                PlanStepStatus.COMPLETED: "[✓]",
+                PlanStepStatus.BLOCKED: "[⊗]",
+                PlanStepStatus.FAILED: "[✗]",
+                PlanStepStatus.SKIPPED: "[-]",
             }.get(step.status, "[ ]")
 
             lines.append(f"{step.step_number}. {status_marker} {step.description}")
@@ -498,7 +498,7 @@ Output as JSON:
         if not step:
             raise ValueError(f"Step not found: {step_id}")
 
-        step.status = StepStatus.IN_PROGRESS
+        step.status = PlanStepStatus.IN_PROGRESS
         step.started_at = datetime.utcnow()
         plan.status = PlanStatus.IN_PROGRESS
         if not plan.started_at:
@@ -542,7 +542,7 @@ Output as JSON:
         if not step:
             raise ValueError(f"Step not found: {step_id}")
 
-        step.status = StepStatus.COMPLETED
+        step.status = PlanStepStatus.COMPLETED
         step.completed_at = datetime.utcnow()
         step.reflection = reflection
         if tools_used:
@@ -598,7 +598,7 @@ Output as JSON:
         if not step:
             raise ValueError(f"Step not found: {step_id}")
 
-        step.status = StepStatus.FAILED
+        step.status = PlanStepStatus.FAILED
         step.completed_at = datetime.utcnow()
         step.reflection = reflection or f"Failed: {error}"
 
@@ -612,7 +612,7 @@ Output as JSON:
         # Mark blocked steps
         for other_step in plan.steps:
             if step.step_id in other_step.depends_on:
-                other_step.status = StepStatus.BLOCKED
+                other_step.status = PlanStepStatus.BLOCKED
 
         await self._store_plan(plan)
 
@@ -659,7 +659,7 @@ Output as JSON:
         # Re-plan remaining steps
         remaining_descriptions = [
             s.description for s in plan.steps
-            if s.status in (StepStatus.PENDING, StepStatus.BLOCKED)
+            if s.status in (PlanStepStatus.PENDING, PlanStepStatus.BLOCKED)
         ]
 
         if remaining_descriptions:
@@ -670,7 +670,7 @@ Output as JSON:
             )
 
             # Replace pending/blocked steps
-            completed_steps = [s for s in plan.steps if s.status == StepStatus.COMPLETED]
+            completed_steps = [s for s in plan.steps if s.status == PlanStepStatus.COMPLETED]
             plan.steps = completed_steps + new_plan.steps
 
             # Renumber steps
@@ -758,12 +758,12 @@ def plan_to_todowrite(plan: ExecutionPlan) -> list[dict]:
     todos = []
     for step in plan.steps:
         status_map = {
-            StepStatus.PENDING: "pending",
-            StepStatus.IN_PROGRESS: "in_progress",
-            StepStatus.COMPLETED: "completed",
-            StepStatus.BLOCKED: "pending",  # TodoWrite doesn't have blocked
-            StepStatus.FAILED: "pending",   # Show as needing retry
-            StepStatus.SKIPPED: "completed",
+            PlanStepStatus.PENDING: "pending",
+            PlanStepStatus.IN_PROGRESS: "in_progress",
+            PlanStepStatus.COMPLETED: "completed",
+            PlanStepStatus.BLOCKED: "pending",  # TodoWrite doesn't have blocked
+            PlanStepStatus.FAILED: "pending",   # Show as needing retry
+            PlanStepStatus.SKIPPED: "completed",
         }
 
         todos.append({
@@ -873,7 +873,7 @@ class PlannerConfig:
 ```
 src/planner/
 ├── __init__.py
-├── types.py           # StepStatus, PlanStatus, PlanStep, ExecutionPlan
+├── types.py           # PlanStepStatus, PlanStatus, PlanStep, ExecutionPlan
 ├── planner.py         # PlannerModule interface
 ├── llm_planner.py     # LLMPlannerModule implementation
 ├── todowrite_compat.py # TodoWrite compatibility layer
@@ -892,7 +892,7 @@ async def test_plan_creation():
 
     assert plan.status == PlanStatus.READY
     assert len(plan.steps) > 0
-    assert all(s.status == StepStatus.PENDING for s in plan.steps)
+    assert all(s.status == PlanStepStatus.PENDING for s in plan.steps)
 
 async def test_step_execution_flow():
     """Test start → complete step flow"""
@@ -905,7 +905,7 @@ async def test_step_execution_flow():
         plan.plan_id, step.step_id, reflection="Done"
     )
 
-    assert updated_step.status == StepStatus.COMPLETED
+    assert updated_step.status == PlanStepStatus.COMPLETED
     assert updated_step.reflection == "Done"
 
 async def test_parallel_step_detection():

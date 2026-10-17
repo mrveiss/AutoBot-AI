@@ -8,8 +8,8 @@ import pytest
 from fastapi import HTTPException
 
 from api.codebase_analytics.source_storage import RegistryUnavailable
-from utils.error_boundaries.decorators import with_error_handling
-from utils.error_boundaries.types import PassThroughError
+from autobot_shared.error_boundaries.decorators import with_error_handling
+from autobot_shared.error_boundaries.types import PassThroughError
 
 
 def test_registry_unavailable_is_a_pass_through_error():

@@ -13,12 +13,17 @@
  */
 
 import { computed, ref, type Ref } from 'vue'
+import {
+  loadingLedgerSection,
+  readLedgerSection,
+  sendLedgerAsk,
+  type LedgerAskOutcome,
+  type LedgerSection,
+  type LedgerSectionStatus,
+} from '@autobot/ui'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
-import { createLogger } from '@/utils/debugUtils'
 import type { components } from '@/types/generated/api'
-
-const logger = createLogger('useAgentLedger')
 
 type Schemas = components['schemas']
 export type ClaimRow = Schemas['ClaimRow']
@@ -29,15 +34,9 @@ export type ConflictRow = Schemas['ConflictRow']
 export type PeerMessageRow = Schemas['PeerMessageRow']
 export type IdleSubscriberRow = Schemas['IdleSubscriberRow']
 
-/** loading -> ready (data, possibly empty) | unavailable (typed 503) | error (anything else). */
-export type SectionState = 'loading' | 'ready' | 'unavailable' | 'error'
-
-export interface LedgerSection<T> {
-  state: SectionState
-  rows: T[]
-  /** For `unavailable`: which store the backend could not read. */
-  source?: string
-}
+/** Section states and answers are read by the kit, shared with the SLM ledger view. */
+export type { LedgerSection }
+export type SectionState = LedgerSectionStatus
 
 /** One contended (or merely held) resource: its holders and its queue, in order. */
 export interface ScopeView {
@@ -49,27 +48,9 @@ export interface ScopeView {
 
 const LEDGER = '/coordination/ledger'
 
-function emptySection<T>(): LedgerSection<T> {
-  return { state: 'loading', rows: [] }
-}
-
 /** GET one ledger path and pick its list field; a 503 with the typed body is `unavailable`. */
-async function fetchSection<T>(path: string, field: string): Promise<LedgerSection<T>> {
-  try {
-    const response = await apiClient.rawRequest(`${getApiBase()}${LEDGER}${path}`, { method: 'GET' })
-    const body = (await response.json().catch(() => null)) as Record<string, unknown> | null
-    if (response.status === 503 && body?.error === 'ledger_unavailable') {
-      return { state: 'unavailable', rows: [], source: String(body.source ?? '') }
-    }
-    if (!response.ok || !body || !Array.isArray(body[field])) {
-      logger.warn(`ledger ${path} answered ${response.status}`)
-      return { state: 'error', rows: [] }
-    }
-    return { state: 'ready', rows: body[field] as T[] }
-  } catch (err: unknown) {
-    logger.warn(`ledger ${path} failed:`, err)
-    return { state: 'error', rows: [] }
-  }
+function fetchSection<T>(path: string, field: string): Promise<LedgerSection<T>> {
+  return readLedgerSection<T>(() => apiClient.rawRequest(`${getApiBase()}${LEDGER}${path}`, { method: 'GET' }), field)
 }
 
 /** Group claims and waiters by scope; waiters stay in queue order. */
@@ -85,14 +66,34 @@ export function groupByScope(claims: ClaimRow[], waiters: WaiterRow[]): ScopeVie
   return [...byScope.values()].sort((a, b) => b.waiters.length - a.waiters.length || a.scope.localeCompare(b.scope))
 }
 
+/**
+ * What happened to a request that the holder release a claim (#18391 AC4, route #18599).
+ * Asking never releases anything: `sent` means the request was delivered and the
+ * holder decides -- silence means hold. Each failure stays distinguishable.
+ */
+export type AskOutcome = LedgerAskOutcome
+// sent | too-soon (429: asked about this scope within the window) | not-found (404: no
+// such claim for this company, or it changed hands) | unavailable (typed 503) | error
+// (anything else, a lost response included: the request may have been delivered)
+
+/** Ask the holder of `scope` to release it -- the same yield request an agent sends. */
+export function askHolderToRelease(scope: string, holderTaskId: string, reason = ''): Promise<AskOutcome> {
+  return sendLedgerAsk(() =>
+    apiClient.rawRequest(`${getApiBase()}${LEDGER}/claims/yield-request`, {
+      method: 'POST',
+      body: { scope, holder_task_id: holderTaskId, reason },
+    })
+  )
+}
+
 export function useAgentLedger() {
-  const presence: Ref<LedgerSection<PresenceRow>> = ref(emptySection())
-  const claims: Ref<LedgerSection<ClaimRow>> = ref(emptySection())
-  const waitlists: Ref<LedgerSection<WaiterRow>> = ref(emptySection())
-  const conflicts: Ref<LedgerSection<ConflictRow>> = ref(emptySection())
-  const activity: Ref<LedgerSection<ActivityRow>> = ref(emptySection())
-  const peerMessages: Ref<LedgerSection<PeerMessageRow>> = ref(emptySection())
-  const idleSubscribers: Ref<LedgerSection<IdleSubscriberRow>> = ref(emptySection())
+  const presence: Ref<LedgerSection<PresenceRow>> = ref(loadingLedgerSection())
+  const claims: Ref<LedgerSection<ClaimRow>> = ref(loadingLedgerSection())
+  const waitlists: Ref<LedgerSection<WaiterRow>> = ref(loadingLedgerSection())
+  const conflicts: Ref<LedgerSection<ConflictRow>> = ref(loadingLedgerSection())
+  const activity: Ref<LedgerSection<ActivityRow>> = ref(loadingLedgerSection())
+  const peerMessages: Ref<LedgerSection<PeerMessageRow>> = ref(loadingLedgerSection())
+  const idleSubscribers: Ref<LedgerSection<IdleSubscriberRow>> = ref(loadingLedgerSection())
 
   /** Contention needs both claims and waitlists; it is only as readable as the worse of the two. */
   const contention = computed<LedgerSection<ScopeView>>(() => {

@@ -22,6 +22,7 @@ a 2048 default ``max_tokens``, and penalty-param forwarding from
 from __future__ import annotations
 
 from autobot_shared.ssot_config import config
+from llm_shared.types import ProviderType
 from services.provider_key_vault import resolve_provider_key
 
 from .openai_compatible import OpenAICompatibleProvider
@@ -44,7 +45,7 @@ class NousPortalProvider(OpenAICompatibleProvider):
               HF_TOKEN or custom API key in environment
     """
 
-    provider_name = "nous"
+    provider_name = ProviderType.NOUS.value
     default_model = NOUS_MODELS[0]
     fallback_models = tuple(NOUS_MODELS)
     default_max_tokens = 2048  # HF inference endpoints reject unbounded generations

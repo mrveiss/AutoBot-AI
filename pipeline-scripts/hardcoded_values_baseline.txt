@@ -362,11 +362,10 @@
 1|other|autobot-backend/llm_shared/optimization/token_optimizer.py|"user"
 1|other|autobot-backend/llm_shared/provider_auth.py|https://accounts.google.com
 1|other|autobot-backend/llm_shared/provider_auth.py|https://login.microsoftonline.com/
-1|other|autobot-backend/llm_shared/providers/anthropic.py|"system"
-2|other|autobot-backend/llm_shared/providers/anthropic.py|"user"
+1|other|autobot-backend/llm_shared/providers/anthropic.py|"user"
 2|other|autobot-backend/llm_shared/providers/bedrock.py|"assistant"
-5|other|autobot-backend/llm_shared/providers/bedrock.py|"system"
-6|other|autobot-backend/llm_shared/providers/bedrock.py|"user"
+4|other|autobot-backend/llm_shared/providers/bedrock.py|"system"
+5|other|autobot-backend/llm_shared/providers/bedrock.py|"user"
 1|other|autobot-backend/llm_shared/providers/huggingface.py|https://api-inference.huggingface.co
 2|other|autobot-backend/llm_shared/providers/mistral.py|https://api.mistral.ai/v1
 1|other|autobot-backend/llm_shared/providers/nous_portal.py|https://api-inference.huggingface.co/v1
@@ -374,8 +373,8 @@
 1|ssot|autobot-backend/llm_shared/providers/ollama_provider.py|:11434
 2|other|autobot-backend/llm_shared/providers/openrouter.py|https://openrouter.ai/api/v1
 1|other|autobot-backend/llm_shared/providers/vertexai.py|"assistant"
-2|other|autobot-backend/llm_shared/providers/vertexai.py|"system"
-2|other|autobot-backend/llm_shared/providers/vertexai.py|"user"
+1|other|autobot-backend/llm_shared/providers/vertexai.py|"system"
+1|other|autobot-backend/llm_shared/providers/vertexai.py|"user"
 1|other|autobot-backend/llm_shared/providers/vertexai.py|https://www.googleapis.com/auth/cloud-platform
 1|other|autobot-backend/llm_shared/providers/vllm.py|"assistant"
 1|other|autobot-backend/llm_shared/tiered_routing/complexity_router.py|"system"

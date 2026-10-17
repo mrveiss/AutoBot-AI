@@ -21,11 +21,11 @@ from api.schemas_workflows import (
 )
 from api.system_health import ComponentHealth, KnownProbes, register_health_probe
 from auth_middleware import check_admin_permission, get_current_user
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.logging_manager import get_logger
-from circuit_breaker import (
+from autobot_shared.circuit_breaker import (
     get_circuit_breaker_manager,
 )
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.resilience.error_budget import get_error_budget_tracker
 from services.resilience.fallback_manager import get_fallback_manager
 from utils.error_catalog import SOURCE_YAML, get_error_catalog_instance

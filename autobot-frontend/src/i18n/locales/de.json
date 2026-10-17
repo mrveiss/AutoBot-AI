@@ -8965,7 +8965,6 @@
       "silenceMeansHold": "Bitten ist keine Freigabe: Schweigen heißt Halten, und ein nicht verlängerter Anspruch läuft von selbst ab.",
       "ask": "Inhaber um Freigabe bitten",
       "askAria": "Den Inhaber von {scope} um Freigabe bitten",
-      "askUnavailable": "Noch nicht verfügbar: die Anfrage wird dem Ledger hinzugefügt.",
       "conflicts": "Konflikte",
       "recent": "Letzte Aktivität",
       "conflict": {
@@ -8988,6 +8987,14 @@
         "unavailableTitle": "Ledger konnte nicht gelesen werden",
         "unavailableBody": "Der Speicher {source} hat nicht geantwortet. Das ist nicht dasselbe wie keine Einträge.",
         "errorTitle": "Beim Laden dieses Abschnitts ist ein Fehler aufgetreten"
+      },
+      "askState": {
+        "sending": "Wird gesendet…",
+        "sent": "Anfrage gesendet — der Inhaber entscheidet; Schweigen heißt Halten.",
+        "tooSoon": "Sie haben gerade erst nach diesem Anspruch gefragt; versuchen Sie es in einer Minute erneut.",
+        "notFound": "Diese Aufgabe hält den Anspruch nicht mehr — aktualisieren Sie, um den aktuellen Inhaber zu sehen.",
+        "unavailable": "Ledger nicht erreichbar; es wurde nichts gesendet.",
+        "error": "Etwas ist schiefgelaufen, und die Zustellung konnte nicht bestätigt werden. Aktualisieren Sie, um zu sehen, ob der Claim noch gehalten wird."
       }
     }
   },

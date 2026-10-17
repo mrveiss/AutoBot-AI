@@ -57,7 +57,7 @@ from .cache import CachedResponse, LLMResponseCache, get_llm_cache
 from .fallback_chain import FallbackChain, FallbackChainManager, get_fallback_chain_manager
 
 # Hardware detection
-from .hardware import TORCH_AVAILABLE, HardwareDetector
+from .hardware import TORCH_AVAILABLE, AccelerationDetector
 
 # Mock providers
 from .mock_providers import LocalLLM, MockPalm, local_llm, palm
@@ -102,7 +102,7 @@ __all__ = [
     "ChatMessage",
     "LLMRequest",
     # Hardware
-    "HardwareDetector",
+    "AccelerationDetector",
     "TORCH_AVAILABLE",
     # Streaming
     "StreamingManager",
