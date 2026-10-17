@@ -21,7 +21,6 @@
     "CheckDefinition",
     "CheckResult",
     "Citation",
-    "ClearAllResponse",
     "CodeSource",
     "CodeValidator",
     "CommitCheckResult",

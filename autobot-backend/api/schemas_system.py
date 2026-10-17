@@ -1766,7 +1766,7 @@ class InvalidateCacheResponse(BaseModel):
     deleted_count: int
 
 
-class ClearAllResponse(BaseModel):
+class CacheClearAllResponse(BaseModel):
     success: bool
     message: str
     total_deleted: int

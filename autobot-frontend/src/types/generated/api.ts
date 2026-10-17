@@ -62500,6 +62500,17 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** CacheClearAllResponse */
+        CacheClearAllResponse: {
+            /** Success */
+            success: boolean;
+            /** Message */
+            message: string;
+            /** Total Deleted */
+            total_deleted: number;
+        } & {
+            [key: string]: unknown;
+        };
         /** CacheClearTypeResponse */
         CacheClearTypeResponse: {
             /** Status */
@@ -63886,6 +63897,37 @@ export interface components {
             session_breakdown?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ClearAllResponse
+         * @description Shape of ``POST /api/knowledge_base/clear_all``.
+         *
+         *     DESTRUCTIVE operation. ``items_removed`` counts fact rows, not
+         *     vectors — vector store is cleared as part of ``kb.clear_all()``.
+         */
+        ClearAllResponse: {
+            /**
+             * Status
+             * @description 'success' | 'error'
+             */
+            status: string;
+            /**
+             * Items Removed
+             * @default 0
+             */
+            items_removed: number;
+            /**
+             * Items Before
+             * @default 0
+             */
+            items_before: number;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
         } & {
             [key: string]: unknown;
         };
@@ -105556,17 +105598,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** ClearAllResponse */
-        api__schemas_system__ClearAllResponse: {
-            /** Success */
-            success: boolean;
-            /** Message */
-            message: string;
-            /** Total Deleted */
-            total_deleted: number;
-        } & {
-            [key: string]: unknown;
-        };
         /**
          * ProviderInfo
          * @description Information about a supported provider.
@@ -105613,37 +105644,6 @@ export interface components {
              * @default false
              */
             is_system: boolean;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * ClearAllResponse
-         * @description Shape of ``POST /api/knowledge_base/clear_all``.
-         *
-         *     DESTRUCTIVE operation. ``items_removed`` counts fact rows, not
-         *     vectors — vector store is cleared as part of ``kb.clear_all()``.
-         */
-        knowledge__schemas__ingestion__ClearAllResponse: {
-            /**
-             * Status
-             * @description 'success' | 'error'
-             */
-            status: string;
-            /**
-             * Items Removed
-             * @default 0
-             */
-            items_removed: number;
-            /**
-             * Items Before
-             * @default 0
-             */
-            items_before: number;
-            /**
-             * Message
-             * @default
-             */
-            message: string;
         } & {
             [key: string]: unknown;
         };
@@ -112977,7 +112977,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["knowledge__schemas__ingestion__ClearAllResponse"];
+                    "application/json": components["schemas"]["ClearAllResponse"];
                 };
             };
             /** @description Validation Error */
@@ -159493,7 +159493,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__schemas_system__ClearAllResponse"];
+                    "application/json": components["schemas"]["CacheClearAllResponse"];
                 };
             };
         };
