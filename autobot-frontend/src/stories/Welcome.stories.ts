@@ -48,7 +48,6 @@ const uiCards: Card[] = [
   { name: 'ThemeToggle', description: 'Theme switcher between light and dark', href: '?path=/docs/components-ui-themetoggle--docs' },
   { name: 'ToastContainer', description: 'Toast notification host container', href: '?path=/docs/components-ui-toastcontainer--docs' },
   { name: 'Icon', description: 'Single-path SVG icon from the ICONS registry', href: '?path=/docs/components-ui-icon--docs' },
-  { name: 'DarkModeToggle', description: 'Dark mode toggle switch', href: '?path=/docs/components-ui-darkmodetoggle--docs' },
   { name: 'OfflineBanner', description: 'Banner shown when network is offline', href: '?path=/docs/components-ui-offlinebanner--docs' },
   { name: 'MessageStatus', description: 'Status indicator for chat messages', href: '?path=/docs/components-ui-messagestatus--docs' },
   { name: 'PreferencesPanel', description: 'User preferences panel', href: '?path=/docs/components-ui-preferencespanel--docs' },
@@ -62,7 +61,7 @@ const uiCards: Card[] = [
 ];
 
 const layoutCards: Card[] = [
-  { name: 'LanguageSwitcher', description: 'Globe icon language switcher for the nav bar', href: '?path=/docs/components-layout-languageswitcher--docs' },
+  { name: 'LanguageSwitcher', description: 'Language picker (select or globe menu), shared with the SLM', href: '?path=/docs/kit-languageswitcher--docs' },
   { name: 'NavOverflowMenu', description: 'Overflow "More" menu for nav items', href: '?path=/docs/components-layout-navoverflowmenu--docs' },
 ];
 
@@ -167,7 +166,7 @@ export const Overview: Story = {
             <code class="block bg-white p-3 rounded text-xs text-gray-800 border border-gray-200">
               src/components/base/BaseButton.stories.ts<br/>
               libs/autobot-ui/src/components/BaseModal.stories.ts<br/>
-              src/components/layout/LanguageSwitcher.stories.ts<br/>
+              libs/autobot-ui/src/components/LanguageSwitcher.stories.ts<br/>
               src/stories/IconLibrary.stories.ts<br/>
               src/stories/DesignTokens.stories.ts
             </code>

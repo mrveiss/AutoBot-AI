@@ -17579,7 +17579,7 @@ export interface paths {
         };
         /**
          * Ledger Presence
-         * @description The company's live agents plus shared infrastructure, busy or idle.
+         * @description The company's live agents plus shared infrastructure, busy or idle, with what each is working on.
          */
         get: operations["ledger_presence_api_coordination_ledger_presence_get"];
         put?: never;
@@ -17725,6 +17725,12 @@ export interface paths {
         /**
          * Ledger Yield Request
          * @description Ask the holder of one of the company's claims to release it. Publishes a request; releases nothing.
+         *
+         *     The per-person rate limit (``RateLimiter.acquire_window``) fails OPEN if ITS store is
+         *     unreachable -- the limiter's class policy (#18607). With Redis down the ask never gets that
+         *     far: the claim lookup before the limiter answers the typed 503. Only a limiter store failing
+         *     on its own lets an ask through unlimited; it is still published once per request, never as
+         *     a release.
          */
         post: operations["ledger_yield_request_api_coordination_ledger_claims_yield_request_post"];
         delete?: never;
@@ -90069,8 +90075,22 @@ export interface components {
             busy: boolean;
             /** Detail */
             detail?: string | null;
+            /** @description Null when idle, or when the agent's kind has no notion of a task */
+            current_task?: components["schemas"]["PresenceTaskRow"] | null;
             /** Last Seen */
             last_seen: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * PresenceTaskRow
+         * @description What a busy agent is working on (#18391): for a Company OS agent, its running run's work item.
+         */
+        PresenceTaskRow: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
         } & {
             [key: string]: unknown;
         };
@@ -105544,7 +105564,7 @@ export interface components {
             holder_task_id: string;
             /**
              * Reason
-             * @description Why; cut to the ledger's free-text cap
+             * @description Why; at most the ledger's free-text cap
              * @default
              */
             reason: string;

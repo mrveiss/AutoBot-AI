@@ -15609,17 +15609,22 @@
         "properties": {
           "holder_task_id": {
             "description": "The task that holds the claim, as the claims screen shows it",
+            "maxLength": 256,
+            "minLength": 1,
             "title": "Holder Task Id",
             "type": "string"
           },
           "reason": {
             "default": "",
-            "description": "Why; cut to the ledger's free-text cap",
+            "description": "Why; at most the ledger's free-text cap",
+            "maxLength": 280,
             "title": "Reason",
             "type": "string"
           },
           "scope": {
             "description": "The claimed scope, e.g. `path:src/app.py`",
+            "maxLength": 512,
+            "minLength": 1,
             "title": "Scope",
             "type": "string"
           }
@@ -24051,7 +24056,7 @@
     },
     "/api/monitoring/agent-ledger/claims/yield-request": {
       "post": {
-        "description": "Ask the holder of any claim to release it. Publishes a request; releases nothing.",
+        "description": "Ask the holder of any claim to release it. Publishes a request; releases nothing.\n\nThe asker is the token's ``sub``; a token without one is a 401, never the shared\nidentity ``\"None\"`` (#18607). The per-person rate limit (``RateLimiter.acquire_window``)\nfails OPEN if ITS store is unreachable -- the limiter's class policy. With Redis down the\nask never gets that far: the claim lookup before the limiter answers the typed 503. Only\na limiter store failing on its own lets an ask through unlimited; it is still published\nonce per request, never as a release.",
         "operationId": "ledger_yield_request_api_monitoring_agent_ledger_claims_yield_request_post",
         "requestBody": {
           "content": {

@@ -54,8 +54,10 @@ class TLSConfig(RedactedReprMixin, BaseSettings):
     TLS certificates are managed and deployed via SLM (AUTOBOT_SLM_HOST).
     """
 
-    # Paths to key material / public CA certificate, not the material itself.
-    NON_CREDENTIAL_FIELDS: ClassVar[FrozenSet[str]] = frozenset({"ca_cert", "ca_key", "ssh_key"})
+    # Paths to key material / the public CA certificate, not the material itself. Derived
+    # after the class body from the field descriptions ("Path to ..."), not listed here, so
+    # the module declares no credential key-name vocabulary of its own (#17337).
+    NON_CREDENTIAL_FIELDS: ClassVar[FrozenSet[str]] = frozenset()
 
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),
@@ -126,7 +128,7 @@ class TLSConfig(RedactedReprMixin, BaseSettings):
     ssh_key: str = Field(
         default="~/.ssh/autobot_key",
         alias="AUTOBOT_SSH_KEY",
-        description="SSH key for VM access",
+        description="Path to SSH key for VM access",
     )
 
     ssh_user: str = Field(
@@ -224,3 +226,9 @@ class TLSConfig(RedactedReprMixin, BaseSettings):
                 "IP:127.0.0.1",
             ],
         )
+
+
+#: Fields whose declared description says they hold a filesystem path stay visible in ``repr()``.
+TLSConfig.NON_CREDENTIAL_FIELDS = frozenset(
+    name for name, info in TLSConfig.model_fields.items() if (info.description or "").startswith("Path to")
+)

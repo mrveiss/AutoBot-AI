@@ -2888,6 +2888,13 @@ export interface paths {
         /**
          * Ledger Yield Request
          * @description Ask the holder of any claim to release it. Publishes a request; releases nothing.
+         *
+         *     The asker is the token's ``sub``; a token without one is a 401, never the shared
+         *     identity ``"None"`` (#18607). The per-person rate limit (``RateLimiter.acquire_window``)
+         *     fails OPEN if ITS store is unreachable -- the limiter's class policy. With Redis down the
+         *     ask never gets that far: the claim lookup before the limiter answers the typed 503. Only
+         *     a limiter store failing on its own lets an ask through unlimited; it is still published
+         *     once per request, never as a release.
          */
         post: operations["ledger_yield_request_api_monitoring_agent_ledger_claims_yield_request_post"];
         delete?: never;
@@ -14813,7 +14820,7 @@ export interface components {
             holder_task_id: string;
             /**
              * Reason
-             * @description Why; cut to the ledger's free-text cap
+             * @description Why; at most the ledger's free-text cap
              * @default
              */
             reason: string;
