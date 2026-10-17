@@ -29,6 +29,10 @@ on:
       # #15824: the ansible-core the guard runs is part of the guard.
       - 'constraints/ansible-core.txt'
       - 'autobot-slm-backend/ansible/inventory/group_vars/**'
+      # #17642: check_network_refusal.py evaluates every network_subnet/gateway definition
+      - 'autobot-slm-backend/ansible/inventory/*.yml'
+      - 'autobot-slm-backend/services/inventory_builder.py'
+      - 'install.sh'
       - 'autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml'
       - 'autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml'
       - 'autobot-slm-backend/ansible/playbooks/update-all-nodes.yml'
@@ -46,6 +50,7 @@ on:
       - 'tools/lint/check_role_facts_single_source.py'
       - 'tools/lint/check_test_inventory_is_generated.py'
       - 'tools/lint/check_group_vars_no_shadow.py'
+      - 'tools/lint/check_network_refusal.py'
       - '.github/workflows/ansible-role-facts-test.yml'
   push:
     branches:
@@ -56,6 +61,10 @@ on:
       # #15824: the ansible-core the guard runs is part of the guard.
       - 'constraints/ansible-core.txt'
       - 'autobot-slm-backend/ansible/inventory/group_vars/**'
+      # #17642: check_network_refusal.py evaluates every network_subnet/gateway definition
+      - 'autobot-slm-backend/ansible/inventory/*.yml'
+      - 'autobot-slm-backend/services/inventory_builder.py'
+      - 'install.sh'
       - 'autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml'
       - 'autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml'
       - 'autobot-slm-backend/ansible/playbooks/update-all-nodes.yml'
@@ -73,6 +82,7 @@ on:
       - 'tools/lint/check_role_facts_single_source.py'
       - 'tools/lint/check_test_inventory_is_generated.py'
       - 'tools/lint/check_group_vars_no_shadow.py'
+      - 'tools/lint/check_network_refusal.py'
 
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever
@@ -124,6 +134,14 @@ jobs:
         working-directory: autobot-slm-backend/ansible
         run: |
           python3 tests/check_ansible_core_pinned.py
+
+      # #17642: network_subnet is a firewall and pg_hba source. Every definition must
+      # stop the play with its hint when unset or blank -- never fall back to an open
+      # range. Evaluated by the fleet's ansible-core, which the python suite lacks.
+      - name: "Every network_subnet/network_gateway definition refuses when unset (#17642)"
+        working-directory: autobot-slm-backend/ansible
+        run: |
+          python3 ../../tools/lint/check_network_refusal.py
 
       # #14678: tests/inventory/group_vars/all.yml is GENERATED, not tracked.
       # It was a third tracked copy of the role-active facts kept byte-equal by

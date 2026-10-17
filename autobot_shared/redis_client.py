@@ -102,8 +102,8 @@ import redis.asyncio as async_redis
 # redis_management now lives in autobot_shared (Issue #2313).
 from autobot_shared.redis_management.config import (
     PoolConfig,
-    RedisConfig,
     RedisConfigLoader,
+    RedisDbConfig,
 )
 from autobot_shared.redis_management.connection_manager import RedisConnectionManager
 from autobot_shared.redis_management.statistics import (
@@ -128,7 +128,7 @@ __all__ = [
     # Constants
     "DATABASE_MAPPING",
     # Configuration
-    "RedisConfig",
+    "RedisDbConfig",
     "RedisConfigLoader",
     "PoolConfig",
     # Statistics

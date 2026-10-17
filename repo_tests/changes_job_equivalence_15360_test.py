@@ -176,6 +176,9 @@ ALLOWED_ADDITIONS = {
             "autobot-frontend/public/favicon.ico",
             "autobot-frontend/public/favicon.svg",
             "autobot-slm-frontend/public/favicon.svg",
+            # #18500: the autofix steps moved into a composite action with a dispatch-only caller; its guards read both.
+            ".github/actions/generated-types-autofix/action.yml",
+            f"{WORKFLOWS}/dispatch-generated-types.yml",
         ]
     },
     # frontend_path_filter_mirror_test pins frontend-test.yml's on.push.paths to this file, so the

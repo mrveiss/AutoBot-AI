@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Pattern, Set
 
 from autobot_shared.logging_manager import get_logger
 
-from .models import PatternCategory, PatternLocation, PatternType
+from .models import CrossLangPatternCategory, CrossLangPatternType, PatternLocation
 
 logger = get_logger(__name__)
 
@@ -241,8 +241,8 @@ class PythonPatternExtractor(BasePatternExtractor):
         # Extract fields
         fields = self._extract_class_fields(node)
 
-        pattern_type = PatternType.DTO_DEFINITION
-        category = PatternCategory.DATA_TYPES
+        pattern_type = CrossLangPatternType.DTO_DEFINITION
+        category = CrossLangPatternCategory.DATA_TYPES
 
         return {
             "type": pattern_type,
@@ -316,11 +316,11 @@ class PythonPatternExtractor(BasePatternExtractor):
         )
 
         if is_validator:
-            pattern_type = PatternType.VALIDATION_RULE
-            category = PatternCategory.VALIDATION
+            pattern_type = CrossLangPatternType.VALIDATION_RULE
+            category = CrossLangPatternCategory.VALIDATION
         else:
-            pattern_type = PatternType.UTILITY_FUNCTION
-            category = PatternCategory.UTILITIES
+            pattern_type = CrossLangPatternType.UTILITY_FUNCTION
+            category = CrossLangPatternCategory.UTILITIES
 
         # Extract parameters
         params = []
@@ -354,8 +354,8 @@ class PythonPatternExtractor(BasePatternExtractor):
             line_num = self.source_code[: match.start()].count("\n") + 1
             patterns.append(
                 {
-                    "type": PatternType.DTO_DEFINITION,
-                    "category": PatternCategory.DATA_TYPES,
+                    "type": CrossLangPatternType.DTO_DEFINITION,
+                    "category": CrossLangPatternCategory.DATA_TYPES,
                     "name": match.group(1),
                     "location": self._create_location(line_num),
                     "code": self._get_line_content(line_num),
@@ -368,8 +368,8 @@ class PythonPatternExtractor(BasePatternExtractor):
             line_num = self.source_code[: match.start()].count("\n") + 1
             patterns.append(
                 {
-                    "type": PatternType.DTO_DEFINITION,
-                    "category": PatternCategory.DATA_TYPES,
+                    "type": CrossLangPatternType.DTO_DEFINITION,
+                    "category": CrossLangPatternCategory.DATA_TYPES,
                     "name": match.group(1),
                     "location": self._create_location(line_num),
                     "code": self._get_line_content(line_num),
@@ -397,8 +397,8 @@ class PythonPatternExtractor(BasePatternExtractor):
 
             patterns.append(
                 {
-                    "type": PatternType.API_ENDPOINT,
-                    "category": PatternCategory.API_CONTRACT,
+                    "type": CrossLangPatternType.API_ENDPOINT,
+                    "category": CrossLangPatternCategory.API_CONTRACT,
                     "name": f"{method} {path}",
                     "path": path,
                     "method": method,
@@ -420,8 +420,8 @@ class PythonPatternExtractor(BasePatternExtractor):
 
             patterns.append(
                 {
-                    "type": PatternType.VALIDATION_RULE,
-                    "category": PatternCategory.VALIDATION,
+                    "type": CrossLangPatternType.VALIDATION_RULE,
+                    "category": CrossLangPatternCategory.VALIDATION,
                     "name": f"validator_{line_num}",
                     "validation_type": validation_type,
                     "location": self._create_location(line_num, line_num + 5),
@@ -505,8 +505,8 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
 
             patterns.append(
                 {
-                    "type": PatternType.DTO_DEFINITION,
-                    "category": PatternCategory.DATA_TYPES,
+                    "type": CrossLangPatternType.DTO_DEFINITION,
+                    "category": CrossLangPatternCategory.DATA_TYPES,
                     "name": interface_name,
                     "location": self._create_location(line_num, end_line),
                     "code": interface_code,
@@ -771,8 +771,8 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
 
             patterns.append(
                 {
-                    "type": PatternType.TYPE_DEFINITION,
-                    "category": PatternCategory.DATA_TYPES,
+                    "type": CrossLangPatternType.TYPE_DEFINITION,
+                    "category": CrossLangPatternCategory.DATA_TYPES,
                     "name": type_name,
                     "location": self._create_location(line_num),
                     "code": type_code,
@@ -803,8 +803,8 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
 
             patterns.append(
                 {
-                    "type": PatternType.API_CALL,
-                    "category": PatternCategory.API_CONTRACT,
+                    "type": CrossLangPatternType.API_CALL,
+                    "category": CrossLangPatternCategory.API_CONTRACT,
                     "name": f"{method} {path}",
                     "path": path,
                     "method": method,
@@ -828,8 +828,8 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
 
             patterns.append(
                 {
-                    "type": PatternType.UTILITY_FUNCTION,
-                    "category": PatternCategory.UTILITIES,
+                    "type": CrossLangPatternType.UTILITY_FUNCTION,
+                    "category": CrossLangPatternCategory.UTILITIES,
                     "name": func_name,
                     "location": self._create_location(line_num),
                     "code": self._get_code_block(line_num, line_num + 5),
@@ -844,8 +844,8 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
 
             patterns.append(
                 {
-                    "type": PatternType.UTILITY_FUNCTION,
-                    "category": PatternCategory.UTILITIES,
+                    "type": CrossLangPatternType.UTILITY_FUNCTION,
+                    "category": CrossLangPatternCategory.UTILITIES,
                     "name": func_name,
                     "location": self._create_location(line_num),
                     "code": self._get_line_content(line_num),
@@ -866,8 +866,8 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
 
             patterns.append(
                 {
-                    "type": PatternType.VALIDATION_RULE,
-                    "category": PatternCategory.VALIDATION,
+                    "type": CrossLangPatternType.VALIDATION_RULE,
+                    "category": CrossLangPatternCategory.VALIDATION,
                     "name": f"validation_{line_num}",
                     "validation_type": validation_type,
                     "location": self._create_location(line_num),
@@ -891,8 +891,8 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
 
             patterns.append(
                 {
-                    "type": PatternType.VALIDATION_RULE,
-                    "category": PatternCategory.VALIDATION,
+                    "type": CrossLangPatternType.VALIDATION_RULE,
+                    "category": CrossLangPatternCategory.VALIDATION,
                     "name": schema_name,
                     "location": self._create_location(line_num),
                     "code": self._get_code_block(line_num, line_num + 10),

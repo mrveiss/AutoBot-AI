@@ -4818,8 +4818,8 @@
     "settings": "Terminal Settings",
     "fontSize": "Font Size",
     "theme": "Theme",
-    "dark": "Dark",
-    "light": "Light",
+    "dark": "Sombre",
+    "light": "Clair",
     "cursorStyle": "Cursor Style",
     "block": "Block",
     "underline": "Underline",
@@ -5091,7 +5091,6 @@
     "role": "Rôle :",
     "lastLogin": "Dernière connexion :",
     "preferences": "Préférences",
-    "theme": "Thème",
     "notifications": "Notifications",
     "emailNotifications": "Notifications par e-mail",
     "browserNotifications": "Notifications du navigateur",
@@ -5101,7 +5100,6 @@
     "showTooltips": "Afficher les infobulles",
     "enableAnimations": "Activer les animations",
     "savePreferences": "Enregistrer les préférences",
-    "appearance": "Apparence",
     "voiceChatDisplay": "Affichage du chat vocal",
     "fullScreen": "Plein écran",
     "sidePanel": "Panneau latéral",
@@ -5117,9 +5115,6 @@
     "pwTooShort": "Le mot de passe doit comporter au moins 8 caractères",
     "pwChanged": "Mot de passe modifié avec succès !",
     "never": "Jamais",
-    "themeLight": "Clair",
-    "themeDark": "Sombre",
-    "themeAuto": "Automatique",
     "tabDevices": "Tab devices"
   },
   "charts": {
@@ -5792,11 +5787,6 @@
       "postExecutionFailed": "La commande s'est exécutée, mais une étape ultérieure a échoué. Sa sortie est affichée ; certaines mises à jour peuvent manquer.",
       "enterComment": "Please enter a comment before submitting"
     },
-    "darkModeToggle": {
-      "switchToLight": "Switch to light mode",
-      "switchToDark": "Switch to dark mode",
-      "toggleDarkMode": "Toggle dark mode"
-    },
     "dataTable": {
       "sortBy": "Sort by {column}",
       "actions": "Actions",
@@ -5918,8 +5908,8 @@
       "selectTheme": "Select theme",
       "switchToLight": "Switch to light mode",
       "switchToDark": "Switch to dark mode",
-      "light": "Light",
-      "dark": "Dark"
+      "light": "Clair",
+      "dark": "Sombre"
     },
     "toastContainer": {
       "notifications": "Notifications",
@@ -7944,7 +7934,6 @@
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents",
     "agentActivity": "Activité de l'agent",
-    "switchLanguage": "Switch language",
     "openMainMenu": "Open main menu",
     "skipToContent": "Aller au contenu principal",
     "services": "Services",
@@ -8947,6 +8936,7 @@
         "agent": "Agent",
         "kind": "Type",
         "status": "Statut",
+        "task": "Tâche en cours",
         "detail": "Détail",
         "scope": "Portée",
         "mode": "Mode",

@@ -2888,6 +2888,13 @@ export interface paths {
         /**
          * Ledger Yield Request
          * @description Ask the holder of any claim to release it. Publishes a request; releases nothing.
+         *
+         *     The asker is the token's ``sub``; a token without one is a 401, never the shared
+         *     identity ``"None"`` (#18607). The per-person rate limit (``RateLimiter.acquire_window``)
+         *     fails OPEN if ITS store is unreachable -- the limiter's class policy. With Redis down the
+         *     ask never gets that far: the claim lookup before the limiter answers the typed 503. Only
+         *     a limiter store failing on its own lets an ask through unlimited; it is still published
+         *     once per request, never as a release.
          */
         post: operations["ledger_yield_request_api_monitoring_agent_ledger_claims_yield_request_post"];
         delete?: never;
@@ -7965,6 +7972,71 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AutobotTeamCreate
+         * @description Schema for creating a team.
+         */
+        AutobotTeamCreate: {
+            /** Description */
+            description?: string | null;
+            /** Name */
+            name: string;
+            /** Organization Id */
+            organization_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AutobotTeamListResponse
+         * @description Schema for paginated team list response.
+         */
+        AutobotTeamListResponse: {
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Teams */
+            teams: components["schemas"]["AutobotTeamResponse"][];
+            /** Total */
+            total: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AutobotTeamResponse
+         * @description Schema for team response.
+         */
+        AutobotTeamResponse: {
+            /** Created At */
+            created_at: string;
+            /** Description */
+            description: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Organization Id */
+            organization_id: string | null;
+            /** Updated At */
+            updated_at: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AutobotTeamUpdate
+         * @description Schema for updating a team.
+         */
+        AutobotTeamUpdate: {
+            /** Description */
+            description?: string | null;
+            /** Name */
+            name?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * BackupCodesResponse
          * @description Response containing backup codes.
          */
@@ -9911,83 +9983,6 @@ export interface components {
             output?: string | null;
             /** Success */
             success: boolean;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * LLMConfig
-         * @description Full LLM configuration stored in SLM settings.
-         */
-        LLMConfig: {
-            /**
-             * Active Provider
-             * @default ollama
-             */
-            active_provider: string;
-            /**
-             * Cpu Models
-             * @default []
-             */
-            cpu_models: string[];
-            /**
-             * Flash Attention
-             * @default true
-             */
-            flash_attention: boolean;
-            /**
-             * Gpu Models
-             * @default []
-             */
-            gpu_models: string[];
-            /**
-             * Keep Alive
-             * @default 10m
-             */
-            keep_alive: string;
-            /**
-             * Kv Cache Type
-             * @default q8_0
-             */
-            kv_cache_type: string;
-            /**
-             * Max Loaded Models
-             * @default 5
-             */
-            max_loaded_models: number;
-            /**
-             * Num Parallel
-             * @default 4
-             */
-            num_parallel: number;
-            /**
-             * Ollama Host
-             * @default 0.0.0.0
-             */
-            ollama_host: string;
-            /**
-             * Ollama Port
-             * @default 11434
-             */
-            ollama_port: number;
-            /**
-             * Providers
-             * @default []
-             */
-            providers: components["schemas"]["LLMProviderConfig"][];
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * LLMConfigResponse
-         * @description Response wrapper for LLM config.
-         */
-        LLMConfigResponse: {
-            config: components["schemas"]["LLMConfig"];
-            /**
-             * Message
-             * @default OK
-             */
-            message: string;
         } & {
             [key: string]: unknown;
         };
@@ -13501,6 +13496,83 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * SlmLLMConfig
+         * @description Full LLM configuration stored in SLM settings.
+         */
+        SlmLLMConfig: {
+            /**
+             * Active Provider
+             * @default ollama
+             */
+            active_provider: string;
+            /**
+             * Cpu Models
+             * @default []
+             */
+            cpu_models: string[];
+            /**
+             * Flash Attention
+             * @default true
+             */
+            flash_attention: boolean;
+            /**
+             * Gpu Models
+             * @default []
+             */
+            gpu_models: string[];
+            /**
+             * Keep Alive
+             * @default 10m
+             */
+            keep_alive: string;
+            /**
+             * Kv Cache Type
+             * @default q8_0
+             */
+            kv_cache_type: string;
+            /**
+             * Max Loaded Models
+             * @default 5
+             */
+            max_loaded_models: number;
+            /**
+             * Num Parallel
+             * @default 4
+             */
+            num_parallel: number;
+            /**
+             * Ollama Host
+             * @default 0.0.0.0
+             */
+            ollama_host: string;
+            /**
+             * Ollama Port
+             * @default 11434
+             */
+            ollama_port: number;
+            /**
+             * Providers
+             * @default []
+             */
+            providers: components["schemas"]["LLMProviderConfig"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SlmLLMConfigResponse
+         * @description Response wrapper for LLM config.
+         */
+        SlmLLMConfigResponse: {
+            config: components["schemas"]["SlmLLMConfig"];
+            /**
+             * Message
+             * @default OK
+             */
+            message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * StepCompleteRequest
          * @description Request to mark a wizard step as completed.
          */
@@ -13721,36 +13793,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * TeamCreate
-         * @description Schema for creating a team.
-         */
-        TeamCreate: {
-            /** Description */
-            description?: string | null;
-            /** Name */
-            name: string;
-            /** Organization Id */
-            organization_id?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * TeamListResponse
-         * @description Schema for paginated team list response.
-         */
-        TeamListResponse: {
-            /** Limit */
-            limit: number;
-            /** Offset */
-            offset: number;
-            /** Teams */
-            teams: components["schemas"]["TeamResponse"][];
-            /** Total */
-            total: number;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * TeamMemberAdd
          * @description Schema for adding a member to a team.
          */
@@ -13765,41 +13807,6 @@ export interface components {
              * Format: uuid
              */
             user_id: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * TeamResponse
-         * @description Schema for team response.
-         */
-        TeamResponse: {
-            /** Created At */
-            created_at: string;
-            /** Description */
-            description: string | null;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Name */
-            name: string;
-            /** Organization Id */
-            organization_id: string | null;
-            /** Updated At */
-            updated_at: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * TeamUpdate
-         * @description Schema for updating a team.
-         */
-        TeamUpdate: {
-            /** Description */
-            description?: string | null;
-            /** Name */
-            name?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -14813,7 +14820,7 @@ export interface components {
             holder_task_id: string;
             /**
              * Reason
-             * @description Why; cut to the ledger's free-text cap
+             * @description Why; at most the ledger's free-text cap
              * @default
              */
             reason: string;
@@ -15912,7 +15919,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TeamListResponse"];
+                    "application/json": components["schemas"]["AutobotTeamListResponse"];
                 };
             };
             /** @description Validation Error */
@@ -15935,7 +15942,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TeamCreate"];
+                "application/json": components["schemas"]["AutobotTeamCreate"];
             };
         };
         responses: {
@@ -15945,7 +15952,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TeamResponse"];
+                    "application/json": components["schemas"]["AutobotTeamResponse"];
                 };
             };
             /** @description Validation Error */
@@ -15976,7 +15983,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TeamResponse"];
+                    "application/json": components["schemas"]["AutobotTeamResponse"];
                 };
             };
             /** @description Validation Error */
@@ -16030,7 +16037,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TeamUpdate"];
+                "application/json": components["schemas"]["AutobotTeamUpdate"];
             };
         };
         responses: {
@@ -16040,7 +16047,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TeamResponse"];
+                    "application/json": components["schemas"]["AutobotTeamResponse"];
                 };
             };
             /** @description Validation Error */
@@ -25024,7 +25031,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LLMConfigResponse"];
+                    "application/json": components["schemas"]["SlmLLMConfigResponse"];
                 };
             };
         };
@@ -25038,7 +25045,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LLMConfig"];
+                "application/json": components["schemas"]["SlmLLMConfig"];
             };
         };
         responses: {
@@ -25048,7 +25055,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LLMConfigResponse"];
+                    "application/json": components["schemas"]["SlmLLMConfigResponse"];
                 };
             };
             /** @description Validation Error */

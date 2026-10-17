@@ -83,10 +83,11 @@ except ImportError:  # pragma: no cover
 READ_PATHS = ("claims", "waitlists", "contention", "conflicts", "activity", "dev-loop", "dev-loop/5", "sources")
 
 
-def _client(role: str) -> TestClient:
+def _client(role: str, sub: str | None = "someone") -> TestClient:
     app = FastAPI()
     app.include_router(ledger_api.router, prefix="/api/monitoring")
-    app.dependency_overrides[get_current_user] = lambda: {"sub": "someone", "role": role, "admin": role == "admin"}
+    user = {"role": role, "admin": role == "admin"} | ({"sub": sub} if sub is not None else {})
+    app.dependency_overrides[get_current_user] = lambda: user
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -215,12 +216,21 @@ async def yield_env(redis, monkeypatch):
     yield redis, pubsub
 
 
-def _ask(role: str, holder: str = "t-u", scope: str = "path:u/f"):
-    return _client(role).post(YIELD_URL, json={"scope": scope, "holder_task_id": holder, "reason": "r" * 1000})
+def _ask(
+    role: str, holder: str = "t-u", scope: str = "path:u/f", reason: str | None = None, sub: str | None = "someone"
+):
+    from autobot_shared.coordination import ledger_events
+
+    body = {
+        "scope": scope,
+        "holder_task_id": holder,
+        "reason": "r" * ledger_events.TEXT_CAP if reason is None else reason,
+    }
+    return _client(role, sub=sub).post(YIELD_URL, json=body)
 
 
 @pytest.mark.asyncio
-async def test_an_admin_asks_for_an_install_wide_claim_and_it_is_published_capped_recorded_and_kept_18599(yield_env):
+async def test_an_admin_asks_for_an_install_wide_claim_and_it_is_published_recorded_and_kept_18599(yield_env):
     from autobot_shared.coordination import ledger_events
 
     redis, pubsub = yield_env
@@ -240,6 +250,31 @@ async def test_an_admin_asks_for_an_install_wide_claim_and_it_is_published_cappe
     assert [e["type"] for e in await ledger_events.read_events(redis)] == ["yield_requested"]
     assert [c.task_id for c in await wc_mod.list_claims()] == ["t-u"]  # asking released nothing
     assert _ask("admin").status_code == 429  # a repeat inside the window
+
+
+@pytest.mark.asyncio
+async def test_an_oversized_request_is_a_422_at_parse_time_and_nothing_is_sent_18607(yield_env):
+    from autobot_shared.coordination import ledger_events
+    from autobot_shared.coordination.ledger_schemas import ID_MAX_LEN, SCOPE_MAX_LEN
+
+    redis, pubsub = yield_env
+    await try_acquire("path:u/f", agent_id="dev-session", task_id="t-u", intent="x")
+    assert _ask("admin", reason="r" * (ledger_events.TEXT_CAP + 1)).status_code == 422
+    assert _ask("admin", holder="t" * (ID_MAX_LEN + 1)).status_code == 422
+    assert _ask("admin", scope="path:" + "s" * SCOPE_MAX_LEN).status_code == 422
+    assert _ask("admin", holder="").status_code == 422
+    assert await pubsub.get_message(ignore_subscribe_messages=True, timeout=0.2) is None
+    assert await ledger_events.read_events(redis) == []
+
+
+@pytest.mark.asyncio
+async def test_a_token_without_a_subject_is_401_never_the_shared_user_none_18607(yield_env):
+    redis, pubsub = yield_env
+    await try_acquire("path:u/f", agent_id="dev-session", task_id="t-u", intent="x")
+    assert _ask("admin", sub=None).status_code == 401
+    assert _ask("admin", sub="").status_code == 401
+    assert await pubsub.get_message(ignore_subscribe_messages=True, timeout=0.2) is None
+    assert _ask("admin").status_code == 200  # a real subject still asks, and its window is untouched
 
 
 @pytest.mark.asyncio

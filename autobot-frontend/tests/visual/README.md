@@ -149,7 +149,7 @@ Coverage = whatever has a `*.stories.ts`. Currently:
 **Gaps worth filling** (touched recently, no story → no visual coverage):
 
 - `ui/Icon.vue` (added in #4805 — the icon registry)
-- `ui/ThemeToggle.vue`, `ui/DarkModeToggle.vue`
+- `ui/ThemeToggle.vue`
 - `ui/BaseModal.vue`, `ui/CommandPermissionDialog.vue`, `ui/PreferencesPanel.vue`
 - `ui/HostSelector.vue`, `ui/HostSelectionDialog.vue`
 - `ui/ToastContainer.vue`

@@ -111,6 +111,21 @@ describe('AgentLedgerView (#18391)', () => {
     expect(buttons.map((b) => b.attributes('aria-describedby'))).toEqual(ids)
   })
 
+  it('shows what a busy agent is working on, and nothing for an idle one (#18391 AC1)', async () => {
+    const agent = { kind: 'company_os', tenant_id: 'c1', detail: 'writer', last_seen: 1 }
+    serve({
+      presence: json(200, { agents: [
+        { ...agent, name: 'busy-one', busy: true, current_task: { id: 'wi-1', title: 'Draft the Q3 report' } },
+        { ...agent, name: 'idle-one', busy: false, current_task: null },
+      ], count: 2 }),
+    })
+    const w = mount(AgentLedgerView, { global: { plugins: [i18n] } })
+    await flushPromises()
+
+    expect(w.get('thead').text()).toContain(L.col.task)
+    expect(w.findAll('[data-testid="ledger-current-task"]').map((c) => c.text())).toEqual(['Draft the Q3 report', ''])
+  })
+
   it('tabs follow WAI-ARIA: one Tab stop, arrows and Home/End move selection and focus, panels are wired', async () => {
     serve({})
     const w = mount(AgentLedgerView, { global: { plugins: [i18n] }, attachTo: document.body })

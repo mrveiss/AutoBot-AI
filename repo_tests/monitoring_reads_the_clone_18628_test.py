@@ -20,6 +20,8 @@ from __future__ import annotations
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint._scan_helpers import tracked_paths
+
 _ROOT = repo_root()
 _SOURCE_KEYS = ("src", "paths")
 
@@ -29,7 +31,7 @@ def _module_args(task: dict) -> list[dict]:
 
 
 def test_no_monitoring_task_reads_a_source_from_the_deploy_dir() -> None:
-    files = sorted(_ROOT.glob("autobot-slm-backend/ansible/roles/monitoring/tasks/*.yml"))
+    files = [_ROOT / p for p in tracked_paths(_ROOT, "autobot-slm-backend/ansible/roles/monitoring/tasks/*.yml")]
     assert files, "no monitoring task files found -- this guard would check nothing"
     offenders, sources = [], 0
     for path in files:

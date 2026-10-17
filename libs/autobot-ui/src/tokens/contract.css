@@ -91,6 +91,7 @@
   --aui-space-6: 1.5rem;
 
   /* ---- Layering ------------------------------------------------------ */
+  --aui-z-dropdown: 100;
   --aui-z-modal: 1000;
   --aui-z-tooltip: 1200;
 

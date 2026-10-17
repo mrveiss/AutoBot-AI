@@ -53,7 +53,7 @@ LOG_LEVEL_PRIORITIES = ["CRITICAL", "ERROR", "WARNING", "WARN", "INFO", "DEBUG"]
 # ============================================================================
 
 
-class LogPatternMiner:
+class AnalyticsLogPatternMiner:
     """Engine for mining patterns from log data"""
 
     # Common log patterns to detect
@@ -540,7 +540,7 @@ class LogPatternMiner:
 
 
 # Global miner instance
-pattern_miner = LogPatternMiner()
+pattern_miner = AnalyticsLogPatternMiner()
 
 
 # =============================================================================

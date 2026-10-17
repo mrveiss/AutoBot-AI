@@ -15,9 +15,10 @@ that refusal again, so none may exist.
 over the host's route on a LAN using the same /24. The range now comes only
 from AUTOBOT_DOCKER_MGMT_PREFIX, picked per host by docker/pick_mgmt_prefix.py.
 
-**What these do not cover.** No play is run and no container started: the
-refusal is checked as the definition's text and the host-detection function is
-run with a stubbed ``ip``. A real install on a host whose network cannot be
+**What these do not cover.** No container is started, and ansible is not run
+here -- the python suite has no ansible binary. The refusal is evaluated with
+the fleet's ansible-core by tools/lint/check_network_refusal.py
+in ansible-role-facts-test, over the same definitions this file reads. A real install on a host whose network cannot be
 detected is the end-to-end proof.
 """
 
@@ -39,20 +40,20 @@ from repo_tests._paths import repo_root
 
 _ROOT = repo_root()
 _ANSIBLE = _ROOT / "autobot-slm-backend" / "ansible"
-_DEFINITION_FILES = [
-    *_ROOT.glob("autobot-slm-backend/ansible/**/*.yml"),
-    _ROOT / "install.sh",
-]
 _BUILDER = _ROOT / "autobot-slm-backend/services/inventory_builder.py"
-_DEF_RE = re.compile(r"""["']?network_(subnet|gateway)["']?\s*:\s*\(?\s*\n?\s*["'](\{\{.*?\}\})""", re.S)
+
+
+def _check_script():
+    path = _ROOT / "tools/lint/check_network_refusal.py"
+    spec = importlib.util.spec_from_file_location("check_network_refusal", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 def _definitions() -> list[tuple[str, str]]:
-    found = []
-    for path in _DEFINITION_FILES:
-        text = path.read_text(encoding="utf-8")
-        found += [(path.name, m.group(2)) for m in _DEF_RE.finditer(text) if "lookup(" in m.group(2)]
-    return found
+    """The population the ansible-role-facts-test job evaluates with real ansible (#17642)."""
+    return _check_script().definitions()
 
 
 def test_every_network_definition_refuses_instead_of_falling_back() -> None:
@@ -90,33 +91,11 @@ def test_every_secrets_lookup_reaches_the_refusal() -> None:
     assert "2>/dev/null || true')" in _BUILDER.read_text(encoding="utf-8")
 
 
-@pytest.mark.skipif(not shutil.which("ansible"), reason="ansible is not installed on this runner")
-def test_ansible_stops_with_the_hint_when_the_subnet_is_unset(tmp_path: Path) -> None:
-    """The definition itself, evaluated by ansible: unset -> the hint; set -> the value."""
-    definition = next(d for f, d in _definitions() if f == "slm-nodes.yml" and "NETWORK_SUBNET" in d)
-    definition = definition.replace("/etc/autobot/slm-secrets.env", str(tmp_path / "absent.env"))
-    inventory = {
-        "all": {"hosts": {"localhost": {"ansible_connection": "local"}}, "vars": {"network_subnet": definition}}
-    }
-    inv = tmp_path / "inv.yml"
-    inv.write_text(yaml.safe_dump(inventory), encoding="utf-8")
-    cmd = ["ansible", "localhost", "-i", str(inv), "-m", "debug", "-a", "msg={{ network_subnet }}"]
-    base = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "ANSIBLE_LOCAL_TEMP": str(tmp_path)}
-    unset = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=base)
-    assert unset.returncode != 0, unset.stdout
-    assert "never falls back to an open range" in unset.stdout + unset.stderr, unset.stdout + unset.stderr
-    blank = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env={**base, "NETWORK_SUBNET": "  "})
-    assert blank.returncode != 0, "a whitespace-only NETWORK_SUBNET was accepted as a value"
-    given = subprocess.run(
-        cmd, capture_output=True, text=True, timeout=120, env={**base, "NETWORK_SUBNET": "198.51.100.0/24"}
-    )
-    assert given.returncode == 0 and "198.51.100.0/24" in given.stdout, given.stdout + given.stderr
-
-
 def test_no_use_of_network_subnet_supplies_its_own_default() -> None:
     uses = [
         f"{p.relative_to(_ROOT)}:{n}"
-        for p in _ROOT.glob("autobot-slm-backend/ansible/**/*.yml")
+        for p in _check_script().definition_files()
+        if p.suffix == ".yml"
         for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
         if re.search(r"network_(subnet|gateway)\s*\|\s*default", line)
     ]
