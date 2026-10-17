@@ -30,7 +30,7 @@ import functools
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.coordination import ledger_read
@@ -142,6 +142,14 @@ async def ledger_dev_loop_history(
     return await ledger_read.dev_loop_history(issue, limit)
 
 
+def _asker(user: dict) -> str:
+    """The token's subject; without one, every such caller would share one rate-limit key."""
+    sub = user.get("sub")
+    if not sub:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="token has no subject")
+    return str(sub)
+
+
 async def _redis() -> Any:
     client = await get_async_redis_client(database="main")
     if client is None:
@@ -165,10 +173,18 @@ async def _record(event_type: str, **fields: Any) -> None:
 )
 @serve_ledger
 async def ledger_yield_request(body: YieldRequestBody, user: dict = Depends(get_current_user)) -> YieldRequestResponse:
-    """Ask the holder of any claim to release it. Publishes a request; releases nothing."""
+    """Ask the holder of any claim to release it. Publishes a request; releases nothing.
+
+    The asker is the token's ``sub``; a token without one is a 401, never the shared
+    identity ``"None"`` (#18607). The per-person rate limit (``RateLimiter.acquire_window``)
+    fails OPEN if ITS store is unreachable -- the limiter's class policy. With Redis down the
+    ask never gets that far: the claim lookup before the limiter answers the typed 503. Only
+    a limiter store failing on its own lets an ask through unlimited; it is still published
+    once per request, never as a release.
+    """
     token = await ask_holder_to_release(
         None,
-        user_id=str(user.get("sub")),
+        user_id=_asker(user),
         scope=body.scope,
         holder_task_id=body.holder_task_id,
         reason=body.reason,

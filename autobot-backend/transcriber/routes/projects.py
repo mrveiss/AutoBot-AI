@@ -9,13 +9,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from transcriber.database import Database
 from transcriber.deps import DEFAULT_USER, authenticate, caller_can_access, caller_id_of, caller_is_admin, get_db
-from transcriber.models import ProjectCreate, ProjectOut, ProjectUpdate
+from transcriber.models import ProjectOut, TranscriberProjectCreate, TranscriberProjectUpdate
 
 router = APIRouter(tags=["transcriber-projects"], dependencies=[Depends(authenticate)])
 
 
 @router.post("/projects", response_model=ProjectOut, status_code=201)
-async def create_project(body: ProjectCreate, request: Request, db: Database = Depends(get_db)):
+async def create_project(body: TranscriberProjectCreate, request: Request, db: Database = Depends(get_db)):
     pid = await db.create_project(body.name, body.description, user_id=caller_id_of(request))
     project = await db.get_project(pid)
     return ProjectOut(**project)
@@ -48,7 +48,7 @@ async def get_project(project_id: int, request: Request, db: Database = Depends(
 @router.patch("/projects/{project_id}", response_model=ProjectOut)
 async def update_project(
     project_id: int,
-    body: ProjectUpdate,
+    body: TranscriberProjectUpdate,
     request: Request,
     db: Database = Depends(get_db),
 ):

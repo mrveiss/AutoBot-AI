@@ -19,6 +19,14 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from autobot_shared.coordination.ledger_events import TEXT_CAP
+from autobot_shared.env_utils import env_int_clamped
+
+#: Longest scope a request may name (`kind:path`); a longer body is a 422 at parse time (#18607).
+SCOPE_MAX_LEN = env_int_clamped("AUTOBOT_LEDGER_SCOPE_MAX_LEN", 512, min_v=64, max_v=4096)
+#: Longest task id a request may name; a longer body is a 422 at parse time (#18607).
+ID_MAX_LEN = env_int_clamped("AUTOBOT_LEDGER_ID_MAX_LEN", 256, min_v=32, max_v=1024)
+
 
 class LedgerUnavailable(BaseModel):
     """The typed 503 body: the source could not be read, which is not 'nothing there'."""
@@ -106,12 +114,22 @@ class ConflictsResponse(BaseModel):
     count: int
 
 
+class PresenceTaskRow(BaseModel):
+    """What a busy agent is working on (#18391): for a Company OS agent, its running run's work item."""
+
+    id: str
+    title: str
+
+
 class PresenceRow(BaseModel):
     kind: str
     tenant_id: str | None
     name: str
     busy: bool
     detail: str | None = None
+    current_task: PresenceTaskRow | None = Field(
+        default=None, description="Null when idle, or when the agent's kind has no notion of a task"
+    )
     last_seen: float
 
 
@@ -183,9 +201,11 @@ class LedgerSourcesResponse(BaseModel):
 class YieldRequestBody(BaseModel):
     """A person asks the holder of a claim to release it (#18599). Asking never releases anything."""
 
-    scope: str = Field(description="The claimed scope, e.g. `path:src/app.py`")
-    holder_task_id: str = Field(description="The task that holds the claim, as the claims screen shows it")
-    reason: str = Field("", description="Why; cut to the ledger's free-text cap")
+    scope: str = Field(min_length=1, max_length=SCOPE_MAX_LEN, description="The claimed scope, e.g. `path:src/app.py`")
+    holder_task_id: str = Field(
+        min_length=1, max_length=ID_MAX_LEN, description="The task that holds the claim, as the claims screen shows it"
+    )
+    reason: str = Field("", max_length=TEXT_CAP, description="Why; at most the ledger's free-text cap")
 
 
 class YieldRequestResponse(BaseModel):

@@ -55,6 +55,8 @@ def _repo(root: Path, ssot: str | None, *, fillers: int = 0, sites: str | None =
     _seed(root)
     if ssot is not None:
         (root / "autobot_shared" / "ssot_config.py").write_text(ssot, encoding="utf-8")
+        # The drift checker also reads the TLS SSOT module (#17312); an empty one adds no defaults.
+        (root / "autobot_shared" / "ssot_tls.py").write_text("", encoding="utf-8")
     if sites is not None:
         (root / "autobot-backend").mkdir()
         (root / "autobot-backend" / "plant.py").write_text(sites, encoding="utf-8")
@@ -154,3 +156,13 @@ def test_a_planted_getenv_drift_exits_one(tmp_path: Path, drift: bool, expected:
 
     assert result.returncode == expected, result.stdout + result.stderr
     assert ("disagrees with ssot_config" in result.stderr) is drift
+
+
+def test_a_missing_tls_ssot_source_is_a_loud_refusal(tmp_path: Path) -> None:
+    """The drift checker never skips an SSOT field source it cannot find (#17312)."""
+    repo = _repo(tmp_path / "no_tls", _ssot_source(False), fillers=PY_FLOOR, sites=_getenv_sites(False))
+    (repo / "autobot_shared" / "ssot_tls.py").unlink()
+    _git(repo, "add", "-A")
+    result = _run_isolated(repo, "check_getenv_ssot_drift.py")
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "ssot_tls.py is not in" in result.stderr

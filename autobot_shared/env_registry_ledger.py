@@ -57,6 +57,34 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_LEDGER_SCOPE_MAX_LEN",
+        type=int,
+        default=512,
+        description=(
+            "Longest claim scope a yield request may name (#18607). A longer request body is "
+            "refused with HTTP 422 at parse time, before anything reads it."
+        ),
+        component="orchestration",
+        range=(64, 4096),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LEDGER_ID_MAX_LEN",
+        type=int,
+        default=256,
+        description=(
+            "Longest holder task id a yield request may name (#18607). A longer request body is "
+            "refused with HTTP 422 at parse time, before anything reads it."
+        ),
+        component="orchestration",
+        range=(32, 1024),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_LEDGER_YIELD_ASK_WINDOW_S",
         type=int,
         default=60,

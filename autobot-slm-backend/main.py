@@ -83,9 +83,9 @@ from middleware import install_middleware
 from services.a2a_card_fetcher import start_card_refresh_task
 from services.auth import require_service_management, require_service_management_or_internal
 from services.compose_fleet import (
-    _SLM_MGMT_IP,
     _compose_nodes_enabled,
     seed_compose_nodes,
+    slm_mgmt_ip,
     start_compose_heartbeat,
 )
 from services.database import db_service
@@ -415,7 +415,7 @@ async def _ensure_local_node() -> None:
     if _compose_nodes_enabled():
         # Use the SLM's static address on the shared autobot-mgmt network so the
         # manager matches the other compose nodes' IP range (#9761).
-        local_ip = _SLM_MGMT_IP
+        local_ip = slm_mgmt_ip()
     elif ip_match:
         local_ip = ip_match.group(1)
     else:

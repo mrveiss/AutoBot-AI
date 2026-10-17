@@ -208,12 +208,12 @@ from .llm_pattern_analyzer import (
 from .log_pattern_miner import (
     Anomaly,
     AnomalyType,
-    LogEntry,
+    DetectedLogPattern,
     LogLevel,
-    LogPattern,
     LogPatternMiner,
+    LogPatternType,
     MiningResult,
-    PatternType,
+    ParsedLogEntry,
     SessionFlow,
     analyze_logs,
     get_anomaly_types,
@@ -230,20 +230,18 @@ from .multi_language_scanner import scan_directory as scan_dir_multi
 from .multi_language_scanner import scan_file as scan_file_multi
 
 # Code Pattern Detection & Optimization (Issue #208)
+from .pattern_analysis import CodePatternType  # Types; Refactoring types; Storage functions
 from .pattern_analysis import (
     CodeLocation,
-    CodePattern,
     CodePatternAnalyzer,
     ComplexityAnalyzer,
     ComplexityHotspot,
+    DetectedCodePattern,
     DuplicatePattern,
     ModularizationSuggestion,
     PatternAnalysisReport,
     PatternCluster,
     PatternSeverity,
-)
-from .pattern_analysis import PatternType as CodePatternType  # Types; Refactoring types; Storage functions
-from .pattern_analysis import (
     RefactoringSuggestion,
     RefactoringSuggestionGenerator,
     RegexOpportunity,
@@ -374,12 +372,12 @@ __all__ = [
     # Log pattern mining (Issue #226)
     "Anomaly",
     "AnomalyType",
-    "LogEntry",
+    "ParsedLogEntry",
     "LogLevel",
-    "LogPattern",
+    "DetectedLogPattern",
     "LogPatternMiner",
     "MiningResult",
-    "PatternType",
+    "LogPatternType",
     "SessionFlow",
     "analyze_logs",
     "get_anomaly_types",
@@ -521,7 +519,7 @@ __all__ = [
     "RefactoringSuggestionGenerator",
     "RegexPatternDetector",
     "CodeLocation",
-    "CodePattern",
+    "DetectedCodePattern",
     "ComplexityHotspot",
     "DuplicatePattern",
     "ModularizationSuggestion",

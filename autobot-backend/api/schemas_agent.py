@@ -648,7 +648,7 @@ class GoalRequest(BaseModel):
     context: Dict[str, Any] = {}
 
 
-class GoalResponse(BaseModel):
+class AgentGoalResponse(BaseModel):
     """Response for POST /intelligent-agent/process."""
 
     success: bool

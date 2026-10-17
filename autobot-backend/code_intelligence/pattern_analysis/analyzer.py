@@ -23,12 +23,12 @@ from .regex_detector import RegexPatternDetector
 from .storage import store_patterns_batch
 from .types import (
     CodeLocation,
-    CodePattern,
+    CodePatternType,
+    DetectedCodePattern,
     DuplicatePattern,
     ModularizationSuggestion,
     PatternAnalysisReport,
     PatternSeverity,
-    PatternType,
 )
 
 logger = get_logger(__name__)
@@ -705,7 +705,7 @@ class CodePatternAnalyzer:
                     if mod_suggestion:
                         modularization.append(mod_suggestion)
                 else:
-                    # Convert to generic CodePattern
+                    # Convert to generic DetectedCodePattern
                     code_pattern = self._anti_pattern_to_code_pattern(pattern)
                     if code_pattern:
                         other_patterns.append(code_pattern)
@@ -786,7 +786,7 @@ class CodePatternAnalyzer:
             canonical = group.instances[0].fragment.source_code or ""
 
         return DuplicatePattern(
-            pattern_type=PatternType.DUPLICATE_CODE,
+            pattern_type=CodePatternType.DUPLICATE_CODE,
             severity=severity,
             description=f"{group.clone_type.value} clone: {len(group.instances)} occurrences",
             locations=locations,
@@ -840,7 +840,7 @@ class CodePatternAnalyzer:
         )
 
         return ModularizationSuggestion(
-            pattern_type=PatternType.MODULARIZATION,
+            pattern_type=CodePatternType.MODULARIZATION,
             severity=severity_map.get(pattern.severity.value.lower(), PatternSeverity.MEDIUM),
             description=pattern.description,
             locations=[location],
@@ -856,14 +856,14 @@ class CodePatternAnalyzer:
             ],
         )
 
-    def _anti_pattern_to_code_pattern(self, pattern) -> CodePattern | None:
-        """Convert anti-pattern to generic CodePattern.
+    def _anti_pattern_to_code_pattern(self, pattern) -> DetectedCodePattern | None:
+        """Convert anti-pattern to generic DetectedCodePattern.
 
         Args:
             pattern: AntiPatternResult
 
         Returns:
-            CodePattern or None
+            DetectedCodePattern or None
         """
         severity_map = {
             "critical": PatternSeverity.CRITICAL,
@@ -875,12 +875,12 @@ class CodePatternAnalyzer:
 
         # Map anti-pattern types to our pattern types
         type_map = {
-            "dead_code": PatternType.DEAD_CODE,
-            "circular_dependency": PatternType.COUPLING_ISSUE,
-            "message_chain": PatternType.COUPLING_ISSUE,
+            "dead_code": CodePatternType.DEAD_CODE,
+            "circular_dependency": CodePatternType.COUPLING_ISSUE,
+            "message_chain": CodePatternType.COUPLING_ISSUE,
         }
 
-        pattern_type = type_map.get(pattern.pattern_type.value.lower(), PatternType.COUPLING_ISSUE)
+        pattern_type = type_map.get(pattern.pattern_type.value.lower(), CodePatternType.COUPLING_ISSUE)
 
         location = CodeLocation(
             file_path=pattern.file_path,
@@ -889,7 +889,7 @@ class CodePatternAnalyzer:
             function_name=pattern.entity_name,
         )
 
-        return CodePattern(
+        return DetectedCodePattern(
             pattern_type=pattern_type,
             severity=severity_map.get(pattern.severity.value.lower(), PatternSeverity.MEDIUM),
             description=pattern.description,

@@ -91,6 +91,18 @@ PresenceKey = tuple[AgentKind, str | None, str]
 
 
 @dataclass(frozen=True)
+class PresenceTask:
+    """What a busy agent is working on (#18391), as its kind's own source names it.
+
+    For a Company OS agent that is the work item of its running heartbeat run --
+    the same row that makes it busy. Kinds whose source has no task leave it unset.
+    """
+
+    id: str
+    title: str
+
+
+@dataclass(frozen=True)
 class PresenceEntry:
     """One live agent, as `list_live()` reports it."""
 
@@ -100,6 +112,7 @@ class PresenceEntry:
     busy: bool
     instance_id: str
     detail: str | None = None
+    task: PresenceTask | None = None
     last_seen: float = field(default_factory=time.time)
 
 
@@ -109,6 +122,7 @@ class _Record:
     busy: bool
     detail: str | None
     last_seen: float
+    task: PresenceTask | None = None
 
 
 class AgentPresenceRegistry:
@@ -134,8 +148,9 @@ class AgentPresenceRegistry:
         instance_id: str,
         busy: bool,
         detail: str | None = None,
+        task: PresenceTask | None = None,
     ) -> None:
-        """Upsert one agent's live status. Call again to heartbeat.
+        """Upsert one agent's live status (and its current task, if any). Call again to heartbeat.
 
         A second `report()` for the same `(kind, tenant_id, name)` from a
         DIFFERENT `instance_id` is the squat case and is rejected -- the
@@ -162,7 +177,7 @@ class AgentPresenceRegistry:
                     f"{existing.instance_id!r}; refusing instance {instance_id!r}"
                 )
             was_busy = existing.busy if existing is not None else None
-            self._entries[key] = _Record(instance_id=instance_id, busy=busy, detail=detail, last_seen=now)
+            self._entries[key] = _Record(instance_id=instance_id, busy=busy, detail=detail, last_seen=now, task=task)
         if was_busy is True and busy is False:
             notify_agent_idle(kind=kind, tenant_id=tenant_id, name=name)
 
@@ -202,6 +217,7 @@ class AgentPresenceRegistry:
                     busy=rec.busy,
                     instance_id=rec.instance_id,
                     detail=rec.detail,
+                    task=rec.task,
                     last_seen=rec.last_seen,
                 )
                 for (kind, key_tenant, name), rec in live.items()

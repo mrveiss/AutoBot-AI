@@ -1621,6 +1621,163 @@
         "title": "AuditLogResponse",
         "type": "object"
       },
+      "AutobotTeamCreate": {
+        "description": "Schema for creating a team.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "organization_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organization Id"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "AutobotTeamCreate",
+        "type": "object"
+      },
+      "AutobotTeamListResponse": {
+        "description": "Schema for paginated team list response.",
+        "properties": {
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "teams": {
+            "items": {
+              "$ref": "#/components/schemas/AutobotTeamResponse"
+            },
+            "title": "Teams",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "teams",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "AutobotTeamListResponse",
+        "type": "object"
+      },
+      "AutobotTeamResponse": {
+        "description": "Schema for team response.",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "organization_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organization Id"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "organization_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AutobotTeamResponse",
+        "type": "object"
+      },
+      "AutobotTeamUpdate": {
+        "description": "Schema for updating a team.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "title": "AutobotTeamUpdate",
+        "type": "object"
+      },
       "BackupCodesResponse": {
         "description": "Response containing backup codes.",
         "properties": {
@@ -5686,95 +5843,6 @@
           "node_count"
         ],
         "title": "LLMApplyResponse",
-        "type": "object"
-      },
-      "LLMConfig": {
-        "description": "Full LLM configuration stored in SLM settings.",
-        "properties": {
-          "active_provider": {
-            "default": "ollama",
-            "title": "Active Provider",
-            "type": "string"
-          },
-          "cpu_models": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Cpu Models",
-            "type": "array"
-          },
-          "flash_attention": {
-            "default": true,
-            "title": "Flash Attention",
-            "type": "boolean"
-          },
-          "gpu_models": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Gpu Models",
-            "type": "array"
-          },
-          "keep_alive": {
-            "default": "10m",
-            "title": "Keep Alive",
-            "type": "string"
-          },
-          "kv_cache_type": {
-            "default": "q8_0",
-            "title": "Kv Cache Type",
-            "type": "string"
-          },
-          "max_loaded_models": {
-            "default": 5,
-            "title": "Max Loaded Models",
-            "type": "integer"
-          },
-          "num_parallel": {
-            "default": 4,
-            "title": "Num Parallel",
-            "type": "integer"
-          },
-          "ollama_host": {
-            "default": "0.0.0.0",
-            "title": "Ollama Host",
-            "type": "string"
-          },
-          "ollama_port": {
-            "default": 11434,
-            "title": "Ollama Port",
-            "type": "integer"
-          },
-          "providers": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/LLMProviderConfig"
-            },
-            "title": "Providers",
-            "type": "array"
-          }
-        },
-        "title": "LLMConfig",
-        "type": "object"
-      },
-      "LLMConfigResponse": {
-        "description": "Response wrapper for LLM config.",
-        "properties": {
-          "config": {
-            "$ref": "#/components/schemas/LLMConfig"
-          },
-          "message": {
-            "default": "OK",
-            "title": "Message",
-            "type": "string"
-          }
-        },
-        "required": [
-          "config"
-        ],
-        "title": "LLMConfigResponse",
         "type": "object"
       },
       "LLMProviderConfig": {
@@ -12995,6 +13063,95 @@
         "title": "SettingUpdate",
         "type": "object"
       },
+      "SlmLLMConfig": {
+        "description": "Full LLM configuration stored in SLM settings.",
+        "properties": {
+          "active_provider": {
+            "default": "ollama",
+            "title": "Active Provider",
+            "type": "string"
+          },
+          "cpu_models": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Cpu Models",
+            "type": "array"
+          },
+          "flash_attention": {
+            "default": true,
+            "title": "Flash Attention",
+            "type": "boolean"
+          },
+          "gpu_models": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Gpu Models",
+            "type": "array"
+          },
+          "keep_alive": {
+            "default": "10m",
+            "title": "Keep Alive",
+            "type": "string"
+          },
+          "kv_cache_type": {
+            "default": "q8_0",
+            "title": "Kv Cache Type",
+            "type": "string"
+          },
+          "max_loaded_models": {
+            "default": 5,
+            "title": "Max Loaded Models",
+            "type": "integer"
+          },
+          "num_parallel": {
+            "default": 4,
+            "title": "Num Parallel",
+            "type": "integer"
+          },
+          "ollama_host": {
+            "default": "0.0.0.0",
+            "title": "Ollama Host",
+            "type": "string"
+          },
+          "ollama_port": {
+            "default": 11434,
+            "title": "Ollama Port",
+            "type": "integer"
+          },
+          "providers": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/LLMProviderConfig"
+            },
+            "title": "Providers",
+            "type": "array"
+          }
+        },
+        "title": "SlmLLMConfig",
+        "type": "object"
+      },
+      "SlmLLMConfigResponse": {
+        "description": "Response wrapper for LLM config.",
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/SlmLLMConfig"
+          },
+          "message": {
+            "default": "OK",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "SlmLLMConfigResponse",
+        "type": "object"
+      },
       "StepCompleteRequest": {
         "description": "Request to mark a wizard step as completed.",
         "properties": {
@@ -13454,77 +13611,6 @@
         "title": "TLSEndpointsResponse",
         "type": "object"
       },
-      "TeamCreate": {
-        "description": "Schema for creating a team.",
-        "properties": {
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "name": {
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
-          },
-          "organization_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Organization Id"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "TeamCreate",
-        "type": "object"
-      },
-      "TeamListResponse": {
-        "description": "Schema for paginated team list response.",
-        "properties": {
-          "limit": {
-            "title": "Limit",
-            "type": "integer"
-          },
-          "offset": {
-            "title": "Offset",
-            "type": "integer"
-          },
-          "teams": {
-            "items": {
-              "$ref": "#/components/schemas/TeamResponse"
-            },
-            "title": "Teams",
-            "type": "array"
-          },
-          "total": {
-            "title": "Total",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "teams",
-          "total",
-          "limit",
-          "offset"
-        ],
-        "title": "TeamListResponse",
-        "type": "object"
-      },
       "TeamMemberAdd": {
         "description": "Schema for adding a member to a team.",
         "properties": {
@@ -13543,92 +13629,6 @@
           "user_id"
         ],
         "title": "TeamMemberAdd",
-        "type": "object"
-      },
-      "TeamResponse": {
-        "description": "Schema for team response.",
-        "properties": {
-          "created_at": {
-            "title": "Created At",
-            "type": "string"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "organization_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Organization Id"
-          },
-          "updated_at": {
-            "title": "Updated At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "description",
-          "organization_id",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "TeamResponse",
-        "type": "object"
-      },
-      "TeamUpdate": {
-        "description": "Schema for updating a team.",
-        "properties": {
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "maxLength": 100,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          }
-        },
-        "title": "TeamUpdate",
         "type": "object"
       },
       "TestErrorResponse": {
@@ -15609,17 +15609,22 @@
         "properties": {
           "holder_task_id": {
             "description": "The task that holds the claim, as the claims screen shows it",
+            "maxLength": 256,
+            "minLength": 1,
             "title": "Holder Task Id",
             "type": "string"
           },
           "reason": {
             "default": "",
-            "description": "Why; cut to the ledger's free-text cap",
+            "description": "Why; at most the ledger's free-text cap",
+            "maxLength": 280,
             "title": "Reason",
             "type": "string"
           },
           "scope": {
             "description": "The claimed scope, e.g. `path:src/app.py`",
+            "maxLength": 512,
+            "minLength": 1,
             "title": "Scope",
             "type": "string"
           }
@@ -17454,7 +17459,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TeamListResponse"
+                  "$ref": "#/components/schemas/AutobotTeamListResponse"
                 }
               }
             },
@@ -17488,7 +17493,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TeamCreate"
+                "$ref": "#/components/schemas/AutobotTeamCreate"
               }
             }
           },
@@ -17499,7 +17504,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TeamResponse"
+                  "$ref": "#/components/schemas/AutobotTeamResponse"
                 }
               }
             },
@@ -17588,7 +17593,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TeamResponse"
+                  "$ref": "#/components/schemas/AutobotTeamResponse"
                 }
               }
             },
@@ -17634,7 +17639,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TeamUpdate"
+                "$ref": "#/components/schemas/AutobotTeamUpdate"
               }
             }
           },
@@ -17645,7 +17650,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TeamResponse"
+                  "$ref": "#/components/schemas/AutobotTeamResponse"
                 }
               }
             },
@@ -24051,7 +24056,7 @@
     },
     "/api/monitoring/agent-ledger/claims/yield-request": {
       "post": {
-        "description": "Ask the holder of any claim to release it. Publishes a request; releases nothing.",
+        "description": "Ask the holder of any claim to release it. Publishes a request; releases nothing.\n\nThe asker is the token's ``sub``; a token without one is a 401, never the shared\nidentity ``\"None\"`` (#18607). The per-person rate limit (``RateLimiter.acquire_window``)\nfails OPEN if ITS store is unreachable -- the limiter's class policy. With Redis down the\nask never gets that far: the claim lookup before the limiter answers the typed 503. Only\na limiter store failing on its own lets an ask through unlimited; it is still published\nonce per request, never as a release.",
         "operationId": "ledger_yield_request_api_monitoring_agent_ledger_claims_yield_request_post",
         "requestBody": {
           "content": {
@@ -33438,7 +33443,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LLMConfigResponse"
+                  "$ref": "#/components/schemas/SlmLLMConfigResponse"
                 }
               }
             },
@@ -33462,7 +33467,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/LLMConfig"
+                "$ref": "#/components/schemas/SlmLLMConfig"
               }
             }
           },
@@ -33473,7 +33478,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LLMConfigResponse"
+                  "$ref": "#/components/schemas/SlmLLMConfigResponse"
                 }
               }
             },

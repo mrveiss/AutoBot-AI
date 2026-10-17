@@ -48,7 +48,9 @@ def agent_org_nodes_with_latest_heartbeat(company_id: str) -> "Select":
         .outerjoin(
             LLCHeartbeatRun,
             (LLCHeartbeatRun.agent_id == latest_runs.c.agent_id)
-            & (LLCHeartbeatRun.created_at == latest_runs.c.latest_at),
+            & (LLCHeartbeatRun.created_at == latest_runs.c.latest_at)
+            # Same company as the subquery: agent slugs are not unique across companies.
+            & (LLCHeartbeatRun.company_id == company_id),
         )
         .where(AgentOrgNode.company_id == company_id)
     )

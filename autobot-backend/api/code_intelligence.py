@@ -687,7 +687,7 @@ async def _generate_report_response(
     operation="analyze_codebase",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-async def analyze_codebase(
+async def analyze_code_anti_patterns(
     request: CodeIntelAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
 ):

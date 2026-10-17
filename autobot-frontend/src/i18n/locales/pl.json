@@ -4818,8 +4818,8 @@
     "settings": "Terminal Settings",
     "fontSize": "Font Size",
     "theme": "Theme",
-    "dark": "Dark",
-    "light": "Light",
+    "dark": "Ciemny",
+    "light": "Jasny",
     "cursorStyle": "Cursor Style",
     "block": "Block",
     "underline": "Underline",
@@ -5091,7 +5091,6 @@
     "role": "Rola:",
     "lastLogin": "Ostatnie logowanie:",
     "preferences": "Preferencje",
-    "theme": "Motyw",
     "notifications": "Powiadomienia",
     "emailNotifications": "Powiadomienia e-mail",
     "browserNotifications": "Powiadomienia przeglądarki",
@@ -5101,7 +5100,6 @@
     "showTooltips": "Pokaż podpowiedzi",
     "enableAnimations": "Włącz animacje",
     "savePreferences": "Zapisz preferencje",
-    "appearance": "Wygląd",
     "voiceChatDisplay": "Wyświetlanie czatu głosowego",
     "fullScreen": "Pełny ekran",
     "sidePanel": "Panel boczny",
@@ -5117,9 +5115,6 @@
     "pwTooShort": "Hasło musi mieć co najmniej 8 znaków",
     "pwChanged": "Hasło zmienione pomyślnie!",
     "never": "Nigdy",
-    "themeLight": "Jasny",
-    "themeDark": "Ciemny",
-    "themeAuto": "Automatyczny",
     "tabDevices": "Tab devices"
   },
   "charts": {
@@ -5792,11 +5787,6 @@
       "postExecutionFailed": "Polecenie zostało wykonane, ale kolejny krok się nie powiódł. Wynik jest wyświetlany; niektóre aktualizacje mogą być niekompletne.",
       "enterComment": "Please enter a comment before submitting"
     },
-    "darkModeToggle": {
-      "switchToLight": "Switch to light mode",
-      "switchToDark": "Switch to dark mode",
-      "toggleDarkMode": "Toggle dark mode"
-    },
     "dataTable": {
       "sortBy": "Sort by {column}",
       "actions": "Actions",
@@ -5918,8 +5908,8 @@
       "selectTheme": "Select theme",
       "switchToLight": "Switch to light mode",
       "switchToDark": "Switch to dark mode",
-      "light": "Light",
-      "dark": "Dark"
+      "light": "Jasny",
+      "dark": "Ciemny"
     },
     "toastContainer": {
       "notifications": "Notifications",
@@ -7944,7 +7934,6 @@
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents",
     "agentActivity": "Aktywność agenta",
-    "switchLanguage": "Switch language",
     "openMainMenu": "Open main menu",
     "skipToContent": "Przejdź do treści głównej",
     "services": "Services",
@@ -8947,6 +8936,7 @@
         "agent": "Agent",
         "kind": "Rodzaj",
         "status": "Stan",
+        "task": "Bieżące zadanie",
         "detail": "Szczegóły",
         "scope": "Zakres",
         "mode": "Tryb",

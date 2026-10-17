@@ -33,6 +33,8 @@ from repo_tests._paths import repo_root
 _WORKFLOWS_DIR = repo_root() / ".github" / "workflows"
 _VERIFY = _WORKFLOWS_DIR / "verify-generated-types.yml"
 _AUTOFIX = _WORKFLOWS_DIR / "auto-fix-generated-types.yml"
+# The job's steps live in the composite action both callers run (#18500).
+_AUTOFIX_STEPS = repo_root() / ".github" / "actions" / "generated-types-autofix" / "action.yml"
 
 # `git diff --exit-code <path> [<path> ...]` inside a `run:` block -- the exact
 # invocation that decides whether a verify job goes red. Stops at `;`/newline
@@ -59,10 +61,10 @@ def _autofix_reported_artifacts() -> set[str]:
     covers a path by REPORTING its drift with the patch, not by pushing a fix for it. A path the
     verify gate checks and this step omits is still a drift that nothing surfaces.
     """
-    document = yaml.safe_load(_AUTOFIX.read_text(encoding="utf-8"))
+    document = yaml.safe_load(_AUTOFIX_STEPS.read_text(encoding="utf-8"))
     step = next(
         step
-        for step in document["jobs"]["autofix-types"]["steps"]
+        for step in document["runs"]["steps"]
         if step.get("name", "").startswith("Report drift with the command that fixes it")
     )
     match = re.search(r'GENERATED="([^"]+)"', step["run"])

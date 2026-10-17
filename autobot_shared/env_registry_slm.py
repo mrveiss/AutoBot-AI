@@ -445,3 +445,30 @@ register_env_var(
         component="slm",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DOCKER_MGMT_PREFIX",
+        type=str,
+        default="",
+        description=(
+            "First three octets of the compose autobot-mgmt /24 (e.g. 10.77.3). No default: "
+            "docker/generate-secrets.sh picks a free private range per host, docker-compose.yml "
+            "refuses to start without it, and compose_fleet.py builds node IPs from it (#16833)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DOCKER_MGMT_POOL",
+        type=str,
+        default="10.128.0.0/9",
+        description=(
+            "Private IPv4 block (/24 or larger) that docker/pick_mgmt_prefix.py draws the "
+            "compose management /24 from, skipping any range a host route or Docker network uses (#16833)."
+        ),
+        component="slm",
+    )
+)

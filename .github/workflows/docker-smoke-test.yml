@@ -175,6 +175,13 @@ jobs:
           echo "Final disk space:"
           df -h
 
+      - name: Pick the management network range (#16833)
+        # docker-compose.yml has no default autobot-mgmt range; this is the pick
+        # docker/generate-secrets.sh makes for a user, exported for every compose step.
+        run: |
+          prefix="$(python3 docker/pick_mgmt_prefix.py)"
+          echo "AUTOBOT_DOCKER_MGMT_PREFIX=${prefix}" >> "$GITHUB_ENV"
+
       - name: Start services with Docker Compose
         # GH#9905: no manual secret step — the stack auto-provisions unique
         # signing secrets via the autobot-secrets-init service + shared volume.
