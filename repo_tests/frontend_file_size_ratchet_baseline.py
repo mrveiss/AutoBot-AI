@@ -173,7 +173,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-frontend/src/views/llc/HeartbeatMonitor.vue": 807,
     "autobot-frontend/src/views/llc/OrgChart.vue": 1527,
     "autobot-frontend/src/views/llc/ProjectBrowserView.vue": 1379,
-    "autobot-frontend/src/views/llc/RolesView.vue": 1029,
+    "autobot-frontend/src/views/llc/RolesView.vue": 1028,
     "autobot-frontend/src/views/llc/RoutinesView.vue": 688,
     "autobot-frontend/src/views/llc/SprintBoardView.vue": 681,
     "autobot-frontend/src/views/llc/WorkItemDetail.vue": 1069,
