@@ -8965,7 +8965,6 @@
       "silenceMeansHold": "Pedir não é libertar: o silêncio significa manter, e uma reserva não renovada expira sozinha.",
       "ask": "Pedir ao titular que liberte",
       "askAria": "Pedir ao titular de {scope} que o liberte",
-      "askUnavailable": "Ainda não disponível: o pedido está a ser adicionado ao registo.",
       "conflicts": "Conflitos",
       "recent": "Atividade recente",
       "conflict": {
@@ -8988,6 +8987,14 @@
         "unavailableTitle": "Não foi possível ler o registo",
         "unavailableBody": "O armazenamento {source} não respondeu. Não é o mesmo que não ter entradas.",
         "errorTitle": "Ocorreu um erro ao carregar esta secção"
+      },
+      "askState": {
+        "sending": "A enviar…",
+        "sent": "Pedido enviado — o titular decide; o silêncio significa manter.",
+        "tooSoon": "Acabou de pedir por esta reserva; tente novamente dentro de um minuto.",
+        "notFound": "Esta tarefa já não detém a reserva — atualize para ver quem a detém agora.",
+        "unavailable": "Não foi possível contactar o registo; nada foi enviado.",
+        "error": "Ocorreu um erro e não foi possível confirmar a entrega. Atualize para ver se a reserva ainda está ativa."
       }
     }
   },

@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict
 
 from autobot_shared.logging_manager import get_logger
-from constants.threshold_constants import RetryConfig
+from autobot_shared.ssot_constants import RetryConfig
 
 from .types import ErrorContext
 

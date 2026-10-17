@@ -23,10 +23,14 @@ from autobot_shared.logging_manager import get_logger as _get_logger
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
+from utils.error_boundaries import register_backend_hooks
 
 # Use singleton config instance for extended config values
 config = get_config_manager()
 logger = _get_logger(__name__)
+
+# #18554: Celery workers never run the app lifespan, so register the boundary hooks here.
+register_backend_hooks()
 
 # Build Redis URLs from SSOT configuration (loads directly from .env)
 # DB numbers come from redis-databases.yaml via DATABASE_MAPPING (#2670)

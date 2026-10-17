@@ -1326,6 +1326,93 @@
       "services": "Services",
       "systemHealth": "System Health",
       "systemMonitoring": "Monitorowanie systemu"
+    },
+    "agentLedger": {
+      "title": "Rejestr agentów",
+      "subtitle": "Every company's agent coordination: shared resources, claims, conflicts and dev-loop history.",
+      "refresh": "Odśwież",
+      "tabsAria": "Widoki rejestru",
+      "tabs": {
+        "contention": "Rywalizacja",
+        "claims": "Rezerwacje",
+        "conflicts": "Konflikty",
+        "devLoop": "Dev loop",
+        "activity": "Aktywność"
+      },
+      "col": {
+        "scope": "Zakres",
+        "agent": "Agent",
+        "company": "Company",
+        "mode": "Tryb",
+        "intent": "Zamiar",
+        "expires": "Wygasa",
+        "renewals": "Odnowienia"
+      },
+      "installWide": "Install-wide",
+      "heldBy": "Held by {agent} ({company})",
+      "waiting": "{n} waiting",
+      "waitlistAria": "Kolejka w kolejności",
+      "silenceMeansHold": "Prośba to nie zwolnienie: milczenie oznacza trzymanie, a nieodnowiona rezerwacja wygasa sama.",
+      "ask": "Poproś właściciela o zwolnienie",
+      "askAria": "Poproś właściciela {scope} o zwolnienie",
+      "askState": {
+        "sending": "Wysyłanie…",
+        "sent": "Prośba wysłana — decyduje właściciel; milczenie oznacza trzymanie.",
+        "tooSoon": "Pytałeś o tę rezerwację przed chwilą; spróbuj ponownie za minutę.",
+        "notFound": "To zadanie nie trzyma już tej rezerwacji — odśwież, aby zobaczyć, kto ją trzyma.",
+        "unavailable": "Nie można połączyć się z rejestrem; nic nie wysłano.",
+        "error": "Coś poszło nie tak i nie udało się potwierdzić doręczenia. Odśwież, aby sprawdzić, czy blokada jest nadal utrzymywana."
+      },
+      "conflict": {
+        "release_refused": "Odmówiono zwolnienia",
+        "claim_expired": "Rezerwacja wygasła w trakcie trzymania",
+        "yield_unanswered": "Prośba o ustąpienie pozostała bez odpowiedzi",
+        "claim_lapsed_during_action": "Rezerwacja wygasła w trakcie działania"
+      },
+      "devLoop": {
+        "issue": "Issue",
+        "choose": "Choose an issue",
+        "col": {
+          "at": "When",
+          "intent": "Zamiar",
+          "outcome": "Outcome",
+          "tokens": "Estimated tokens",
+          "reason": "Powód"
+        }
+      },
+      "empty": {
+        "contention": "Nic nie jest przedmiotem rywalizacji",
+        "claims": "Brak rezerwacji",
+        "conflicts": "Brak konfliktów",
+        "activity": "Brak ostatniej aktywności",
+        "devLoop": "No dev-loop history",
+        "devLoopActions": "No actions recorded for this issue"
+      },
+      "notes": {
+        "title": "What this view cannot see",
+        "neverReadable": "The SLM cannot read {sources}: they live inside the AutoBot backend process, so they are missing here, not empty.",
+        "storeDown": "Couldn't read the {source} store just now. Its entries are missing here, not empty.",
+        "sourcesUnknown": "Couldn't check which ledger sources are readable.",
+        "peerIdentity": "Agents have no per-peer identity yet: an agent that is refused an action can ask another agent to do it (#16950).",
+        "busAuth": "Messages between agents are not authenticated yet, so this view cannot prove who sent one (#16962)."
+      },
+      "source": {
+        "presence": "agent presence",
+        "ai_stack_agents": "AI-stack agents",
+        "live_sessions": "live sessions",
+        "peer_messages": "pending peer messages",
+        "idle_subscribers": "idle subscriptions",
+        "claims": "claims",
+        "waitlists": "waitlists",
+        "events": "ledger activity",
+        "dev_loop": "dev-loop history"
+      },
+      "state": {
+        "loading": "Odczytywanie rejestru…",
+        "unavailableTitle": "Nie udało się odczytać rejestru",
+        "unavailableBody": "Magazyn {source} nie odpowiedział. To nie to samo co brak wpisów.",
+        "errorTitle": "Podczas ładowania tej sekcji wystąpił błąd"
+      }
     }
   },
   "monitoringView": {
@@ -1334,7 +1421,17 @@
     "monitoring": "Monitorowanie",
     "monitoringSections": "Monitoring sections",
     "systemHealthStatusAria": "System health: {status}",
-    "value0AlertPlural": "{value0} Alert{plural}"
+    "value0AlertPlural": "{value0} Alert{plural}",
+    "tabs": {
+      "system": "Systemowa",
+      "logs": "Logs",
+      "dashboards": "Dashboards",
+      "alerts": "Alerts",
+      "errors": "Błędy",
+      "backendHealth": "Backend Health",
+      "performance": "Wydajność",
+      "agentLedger": "Rejestr agentów"
+    }
   },
   "orchestration": {
     "nodeHealthCard": {

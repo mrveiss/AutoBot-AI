@@ -87,7 +87,7 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
         {"delete_team", "list_team_members", "update_member_role"}
     ),
     "autobot-backend/chat_workflow/session_handler.py": frozenset({"get_active_sessions_count"}),
-    "autobot-backend/circuit_breaker.py": frozenset({"reset_all_circuit_breakers"}),
+    "autobot_shared/circuit_breaker.py": frozenset({"reset_all_circuit_breakers"}),
     "autobot-backend/code_intelligence/code_review_engine.py": frozenset({"DiffFile"}),
     "autobot-backend/code_intelligence/doc_generation/models.py": frozenset({"add_base_class"}),
     "autobot-backend/code_intelligence/precommit_analyzer.py": frozenset({"add_custom_check"}),

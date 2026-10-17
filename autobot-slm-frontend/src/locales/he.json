@@ -1326,6 +1326,93 @@
       "services": "Services",
       "systemHealth": "System Health",
       "systemMonitoring": "ניטור מערכת"
+    },
+    "agentLedger": {
+      "title": "יומן הסוכנים",
+      "subtitle": "Every company's agent coordination: shared resources, claims, conflicts and dev-loop history.",
+      "refresh": "Refresh",
+      "tabsAria": "תצוגות היומן",
+      "tabs": {
+        "contention": "תחרות",
+        "claims": "תפיסות",
+        "conflicts": "התנגשויות",
+        "devLoop": "Dev loop",
+        "activity": "פעילות"
+      },
+      "col": {
+        "scope": "היקף",
+        "agent": "סוכן",
+        "company": "Company",
+        "mode": "מצב פעולה",
+        "intent": "כוונה",
+        "expires": "פג תוקף",
+        "renewals": "חידושים"
+      },
+      "installWide": "Install-wide",
+      "heldBy": "Held by {agent} ({company})",
+      "waiting": "{n} waiting",
+      "waitlistAria": "רשימת המתנה לפי הסדר",
+      "silenceMeansHold": "בקשה אינה שחרור: שתיקה פירושה החזקה, ותפיסה שלא חודשה פגה מעצמה.",
+      "ask": "בקשו מהמחזיק לשחרר",
+      "askAria": "בקשו ממחזיק {scope} לשחרר אותו",
+      "askState": {
+        "sending": "שולח…",
+        "sent": "הבקשה נשלחה — המחזיק מחליט; שתיקה פירושה החזקה.",
+        "tooSoon": "שאלתם על התפיסה הזו לפני רגע; נסו שוב בעוד דקה.",
+        "notFound": "המשימה הזו כבר לא מחזיקה בתפיסה — רעננו כדי לראות מי מחזיק בה כעת.",
+        "unavailable": "לא ניתן היה להגיע ליומן; דבר לא נשלח.",
+        "error": "משהו השתבש ולא ניתן היה לאשר את המסירה. רעננו כדי לראות אם התביעה עדיין מוחזקת."
+      },
+      "conflict": {
+        "release_refused": "שחרור נדחה",
+        "claim_expired": "תפיסה פגה בזמן החזקה",
+        "yield_unanswered": "בקשת ויתור נותרה ללא מענה",
+        "claim_lapsed_during_action": "תפיסה פגה במהלך פעולה"
+      },
+      "devLoop": {
+        "issue": "Issue",
+        "choose": "Choose an issue",
+        "col": {
+          "at": "When",
+          "intent": "כוונה",
+          "outcome": "Outcome",
+          "tokens": "Estimated tokens",
+          "reason": "סיבה"
+        }
+      },
+      "empty": {
+        "contention": "אין תחרות",
+        "claims": "אין תפיסות",
+        "conflicts": "אין התנגשויות",
+        "activity": "אין פעילות אחרונה",
+        "devLoop": "No dev-loop history",
+        "devLoopActions": "No actions recorded for this issue"
+      },
+      "notes": {
+        "title": "What this view cannot see",
+        "neverReadable": "The SLM cannot read {sources}: they live inside the AutoBot backend process, so they are missing here, not empty.",
+        "storeDown": "Couldn't read the {source} store just now. Its entries are missing here, not empty.",
+        "sourcesUnknown": "Couldn't check which ledger sources are readable.",
+        "peerIdentity": "Agents have no per-peer identity yet: an agent that is refused an action can ask another agent to do it (#16950).",
+        "busAuth": "Messages between agents are not authenticated yet, so this view cannot prove who sent one (#16962)."
+      },
+      "source": {
+        "presence": "agent presence",
+        "ai_stack_agents": "AI-stack agents",
+        "live_sessions": "live sessions",
+        "peer_messages": "pending peer messages",
+        "idle_subscribers": "idle subscriptions",
+        "claims": "claims",
+        "waitlists": "waitlists",
+        "events": "ledger activity",
+        "dev_loop": "dev-loop history"
+      },
+      "state": {
+        "loading": "קורא את היומן…",
+        "unavailableTitle": "לא ניתן היה לקרוא את היומן",
+        "unavailableBody": "המאגר {source} לא הגיב. זה לא כמו שאין רשומות.",
+        "errorTitle": "אירעה שגיאה בטעינת הקטע הזה"
+      }
     }
   },
   "monitoringView": {
@@ -1334,7 +1421,17 @@
     "monitoring": "ניטור",
     "monitoringSections": "Monitoring sections",
     "systemHealthStatusAria": "System health: {status}",
-    "value0AlertPlural": "{value0} Alert{plural}"
+    "value0AlertPlural": "{value0} Alert{plural}",
+    "tabs": {
+      "system": "מערכת",
+      "logs": "Logs",
+      "dashboards": "Dashboards",
+      "alerts": "Alerts",
+      "errors": "שגיאות",
+      "backendHealth": "Backend Health",
+      "performance": "ביצועים",
+      "agentLedger": "יומן הסוכנים"
+    }
   },
   "orchestration": {
     "nodeHealthCard": {

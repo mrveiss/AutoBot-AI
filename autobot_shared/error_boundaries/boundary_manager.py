@@ -19,27 +19,11 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
-from constants.threshold_constants import CategoryDefaults, RetryConfig
-from constants.ttl_constants import TTL_24_HOURS
+from autobot_shared.ssot_constants import TTL_24_HOURS, CategoryDefaults, RetryConfig
 
-try:
-    from autobot_shared.redis_client import get_redis_client
-except ImportError:
-
-    def get_redis_client():
-        """Fallback function when redis client is unavailable."""
-        return None
-
-
-try:
-    from utils.error_metrics import record_error_metric
-except ImportError:
-
-    async def record_error_metric(*args, **kwargs):
-        """Fallback async function when error metrics module is unavailable."""
-
-
+from .hooks import emit_error_metric
 from .recovery_handlers import (
     ErrorRecoveryHandler,
     FallbackRecoveryHandler,
@@ -223,7 +207,7 @@ class ErrorBoundaryManager:
 
         # Record error metric
         try:
-            await record_error_metric(
+            await emit_error_metric(
                 error_code=None,
                 category=error_report.category,
                 component=context.component,
@@ -358,9 +342,9 @@ class ErrorBoundaryManager:
 
         Issue #620.
         """
-        categories = {}
-        severities = {}
-        components = {}
+        categories: Dict[str, int] = {}
+        severities: Dict[str, int] = {}
+        components: Dict[str, int] = {}
 
         for error in errors:
             category = error.get("category", CategoryDefaults.UNKNOWN)

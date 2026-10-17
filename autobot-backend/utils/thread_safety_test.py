@@ -16,6 +16,7 @@ These tests use concurrent execution to verify no race conditions exist.
 
 import ast
 import asyncio
+import collections
 import inspect
 import textwrap
 import threading
@@ -310,12 +311,19 @@ class TestExistingLockVerification:
         assert hasattr(analytics_precommit, "_history_lock")
         assert isinstance(analytics_precommit._history_lock, type(threading.Lock()))
 
-    def test_browser_mcp_has_lock(self):
-        """Verify browser_mcp.py has async lock"""
-        from api import browser_mcp
+    @pytest.mark.parametrize("module_name", ["browser_mcp", "git_mcp", "database_mcp", "http_client_mcp"])
+    def test_mcp_bridge_uses_canonical_limiter_and_holds_no_limiter_state(self, module_name):
+        """The MCP bridges rate-limit through the canonical RateLimiter, no per-worker state (#18087)."""
+        import importlib
 
-        assert hasattr(browser_mcp, "_rate_limit_lock")
-        assert isinstance(browser_mcp._rate_limit_lock, asyncio.Lock)
+        from autobot_shared.rate_limiter import RateLimiter
+
+        module = importlib.import_module(f"api.{module_name}")
+        assert isinstance(module._rate_limiter, RateLimiter)
+        state_types = (dict, collections.deque, asyncio.Lock, type(threading.Lock()))
+        for name, value in vars(module).items():
+            if "rate_limit" in name.lower() or name.lower().endswith("_counter"):
+                assert not isinstance(value, state_types), name
 
     def test_analytics_controller_has_lock(self):
         """Verify analytics_controller.py has async lock"""

@@ -49,6 +49,9 @@ _KEY = "ssh-rsa AAAAB3Nza slm-server@autobot"
 
 _PLAYBOOK = _ANSIBLE / "playbooks" / "enroll-slm-agent.yml"
 _ROLES = _ANSIBLE / "roles"
+_DEPLOY_PLAYBOOK = _ANSIBLE / "playbooks" / "deploy-slm-agent.yml"
+_SHARED_TASKS = _ROLES / "_shared" / "tasks" / "install_agent_autobot_shared.yml"
+_SHARED_INCLUDE = "../roles/_shared/tasks/install_agent_autobot_shared.yml"
 
 
 def _tasks() -> list[dict]:
@@ -117,7 +120,12 @@ def test_the_ssh_key_steps_are_kept() -> None:
 
 
 def _shared_block() -> dict:
-    return next(t for t in _tasks() if t["name"].startswith("Ship autobot_shared"))
+    """The one autobot_shared install block, shared by enrollment and deploy-slm-agent (#18611)."""
+    return yaml.safe_load(_SHARED_TASKS.read_text(encoding="utf-8"))[0]
+
+
+def _include_index(tasks: list[dict]) -> int:
+    return next(i for i, t in enumerate(tasks) if t.get("ansible.builtin.import_tasks") == _SHARED_INCLUDE)
 
 
 def _shared_tasks() -> list[dict]:
@@ -127,9 +135,9 @@ def _shared_tasks() -> list[dict]:
 def test_autobot_shared_is_installed_before_the_agent_without_a_handler() -> None:
     """The agent imports autobot_shared; a fresh enrollee has no backend/celery to restart."""
     tasks = _tasks()
-    idx = tasks.index(_shared_block())
+    idx = _include_index(tasks)
     assert idx < next(i for i, t in enumerate(tasks) if "ansible.builtin.import_role" in t)
-    assert "notify" not in _shared_block() and not _notified(tasks)
+    assert "notify" not in _shared_block() and not _notified(tasks) and not _notified([_shared_block()])
     unarchive = [t for t in _shared_tasks() if "ansible.builtin.unarchive" in t]
     assert len(unarchive) == 1
     args = unarchive[0]["ansible.builtin.unarchive"]
@@ -145,12 +153,12 @@ def test_no_per_file_loop_remains() -> None:
             for k in ("block", "rescue", "always"):
                 yield from walk(t.get(k, []))
 
-    for t in walk(_tasks()):
+    for t in walk(_tasks() + [_shared_block()]):
         assert not {"loop", "with_items", "with_fileglob", "with_filetree"} & set(t), t["name"]
         assert "ansible.builtin.find" not in t, t["name"]
         if t["name"].startswith(("Install autobot_shared", "Ship autobot_shared")):
             assert "ansible.builtin.copy" not in t
-    assert sum("ansible.builtin.unarchive" in t for t in walk(_tasks())) == 1
+    assert sum("ansible.builtin.unarchive" in t for t in walk(_tasks() + [_shared_block()])) == 1
 
 
 def _role_rsync_excludes() -> set[str]:
@@ -187,6 +195,9 @@ def test_the_archive_holds_only_sources_with_fixed_modes(tmp_path) -> None:
         "sub/pkg/__init__.py",
         "__pycache__/x.pyc",
         ".env",
+        ".envrc",
+        ".env.local",
+        ".env.production",
         "a/prod.env",
         "x.egg-info/PKG-INFO",
         ".git/config",
@@ -213,11 +224,69 @@ def test_the_archive_holds_only_sources_with_fixed_modes(tmp_path) -> None:
     assert all(m.uid == 0 and m.gid == 0 for m in members.values())
 
 
+def _module_names(tasks: list) -> list[str]:
+    """Every task's module keys, recursing into block/rescue/always."""
+    names: list[str] = []
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        names.extend(k for k in task if k.rpartition(".")[2] == "synchronize")
+        for key in ("block", "rescue", "always"):
+            names.extend(_module_names(task.get(key) or []))
+    return names
+
+
+def _enrollment_path_tasks() -> list:
+    plays = yaml.safe_load(_PLAYBOOK.read_text(encoding="utf-8")) + yaml.safe_load(
+        _DEPLOY_PLAYBOOK.read_text(encoding="utf-8")
+    )
+    tasks: list = yaml.safe_load(_SHARED_TASKS.read_text(encoding="utf-8"))
+    for play in plays:
+        for section in ("pre_tasks", "tasks", "post_tasks"):
+            tasks += play.get(section) or []
+    return tasks
+
+
 def test_no_synchronize_on_the_enrollment_path() -> None:
     """synchronize escalates only with passwordless sudo, which password-auth enrollment lacks."""
-    assert not any("ansible.posix.synchronize" in t or "synchronize" in t for t in _tasks())
+    assert _module_names(_enrollment_path_tasks()) == []
     for path in (_ROLES / "slm_agent" / "tasks").glob("*.yml"):
-        assert "synchronize:" not in path.read_text(encoding="utf-8"), path.name
+        assert _module_names(yaml.safe_load(path.read_text(encoding="utf-8")) or []) == [], path.name
+
+
+def test_synchronize_contrast_a_nested_block_is_caught() -> None:
+    nested = [{"block": [{"rescue": [{"ansible.posix.synchronize": {"src": "a", "dest": "b"}}]}]}]
+    assert _module_names(nested) == ["ansible.posix.synchronize"]
+    assert _module_names([{"always": [{"synchronize": {}}]}, {"community.general.synchronize": {}}]) == [
+        "synchronize",
+        "community.general.synchronize",
+    ]
+
+
+def _shared_parent(playbook: Path, **extra) -> str:
+    """Render the shared tasks' shared_parent default for a playbook, as Ansible would."""
+    import jinja2
+
+    expr = _shared_block()["vars"]["shared_parent"]
+    env = jinja2.Environment()
+    env.filters["dirname"] = os.path.dirname
+    return env.from_string(expr).render(playbook_dir=str(playbook.parent), autobot={"base_dir": "/x"}, **extra)
+
+
+@pytest.mark.parametrize("playbook", [_PLAYBOOK, _DEPLOY_PLAYBOOK])
+def test_the_source_resolves_to_a_tree_containing_autobot_shared(playbook: Path) -> None:
+    root = Path(_shared_parent(playbook))
+    assert (root / "autobot_shared" / "__init__.py").is_file(), root
+
+
+def test_an_explicit_code_source_dir_wins_and_a_missing_source_fails_clearly() -> None:
+    assert _shared_parent(_PLAYBOOK, code_source_dir="/srv/cs") == "/srv/cs"
+    tasks = _shared_block()["block"]
+    check = next(t for t in tasks if "ansible.builtin.assert" in t)
+    assert "code_source_dir" in check["ansible.builtin.assert"]["fail_msg"]
+    stat_idx = next(i for i, t in enumerate(tasks) if "ansible.builtin.stat" in t)
+    tar_idx = next(i for i, t in enumerate(tasks) if "ansible.builtin.command" in t)
+    assert stat_idx < tasks.index(check) < tar_idx
 
 
 def test_the_play_notifies_only_handlers_the_slm_agent_role_defines() -> None:
@@ -359,3 +428,70 @@ def test_non_ascii_passwords_round_trip_in_both_yaml_loaders(deployment, monkeyp
         path.unlink()
     raw.decode("ascii")  # every non-ASCII char is escaped, none written raw
     assert loaded == {"ansible_ssh_pass": _TRICKY, "ansible_become_pass": _TRICKY}
+
+
+def test_the_env_file_names_are_excluded_from_both_lists() -> None:
+    for pattern in (".env", "*.env", ".env.*", ".envrc"):
+        assert pattern in _shared_block()["vars"]["shared_excludes"]
+        assert pattern in _role_rsync_excludes()
+
+
+def test_deploy_slm_agent_installs_autobot_shared_before_the_agent_without_a_handler() -> None:
+    """#18611: a node deployed only through deploy-slm-agent.yml must have autobot_shared."""
+    play = yaml.safe_load(_DEPLOY_PLAYBOOK.read_text(encoding="utf-8"))[0]
+    assert [r["role"] for r in play["roles"]] == ["common"]
+    tasks = play["tasks"]
+    assert _include_index(tasks) < _role_order_index(tasks)
+    assert _role_order(tasks) == ["slm_agent"]
+    assert _unowned_notifies(tasks + [_shared_block()], ["slm_agent"]) == set()
+
+
+def _role_order_index(tasks: list[dict]) -> int:
+    return next(i for i, t in enumerate(tasks) if "ansible.builtin.import_role" in t)
+
+
+def test_deploy_contrast_an_agent_before_the_install_is_caught() -> None:
+    inc = {"ansible.builtin.import_tasks": _SHARED_INCLUDE}
+    role = {"ansible.builtin.import_role": {"name": "slm_agent"}}
+    assert _include_index([inc, role]) < _role_order_index([inc, role])
+    assert not _include_index([role, inc]) < _role_order_index([role, inc])
+
+
+def test_both_playbooks_include_the_one_shared_tasks_file() -> None:
+    deploy = yaml.safe_load(_DEPLOY_PLAYBOOK.read_text(encoding="utf-8"))[0]["tasks"]
+    assert _include_index(deploy) >= 0 and _include_index(_tasks()) >= 0
+    for path in (_PLAYBOOK, _DEPLOY_PLAYBOOK):
+        assert "autobot_shared.tar" not in path.read_text(encoding="utf-8") and "unarchive" not in path.read_text(
+            encoding="utf-8"
+        )
+
+
+def test_a_lone_surrogate_password_is_refused_with_422_before_any_playbook_runs() -> None:
+    """Both request schemas that carry ssh_password validate it, so FastAPI answers 422 up front (#18613)."""
+    from pydantic import TypeAdapter, ValidationError
+
+    from services.ssh_utils import SshPassword
+
+    adapter = TypeAdapter(SshPassword)
+    assert adapter.validate_python("😀") == "😀"
+    for bad in ("ab\ud83dcd", "\udc00"):
+        with pytest.raises(ValidationError, match="valid UTF-8"):
+            adapter.validate_python(bad)
+    # conftest stubs models.schemas, so pin the wiring from source: EnrollRequest and NodeCreate
+    schemas = (_BACKEND / "models" / "schemas.py").read_text(encoding="utf-8")
+    assert schemas.count("ssh_password: SshPassword | None = None") == 2
+    assert "ssh_password: str" not in schemas
+
+
+def test_the_shared_include_resolves_from_each_playbook_dir() -> None:
+    """Ansible resolves a playbook-level task file against the playbook's own directory."""
+    for playbook in (_PLAYBOOK, _DEPLOY_PLAYBOOK):
+        play = yaml.safe_load(playbook.read_text(encoding="utf-8"))[0]["tasks"]
+        ref = play[_include_index(play)]["ansible.builtin.import_tasks"]
+        assert (playbook.parent / ref).resolve() == _SHARED_TASKS.resolve(), (playbook.name, ref)
+        assert (playbook.parent / ref).is_file()
+
+
+def test_include_resolution_contrast() -> None:
+    wrong = _PLAYBOOK.parent / "roles/_shared/tasks/install_agent_autobot_shared.yml"
+    assert not wrong.is_file()  # the path #18620's first head used: playbooks/roles/... does not exist

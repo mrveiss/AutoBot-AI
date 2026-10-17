@@ -8,8 +8,8 @@
   says "couldn't read the ledger" apart from "nothing here" (AC3).
 
   The one human action, "Ask holder to release", is the same yield request an
-  agent sends; silence means hold. It is shown disabled until its route lands
-  (#18599). There is no force-release and no delete, by design.
+  agent sends (#18599); silence means hold, so its result is "request sent --
+  the holder decides", never a release. No force-release and no delete, by design.
 -->
 <template>
   <div class="flex flex-col gap-4 p-4" data-testid="agent-ledger">
@@ -77,17 +77,20 @@
       <LedgerSectionState :section="ledger.contention.value" :empty="t('llc.ledger.empty.contention')">
         <article v-for="(s, i) in ledger.contention.value.rows" :key="s.scope" class="p-3 rounded border border-autobot-border" data-testid="ledger-scope">
           <h3 class="m-0 mb-2 text-sm"><code>{{ s.scope }}</code></h3>
-          <p v-for="h in s.holders" :key="h.task_id">{{ t('llc.ledger.heldBy', { agent: h.agent_id }) }}</p>
+          <div v-for="(h, hi) in s.holders" :key="h.task_id" class="flex flex-wrap items-center gap-2">
+            <span>{{ t('llc.ledger.heldBy', { agent: h.agent_id }) }}</span>
+            <button type="button" class="ms-auto px-3 py-1 rounded border border-autobot-border text-autobot-text-primary"
+              data-testid="ledger-ask" :aria-label="t('llc.ledger.askAria', { scope: s.scope })"
+              :aria-describedby="`ledger-ask-status-${i}-${hi}`" :disabled="asks[askKey(s.scope, h.task_id)] === 'sending'"
+              @click="ask(s.scope, h.task_id)"
+            >{{ t('llc.ledger.ask') }}</button>
+            <span :id="`ledger-ask-status-${i}-${hi}`" class="w-full text-sm text-autobot-text-secondary" role="status" data-testid="ledger-ask-status">
+              {{ askText(asks[askKey(s.scope, h.task_id)]) }}
+            </span>
+          </div>
           <ol :aria-label="t('llc.ledger.waitlistAria')">
             <li v-for="w in s.waiters" :key="w.task_id">{{ w.agent_id }} — {{ w.intent }}</li>
           </ol>
-          <span v-if="s.holders.length" :title="t('llc.ledger.askUnavailable')">
-            <button type="button" class="px-3 py-1 rounded border border-autobot-border text-autobot-text-secondary cursor-not-allowed"
-              aria-disabled="true" data-testid="ledger-ask" @click.prevent
-              :aria-label="t('llc.ledger.askAria', { scope: s.scope })" :aria-describedby="`ledger-ask-why-${i}`"
-            >{{ t('llc.ledger.ask') }}</button>
-            <span :id="`ledger-ask-why-${i}`" class="sr-only">{{ t('llc.ledger.askUnavailable') }}</span>
-          </span>
         </article>
       </LedgerSectionState>
     </section>
@@ -112,9 +115,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useAgentLedger } from '@/composables/useAgentLedger'
+import { askHolderToRelease, useAgentLedger, type AskOutcome } from '@/composables/useAgentLedger'
 import { useUiMode } from '@/composables/useUiMode'
 import LedgerSectionState from '@/components/llc/ledger/LedgerSectionState.vue'
 
@@ -125,6 +128,24 @@ const { uiMode } = useUiMode()
 const ledger = useAgentLedger()
 const active = ref<TabId>('now')
 const tabEls = ref<HTMLButtonElement[]>([])
+
+/** #18391 AC4: one request per holder, its outcome announced; asking never releases anything. */
+const asks = reactive<Record<string, AskOutcome['state'] | 'sending'>>({})
+const askKey = (scope: string, taskId: string) => `${scope}\u0000${taskId}`
+
+async function ask(scope: string, holderTaskId: string): Promise<void> {
+  const key = askKey(scope, holderTaskId)
+  asks[key] = 'sending'
+  asks[key] = (await askHolderToRelease(scope, holderTaskId)).state
+}
+
+const ASK_TEXT_KEY = {
+  sending: 'sending', sent: 'sent', 'too-soon': 'tooSoon', 'not-found': 'notFound', unavailable: 'unavailable', error: 'error',
+} as const
+
+function askText(state: AskOutcome['state'] | 'sending' | undefined): string {
+  return state ? t(`llc.ledger.askState.${ASK_TEXT_KEY[state]}`) : ''
+}
 
 /** WAI-ARIA tabs: arrows move between tabs (wrapping), Home/End jump; focus follows selection. */
 function onTabKey(event: KeyboardEvent, index: number): void {

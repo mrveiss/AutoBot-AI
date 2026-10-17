@@ -5,9 +5,9 @@
 /**
  * #18391 on screen: an unreadable ledger says "couldn't read the ledger" and
  * names the store -- never the empty "No claims" -- and an empty one says the
- * opposite (AC3). "Ask holder to release" is present but disabled until its
- * route lands (#18599), with its reason exposed to assistive tech. Activity is
- * a Full-mode tab, as in the mockup.
+ * opposite (AC3). "Ask holder to release" sends the yield request (#18599) and
+ * announces its outcome per holder; asking never releases anything (AC4).
+ * Activity is a Full-mode tab, as in the mockup.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
@@ -77,18 +77,38 @@ describe('AgentLedgerView (#18391)', () => {
     expect(w.get('[data-testid="ledger-tab-claims"]').text()).toBe(`${L.tabs.claims} (1)`)
   })
 
-  it('offers "Ask holder to release" for a held scope, disabled, with its reason linked', async () => {
+  it.each([
+    [200, { token: 'tok-1' }, 'sent'],
+    [429, { detail: 'too soon' }, 'tooSoon'],
+    [404, { detail: 'no such claim' }, 'notFound'],
+    [503, { error: 'ledger_unavailable', source: 'claims', detail: 'x' }, 'unavailable'],
+    [500, { detail: 'boom' }, 'error'],
+  ] as const)('"Ask holder to release" sends the yield request and announces %s as %s', async (status, body, key) => {
     serve({ claims: json(200, { claims: [CLAIM], count: 1 }) })
     const w = await mountOn('contention')
-    const ask = w.get('[data-testid="ledger-ask"]')
-    // aria-disabled, not disabled: still a Tab stop, so its linked reason is reachable.
-    expect(ask.attributes('aria-disabled')).toBe('true')
-    expect(ask.attributes('disabled')).toBeUndefined()
-    await ask.trigger('click')
-    expect(rawRequest.mock.calls.every(([, init]) => (init as { method: string }).method === 'GET')).toBe(true)
-    expect(ask.text()).toBe(L.ask)
-    const why = w.get(`#${ask.attributes('aria-describedby')}`)
-    expect(why.text()).toBe(L.askUnavailable)
+    rawRequest.mockImplementationOnce(async () => json(status, body))
+    await w.get('[data-testid="ledger-ask"]').trigger('click')
+    await flushPromises()
+
+    const [url, init] = rawRequest.mock.calls.at(-1)!
+    expect(url).toBe('/api/coordination/ledger/claims/yield-request')
+    expect(init).toEqual({ method: 'POST', body: { scope: 'provider:openai', holder_task_id: 't1', reason: '' } })
+    const status_ = w.get('[data-testid="ledger-ask-status"]')
+    expect(status_.text()).toBe(L.askState[key])
+    expect(status_.attributes('role')).toBe('status')
+    // Asking never releases anything: the claim is still listed as held.
+    expect(w.text()).toContain(L.heldBy.replace('{agent}', 'research-agent'))
+  })
+
+  it('each holder of a shared scope has its own ask status, and its button names that one', async () => {
+    serve({ claims: json(200, { claims: [CLAIM, { ...CLAIM, agent_id: 'writer-agent', task_id: 't2', mode: 'shared' }], count: 2 }) })
+    const w = await mountOn('contention')
+    const buttons = w.findAll('[data-testid="ledger-ask"]')
+    const statuses = w.findAll('[data-testid="ledger-ask-status"]')
+    expect(statuses).toHaveLength(2)
+    const ids = statuses.map((s) => s.attributes('id'))
+    expect(new Set(ids).size).toBe(2)
+    expect(buttons.map((b) => b.attributes('aria-describedby'))).toEqual(ids)
   })
 
   it('tabs follow WAI-ARIA: one Tab stop, arrows and Home/End move selection and focus, panels are wired', async () => {

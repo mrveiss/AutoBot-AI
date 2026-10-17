@@ -1326,6 +1326,93 @@
       "services": "Services",
       "systemHealth": "سلامت سیستم",
       "systemMonitoring": "پایش سیستم"
+    },
+    "agentLedger": {
+      "title": "دفتر عامل‌ها",
+      "subtitle": "Every company's agent coordination: shared resources, claims, conflicts and dev-loop history.",
+      "refresh": "Refresh",
+      "tabsAria": "نماهای دفتر",
+      "tabs": {
+        "contention": "رقابت",
+        "claims": "ادعاها",
+        "conflicts": "تعارض‌ها",
+        "devLoop": "Dev loop",
+        "activity": "فعالیت"
+      },
+      "col": {
+        "scope": "دامنه",
+        "agent": "عامل",
+        "company": "Company",
+        "mode": "حالت",
+        "intent": "هدف",
+        "expires": "انقضا",
+        "renewals": "تمدیدها"
+      },
+      "installWide": "Install-wide",
+      "heldBy": "Held by {agent} ({company})",
+      "waiting": "{n} waiting",
+      "waitlistAria": "فهرست انتظار به ترتیب",
+      "silenceMeansHold": "درخواست، آزادسازی نیست: سکوت یعنی نگه‌داشتن، و ادعای تمدیدنشده خودبه‌خود منقضی می‌شود.",
+      "ask": "از دارنده بخواهید آزاد کند",
+      "askAria": "از دارنده {scope} بخواهید آن را آزاد کند",
+      "askState": {
+        "sending": "در حال ارسال…",
+        "sent": "درخواست ارسال شد — تصمیم با دارنده است؛ سکوت یعنی نگه‌داشتن.",
+        "tooSoon": "همین الان دربارهٔ این ادعا پرسیدید؛ یک دقیقه دیگر دوباره تلاش کنید.",
+        "notFound": "این وظیفه دیگر این ادعا را در اختیار ندارد — برای دیدن دارندهٔ فعلی بازخوانی کنید.",
+        "unavailable": "دسترسی به دفتر ممکن نشد؛ چیزی ارسال نشد.",
+        "error": "خطایی رخ داد و تحویل تأیید نشد. صفحه را تازه کنید تا ببینید آیا ادعا هنوز نگه داشته شده است."
+      },
+      "conflict": {
+        "release_refused": "یک آزادسازی رد شد",
+        "claim_expired": "یک ادعا هنگام نگه‌داری منقضی شد",
+        "yield_unanswered": "یک درخواست واگذاری بی‌پاسخ ماند",
+        "claim_lapsed_during_action": "یک ادعا در حین یک اقدام منقضی شد"
+      },
+      "devLoop": {
+        "issue": "Issue",
+        "choose": "Choose an issue",
+        "col": {
+          "at": "When",
+          "intent": "هدف",
+          "outcome": "Outcome",
+          "tokens": "Estimated tokens",
+          "reason": "دلیل"
+        }
+      },
+      "empty": {
+        "contention": "رقابتی وجود ندارد",
+        "claims": "ادعایی وجود ندارد",
+        "conflicts": "تعارضی وجود ندارد",
+        "activity": "فعالیت اخیری نیست",
+        "devLoop": "No dev-loop history",
+        "devLoopActions": "No actions recorded for this issue"
+      },
+      "notes": {
+        "title": "What this view cannot see",
+        "neverReadable": "The SLM cannot read {sources}: they live inside the AutoBot backend process, so they are missing here, not empty.",
+        "storeDown": "Couldn't read the {source} store just now. Its entries are missing here, not empty.",
+        "sourcesUnknown": "Couldn't check which ledger sources are readable.",
+        "peerIdentity": "Agents have no per-peer identity yet: an agent that is refused an action can ask another agent to do it (#16950).",
+        "busAuth": "Messages between agents are not authenticated yet, so this view cannot prove who sent one (#16962)."
+      },
+      "source": {
+        "presence": "agent presence",
+        "ai_stack_agents": "AI-stack agents",
+        "live_sessions": "live sessions",
+        "peer_messages": "pending peer messages",
+        "idle_subscribers": "idle subscriptions",
+        "claims": "claims",
+        "waitlists": "waitlists",
+        "events": "ledger activity",
+        "dev_loop": "dev-loop history"
+      },
+      "state": {
+        "loading": "در حال خواندن دفتر…",
+        "unavailableTitle": "خواندن دفتر ممکن نشد",
+        "unavailableBody": "مخزن {source} پاسخ نداد. این با نبودن هیچ ورودی یکی نیست.",
+        "errorTitle": "هنگام بارگذاری این بخش خطایی رخ داد"
+      }
     }
   },
   "monitoringView": {
@@ -1334,7 +1421,17 @@
     "monitoring": "پایش",
     "monitoringSections": "Monitoring sections",
     "systemHealthStatusAria": "System health: {status}",
-    "value0AlertPlural": "{value0} Alert{plural}"
+    "value0AlertPlural": "{value0} Alert{plural}",
+    "tabs": {
+      "system": "سیستمی",
+      "logs": "Logs",
+      "dashboards": "Dashboards",
+      "alerts": "Alerts",
+      "errors": "خطاها",
+      "backendHealth": "Backend Health",
+      "performance": "کارایی",
+      "agentLedger": "دفتر عامل‌ها"
+    }
   },
   "orchestration": {
     "nodeHealthCard": {

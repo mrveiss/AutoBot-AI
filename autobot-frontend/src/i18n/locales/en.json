@@ -8953,7 +8953,6 @@
       "silenceMeansHold": "Asking is a request, not a release: silence means hold, and an unrenewed claim expires on its own.",
       "ask": "Ask holder to release",
       "askAria": "Ask the holder of {scope} to release it",
-      "askUnavailable": "Not available yet: the request is being added to the ledger.",
       "conflicts": "Conflicts",
       "recent": "Recent activity",
       "conflict": {
@@ -8976,6 +8975,14 @@
         "unavailableTitle": "Couldn't read the ledger",
         "unavailableBody": "The {source} store did not answer. This is not the same as having no entries.",
         "errorTitle": "Something went wrong loading this section"
+      },
+      "askState": {
+        "sending": "Sending…",
+        "sent": "Request sent — the holder decides; silence means hold.",
+        "tooSoon": "You asked about this claim a moment ago; try again in a minute.",
+        "notFound": "That claim is no longer held by this task — refresh to see who holds it now.",
+        "unavailable": "Couldn't reach the ledger; nothing was sent.",
+        "error": "Something went wrong and delivery could not be confirmed. Refresh to see whether the claim is still held."
       }
     }
   },

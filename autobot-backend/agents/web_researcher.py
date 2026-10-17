@@ -24,10 +24,10 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel
 
+from autobot_shared.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 from autobot_shared.url_safety import host_matches
-from circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from constants.security_constants import SecurityConstants
 from constants.threshold_constants import CircuitBreakerDefaults, TimingConstants
 from services.captcha_human_loop import get_captcha_human_loop

@@ -24,7 +24,7 @@ from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service
 
 from .base_agent import DeploymentMode
-from .payloads import AgentStatus, KnowledgeQueryPayload
+from .payloads import AgentOutcome, KnowledgeQueryPayload
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
@@ -175,7 +175,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
         the public API contract (Dict[str, Any]) is unchanged.
         """
         return KnowledgeQueryPayload(
-            status=AgentStatus.SUCCESS,
+            status=AgentOutcome.SUCCESS,
             agent_type="knowledge_retrieval",
             model_used=self.model_name,
             query=query,

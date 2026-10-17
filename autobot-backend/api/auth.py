@@ -8,8 +8,6 @@ Provides login, logout, and session management functionality
 """
 
 import datetime
-from collections import defaultdict
-from time import time
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -39,6 +37,7 @@ from autobot_shared.auth.jwt_core import JWTDecodeError, _peek_alg, decode_jwt_n
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role, is_admin_role, role_value
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.security.password_weakness import check_password_weakness
 from autobot_shared.user_management.password_epoch import set_password_epoch
 from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
@@ -76,40 +75,8 @@ async def _enrich_user_with_org_context(user_data: Dict) -> Dict:
     return user_data
 
 
-class SessionPasswordChangeRateLimiter:
-    """Rate limiter for password change attempts to prevent brute-force attacks."""
-
-    def __init__(
-        self,
-        window: int = SESSION_WINDOW_SECONDS,
-        max_attempts: int = SESSION_MAX_ATTEMPTS,
-    ):
-        """Initialize rate limiter."""
-        self.window = window
-        self.max_attempts = max_attempts
-        self.attempts: Dict[str, List[float]] = defaultdict(list)
-
-    def is_allowed(self, client_id: str) -> bool:
-        """Check if password change attempt is allowed."""
-        now = time()
-        # Clean old attempts
-        self.attempts[client_id] = [t for t in self.attempts[client_id] if now - t < self.window]
-        # Check limit
-        if len(self.attempts[client_id]) >= self.max_attempts:
-            return False
-        # Record attempt
-        self.attempts[client_id].append(now)
-        return True
-
-    def get_remaining(self, client_id: str) -> int:
-        """Get remaining attempts for client."""
-        now = time()
-        self.attempts[client_id] = [t for t in self.attempts[client_id] if now - t < self.window]
-        return max(0, self.max_attempts - len(self.attempts[client_id]))
-
-
-# Global rate limiter for password changes
-password_change_limiter = SessionPasswordChangeRateLimiter()
+# Global (cross-worker) count per "<username>:<ip>"; fails open when Redis is down (#18087).
+_password_change_limiter = RateLimiter("password_change_session", log_label="password_change_session")
 
 
 async def _authenticate_and_build_user_data(username: str, password: str, ip_address: str) -> Dict:
@@ -361,10 +328,10 @@ async def check_permission(request: Request, operation: str):
         }
 
 
-def _check_password_change_rate_limit(username: str, ip_address: str) -> None:
+async def _check_password_change_rate_limit(username: str, ip_address: str) -> None:
     """Check rate limit for password change attempts."""
     client_id = f"{username}:{ip_address}"
-    if not password_change_limiter.is_allowed(client_id):
+    if not await _password_change_limiter.acquire_window(client_id, SESSION_MAX_ATTEMPTS, SESSION_WINDOW_SECONDS):
         remaining_time = SESSION_WINDOW_SECONDS // 60
         get_auth_middleware().security_layer.audit_log(
             action="password_change_rate_limited",
@@ -441,7 +408,7 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
 
         ip_address = request.client.host if request.client else "unknown"
 
-        _check_password_change_rate_limit(username, ip_address)
+        await _check_password_change_rate_limit(username, ip_address)
         _verify_current_password(username, password_data.current_password, ip_address)
 
         new_password_hash = get_auth_middleware().hash_password(password_data.new_password)

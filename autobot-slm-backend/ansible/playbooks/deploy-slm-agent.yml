@@ -29,7 +29,18 @@
     - role: common
       tags: ['common']
 
-    - role: slm_agent
+  tasks:
+    # The agent imports autobot_shared (#18611); the same tasks enrollment runs. Not the
+    # autobot_shared role: its restart backend/celery handlers do not exist on agent-only nodes.
+    - name: Install autobot_shared for the agent
+      # Static import: the path is resolved (and checked by --syntax-check) at parse
+      # time, relative to this playbook, and tags apply to every imported task.
+      ansible.builtin.import_tasks: ../roles/_shared/tasks/install_agent_autobot_shared.yml
+      tags: ['slm_agent', 'autobot_shared']
+
+    - name: Deploy the SLM agent (slm_agent role)
+      ansible.builtin.import_role:
+        name: slm_agent
       tags: ['slm_agent']
 
   post_tasks:
