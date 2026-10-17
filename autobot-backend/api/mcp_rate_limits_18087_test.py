@@ -191,7 +191,7 @@ async def test_password_change_redis_down_fails_open(monkeypatch, caplog):
     with caplog.at_level(logging.WARNING):
         for _ in range(3):
             await auth._check_password_change_rate_limit("alice", "1.2.3.4")
-    assert any("redis down" in r.getMessage() for r in caplog.records)
+    assert any("fail-open" in r.getMessage() for r in caplog.records)
     assert "alice" not in caplog.text and "1.2.3.4" not in caplog.text
     assert not re.search(r"\b[0-9a-f]{12}\b", caplog.text)  # no key digest either
 
@@ -202,8 +202,9 @@ async def test_password_change_redis_error_log_never_carries_the_key(monkeypatch
         raise ConnectionError("redis down")
 
     monkeypatch.setattr(rl_mod, "get_async_redis_client", _down)
+    monkeypatch.setattr(auth._password_change_limiter, "_last_fail_open_warn", None)  # fresh warn window (#18617)
     with caplog.at_level(logging.WARNING):
         await auth._check_password_change_rate_limit("alice", "1.2.3.4")
-    assert [r for r in caplog.records if "window acquire error" in r.getMessage()]
+    assert [r for r in caplog.records if "window acquire error" in r.getMessage() and "fail-open" in r.getMessage()]
     assert "alice" not in caplog.text and "1.2.3.4" not in caplog.text
     assert not re.search(r"\b[0-9a-f]{12}\b", caplog.text)  # no key digest either

@@ -340,3 +340,17 @@ register_env_var(
         component="security",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_RATE_LIMITER_FAIL_OPEN_WARN_INTERVAL",
+        type=float,
+        default=60.0,
+        description=(
+            "Minimum seconds between fail-open warnings per rate-limiter instance (#18617). While Redis is "
+            "unreachable the limiters allow requests; the warning names only the limiter scope and is emitted "
+            "at most once per interval so an outage cannot flood the log."
+        ),
+        component="security",
+    )
+)

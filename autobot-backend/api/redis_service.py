@@ -282,7 +282,7 @@ async def probe_redis_service(
     #12459: ``detail`` previously echoed the bare ``overall_status`` word
     ("degraded"), which is not diagnosable when Redis itself pings fine —
     the real cause (SLM couldn't confirm systemd state, connectivity down,
-    slow response, ...) lives in ``HealthStatus.recommendations`` but was
+    slow response, ...) lives in ``ServiceHealthReport.recommendations`` but was
     never surfaced. Join it into ``detail`` so a "degraded" result always
     says *which* check failed.
     """

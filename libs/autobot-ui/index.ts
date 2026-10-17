@@ -106,3 +106,16 @@ export type { LogLevel } from './src/utils/logger'
 
 export { default as SchedulePicker } from './src/components/SchedulePicker.vue'
 export * from './src/schedule'
+
+// Agent-ledger answers and their section states (#18391) — one reading of the
+// shared response shapes for the Company OS and SLM ledger views.
+export {
+  loadingLedgerSection,
+  ledgerSectionFrom,
+  readLedgerSection,
+  ledgerAskOutcomeFrom,
+  sendLedgerAsk,
+} from './src/utils/ledger'
+export type { LedgerSection, LedgerSectionStatus, LedgerAskOutcome } from './src/utils/ledger'
+export { default as LedgerSectionState } from './src/components/LedgerSectionState.vue'
+export type { LedgerStateLabels } from './src/components/LedgerSectionState.vue'

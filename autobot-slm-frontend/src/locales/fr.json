@@ -1326,6 +1326,93 @@
       "services": "Services",
       "systemHealth": "Santé du système",
       "systemMonitoring": "Surveillance du système"
+    },
+    "agentLedger": {
+      "title": "Registre des agents",
+      "subtitle": "Every company's agent coordination: shared resources, claims, conflicts and dev-loop history.",
+      "refresh": "Actualiser",
+      "tabsAria": "Vues du registre",
+      "tabs": {
+        "contention": "Contention",
+        "claims": "Réservations",
+        "conflicts": "Conflits",
+        "devLoop": "Dev loop",
+        "activity": "Activité"
+      },
+      "col": {
+        "scope": "Portée",
+        "agent": "Agent",
+        "company": "Company",
+        "mode": "Mode",
+        "intent": "Intention",
+        "expires": "Expire",
+        "renewals": "Renouvellements"
+      },
+      "installWide": "Install-wide",
+      "heldBy": "Held by {agent} ({company})",
+      "waiting": "{n} waiting",
+      "waitlistAria": "Liste d'attente dans l'ordre",
+      "silenceMeansHold": "Demander n'est pas libérer : le silence vaut maintien, et une réservation non renouvelée expire d'elle-même.",
+      "ask": "Demander au détenteur de libérer",
+      "askAria": "Demander au détenteur de {scope} de le libérer",
+      "askState": {
+        "sending": "Envoi…",
+        "sent": "Demande envoyée — le détenteur décide ; le silence vaut maintien.",
+        "tooSoon": "Vous venez déjà de demander pour cette réservation ; réessayez dans une minute.",
+        "notFound": "Cette tâche ne détient plus la réservation — actualisez pour voir qui la détient.",
+        "unavailable": "Impossible de joindre le registre ; rien n'a été envoyé.",
+        "error": "Un problème est survenu et la remise n'a pas pu être confirmée. Actualisez pour voir si la réservation est toujours détenue."
+      },
+      "conflict": {
+        "release_refused": "Une libération a été refusée",
+        "claim_expired": "Une réservation a expiré pendant sa détention",
+        "yield_unanswered": "Une demande de cession est restée sans réponse",
+        "claim_lapsed_during_action": "Une réservation a expiré pendant une action"
+      },
+      "devLoop": {
+        "issue": "Issue",
+        "choose": "Choose an issue",
+        "col": {
+          "at": "When",
+          "intent": "Intention",
+          "outcome": "Outcome",
+          "tokens": "Estimated tokens",
+          "reason": "Raison"
+        }
+      },
+      "empty": {
+        "contention": "Rien n'est en contention",
+        "claims": "Aucune réservation",
+        "conflicts": "Aucun conflit",
+        "activity": "Aucune activité récente",
+        "devLoop": "No dev-loop history",
+        "devLoopActions": "No actions recorded for this issue"
+      },
+      "notes": {
+        "title": "What this view cannot see",
+        "neverReadable": "The SLM cannot read {sources}: they live inside the AutoBot backend process, so they are missing here, not empty.",
+        "storeDown": "Couldn't read the {source} store just now. Its entries are missing here, not empty.",
+        "sourcesUnknown": "Couldn't check which ledger sources are readable.",
+        "peerIdentity": "Agents have no per-peer identity yet: an agent that is refused an action can ask another agent to do it (#16950).",
+        "busAuth": "Messages between agents are not authenticated yet, so this view cannot prove who sent one (#16962)."
+      },
+      "source": {
+        "presence": "agent presence",
+        "ai_stack_agents": "AI-stack agents",
+        "live_sessions": "live sessions",
+        "peer_messages": "pending peer messages",
+        "idle_subscribers": "idle subscriptions",
+        "claims": "claims",
+        "waitlists": "waitlists",
+        "events": "ledger activity",
+        "dev_loop": "dev-loop history"
+      },
+      "state": {
+        "loading": "Lecture du registre…",
+        "unavailableTitle": "Impossible de lire le registre",
+        "unavailableBody": "Le stockage {source} n'a pas répondu. Ce n'est pas la même chose qu'une liste vide.",
+        "errorTitle": "Un problème est survenu lors du chargement de cette section"
+      }
     }
   },
   "monitoringView": {
@@ -1334,7 +1421,17 @@
     "monitoring": "Surveillance",
     "monitoringSections": "Monitoring sections",
     "systemHealthStatusAria": "System health: {status}",
-    "value0AlertPlural": "{value0} Alert{plural}"
+    "value0AlertPlural": "{value0} Alert{plural}",
+    "tabs": {
+      "system": "Système",
+      "logs": "Logs",
+      "dashboards": "Dashboards",
+      "alerts": "Alerts",
+      "errors": "Erreurs",
+      "backendHealth": "Backend Health",
+      "performance": "Performance",
+      "agentLedger": "Registre des agents"
+    }
   },
   "orchestration": {
     "nodeHealthCard": {

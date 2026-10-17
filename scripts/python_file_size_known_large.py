@@ -214,7 +214,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/integrations/whatsapp_integration.py": 754,
     "autobot-backend/intelligence/goal_processor.py": 609,
     "autobot-backend/intelligence/intelligent_agent.py": 848,
-    "autobot-backend/intelligence/streaming_executor.py": 650,
+    "autobot-backend/intelligence/streaming_executor.py": 648,
     "autobot-backend/intent_classification_test.py": 622,
     "autobot-backend/judges/multi_agent_arbitrator.py": 611,
     "autobot-backend/judges/security_risk_judge.py": 842,

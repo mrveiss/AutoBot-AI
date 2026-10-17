@@ -11,7 +11,7 @@ instead of assuming a bare ``api_key`` in settings.
 
 Strategies
 ----------
-- ``ApiKeyAuth``      — wraps today's api_key behaviour (backward-compatible).
+- ``StaticApiKeyAuth``      — wraps today's api_key behaviour (backward-compatible).
 - ``OAuthAuth``       — authorization-code + PKCE; tokens kept in the vault.
 - ``DeviceCodeAuth``  — RFC 8628 device-authorization grant (CLI/headless).
 - ``SessionAuth``     — bearer token from an existing session/subscription.
@@ -101,7 +101,7 @@ class ProviderAuthStrategy(ABC):
 
         Args:
             session: Optional SQLAlchemy ``AsyncSession`` required by vault-backed
-                     strategies.  ``ApiKeyAuth`` ignores it.
+                     strategies.  ``StaticApiKeyAuth`` ignores it.
 
         Returns:
             Token string (never empty).
@@ -116,11 +116,11 @@ class ProviderAuthStrategy(ABC):
 
 
 # ---------------------------------------------------------------------------
-# ApiKeyAuth — backward-compatible default
+# StaticApiKeyAuth — backward-compatible default
 # ---------------------------------------------------------------------------
 
 
-class ApiKeyAuth(ProviderAuthStrategy):
+class StaticApiKeyAuth(ProviderAuthStrategy):
     """Wraps a static API key from provider settings.
 
     This is the default strategy for all existing providers — no behaviour
@@ -129,14 +129,14 @@ class ApiKeyAuth(ProviderAuthStrategy):
 
     def __init__(self, api_key: str) -> None:
         if not api_key:
-            raise ProviderAuthError("ApiKeyAuth requires a non-empty api_key")
+            raise ProviderAuthError("StaticApiKeyAuth requires a non-empty api_key")
         self._key = api_key
 
     async def resolve_token(self, session: Any | None = None) -> str:
         return self._key
 
     def __repr__(self) -> str:
-        return "<ApiKeyAuth key=***>"
+        return "<StaticApiKeyAuth key=***>"
 
 
 # ---------------------------------------------------------------------------
@@ -638,7 +638,7 @@ __all__ = [
     "ProviderAuthStrategy",
     "ProviderAuthError",
     "TokenExpiredError",
-    "ApiKeyAuth",
+    "StaticApiKeyAuth",
     "OAuthAuth",
     "DeviceCodeAuth",
     "SessionAuth",

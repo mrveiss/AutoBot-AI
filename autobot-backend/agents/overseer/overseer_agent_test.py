@@ -16,9 +16,9 @@ from agents.overseer.overseer_agent import (
 )
 from agents.overseer.types import (
     AgentTask,
+    OverseerStepStatus,
     OverseerUpdate,
-    StepResult,
-    StepStatus,
+    StepRunResult,
     TaskPlan,
 )
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
@@ -41,11 +41,11 @@ class TestBuildPreviousContext:
     def test_gathers_completed_results(self):
         task = AgentTask(task_id="t2", step_number=2, total_steps=2, description="second")
         completed = {
-            "t1": StepResult(
+            "t1": StepRunResult(
                 task_id="t1",
                 step_number=1,
                 total_steps=2,
-                status=StepStatus.COMPLETED,
+                status=OverseerStepStatus.COMPLETED,
                 command="ls",
                 output="file1\n",
                 return_code=0,
@@ -60,11 +60,11 @@ class TestBuildPreviousContext:
     def test_skips_results_without_output(self):
         task = AgentTask(task_id="t2", step_number=2, total_steps=2, description="second")
         completed = {
-            "t1": StepResult(
+            "t1": StepRunResult(
                 task_id="t1",
                 step_number=1,
                 total_steps=2,
-                status=StepStatus.COMPLETED,
+                status=OverseerStepStatus.COMPLETED,
                 output=None,
             )
         }
@@ -257,11 +257,11 @@ class TestDependencyValidation:
             dependencies=["t1"],
         )
         completed = {
-            "t1": StepResult(
+            "t1": StepRunResult(
                 task_id="t1",
                 step_number=1,
                 total_steps=2,
-                status=StepStatus.COMPLETED,
+                status=OverseerStepStatus.COMPLETED,
             )
         }
         valid, error = agent._validate_task_dependencies(task, completed, "plan_1")
@@ -302,11 +302,11 @@ class TestOrchestrateExecution:
         )
 
         async def mock_execute(task):
-            yield StepResult(
+            yield StepRunResult(
                 task_id=task.task_id,
                 step_number=task.step_number,
                 total_steps=task.total_steps,
-                status=StepStatus.COMPLETED,
+                status=OverseerStepStatus.COMPLETED,
                 command="ls",
             )
 
@@ -333,7 +333,7 @@ class TestGetPlanSummary:
             step_number=1,
             total_steps=1,
             description="List files",
-            status=StepStatus.COMPLETED,
+            status=OverseerStepStatus.COMPLETED,
         )
         agent.current_plan = TaskPlan(
             plan_id="plan_1",

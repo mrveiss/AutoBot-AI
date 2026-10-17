@@ -93,7 +93,7 @@ async def test_rate_limit_fails_open_when_redis_is_down(monkeypatch, caplog):
     with caplog.at_level(logging.WARNING):
         for _ in range(3):
             assert "result" in await srv.handle_request("tools/list", {}, VALID_TOKEN)
-    assert any("redis down" in x.getMessage() for x in caplog.records)
+    assert any("fail-open" in x.getMessage() for x in caplog.records)
 
 
 @pytest.mark.asyncio
