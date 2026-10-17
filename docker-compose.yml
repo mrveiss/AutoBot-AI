@@ -2,10 +2,10 @@
 # All core services on one machine. Frontend at /, SLM at /slm.
 # Requires Docker Compose v2+ for resource limits (deploy.resources).
 #
-# Usage (works out of the box — no manual secret step):
-#   docker compose up -d --build                       # Start all core services
-#   docker compose --profile monitoring up -d
-#   docker compose --profile ollama up -d
+# Usage — first `bash docker/generate-secrets.sh` once per host: it picks the
+# management network range (AUTOBOT_DOCKER_MGMT_PREFIX, no default, #16833):
+#   docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d --build
+#   ... --profile monitoring up -d   /   ... --profile ollama up -d
 #
 # SECRETS (GH#9775, GH#9905): AUTOBOT_JWT_SECRET / SECRET_KEY have NO committed
 # fallback — a shared committed signing secret allows token forgery. On first
@@ -76,7 +76,7 @@ services:
       - no-new-privileges:true
     networks:
       autobot-mgmt:
-        ipv4_address: 172.30.0.10
+        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.10
       autobot-data:
 
   autobot-postgres:
@@ -118,7 +118,7 @@ services:
       - no-new-privileges:true
     networks:
       autobot-mgmt:
-        ipv4_address: 172.30.0.11
+        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.11
       autobot-data:
 
   autobot-chromadb:
@@ -175,7 +175,7 @@ services:
       - no-new-privileges:true
     networks:
       autobot-mgmt:
-        ipv4_address: 172.30.0.12
+        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.12
       autobot-data:
 
   # ---- Application Layer ----
@@ -330,7 +330,7 @@ services:
       - no-new-privileges:true
     networks:
       autobot-mgmt:
-        ipv4_address: 172.30.0.13
+        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.13
       autobot-data:
       autobot-app:
 
@@ -461,7 +461,7 @@ services:
       - no-new-privileges:true
     networks:
       autobot-mgmt:
-        ipv4_address: 172.30.0.14
+        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.14
       autobot-data:
       autobot-app:
 
@@ -549,7 +549,7 @@ services:
       - no-new-privileges:true
     networks:
       autobot-mgmt:
-        ipv4_address: 172.30.0.15
+        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.15
       autobot-data:
 
   autobot-slm:
@@ -587,6 +587,7 @@ services:
       # Surface each compose service container as a fleet node (#9761). Off by
       # default so production/Ansible VM fleets are unaffected; on for compose.
       - SLM_COMPOSE_NODES=${SLM_COMPOSE_NODES:-true}
+      - AUTOBOT_DOCKER_MGMT_PREFIX=${AUTOBOT_DOCKER_MGMT_PREFIX}  # compose_fleet node IPs (#16833)
       # Shared signing secrets so the backend node's JWT verifies on SLM —
       # without a shared secret each service generates its own and SLM rejects
       # the node WS with 401, leaving the host shown offline (#9715). CHANGE in
@@ -634,7 +635,7 @@ services:
       - no-new-privileges:true
     networks:
       autobot-mgmt:
-        ipv4_address: 172.30.0.16
+        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.16
       autobot-data:
       autobot-app:
 
@@ -696,7 +697,7 @@ services:
       - no-new-privileges:true
     networks:
       autobot-mgmt:
-        ipv4_address: 172.30.0.17
+        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.17
       autobot-app:
 
   # ---- Optional: SLM web GUI only (#18585) ----
@@ -904,8 +905,11 @@ networks:
     driver: bridge
   # Shared management network: every service joins this single subnet so all
   # fleet nodes report IPs from one range, regardless of app/data tier (#9761).
+  # No default range (#16833): a fixed one took over the host's route on a LAN
+  # using the same /24. docker/generate-secrets.sh picks a free private /24 per
+  # host and writes AUTOBOT_DOCKER_MGMT_PREFIX (its first three octets).
   autobot-mgmt:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.30.0.0/24
+        - subnet: "${AUTOBOT_DOCKER_MGMT_PREFIX:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}.0/24"
