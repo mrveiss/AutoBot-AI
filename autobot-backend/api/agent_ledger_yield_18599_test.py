@@ -133,6 +133,21 @@ async def test_a_claim_the_caller_may_not_see_is_404_with_one_message_and_nothin
 
 
 @pytest.mark.asyncio
+async def test_an_oversized_request_is_a_422_at_parse_time_and_nothing_is_sent_18607(redis, bus):
+    from autobot_shared.coordination.ledger_events import TEXT_CAP
+    from autobot_shared.coordination.ledger_schemas import ID_MAX_LEN, SCOPE_MAX_LEN
+
+    await _hold("path:a/f", "t-a", CO_A)
+    client = _client()
+    assert _ask(client, reason="r" * (TEXT_CAP + 1)).status_code == 422
+    assert _ask(client, holder="t" * (ID_MAX_LEN + 1)).status_code == 422
+    assert _ask(client, scope="path:" + "s" * SCOPE_MAX_LEN).status_code == 422
+    assert _ask(client, scope="").status_code == 422
+    assert bus.events == []
+    assert _ask(client, reason="r" * TEXT_CAP).status_code == 200  # the cap itself is accepted
+
+
+@pytest.mark.asyncio
 async def test_unauthenticated_is_401(redis, bus):
     await _hold("path:a/f", "t-a", CO_A)
     assert any(d.dependency is get_current_user for d in agent_ledger.router.dependencies)
@@ -153,8 +168,18 @@ async def test_a_repeat_within_the_window_is_429_and_a_404_never_spends_the_allo
 
 @pytest.mark.asyncio
 async def test_a_long_reason_is_cut_in_the_published_event_and_the_ledger_copy_18563(redis, bus):
+    """The route refuses an over-cap reason (#18607); a caller below the route still gets the cut (#18563)."""
+    from autobot_shared.coordination.yield_ask import ask_holder_to_release
+
     await _hold("path:a/f", "t-a", CO_A)
-    assert _ask(_client(), reason="x" * (ledger_events.TEXT_CAP * 3)).status_code == 200
+    await ask_holder_to_release(
+        str(CO_A),
+        user_id="u-1",
+        scope="path:a/f",
+        holder_task_id="t-a",
+        reason="x" * (ledger_events.TEXT_CAP * 3),
+        issue=claim_yield.request_yield,
+    )
     assert bus.events[0][1]["reason"] == "x" * ledger_events.TEXT_CAP
     assert (await ledger_events.read_events(redis))[0]["reason"] == "x" * ledger_events.TEXT_CAP
 

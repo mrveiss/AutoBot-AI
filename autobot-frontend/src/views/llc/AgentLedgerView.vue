@@ -31,11 +31,12 @@
     <section v-if="active === 'now'" id="ledger-panel-now" role="tabpanel" aria-labelledby="ledger-tab-now" tabindex="0">
       <LedgerSectionState :section="ledger.presence.value" :empty="t('llc.ledger.empty.presence')">
         <table class="w-full border-collapse text-start [&_th]:p-2 [&_td]:p-2 [&_th]:text-start [&_tr]:border-b [&_tr]:border-autobot-border">
-          <thead><tr><th>{{ t('llc.ledger.col.agent') }}</th><th>{{ t('llc.ledger.col.kind') }}</th><th>{{ t('llc.ledger.col.status') }}</th><th>{{ t('llc.ledger.col.detail') }}</th></tr></thead>
+          <thead><tr><th>{{ t('llc.ledger.col.agent') }}</th><th>{{ t('llc.ledger.col.kind') }}</th><th>{{ t('llc.ledger.col.status') }}</th><th>{{ t('llc.ledger.col.task') }}</th><th>{{ t('llc.ledger.col.detail') }}</th></tr></thead>
           <tbody>
             <tr v-for="a in ledger.presence.value.rows" :key="`${a.kind}:${a.name}`">
               <td>{{ a.name }}</td><td>{{ a.kind }}</td>
-              <td>{{ a.busy ? t('llc.ledger.busy') : t('llc.ledger.idle') }}</td><td>{{ a.detail ?? '' }}</td>
+              <td>{{ a.busy ? t('llc.ledger.busy') : t('llc.ledger.idle') }}</td>
+              <td data-testid="ledger-current-task" class="max-w-xs truncate" :title="a.current_task?.title">{{ a.current_task?.title ?? '' }}</td><td>{{ a.detail ?? '' }}</td>
             </tr>
           </tbody>
         </table>

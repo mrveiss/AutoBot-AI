@@ -328,6 +328,10 @@ python:
   # here, a change confined to this file -- the only change that could add
   # `install-git-hooks.sh` back in -- skips the guard.
   - '.github/workflows/auto-fix-generated-types.yml'
+  # #18500: the autofix steps moved into a composite action with a dispatch-only
+  # caller; the guards above (and autofix_types_dispatch_18500_test.py) read both.
+  - '.github/actions/generated-types-autofix/action.yml'
+  - '.github/workflows/dispatch-generated-types.yml'
   # #17173: `repo_tests/secrets_baseline_reason_entries.py`'s `SPECIFIC_REASONS`
   # table names files under this tree by concrete literal (baseline keys are
   # (filename, type, hashed_secret) triples) -- the same filter-gap shape as

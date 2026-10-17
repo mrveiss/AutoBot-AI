@@ -35,7 +35,7 @@ class SystemFrontendConfigResponse(BaseModel):
     timestamp: str
 
 
-class SystemHealthResponse(BaseModel):
+class ProbeHealthResponse(BaseModel):
     """Response for GET /health and GET /system/health.
 
     Issue #6909: status uses probe vocabulary ("ok"/"degraded"/"down") — the
@@ -1766,7 +1766,7 @@ class InvalidateCacheResponse(BaseModel):
     deleted_count: int
 
 
-class ClearAllResponse(BaseModel):
+class CacheClearAllResponse(BaseModel):
     success: bool
     message: str
     total_deleted: int

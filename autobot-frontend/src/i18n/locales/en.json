@@ -5091,7 +5091,6 @@
     "role": "Role:",
     "lastLogin": "Last Login:",
     "preferences": "Preferences",
-    "theme": "Theme",
     "notifications": "Notifications",
     "emailNotifications": "Email notifications",
     "browserNotifications": "Browser notifications",
@@ -5101,7 +5100,6 @@
     "showTooltips": "Show tooltips",
     "enableAnimations": "Enable animations",
     "savePreferences": "Save Preferences",
-    "appearance": "Appearance",
     "voiceChatDisplay": "Voice Chat Display",
     "fullScreen": "Full-screen",
     "sidePanel": "Side panel",
@@ -5117,9 +5115,6 @@
     "pwTooShort": "Password must be at least 8 characters",
     "pwChanged": "Password changed successfully!",
     "never": "Never",
-    "themeLight": "Light",
-    "themeDark": "Dark",
-    "themeAuto": "Auto",
     "tabDevices": "Tab devices"
   },
   "charts": {
@@ -5798,11 +5793,6 @@
       "executionFailed": "Command execution failed",
       "postExecutionFailed": "The command ran, but a follow-up step failed. Its output is shown; some updates may be missing.",
       "enterComment": "Please enter a comment before submitting"
-    },
-    "darkModeToggle": {
-      "switchToLight": "Switch to light mode",
-      "switchToDark": "Switch to dark mode",
-      "toggleDarkMode": "Toggle dark mode"
     },
     "dataTable": {
       "sortBy": "Sort by {column}",
@@ -8001,7 +7991,6 @@
     "slmAdmin": "SLM Admin",
     "slmAdminTitle": "SLM Admin — opens in new tab",
     "profileSettings": "Profile Settings",
-    "switchLanguage": "Switch language",
     "openMainMenu": "Open main menu",
     "profile": "Profile",
     "services": "Services",
@@ -8935,6 +8924,7 @@
         "agent": "Agent",
         "kind": "Kind",
         "status": "Status",
+        "task": "Current task",
         "detail": "Detail",
         "scope": "Scope",
         "mode": "Mode",

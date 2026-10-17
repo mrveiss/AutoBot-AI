@@ -10,7 +10,7 @@ its own docstring: "avoiding dependency issues when autobot_shared is used
 independently"). ``autobot-slm-backend/config.py`` is a single file, not a
 package, so ``config.registry`` cannot resolve there at all — every tier
 before ``autobot_shared.ssot_config`` came up empty on that process, and
-`RedisConfig.host`'s dataclass field default froze whatever NetworkConstants
+`RedisDbConfig.host`'s dataclass field default froze whatever NetworkConstants
 answered at whichever process imported ``redis_management.config`` first.
 
 Two things had to change together for the 'main' database specifically
@@ -22,7 +22,7 @@ file only adds the new one and the 'main'-specific wiring):
    works from any process) before finally defaulting to '127.0.0.1'.
 2. ``_init_configurations`` / ``_load_configurations`` — 'main' now takes its
    host from ``self._config["host"]`` (the resolved chain above) instead of
-   ``RedisConfig.host``'s frozen class-level default, which never went
+   ``RedisDbConfig.host``'s frozen class-level default, which never went
    through that chain at all.
 """
 

@@ -152,7 +152,7 @@ class TestCodePatternAnalyzerSourceTagging:
     async def test_duplicate_pattern_metadata_tagged_with_source(self, pa):
         analyzer = pa.analyzer.CodePatternAnalyzer(enable_embedding_storage=False, source_id="A")
         dup = pa.types.DuplicatePattern(
-            pattern_type=pa.types.PatternType.DUPLICATE_CODE,
+            pattern_type=pa.types.CodePatternType.DUPLICATE_CODE,
             severity=pa.types.PatternSeverity.HIGH,
             description="clone",
             locations=[pa.types.CodeLocation(file_path="a.py", start_line=1, end_line=5)],
@@ -167,7 +167,7 @@ class TestCodePatternAnalyzerSourceTagging:
     async def test_regex_pattern_metadata_tagged_with_source(self, pa):
         analyzer = pa.analyzer.CodePatternAnalyzer(enable_embedding_storage=False, source_id="A")
         regex_opp = pa.types.RegexOpportunity(
-            pattern_type=pa.types.PatternType.REGEX_OPPORTUNITY,
+            pattern_type=pa.types.CodePatternType.REGEX_OPPORTUNITY,
             severity=pa.types.PatternSeverity.LOW,
             description="use regex",
             locations=[pa.types.CodeLocation(file_path="b.py", start_line=1, end_line=1)],

@@ -90,6 +90,7 @@
   --aui-space-6: var(--spacing-6);
 
   /* ---- Z-index ------------------------------------------------------- */
+  --aui-z-dropdown: var(--z-dropdown);
   --aui-z-modal: var(--z-modal);
   --aui-z-tooltip: var(--z-tooltip);
 

@@ -13,7 +13,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import {
   useLlmConfigApi,
-  type LLMConfig,
+  type SlmLLMConfig,
   type LLMProviderConfig,
   type LLMTestResponse,
 } from '@/composables/useLlmConfigApi'
@@ -30,7 +30,7 @@ const testResult = ref<LLMTestResponse | null>(null)
 
 const activeTab = ref<'providers' | 'server' | 'models'>('providers')
 
-const config = reactive<LLMConfig>({
+const config = reactive<SlmLLMConfig>({
   active_provider: 'ollama',
   providers: [],
   ollama_host: '0.0.0.0',

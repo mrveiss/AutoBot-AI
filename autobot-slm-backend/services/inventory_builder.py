@@ -158,6 +158,14 @@ REQUIRED_GROUPS: frozenset = frozenset(
     }
 )
 
+
+def _secrets_lookup(key: str, why: str = "") -> str:
+    """Env, then the install-time secrets file, else a refusal -- never a default (#17642)."""
+    grep = f"lookup('pipe', 'grep -oP \"{key}=\\\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || true')"
+    hint = f"{key.lower()} is unset: set {key} in the environment or in /etc/autobot/slm-secrets.env. {why}(#17642)"
+    return f"{{{{ (lookup('env', '{key}') | trim) or ({grep} | trim) or undef(hint='{hint}') }}}}"
+
+
 # Global all.vars — reproduced verbatim from slm-nodes.yml
 _ALL_VARS: dict[str, str] = {
     "ansible_user": "autobot",
@@ -168,16 +176,8 @@ _ALL_VARS: dict[str, str] = {
         ' \'grep -oP "SLM_HOST=\\\\K.*" /etc/autobot/slm-secrets.env'
         " 2>/dev/null || echo 127.0.0.1'), true) }}"
     ),
-    "network_subnet": (
-        "{{ lookup('env', 'NETWORK_SUBNET') or"
-        " lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\\\K.*\""
-        " /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0/0' }}"
-    ),
-    "network_gateway": (
-        "{{ lookup('env', 'NETWORK_GATEWAY') or"
-        " lookup('pipe', 'grep -oP \"NETWORK_GATEWAY=\\\\K.*\""
-        " /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0' }}"
-    ),
+    "network_subnet": _secrets_lookup("NETWORK_SUBNET", "A firewall source never falls back to an open range. "),
+    "network_gateway": _secrets_lookup("NETWORK_GATEWAY"),
 }
 
 

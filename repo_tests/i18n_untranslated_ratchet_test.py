@@ -66,16 +66,16 @@ _LOCALES = _REPO_ROOT / "autobot-frontend" / "src" / "i18n" / "locales"
 # Lower these as translations land. Never raise one to admit a new untranslated
 # string: translate it, or leave the key out until it can be translated.
 BASELINE = {
-    "ar": 3719,  # #17561/#17565: skip-link labels and palette strings translated
-    "de": 1613,  # #17561/#17565: skip-link labels and palette strings translated
-    "es": 1661,  # #17561/#17565: skip-link labels and palette strings translated
-    "fa": 3782,  # #17561/#17565: skip-link labels and palette strings translated
-    "fr": 1858,  # #17561/#17565: skip-link labels and palette strings translated
-    "he": 3782,  # #17561/#17565: skip-link labels and palette strings translated
-    "lv": 2253,  # #17561/#17565: skip-link labels and palette strings translated
-    "pl": 2219,  # #17561/#17565: skip-link labels and palette strings translated
-    "pt": 2056,  # #17561/#17565: skip-link labels and palette strings translated
-    "ur": 3782,  # #17561/#17565: skip-link labels and palette strings translated
+    "ar": 3715,  # #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
+    "de": 1609,  # #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
+    "es": 1657,  # #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
+    "fa": 3778,  # #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
+    "fr": 1854,  # #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
+    "he": 3778,  # #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
+    "lv": 2249,  # #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
+    "pl": 2215,  # #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
+    "pt": 2052,  # #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
+    "ur": 3778,  # #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
 }
 
 # Below this length a match is far more likely to be a shared token than an

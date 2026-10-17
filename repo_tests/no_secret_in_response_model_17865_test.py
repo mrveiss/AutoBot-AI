@@ -15,7 +15,7 @@ naive version misses and each of which hides a real route in this tree:
 
 * **inheritance** -- the field is usually declared on a parent in another
   module, which is exactly how the original defect was built.
-* **nesting** -- `LLMConfigResponse` reaches `LLMProviderConfig.api_key`
+* **nesting** -- `SlmLLMConfigResponse` reaches `LLMProviderConfig.api_key`
   through a field annotation, not through a base class.
 * **generic subscripts** -- `DataResponse[SecretCreatedData]` is an
   `ast.Subscript`, so a check reading only `ast.Name` sees nothing at all.

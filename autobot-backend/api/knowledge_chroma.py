@@ -10,11 +10,17 @@ Endpoints support listing collections, getting details, browsing documents,
 and performing similarity searches.
 """
 
-from typing import Any, Dict, List, Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
+from api.schemas_knowledge_chroma import (
+    ChromaSearchRequest,
+    ChromaSearchResponse,
+    CollectionDetailResponse,
+    CollectionListResponse,
+    CollectionMetadata,
+    DocumentListResponse,
+    SearchResultItem,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -40,82 +46,6 @@ _NOT_FOUND_MARKERS = ("does not exist", "not found", "not exist")
 def _is_collection_not_found(exc: Exception) -> bool:
     """True when the exception indicates the collection genuinely doesn't exist."""
     return any(marker in str(exc).lower() for marker in _NOT_FOUND_MARKERS)
-
-
-# ============================================================================
-# Pydantic Models
-# ============================================================================
-
-
-class CollectionMetadata(BaseModel):
-    """Metadata for a ChromaDB collection."""
-
-    name: str = Field(..., description="Collection name")
-    count: int = Field(..., description="Number of documents in collection")
-    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Collection metadata")
-
-
-class CollectionListResponse(BaseModel):
-    """Response for listing all collections."""
-
-    success: bool = True
-    data: List[CollectionMetadata]
-    error: Optional[str] = None
-
-
-class CollectionDetailResponse(BaseModel):
-    """Response for getting collection details."""
-
-    success: bool = True
-    data: Optional[CollectionMetadata] = None
-    error: Optional[str] = None
-
-
-class DocumentItem(BaseModel):
-    """A document in a collection."""
-
-    id: str = Field(..., description="Document ID")
-    document: Optional[str] = Field(None, description="Document text content")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Document metadata")
-    embedding_dim: Optional[int] = Field(None, description="Embedding vector dimensionality")
-
-
-class DocumentListResponse(BaseModel):
-    """Response for listing documents in a collection."""
-
-    success: bool = True
-    data: Optional[Dict[str, Any]] = Field(
-        None,
-        description="Documents with ids, documents, metadatas, embeddings summary",
-    )
-    total: Optional[int] = Field(None, description="Total document count")
-    error: Optional[str] = None
-
-
-class SearchRequest(BaseModel):
-    """Request for similarity search."""
-
-    query: str = Field(..., description="Query text for similarity search")
-    n_results: int = Field(10, ge=1, le=100, description="Number of results to return")
-    where: Optional[Dict[str, Any]] = Field(None, description="Metadata filter (ChromaDB where clause)")
-
-
-class SearchResultItem(BaseModel):
-    """A single search result."""
-
-    id: str
-    document: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    distance: Optional[float] = Field(None, description="Similarity distance score")
-
-
-class SearchResponse(BaseModel):
-    """Response for similarity search."""
-
-    success: bool = True
-    data: Optional[List[SearchResultItem]] = None
-    query: Optional[str] = None
-    error: Optional[str] = None
 
 
 # ============================================================================
@@ -307,7 +237,7 @@ async def list_documents(
         )
 
 
-@router.post("/collections/{name}/search", response_model=SearchResponse)
+@router.post("/collections/{name}/search", response_model=ChromaSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_chroma_collection",
@@ -315,9 +245,9 @@ async def list_documents(
 )
 async def search_collection(
     name: str,
-    request: SearchRequest,
+    request: ChromaSearchRequest,
     _: bool = Depends(check_admin_permission),
-) -> SearchResponse:
+) -> ChromaSearchResponse:
     """
     Perform similarity search on a collection using query text.
 
@@ -330,7 +260,7 @@ async def search_collection(
         _: Admin permission check -- the raw explorer bypasses fact visibility (#16666)
 
     Returns:
-        SearchResponse with matching documents and similarity scores
+        ChromaSearchResponse with matching documents and similarity scores
 
     Raises:
         HTTPException: 400 for invalid parameters, 404 if collection not found,
@@ -372,7 +302,7 @@ async def search_collection(
                     )
                 )
 
-        return SearchResponse(
+        return ChromaSearchResponse(
             success=True,
             data=search_results,
             query=request.query,

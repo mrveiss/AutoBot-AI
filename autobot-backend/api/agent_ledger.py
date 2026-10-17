@@ -43,6 +43,7 @@ from autobot_shared.coordination.ledger_schemas import (
     PeerMessagesResponse,
     PresenceResponse,
     PresenceRow,
+    PresenceTaskRow,
     WaitlistsResponse,
     YieldRequestBody,
     YieldRequestResponse,
@@ -71,11 +72,17 @@ async def company_scope(ctx: TenantContext = Depends(require_org_context)) -> Co
 @router.get("/ledger/presence", response_model=PresenceResponse)
 @serve_ledger
 async def ledger_presence(scope: CompanyScope = Depends(company_scope)) -> PresenceResponse:
-    """The company's live agents plus shared infrastructure, busy or idle."""
+    """The company's live agents plus shared infrastructure, busy or idle, with what each is working on."""
     entries = get_presence_registry().list_live(scope.org_id)
     rows = [
         PresenceRow(
-            kind=e.kind.value, tenant_id=e.tenant_id, name=e.name, busy=e.busy, detail=e.detail, last_seen=e.last_seen
+            kind=e.kind.value,
+            tenant_id=e.tenant_id,
+            name=e.name,
+            busy=e.busy,
+            detail=e.detail,
+            current_task=PresenceTaskRow(id=e.task.id, title=e.task.title) if e.task else None,
+            last_seen=e.last_seen,
         )
         for e in entries
     ]
@@ -163,7 +170,14 @@ async def ledger_yield_request(
     scope: CompanyScope = Depends(company_scope),
     user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> YieldRequestResponse:
-    """Ask the holder of one of the company's claims to release it. Publishes a request; releases nothing."""
+    """Ask the holder of one of the company's claims to release it. Publishes a request; releases nothing.
+
+    The per-person rate limit (``RateLimiter.acquire_window``) fails OPEN if ITS store is
+    unreachable -- the limiter's class policy (#18607). With Redis down the ask never gets that
+    far: the claim lookup before the limiter answers the typed 503. Only a limiter store failing
+    on its own lets an ask through unlimited; it is still published once per request, never as
+    a release.
+    """
     token = await ask_holder_to_release(
         scope.org_id,
         user_id=str(user_id),

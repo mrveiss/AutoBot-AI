@@ -64,8 +64,10 @@
 
 # #12460: the alert rules live in the repo under autobot-monitoring/ and were
 # never installed, so `rule_files` had nothing to point at on a fleet host.
-# Copied from the deployed checkout rather than duplicated into the role, so the
-# repo stays the single source for every alert.
+# Copied from the repo clone (code_source_dir, as health_check_cron.yml reads
+# scripts) rather than duplicated into the role, so the repo stays the single
+# source for every alert. Not autobot_repo_dir: install.sh deploys only the
+# service trees there, so a fresh install has no autobot-monitoring/ in it (#18628).
 - name: Create Prometheus rules directory
   ansible.builtin.file:
     path: "{{ prometheus_config_dir }}/rules"
@@ -76,7 +78,7 @@
 
 - name: Find Prometheus alert rules in the repo
   ansible.builtin.find:
-    paths: "{{ autobot_repo_dir }}/autobot-monitoring"
+    paths: "{{ code_source_dir }}/autobot-monitoring"
     patterns: "alerts-*.yml"
   register: _prometheus_alert_rules
 
@@ -88,9 +90,9 @@
   ansible.builtin.assert:
     that: _prometheus_alert_rules.files | length > 0
     fail_msg: >-
-      No alerts-*.yml found under {{ autobot_repo_dir }}/autobot-monitoring.
+      No alerts-*.yml found under {{ code_source_dir }}/autobot-monitoring.
       Prometheus would start with rule_files pointing at an empty directory and
-      no alert would ever fire. Check autobot_repo_dir, or set
+      no alert would ever fire. Check code_source_dir, or set
       prometheus_alert_rules_required=false for a node that intentionally has none.
   when: prometheus_alert_rules_required | bool
 

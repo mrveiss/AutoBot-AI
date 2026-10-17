@@ -317,7 +317,7 @@ _SERVICE_DEFINITIONS = {
 }
 
 
-class ServiceRegistry:
+class ServiceDefinitionRegistry:
     """
     Registry of known AutoBot services with their configurations.
 
@@ -388,7 +388,7 @@ class ServiceOrchestrator:
     _SSH_MAX_CONCURRENT = 10
 
     def __init__(self):
-        self.registry = ServiceRegistry()
+        self.registry = ServiceDefinitionRegistry()
         self.ssh_key = Path(config.path.ssh_key_path)  # canonical inter-node key (#12429)
         self.ssh_user = "autobot"
         self._ssh_semaphore = asyncio.Semaphore(self._SSH_MAX_CONCURRENT)

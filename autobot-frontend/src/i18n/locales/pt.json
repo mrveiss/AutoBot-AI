@@ -4818,8 +4818,8 @@
     "settings": "Terminal Settings",
     "fontSize": "Font Size",
     "theme": "Theme",
-    "dark": "Dark",
-    "light": "Light",
+    "dark": "Escuro",
+    "light": "Claro",
     "cursorStyle": "Cursor Style",
     "block": "Block",
     "underline": "Underline",
@@ -5091,7 +5091,6 @@
     "role": "Função:",
     "lastLogin": "Último acesso:",
     "preferences": "Preferências",
-    "theme": "Tema",
     "notifications": "Notificações",
     "emailNotifications": "Notificações por e-mail",
     "browserNotifications": "Notificações do navegador",
@@ -5101,7 +5100,6 @@
     "showTooltips": "Mostrar dicas",
     "enableAnimations": "Ativar animações",
     "savePreferences": "Guardar preferências",
-    "appearance": "Aparência",
     "voiceChatDisplay": "Ecrã do chat de voz",
     "fullScreen": "Ecrã inteiro",
     "sidePanel": "Painel lateral",
@@ -5117,9 +5115,6 @@
     "pwTooShort": "A palavra-passe deve ter pelo menos 8 caracteres",
     "pwChanged": "Palavra-passe alterada com sucesso!",
     "never": "Nunca",
-    "themeLight": "Claro",
-    "themeDark": "Escuro",
-    "themeAuto": "Automático",
     "tabDevices": "Tab devices"
   },
   "charts": {
@@ -5792,11 +5787,6 @@
       "postExecutionFailed": "O comando foi executado, mas uma etapa posterior falhou. A saída é exibida; algumas atualizações podem estar faltando.",
       "enterComment": "Please enter a comment before submitting"
     },
-    "darkModeToggle": {
-      "switchToLight": "Switch to light mode",
-      "switchToDark": "Switch to dark mode",
-      "toggleDarkMode": "Toggle dark mode"
-    },
     "dataTable": {
       "sortBy": "Sort by {column}",
       "actions": "Actions",
@@ -5918,8 +5908,8 @@
       "selectTheme": "Select theme",
       "switchToLight": "Switch to light mode",
       "switchToDark": "Switch to dark mode",
-      "light": "Light",
-      "dark": "Dark"
+      "light": "Claro",
+      "dark": "Escuro"
     },
     "toastContainer": {
       "notifications": "Notifications",
@@ -7944,7 +7934,6 @@
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents",
     "agentActivity": "Atividade do agente",
-    "switchLanguage": "Switch language",
     "openMainMenu": "Open main menu",
     "skipToContent": "Pular para o conteúdo principal",
     "services": "Services",
@@ -8947,6 +8936,7 @@
         "agent": "Agente",
         "kind": "Tipo",
         "status": "Estado",
+        "task": "Tarefa atual",
         "detail": "Detalhe",
         "scope": "Âmbito",
         "mode": "Modo",

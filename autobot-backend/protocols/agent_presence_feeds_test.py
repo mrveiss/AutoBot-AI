@@ -18,7 +18,7 @@ import pytest
 from llc.models.enums import LLCRunStatus
 from models.agent_org import AgentOrgNode
 from protocols.agent_kind import AgentKind
-from protocols.agent_presence import UNKNOWN_TENANT, AgentPresenceRegistry
+from protocols.agent_presence import UNKNOWN_TENANT, AgentPresenceRegistry, PresenceTask
 from protocols.agent_presence_feeds import (
     sync_ai_stack_presence,
     sync_company_os_presence,
@@ -35,19 +35,25 @@ class _FakeResult:
 
 
 class _FakeSession:
-    def __init__(self, rows):
-        self._rows = rows
+    """Answers each execute() with the next result set: org rows first, then work-item titles."""
 
-    async def execute(self, *_args, **_kwargs):
-        return _FakeResult(self._rows)
+    def __init__(self, rows, *more):
+        self._results = [rows, *more]
+        self.calls = 0
+        self.statements = []
+
+    async def execute(self, statement, *_args, **_kwargs):
+        self.calls += 1
+        self.statements.append(statement)
+        return _FakeResult(self._results[min(self.calls, len(self._results)) - 1])
 
 
 def _org_node(*, agent_id: str, company_id, org_role: str = "worker") -> AgentOrgNode:
     return AgentOrgNode(agent_id=agent_id, name=agent_id, company_id=company_id, org_role=org_role)
 
 
-def _run(status: str):
-    return SimpleNamespace(status=status)
+def _run(status: str, work_item_id=None):
+    return SimpleNamespace(status=status, work_item_id=work_item_id)
 
 
 class TestSyncCompanyOsPresence:
@@ -66,6 +72,63 @@ class TestSyncCompanyOsPresence:
         assert entries[0].name == "assistant-abc123"
         assert entries[0].tenant_id == str(company_id)
         assert entries[0].busy is True
+
+    @pytest.mark.asyncio
+    async def test_a_running_agent_reports_its_runs_work_item_as_current_task(self):
+        """#18391: the run that makes the agent busy names what it is working on."""
+        company_id, item = uuid.uuid4(), uuid.uuid4()
+        node = _org_node(agent_id="assistant-abc123", company_id=company_id)
+        session = _FakeSession([(node, _run(LLCRunStatus.RUNNING.value, item))], [(item, "Draft the Q3 report")])
+        registry = AgentPresenceRegistry(ttl_seconds=60)
+
+        await sync_company_os_presence(registry, session, str(company_id))
+
+        assert registry.list_live(str(company_id))[0].task == PresenceTask(id=str(item), title="Draft the Q3 report")
+
+    @pytest.mark.asyncio
+    async def test_the_title_query_is_scoped_to_the_agents_company(self):
+        """A title is only ever read for the company whose presence is being synced (01's review of #18652)."""
+        company_id, item = uuid.uuid4(), uuid.uuid4()
+        node = _org_node(agent_id="assistant-abc123", company_id=company_id)
+        session = _FakeSession([(node, _run(LLCRunStatus.RUNNING.value, item))], [(item, "t")])
+
+        await sync_company_os_presence(AgentPresenceRegistry(ttl_seconds=60), session, str(company_id))
+
+        where = str(session.statements[1].whereclause)
+        assert "llc_work_items.company_id" in where and "llc_work_items.id IN" in where
+
+    def test_the_latest_run_join_is_scoped_to_the_company(self):
+        """Agent slugs repeat across companies; the run join must not pick another company's run."""
+        from llc.services.agent_presence_queries import agent_org_nodes_with_latest_heartbeat
+
+        sql = str(agent_org_nodes_with_latest_heartbeat(str(uuid.uuid4())))
+        join_on = sql.split("LEFT OUTER JOIN llc_heartbeat_runs ON", 1)[1].split("WHERE", 1)[0]
+        assert "llc_heartbeat_runs.company_id" in join_on
+
+    @pytest.mark.asyncio
+    async def test_an_idle_agent_has_no_current_task_and_no_title_query_runs(self):
+        company_id, item = uuid.uuid4(), uuid.uuid4()
+        node = _org_node(agent_id="assistant-abc123", company_id=company_id)
+        session = _FakeSession([(node, _run(LLCRunStatus.COMPLETED.value, item))])
+        registry = AgentPresenceRegistry(ttl_seconds=60)
+
+        await sync_company_os_presence(registry, session, str(company_id))
+
+        assert registry.list_live(str(company_id))[0].task is None
+        assert session.calls == 1
+
+    @pytest.mark.asyncio
+    async def test_a_running_run_without_a_work_item_has_no_current_task(self):
+        company_id = uuid.uuid4()
+        node = _org_node(agent_id="assistant-abc123", company_id=company_id)
+        session = _FakeSession([(node, _run(LLCRunStatus.RUNNING.value))])
+        registry = AgentPresenceRegistry(ttl_seconds=60)
+
+        await sync_company_os_presence(registry, session, str(company_id))
+
+        entry = registry.list_live(str(company_id))[0]
+        assert entry.busy is True and entry.task is None
+        assert session.calls == 1
 
     @pytest.mark.asyncio
     async def test_an_agent_with_a_completed_heartbeat_is_idle(self):

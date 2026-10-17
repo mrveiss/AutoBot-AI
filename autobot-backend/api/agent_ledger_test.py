@@ -30,7 +30,7 @@ from autobot_shared.coordination.work_claims import release_scope, try_acquire
 from protocols import idle_notice
 from protocols.agent_communication import AgentIdentity
 from protocols.agent_kind import AgentKind
-from protocols.agent_presence import AgentPresenceRegistry
+from protocols.agent_presence import AgentPresenceRegistry, PresenceTask
 from protocols.idle_notice import IdleSubscription
 from protocols.peer_inbox import PeerInboxDirectory
 from user_management.services import TenantContext
@@ -142,6 +142,24 @@ def test_presence_peer_messages_and_idle_subscribers_are_scoped_to_the_callers_c
         ]
         assert "secret body" not in pending.text and other not in pending.text  # metadata only, own tenant only
         assert [s["subscriber"] for s in _get(company, "idle-subscribers").json()["subscribers"]] == [f"{name}-waiter"]
+
+
+def test_presence_carries_a_busy_agents_current_task_and_null_for_an_idle_one_18391(world):
+    registry, _directory = world
+    registry.report(
+        kind=AgentKind.COMPANY_OS,
+        tenant_id=str(CO_A),
+        name="writer",
+        instance_id="i",
+        busy=True,
+        task=PresenceTask(id="wi-1", title="Draft the Q3 report"),
+    )
+    registry.report(kind=AgentKind.COMPANY_OS, tenant_id=str(CO_A), name="idler", instance_id="j", busy=False)
+
+    rows = {r["name"]: r for r in _get(CO_A, "presence").json()["agents"]}
+
+    assert rows["writer"]["current_task"] == {"id": "wi-1", "title": "Draft the Q3 report"}
+    assert rows["idler"]["current_task"] is None
 
 
 def test_reading_pending_messages_does_not_drain_them(world):

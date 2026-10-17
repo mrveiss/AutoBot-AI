@@ -15,12 +15,12 @@ from typing import Dict, List
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.schemas_system import (
+    CacheClearAllResponse,
     CacheClearTypeResponse,
     CacheConfigResponse,
     CacheStatsResponse,
     CacheWarmingRequest,
     CacheWarmupResponse,
-    ClearAllResponse,
     InvalidateCacheResponse,
     RedisClearResponse,
     RedisStatsResponse,
@@ -441,7 +441,7 @@ async def invalidate_cache(
         raise HTTPException(status_code=500, detail="Error invalidating cache")
 
 
-@router.post("/clear-all", response_model=ClearAllResponse)
+@router.post("/clear-all", response_model=CacheClearAllResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_all_cache",

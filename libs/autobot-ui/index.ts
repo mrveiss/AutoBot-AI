@@ -31,6 +31,10 @@ export { default as BaseCard } from './src/components/BaseCard.vue'
 export { default as EmptyState } from './src/components/EmptyState.vue'
 
 export { default as SkipLink } from './src/components/SkipLink.vue'
+// One language picker for both apps (#18354); endonym labels live with it.
+export { default as LanguageSwitcher } from './src/components/LanguageSwitcher.vue'
+export { LOCALE_ENDONYMS, localeOptions } from './src/utils/locales'
+export type { LocaleOption } from './src/utils/locales'
 
 export { default as BaseModal } from './src/components/BaseModal.vue'
 export type { ModalSize } from './src/components/BaseModal.vue'

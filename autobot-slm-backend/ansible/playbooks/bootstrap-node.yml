@@ -180,7 +180,7 @@
         rule: allow
         port: "5900"
         proto: tcp
-        src: "{{ network_subnet | default('0.0.0.0/0', true) }}"
+        src: "{{ network_subnet }}"
         comment: "VNC server - internal only"
 
     - name: "Allow websockify port (6080) from internal subnet"
@@ -188,7 +188,7 @@
         rule: allow
         port: "6080"
         proto: tcp
-        src: "{{ network_subnet | default('0.0.0.0/0', true) }}"
+        src: "{{ network_subnet }}"
         comment: "noVNC websockify - internal only"
 
     - name: "Allow RDP port (3389) from internal subnet (GH#1525)"
@@ -196,7 +196,7 @@
         rule: allow
         port: "3389"
         proto: tcp
-        src: "{{ network_subnet | default('0.0.0.0/0', true) }}"
+        src: "{{ network_subnet }}"
         comment: "xrdp RDP server - internal only"
 
     - name: "Enable UFW with deny-incoming default"

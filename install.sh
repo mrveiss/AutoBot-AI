@@ -174,6 +174,21 @@ add_ppa_if_missing() {
 # Network Interface Detection (#2832)
 # =============================================================================
 
+# #17642: a firewall source, so given (NETWORK_SUBNET/NETWORK_GATEWAY) or detected, never guessed
+detect_network() {
+    local cidr
+    network_subnet="${NETWORK_SUBNET:-}" network_gateway="${NETWORK_GATEWAY:-}"
+    cidr=$(ip -4 addr show | awk -v ip="${local_ip}/" '$1 == "inet" && index($2, ip) == 1 {print $2; exit}')
+    if [[ -z "${network_subnet}" && -n "${cidr}" ]]; then
+        network_subnet=$(python3 -c "import ipaddress; print(ipaddress.ip_interface('${cidr}').network)") || network_subnet=""
+    fi
+    if [[ -z "${network_gateway}" ]]; then
+        network_gateway=$(ip route | awk '/^default/ {print $3}' | head -1)
+    fi
+    python3 -c 'import ipaddress, sys; ipaddress.ip_network(sys.argv[1]); ipaddress.ip_address(sys.argv[2])' "${network_subnet}" "${network_gateway}" 2>/dev/null \
+        || fatal "No usable network for ${local_ip} (subnet '${network_subnet}', gateway '${network_gateway}'). Re-run with NETWORK_SUBNET=<cidr> NETWORK_GATEWAY=<ip> (INSTALL.md)."
+}
+
 detect_local_ip() {
     # If OVERRIDE_IP is set, use it directly
     if [[ -n "${OVERRIDE_IP:-}" ]]; then
@@ -597,10 +612,10 @@ all:
   vars:
     # #7162: network_subnet/network_gateway/slm_host MUST be defined here so
     # firewall rules in group_vars/slm.yml resolve. Match slm-nodes.yml's
-    # lookup-with-fallback pattern: env first, then secrets file, then default.
+    # lookup pattern: env first, then secrets file, never an open-range default (#17642).
     slm_host: "{{ lookup('env', 'SLM_HOST') | default(lookup('pipe', 'grep -oP \"SLM_HOST=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || echo 127.0.0.1'), true) }}"
-    network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0/0' }}"
-    network_gateway: "{{ lookup('env', 'NETWORK_GATEWAY') or lookup('pipe', 'grep -oP \"NETWORK_GATEWAY=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0' }}"
+    network_subnet: "{{ (lookup('env', 'NETWORK_SUBNET') | trim) or (lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || true') | trim) or undef(hint='network_subnet is unset: set NETWORK_SUBNET in the environment or in /etc/autobot/slm-secrets.env. It is a firewall source, so it never falls back to an open range (#17642)') }}"
+    network_gateway: "{{ (lookup('env', 'NETWORK_GATEWAY') | trim) or (lookup('pipe', 'grep -oP \"NETWORK_GATEWAY=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || true') | trim) or undef(hint='network_gateway is unset: set NETWORK_GATEWAY in the environment or in /etc/autobot/slm-secrets.env (#17642)') }}"
   hosts:
     00-SLM-Manager:
       ansible_connection: local
@@ -628,16 +643,7 @@ INVENTORY
         # Issue #2758: detect the machine's primary outbound IP so that
         # SLM_EXTERNAL_URL is set correctly and not left to the Python fallback.
         local_ip="$(detect_local_ip)"
-        # Detect subnet and gateway from the selected interface so Ansible
-        # firewall rules use the correct network range for any installation.
-        local cidr
-        cidr=$(ip -4 addr show | awk '/inet / {print $2}' | grep "^${local_ip%.*}" | head -1)
-        if [[ -n "$cidr" ]]; then
-            network_subnet=$(python3 -c "import ipaddress; print(str(ipaddress.ip_interface('$cidr').network))" 2>/dev/null)
-        fi
-        network_gateway=$(ip route | awk '/^default/ {print $3}' | head -1)
-        [[ -z "$network_subnet" ]] && network_subnet="${local_ip%.*}.0/24"
-        [[ -z "$network_gateway" ]] && network_gateway="${local_ip%.*}.1"
+        detect_network
         cat > "${SECRETS_FILE}" << EOF
 SLM_SECRET_KEY=${secret_key}
 SLM_ENCRYPTION_KEY=${encryption_key}
@@ -655,15 +661,9 @@ EOF
         # Refresh IP/network fields even when preserving static secrets (#3266).
         # Stale IPs remain when the machine's address changes between installs.
         info "  Refreshing IP/network fields in preserved secrets file..."
-        local local_ip network_subnet network_gateway cidr
+        local local_ip network_subnet network_gateway
         local_ip="$(detect_local_ip)"
-        cidr=$(ip -4 addr show | awk '/inet / {print $2}' | grep "^${local_ip%.*}" | head -1)
-        if [[ -n "$cidr" ]]; then
-            network_subnet=$(python3 -c "import ipaddress; print(str(ipaddress.ip_interface('$cidr').network))" 2>/dev/null)
-        fi
-        network_gateway=$(ip route | awk '/^default/ {print $3}' | head -1)
-        [[ -z "$network_subnet" ]] && network_subnet="${local_ip%.*}.0/24"
-        [[ -z "$network_gateway" ]] && network_gateway="${local_ip%.*}.1"
+        detect_network
         # Upsert each key: replace the line if it exists, append if missing.
         # Plain sed s/// silently does nothing when the key is absent — which
         # causes SLM_HOST / NETWORK_* to stay missing on secrets files written
@@ -1128,7 +1128,7 @@ uninstall() {
     echo "    - Node.js, Grafana, Ansible"
     echo "    - APT repositories added by the installer"
     echo "    - The '${AUTOBOT_USER}' system user"
-    echo "    - Directories: /opt/autobot, /etc/autobot, /var/lib/slm, /var/log/autobot"
+    echo "    - Directories: ${AUTOBOT_BASE}, /etc/autobot, /var/lib/slm, /var/log/autobot"
     echo
 
     if ! ${CONFIRM_YES}; then
@@ -1245,7 +1245,7 @@ uninstall() {
 
     # ---- Phase 5: Remove directories and files ----
     info "Removing AutoBot directories and files..."
-    local dirs=(/opt/autobot /var/lib/slm /var/log/autobot /etc/autobot /var/lib/postgresql /etc/postgresql /var/lib/grafana /etc/grafana)
+    local dirs=("${AUTOBOT_BASE}" /var/lib/slm /var/log/autobot /etc/autobot /var/lib/postgresql /etc/postgresql /var/lib/grafana /etc/grafana)
     for dir in "${dirs[@]}"; do
         if [[ -d "${dir}" ]]; then
             rm -rf "${dir}"
