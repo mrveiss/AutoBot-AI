@@ -50,7 +50,7 @@ class ServiceMigrateRequest(BaseModel):
     target_node_id: str = Field(..., description="Node to migrate the service to")
 
 
-class ServiceActionResponse(BaseModel):
+class OrchestrationServiceActionResponse(BaseModel):
     """Response for a service action."""
 
     service_name: str
@@ -145,7 +145,7 @@ async def _per_node_systemd_action(
     service_name: str,
     action: str,
     node_id: str | None,
-) -> ServiceActionResponse:
+) -> OrchestrationServiceActionResponse:
     """Run a systemctl action on a specific node for a raw systemd service.
 
     Used when the service name is not in the abstract registry (#1025).
@@ -181,7 +181,7 @@ async def _per_node_systemd_action(
             svc.status = new_status
             await db.commit()
 
-    return ServiceActionResponse(
+    return OrchestrationServiceActionResponse(
         service_name=service_name,
         action=action,
         success=success,
@@ -270,13 +270,13 @@ async def get_fleet_status(
 # =============================================================================
 
 
-@router.post("/services/{service_name}/start", response_model=ServiceActionResponse)
+@router.post("/services/{service_name}/start", response_model=OrchestrationServiceActionResponse)
 async def start_service(
     service_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
     request: ServiceActionRequest | None = None,
-) -> ServiceActionResponse:
+) -> OrchestrationServiceActionResponse:
     """
     Start an AutoBot service.
 
@@ -297,7 +297,7 @@ async def start_service(
         force=request.force,
     )
 
-    return ServiceActionResponse(
+    return OrchestrationServiceActionResponse(
         service_name=service_name,
         action="start",
         success=success,
@@ -307,13 +307,13 @@ async def start_service(
     )
 
 
-@router.post("/services/{service_name}/stop", response_model=ServiceActionResponse)
+@router.post("/services/{service_name}/stop", response_model=OrchestrationServiceActionResponse)
 async def stop_service(
     service_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
     request: ServiceActionRequest | None = None,
-) -> ServiceActionResponse:
+) -> OrchestrationServiceActionResponse:
     """
     Stop an AutoBot service.
 
@@ -331,7 +331,7 @@ async def stop_service(
         node_id=request.node_id,
     )
 
-    return ServiceActionResponse(
+    return OrchestrationServiceActionResponse(
         service_name=service_name,
         action="stop",
         success=success,
@@ -341,13 +341,13 @@ async def stop_service(
     )
 
 
-@router.post("/services/{service_name}/restart", response_model=ServiceActionResponse)
+@router.post("/services/{service_name}/restart", response_model=OrchestrationServiceActionResponse)
 async def restart_service(
     service_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
     request: ServiceActionRequest | None = None,
-) -> ServiceActionResponse:
+) -> OrchestrationServiceActionResponse:
     """
     Restart an AutoBot service.
 
@@ -365,7 +365,7 @@ async def restart_service(
         node_id=request.node_id,
     )
 
-    return ServiceActionResponse(
+    return OrchestrationServiceActionResponse(
         service_name=service_name,
         action="restart",
         success=success,
@@ -380,13 +380,13 @@ async def restart_service(
 # =============================================================================
 
 
-@router.post("/services/{service_name}/migrate", response_model=ServiceActionResponse)
+@router.post("/services/{service_name}/migrate", response_model=OrchestrationServiceActionResponse)
 async def migrate_service(
     service_name: str,
     request: ServiceMigrateRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-) -> ServiceActionResponse:
+) -> OrchestrationServiceActionResponse:
     """
     Migrate an AutoBot service from one node to another.
 
@@ -400,7 +400,7 @@ async def migrate_service(
         target_node_id=request.target_node_id,
     )
 
-    return ServiceActionResponse(
+    return OrchestrationServiceActionResponse(
         service_name=service_name,
         action="migrate",
         success=success,
@@ -794,13 +794,13 @@ async def _apply_fleet_action(
 
 @fleet_router.post(
     "/services/{service_name}/start",
-    response_model=ServiceActionResponse,
+    response_model=OrchestrationServiceActionResponse,
 )
 async def start_fleet_service(
     service_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-) -> ServiceActionResponse:
+) -> OrchestrationServiceActionResponse:
     """
     Start a service on all nodes that have it.
 
@@ -817,7 +817,7 @@ async def start_fleet_service(
         "running",
     )
     await db.commit()
-    return ServiceActionResponse(
+    return OrchestrationServiceActionResponse(
         action="start",
         service_name=service_name,
         node_id="fleet",
@@ -828,13 +828,13 @@ async def start_fleet_service(
 
 @fleet_router.post(
     "/services/{service_name}/stop",
-    response_model=ServiceActionResponse,
+    response_model=OrchestrationServiceActionResponse,
 )
 async def stop_fleet_service(
     service_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-) -> ServiceActionResponse:
+) -> OrchestrationServiceActionResponse:
     """
     Stop a service on all nodes.
 
@@ -851,7 +851,7 @@ async def stop_fleet_service(
         "dead",
     )
     await db.commit()
-    return ServiceActionResponse(
+    return OrchestrationServiceActionResponse(
         action="stop",
         service_name=service_name,
         node_id="fleet",
@@ -862,13 +862,13 @@ async def stop_fleet_service(
 
 @fleet_router.post(
     "/services/{service_name}/restart",
-    response_model=ServiceActionResponse,
+    response_model=OrchestrationServiceActionResponse,
 )
 async def restart_fleet_service(
     service_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-) -> ServiceActionResponse:
+) -> OrchestrationServiceActionResponse:
     """
     Restart a service on all nodes that have it.
 
@@ -885,7 +885,7 @@ async def restart_fleet_service(
         "running",
     )
     await db.commit()
-    return ServiceActionResponse(
+    return OrchestrationServiceActionResponse(
         action="restart",
         service_name=service_name,
         node_id="fleet",

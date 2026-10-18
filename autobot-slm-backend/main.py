@@ -589,7 +589,7 @@ app = FastAPI(
     forwarded_allow_ips=settings.trusted_proxies,
 )
 # #16428 review: FastAPI's default 422 body echoes the submitted payload --
-# UserCreate.password and VNCCredentialCreate.password have the same
+# SlmAdminUserCreate.password and VNCCredentialCreate.password have the same
 # exposure the audit found on autobot-backend's secrets endpoint.
 register_validation_error_handlers(app)
 
@@ -649,9 +649,9 @@ app.include_router(scim_router)
 # --- Service-management–gated routers ---
 app.include_router(browser_router, prefix="/api", dependencies=_SM)
 app.include_router(agents_router, prefix="/api", dependencies=_SM)
+app.include_router(services_router, prefix="/api", dependencies=_SM)
 app.include_router(nodes_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(nodes_execution_router, prefix="/api", dependencies=_SM)  # Issue #3406
-app.include_router(services_router, prefix="/api", dependencies=_SM)
 app.include_router(fleet_services_router, prefix="/api", dependencies=_SM)
 app.include_router(deployments_router, prefix="/api", dependencies=_SM)
 app.include_router(blue_green_router, prefix="/api", dependencies=_SM)

@@ -889,7 +889,7 @@ fleet_router = APIRouter(prefix="/fleet", tags=["fleet-services"])
 
 
 @fleet_router.get("/services", response_model=FleetServicesResponse)
-async def get_fleet_services(
+async def legacy_fleet_services(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
 ) -> FleetServicesResponse:

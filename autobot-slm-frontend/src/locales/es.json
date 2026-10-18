@@ -2367,7 +2367,9 @@
         "weighted": "Weighted",
         "windows": "Windows",
         "worker": "Trabajador",
-        "workerName": "Worker Name *"
+        "workerName": "Worker Name *",
+        "connectionTestFailed": "Connection test failed",
+        "loadBalancingLoadFailed": "Failed to load load-balancing configuration"
       },
       "personalitySettings": {
         "active": "Active",

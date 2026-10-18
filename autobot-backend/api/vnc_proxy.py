@@ -358,6 +358,48 @@ async def get_vnc_client(vnc_type: str, current_user: dict = Depends(get_current
         raise HTTPException(status_code=503, detail="VNC server unavailable")
 
 
+@router.get("/{vnc_type}/status", response_model=VncProxyStatusResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_vnc_status",
+    error_code_prefix="VNC_PROXY",
+)
+async def get_vnc_status(vnc_type: str, current_user: dict = Depends(get_current_user)):
+    """
+    Check if VNC server is accessible
+
+    Issue #744: Requires authenticated user.
+
+    Args:
+        vnc_type: 'desktop' or 'browser'
+    """
+    if vnc_type not in VNC_ENDPOINTS:
+        raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
+
+    endpoint = VNC_ENDPOINTS[vnc_type]
+
+    try:
+        http_client = get_http_client()
+        async with await http_client.get(
+            f"{endpoint}/vnc.html", timeout=aiohttp.ClientTimeout(total=5), guard_egress=EGRESS_POLICY
+        ) as response:
+            accessible = response.status == 200
+            return {
+                "vnc_type": vnc_type,
+                "endpoint": endpoint,
+                "accessible": accessible,
+                "status": response.status,
+            }
+    except Exception as e:
+        logger.error("Failed to check VNC status for %s: %s", vnc_type, e)
+        return {
+            "vnc_type": vnc_type,
+            "endpoint": endpoint,
+            "accessible": False,
+            "error": "Internal server error",
+        }
+
+
 @router.get("/{vnc_type}/{path:path}", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -489,45 +531,3 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
         logger.info("VNC WebSocket proxy closed: %s", vnc_type)
         # Record disconnection event for MCP
         await record_observation(vnc_type, "disconnection", {"status": "closed"})
-
-
-@router.get("/{vnc_type}/status", response_model=VncProxyStatusResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_vnc_status",
-    error_code_prefix="VNC_PROXY",
-)
-async def get_vnc_status(vnc_type: str, current_user: dict = Depends(get_current_user)):
-    """
-    Check if VNC server is accessible
-
-    Issue #744: Requires authenticated user.
-
-    Args:
-        vnc_type: 'desktop' or 'browser'
-    """
-    if vnc_type not in VNC_ENDPOINTS:
-        raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
-
-    endpoint = VNC_ENDPOINTS[vnc_type]
-
-    try:
-        http_client = get_http_client()
-        async with await http_client.get(
-            f"{endpoint}/vnc.html", timeout=aiohttp.ClientTimeout(total=5), guard_egress=EGRESS_POLICY
-        ) as response:
-            accessible = response.status == 200
-            return {
-                "vnc_type": vnc_type,
-                "endpoint": endpoint,
-                "accessible": accessible,
-                "status": response.status,
-            }
-    except Exception as e:
-        logger.error("Failed to check VNC status for %s: %s", vnc_type, e)
-        return {
-            "vnc_type": vnc_type,
-            "endpoint": endpoint,
-            "accessible": False,
-            "error": "Internal server error",
-        }

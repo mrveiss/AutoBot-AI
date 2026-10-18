@@ -79,6 +79,7 @@ import repo_tests.pr_comment_upsert_12984_test as _pr_comment_guard  # noqa: F40
 import repo_tests.provider_key_env_reads_route_through_vault_18094_test as _provider_key_env_guard  # noqa: F401 -- registers its scope
 import repo_tests.redis_direct_constructor_18553_test as _redis_constructor_guard  # noqa: F401 -- registers its scope
 import repo_tests.root_resolver_single_source_18101_test as _root_resolver_guard  # noqa: F401 -- registers its scope
+import repo_tests.shadowed_literal_routes_18720_test as _shadowed_routes_guard  # noqa: F401 -- registers its scope
 import repo_tests.single_attribute_writer_18240_test as _attribute_writer_guard  # noqa: F401 -- registers its scope
 import repo_tests.slm_backend_no_embedded_playbook_18606_test as _embedded_playbook_guard  # noqa: F401 -- registers its scope
 from repo_tests._paths import repo_root
@@ -224,6 +225,7 @@ _DECLARED_SCOPES = {
     "chat-history-async-calls-awaited": ("autobot-backend/api",),
     "chat-single-delete-implementation": ("autobot-backend/api",),
     "ai-line-single-policy": ("autobot-backend", "autobot_shared"),
+    "shadowed-literal-routes": ("autobot-backend", "autobot-slm-backend"),
     "conversation-turn-single-store": ("autobot-backend", "autobot_shared", "autobot-infrastructure"),
     "credential-field-name-only-callers": (
         "autobot-backend",

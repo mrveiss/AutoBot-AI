@@ -8537,6 +8537,57 @@
         "title": "NodeUpdateSummary",
         "type": "object"
       },
+      "OrchestrationServiceActionResponse": {
+        "description": "Response for a service action.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node Id"
+          },
+          "service_name": {
+            "title": "Service Name",
+            "type": "string"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "service_name",
+          "action",
+          "success",
+          "message"
+        ],
+        "title": "OrchestrationServiceActionResponse",
+        "type": "object"
+      },
       "PackageUploadResponse": {
         "description": "Response after uploading a role package.",
         "properties": {
@@ -10133,7 +10184,7 @@
         "title": "RestartAllServicesResponse",
         "type": "object"
       },
-      "RoleCreate": {
+      "RoleDefinitionCreate": {
         "description": "Role creation schema.",
         "properties": {
           "ansible_playbook": {
@@ -10257,7 +10308,293 @@
           "name",
           "target_path"
         ],
-        "title": "RoleCreate",
+        "title": "RoleDefinitionCreate",
+        "type": "object"
+      },
+      "RoleDefinitionResponse": {
+        "description": "Role response schema.",
+        "properties": {
+          "ansible_playbook": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ansible Playbook"
+          },
+          "auto_restart": {
+            "title": "Auto Restart",
+            "type": "boolean"
+          },
+          "degraded_without": {
+            "items": {},
+            "title": "Degraded Without",
+            "type": "array"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "health_check_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Check Path"
+          },
+          "health_check_port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Check Port"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "post_sync_cmd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Post Sync Cmd"
+          },
+          "pre_sync_cmd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pre Sync Cmd"
+          },
+          "required": {
+            "default": false,
+            "title": "Required",
+            "type": "boolean"
+          },
+          "source_paths": {
+            "items": {},
+            "title": "Source Paths",
+            "type": "array"
+          },
+          "sync_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Type"
+          },
+          "systemd_service": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Systemd Service"
+          },
+          "target_path": {
+            "title": "Target Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "source_paths",
+          "target_path",
+          "auto_restart"
+        ],
+        "title": "RoleDefinitionResponse",
+        "type": "object"
+      },
+      "RoleDefinitionUpdate": {
+        "description": "Role update schema.",
+        "properties": {
+          "ansible_playbook": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ansible Playbook"
+          },
+          "auto_restart": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Restart"
+          },
+          "degraded_without": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Degraded Without"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "health_check_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Check Path"
+          },
+          "health_check_port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Check Port"
+          },
+          "post_sync_cmd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Post Sync Cmd"
+          },
+          "pre_sync_cmd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pre Sync Cmd"
+          },
+          "required": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required"
+          },
+          "source_paths": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Paths"
+          },
+          "sync_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Type"
+          },
+          "systemd_service": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Systemd Service"
+          },
+          "target_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Path"
+          }
+        },
+        "title": "RoleDefinitionUpdate",
         "type": "object"
       },
       "RoleInfo": {
@@ -10465,10 +10802,10 @@
         "title": "RoleReportItem",
         "type": "object"
       },
-      "RoleUpdate": {
-        "description": "Role update schema.",
+      "RoleResponse": {
+        "description": "Role information in responses.",
         "properties": {
-          "ansible_playbook": {
+          "description": {
             "anyOf": [
               {
                 "type": "string"
@@ -10477,147 +10814,28 @@
                 "type": "null"
               }
             ],
-            "title": "Ansible Playbook"
+            "title": "Description"
           },
-          "auto_restart": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Auto Restart"
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
           },
-          "degraded_without": {
-            "anyOf": [
-              {
-                "items": {},
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Degraded Without"
+          "is_system": {
+            "default": false,
+            "title": "Is System",
+            "type": "boolean"
           },
-          "display_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Display Name"
-          },
-          "health_check_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Health Check Path"
-          },
-          "health_check_port": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Health Check Port"
-          },
-          "post_sync_cmd": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Post Sync Cmd"
-          },
-          "pre_sync_cmd": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pre Sync Cmd"
-          },
-          "required": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Required"
-          },
-          "source_paths": {
-            "anyOf": [
-              {
-                "items": {},
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Paths"
-          },
-          "sync_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sync Type"
-          },
-          "systemd_service": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Systemd Service"
-          },
-          "target_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Target Path"
+          "name": {
+            "title": "Name",
+            "type": "string"
           }
         },
-        "title": "RoleUpdate",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "RoleResponse",
         "type": "object"
       },
       "RolesUpdateRequest": {
@@ -12674,6 +12892,51 @@
         "title": "ServiceActionRequest",
         "type": "object"
       },
+      "ServiceActionResponse": {
+        "description": "Service action response.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "service_name": {
+            "title": "Service Name",
+            "type": "string"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "action",
+          "service_name",
+          "node_id",
+          "success",
+          "message"
+        ],
+        "title": "ServiceActionResponse",
+        "type": "object"
+      },
       "ServiceCategoryUpdate": {
         "description": "Request to update service category.",
         "properties": {
@@ -13299,6 +13562,79 @@
           "value"
         ],
         "title": "SettingUpdate",
+        "type": "object"
+      },
+      "SlmAdminUserCreate": {
+        "description": "User creation request.",
+        "properties": {
+          "is_admin": {
+            "default": false,
+            "title": "Is Admin",
+            "type": "boolean"
+          },
+          "password": {
+            "minLength": 8,
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 64,
+            "minLength": 3,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "SlmAdminUserCreate",
+        "type": "object"
+      },
+      "SlmAdminUserResponse": {
+        "description": "User response (excludes password).",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "is_admin": {
+            "default": false,
+            "title": "Is Admin",
+            "type": "boolean"
+          },
+          "last_login": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "is_active",
+          "created_at"
+        ],
+        "title": "SlmAdminUserResponse",
         "type": "object"
       },
       "SlmLLMConfig": {
@@ -15084,6 +15420,86 @@
         "title": "UpdateSummaryResponse",
         "type": "object"
       },
+      "UserCreate": {
+        "description": "Request model for creating a user.",
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Display name",
+            "title": "Display Name"
+          },
+          "email": {
+            "description": "User email address",
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "org_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Organization ID (uses current context if not provided)",
+            "title": "Org Id"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 8,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Password (8-128 characters, optional for SSO users)",
+            "title": "Password"
+          },
+          "role_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "List of role IDs to assign",
+            "title": "Role Ids"
+          },
+          "username": {
+            "description": "Username (3-100 characters, alphanumeric and underscores)",
+            "maxLength": 100,
+            "minLength": 3,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "username"
+        ],
+        "title": "UserCreate",
+        "type": "object"
+      },
       "UserListResponse": {
         "description": "Response model for paginated user list.",
         "properties": {
@@ -15101,7 +15517,7 @@
           },
           "users": {
             "items": {
-              "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
+              "$ref": "#/components/schemas/UserResponse"
             },
             "title": "Users",
             "type": "array"
@@ -15114,6 +15530,132 @@
           "offset"
         ],
         "title": "UserListResponse",
+        "type": "object"
+      },
+      "UserResponse": {
+        "description": "Response model for a single user.",
+        "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "default": true,
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "is_platform_admin": {
+            "default": false,
+            "title": "Is Platform Admin",
+            "type": "boolean"
+          },
+          "is_verified": {
+            "default": false,
+            "title": "Is Verified",
+            "type": "boolean"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          },
+          "mfa_enabled": {
+            "default": false,
+            "title": "Mfa Enabled",
+            "type": "boolean"
+          },
+          "org_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Org Id"
+          },
+          "preferences": {
+            "additionalProperties": true,
+            "title": "Preferences",
+            "type": "object"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/RoleResponse"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "username",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "UserResponse",
         "type": "object"
       },
       "UserUpdate": {
@@ -15886,548 +16428,6 @@
           "token"
         ],
         "title": "YieldRequestResponse",
-        "type": "object"
-      },
-      "api__orchestration__ServiceActionResponse": {
-        "description": "Response for a service action.",
-        "properties": {
-          "action": {
-            "title": "Action",
-            "type": "string"
-          },
-          "host": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Host"
-          },
-          "message": {
-            "title": "Message",
-            "type": "string"
-          },
-          "node_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Node Id"
-          },
-          "service_name": {
-            "title": "Service Name",
-            "type": "string"
-          },
-          "success": {
-            "title": "Success",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "service_name",
-          "action",
-          "success",
-          "message"
-        ],
-        "title": "ServiceActionResponse",
-        "type": "object"
-      },
-      "api__roles__RoleResponse": {
-        "description": "Role response schema.",
-        "properties": {
-          "ansible_playbook": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ansible Playbook"
-          },
-          "auto_restart": {
-            "title": "Auto Restart",
-            "type": "boolean"
-          },
-          "degraded_without": {
-            "items": {},
-            "title": "Degraded Without",
-            "type": "array"
-          },
-          "display_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Display Name"
-          },
-          "health_check_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Health Check Path"
-          },
-          "health_check_port": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Health Check Port"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "post_sync_cmd": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Post Sync Cmd"
-          },
-          "pre_sync_cmd": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pre Sync Cmd"
-          },
-          "required": {
-            "default": false,
-            "title": "Required",
-            "type": "boolean"
-          },
-          "source_paths": {
-            "items": {},
-            "title": "Source Paths",
-            "type": "array"
-          },
-          "sync_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sync Type"
-          },
-          "systemd_service": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Systemd Service"
-          },
-          "target_path": {
-            "title": "Target Path",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "source_paths",
-          "target_path",
-          "auto_restart"
-        ],
-        "title": "RoleResponse",
-        "type": "object"
-      },
-      "autobot_shared__user_management__schemas__user__RoleResponse": {
-        "description": "Role information in responses.",
-        "properties": {
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "is_system": {
-            "default": false,
-            "title": "Is System",
-            "type": "boolean"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name"
-        ],
-        "title": "RoleResponse",
-        "type": "object"
-      },
-      "autobot_shared__user_management__schemas__user__UserCreate": {
-        "description": "Request model for creating a user.",
-        "properties": {
-          "display_name": {
-            "anyOf": [
-              {
-                "maxLength": 255,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Display name",
-            "title": "Display Name"
-          },
-          "email": {
-            "description": "User email address",
-            "format": "email",
-            "title": "Email",
-            "type": "string"
-          },
-          "org_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Organization ID (uses current context if not provided)",
-            "title": "Org Id"
-          },
-          "password": {
-            "anyOf": [
-              {
-                "maxLength": 128,
-                "minLength": 8,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Password (8-128 characters, optional for SSO users)",
-            "title": "Password"
-          },
-          "role_ids": {
-            "anyOf": [
-              {
-                "items": {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "List of role IDs to assign",
-            "title": "Role Ids"
-          },
-          "username": {
-            "description": "Username (3-100 characters, alphanumeric and underscores)",
-            "maxLength": 100,
-            "minLength": 3,
-            "title": "Username",
-            "type": "string"
-          }
-        },
-        "required": [
-          "email",
-          "username"
-        ],
-        "title": "UserCreate",
-        "type": "object"
-      },
-      "autobot_shared__user_management__schemas__user__UserResponse": {
-        "description": "Response model for a single user.",
-        "properties": {
-          "avatar_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Avatar Url"
-          },
-          "bio": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Bio"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "display_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Display Name"
-          },
-          "email": {
-            "title": "Email",
-            "type": "string"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "is_active": {
-            "default": true,
-            "title": "Is Active",
-            "type": "boolean"
-          },
-          "is_platform_admin": {
-            "default": false,
-            "title": "Is Platform Admin",
-            "type": "boolean"
-          },
-          "is_verified": {
-            "default": false,
-            "title": "Is Verified",
-            "type": "boolean"
-          },
-          "last_login_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Login At"
-          },
-          "mfa_enabled": {
-            "default": false,
-            "title": "Mfa Enabled",
-            "type": "boolean"
-          },
-          "org_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Org Id"
-          },
-          "preferences": {
-            "additionalProperties": true,
-            "title": "Preferences",
-            "type": "object"
-          },
-          "roles": {
-            "items": {
-              "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__RoleResponse"
-            },
-            "title": "Roles",
-            "type": "array"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          },
-          "username": {
-            "title": "Username",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "email",
-          "username",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "UserResponse",
-        "type": "object"
-      },
-      "models__schemas__ServiceActionResponse": {
-        "description": "Service action response.",
-        "properties": {
-          "action": {
-            "title": "Action",
-            "type": "string"
-          },
-          "job_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Job Id"
-          },
-          "message": {
-            "title": "Message",
-            "type": "string"
-          },
-          "node_id": {
-            "title": "Node Id",
-            "type": "string"
-          },
-          "service_name": {
-            "title": "Service Name",
-            "type": "string"
-          },
-          "success": {
-            "title": "Success",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "action",
-          "service_name",
-          "node_id",
-          "success",
-          "message"
-        ],
-        "title": "ServiceActionResponse",
-        "type": "object"
-      },
-      "models__schemas__UserCreate": {
-        "description": "User creation request.",
-        "properties": {
-          "is_admin": {
-            "default": false,
-            "title": "Is Admin",
-            "type": "boolean"
-          },
-          "password": {
-            "minLength": 8,
-            "title": "Password",
-            "type": "string"
-          },
-          "username": {
-            "maxLength": 64,
-            "minLength": 3,
-            "title": "Username",
-            "type": "string"
-          }
-        },
-        "required": [
-          "username",
-          "password"
-        ],
-        "title": "UserCreate",
-        "type": "object"
-      },
-      "models__schemas__UserResponse": {
-        "description": "User response (excludes password).",
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id"
-          },
-          "is_active": {
-            "title": "Is Active",
-            "type": "boolean"
-          },
-          "is_admin": {
-            "default": false,
-            "title": "Is Admin",
-            "type": "boolean"
-          },
-          "last_login": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Login"
-          },
-          "username": {
-            "title": "Username",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "username",
-          "is_active",
-          "created_at"
-        ],
-        "title": "UserResponse",
         "type": "object"
       }
     },
@@ -17615,7 +17615,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/models__schemas__UserCreate"
+                "$ref": "#/components/schemas/SlmAdminUserCreate"
               }
             }
           },
@@ -17626,7 +17626,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models__schemas__UserResponse"
+                  "$ref": "#/components/schemas/SlmAdminUserResponse"
                 }
               }
             },
@@ -18106,7 +18106,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserCreate"
+                "$ref": "#/components/schemas/UserCreate"
               }
             }
           },
@@ -18117,7 +18117,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
+                  "$ref": "#/components/schemas/UserResponse"
                 }
               }
             },
@@ -18206,7 +18206,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
+                  "$ref": "#/components/schemas/UserResponse"
                 }
               }
             },
@@ -18263,7 +18263,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
+                  "$ref": "#/components/schemas/UserResponse"
                 }
               }
             },
@@ -22840,7 +22840,7 @@
     "/api/fleet/services": {
       "get": {
         "description": "Deprecated alias of ``GET /orchestration/fleet/services`` (#17856).\n\nOne implementation lives in ``api.orchestration``; this route only delegates so the SLM\nfrontend keeps working until it calls the public path, after which this returns 410.",
-        "operationId": "get_fleet_services_api_fleet_services_get",
+        "operationId": "legacy_fleet_services_api_fleet_services_get",
         "responses": {
           "200": {
             "content": {
@@ -22858,7 +22858,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Fleet Services",
+        "summary": "Legacy Fleet Services",
         "tags": [
           "fleet-services"
         ]
@@ -22944,7 +22944,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models__schemas__ServiceActionResponse"
+                  "$ref": "#/components/schemas/ServiceActionResponse"
                 }
               }
             },
@@ -22992,7 +22992,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models__schemas__ServiceActionResponse"
+                  "$ref": "#/components/schemas/ServiceActionResponse"
                 }
               }
             },
@@ -23040,7 +23040,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models__schemas__ServiceActionResponse"
+                  "$ref": "#/components/schemas/ServiceActionResponse"
                 }
               }
             },
@@ -28603,7 +28603,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models__schemas__ServiceActionResponse"
+                  "$ref": "#/components/schemas/ServiceActionResponse"
                 }
               }
             },
@@ -28660,7 +28660,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models__schemas__ServiceActionResponse"
+                  "$ref": "#/components/schemas/ServiceActionResponse"
                 }
               }
             },
@@ -28717,7 +28717,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models__schemas__ServiceActionResponse"
+                  "$ref": "#/components/schemas/ServiceActionResponse"
                 }
               }
             },
@@ -29896,7 +29896,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__orchestration__ServiceActionResponse"
+                  "$ref": "#/components/schemas/OrchestrationServiceActionResponse"
                 }
               }
             },
@@ -29945,7 +29945,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__orchestration__ServiceActionResponse"
+                  "$ref": "#/components/schemas/OrchestrationServiceActionResponse"
                 }
               }
             },
@@ -29994,7 +29994,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__orchestration__ServiceActionResponse"
+                  "$ref": "#/components/schemas/OrchestrationServiceActionResponse"
                 }
               }
             },
@@ -30186,7 +30186,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__orchestration__ServiceActionResponse"
+                  "$ref": "#/components/schemas/OrchestrationServiceActionResponse"
                 }
               }
             },
@@ -30251,7 +30251,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__orchestration__ServiceActionResponse"
+                  "$ref": "#/components/schemas/OrchestrationServiceActionResponse"
                 }
               }
             },
@@ -30316,7 +30316,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__orchestration__ServiceActionResponse"
+                  "$ref": "#/components/schemas/OrchestrationServiceActionResponse"
                 }
               }
             },
@@ -30381,7 +30381,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__orchestration__ServiceActionResponse"
+                  "$ref": "#/components/schemas/OrchestrationServiceActionResponse"
                 }
               }
             },
@@ -31442,7 +31442,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/api__roles__RoleResponse"
+                    "$ref": "#/components/schemas/RoleDefinitionResponse"
                   },
                   "title": "Response Get Roles Api Roles Get",
                   "type": "array"
@@ -31497,7 +31497,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RoleCreate"
+                "$ref": "#/components/schemas/RoleDefinitionCreate"
               }
             }
           },
@@ -31508,7 +31508,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__roles__RoleResponse"
+                  "$ref": "#/components/schemas/RoleDefinitionResponse"
                 }
               }
             },
@@ -31948,7 +31948,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__roles__RoleResponse"
+                  "$ref": "#/components/schemas/RoleDefinitionResponse"
                 }
               }
             },
@@ -32009,7 +32009,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RoleUpdate"
+                "$ref": "#/components/schemas/RoleDefinitionUpdate"
               }
             }
           },
@@ -32020,7 +32020,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__roles__RoleResponse"
+                  "$ref": "#/components/schemas/RoleDefinitionResponse"
                 }
               }
             },
@@ -34586,7 +34586,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserCreate"
+                "$ref": "#/components/schemas/UserCreate"
               }
             }
           },
@@ -34597,7 +34597,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
+                  "$ref": "#/components/schemas/UserResponse"
                 }
               }
             },
@@ -34686,7 +34686,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
+                  "$ref": "#/components/schemas/UserResponse"
                 }
               }
             },
@@ -34743,7 +34743,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
+                  "$ref": "#/components/schemas/UserResponse"
                 }
               }
             },

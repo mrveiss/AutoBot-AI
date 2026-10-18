@@ -73,6 +73,12 @@ REASON_CODES = frozenset(
 #: `reach_declarations_test` fails on a new one that does not -- so the pattern cannot be
 #: re-added without someone writing down why (#17914 AC4).
 ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
+    "shadowed-literal-routes": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Router modules the registries and main.py mount, a subset of tracked Python under two trees; "
+        "the rest of those trees grows independently, so a share of all Python would sink with nothing wrong.",
+    ),
     "brand-mark-announcer-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

@@ -132,25 +132,10 @@ from services.knowledge_sync_service import router as knowledge_sync_router
 def _get_system_routers() -> list:
     """Get system and settings routers (Issue #560: extracted, #1281: audit, #4461: event-logs)."""
     return [
-        (
-            admin_event_logs_router,
-            "",
-            ["admin", "compliance"],
-            "admin_event_logs",
-        ),  # Issue #4461
+        (admin_event_logs_router, "", ["admin", "compliance"], "admin_event_logs"),  # Issue #4461
         (admin_pricing_router, "", ["admin", "pricing"], "admin_pricing"),  # GH#6480
-        (
-            admin_orphan_repair_router,
-            "",
-            ["admin", "orphan-repair"],
-            "admin_orphan_repair",
-        ),  # #15779
-        (
-            admin_orphan_storage_router,
-            "",
-            ["admin", "orphan-storage"],
-            "admin_orphan_storage",
-        ),  # #17038, #17039
+        (admin_orphan_repair_router, "", ["admin", "orphan-repair"], "admin_orphan_repair"),  # #15779
+        (admin_orphan_storage_router, "", ["admin", "orphan-storage"], "admin_orphan_storage"),  # #17038, #17039
         (
             admin_retention_policies_router,
             "",
@@ -161,43 +146,24 @@ def _get_system_routers() -> list:
         (auth_router, "/auth", ["auth"], "auth"),
         (jwks_auth_router, "/auth", ["auth", "jwks"], "jwks_auth"),  # #10196 /api/auth/jwks
         (service_messages_router, "", ["service-messages"], "service_messages"),
+        # #18720: before chat -- chat's POST /chats/{chat_id}/message would capture /chats/embed/message
+        (chat_embed_router, "", ["chat", "embed"], "chat_embed"),  # GH#9047
         (chat_router, "", ["chat"], "chat"),
         (chat_compare_router, "", ["chat", "compare"], "chat_compare"),  # Issue #4414
-        (chat_embed_router, "", ["chat", "embed"], "chat_embed"),  # GH#9047
         (chat_presets_router, "", ["chat"], "chat_presets"),  # GH#8595
         (benchmarks_router, "", ["benchmarks"], "benchmarks"),  # Issue #9024
         (collaboration_router, "", ["collaboration"], "collaboration"),
         (collaboration_events_router, "", ["collaboration"], "collaboration_events"),  # #16460
-        (
-            telegram_bot_router,
-            "",
-            ["telegram-bot", "integrations"],
-            "telegram_bot",
-        ),  # MVA-2074
+        (telegram_bot_router, "", ["telegram-bot", "integrations"], "telegram_bot"),  # MVA-2074
         (system_router, "/system", ["system"], "system"),
         (settings_router, "/settings", ["settings"], "settings"),
         (usage_router, "/usage", ["usage", "analytics"], "usage"),  # Issue #1807
-        (
-            user_management_router,
-            "",
-            ["user-management"],
-            "user_management",
-        ),  # Issue #1801
-        (
-            user_provider_credentials_router,
-            "",
-            ["user-provider-credentials"],
-            "user_provider_credentials",
-        ),  # GH#9037
+        (user_management_router, "", ["user-management"], "user_management"),  # Issue #1801
+        (user_provider_credentials_router, "", ["user-provider-credentials"], "user_provider_credentials"),  # GH#9037
         # GH#10352 — users_router carries its own prefix="/users" → register with
         # empty prefix so the loop yields /api/users/* (was never registered → 404)
         (users_router, "", ["users"], "users"),
-        (
-            mobile_devices_router,
-            "/devices",
-            ["devices", "integrations"],
-            "mobile_devices",
-        ),  # GH#4463
+        (mobile_devices_router, "/devices", ["devices", "integrations"], "mobile_devices"),  # GH#4463
         (data_storage_router, "", ["data-storage"], "data_storage"),
         (prompts_router, "/prompts", ["prompts"], "prompts"),
         (frontend_config_router, "", ["frontend-config"], "frontend_config"),
