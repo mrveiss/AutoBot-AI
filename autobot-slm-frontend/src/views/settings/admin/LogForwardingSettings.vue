@@ -539,8 +539,8 @@ onMounted(async () => {
               :disabled="formData.clear_api_key"
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             />
-            <p v-if="editingDestination" class="mt-1 text-xs text-gray-500">{{ $t('settings.admin.logForwardingSettings.leaveBlankToKeep') }}</p>
-            <label v-if="editingDestination" class="mt-1 flex items-center gap-2 text-xs text-gray-600">
+            <p v-if="editingDestination" class="mt-1 text-xs text-autobot-text-tertiary">{{ $t('settings.admin.logForwardingSettings.leaveBlankToKeep') }}</p>
+            <label v-if="editingDestination" class="mt-1 flex items-center gap-2 text-xs text-autobot-text-secondary">
               <input v-model="formData.clear_api_key" type="checkbox" data-test="remove-api-key" />
               {{ $t('settings.admin.logForwardingSettings.removeStoredValue') }}
             </label>
@@ -585,8 +585,8 @@ onMounted(async () => {
                 :disabled="formData.clear_password"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
-              <p v-if="editingDestination" class="mt-1 text-xs text-gray-500">{{ $t('settings.admin.logForwardingSettings.leaveBlankToKeep') }}</p>
-              <label v-if="editingDestination" class="mt-1 flex items-center gap-2 text-xs text-gray-600">
+              <p v-if="editingDestination" class="mt-1 text-xs text-autobot-text-tertiary">{{ $t('settings.admin.logForwardingSettings.leaveBlankToKeep') }}</p>
+              <label v-if="editingDestination" class="mt-1 flex items-center gap-2 text-xs text-autobot-text-secondary">
               <input v-model="formData.clear_password" type="checkbox" data-test="remove-password" />
               {{ $t('settings.admin.logForwardingSettings.removeStoredValue') }}
             </label>

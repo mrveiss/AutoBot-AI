@@ -297,7 +297,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:border-emerald-500/30": 2,
     "slm:border-gray-100": 55,
     "slm:border-gray-200": 348,
-    "slm:border-gray-300": 347,
+    "slm:border-gray-300": 344,
     "slm:border-gray-50": 4,
     "slm:border-gray-500": 2,
     "slm:border-gray-500/30": 4,
@@ -363,7 +363,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:text-gray-400": 240,
     "slm:text-gray-500": 885,
     "slm:text-gray-600": 286,
-    "slm:text-gray-700": 431,
+    "slm:text-gray-700": 428,
     "slm:text-gray-800": 43,
     "slm:text-gray-900": 486,
     "slm:text-green-300": 4,
@@ -405,4 +405,4 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
 }
 
 #: Frozen total, asserted separately so a hand edit of one number cannot pass.
-TOTAL_OCCURRENCES = 6756
+TOTAL_OCCURRENCES = 6750
