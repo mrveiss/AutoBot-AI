@@ -55,7 +55,8 @@ from api.user_management.dependencies import require_org_context
 from api.websockets import NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
+from autobot_shared.time_utils import utc_timestamp
+from chat_history.deduplication import _parse_timestamp
 from chat_history.message_schema import llm_role, message_text, message_type
 
 # Import context overflow protection (#9043)
@@ -74,6 +75,7 @@ from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from security.chat_message_safety import scan_chat_message
 from security.session_ownership import build_owner_metadata, validate_session_ownership
 from services.ai_stack_client import AIStackError, get_ai_stack_client
+from services.llm_service import get_llm_service  # process-wide singleton (#18689)
 from type_defs.common import STREAMING_MESSAGE_TYPES, Metadata
 
 # Import reusable chat utilities - Phase 1 Utility Extraction
@@ -118,14 +120,6 @@ def get_memory_interface(request: Request) -> Any | None:
     return getattr(request.app.state, "memory_interface", None)
 
 
-def get_llm_service(request: Request) -> Any:
-    """Get LLM service from app state, with lazy initialization"""
-    from services.llm_service import LLMService
-    from utils.lazy_singleton import lazy_init_singleton
-
-    return lazy_init_singleton(request.app.state, "llm_service", LLMService)
-
-
 async def get_chat_workflow_manager(request: Request) -> Any:
     """Get ChatWorkflowManager from app state, with async lazy initialization"""
     from chat_workflow import ChatWorkflowManager
@@ -155,18 +149,6 @@ def handle_api_error(error: Exception, request_id: str = "unknown") -> Dict[str,
 # ====================================================================
 # Message Merge Helpers (Issue #315 - Reduced nesting)
 # ====================================================================
-
-
-def _parse_message_timestamp(msg_ts_str: str) -> datetime | None:
-    """Parse message timestamp from various formats (Issue #315)."""
-    if not isinstance(msg_ts_str, str) or not msg_ts_str:
-        return None
-    try:
-        if "T" in msg_ts_str:
-            return parse_utc_iso(msg_ts_str)
-        return datetime.strptime(msg_ts_str, "%Y-%m-%d %H:%M:%S")
-    except (ValueError, TypeError):
-        return None
 
 
 def _should_start_new_streaming_group(current_ts: datetime, last_streaming_ts: datetime | None) -> bool:
@@ -283,7 +265,7 @@ def _process_streaming_groups(merged: List[Dict]) -> List[Dict]:
     for msg in merged:
         if _is_streaming_response(msg):
             msg_ts_str = msg.get("timestamp", "")
-            current_ts = _parse_message_timestamp(msg_ts_str)
+            current_ts = _parse_timestamp(msg_ts_str)
 
             if current_ts and _should_start_new_streaming_group(current_ts, last_streaming_ts):
                 if current_group:
@@ -1062,7 +1044,7 @@ async def send_message(
 
     # Get dependencies from request state
     chat_history_manager = get_chat_history_manager(request)
-    llm_service = get_llm_service(request)
+    llm_service = get_llm_service()
     memory_interface = get_memory_interface(request)
 
     # Issue #3282: Carry author identity for shared-session message attribution
@@ -1144,7 +1126,7 @@ async def stream_message(
 
     # Get dependencies from request state
     chat_history_manager = get_chat_history_manager(request)
-    llm_service, message.content = get_llm_service(request), scan_chat_message(message.content, message.session_id)
+    llm_service, message.content = get_llm_service(), scan_chat_message(message.content, message.session_id)
 
     # Return streaming response
     return await stream_chat_response(message, chat_history_manager, llm_service, request_id)
@@ -1381,9 +1363,9 @@ async def chat_health_check(
     """
     Health check for chat service.
 
-    Note: llm_service is lazily initialized on first chat request, so we report
-    it as 'available' (can be initialized) rather than requiring it to exist.
-    Only chat_history_manager is critical for the health check.
+    llm_service: 'healthy' once startup wired the singleton, 'degraded' when that
+    wiring failed (#18689), 'available' before startup ran. Only
+    chat_history_manager is critical for the health check.
 
     Issue #744: Requires authenticated user.
     """
@@ -1393,8 +1375,8 @@ async def chat_health_check(
     # chat_history_manager is critical - must be present
     chat_history_status = "healthy" if chat_history_manager else "unavailable"
 
-    # llm_service is lazily initialized - report as "available" if not yet created
-    llm_status = "healthy" if llm_service else "available"
+    wiring_failed = getattr(request.app.state, "llm_service_error", None)  # startup wiring, #18689
+    llm_status = "healthy" if llm_service else "degraded" if wiring_failed else "available"
 
     health_status = {
         "status": "healthy",
@@ -2674,7 +2656,7 @@ Conversation:
 Summary:"""
 
     # Get LLM service and generate summary
-    llm_service = get_llm_service(request)
+    llm_service = get_llm_service()
 
     try:
         summary_response = await llm_service.generate_response(

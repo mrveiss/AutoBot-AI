@@ -219,9 +219,9 @@ async def _route_to_chat_and_reply(request: Request, unified_message: Any) -> No
     # Get services from app state (same pattern as chat.py)
     chat_history_manager = get_chat_history_manager(request)
 
-    from services.llm_service import LLMService
+    from services.llm_service import get_llm_service
 
-    llm_service = lazy_init_singleton(request.app.state, "llm_service", LLMService)
+    llm_service = lazy_init_singleton(request.app.state, "llm_service", get_llm_service)
     memory_interface = getattr(request.app.state, "memory_interface", None)
 
     # Generate AI response

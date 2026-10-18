@@ -48,7 +48,6 @@
     "get_current_user",
     "get_deployment_config",
     "get_fleet_services",
-    "get_llm_service",
     "get_service_url",
     "restart_fleet_service",
     "route_next",

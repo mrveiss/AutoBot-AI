@@ -101,7 +101,7 @@ async def _route_to_chat_and_reply(
         media_id:        Graph API media id for lazy re-fetch, or None.
     """
     from api.chat import process_chat_message
-    from services.llm_service import LLMService
+    from services.llm_service import get_llm_service
     from utils.chat_utils import get_chat_history_manager
     from utils.lazy_singleton import lazy_init_singleton
 
@@ -145,7 +145,7 @@ async def _route_to_chat_and_reply(
     )
 
     chat_history_manager = get_chat_history_manager(request)
-    llm_service = lazy_init_singleton(request.app.state, "llm_service", LLMService)
+    llm_service = lazy_init_singleton(request.app.state, "llm_service", get_llm_service)
     memory_interface = getattr(request.app.state, "memory_interface", None)
 
     response_data = await process_chat_message(
