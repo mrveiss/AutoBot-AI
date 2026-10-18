@@ -246,37 +246,14 @@ import { useCompanyPeople } from '@/composables/llc/useCompanyPeople'
 import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
 
 const logger = createLogger('WorkItemDetail')
+
+// Comments return with their read route (#18750): only POST .../comments is served, no GET.
+const COMMENTS_ENABLED = false
 const api = useApiClient()
 const { t } = useI18n()
 
 import type { WorkItem } from './workItemTypes'
-
-interface Comment {
-  id: string
-  body: string
-  author_name: string
-  author_type: 'human' | 'agent'
-  created_at: string
-}
-
-interface Artifact {
-  id: string
-  name: string
-  type: string
-  url: string
-}
-
-interface ActivityEvent {
-  id: string
-  actor_name: string
-  description: string
-  created_at: string
-}
-
-interface GoalAncestor {
-  id: string
-  title: string
-}
+import type { Comment, Artifact, ActivityEvent, GoalAncestor } from './workItemDetailTypes'
 
 const props = defineProps<{
   item: WorkItem
@@ -294,7 +271,7 @@ const TABS = computed(() => [
   { key: 'artifacts', label: t('llc.workItem.tabArtifacts') },
   { key: 'activity', label: t('llc.workItem.tabActivity') },
   { key: 'handoff', label: t('llc.workItem.tabHandoff') },
-])
+].filter((tab) => COMMENTS_ENABLED || tab.key !== 'comments'))
 
 const activeTab = ref('details')
 const localItem = ref<WorkItem>({ ...props.item })
