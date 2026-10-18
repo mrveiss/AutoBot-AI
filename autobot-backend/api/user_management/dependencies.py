@@ -15,7 +15,8 @@ from typing import AsyncGenerator, Optional
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth_middleware import get_auth_middleware
+from auth_middleware import get_current_user as _canonical_get_current_user
+from auth_middleware import resolve_human_user as _canonical_resolve_human_user
 from autobot_shared.auth.permissions import Permission, is_admin_role, role_has_permission
 from autobot_shared.coordination.claim_company import set_company
 from user_management.database import get_async_session
@@ -33,6 +34,7 @@ logger = logging.getLogger(__name__)
 # the one it replaces, or "refused sooner" would read to a caller as "refused for a
 # different reason".
 _PLATFORM_ADMIN_DENIED = "Platform admin privileges required"
+_SERVICE_PRINCIPAL_DENIED = "Service credentials cannot act on organization-scoped routes"
 _REPORTING_LINE_WRITE_DENIED = "admin.reporting_line.write permission required"
 
 
@@ -58,19 +60,34 @@ async def get_optional_db_session() -> AsyncGenerator[Optional[AsyncSession], No
         yield session
 
 
-def get_current_user(request: Request) -> dict:
-    """
-    Get current authenticated user from request.
+async def get_current_user(request: Request) -> dict:
+    """Current authenticated user -- delegates to the canonical ``auth_middleware`` gate (#18688).
 
-    Returns user data dict from auth middleware.
+    A thin wrapper rather than a re-export: ``dependency_overrides`` is keyed on
+    the function object, so a bare alias would make an override of one name
+    silently apply to the other in an app that overrides both.
+
+    The canonical gate adds password-change revocation (#12924, #16411), the
+    run/device-JWT path allow-lists and one error shape. It also admits the
+    internal service key as a ``service`` principal, which this wrapper refuses
+    with 401 unless the same request also names a human user, who is returned
+    instead (see ``_is_service_principal``); routes that accept the key depend on
+    ``auth_middleware.get_current_user`` directly.
     """
-    user_data = get_auth_middleware().get_user_from_request(request)
-    if not user_data:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-        )
-    return user_data
+    user = await _canonical_get_current_user(request)
+    if not _is_service_principal(user):
+        return user
+    # The canonical gate reads the internal key before the JWT, and the SLM
+    # nginx adds the key to every proxied call alongside the user's own
+    # Authorization header. Main's wrapper read only the JWT/session, so such a
+    # request resolves to the human here; the key alone stays a 401.
+    human = await _canonical_resolve_human_user(request)
+    if human and not _is_service_principal(human):
+        return human
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required",
+    )
 
 
 def get_current_user_id(
@@ -138,6 +155,16 @@ def _extract_request_org_id(request: Request) -> Optional[uuid.UUID]:
     return None
 
 
+def _is_service_principal(current_user: dict) -> bool:
+    """True for the synthetic principal the internal API key resolves to (#18688).
+
+    Service principals are not tenant admins (owner decision 2026-10-17): they
+    carry ``role: admin`` for the non-tenant routes that accept them, but that
+    role must never turn into platform-admin or org-membership bypass here.
+    """
+    return bool(current_user.get("service", False))
+
+
 def _is_platform_admin_claim(current_user: dict) -> bool:
     """Platform-admin status exactly as the caller's JWT attests it (#15805).
 
@@ -147,6 +174,8 @@ def _is_platform_admin_claim(current_user: dict) -> bool:
     belongs in ``get_tenant_context``, not here -- adding one here silently
     re-couples the pre-check to the pool.
     """
+    if _is_service_principal(current_user):
+        return False
     if bool(current_user.get("is_platform_admin", False)):
         return True
     return is_admin_role(current_user.get("role"))
@@ -159,6 +188,8 @@ def _holds_reporting_line_write(current_user: dict) -> bool:
     a pure function of the JWT role claim -- no session, and no reporting-line
     data, which is the escalation guarantee #15765 established.
     """
+    if _is_service_principal(current_user):
+        return False
     return role_has_permission(current_user.get("role"), Permission.ADMIN_REPORTING_LINE_WRITE.value)
 
 
@@ -217,6 +248,14 @@ async def _resolve_tenant_context(request: Request, current_user: dict, session:
       - If the org_id comes only from the JWT claim (source 3) it is accepted
         as-is, mirroring prior behaviour.
     """
+    if _is_service_principal(current_user):
+        # No per-route service grant exists, so the principal is refused outright
+        # whatever org it names (fails closed, #18688).
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_SERVICE_PRINCIPAL_DENIED,
+        )
+
     user_id: Optional[uuid.UUID] = None
     is_platform_admin = False
 

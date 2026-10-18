@@ -15,6 +15,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from testkit.canonical_gate import unauthenticated_canonical_gate
 from user_management.services import TenantContext
 
 _FIXED_USER_ID = uuid.UUID("77777777-7777-7777-7777-777777777777")
@@ -62,8 +63,7 @@ class TestBacklogNoAuth:
 
         app.dependency_overrides[get_session] = _fake_session
 
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = TestClient(app)
             resp = client.get("/api/llc/backlog", params={"company_id": str(uuid.uuid4())})
         assert resp.status_code == 401

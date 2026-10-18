@@ -22,7 +22,6 @@ import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-import api.user_management.dependencies as user_deps
 from autobot_shared.auth.interactive_principal import LOGIN_TOKEN_TYPE
 from autobot_shared.auth.jwt_core import decode_jwt, encode_jwt
 from autobot_shared.auth.permissions import Role
@@ -125,11 +124,12 @@ ASYNC_ROUTE_EXPECTED = {
 #: three of them earlier, so each table lost coverage; if a floor reaches 0 the
 #: check is untested there and a regression weakening it would go unnoticed.
 #:
-#: The two numbers differ and that is not an oversight: on the LLC route the
-#: sync ``get_current_user`` does not resolve ``internal_service_key`` to a user
-#: at all (401 at resolution), so that kind never reached the human check there
-#: even before #17049. Asserting one shared number would have been wrong for one
-#: of the two tables.
+#: The two numbers differ and that is not an oversight: since #18688 the LLC
+#: route resolves credentials through the same canonical ``get_current_user`` as
+#: the async route, but its tenant gate then refuses ``internal_service_key``
+#: (service principals are not tenant admins), so that kind is refused before
+#: the human check there and still reaches it on the async route. Asserting one
+#: shared number would be wrong for one of the two tables.
 MIN_KINDS_REACHING_HUMAN_CHECK = 4
 MIN_KINDS_REACHING_HUMAN_CHECK_LLC = 3
 
@@ -178,7 +178,13 @@ def install_real_resolution(real_auth_middleware, monkeypatch) -> SimpleNamespac
         monkeypatch.setattr(real_auth_middleware, "config", SimpleNamespace(get=_config_get))
 
     monkeypatch.setattr(real_auth_middleware, "get_auth_middleware", lambda: state.middleware)
-    monkeypatch.setattr(user_deps, "get_auth_middleware", lambda: state.middleware)
+    # user_management's gate delegates here (#18688); under pytest its import is the stub.
+    monkeypatch.setattr(
+        "api.user_management.dependencies._canonical_get_current_user", real_auth_middleware.get_current_user
+    )
+    monkeypatch.setattr(
+        "api.user_management.dependencies._canonical_resolve_human_user", real_auth_middleware.resolve_human_user
+    )
     monkeypatch.setattr(real_auth_middleware, "verify_internal_api_key", lambda provided: provided == INTERNAL_KEY)
     monkeypatch.setattr(real_auth_middleware, "reject_if_revoked_by_password_change", AsyncMock())
     run_jwt = SimpleNamespace(validate_run_jwt=token_validator(lambda: state.run_secret, RUN_AUD))

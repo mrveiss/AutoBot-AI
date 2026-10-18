@@ -39,6 +39,7 @@ from api.chat_knowledge_manager import (
 )
 from api.schemas_knowledge import FileAssociationType
 from api.user_management.dependencies import get_current_user
+from testkit.canonical_gate import install_canonical_gate, no_user_middleware
 
 API_PREFIX = "/api/chat-knowledge"
 CHAT_ID = "chat-15160"
@@ -408,11 +409,7 @@ class TestTheRouterIsGated:
         than about the middleware's own logic -- which has its own tests.
         """
 
-        class _NoUser:
-            def get_user_from_request(self, request):
-                return None
-
-        monkeypatch.setattr("api.user_management.dependencies.get_auth_middleware", lambda: _NoUser())
+        install_canonical_gate(monkeypatch, no_user_middleware())
         app = _make_app(authenticated=False)
         setattr(app.state, MANAGER_STATE_KEY, stub_manager)
         with TestClient(app, raise_server_exceptions=False) as unauth:

@@ -22,6 +22,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from testkit.canonical_gate import unauthenticated_canonical_gate
 from user_management.services import TenantContext
 
 _FIXED_USER_ID = uuid.UUID("77777777-7777-7777-7777-777777777777")
@@ -111,30 +112,26 @@ class TestSecretsNoAuth:
         return TestClient(app)
 
     def test_list_secrets_no_token_returns_401(self):
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = self._make_unauthenticated_client()
             resp = client.get(f"/api/llc/secrets/{_OTHER_ORG}")
         assert resp.status_code == 401
 
     def test_list_secrets_spoofed_header_alone_returns_401(self):
         """The old X-Agent-Company-Id header, with no real auth, no longer works (GH#12147)."""
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = self._make_unauthenticated_client()
             resp = client.get(f"/api/llc/secrets/{_OTHER_ORG}", headers={"X-Agent-Company-Id": _OTHER_ORG})
         assert resp.status_code == 401
 
     def test_get_secret_no_token_returns_401(self):
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = self._make_unauthenticated_client()
             resp = client.get(f"/api/llc/secrets/{_OTHER_ORG}/db_password")
         assert resp.status_code == 401
 
     def test_set_secret_no_token_returns_401(self):
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = self._make_unauthenticated_client()
             resp = client.post(
                 f"/api/llc/secrets/{_OTHER_ORG}",
@@ -143,8 +140,7 @@ class TestSecretsNoAuth:
         assert resp.status_code == 401
 
     def test_revoke_secret_no_token_returns_401(self):
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = self._make_unauthenticated_client()
             resp = client.delete(f"/api/llc/secrets/{_OTHER_ORG}/db_password", params={"actor": "agent-1"})
         assert resp.status_code == 401
