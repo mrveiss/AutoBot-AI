@@ -42,6 +42,7 @@ import repo_tests.container_hardening_single_source_17267_test as _hardening_gua
 import repo_tests.conversation_turn_single_store_18293_test as _conversation_turn_guard  # noqa: F401 -- registers its scope
 import repo_tests.credential_field_name_only_17336_test as _credential_field_guard  # noqa: F401 -- registers its scope
 import repo_tests.data_db_path_single_source_test as _data_db_guard  # noqa: F401 -- registers its scope
+import repo_tests.docker_admin_seed_18729_test as _user_mode_guard  # noqa: F401 -- registers its scope
 import repo_tests.egress_default_guard_17576_test as _egress_default_guard  # noqa: F401 -- registers its scope
 import repo_tests.embedding_model_preserved_15502_test as _embedding_render_guard  # noqa: F401 -- registers its scope
 import repo_tests.env_file_family_18555_test as _env_family_guard  # noqa: F401 -- registers its scope
@@ -273,6 +274,13 @@ _DECLARED_SCOPES = {
     ),
     "ansible-concept-forks-17856-scan": ("autobot-slm-backend/ansible",),
     "env-file-family-18555-scan": (".env", "autobot-frontend/", "autobot-slm-backend/", "docker/"),
+    "user-mode-default-carriers-18729": (
+        ".env",
+        "autobot-frontend/",
+        "autobot-slm-backend/",
+        "docker-compose",
+        "docker/",
+    ),
     "concept-forks-17856-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "gateway-adapter-package-scan": ("autobot-backend/services/gateway",),
     "architecture-family-definition-scan": (
