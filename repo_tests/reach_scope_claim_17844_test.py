@@ -51,6 +51,7 @@ import repo_tests.kb_read_visibility_guard_test as kb
 import repo_tests.knowledge_metadata_parse_canonical_18220_test as _metadata_parse_guard  # noqa: F401 -- registers its scope
 import repo_tests.migration_gate_filter_covers_what_its_tests_import_test as _migration_gate_guard  # noqa: F401 -- registers its scope
 import repo_tests.model_tier_single_definition_15502_test as _model_tier_guard  # noqa: F401 -- registers its scope
+import repo_tests.no_doubled_api_prefix_18722_test as _doubled_api_prefix_guard  # noqa: F401 -- registers its scope
 import repo_tests.oauth_bundle_no_app_secret_13630_test as _oauth_bundle_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_actor_id_15754_test as _actor_id_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_anthropic_message_split_16815_test as _anthropic_split_guard  # noqa: F401 -- registers its scope
@@ -317,6 +318,7 @@ _DECLARED_SCOPES = {
     ),
     "anthropic-message-split-scan": ("autobot-backend/llm_shared/providers",),
     "backoff-formula-scan": ("libs/autobot-ui", "autobot-frontend/src", "autobot-slm-frontend/src"),
+    "doubled-api-prefix-scan": ("autobot-backend/api", "autobot-slm-backend/api"),
     "post-commit-seed-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "redis-direct-constructor-scan": (
         "autobot-backend",

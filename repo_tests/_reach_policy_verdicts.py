@@ -538,4 +538,9 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
     ),
     "workflow-job-parse-sweep": (ABSOLUTE, "NOT_PATHS", "Parsed workflow jobs, not files."),
     "workflow-rc-capture": (ABSOLUTE, "NOT_PATHS", "`run:` blocks under an errexit shell, not files."),
+    "doubled-api-prefix-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test source is a subset of tracked .py under two roots; the test-file share drifts.",
+    ),
 }

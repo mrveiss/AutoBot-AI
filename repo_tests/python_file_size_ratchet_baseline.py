@@ -141,7 +141,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/secrets.py": 1182,  # #16444 review: except HTTPException, ValueError handlers
     "autobot-backend/api/security_assessment.py": 913,
     "autobot-backend/api/settings.py": 881,
-    "autobot-backend/api/system.py": 1108,
+    "autobot-backend/api/system.py": 1011,
     "autobot-backend/api/terminal.py": 1294,
     "autobot-backend/api/terminal_handlers.py": 1497,
     "autobot-backend/api/validation_dashboard.py": 670,
