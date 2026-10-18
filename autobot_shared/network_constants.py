@@ -292,16 +292,14 @@ class NetworkConstants(metaclass=_LazyConfigMeta):
 
     @classmethod
     def get_websocket_url(cls) -> str:
-        """Get WebSocket URL for frontend (Issue #372 - reduces feature envy).
+        """Get WebSocket URL for frontend (Issue #372).
 
-        Issue #6303: Returns wss:// when backend TLS is enabled; omits port
-        because nginx terminates TLS on 443 and proxies to the backend.
+        Delegates to ``AutoBotConfig.websocket_url`` (#18731), the one
+        implementation of the TLS-aware URL (#6303/#6302).
         """
         from autobot_shared.ssot_config import config  # lazy to avoid circular import
 
-        if config.tls.backend_tls_enabled:
-            return f"wss://{cls.MAIN_MACHINE_IP}/api/ws"
-        return f"ws://{cls.MAIN_MACHINE_IP}:{cls.BACKEND_PORT}/api/ws"
+        return config.websocket_url
 
 
 # #12773: these URLs were composed in the class body from NetworkConstants

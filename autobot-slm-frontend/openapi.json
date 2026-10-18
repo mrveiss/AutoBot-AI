@@ -4982,6 +4982,65 @@
         "title": "FleetMetricsResponse",
         "type": "object"
       },
+      "FleetServiceActionResponse": {
+        "description": "``ServiceActionResponse`` for an action applied across the fleet.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "diagnostics": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diagnostics"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "service_name": {
+            "title": "Service Name",
+            "type": "string"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "action",
+          "service_name",
+          "node_id",
+          "success",
+          "message"
+        ],
+        "title": "FleetServiceActionResponse",
+        "type": "object"
+      },
       "FleetServiceNodeStatus": {
         "description": "Per-node status for a fleet service.",
         "properties": {
@@ -22944,7 +23003,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ServiceActionResponse"
+                  "$ref": "#/components/schemas/FleetServiceActionResponse"
                 }
               }
             },
@@ -22992,7 +23051,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ServiceActionResponse"
+                  "$ref": "#/components/schemas/FleetServiceActionResponse"
                 }
               }
             },
@@ -23040,7 +23099,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ServiceActionResponse"
+                  "$ref": "#/components/schemas/FleetServiceActionResponse"
                 }
               }
             },
@@ -29878,8 +29937,8 @@
     },
     "/api/orchestration/fleet/services/{service_name}/restart": {
       "post": {
-        "description": "Restart a service on all nodes that have it.\n\nIssue #850: Moved from /fleet/services/{name}/restart to /orchestration/fleet/services/{name}/restart.",
-        "operationId": "restart_fleet_service_api_orchestration_fleet_services__service_name__restart_post",
+        "description": "Restart a service on all nodes that have it: delegates to ``api.services`` (#18714).",
+        "operationId": "orchestration_restart_fleet_service_api_orchestration_fleet_services__service_name__restart_post",
         "parameters": [
           {
             "in": "path",
@@ -29896,7 +29955,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OrchestrationServiceActionResponse"
+                  "$ref": "#/components/schemas/FleetServiceActionResponse"
                 }
               }
             },
@@ -29918,7 +29977,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Restart Fleet Service",
+        "summary": "Orchestration Restart Fleet Service",
         "tags": [
           "orchestration",
           "orchestration-fleet"
@@ -29927,8 +29986,8 @@
     },
     "/api/orchestration/fleet/services/{service_name}/start": {
       "post": {
-        "description": "Start a service on all nodes that have it.\n\nIssue #850: Moved from /fleet/services/{name}/start to /orchestration/fleet/services/{name}/start.",
-        "operationId": "start_fleet_service_api_orchestration_fleet_services__service_name__start_post",
+        "description": "Start a service on all nodes that have it: delegates to ``api.services`` (#18714).\n\nThe route dependencies (``FLEET_SERVICE_ACTION_ROUTE``) are the ones the canonical route\ncarries, so the unit-name validation (422) and the service-management gate come with it.",
+        "operationId": "orchestration_start_fleet_service_api_orchestration_fleet_services__service_name__start_post",
         "parameters": [
           {
             "in": "path",
@@ -29945,7 +30004,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OrchestrationServiceActionResponse"
+                  "$ref": "#/components/schemas/FleetServiceActionResponse"
                 }
               }
             },
@@ -29967,7 +30026,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Start Fleet Service",
+        "summary": "Orchestration Start Fleet Service",
         "tags": [
           "orchestration",
           "orchestration-fleet"
@@ -29976,8 +30035,8 @@
     },
     "/api/orchestration/fleet/services/{service_name}/stop": {
       "post": {
-        "description": "Stop a service on all nodes.\n\nIssue #850: Moved from /fleet/services/{name}/stop to /orchestration/fleet/services/{name}/stop.",
-        "operationId": "stop_fleet_service_api_orchestration_fleet_services__service_name__stop_post",
+        "description": "Stop a service on all nodes: delegates to ``api.services`` (#18714).",
+        "operationId": "orchestration_stop_fleet_service_api_orchestration_fleet_services__service_name__stop_post",
         "parameters": [
           {
             "in": "path",
@@ -29994,7 +30053,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OrchestrationServiceActionResponse"
+                  "$ref": "#/components/schemas/FleetServiceActionResponse"
                 }
               }
             },
@@ -30016,7 +30075,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Stop Fleet Service",
+        "summary": "Orchestration Stop Fleet Service",
         "tags": [
           "orchestration",
           "orchestration-fleet"

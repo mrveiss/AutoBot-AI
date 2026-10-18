@@ -29,6 +29,7 @@ from api.schemas_agent import (
     UserSearchResult,
 )
 from api.user_management.dependencies import (
+    _is_platform_admin_claim,
     get_current_user,
     get_user_service,
     require_org_context,
@@ -36,7 +37,6 @@ from api.user_management.dependencies import (
     require_self_or_admin,
     user_management_route_marker,
 )
-from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.user_management.user_service_errors import DuplicateUserError, UserNotFoundError
@@ -203,7 +203,7 @@ async def get_current_user_profile(
         is_active=True,
         is_verified=True,
         mfa_enabled=False,
-        is_platform_admin=is_admin_role(current_user.get("role")) or current_user.get("is_platform_admin", False),
+        is_platform_admin=_is_platform_admin_claim(current_user),
         preferences={},
         roles=[],
         created_at=None,

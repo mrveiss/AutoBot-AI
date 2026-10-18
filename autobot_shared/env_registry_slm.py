@@ -107,6 +107,34 @@ register_env_var(
     )
 )
 
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SLM_FAILURE_DIAG_JOURNAL_LINES",
+        type=int,
+        default=30,
+        description=(
+            "Journal lines fetched from a node whose fleet start/stop/restart failed, "
+            "returned in the response `diagnostics` (services/service_restart.py, #18714)."
+        ),
+        component="slm",
+        range=(1, 500),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SLM_FAILURE_DIAG_MAX_CHARS",
+        type=int,
+        default=4000,
+        description=(
+            "Characters kept (the tail) of each failure-diagnostics section, `systemctl status` "
+            "and journal, per failed node (services/service_restart.py, #18714)."
+        ),
+        component="slm",
+        range=(200, 65536),
+    )
+)
+
 # --- #15710: os.environ.get-wrapped code-sync/venv-reconcile timeouts, sized
 # but never registered because the registry checker only ever saw os.getenv
 # and the env_utils helpers, not os.environ.get. -----------------------------

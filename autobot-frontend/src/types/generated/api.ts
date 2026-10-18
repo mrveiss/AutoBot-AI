@@ -1481,9 +1481,9 @@ export interface paths {
          * Chat Health Check
          * @description Health check for chat service.
          *
-         *     Note: llm_service is lazily initialized on first chat request, so we report
-         *     it as 'available' (can be initialized) rather than requiring it to exist.
-         *     Only chat_history_manager is critical for the health check.
+         *     llm_service: 'healthy' once startup wired the singleton, 'degraded' when that
+         *     wiring failed (#18689), 'available' before startup ran. Only
+         *     chat_history_manager is critical for the health check.
          *
          *     Issue #744: Requires authenticated user.
          */
@@ -45425,7 +45425,7 @@ export interface paths {
          * Get Redis Status
          * @description Get current Redis service status
          *
-         *     No authentication required (public endpoint)
+         *     Requires an authenticated user; no caller depended on it being public (#18718).
          */
         get: operations["get_redis_status_api_redis_service_status_get"];
         put?: never;

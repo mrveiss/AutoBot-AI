@@ -1026,6 +1026,47 @@ async def create_directory(request: Request, path: str = Form(...), name: str = 
     }
 
 
+def build_directory_tree(directory: Path, root: Path) -> list:
+    """Recursively build the file-browser tree under *directory*, paths relative to *root*.
+
+    Sync (run it in the file executor). The one tree walk shared by ``/files/tree``
+    and ``/sandbox/files/tree`` (#18731).
+    """
+    try:
+        items = []
+        for item in sorted(directory.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+            try:
+                item_info = {
+                    "name": item.name,
+                    "path": str(item.relative_to(root)),
+                    "type": "directory" if item.is_dir() else "file",
+                }
+                if item.is_file():
+                    item_info["size"] = item.stat().st_size
+                    item_info["extension"] = item.suffix.lower() if item.suffix else None
+                else:
+                    item_info["children"] = build_directory_tree(item, root)
+                items.append(item_info)
+            except (OSError, PermissionError) as e:
+                logger.warning("Skipping inaccessible item %s: %s", item, e)
+        return items
+    except Exception as e:
+        logger.error("Error building tree for %s: %s", directory, e)
+        return []
+
+
+def collect_directory_stats(root: Path) -> tuple:
+    """``(total_files, total_directories, total_size)`` under *root*; shared with sandbox_files (#18731)."""
+    total_files = total_directories = total_size = 0
+    for item in root.rglob("*"):
+        if item.is_file():
+            total_files += 1
+            total_size += item.stat().st_size
+        elif item.is_dir():
+            total_directories += 1
+    return total_files, total_directories, total_size
+
+
 @router.get("/tree", response_model=DirectoryTreeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1054,38 +1095,8 @@ async def get_directory_tree(request: Request, path: str = ""):
     if not await run_in_file_executor(target_path.is_dir):
         raise HTTPException(status_code=400, detail="Path is not a directory")
 
-    def build_tree(directory: Path, relative_base: Path) -> dict:
-        """Recursively build directory tree structure (sync, runs in thread)"""
-        try:
-            items = []
-            for item in sorted(directory.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
-                try:
-                    relative_path = str(item.relative_to(SANDBOXED_ROOT))
-                    item_info = {
-                        "name": item.name,
-                        "path": relative_path,
-                        "type": "directory" if item.is_dir() else "file",
-                    }
-
-                    if item.is_file():
-                        item_info["size"] = item.stat().st_size
-                        item_info["extension"] = item.suffix.lower() if item.suffix else None
-                    else:
-                        # Recursively add children for directories
-                        item_info["children"] = build_tree(item, SANDBOXED_ROOT)
-
-                    items.append(item_info)
-                except (OSError, PermissionError) as e:
-                    logger.warning("Skipping inaccessible item %s: %s", item, e)
-                    continue
-
-            return items
-        except Exception as e:
-            logger.error("Error building tree for %s: %s", directory, e)
-            return []
-
     # Issue #358: Run entire recursive tree building in thread to avoid blocking
-    tree_data = await run_in_file_executor(build_tree, target_path, SANDBOXED_ROOT)
+    tree_data = await run_in_file_executor(build_directory_tree, target_path, SANDBOXED_ROOT)
 
     return {"path": path, "tree": tree_data}
 
@@ -1107,22 +1118,7 @@ async def get_file_stats(request: Request):
     request.state.user = user_data
 
     # Issue #358: Run stats collection in thread to avoid blocking event loop
-    def _collect_stats_sync():
-        """Sync helper for stats collection to avoid blocking event loop."""
-        total_files = 0
-        total_directories = 0
-        total_size = 0
-
-        for item in SANDBOXED_ROOT.rglob("*"):
-            if item.is_file():
-                total_files += 1
-                total_size += item.stat().st_size
-            elif item.is_dir():
-                total_directories += 1
-
-        return total_files, total_directories, total_size
-
-    total_files, total_directories, total_size = await run_in_file_executor(_collect_stats_sync)
+    total_files, total_directories, total_size = await run_in_file_executor(collect_directory_stats, SANDBOXED_ROOT)
 
     return {
         "sandbox_root": str(SANDBOXED_ROOT),

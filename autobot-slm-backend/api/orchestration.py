@@ -13,7 +13,6 @@ Updated for Issue #850 - Complete orchestration consolidation.
 """
 
 import logging
-from datetime import datetime, timezone
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -22,8 +21,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
-from api.websocket import ws_manager
+from api.service_action_guard import FLEET_SERVICE_ACTION_ROUTE
 from models.database import Node, Service, SystemdState
+from models.fleet_schemas import FleetServiceActionResponse
 from models.schemas import ServiceActionRequest
 from services.ansible_utils import summarize_playbook_failure
 from services.auth import get_current_user
@@ -720,178 +720,49 @@ async def update_fleet_service_category(
     }
 
 
-async def _fetch_fleet_services_and_nodes(
-    db: AsyncSession,
-    service_name: str,
-) -> tuple:
-    """Helper for start/stop/restart_fleet_service. Ref: #1088.
+def _canonical_fleet_action(action: str):
+    """The ``api.services`` fleet handler for *action* -- the one implementation (#18714).
 
-    Fetch all Service records for service_name and their Node objects.
-    Raises HTTP 404 if no records found. Returns (services, nodes_dict).
+    Imported at call time: ``api.services`` imports this module at load, so a module-level
+    import here would be a cycle.
     """
-    query = select(Service).where(Service.service_name == service_name)
-    result = await db.execute(query)
-    services = result.scalars().all()
-    if not services:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Service {service_name} not found on any node",
-        )
-    node_ids = [s.node_id for s in services]
-    nodes_result = await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
-    nodes = {n.node_id: n for n in nodes_result.scalars().all()}
-    return services, nodes
+    from api import services as services_api
+
+    return getattr(services_api, f"{action}_fleet_service")
 
 
-async def _apply_fleet_action(
-    service_name: str,
-    action: str,
-    services: list,
-    nodes: dict,
-    running_state: str | None,
-    active_state: str | None,
-    sub_state: str | None,
-) -> tuple:
-    """Helper for start/stop/restart_fleet_service. Ref: #1088.
-
-    Run action on each node, update svc fields, broadcast status.
-    Returns (success_count, fail_count).
-    """
-    success_count = 0
-    fail_count = 0
-    for svc in services:
-        node = nodes.get(svc.node_id)
-        if not node:
-            fail_count += 1
-            continue
-        success, msg = await _run_ssh_service_action(node, service_name, action)
-        if success:
-            success_count += 1
-            svc.status = running_state
-            svc.active_state = active_state
-            svc.sub_state = sub_state
-            svc.last_checked = datetime.now(timezone.utc)
-            await ws_manager.send_service_status(
-                node_id=svc.node_id,
-                service_name=service_name,
-                status=running_state,
-                action=action,
-                success=True,
-                message=msg,
-            )
-        else:
-            fail_count += 1
-            await ws_manager.send_service_status(
-                node_id=svc.node_id,
-                service_name=service_name,
-                status="unknown",
-                action=action,
-                success=False,
-                message=msg,
-            )
-    return success_count, fail_count
-
-
-@fleet_router.post(
-    "/services/{service_name}/start",
-    response_model=OrchestrationServiceActionResponse,
-)
-async def start_fleet_service(
+@fleet_router.post("/services/{service_name}/start", **FLEET_SERVICE_ACTION_ROUTE)
+async def orchestration_start_fleet_service(
     service_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-) -> OrchestrationServiceActionResponse:
+) -> FleetServiceActionResponse:
+    """Start a service on all nodes that have it: delegates to ``api.services`` (#18714).
+
+    The route dependencies (``FLEET_SERVICE_ACTION_ROUTE``) are the ones the canonical route
+    carries, so the unit-name validation (422) and the service-management gate come with it.
     """
-    Start a service on all nodes that have it.
-
-    Issue #850: Moved from /fleet/services/{name}/start to /orchestration/fleet/services/{name}/start.
-    """
-    services, nodes = await _fetch_fleet_services_and_nodes(db, service_name)
-    success_count, fail_count = await _apply_fleet_action(
-        service_name,
-        "start",
-        services,
-        nodes,
-        SystemdState.RUNNING.value,
-        "active",
-        "running",
-    )
-    await db.commit()
-    return OrchestrationServiceActionResponse(
-        action="start",
-        service_name=service_name,
-        node_id="fleet",
-        success=fail_count == 0,
-        message=f"Started on {success_count}/{len(services)} nodes",
-    )
+    return await _canonical_fleet_action("start")(service_name, db, _)
 
 
-@fleet_router.post(
-    "/services/{service_name}/stop",
-    response_model=OrchestrationServiceActionResponse,
-)
-async def stop_fleet_service(
+@fleet_router.post("/services/{service_name}/stop", **FLEET_SERVICE_ACTION_ROUTE)
+async def orchestration_stop_fleet_service(
     service_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-) -> OrchestrationServiceActionResponse:
-    """
-    Stop a service on all nodes.
-
-    Issue #850: Moved from /fleet/services/{name}/stop to /orchestration/fleet/services/{name}/stop.
-    """
-    services, nodes = await _fetch_fleet_services_and_nodes(db, service_name)
-    success_count, fail_count = await _apply_fleet_action(
-        service_name,
-        "stop",
-        services,
-        nodes,
-        SystemdState.STOPPED.value,
-        "inactive",
-        "dead",
-    )
-    await db.commit()
-    return OrchestrationServiceActionResponse(
-        action="stop",
-        service_name=service_name,
-        node_id="fleet",
-        success=fail_count == 0,
-        message=f"Stopped on {success_count}/{len(services)} nodes",
-    )
+) -> FleetServiceActionResponse:
+    """Stop a service on all nodes: delegates to ``api.services`` (#18714)."""
+    return await _canonical_fleet_action("stop")(service_name, db, _)
 
 
-@fleet_router.post(
-    "/services/{service_name}/restart",
-    response_model=OrchestrationServiceActionResponse,
-)
-async def restart_fleet_service(
+@fleet_router.post("/services/{service_name}/restart", **FLEET_SERVICE_ACTION_ROUTE)
+async def orchestration_restart_fleet_service(
     service_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-) -> OrchestrationServiceActionResponse:
-    """
-    Restart a service on all nodes that have it.
-
-    Issue #850: Moved from /fleet/services/{name}/restart to /orchestration/fleet/services/{name}/restart.
-    """
-    services, nodes = await _fetch_fleet_services_and_nodes(db, service_name)
-    success_count, fail_count = await _apply_fleet_action(
-        service_name,
-        "restart",
-        services,
-        nodes,
-        SystemdState.RUNNING.value,
-        "active",
-        "running",
-    )
-    await db.commit()
-    return OrchestrationServiceActionResponse(
-        action="restart",
-        service_name=service_name,
-        node_id="fleet",
-        success=fail_count == 0,
-        message=f"Restarted on {success_count}/{len(services)} nodes",
-    )
+) -> FleetServiceActionResponse:
+    """Restart a service on all nodes that have it: delegates to ``api.services`` (#18714)."""
+    return await _canonical_fleet_action("restart")(service_name, db, _)
 
 
 # Include fleet sub-router in main orchestration router

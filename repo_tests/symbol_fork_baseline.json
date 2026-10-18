@@ -27,15 +27,9 @@
     "TaskArtifact",
     "TaskQueue",
     "TaskResult",
-    "ToolCall",
     "User",
-    "check_admin_permission",
     "get_current_user",
     "get_deployment_config",
-    "get_llm_service",
-    "get_service_url",
-    "restart_fleet_service",
-    "start_fleet_service",
-    "stop_fleet_service"
+    "get_service_url"
   ]
 }

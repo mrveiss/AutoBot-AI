@@ -28,47 +28,20 @@ from api.schemas_system import (
     AuditQueryResponse,
     AuditStatisticsResponse,
 )
-from auth_middleware import get_auth_middleware
-from autobot_shared.auth.permissions import is_admin_role
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.time_utils import parse_utc_iso
+from security.human_admin import refuse_service_principal
 from services.audit_logger import AuditResult, get_audit_logger
 from utils.catalog_http_exceptions import (
-    raise_auth_error,
     raise_server_error,
     raise_validation_error,
 )
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 logger = get_logger(__name__)
-
-
-def check_admin_permission(request: Request) -> bool:
-    """Check if user has admin permission for audit log access"""
-    try:
-        # Get user from auth middleware
-        user_data = get_auth_middleware().get_user_from_request(request)
-
-        if not user_data:
-            raise_auth_error("AUTH_0002", "Authentication required for audit log access")
-
-        # Check for admin role
-        # Issue #744: Require explicit role - no guest fallback for security
-        user_role = user_data.get("role")
-        if not user_role:
-            raise_auth_error("AUTH_0002", "User role not assigned - access denied")
-        if not is_admin_role(user_role):
-            raise_auth_error("AUTH_0003", "Admin permission required for audit log access")
-
-        return True
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Permission check failed: %s", e)
-        raise_server_error("API_0003", "Permission check error")
 
 
 def _build_query_dict(
@@ -339,6 +312,7 @@ async def get_failed_operations(
 async def cleanup_old_logs(
     request: Request,
     cleanup_request: AuditCleanupRequest,
+    _human: None = Depends(refuse_service_principal),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """

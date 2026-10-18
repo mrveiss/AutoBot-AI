@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.python_files import collect_python_files
 from utils.io_executor import get_analytics_executor
 
 from .complexity_analyzer import ComplexityAnalyzer
@@ -215,18 +216,8 @@ class CodePatternAnalyzer:
             self._merge_results(report, result)
 
     def collect_python_files(self, directory: str) -> List[str]:
-        """Collect all Python files excluding configured directories.
-
-        Returns:
-            Sorted list of absolute file paths.
-        """
-        files = []
-        dir_path = Path(directory)
-        for py_file in dir_path.rglob("*.py"):
-            if any(exc in py_file.parts for exc in self.exclude_dirs):
-                continue
-            files.append(str(py_file))
-        return sorted(files)
+        """Sorted Python files in *directory* minus ``exclude_dirs`` (shared collector, #18731)."""
+        return collect_python_files(directory, self.exclude_dirs)
 
     async def _run_batch_regex(self, file_paths: List[str]) -> List:
         """Run regex detection on a batch of files."""

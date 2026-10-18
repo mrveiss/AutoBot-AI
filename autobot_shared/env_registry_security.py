@@ -354,3 +354,18 @@ register_env_var(
         component="security",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_JWT_CLOCK_SKEW_LEEWAY_SECONDS",
+        type=int,
+        default=5,
+        description=(
+            "Clock-skew tolerance in seconds for JWT verification (#18792). A backward "
+            "wall-clock step (WSL2) or skew between issuing and verifying hosts otherwise "
+            "rejects a fresh token whose iat is ahead of the verifier's clock. Applies to the iat "
+            "and nbf claims only; exp stays strict. Clamped to 0-60."
+        ),
+        component="security",
+    )
+)

@@ -1323,7 +1323,7 @@
 1|other|autobot-slm-backend/user_management/services/sso_service.py|https://login.microsoftonline.com/{domain}/oauth2/v2.0/token
 1|other|autobot-slm-backend/user_management/services/sso_service.py|https://oauth2.googleapis.com/token
 1|other|autobot-slm-backend/user_management/services/sso_service.py|https://openidconnect.googleapis.com/v1/userinfo
-2|ssot|autobot-slm-backend/user_management/services/vault_client.py|:8001
+1|ssot|autobot-slm-backend/user_management/services/vault_client.py|:8001
 1|other|autobot-slm-frontend/src/components/CodeSourceModal.vue|'/opt/autobot/code_source
 2|other|autobot-slm-frontend/src/components/agents/ProcessMonitorTab.vue|300
 1|other|autobot-slm-frontend/src/components/fleet/NodeLifecyclePanel.vue|offset=0

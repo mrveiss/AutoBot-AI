@@ -4695,12 +4695,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Restart Fleet Service
-         * @description Restart a service on all nodes that have it.
-         *
-         *     Issue #850: Moved from /fleet/services/{name}/restart to /orchestration/fleet/services/{name}/restart.
+         * Orchestration Restart Fleet Service
+         * @description Restart a service on all nodes that have it: delegates to ``api.services`` (#18714).
          */
-        post: operations["restart_fleet_service_api_orchestration_fleet_services__service_name__restart_post"];
+        post: operations["orchestration_restart_fleet_service_api_orchestration_fleet_services__service_name__restart_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4717,12 +4715,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Start Fleet Service
-         * @description Start a service on all nodes that have it.
+         * Orchestration Start Fleet Service
+         * @description Start a service on all nodes that have it: delegates to ``api.services`` (#18714).
          *
-         *     Issue #850: Moved from /fleet/services/{name}/start to /orchestration/fleet/services/{name}/start.
+         *     The route dependencies (``FLEET_SERVICE_ACTION_ROUTE``) are the ones the canonical route
+         *     carries, so the unit-name validation (422) and the service-management gate come with it.
          */
-        post: operations["start_fleet_service_api_orchestration_fleet_services__service_name__start_post"];
+        post: operations["orchestration_start_fleet_service_api_orchestration_fleet_services__service_name__start_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4739,12 +4738,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Stop Fleet Service
-         * @description Stop a service on all nodes.
-         *
-         *     Issue #850: Moved from /fleet/services/{name}/stop to /orchestration/fleet/services/{name}/stop.
+         * Orchestration Stop Fleet Service
+         * @description Stop a service on all nodes: delegates to ``api.services`` (#18714).
          */
-        post: operations["stop_fleet_service_api_orchestration_fleet_services__service_name__stop_post"];
+        post: operations["orchestration_stop_fleet_service_api_orchestration_fleet_services__service_name__stop_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9627,6 +9624,30 @@ export interface components {
             total_nodes: number;
             /** Total Services */
             total_services: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * FleetServiceActionResponse
+         * @description ``ServiceActionResponse`` for an action applied across the fleet.
+         */
+        FleetServiceActionResponse: {
+            /** Action */
+            action: string;
+            /** Diagnostics */
+            diagnostics?: {
+                [key: string]: string;
+            } | null;
+            /** Job Id */
+            job_id?: string | null;
+            /** Message */
+            message: string;
+            /** Node Id */
+            node_id: string;
+            /** Service Name */
+            service_name: string;
+            /** Success */
+            success: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -19143,7 +19164,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ServiceActionResponse"];
+                    "application/json": components["schemas"]["FleetServiceActionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -19174,7 +19195,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ServiceActionResponse"];
+                    "application/json": components["schemas"]["FleetServiceActionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -19205,7 +19226,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ServiceActionResponse"];
+                    "application/json": components["schemas"]["FleetServiceActionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -23046,7 +23067,7 @@ export interface operations {
             };
         };
     };
-    restart_fleet_service_api_orchestration_fleet_services__service_name__restart_post: {
+    orchestration_restart_fleet_service_api_orchestration_fleet_services__service_name__restart_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -23063,7 +23084,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OrchestrationServiceActionResponse"];
+                    "application/json": components["schemas"]["FleetServiceActionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -23077,7 +23098,7 @@ export interface operations {
             };
         };
     };
-    start_fleet_service_api_orchestration_fleet_services__service_name__start_post: {
+    orchestration_start_fleet_service_api_orchestration_fleet_services__service_name__start_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -23094,7 +23115,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OrchestrationServiceActionResponse"];
+                    "application/json": components["schemas"]["FleetServiceActionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -23108,7 +23129,7 @@ export interface operations {
             };
         };
     };
-    stop_fleet_service_api_orchestration_fleet_services__service_name__stop_post: {
+    orchestration_stop_fleet_service_api_orchestration_fleet_services__service_name__stop_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -23125,7 +23146,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OrchestrationServiceActionResponse"];
+                    "application/json": components["schemas"]["FleetServiceActionResponse"];
                 };
             };
             /** @description Validation Error */
