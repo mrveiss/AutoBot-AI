@@ -584,10 +584,9 @@ app = FastAPI(
     root_path=os.getenv("SLM_ROOT_PATH", ""),
     docs_url="/api/docs" if settings.debug else None,
     redoc_url="/api/redoc" if settings.debug else None,
-    # Security: MVA-3397 - Trust X-Forwarded-For from nginx proxy for rate limiting
-    proxy_headers=True,
-    forwarded_allow_ips=settings.trusted_proxies,
 )
+# MVA-3397 / #9616: the client IP behind nginx comes from get_client_ip(..., settings.trusted_proxies);
+# proxy-header trust is a uvicorn setting, never a FastAPI() argument (0.145 rejects it).
 # #16428 review: FastAPI's default 422 body echoes the submitted payload --
 # SlmAdminUserCreate.password and VNCCredentialCreate.password have the same
 # exposure the audit found on autobot-backend's secrets endpoint.
