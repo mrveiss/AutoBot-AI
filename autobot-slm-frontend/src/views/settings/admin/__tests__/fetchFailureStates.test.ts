@@ -14,6 +14,7 @@ import NPUWorkersSettings from '../NPUWorkersSettings.vue'
 
 const api = {
   getLogForwardingStatus: vi.fn(),
+  getLogForwardingAutoStart: vi.fn(),
   getLogForwardingDestinations: vi.fn(),
   startLogForwarding: vi.fn(),
   stopLogForwarding: vi.fn(),
