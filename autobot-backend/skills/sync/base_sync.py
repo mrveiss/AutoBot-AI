@@ -7,9 +7,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
 
-import yaml
-
-from autobot_shared.frontmatter import split_frontmatter
+from skills.generator import _parse_manifest
 
 
 class BaseRepoSync(ABC):
@@ -22,10 +20,4 @@ class BaseRepoSync(ABC):
     @staticmethod
     def _parse_skill_md(content: str) -> Dict[str, Any]:
         """Parse YAML frontmatter from SKILL.md content into manifest dict."""
-        raw, _ = split_frontmatter(content)
-        if raw is None:
-            return {}
-        try:
-            return yaml.safe_load(raw) or {}
-        except yaml.YAMLError:
-            return {}
+        return _parse_manifest(content)

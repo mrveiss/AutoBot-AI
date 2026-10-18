@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.python_files import collect_python_files
 
 from .detectors import (
     BloaterDetector,
@@ -394,26 +395,8 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
         return patterns
 
     def _get_python_files(self, directory: str) -> List[str]:
-        """
-        Get all Python files in directory, excluding specified patterns.
-
-        Issue #607: Uses shared FileListCache when available for performance.
-        Falls back to direct rglob if cache is not available or for custom directories.
-        """
-        python_files = []
-        dir_path = Path(directory)
-
-        for py_file in dir_path.rglob("*.py"):
-            should_exclude = False
-            for exclude_dir in self.exclude_dirs:
-                if exclude_dir in py_file.parts:
-                    should_exclude = True
-                    break
-
-            if not should_exclude:
-                python_files.append(str(py_file))
-
-        return sorted(python_files)
+        """All Python files in *directory* minus ``exclude_dirs`` (shared collector, #18731)."""
+        return collect_python_files(directory, self.exclude_dirs)
 
     async def _get_python_files_async(self, directory: str) -> List[str]:
         """
