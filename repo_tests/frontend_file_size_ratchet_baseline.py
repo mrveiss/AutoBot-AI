@@ -196,7 +196,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-frontend/src/views/DeploymentsView.vue": 1703,
     "autobot-slm-frontend/src/views/FleetOverview.vue": 837,
     "autobot-slm-frontend/src/views/MaintenanceView.vue": 818,
-    "autobot-slm-frontend/src/views/OrchestrationView.vue": 2193,
+    "autobot-slm-frontend/src/views/OrchestrationView.vue": 2189,
     "autobot-slm-frontend/src/views/ReplicationView.vue": 731,
     "autobot-slm-frontend/src/views/SecurityView.vue": 1409,
     "autobot-slm-frontend/src/views/SetupWizardView.vue": 1834,

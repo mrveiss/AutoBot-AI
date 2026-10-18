@@ -4,6 +4,11 @@
 # Author: mrveiss
 """No NEW user-visible literal in the SLM console (#15665, #14781).
 
+The detector itself moved to `repo_tests/_ui_literal_scan.py` (#12732) so the
+per-file ratchet over both apps shares it instead of forking it; its boundary
+(what counts, what does not) is documented there. This file keeps the zero
+baseline, the reach declaration and the shape fixtures.
+
 `autobot-slm-frontend` has never had an i18n gate. #15665 found the log
 viewer's "No logs available" written as a bare English string and said so in its
 title: *"no i18n gate covers this app"*. Fixing that one literal without a gate
@@ -72,114 +77,14 @@ the bottom are what distinguish those two.
 
 from __future__ import annotations
 
-import re
-from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
+from repo_tests._ui_literal_scan import literals_in_source
 
 _SRC = Path("autobot-slm-frontend") / "src"
-
-#: Attributes a user reads. `aria-*` included: a screen reader is a user.
-_VISIBLE_ATTRS = frozenset({"placeholder", "title", "alt", "aria-label", "aria-description", "label"})
-
-#: Elements whose contents are never prose.
-_OPAQUE_TAGS = frozenset({"script", "style", "code", "pre", "svg", "path"})
-
-#: Two consecutive LETTERS IN ANY SCRIPT, so `1.2`, `%` and `·` are not prose.
-#:
-#: `[A-Za-z]{2,}` until #17395: an ASCII-only word test in a guard whose entire
-#: purpose is internationalisation. A hardcoded Arabic, Hebrew, Persian or Urdu
-#: label contains no ASCII letter, so it scored as "not prose" and the guard
-#: passed it -- four of the eleven shipped locales were invisible to the check
-#: written to protect them. Measured when it was fixed: the widening surfaced
-#: zero new offenders, so nothing had actually slipped through yet. The guard was
-#: lucky rather than correct, which is precisely the state a guard must not be
-#: left in.
-#:
-#: `[^\W\d_]` is "word character, not a digit, not an underscore" -- a letter in
-#: any script.
-_HAS_WORD = re.compile(r"[^\W\d_]{2,}", re.UNICODE)
-
-#: A single identifier -- `FleetOverview`, `node_id`, `kebab-case-thing`.
-_IDENTIFIER_ONLY = re.compile(r"^[A-Za-z][A-Za-z0-9]*([_-][A-Za-z0-9]+)*$")
-
-#: Things that are not text even when they contain words.
-_NOT_PROSE = re.compile(r"^(https?://|/|\.{1,2}/|#|\{|\$t\(|t\()")
-
-_MIN_LENGTH = 4
-
-
-class _TemplateScan(HTMLParser):
-    """Collects user-visible text nodes and attribute values with line numbers."""
-
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self.found: list[tuple[int, str]] = []
-        self._opaque_depth = 0
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag in _OPAQUE_TAGS:
-            self._opaque_depth += 1
-            return
-        if self._opaque_depth:
-            return
-        for name, value in attrs:
-            # A bound attribute's value is an expression, not a literal.
-            if name.startswith((":", "v-bind:", "@", "v-on:")):
-                continue
-            if name in _VISIBLE_ATTRS and value and _is_prose(value):
-                self.found.append((self.getpos()[0], f"{name}={value.strip()[:60]}"))
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag in _OPAQUE_TAGS and self._opaque_depth:
-            self._opaque_depth -= 1
-
-    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag not in _OPAQUE_TAGS:
-            self.handle_starttag(tag, attrs)
-
-    def handle_data(self, data: str) -> None:
-        if self._opaque_depth:
-            return
-        # Drop every interpolation first: `{{ $t('x') }}` and `{{ count }}` are
-        # not literals, and a line may mix one with real text.
-        text = re.sub(r"\{\{.*?\}\}", " ", data, flags=re.S)
-        for chunk in text.splitlines():
-            candidate = chunk.strip()
-            if _is_prose(candidate):
-                self.found.append((self.getpos()[0], candidate[:60]))
-
-
-def _is_prose(value: str) -> bool:
-    text = value.strip()
-    if len(text) < _MIN_LENGTH or not _HAS_WORD.search(text):
-        return False
-    if _NOT_PROSE.match(text) or _IDENTIFIER_ONLY.match(text):
-        return False
-    return True
-
-
-def _template_of(source: str) -> tuple[str, int] | None:
-    """The `<template>` body and the line it starts on, or None."""
-    match = re.search(r"<template[^>]*>(.*)</template>", source, re.S)
-    if not match:
-        return None
-    return match.group(1), source[: match.start(1)].count("\n")
-
-
-def literals_in_source(source: str, label: str) -> list[str]:
-    """Every user-visible bare literal in one component, as `label:line text`."""
-    template = _template_of(source)
-    if template is None:
-        return []
-    body, offset = template
-    scan = _TemplateScan()
-    scan.feed(body)
-    scan.close()
-    return [f"{label}:{line + offset} {text}" for line, text in scan.found]
 
 
 def _scan() -> tuple[list[str], int]:
@@ -275,6 +180,10 @@ _CAUGHT = {
     # these as "not prose", so a guard for internationalisation could not see an
     # untranslated label in four of the locales this repo ships.
     "arabic text node": "<template><button>حذف العقدة</button></template>",
+    # An opaque element's CONTENT is not prose; its own attributes still are.
+    "title on a pre element": '<template><pre title="Copy command">{{ out }}</pre></template>',
+    "title on a code element": '<template><code title="Copy command">{{ out }}</code></template>',
+    "label on a code element nested in a pre": '<template><pre><code aria-label="Shell output" /></pre></template>',
     "hebrew title attribute": '<template><button title="מחק את הצומת">x</button></template>',
 }
 
@@ -287,6 +196,7 @@ _IGNORED = {
     # The other half of the non-Latin contrast pair: widening the word test to
     # every script must not make digits into prose, whatever script they are in.
     "non-latin digits": "<template><span>١٢٣٤٥</span></template>",
+    "text inside pre and code": "<template><pre>Some command output</pre><code>autobot-backend</code></template>",
     "script contents": "<template><div>{{ x }}</div></template><script>const s = 'Delete this node'</script>",
 }
 
