@@ -6,7 +6,7 @@
 
 `_ui_literal_scan.py` enumerates by walking the filesystem and reads the
 template with `html.parser`. This module shares neither: it enumerates with
-`git ls-files` (environment scrubbed, `autobot_shared.paths.scrubbed_git_env`)
+git's index via `tools.lint._scan_helpers.tracked_paths` (environment scrubbed there)
 and matches with regexes over the template with comments removed. The ratchet
 test compares the two as SETS of (file, kind, literal).
 
@@ -51,10 +51,9 @@ from __future__ import annotations
 
 import html
 import re
-import subprocess
 from pathlib import Path
 
-from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths
 
 _TREES = ("autobot-frontend/src", "autobot-slm-frontend/src")
 _SCRIPT = re.compile(r"<(script|style)\b[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
@@ -66,15 +65,13 @@ _ATTRIBUTE = re.compile(r"""(?<![:@\w-])(?:title|placeholder|aria-label|label|al
 
 
 def tracked_vue_files(root: Path) -> list[str]:
-    """Tracked `.vue` paths in the boundary, via git instead of a filesystem walk."""
-    out = subprocess.run(
-        ["git", "ls-files", "-z", "--", *_TREES],
-        cwd=root,
-        env=scrubbed_git_env(),
-        capture_output=True,
-        check=True,
-    ).stdout.decode("utf-8")
-    return sorted(p for p in out.split("\0") if p.endswith(".vue") and in_boundary(p))
+    """Tracked `.vue` paths in the boundary, from git's index instead of a filesystem walk.
+
+    Through the one shared enumerator (`tracked_paths`, #15926), which scrubs the git
+    environment itself. Independence from the primary detector is in the SOURCE (the
+    index, not the tree), not in calling git a second way.
+    """
+    return sorted(p for p in tracked_paths(root, *(f"{tree}/*.vue" for tree in _TREES)) if in_boundary(p))
 
 
 def in_boundary(rel: str) -> bool:
