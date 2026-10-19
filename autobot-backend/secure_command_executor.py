@@ -263,7 +263,7 @@ def _check_dangerous_env_var_prefix(command: str) -> List[str] | None:
 # Issue #765: Path constants now imported from security.command_patterns
 
 
-class SecurityPolicy:
+class CommandSecurityPolicy:
     """Security policy for command execution.
 
     Issue #765: Now uses centralized patterns from security.command_patterns.
@@ -341,7 +341,7 @@ class SecureCommandExecutor:
 
     def __init__(
         self,
-        policy: SecurityPolicy | None = None,
+        policy: CommandSecurityPolicy | None = None,
         require_approval_callback=None,
         use_docker_sandbox: bool = False,
         is_admin: bool = False,
@@ -352,14 +352,14 @@ class SecureCommandExecutor:
         Initialize secure command executor
 
         Args:
-            policy: Security policy to use (default: SecurityPolicy())
+            policy: Security policy to use (default: CommandSecurityPolicy())
             require_approval_callback: Async callback function for user approval
             use_docker_sandbox: Whether to execute commands in Docker container
             is_admin: Whether current user has admin privileges (for permission v2)
             project_path: Current project path (for approval memory)
             user_id: Current user ID (for approval memory)
         """
-        self.policy = policy or SecurityPolicy()
+        self.policy = policy or CommandSecurityPolicy()
         self.require_approval_callback = require_approval_callback
         self.use_docker_sandbox = use_docker_sandbox
         self.docker_image = "autobot-sandbox:latest"

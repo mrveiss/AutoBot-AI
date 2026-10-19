@@ -2202,6 +2202,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/cache/coordinator/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Cache Coordinator Stats
+         * @description Get unified cache statistics from the cache coordinator.
+         *
+         *     Returns stats for all registered caches including:
+         *     - Individual cache metrics (size, hits, misses, hit_rate)
+         *     - Total items across all caches
+         *     - System memory percentage
+         *     - Pressure trigger count
+         *
+         *     Issue #744: Requires admin authentication.
+         */
+        get: operations["get_cache_coordinator_stats_api_system_cache_coordinator_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/system/cache/evict": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger Cache Eviction
+         * @description Manually trigger coordinated cache eviction.
+         *
+         *     Evicts items from all registered caches according to eviction_ratio.
+         *
+         *     Issue #744: Requires admin authentication.
+         */
+        post: operations["trigger_cache_eviction_api_system_cache_evict_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/system/cache/clear/{cache_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear Cache
+         * @description Clear a specific cache by name.
+         *
+         *     Args:
+         *         cache_name: Name of the cache to clear (e.g., 'lru_memory', 'embedding')
+         *
+         *     Issue #744: Requires admin authentication.
+         */
+        post: operations["clear_cache_api_system_cache_clear__cache_name__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/frontend-config": {
         parameters: {
             query?: never;
@@ -2555,83 +2632,6 @@ export interface paths {
         get: operations["get_system_metrics_api_system_metrics_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/system/api/cache/stats": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Cache Coordinator Stats
-         * @description Get unified cache statistics from the cache coordinator.
-         *
-         *     Returns stats for all registered caches including:
-         *     - Individual cache metrics (size, hits, misses, hit_rate)
-         *     - Total items across all caches
-         *     - System memory percentage
-         *     - Pressure trigger count
-         *
-         *     Issue #744: Requires admin authentication.
-         */
-        get: operations["get_cache_coordinator_stats_api_system_api_cache_stats_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/system/api/cache/evict": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Trigger Cache Eviction
-         * @description Manually trigger coordinated cache eviction.
-         *
-         *     Evicts items from all registered caches according to eviction_ratio.
-         *
-         *     Issue #744: Requires admin authentication.
-         */
-        post: operations["trigger_cache_eviction_api_system_api_cache_evict_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/system/api/cache/clear/{cache_name}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Clear Cache
-         * @description Clear a specific cache by name.
-         *
-         *     Args:
-         *         cache_name: Name of the cache to clear (e.g., 'lru_memory', 'embedding')
-         *
-         *     Issue #744: Requires admin authentication.
-         */
-        post: operations["clear_cache_api_system_api_cache_clear__cache_name__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9262,7 +9262,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/api/knowledge/facts/{fact_id}/share": {
+    "/api/knowledge_base/facts/{fact_id}/share": {
         parameters: {
             query?: never;
             header?: never;
@@ -9284,14 +9284,14 @@ export interface paths {
          *     Returns:
          *         Success response with updated sharing info
          */
-        post: operations["share_fact_api_knowledge_base_api_knowledge_facts__fact_id__share_post"];
+        post: operations["share_fact_api_knowledge_base_facts__fact_id__share_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/api/knowledge/facts/{fact_id}/share/{user_id_to_remove}": {
+    "/api/knowledge_base/facts/{fact_id}/share/{user_id_to_remove}": {
         parameters: {
             query?: never;
             header?: never;
@@ -9314,13 +9314,13 @@ export interface paths {
          *     Returns:
          *         Success response with updated sharing info
          */
-        delete: operations["unshare_fact_api_knowledge_base_api_knowledge_facts__fact_id__share__user_id_to_remove__delete"];
+        delete: operations["unshare_fact_api_knowledge_base_facts__fact_id__share__user_id_to_remove__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/api/knowledge/facts/{fact_id}/visibility": {
+    "/api/knowledge_base/facts/{fact_id}/visibility": {
         parameters: {
             query?: never;
             header?: never;
@@ -9341,7 +9341,7 @@ export interface paths {
          *     Returns:
          *         Success response with new visibility
          */
-        put: operations["update_fact_visibility_api_knowledge_base_api_knowledge_facts__fact_id__visibility_put"];
+        put: operations["update_fact_visibility_api_knowledge_base_facts__fact_id__visibility_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -9349,7 +9349,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/api/knowledge/facts/mine": {
+    "/api/knowledge_base/facts/mine": {
         parameters: {
             query?: never;
             header?: never;
@@ -9370,7 +9370,7 @@ export interface paths {
          *     Returns:
          *         List of facts owned by (and optionally shared with) the user
          */
-        get: operations["get_my_facts_api_knowledge_base_api_knowledge_facts_mine_get"];
+        get: operations["get_my_facts_api_knowledge_base_facts_mine_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9379,7 +9379,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/api/knowledge/facts/shared-with-me": {
+    "/api/knowledge_base/facts/shared-with-me": {
         parameters: {
             query?: never;
             header?: never;
@@ -9399,7 +9399,7 @@ export interface paths {
          *     Returns:
          *         List of facts shared with the user
          */
-        get: operations["get_shared_facts_api_knowledge_base_api_knowledge_facts_shared_with_me_get"];
+        get: operations["get_shared_facts_api_knowledge_base_facts_shared_with_me_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10087,7 +10087,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/api/ground-response": {
+    "/api/knowledge_base/ground-response": {
         parameters: {
             query?: never;
             header?: never;
@@ -10139,14 +10139,14 @@ export interface paths {
          *     Returns:
          *         GroundedResponse serialized to dict
          */
-        post: operations["ground_response_api_knowledge_base_api_ground_response_post"];
+        post: operations["ground_response_api_knowledge_base_ground_response_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/api/verify-claim": {
+    "/api/knowledge_base/verify-claim": {
         parameters: {
             query?: never;
             header?: never;
@@ -10191,14 +10191,14 @@ export interface paths {
          *     Returns:
          *         Verified claim with status and evidence
          */
-        post: operations["verify_claim_api_knowledge_base_api_verify_claim_post"];
+        post: operations["verify_claim_api_knowledge_base_verify_claim_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/api/kb-conflicts": {
+    "/api/knowledge_base/kb-conflicts": {
         parameters: {
             query?: never;
             header?: never;
@@ -10247,7 +10247,7 @@ export interface paths {
          *     Returns:
          *         List of conflicts with pagination info
          */
-        get: operations["list_conflicts_api_knowledge_base_api_kb_conflicts_get"];
+        get: operations["list_conflicts_api_knowledge_base_kb_conflicts_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10256,7 +10256,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/api/kb-conflicts/{conflict_id}/resolve": {
+    "/api/knowledge_base/kb-conflicts/{conflict_id}/resolve": {
         parameters: {
             query?: never;
             header?: never;
@@ -10299,14 +10299,14 @@ export interface paths {
          *     Returns:
          *         Resolution result
          */
-        post: operations["resolve_conflict_api_knowledge_base_api_kb_conflicts__conflict_id__resolve_post"];
+        post: operations["resolve_conflict_api_knowledge_base_kb_conflicts__conflict_id__resolve_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/api/kb-stats": {
+    "/api/knowledge_base/kb-stats": {
         parameters: {
             query?: never;
             header?: never;
@@ -10359,7 +10359,7 @@ export interface paths {
          *     Returns:
          *         Statistics dictionary
          */
-        get: operations["get_stats_api_knowledge_base_api_kb_stats_get"];
+        get: operations["get_stats_api_knowledge_base_kb_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -80131,7 +80131,7 @@ export interface components {
         };
         /**
          * KnowledgeConflictsListResponse
-         * @description Response for GET /api/kb-conflicts.
+         * @description Response for GET /api/knowledge_base/kb-conflicts.
          */
         KnowledgeConflictsListResponse: {
             /** Status */
@@ -80576,7 +80576,7 @@ export interface components {
         };
         /**
          * KnowledgeGroundResponseResponse
-         * @description Response for POST /api/ground-response.
+         * @description Response for POST /api/knowledge_base/ground-response.
          */
         KnowledgeGroundResponseResponse: {
             /** Status */
@@ -80590,7 +80590,7 @@ export interface components {
         };
         /**
          * KnowledgeGroundingStatsResponse
-         * @description Response for GET /api/kb-stats.
+         * @description Response for GET /api/knowledge_base/kb-stats.
          *
          *     Stats shape is dynamic — extra fields allowed.
          */
@@ -80847,7 +80847,7 @@ export interface components {
         };
         /**
          * KnowledgeMyFactsResponse
-         * @description Response for GET /api/knowledge/facts/mine.
+         * @description Response for GET /api/knowledge_base/facts/mine.
          */
         KnowledgeMyFactsResponse: {
             /** Success */
@@ -81029,7 +81029,7 @@ export interface components {
         };
         /**
          * KnowledgeResolveConflictResponse
-         * @description Response for POST /api/kb-conflicts/{conflict_id}/resolve.
+         * @description Response for POST /api/knowledge_base/kb-conflicts/{conflict_id}/resolve.
          */
         KnowledgeResolveConflictResponse: {
             /** Status */
@@ -81168,7 +81168,7 @@ export interface components {
         };
         /**
          * KnowledgeShareFactResponse
-         * @description Response for POST /api/knowledge/facts/{fact_id}/share.
+         * @description Response for POST /api/knowledge_base/facts/{fact_id}/share.
          */
         KnowledgeShareFactResponse: {
             /** Success */
@@ -81202,7 +81202,7 @@ export interface components {
         };
         /**
          * KnowledgeSharedWithMeResponse
-         * @description Response for GET /api/knowledge/facts/shared-with-me.
+         * @description Response for GET /api/knowledge_base/facts/shared-with-me.
          */
         KnowledgeSharedWithMeResponse: {
             /** Success */
@@ -81624,7 +81624,7 @@ export interface components {
         };
         /**
          * KnowledgeUnshareFactResponse
-         * @description Response for DELETE /api/knowledge/facts/{fact_id}/share/{user_id_to_remove}.
+         * @description Response for DELETE /api/knowledge_base/facts/{fact_id}/share/{user_id_to_remove}.
          */
         KnowledgeUnshareFactResponse: {
             /** Success */
@@ -81658,7 +81658,7 @@ export interface components {
         };
         /**
          * KnowledgeUpdateVisibilityResponse
-         * @description Response for PUT /api/knowledge/facts/{fact_id}/visibility.
+         * @description Response for PUT /api/knowledge_base/facts/{fact_id}/visibility.
          */
         KnowledgeUpdateVisibilityResponse: {
             /** Success */
@@ -81742,7 +81742,7 @@ export interface components {
         };
         /**
          * KnowledgeVerifyClaimResponse
-         * @description Response for POST /api/verify-claim.
+         * @description Response for POST /api/knowledge_base/verify-claim.
          */
         KnowledgeVerifyClaimResponse: {
             /** Status */
@@ -99216,7 +99216,7 @@ export interface components {
         };
         /**
          * SystemCacheClearResponse
-         * @description Response for POST /api/cache/clear/{cache_name}.
+         * @description Response for POST /api/system/cache/clear/{cache_name}.
          */
         SystemCacheClearResponse: {
             /** Status */
@@ -99230,7 +99230,7 @@ export interface components {
         };
         /**
          * SystemCacheCoordinatorStatsResponse
-         * @description Response for GET /api/cache/stats.
+         * @description Response for GET /api/system/cache/coordinator/stats.
          *
          *     Shape is defined by CacheCoordinator.get_cache_stats() — opaque.
          */
@@ -99239,7 +99239,7 @@ export interface components {
         };
         /**
          * SystemCacheEvictResponse
-         * @description Response for POST /api/cache/evict.
+         * @description Response for POST /api/system/cache/evict.
          */
         SystemCacheEvictResponse: {
             /** Status */
@@ -109226,6 +109226,77 @@ export interface operations {
             };
         };
     };
+    get_cache_coordinator_stats_api_system_cache_coordinator_stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemCacheCoordinatorStatsResponse"];
+                };
+            };
+        };
+    };
+    trigger_cache_eviction_api_system_cache_evict_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemCacheEvictResponse"];
+                };
+            };
+        };
+    };
+    clear_cache_api_system_cache_clear__cache_name__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cache_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemCacheClearResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_frontend_config_api_system_frontend_config_get: {
         parameters: {
             query?: never;
@@ -109535,77 +109606,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemMetricsResponse"];
-                };
-            };
-        };
-    };
-    get_cache_coordinator_stats_api_system_api_cache_stats_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SystemCacheCoordinatorStatsResponse"];
-                };
-            };
-        };
-    };
-    trigger_cache_eviction_api_system_api_cache_evict_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SystemCacheEvictResponse"];
-                };
-            };
-        };
-    };
-    clear_cache_api_system_api_cache_clear__cache_name__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                cache_name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SystemCacheClearResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -118099,7 +118099,7 @@ export interface operations {
             };
         };
     };
-    share_fact_api_knowledge_base_api_knowledge_facts__fact_id__share_post: {
+    share_fact_api_knowledge_base_facts__fact_id__share_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -118134,7 +118134,7 @@ export interface operations {
             };
         };
     };
-    unshare_fact_api_knowledge_base_api_knowledge_facts__fact_id__share__user_id_to_remove__delete: {
+    unshare_fact_api_knowledge_base_facts__fact_id__share__user_id_to_remove__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -118166,7 +118166,7 @@ export interface operations {
             };
         };
     };
-    update_fact_visibility_api_knowledge_base_api_knowledge_facts__fact_id__visibility_put: {
+    update_fact_visibility_api_knowledge_base_facts__fact_id__visibility_put: {
         parameters: {
             query?: never;
             header?: never;
@@ -118201,7 +118201,7 @@ export interface operations {
             };
         };
     };
-    get_my_facts_api_knowledge_base_api_knowledge_facts_mine_get: {
+    get_my_facts_api_knowledge_base_facts_mine_get: {
         parameters: {
             query?: {
                 limit?: number;
@@ -118234,7 +118234,7 @@ export interface operations {
             };
         };
     };
-    get_shared_facts_api_knowledge_base_api_knowledge_facts_shared_with_me_get: {
+    get_shared_facts_api_knowledge_base_facts_shared_with_me_get: {
         parameters: {
             query?: {
                 limit?: number;
@@ -119028,7 +119028,7 @@ export interface operations {
             };
         };
     };
-    ground_response_api_knowledge_base_api_ground_response_post: {
+    ground_response_api_knowledge_base_ground_response_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -119061,7 +119061,7 @@ export interface operations {
             };
         };
     };
-    verify_claim_api_knowledge_base_api_verify_claim_post: {
+    verify_claim_api_knowledge_base_verify_claim_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -119094,7 +119094,7 @@ export interface operations {
             };
         };
     };
-    list_conflicts_api_knowledge_base_api_kb_conflicts_get: {
+    list_conflicts_api_knowledge_base_kb_conflicts_get: {
         parameters: {
             query?: {
                 /** @description Filter by resolution status */
@@ -119132,7 +119132,7 @@ export interface operations {
             };
         };
     };
-    resolve_conflict_api_knowledge_base_api_kb_conflicts__conflict_id__resolve_post: {
+    resolve_conflict_api_knowledge_base_kb_conflicts__conflict_id__resolve_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -119168,7 +119168,7 @@ export interface operations {
             };
         };
     };
-    get_stats_api_knowledge_base_api_kb_stats_get: {
+    get_stats_api_knowledge_base_kb_stats_get: {
         parameters: {
             query?: {
                 /** @description Time period for stats */

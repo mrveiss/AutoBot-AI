@@ -2,7 +2,7 @@
   <!-- Enhanced Analytics Dashboard Cards -->
   <div class="enhanced-analytics-grid">
       <!-- System Overview -->
-      <BasePanel variant="dark" size="md">
+      <BaseCard scrollable variant="dark" size="md">
         <template #header>
           <div class="card-header-content">
             <h3><Icon name="tachometer-alt" /> {{ $t('analytics.codebase.overview.title') }}</h3>
@@ -43,10 +43,10 @@
             </button>
           </template>
         </EmptyState>
-      </BasePanel>
+      </BaseCard>
 
       <!-- Communication Patterns -->
-      <BasePanel variant="dark" size="md">
+      <BaseCard scrollable variant="dark" size="md">
         <template #header>
           <div class="card-header-content">
             <h3><Icon name="network-wired" /> {{ $t('analytics.codebase.communication.title') }}</h3>
@@ -78,10 +78,10 @@
           icon="wifi"
           :message="$t('analytics.codebase.communication.noData')"
         />
-      </BasePanel>
+      </BaseCard>
 
       <!-- Code Quality -->
-      <BasePanel variant="dark" size="md">
+      <BaseCard scrollable variant="dark" size="md">
         <template #header>
           <div class="card-header-content">
             <h3><Icon name="code-branch" /> {{ $t('analytics.codebase.quality.title') }}</h3>
@@ -115,10 +115,10 @@
           icon="star"
           :message="$t('analytics.codebase.quality.noMetrics')"
         />
-      </BasePanel>
+      </BaseCard>
 
       <!-- Performance Metrics -->
-      <BasePanel variant="dark" size="md">
+      <BaseCard scrollable variant="dark" size="md">
         <template #header>
           <div class="card-header-content">
             <h3><Icon name="bolt" /> {{ $t('analytics.codebase.performance.title') }}</h3>
@@ -152,15 +152,15 @@
           icon="rocket"
           :message="$t('analytics.codebase.performance.noData')"
         />
-      </BasePanel>
+      </BaseCard>
   </div>
 </template>
 
 <script setup lang="ts">
+import { BaseCard } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BasePanel from '@/components/base/BasePanel.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('CodebaseOverviewPanel')

@@ -1,5 +1,5 @@
 <template>
-  <BasePanel variant="bordered" size="md">
+  <BaseCard scrollable variant="bordered" size="md">
     <div class="activity-header">
       <h4>{{ $t('knowledge.stats.recentActivity') }}</h4>
       <div class="feed-filter-chips" role="group" :aria-label="$t('knowledge.stats.recentActivity')">
@@ -30,10 +30,11 @@
         :message="$t('knowledge.stats.noRecentActivity')"
       />
     </div>
-  </BasePanel>
+  </BaseCard>
 </template>
 
 <script setup lang="ts">
+import { BaseCard } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -48,7 +49,6 @@
  */
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
-import BasePanel from '@/components/base/BasePanel.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { ref, computed } from 'vue'
 import { formatTimeAgo } from '@/utils/formatHelpers'

@@ -643,7 +643,7 @@ class KnowledgeAutoApplySuggestionsResponse(BaseModel):
 
 
 class KnowledgeShareFactResponse(BaseModel):
-    """Response for POST /api/knowledge/facts/{fact_id}/share."""
+    """Response for POST /api/knowledge_base/facts/{fact_id}/share."""
 
     success: bool
     fact_id: str
@@ -652,7 +652,7 @@ class KnowledgeShareFactResponse(BaseModel):
 
 
 class KnowledgeUnshareFactResponse(BaseModel):
-    """Response for DELETE /api/knowledge/facts/{fact_id}/share/{user_id_to_remove}."""
+    """Response for DELETE /api/knowledge_base/facts/{fact_id}/share/{user_id_to_remove}."""
 
     success: bool
     fact_id: str
@@ -661,7 +661,7 @@ class KnowledgeUnshareFactResponse(BaseModel):
 
 
 class KnowledgeUpdateVisibilityResponse(BaseModel):
-    """Response for PUT /api/knowledge/facts/{fact_id}/visibility."""
+    """Response for PUT /api/knowledge_base/facts/{fact_id}/visibility."""
 
     success: bool
     fact_id: str
@@ -669,7 +669,7 @@ class KnowledgeUpdateVisibilityResponse(BaseModel):
 
 
 class KnowledgeMyFactsResponse(BaseModel):
-    """Response for GET /api/knowledge/facts/mine."""
+    """Response for GET /api/knowledge_base/facts/mine."""
 
     success: bool
     user_id: str
@@ -680,7 +680,7 @@ class KnowledgeMyFactsResponse(BaseModel):
 
 
 class KnowledgeSharedWithMeResponse(BaseModel):
-    """Response for GET /api/knowledge/facts/shared-with-me."""
+    """Response for GET /api/knowledge_base/facts/shared-with-me."""
 
     success: bool
     user_id: str
@@ -694,14 +694,14 @@ class KnowledgeSharedWithMeResponse(BaseModel):
 
 
 class KnowledgeGroundResponseResponse(BaseModel):
-    """Response for POST /api/ground-response."""
+    """Response for POST /api/knowledge_base/ground-response."""
 
     status: str
     data: Dict[str, Any]
 
 
 class KnowledgeVerifyClaimResponse(BaseModel):
-    """Response for POST /api/verify-claim."""
+    """Response for POST /api/knowledge_base/verify-claim."""
 
     status: str
     claim_text: str
@@ -713,7 +713,7 @@ class KnowledgeVerifyClaimResponse(BaseModel):
 
 
 class KnowledgeConflictsListResponse(BaseModel):
-    """Response for GET /api/kb-conflicts."""
+    """Response for GET /api/knowledge_base/kb-conflicts."""
 
     status: str
     conflicts: List[Any]
@@ -724,14 +724,14 @@ class KnowledgeConflictsListResponse(BaseModel):
 
 
 class KnowledgeResolveConflictResponse(BaseModel):
-    """Response for POST /api/kb-conflicts/{conflict_id}/resolve."""
+    """Response for POST /api/knowledge_base/kb-conflicts/{conflict_id}/resolve."""
 
     status: str
     data: Dict[str, Any]
 
 
 class KnowledgeGroundingStatsResponse(BaseModel):
-    """Response for GET /api/kb-stats.
+    """Response for GET /api/knowledge_base/kb-stats.
 
     Stats shape is dynamic — extra fields allowed.
     """
@@ -5029,7 +5029,7 @@ from datetime import datetime as _datetime
 from services.audit.audit import AuditEventType as _AuditEventType  # GH#8290 Phase 2
 
 
-class AuditEvent(BaseModel):
+class KnowledgeAuditEventRecord(BaseModel):
     """Audit event model."""
 
     id: str

@@ -18,8 +18,8 @@ from services.agents.subagent_manager import SubagentManager
 from services.agents.subagent_spawner import SubagentSpawner
 from services.agents.subagent_task import (
     SubagentTask,
+    SubagentTaskResult,
     TaskPriority,
-    TaskResult,
     TaskStatus,
 )
 
@@ -69,7 +69,7 @@ class TestSubagentTask:
 
     def test_task_result_creation(self):
         """Test creating a task result."""
-        result = TaskResult(
+        result = SubagentTaskResult(
             task_id="task-123",
             status=TaskStatus.COMPLETED,
             output={"data": "result"},
@@ -82,13 +82,13 @@ class TestSubagentTask:
 
     def test_task_result_serialization(self):
         """Test result to_dict and from_dict."""
-        original = TaskResult(
+        original = SubagentTaskResult(
             task_id="task-456",
             status=TaskStatus.FAILED,
             error="Something went wrong",
         )
         result_dict = original.to_dict()
-        restored = TaskResult.from_dict(result_dict)
+        restored = SubagentTaskResult.from_dict(result_dict)
 
         assert restored.task_id == original.task_id
         assert restored.status == original.status
@@ -149,9 +149,9 @@ class TestSubagentSpawner:
         """Test aggregating results with 'all' strategy."""
         spawner = SubagentSpawner()
         results = [
-            TaskResult(task_id="t1", status=TaskStatus.COMPLETED, output={"value": 10}),
-            TaskResult(task_id="t2", status=TaskStatus.COMPLETED, output={"value": 20}),
-            TaskResult(task_id="t3", status=TaskStatus.FAILED, error="Failed"),
+            SubagentTaskResult(task_id="t1", status=TaskStatus.COMPLETED, output={"value": 10}),
+            SubagentTaskResult(task_id="t2", status=TaskStatus.COMPLETED, output={"value": 20}),
+            SubagentTaskResult(task_id="t3", status=TaskStatus.FAILED, error="Failed"),
         ]
 
         aggregation = await spawner.aggregate_results(results, strategy="all")
@@ -167,9 +167,9 @@ class TestSubagentSpawner:
         """Test aggregating results with 'consensus' strategy."""
         spawner = SubagentSpawner()
         results = [
-            TaskResult(task_id="t1", status=TaskStatus.COMPLETED, output={"answer": "yes"}),
-            TaskResult(task_id="t2", status=TaskStatus.COMPLETED, output={"answer": "yes"}),
-            TaskResult(task_id="t3", status=TaskStatus.COMPLETED, output={"answer": "yes"}),
+            SubagentTaskResult(task_id="t1", status=TaskStatus.COMPLETED, output={"answer": "yes"}),
+            SubagentTaskResult(task_id="t2", status=TaskStatus.COMPLETED, output={"answer": "yes"}),
+            SubagentTaskResult(task_id="t3", status=TaskStatus.COMPLETED, output={"answer": "yes"}),
         ]
 
         aggregation = await spawner.aggregate_results(results, strategy="consensus")
@@ -182,9 +182,9 @@ class TestSubagentSpawner:
         """Test aggregating results with 'majority' strategy."""
         spawner = SubagentSpawner()
         results = [
-            TaskResult(task_id="t1", status=TaskStatus.COMPLETED, output="A"),
-            TaskResult(task_id="t2", status=TaskStatus.COMPLETED, output="A"),
-            TaskResult(task_id="t3", status=TaskStatus.COMPLETED, output="B"),
+            SubagentTaskResult(task_id="t1", status=TaskStatus.COMPLETED, output="A"),
+            SubagentTaskResult(task_id="t2", status=TaskStatus.COMPLETED, output="A"),
+            SubagentTaskResult(task_id="t3", status=TaskStatus.COMPLETED, output="B"),
         ]
 
         aggregation = await spawner.aggregate_results(results, strategy="majority")
@@ -197,8 +197,8 @@ class TestSubagentSpawner:
         """Test conflict resolution when no conflict exists."""
         spawner = SubagentSpawner()
         results = [
-            TaskResult(task_id="t1", status=TaskStatus.COMPLETED, output={"result": "same"}),
-            TaskResult(task_id="t2", status=TaskStatus.COMPLETED, output={"result": "same"}),
+            SubagentTaskResult(task_id="t1", status=TaskStatus.COMPLETED, output={"result": "same"}),
+            SubagentTaskResult(task_id="t2", status=TaskStatus.COMPLETED, output={"result": "same"}),
         ]
 
         conflict = await spawner.resolve_conflicts(results)
@@ -210,9 +210,9 @@ class TestSubagentSpawner:
         """Test conflict detection and resolution."""
         spawner = SubagentSpawner()
         results = [
-            TaskResult(task_id="t1", status=TaskStatus.COMPLETED, output="X"),
-            TaskResult(task_id="t2", status=TaskStatus.COMPLETED, output="Y"),
-            TaskResult(task_id="t3", status=TaskStatus.COMPLETED, output="X"),
+            SubagentTaskResult(task_id="t1", status=TaskStatus.COMPLETED, output="X"),
+            SubagentTaskResult(task_id="t2", status=TaskStatus.COMPLETED, output="Y"),
+            SubagentTaskResult(task_id="t3", status=TaskStatus.COMPLETED, output="X"),
         ]
 
         conflict = await spawner.resolve_conflicts(results, strategy="consensus")
@@ -259,7 +259,7 @@ class TestSubagentManager:
     @pytest.mark.asyncio
     async def test_record_task_result(self, manager):
         """Test recording a task result."""
-        result = TaskResult(
+        result = SubagentTaskResult(
             task_id="task-1",
             status=TaskStatus.COMPLETED,
             output={"success": True},
@@ -274,7 +274,7 @@ class TestSubagentManager:
     @pytest.mark.asyncio
     async def test_get_task_result_from_local_cache(self, manager):
         """Test getting result from local cache."""
-        result = TaskResult(task_id="task-1", status=TaskStatus.COMPLETED, output="cached")
+        result = SubagentTaskResult(task_id="task-1", status=TaskStatus.COMPLETED, output="cached")
         manager.local_results["task-1"] = result
 
         retrieved = await manager.get_task_result("task-1")
@@ -285,8 +285,8 @@ class TestSubagentManager:
     @pytest.mark.asyncio
     async def test_get_batch_results(self, manager):
         """Test getting batch of results."""
-        result1 = TaskResult(task_id="t1", status=TaskStatus.COMPLETED, output="r1")
-        result2 = TaskResult(task_id="t2", status=TaskStatus.COMPLETED, output="r2")
+        result1 = SubagentTaskResult(task_id="t1", status=TaskStatus.COMPLETED, output="r1")
+        result2 = SubagentTaskResult(task_id="t2", status=TaskStatus.COMPLETED, output="r2")
         manager.local_results["t1"] = result1
         manager.local_results["t2"] = result2
 
@@ -347,8 +347,8 @@ class TestSubagentManager:
     @pytest.mark.asyncio
     async def test_wait_for_results_all_complete(self, manager):
         """Test waiting for all results to complete."""
-        result1 = TaskResult(task_id="t1", status=TaskStatus.COMPLETED, output="r1")
-        result2 = TaskResult(task_id="t2", status=TaskStatus.COMPLETED, output="r2")
+        result1 = SubagentTaskResult(task_id="t1", status=TaskStatus.COMPLETED, output="r1")
+        result2 = SubagentTaskResult(task_id="t2", status=TaskStatus.COMPLETED, output="r2")
         manager.local_results["t1"] = result1
         manager.local_results["t2"] = result2
 

@@ -61,7 +61,7 @@ export function useCodeIntelAnalysis(
     getHealthScore: codeIntelGetHealthScore,
     getQualityScore: codeIntelGetQualityScore,
     getAnalysisHistory: codeIntelGetAnalysisHistory,
-    batchAnalyze: codeIntelBatchAnalyze,
+    scanFile: codeIntelScanFile,
   } = useCodeIntelligence()
   // #5365: codeIntel{Security,Performance,Redis}Findings are declared
   // as computed adapters further down, after `scores` is constructed.
@@ -211,10 +211,20 @@ export function useCodeIntelAnalysis(
   ) {
     codeIntelFindingsLoading.value = true
     try {
-      const results = await codeIntelBatchAnalyze([
-        { code: filePath, filename: filePath },
-      ])
-      if (results.length > 0) {
+      const result = await codeIntelScanFile(filePath)
+      if (!result) {
+        throw new Error('scan-file returned no result')
+      }
+      // The contract types statistics as an open dict, so narrow before comparing.
+      const issuesFound = result.statistics?.issues_found
+      if (typeof issuesFound !== 'number' || !Number.isFinite(issuesFound)) {
+        // Unknown count is not "no issues": never show the success toast for it.
+        logger.warn('scan-file returned no numeric issues_found:', result)
+        notify(t('analytics.codebase.notify.fileScanFailed'), 'error')
+        return
+      }
+      const issueCount = issuesFound
+      if (issueCount > 0) {
         codeIntelFindingsFetched.value = {
           security: true,
           performance: true,
@@ -222,7 +232,7 @@ export function useCodeIntelAnalysis(
         }
         notify(
           t('analytics.codebase.notify.fileScanComplete', {
-            count: results.length,
+            count: issueCount,
           }),
           'info',
         )

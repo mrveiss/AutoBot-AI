@@ -13,15 +13,15 @@ import pytest
 
 # Import the modules to test
 from autobot_shared.status_enums import CommandRisk
-from secure_command_executor import SecureCommandExecutor, SecurityPolicy
+from secure_command_executor import CommandSecurityPolicy, SecureCommandExecutor
 
 
 class TestSecurityPolicy:
-    """Test SecurityPolicy configuration and methods"""
+    """Test CommandSecurityPolicy configuration and methods"""
 
     def test_security_policy_initialization(self):
-        """Test SecurityPolicy initializes with default values"""
-        policy = SecurityPolicy()
+        """Test CommandSecurityPolicy initializes with default values"""
+        policy = CommandSecurityPolicy()
 
         # Check that safe commands are populated
         assert "echo" in policy.safe_commands
@@ -36,7 +36,7 @@ class TestSecurityPolicy:
         assert Path.home() in policy.allowed_paths
         assert Path("/tmp") in policy.allowed_paths  # nosec B108  # test/controlled code uses tmpdir intentionally
 
-        # #7147: dangerous_patterns moved off SecurityPolicy in #765 — they
+        # #7147: dangerous_patterns moved off CommandSecurityPolicy in #765 — they
         # now live in security.command_patterns.DANGEROUS_PATTERNS (the
         # canonical location used by check_dangerous_patterns()). Validate
         # them at the canonical location instead of the deleted attribute.
@@ -57,14 +57,14 @@ class TestSecureCommandExecutor:
     def test_executor_initialization(self):
         """Test SecureCommandExecutor initializes correctly"""
         assert self.executor.policy is not None
-        assert isinstance(self.executor.policy, SecurityPolicy)
+        assert isinstance(self.executor.policy, CommandSecurityPolicy)
         assert self.executor.require_approval_callback is None
         assert self.executor.use_docker_sandbox is False
         assert self.executor.command_history == []
 
     def test_executor_initialization_with_params(self):
         """Test SecureCommandExecutor initializes with custom parameters"""
-        policy = SecurityPolicy()
+        policy = CommandSecurityPolicy()
         callback = AsyncMock()
 
         executor = SecureCommandExecutor(policy=policy, require_approval_callback=callback, use_docker_sandbox=True)

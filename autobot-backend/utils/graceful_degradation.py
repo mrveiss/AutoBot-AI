@@ -36,7 +36,7 @@ class DegradationLevel(Enum):
     OFFLINE = 4  # Complete service unavailable
 
 
-class ServiceHealth(Enum):
+class ServiceHealthLevel(Enum):
     """Service health status indicators"""
 
     HEALTHY = "healthy"
@@ -63,7 +63,7 @@ class FallbackResponse:
 class DegradedState:
     """Current service status and health metrics"""
 
-    health: ServiceHealth
+    health: ServiceHealthLevel
     degradation_level: DegradationLevel
     last_success: float | None = None
     last_failure: float | None = None
@@ -363,7 +363,7 @@ class GracefulDegradationManager:
         self._lock = asyncio.Lock()
 
         # Service monitoring
-        self.service_status = DegradedState(health=ServiceHealth.HEALTHY, degradation_level=DegradationLevel.NORMAL)
+        self.service_status = DegradedState(ServiceHealthLevel.HEALTHY, DegradationLevel.NORMAL)
 
         # Failure tracking
         self.failure_history: List[float] = []
@@ -500,14 +500,14 @@ class GracefulDegradationManager:
 
     def _determine_health_status(
         self, consecutive_failures: int, error_rate: float
-    ) -> tuple[ServiceHealth, DegradationLevel]:
+    ) -> tuple[ServiceHealthLevel, DegradationLevel]:
         """Determine health and degradation level (Issue #315 - extracted helper)."""
         # Ordered thresholds from healthiest to most degraded
         thresholds = [
-            (0, 5, ServiceHealth.HEALTHY, DegradationLevel.NORMAL),
-            (3, 15, ServiceHealth.DEGRADED, DegradationLevel.REDUCED),
-            (5, 30, ServiceHealth.UNSTABLE, DegradationLevel.MINIMAL),
-            (10, 100, ServiceHealth.FAILING, DegradationLevel.EMERGENCY),
+            (0, 5, ServiceHealthLevel.HEALTHY, DegradationLevel.NORMAL),
+            (3, 15, ServiceHealthLevel.DEGRADED, DegradationLevel.REDUCED),
+            (5, 30, ServiceHealthLevel.UNSTABLE, DegradationLevel.MINIMAL),
+            (10, 100, ServiceHealthLevel.FAILING, DegradationLevel.EMERGENCY),
         ]
 
         for max_failures, max_error, health, level in thresholds:
@@ -516,7 +516,7 @@ class GracefulDegradationManager:
             if consecutive_failures == 0 and error_rate < max_error:
                 return health, level
 
-        return ServiceHealth.DOWN, DegradationLevel.OFFLINE
+        return ServiceHealthLevel.DOWN, DegradationLevel.OFFLINE
 
     async def _update_service_health(self):
         """Update service health status and degradation level (Issue #315 - refactored)."""
@@ -624,7 +624,7 @@ class GracefulDegradationManager:
     async def reset_service_status(self):
         """Reset service status to healthy (for recovery, thread-safe)"""
         async with self._lock:
-            self.service_status = DegradedState(health=ServiceHealth.HEALTHY, degradation_level=DegradationLevel.NORMAL)
+            self.service_status = DegradedState(ServiceHealthLevel.HEALTHY, DegradationLevel.NORMAL)
             self.failure_history.clear()
         logger.info("Service status reset to healthy")
 

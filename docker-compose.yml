@@ -405,9 +405,9 @@ services:
       - AUTOBOT_CHROMADB_AUTH_TOKEN=${AUTOBOT_CHROMADB_AUTH_TOKEN:-}
       - AUTOBOT_AUDIT_LOG_FILE=/app/logs/audit.log
       # User-mgmt/RBAC tasks need the same Postgres + mode wiring as the backend.
-      # Defaults to single_user; the backend entrypoint bootstraps the schema
-      # on flip (#9759), so no manual migration step is needed here.
-      - AUTOBOT_USER_MODE=${AUTOBOT_USER_MODE:-single_user}
+      # single_user is retired (#10636); single_company matches the backend's
+      # default, and the backend entrypoint bootstraps the schema (#9759) (#18729).
+      - AUTOBOT_USER_MODE=${AUTOBOT_USER_MODE:-single_company}
       - AUTOBOT_POSTGRES_HOST=autobot-postgres
       - AUTOBOT_POSTGRES_PORT=5432
       - AUTOBOT_POSTGRES_DB=${AUTOBOT_USERS_DB_NAME:-autobot_users}

@@ -1,5 +1,5 @@
 <template>
-  <BasePanel v-if="show" variant="bordered" size="md">
+  <BaseCard scrollable v-if="show" variant="bordered" size="md">
     <template #header>
       <h3><Icon name="tasks" /> {{ $t('manpage.progressTracking.title') }}</h3>
       <BaseButton
@@ -64,10 +64,11 @@
         </span>
       </div>
     </div>
-  </BasePanel>
+  </BaseCard>
 </template>
 
 <script setup lang="ts">
+import { BaseCard } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -83,7 +84,6 @@
 
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
-import BasePanel from '@/components/base/BasePanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 
