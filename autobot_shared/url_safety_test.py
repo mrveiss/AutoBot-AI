@@ -13,6 +13,7 @@ import-isolation contract that motivated the extraction.
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 from unittest.mock import patch
 
@@ -191,6 +192,29 @@ async def test_resolve_safe_ip_no_usable_ip() -> None:
     with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos):
         with pytest.raises(ValueError, match="non-public"):
             await resolve_safe_ip_async("all-private.example")
+
+
+@pytest.mark.asyncio
+async def test_resolve_safe_ip_enforces_its_timeout() -> None:
+    """A lookup that never answers is a ValueError after ``timeout``, not a hang (#18731)."""
+
+    async def hung(*_args, **_kwargs):
+        await asyncio.Event().wait()
+
+    with patch.object(asyncio.get_running_loop(), "getaddrinfo", hung):
+        with pytest.raises(ValueError, match="DNS resolution timeout"):
+            await resolve_safe_ip_async("slow.example", timeout=0.05)
+
+
+@pytest.mark.asyncio
+async def test_resolve_safe_ip_answers_within_its_timeout() -> None:
+    """A lookup that answers inside ``timeout`` is not cut short."""
+
+    async def prompt(*_args, **_kwargs):
+        return [(2, 1, 6, "", ("93.184.216.34", 0))]
+
+    with patch.object(asyncio.get_running_loop(), "getaddrinfo", prompt):
+        assert await resolve_safe_ip_async("example.com", timeout=0.05) == "93.184.216.34"
 
 
 # ---------------------------------------------------------------------------

@@ -22,6 +22,7 @@ from security.enforcement_mode import ResolvedEnforcementMode
 from security.session_owner_errors import SessionOwnerUnreadable
 from security.session_ownership import validate_session_ownership
 from security.session_posture import SessionPosture
+from testkit.canonical_gate import install_canonical_resolver
 
 ALLOW, DENY, ERROR, UNOWNED, UNREADABLE, BROKEN = "allow", "deny", "error", None, "unreadable", "broken"
 NONSTR = object()  # a stored owner that is not a name
@@ -156,8 +157,8 @@ def _drive(monkeypatch, c):
         manager.get_session_owner = AsyncMock(side_effect=RuntimeError("boom"))
     else:
         manager.get_session_owner = AsyncMock(return_value=c["file"])
-    for target in ("security.session_ownership", "security.session_posture"):
-        monkeypatch.setattr(f"{target}.get_auth_middleware", lambda: middleware)
+    monkeypatch.setattr("security.session_ownership.get_auth_middleware", lambda: middleware)
+    install_canonical_resolver(monkeypatch, "security.session_posture.resolve_human_user", middleware)
     monkeypatch.setattr("utils.chat_utils.get_chat_history_manager", lambda r: manager)
     monkeypatch.setattr(
         "security.session_ownership.resolve_enforcement_mode_for_request",

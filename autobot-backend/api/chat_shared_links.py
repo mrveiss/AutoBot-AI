@@ -38,7 +38,7 @@ from api.schemas_chat import (
     SharedMessageItem,
 )
 from api.user_management.dependencies import get_db_session
-from auth_middleware import get_auth_middleware, get_current_user
+from auth_middleware import get_current_user, resolve_human_user
 from auth_rbac import require_role
 from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -332,11 +332,11 @@ async def _resolve_link(token: str, db: AsyncSession) -> ChatSharedLink:
     return link
 
 
-def _enforce_require_login(link: ChatSharedLink, request: Request) -> None:
-    """Reject an unauthenticated visitor on a login-required link (#16861)."""
+async def _enforce_require_login(link: ChatSharedLink, request: Request) -> None:
+    """Reject an unauthenticated visitor on a login-required link (#16861); a revoked JWT is 401 (#18688)."""
     if not link.require_login:
         return
-    if get_auth_middleware().get_user_from_request(request):
+    if await resolve_human_user(request):
         return
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -368,7 +368,7 @@ async def get_shared_session(
 ) -> Dict[str, Any]:
     """Return shared conversation content.  Password-protected links return metadata only (GH#8996)."""
     link = await _resolve_link(token, db)
-    _enforce_require_login(link, request)
+    await _enforce_require_login(link, request)
 
     if link.has_password:
         return create_success_response(
@@ -413,7 +413,7 @@ async def access_shared_session(
         )
 
     link = await _resolve_link(token, db)
-    _enforce_require_login(link, request)
+    await _enforce_require_login(link, request)
 
     if link.has_password:
         if not body.password:

@@ -44,10 +44,12 @@ register_env_var(
         type=bool,
         default=False,
         description=(
-            "Set to 1 to let `git push` proceed when the pre-push pytest gate COULD NOT RUN on the "
-            "local interpreter -- llc/scheduler/base.py refuses to import below Python 3.11, which "
-            "takes whole pytest groups down at collect time on a sub-floor machine (the platform "
-            "floor and CI are 3.14). Distinct from AUTOBOT_PREPUSH_ALLOW_TIMEOUT, which covers a "
+            "Set to 1 to let `git push` proceed when any pre-push gate COULD NOT RUN, i.e. cannot "
+            "produce a verdict here. Examples: pytest on a sub-floor interpreter "
+            "(llc/scheduler/base.py refuses to import below Python 3.11, taking whole pytest groups "
+            "down at collect time; the platform floor and CI are 3.14), or vitest handed a file it "
+            "does not collect, such as a Playwright spec under tests/ before #18694's root filter "
+            "is installed. Distinct from AUTOBOT_PREPUSH_ALLOW_TIMEOUT, which covers a "
             "check that started and ran out of time. Neither is a substitute for --no-verify: both "
             "switch off exactly the one check that could not produce a verdict and leave every "
             "other hook blocking (#16230)."

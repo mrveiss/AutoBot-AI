@@ -14,6 +14,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from testkit.canonical_gate import canonical_resolver
+
 # ---------------------------------------------------------------------------
 # resolve_bundle_for_user
 # ---------------------------------------------------------------------------
@@ -118,7 +120,7 @@ async def test_set_user_bundle_invalid_bundle():
     app.include_router(bundle_admin_router)
     app.dependency_overrides[get_current_user] = lambda: admin
 
-    with patch("auth_rbac.get_auth_middleware", return_value=mock_auth):
+    with canonical_resolver("auth_rbac.resolve_human_user", mock_auth):
         with TestClient(app) as client:
             resp = client.put(
                 "/admin/voice/bundle/user-abc",
@@ -143,7 +145,7 @@ async def test_user_cannot_call_admin_bundle_endpoint_unauthenticated():
     mock_auth = MagicMock()
     mock_auth.get_user_from_request.return_value = None
 
-    with patch("auth_rbac.get_auth_middleware", return_value=mock_auth):
+    with canonical_resolver("auth_rbac.resolve_human_user", mock_auth):
         with TestClient(app, raise_server_exceptions=False) as client:
             resp = client.get("/admin/voice/bundle/user-abc")
     # Expect 401 or 403

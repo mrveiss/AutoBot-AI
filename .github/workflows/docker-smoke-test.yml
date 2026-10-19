@@ -228,6 +228,72 @@ jobs:
           docker compose --env-file docker/.env.docker logs
           exit 1
 
+      - name: The management network uses the picked range, and fleet node IPs match it (#16833)
+        # #16833 AC1: the picked AUTOBOT_DOCKER_MGMT_PREFIX is the subnet Docker actually
+        # created. AC2 (#9761 regression): every node the SLM registered reports an address
+        # in that range, and each compose service's registered IP is the address Docker gave
+        # its container -- compose_fleet.mgmt_ip() computes them, so drift shows up here.
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$*"; exit 1; }
+          net="$(docker network ls -q --filter label=com.docker.compose.network=autobot-mgmt)"
+          [ -n "$net" ] || fail "no autobot-mgmt network found"
+          net_name="$(docker network inspect -f '{{.Name}}' "$net")"
+          subnet="$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' "$net")"
+          echo "autobot-mgmt (${net_name}) subnet: ${subnet}; picked prefix: ${AUTOBOT_DOCKER_MGMT_PREFIX}"
+          [ "$subnet" = "${AUTOBOT_DOCKER_MGMT_PREFIX}.0/24" ] || fail "subnet ${subnet} is not the picked ${AUTOBOT_DOCKER_MGMT_PREFIX}.0/24"
+
+          # Expected nodes: every compose service that declares an autobot-mgmt address (the eight
+          # compose_fleet hosts). Each must be running at its declared address, and each must be
+          # registered at that address -- one matching node is not enough (#16833 AC2).
+          declare -A declared actual
+          while read -r svc ip; do declared[$svc]="$ip"; done < <(
+            docker compose --env-file docker/.env.docker config --format json \
+              | jq -r '.services | to_entries[] | select(.value.networks["autobot-mgmt"].ipv4_address? != null)
+                       | "\(.key) \(.value.networks["autobot-mgmt"].ipv4_address)"')
+          [ "${#declared[@]}" -gt 0 ] || fail "no compose service declares an autobot-mgmt address"
+          for c in $(docker compose --env-file docker/.env.docker ps -q); do
+            svc="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$c")"
+            actual[$svc]="$(docker inspect -f "{{with index .NetworkSettings.Networks \"${net_name}\"}}{{.IPAddress}}{{end}}" "$c")"
+          done
+          for svc in "${!declared[@]}"; do
+            [ "${actual[$svc]:-}" = "${declared[$svc]}" ] || fail "service ${svc} declares ${declared[$svc]}, but its container has '${actual[$svc]:-not running}'"
+          done
+
+          # compare_nodes ROWS: 0 when every declared service is registered at its address. The SLM
+          # registers itself under SLM_NODE_ID, not its service name, so it is matched by address.
+          compare_nodes() {
+            local -A reg=()
+            local id ip svc
+            while read -r id ip; do [ -z "$id" ] || reg[$id]="$ip"; done <<< "$1"
+            for id in "${!reg[@]}"; do
+              [[ "${reg[$id]}" == "${AUTOBOT_DOCKER_MGMT_PREFIX}."* ]] || { echo "node ${id} reports ${reg[$id]}, outside ${AUTOBOT_DOCKER_MGMT_PREFIX}.0/24"; return 1; }
+            done
+            for svc in "${!declared[@]}"; do
+              if [ "$svc" = "autobot-slm" ]; then
+                printf '%s\n' "${reg[@]}" | grep -qxF "${declared[$svc]}" || { echo "no node is registered at the SLM manager's address ${declared[$svc]}"; return 1; }
+              elif [ "${reg[$svc]:-}" != "${declared[$svc]}" ]; then
+                echo "node ${svc} is registered at '${reg[$svc]:-missing}', but its container has ${declared[$svc]}"; return 1
+              fi
+            done
+          }
+
+          # The SLM seeds compose nodes at startup; allow it a minute. A failed query (table not
+          # created yet, connection refused) or an incomplete set is a retry, not a step failure under
+          # `set -e`. User and database come from the container, where compose set them.
+          rows="" why="the SLM registered no fleet nodes"
+          for _ in $(seq 1 12); do
+            rows="$(docker compose --env-file docker/.env.docker exec -T autobot-postgres \
+              sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA -F " " -c "SELECT node_id, ip_address FROM nodes ORDER BY node_id"' \
+              2>/dev/null)" || rows=""
+            if [ -n "$rows" ]; then why="$(compare_nodes "$rows")" && { why=""; break; }; fi
+            sleep 5
+          done
+          while IFS= read -r row; do echo "  node $row"; done <<< "$rows"
+          [ -z "$why" ] || fail "$why"
+          echo "✓ all ${#declared[@]} compose services are registered at the address Docker gave them, all in ${subnet}"
+
       - name: Verify services are running
         shell: bash
         run: |

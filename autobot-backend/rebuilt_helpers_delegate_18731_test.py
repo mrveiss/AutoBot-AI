@@ -154,11 +154,11 @@ def test_shared_python_file_walk_sorts_and_excludes(tmp_path):
     assert collect_python_files(str(tmp_path), ["skipme"]) == [str(tmp_path / "b.py"), str(tmp_path / "z.py")]
 
 
-def test_repo_sync_manifest_parse_delegates_to_generator(monkeypatch):
+def test_repo_sync_manifest_parse_delegates_to_the_shared_frontmatter_parser(monkeypatch):
     from skills.sync import base_sync
 
     kept = MagicMock(return_value={"name": "n"})
-    monkeypatch.setattr(base_sync, "_parse_manifest", kept)
+    monkeypatch.setattr(base_sync, "parse_frontmatter_mapping", kept)
     assert base_sync.BaseRepoSync._parse_skill_md("---\nname: n\n---\n") == {"name": "n"}
     kept.assert_called_once()
 
@@ -193,3 +193,22 @@ async def test_task_status_response_not_found_and_found(monkeypatch):
     record.to_response_dict.return_value = {"task_id": "t9", "status": "running"}
     monkeypatch.setattr(TaskStatusManager, "get_task", AsyncMock(return_value=record))
     assert await TaskStatusManager.get_task_response("t9") == {"task_id": "t9", "status": "running"}
+
+
+def test_chat_and_dedup_share_one_public_timestamp_parser():
+    """api.chat uses the public chat_history parser; no private cross-module import (#18731 G076)."""
+    from api import chat
+    from chat_history import deduplication
+
+    assert chat.parse_message_timestamp is deduplication.parse_message_timestamp
+    assert not hasattr(deduplication, "_parse_timestamp")
+
+
+def test_skill_manifest_parsers_are_the_one_shared_function():
+    """generator and base_sync bind autobot_shared.frontmatter directly, no private alias (#18731)."""
+    from autobot_shared.frontmatter import parse_frontmatter_mapping
+    from skills import generator
+    from skills.sync import base_sync
+
+    assert generator.parse_frontmatter_mapping is parse_frontmatter_mapping
+    assert base_sync.parse_frontmatter_mapping is parse_frontmatter_mapping

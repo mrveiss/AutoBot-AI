@@ -213,9 +213,9 @@ class SessionOwnershipValidator:
             logger.error("Failed to get session owner: %s", e)
             return None
 
-    def _get_authenticated_user(self, session_id: str, request: Request) -> Dict:
+    async def _get_authenticated_user(self, session_id: str, request: Request) -> Dict:
         """The authenticated user, or 401 (Issue #281). One body, shared with STRICT (#14016)."""
-        return authenticated_user(session_id, request)
+        return await authenticated_user(session_id, request)
 
     async def _get_enforcement_mode(self) -> ResolvedEnforcementMode:
         """The global enforcement mode, with whether it was determined or degraded to.
@@ -601,7 +601,7 @@ class SessionOwnershipValidator:
         Raises:
             HTTPException: 401 if not authenticated, 403 if not authorized (ENFORCED mode only)
         """
-        user_data = self._get_authenticated_user(session_id, request)
+        user_data = await self._get_authenticated_user(session_id, request)
         username = user_data["username"]
         enforcement = await self._get_enforcement_mode_for_request(request)
 
@@ -777,7 +777,7 @@ async def validate_session_ownership(
         HTTPException: 401 if not authenticated, 403 if not authorized (ENFORCED mode)
     """
     if require_posture(posture) is SessionPosture.STRICT:
-        return await validate_strict(session_id, authenticated_user(session_id, request), request)
+        return await validate_strict(session_id, await authenticated_user(session_id, request), request)
 
     from autobot_shared.redis_client import get_redis_client as get_redis_manager
     from services.access_control_metrics import get_metrics_service

@@ -30,6 +30,7 @@ from auth_rbac import (
     require_permission,
     require_role,
 )
+from testkit.canonical_gate import canonical_resolver
 
 
 class TestPermissionEnum:
@@ -135,10 +136,10 @@ class TestRequirePermissionIsTheSharedGate:
         request.url.path = "/api/test"
         return request
 
-    @patch("auth_rbac.get_auth_middleware")
-    def test_the_caller_is_the_auth_middlewares_user(self, mock_mw):
-        mock_mw.return_value.get_user_from_request.return_value = {"role": "admin"}
-        assert _request_caller(self._request()) == {"role": "admin"}
+    async def test_the_caller_is_the_auth_middlewares_user(self):
+        middleware = Mock(get_user_from_request=Mock(return_value={"role": "admin"}))
+        with canonical_resolver("auth_rbac.resolve_human_user", middleware):
+            assert await _request_caller(self._request()) == {"role": "admin"}
 
     async def test_unauthenticated_is_401(self):
         with pytest.raises(HTTPException) as exc:
@@ -179,14 +180,14 @@ class TestRequireRoleDecorator:
         request.url.path = "/api/test"
         return request
 
-    @patch("auth_rbac.get_auth_middleware")
-    def test_unauthenticated_request_denied(self, mock_mw):
-        """No authenticated user → the decorator raises (full auth always required)."""
-        mock_mw.return_value.get_user_from_request.return_value = None
-        request = self._create_mock_request()
+    async def test_unauthenticated_request_denied(self):
+        """No authenticated user → the decorator raises 401 (full auth always required)."""
+        middleware = Mock(get_user_from_request=Mock(return_value=None))
         dependency = require_role(Role.ADMIN)
-        with pytest.raises(Exception):
-            dependency(request)
+        with canonical_resolver("auth_rbac.resolve_human_user", middleware):
+            with pytest.raises(HTTPException) as exc:
+                await dependency(self._create_mock_request())
+        assert exc.value.status_code == 401
 
 
 class TestPermissionIntegration:

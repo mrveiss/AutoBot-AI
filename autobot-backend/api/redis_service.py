@@ -20,7 +20,7 @@ from api.schemas_system import (
     ServiceStatusResponse,
 )
 from api.system_health import ComponentHealth, register_health_probe
-from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
+from auth_middleware import check_admin_permission, get_current_user, resolve_human_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from security.human_admin import refuse_service_principal
@@ -70,7 +70,7 @@ async def get_service_manager() -> RedisServiceManager:
     return _service_manager
 
 
-def check_operator_permission(request: Request) -> str:
+async def check_operator_permission(request: Request) -> str:
     """
     Check if user has operator or admin permissions
 
@@ -80,7 +80,7 @@ def check_operator_permission(request: Request) -> str:
     Raises:
         HTTPException: If user lacks operator/admin permissions
     """
-    user_data = get_auth_middleware().get_user_from_request(request)
+    user_data = await resolve_human_user(request)  # a revoked JWT is 401 (#18688)
 
     if not user_data:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -111,7 +111,7 @@ async def start_redis_service(request: Request, manager: RedisServiceManager = D
     """
     try:
         # Check permissions
-        user_id = check_operator_permission(request)
+        user_id = await check_operator_permission(request)
 
         logger.info("Starting Redis service, requested by user: %s", user_id)
 
@@ -201,7 +201,7 @@ async def restart_redis_service(request: Request, manager: RedisServiceManager =
     """
     try:
         # Check permissions
-        user_id = check_operator_permission(request)
+        user_id = await check_operator_permission(request)
 
         logger.info("Restarting Redis service, requested by user: %s", user_id)
 

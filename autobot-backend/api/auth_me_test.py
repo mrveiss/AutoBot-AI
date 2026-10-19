@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from api import auth_me
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
+from testkit.canonical_gate import canonical_resolver
 
 
 def _me(user_data):
@@ -23,7 +24,7 @@ def _me(user_data):
     middleware.get_user_from_request.return_value = user_data
     config = SimpleNamespace(mode=SimpleNamespace(value="single_company"))
     with (
-        patch.object(auth_me, "get_auth_middleware", return_value=middleware),
+        canonical_resolver("api.auth_me.resolve_human_user", middleware),
         patch("user_management.config.get_deployment_config", return_value=config),
     ):
         return TestClient(app, raise_server_exceptions=False).get("/api/auth/me")

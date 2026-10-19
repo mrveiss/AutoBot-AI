@@ -377,9 +377,11 @@ class TestApiEndpointTenantIsolation(unittest.IsolatedAsyncioTestCase):
 
         current_user = {"user_id": "user-A", "role": "user"}
 
-        with patch("api.memory_privacy.check_admin_permission", side_effect=HTTPException(status_code=403)):
+        with patch(
+            "api.memory_privacy.check_admin_permission", new=AsyncMock(side_effect=HTTPException(status_code=403))
+        ):
             with self.assertRaises(HTTPException) as ctx:
-                _resolve_target_user(current_user, "user-B", self._make_request())
+                await _resolve_target_user(current_user, "user-B", self._make_request())
 
         self.assertEqual(ctx.exception.status_code, 403)
 
@@ -388,7 +390,7 @@ class TestApiEndpointTenantIsolation(unittest.IsolatedAsyncioTestCase):
         from api.memory_privacy import _resolve_target_user
 
         current_user = {"user_id": "user-A", "role": "user"}
-        result = _resolve_target_user(current_user, "user-A", self._make_request())
+        result = await _resolve_target_user(current_user, "user-A", self._make_request())
         self.assertEqual(result, "user-A")
 
     async def test_no_target_user_id_returns_caller(self):
@@ -396,7 +398,7 @@ class TestApiEndpointTenantIsolation(unittest.IsolatedAsyncioTestCase):
         from api.memory_privacy import _resolve_target_user
 
         current_user = {"user_id": "user-A", "role": "user"}
-        result = _resolve_target_user(current_user, None, self._make_request())
+        result = await _resolve_target_user(current_user, None, self._make_request())
         self.assertEqual(result, "user-A")
 
     async def test_admin_can_use_target_user_id(self):
@@ -405,8 +407,8 @@ class TestApiEndpointTenantIsolation(unittest.IsolatedAsyncioTestCase):
 
         current_user = {"user_id": "admin-1", "role": "admin"}
 
-        with patch("api.memory_privacy.check_admin_permission", return_value=True):
-            result = _resolve_target_user(current_user, "user-B", self._make_request())
+        with patch("api.memory_privacy.check_admin_permission", new=AsyncMock(return_value=True)):
+            result = await _resolve_target_user(current_user, "user-B", self._make_request())
 
         self.assertEqual(result, "user-B")
 

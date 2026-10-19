@@ -194,3 +194,58 @@ def test_redis_status_needs_a_user(stop_client, identity):
     assert client.get(_STATUS).status_code == 401
     identity.user = _USER
     assert client.get(_STATUS).status_code != 401
+
+
+# -- service_messages uses the canonical human-admin gate (owner decision 2026-10-18) --------------
+
+_MESSAGES = "/api/service-messages/latest"
+
+
+@pytest.fixture
+def messages_client(identity, monkeypatch):
+    # HUMAN_ADMIN_DEPENDENCIES binds the gate when ``security.human_admin`` first loads (the
+    # stub, under pytest). Load a FRESH copy against the real gate so the route's own list is judged.
+    spec = importlib.util.spec_from_file_location(
+        "_fresh_18688_human_admin", _API.parent / "security" / "human_admin.py"
+    )
+    human_admin = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(human_admin)
+    monkeypatch.setitem(sys.modules, "security.human_admin", human_admin)
+    module = _fresh("service_messages")
+    app = FastAPI()
+    app.include_router(module.router, prefix="/api")
+    bus = MagicMock()
+    bus.get_latest = AsyncMock(return_value=[])
+    with patch.object(module, "get_message_bus", return_value=bus):
+        client = TestClient(app, raise_server_exceptions=False)
+        client.bus = bus  # so a test can prove a refused caller never reached the bus
+        yield client
+
+
+def test_service_messages_anonymous_gives_401(messages_client, identity):
+    identity.user = None
+    assert messages_client.get(_MESSAGES).status_code == 401
+    messages_client.bus.get_latest.assert_not_awaited()
+
+
+def test_service_messages_missing_role_gives_401_not_500(messages_client, identity):
+    identity.user = dict(_NO_ROLE)
+    assert messages_client.get(_MESSAGES).status_code == 401
+
+
+def test_service_messages_non_admin_gives_403(messages_client, identity):
+    identity.user = dict(_USER)
+    assert messages_client.get(_MESSAGES).status_code == 403
+    messages_client.bus.get_latest.assert_not_awaited()
+
+
+def test_service_messages_refuses_the_internal_key(messages_client, identity):
+    response = messages_client.get(_MESSAGES, headers={"X-Internal-API-Key": _KEY})
+    assert response.status_code == 403
+    messages_client.bus.get_latest.assert_not_awaited()
+
+
+def test_service_messages_admin_gives_200(messages_client, identity):
+    identity.user = dict(_ADMIN)
+    assert messages_client.get(_MESSAGES).status_code == 200
+    messages_client.bus.get_latest.assert_awaited_once()
