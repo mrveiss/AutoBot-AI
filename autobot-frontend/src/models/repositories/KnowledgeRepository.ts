@@ -29,6 +29,7 @@ import type {
   DetailedKnowledgeStats as ApiDetailedKnowledgeStats
 } from '@/types/api-contract'
 import { getApiBase } from '@/config/ssot-config'
+import { factByKeyUrl, factToDocument, type FactByKeyBody } from './knowledgeFactMapping'
 
 // Re-export types for convenience
 export type { KnowledgeDocument, SearchResult }
@@ -447,8 +448,7 @@ export class KnowledgeRepository extends ApiRepository {
    * Get document by ID
    */
   async getDocument(documentId: string): Promise<KnowledgeDocument> {
-    const response = await this.get<KnowledgeDocument>(`${getApiBase()}/knowledge_base/documents/${documentId}`)
-    return response.data
+    return factToDocument(documentId, (await this.get<FactByKeyBody>(factByKeyUrl(documentId))).data)
   }
 
   /**

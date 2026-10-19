@@ -19,6 +19,15 @@ import Icon from '@/components/ui/Icon.vue'
 const { t } = useI18n()
 const logger = createLogger('BrowserAutomationView')
 
+// Each flag returns with its route (#18747); no backend route serves these controls yet.
+// Launch: POST /browser/launch is not served.
+const LAUNCH_ENABLED = false
+// Run automation script: POST /browser/automation/run is not served.
+const AUTOMATION_SCRIPT_ENABLED = false
+// Type text / Execute script: the served MCP routes key a Browser VM context by session_id,
+// which is not the research-browser session id this view lists (playwright-server.js getSessionEntry).
+const SESSION_INPUT_ENABLED = false
+
 const {
   workerStatus,
   sessions,
@@ -153,7 +162,7 @@ function selectSession(session: typeof sessions.value[0]) {
       <button @click="activeTab = 'sessions'" :class="['tab-btn', { active: activeTab === 'sessions' }]">
         <Icon name="window-restore" /> {{ $t('views.browserAutomation.sessionsTab', { count: sessions.length }) }}
       </button>
-      <button @click="activeTab = 'scripts'" :class="['tab-btn', { active: activeTab === 'scripts' }]">
+      <button v-if="AUTOMATION_SCRIPT_ENABLED" @click="activeTab = 'scripts'" :class="['tab-btn', { active: activeTab === 'scripts' }]">
         <Icon name="code" /> {{ $t('views.browserAutomation.automationScripts') }}
       </button>
     </nav>
@@ -174,7 +183,7 @@ function selectSession(session: typeof sessions.value[0]) {
           </div>
         </div>
 
-        <div v-if="!currentSession" class="card">
+        <div v-if="LAUNCH_ENABLED && !currentSession" class="card">
           <div class="card-header">
             <span class="card-title">{{ $t('views.browserAutomation.launchNewSession') }}</span>
           </div>
@@ -213,7 +222,7 @@ function selectSession(session: typeof sessions.value[0]) {
                 {{ $t('views.browserAutomation.click') }}
               </button>
             </div>
-            <div class="input-action-row">
+            <div v-if="SESSION_INPUT_ENABLED" class="input-action-row">
               <input v-model="textInput" type="text" :placeholder="$t('views.browserAutomation.textToType')" class="field-input">
               <button @click="handleType" :disabled="isLoading" class="btn-action-primary">
                 {{ $t('views.browserAutomation.typeText') }}
@@ -230,7 +239,7 @@ function selectSession(session: typeof sessions.value[0]) {
             <button @click="handleScreenshot" :disabled="isLoading" class="btn-action-secondary btn-full">
               <Icon name="camera" /> {{ $t('views.browserAutomation.takeScreenshot') }}
             </button>
-            <div class="script-block">
+            <div v-if="SESSION_INPUT_ENABLED" class="script-block">
               <textarea v-model="scriptInput" rows="4" :placeholder="$t('views.browserAutomation.jsPlaceholder')" class="field-input code-textarea"></textarea>
               <button @click="handleExecuteScript" :disabled="isLoading" class="btn-action-primary btn-full">
                 {{ $t('views.browserAutomation.executeScript') }}
@@ -294,7 +303,7 @@ function selectSession(session: typeof sessions.value[0]) {
       </div>
 
       <!-- Scripts Tab -->
-      <div v-show="activeTab === 'scripts'" class="tab-panel">
+      <div v-if="AUTOMATION_SCRIPT_ENABLED" v-show="activeTab === 'scripts'" class="tab-panel">
         <div class="card">
           <div class="card-header">
             <span class="card-title">{{ $t('views.browserAutomation.runAutomationScript') }}</span>

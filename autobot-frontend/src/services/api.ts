@@ -335,7 +335,7 @@ class ApiService {
   }
 
   async getSystemMetrics(): Promise<ApiResponse> {
-    return this.get(`${getApiBase()}/service-monitor/resources`)
+    return this.get(`${getApiBase()}/monitoring/hardware/system`)
   }
 
   // User Management API

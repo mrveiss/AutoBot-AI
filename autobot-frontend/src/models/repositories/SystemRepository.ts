@@ -329,8 +329,8 @@ export class SystemRepository extends ApiRepository {
   }
 
   async getResourceUsage(): Promise<unknown> {
-    // Issue #552: Backend uses /api/service-monitor/resources
-    const response = await this.get(`${getApiBase()}/service-monitor/resources`)
+    // #18730: served by monitoring.py get_hardware_system_status (CPU, memory, disk)
+    const response = await this.get(`${getApiBase()}/monitoring/hardware/system`)
     return response.data
   }
 

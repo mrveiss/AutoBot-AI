@@ -184,6 +184,8 @@ ALLOWED_ADDITIONS = {
             "**/*.env",
             # #18653: uninstall_covers_role_packages_18653_test.py reads .python-version.
             ".python-version",
+            # #18729: docker_admin_seed_18729_test.py reads every Docker entrypoint.
+            "docker/*/*entrypoint*.sh",
         ]
     },
     # frontend_path_filter_mirror_test pins frontend-test.yml's on.push.paths to this file, so the

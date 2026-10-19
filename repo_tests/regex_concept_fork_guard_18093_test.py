@@ -161,6 +161,12 @@ CONCEPTS = (
             "autobot-backend/voice_processing/language_detection.py": (
                 "`.split()` into filename tokens -- tokenising, not sanitising; no output string is built"
             ),
+            "repo_tests/_ui_literal_rederive.py": (
+                "a measurement, not a sanitiser: `_outside_class` strips the characters the #12732 regex "
+                "re-derivation cannot match only to ask whether the REST of a literal would have matched, "
+                "so a parser/regex difference is explained by position rather than waved through; no "
+                "output string is built or shown (#12732)"
+            ),
             "autobot_shared/text_tokens.py": (
                 "the one word tokenizer (`tokenize`): a split into tokens, not a sanitiser; has its own "
                 "`word-tokenizer` concept below"
