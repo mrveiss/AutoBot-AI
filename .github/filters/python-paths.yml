@@ -46,6 +46,8 @@ python:
   # #18653: uninstall_covers_role_packages_18653_test.py reads the interpreter
   # version the python_interpreter role installs (python{{ version }} packages).
   - '.python-version'
+  # #18729: docker_admin_seed_18729_test.py reads every Docker entrypoint's user-mode default.
+  - 'docker/*/*entrypoint*.sh'
   # #18592: install_preflight_and_source_18581_test.py reads INSTALL.md; compose_slm_gui_profile_18585_test.py reads the root compose file and the frontend Dockerfile.
   - 'INSTALL.md'
   - 'docker-compose.yml'
