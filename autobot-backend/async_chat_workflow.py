@@ -21,8 +21,8 @@ from constants.threshold_constants import TimingConstants
 from dependency_container import inject_services
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER as _RESEARCH_QUARANTINE_FILTER
 from knowledge.search import map_kb_result_to_dict
-from knowledge_base_factory import get_knowledge_base
-from llm_shared.models import ChatMessage, LLMResponse  # Phase 2D #3185
+from knowledge_base_factory import get_knowledge_base_or_none
+from llm_shared.models import LLMChatMessage, LLMResponse  # Phase 2D #3185
 from retry_mechanism import RetryPolicy, RetryStrategy, with_retry
 
 logger = get_logger(__name__)
@@ -221,7 +221,7 @@ class AsyncChatWorkflow:
     ) -> tuple[KnowledgeStatus, List[Dict[str, Any]]]:
         """Call the KB facade and map results; returns (status, results). Issue #10715."""
         try:
-            kb = await get_knowledge_base()
+            kb = await get_knowledge_base_or_none()
             if kb is None:
                 logger.warning("Knowledge base unavailable; skipping search for query: %.80s", query)
                 return KnowledgeStatus.MISSING, []
@@ -356,8 +356,8 @@ class AsyncChatWorkflow:
 
         # Prepare chat messages
         messages = [
-            ChatMessage(role="system", content=system_prompt),
-            ChatMessage(role="user", content=user_message),
+            LLMChatMessage(role="system", content=system_prompt),
+            LLMChatMessage(role="user", content=user_message),
         ]
 
         # Generate response with timeout
@@ -392,7 +392,7 @@ get_workflow_manager = lazy_singleton(WorkflowManager)
 
 
 # Convenience function
-async def process_chat_message(user_message: str, chat_id: str = "default") -> ChatWorkflowResult:
+async def process_chat_message_with_timeout(user_message: str, chat_id: str = "default") -> ChatWorkflowResult:
     """Process chat message through async workflow"""
     try:
         # Add timeout protection to prevent hanging - maximum 25 seconds

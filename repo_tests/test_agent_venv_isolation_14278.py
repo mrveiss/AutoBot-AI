@@ -128,11 +128,16 @@ def _agent_import_closure() -> set[str]:
     """
     import ast as _ast
 
-    agent_pkg = _ROLES / "slm_agent" / "files" / "slm" / "agent"
+    # The role deploys from the one source tree since #18548 (the Ansible mirror is gone).
+    agent_pkg = _REPO_ROOT / "autobot-slm-backend" / "slm" / "agent"
     shared = _REPO_ROOT / "autobot_shared"
     seen: set[str] = set()
     # Tests never run on the node; their imports are not runtime dependencies.
-    queue = [p for p in agent_pkg.rglob("*.py") if not (p.name.startswith("test_") or p.name.endswith("_test.py"))]
+    queue = [
+        p
+        for p in agent_pkg.glob("*.py")
+        if not (p.name.startswith("test_") or p.name.endswith("_test.py") or p.name == "conftest.py")
+    ]
     visited_files: set[Path] = set()
 
     while queue:

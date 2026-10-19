@@ -37,10 +37,6 @@ FORK_EXCLUDED_PARTS = frozenset({"__pycache__", "node_modules", "venv", ".venv",
 #: Names whose repetition across modules is the intended design, not a fork.
 FORK_EXCLUDED_NAMES = frozenset({"main", "upgrade", "downgrade", "migrate"})
 
-#: A MANDATORY byte-identical mirror, not a fork (#16401): the ansible payload
-#: copy of ``autobot-slm-backend/slm/agent/``.
-FORK_MIRRORED_PREFIX = "autobot-slm-backend/ansible/roles/slm_agent/files/"
-
 _GIT_LS_FILES_TIMEOUT_SECONDS = 60
 
 
@@ -52,6 +48,8 @@ class ForkDefinition:
     lineno: int
     kind: str
     body_statements: int
+    #: True for ``class N(<shared N>)``: a binding of the shared definition, not a second one.
+    binds_shared: bool = False
 
 
 @dataclass
@@ -87,19 +85,12 @@ class ForkScan:
 def fork_is_test_file(path: Path) -> bool:
     """Tests legitimately redefine names: fixtures, fakes, back-compat shims."""
     name = path.name
-    return name.endswith("_test.py") or name.startswith("test_") or "tests" in path.parts
-
-
-def fork_is_mandatory_mirror(path: Path) -> bool:
-    """True for the ansible payload copy of ``autobot-slm-backend/slm/agent/``."""
-    return path.as_posix().startswith(FORK_MIRRORED_PREFIX)
+    return name.endswith("_test.py") or name.startswith("test_") or name == "conftest.py" or "tests" in path.parts
 
 
 def fork_in_population(path: Path) -> bool:
     """The declared boundary, in one place so every caller shares it."""
     if FORK_EXCLUDED_PARTS & set(path.parts):
-        return False
-    if fork_is_mandatory_mirror(path):
         return False
     return not fork_is_test_file(path)
 
@@ -111,6 +102,50 @@ def fork_is_route_handler(node: ast.AST) -> bool:
         if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
             if func.value.id in ("router", "app", "api_router"):
                 return True
+    return False
+
+
+#: The package whose definitions a same-name subclass is a binding of.
+FORK_SHARED_PACKAGE = "autobot_shared"
+
+
+def _fork_import_targets(tree: ast.Module) -> dict[str, str]:
+    """Local name -> dotted target for every module-level import (aliases resolved)."""
+    targets: dict[str, str] = {}
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            for alias in node.names:
+                targets[alias.asname or alias.name] = f"{node.module}.{alias.name}"
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                targets[alias.asname or alias.name.split(".")[0]] = (
+                    alias.name if alias.asname else alias.name.split(".")[0]
+                )
+    return targets
+
+
+def _fork_dotted(expr: ast.expr, targets: dict[str, str]) -> str:
+    """Dotted path ``expr`` refers to through the file's imports, or ``""``."""
+    if isinstance(expr, ast.Name):
+        return targets.get(expr.id, "")
+    if isinstance(expr, ast.Attribute):
+        head = _fork_dotted(expr.value, targets)
+        return f"{head}.{expr.attr}" if head else ""
+    return ""
+
+
+def fork_binds_shared(node: ast.ClassDef, targets: dict[str, str]) -> bool:
+    """True if ``node`` subclasses the SAME-NAMED class imported from ``autobot_shared``.
+
+    A subclass of the shared definition is a binding of it, not a second
+    definition (#17312): ``class UserService(SharedUserService)`` adds hooks to
+    the one implementation. A same-name class with any other base, or with a
+    same-name base from outside the shared package, is still a fork.
+    """
+    for base in node.bases:
+        dotted = _fork_dotted(base, targets)
+        if dotted.startswith(f"{FORK_SHARED_PACKAGE}.") and dotted.rsplit(".", 1)[-1] == node.name:
+            return True
     return False
 
 
@@ -127,6 +162,7 @@ def fork_definitions_in(path: Path, root: Path) -> "list[tuple[str, ForkDefiniti
         tree = ast.parse((root / path).read_text(encoding="utf-8"))
     except (SyntaxError, OSError, ValueError):
         return None
+    targets = _fork_import_targets(tree)
     found = []
     for node in tree.body:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
@@ -134,7 +170,8 @@ def fork_definitions_in(path: Path, root: Path) -> "list[tuple[str, ForkDefiniti
         if node.name.startswith("_") or node.name in FORK_EXCLUDED_NAMES or fork_is_route_handler(node):
             continue
         kind = _BINDINGS[type(node)]
-        found.append((node.name, ForkDefinition(str(path), node.lineno, kind, len(node.body))))
+        binds = isinstance(node, ast.ClassDef) and fork_binds_shared(node, targets)
+        found.append((node.name, ForkDefinition(str(path), node.lineno, kind, len(node.body), binds)))
     return found
 
 
@@ -154,6 +191,8 @@ def fork_find_clusters(paths: list[Path], root: Path) -> ForkScan:
             continue
         parsed += 1
         for name, definition in found:
+            if definition.binds_shared:
+                continue
             by_name[name].append(definition)
     clusters = {
         name: ForkCluster(name, sorted(defs, key=lambda d: (d.path, d.lineno)))

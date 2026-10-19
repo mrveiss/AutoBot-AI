@@ -344,7 +344,7 @@
     "runRsyncFromTo": "Run rsync from {source} to {dest}",
     "running": "Running...",
     "sLMManagerRestarting": "SLM Manager Restarting",
-    "schedule": "Schedule",
+    "schedule": "زمان‌بندی",
     "scheduledUpdates": "Scheduled Updates",
     "showDetails": "Show details",
     "slmSelfUpdateStage": "SLM server",
@@ -1326,6 +1326,107 @@
       "services": "Services",
       "systemHealth": "سلامت سیستم",
       "systemMonitoring": "پایش سیستم"
+    },
+    "agentLedger": {
+      "title": "دفتر عامل‌ها",
+      "subtitle": "Every company's agent coordination: shared resources, claims, conflicts and dev-loop history.",
+      "refresh": "Refresh",
+      "tabsAria": "نماهای دفتر",
+      "tabs": {
+        "now": "در حال کار",
+        "contention": "رقابت",
+        "claims": "ادعاها",
+        "conflicts": "تعارض‌ها",
+        "devLoop": "Dev loop",
+        "activity": "فعالیت"
+      },
+      "col": {
+        "scope": "دامنه",
+        "agent": "عامل",
+        "company": "Company",
+        "mode": "حالت",
+        "intent": "هدف",
+        "expires": "انقضا",
+        "renewals": "تمدیدها",
+        "kind": "نوع",
+        "status": "وضعیت",
+        "task": "وظیفه فعلی",
+        "detail": "جزئیات"
+      },
+      "installWide": "Install-wide",
+      "heldBy": "Held by {agent} ({company})",
+      "waiting": "{n} waiting",
+      "waitlistAria": "فهرست انتظار به ترتیب",
+      "silenceMeansHold": "درخواست، آزادسازی نیست: سکوت یعنی نگه‌داشتن، و ادعای تمدیدنشده خودبه‌خود منقضی می‌شود.",
+      "ask": "از دارنده بخواهید آزاد کند",
+      "askAria": "از دارنده {scope} بخواهید آن را آزاد کند",
+      "askState": {
+        "sending": "در حال ارسال…",
+        "sent": "درخواست ارسال شد — تصمیم با دارنده است؛ سکوت یعنی نگه‌داشتن.",
+        "tooSoon": "همین الان دربارهٔ این ادعا پرسیدید؛ یک دقیقه دیگر دوباره تلاش کنید.",
+        "notFound": "این وظیفه دیگر این ادعا را در اختیار ندارد — برای دیدن دارندهٔ فعلی بازخوانی کنید.",
+        "unavailable": "دسترسی به دفتر ممکن نشد؛ چیزی ارسال نشد.",
+        "error": "خطایی رخ داد و تحویل تأیید نشد. صفحه را تازه کنید تا ببینید آیا ادعا هنوز نگه داشته شده است."
+      },
+      "conflict": {
+        "release_refused": "یک آزادسازی رد شد",
+        "claim_expired": "یک ادعا هنگام نگه‌داری منقضی شد",
+        "yield_unanswered": "یک درخواست واگذاری بی‌پاسخ ماند",
+        "claim_lapsed_during_action": "یک ادعا در حین یک اقدام منقضی شد"
+      },
+      "devLoop": {
+        "issue": "Issue",
+        "choose": "Choose an issue",
+        "col": {
+          "at": "When",
+          "intent": "هدف",
+          "outcome": "Outcome",
+          "tokens": "Estimated tokens",
+          "reason": "دلیل"
+        }
+      },
+      "empty": {
+        "contention": "رقابتی وجود ندارد",
+        "claims": "ادعایی وجود ندارد",
+        "conflicts": "تعارضی وجود ندارد",
+        "activity": "فعالیت اخیری نیست",
+        "devLoop": "No dev-loop history",
+        "devLoopActions": "No actions recorded for this issue",
+        "presence": "هیچ عاملی گزارش نداده است",
+        "peerMessages": "پیام در انتظاری نیست",
+        "idleSubscribers": "اشتراک بیکاری وجود ندارد"
+      },
+      "notes": {
+        "title": "What this view cannot see",
+        "storeDown": "Couldn't read the {source} store just now. Its entries are missing here, not empty.",
+        "sourcesUnknown": "Couldn't check which ledger sources are readable.",
+        "peerIdentity": "Agents have no per-peer identity yet: an agent that is refused an action can ask another agent to do it (#16950).",
+        "busAuth": "Messages between agents are not authenticated yet, so this view cannot prove who sent one (#16962)."
+      },
+      "source": {
+        "presence": "agent presence",
+        "ai_stack_agents": "AI-stack agents",
+        "live_sessions": "live sessions",
+        "peer_messages": "pending peer messages",
+        "idle_subscribers": "idle subscriptions",
+        "claims": "claims",
+        "waitlists": "waitlists",
+        "events": "ledger activity",
+        "dev_loop": "dev-loop history"
+      },
+      "state": {
+        "loading": "در حال خواندن دفتر…",
+        "unavailableTitle": "خواندن دفتر ممکن نشد",
+        "unavailableBody": "مخزن {source} پاسخ نداد. این با نبودن هیچ ورودی یکی نیست.",
+        "errorTitle": "هنگام بارگذاری این بخش خطایی رخ داد"
+      },
+      "busy": "مشغول",
+      "idle": "Idle",
+      "peerMessages": "پیام‌های همتای در انتظار",
+      "idleSubscribers": "اشتراک‌های بیکاری",
+      "pendingFor": "{n} در انتظار برای {name}",
+      "sentBy": "از {names}",
+      "waitsForIdle": "{who} منتظر است تا {target} بیکار شود"
     }
   },
   "monitoringView": {
@@ -1334,7 +1435,17 @@
     "monitoring": "پایش",
     "monitoringSections": "Monitoring sections",
     "systemHealthStatusAria": "System health: {status}",
-    "value0AlertPlural": "{value0} Alert{plural}"
+    "value0AlertPlural": "{value0} Alert{plural}",
+    "tabs": {
+      "system": "سیستمی",
+      "logs": "Logs",
+      "dashboards": "Dashboards",
+      "alerts": "Alerts",
+      "errors": "خطاها",
+      "backendHealth": "Backend Health",
+      "performance": "کارایی",
+      "agentLedger": "دفتر عامل‌ها"
+    }
   },
   "orchestration": {
     "nodeHealthCard": {
@@ -1499,7 +1610,8 @@
     "value0AnsibleMigrationOf": "{value0} Ansible migration of",
     "value0Nodes": "({value0} nodes)",
     "value0OnlineValue1Offline": "{value0} online, {value1} offline",
-    "value0Required": "{value0} (required)"
+    "value0Required": "{value0} (required)",
+    "serviceCount": "{count} service | {count} services"
   },
   "performance": {
     "alertRulesView": {
@@ -1902,7 +2014,7 @@
     "enableTlsForAria": "Enable TLS for {service}",
     "enablingTLS": "Enabling TLS...",
     "enterNodeID": "Enter node ID",
-    "expires": "Expires",
+    "expires": "انقضا",
     "expiringSoon30d": "Expiring Soon (30d)",
     "expiry": "Expiry",
     "failed": "ناموفق",
@@ -2207,7 +2319,7 @@
       "nPUWorkersSettings": {
         "actions": "عملیات",
         "areYouSureYou": "Are you sure you want to remove",
-        "busy": "Busy",
+        "busy": "مشغول",
         "cancel": "لغو",
         "capabilities": "Capabilities",
         "close": "بستن",
@@ -2256,7 +2368,9 @@
         "weighted": "Weighted",
         "windows": "Windows",
         "worker": "Worker",
-        "workerName": "Worker Name *"
+        "workerName": "Worker Name *",
+        "connectionTestFailed": "Connection test failed",
+        "loadBalancingLoadFailed": "Failed to load load-balancing configuration"
       },
       "personalitySettings": {
         "active": "فعال",
@@ -2387,7 +2501,7 @@
         "sPEntityID": "SP Entity ID",
         "sSOOIDCConfiguration": "SSO / OIDC Configuration",
         "saving": "Saving...",
-        "scope": "Scope",
+        "scope": "دامنه",
         "searchFilter": "Search Filter",
         "searchFilterExample": "(uid={username})",
         "serverURI": "Server URI",
@@ -2486,7 +2600,7 @@
         "createSLMAdministrator": "Create SLM Administrator",
         "createTeam": "Create Team",
         "created": "ایجادشده",
-        "dark": "Dark",
+        "dark": "تیره",
         "deleteProvider": "Delete provider",
         "deleteTeam": "Delete team",
         "deleteUser": "Delete user",
@@ -2513,7 +2627,7 @@
         "language": "Language",
         "lastLogin": "Last Login",
         "lastSync": "Last Sync",
-        "light": "Light",
+        "light": "روشن",
         "logout": "Logout",
         "lowercaseLettersNumbersUnderscores": "Lowercase, letters, numbers, underscores",
         "microsoftEntraID": "Microsoft Entra ID",
@@ -2757,7 +2871,7 @@
       "enterYourPassword": "Enter your password",
       "enterYourPasswordTo": "Enter your password to confirm disabling two-factor authentication.",
       "expiration": "Expiration",
-      "expires": "Expires",
+      "expires": "انقضا",
       "keyPrefix": "Key Prefix",
       "lastVerifiedValue0": "Last verified: {value0}",
       "mFAIsEnabled": "MFA is enabled",
@@ -3055,7 +3169,7 @@
         "allStatus": "All Status",
         "capabilities": "Capabilities",
         "error": "خطا",
-        "idle": "بی‌کار",
+        "idle": "Idle",
         "lastActivityValue0": "Last activity: {value0}",
         "loadingAgents": "در حال بارگذاری عامل‌ها...",
         "noAgentsFound": "No agents found",
@@ -3366,7 +3480,7 @@
   },
   "sharedLinksView": {
     "colCreated": "ایجادشده",
-    "colExpires": "Expires",
+    "colExpires": "انقضا",
     "colOwner": "مالک",
     "colPassword": "گذرواژه",
     "colSession": "Session",
@@ -3394,7 +3508,7 @@
     "period": "Period",
     "readOnlyNotice": "Audit view only. Budget policies are created and managed by users in the user app; this console does not modify them.",
     "refresh": "Refresh",
-    "scope": "Scope",
+    "scope": "دامنه",
     "scopeId": "Scope ID",
     "status": "وضعیت",
     "subtitle": "Read-only oversight of all agent, project, task, and tenant budget policies and their hard-stop auto-pause configuration.",

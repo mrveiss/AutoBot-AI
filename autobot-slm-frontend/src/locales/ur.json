@@ -344,7 +344,7 @@
     "runRsyncFromTo": "Run rsync from {source} to {dest}",
     "running": "Running...",
     "sLMManagerRestarting": "SLM Manager Restarting",
-    "schedule": "Schedule",
+    "schedule": "شیڈول",
     "scheduledUpdates": "Scheduled Updates",
     "showDetails": "Show details",
     "slmSelfUpdateStage": "SLM server",
@@ -1326,6 +1326,107 @@
       "services": "Services",
       "systemHealth": "سسٹم کی صحت",
       "systemMonitoring": "سسٹم کی نگرانی"
+    },
+    "agentLedger": {
+      "title": "ایجنٹ لیجر",
+      "subtitle": "Every company's agent coordination: shared resources, claims, conflicts and dev-loop history.",
+      "refresh": "تازہ کریں",
+      "tabsAria": "لیجر کے منظر",
+      "tabs": {
+        "now": "ابھی کام کر رہے ہیں",
+        "contention": "مسابقت",
+        "claims": "دعوے",
+        "conflicts": "تنازعات",
+        "devLoop": "Dev loop",
+        "activity": "سرگرمی"
+      },
+      "col": {
+        "scope": "دائرہ",
+        "agent": "ایجنٹ",
+        "company": "Company",
+        "mode": "طریقہ",
+        "intent": "ارادہ",
+        "expires": "میعاد ختم",
+        "renewals": "تجدیدات",
+        "kind": "قسم",
+        "status": "Status",
+        "task": "موجودہ کام",
+        "detail": "تفصیل"
+      },
+      "installWide": "Install-wide",
+      "heldBy": "Held by {agent} ({company})",
+      "waiting": "{n} waiting",
+      "waitlistAria": "ترتیب سے انتظار کی فہرست",
+      "silenceMeansHold": "درخواست رہائی نہیں ہے: خاموشی کا مطلب روکے رکھنا ہے، اور غیر تجدید شدہ دعویٰ خود ختم ہو جاتا ہے۔",
+      "ask": "مالک سے رہائی کی درخواست کریں",
+      "askAria": "{scope} کے مالک سے اسے چھوڑنے کی درخواست کریں",
+      "askState": {
+        "sending": "بھیجا جا رہا ہے…",
+        "sent": "درخواست بھیج دی گئی — فیصلہ مالک کا ہے؛ خاموشی کا مطلب روکے رکھنا ہے۔",
+        "tooSoon": "آپ نے ابھی اس دعوے کے بارے میں پوچھا تھا؛ ایک منٹ بعد دوبارہ کوشش کریں۔",
+        "notFound": "یہ کام اب اس دعوے کو نہیں رکھتا — یہ دیکھنے کے لیے ریفریش کریں کہ اب اسے کون رکھتا ہے۔",
+        "unavailable": "لیجر تک رسائی نہیں ہو سکی؛ کچھ نہیں بھیجا گیا۔",
+        "error": "کچھ غلط ہو گیا اور ترسیل کی تصدیق نہیں ہو سکی۔ یہ دیکھنے کے لیے ریفریش کریں کہ آیا دعویٰ اب بھی برقرار ہے۔"
+      },
+      "conflict": {
+        "release_refused": "ایک رہائی مسترد ہوئی",
+        "claim_expired": "ایک دعویٰ رکھے جانے کے دوران ختم ہو گیا",
+        "yield_unanswered": "ایک دستبرداری کی درخواست کا جواب نہیں ملا",
+        "claim_lapsed_during_action": "ایک دعویٰ کارروائی کے دوران ختم ہو گیا"
+      },
+      "devLoop": {
+        "issue": "Issue",
+        "choose": "Choose an issue",
+        "col": {
+          "at": "When",
+          "intent": "ارادہ",
+          "outcome": "Outcome",
+          "tokens": "Estimated tokens",
+          "reason": "وجہ"
+        }
+      },
+      "empty": {
+        "contention": "کوئی مسابقت نہیں",
+        "claims": "کوئی دعویٰ نہیں",
+        "conflicts": "کوئی تنازع نہیں",
+        "activity": "کوئی حالیہ سرگرمی نہیں",
+        "devLoop": "No dev-loop history",
+        "devLoopActions": "No actions recorded for this issue",
+        "presence": "کسی ایجنٹ نے اطلاع نہیں دی",
+        "peerMessages": "کوئی زیر التوا پیغام نہیں",
+        "idleSubscribers": "کوئی فراغت کی رکنیت نہیں"
+      },
+      "notes": {
+        "title": "What this view cannot see",
+        "storeDown": "Couldn't read the {source} store just now. Its entries are missing here, not empty.",
+        "sourcesUnknown": "Couldn't check which ledger sources are readable.",
+        "peerIdentity": "Agents have no per-peer identity yet: an agent that is refused an action can ask another agent to do it (#16950).",
+        "busAuth": "Messages between agents are not authenticated yet, so this view cannot prove who sent one (#16962)."
+      },
+      "source": {
+        "presence": "agent presence",
+        "ai_stack_agents": "AI-stack agents",
+        "live_sessions": "live sessions",
+        "peer_messages": "pending peer messages",
+        "idle_subscribers": "idle subscriptions",
+        "claims": "claims",
+        "waitlists": "waitlists",
+        "events": "ledger activity",
+        "dev_loop": "dev-loop history"
+      },
+      "state": {
+        "loading": "لیجر پڑھا جا رہا ہے…",
+        "unavailableTitle": "لیجر نہیں پڑھا جا سکا",
+        "unavailableBody": "اسٹور {source} نے جواب نہیں دیا۔ یہ اندراجات نہ ہونے جیسا نہیں ہے۔",
+        "errorTitle": "یہ حصہ لوڈ کرتے وقت کچھ غلط ہو گیا"
+      },
+      "busy": "مصروف",
+      "idle": "Idle",
+      "peerMessages": "زیر التوا پیئر پیغامات",
+      "idleSubscribers": "فراغت کی رکنیتیں",
+      "pendingFor": "{name} کے لیے {n} زیر التوا",
+      "sentBy": "{names} کی طرف سے",
+      "waitsForIdle": "{who} انتظار میں ہے کہ {target} فارغ ہو"
     }
   },
   "monitoringView": {
@@ -1334,7 +1435,17 @@
     "monitoring": "نگرانی",
     "monitoringSections": "Monitoring sections",
     "systemHealthStatusAria": "System health: {status}",
-    "value0AlertPlural": "{value0} Alert{plural}"
+    "value0AlertPlural": "{value0} Alert{plural}",
+    "tabs": {
+      "system": "سسٹم",
+      "logs": "Logs",
+      "dashboards": "Dashboards",
+      "alerts": "Alerts",
+      "errors": "خرابیاں",
+      "backendHealth": "Backend Health",
+      "performance": "کارکردگی",
+      "agentLedger": "ایجنٹ لیجر"
+    }
   },
   "orchestration": {
     "nodeHealthCard": {
@@ -1499,7 +1610,8 @@
     "value0AnsibleMigrationOf": "{value0} Ansible migration of",
     "value0Nodes": "({value0} nodes)",
     "value0OnlineValue1Offline": "{value0} online, {value1} offline",
-    "value0Required": "{value0} (required)"
+    "value0Required": "{value0} (required)",
+    "serviceCount": "{count} service | {count} services"
   },
   "performance": {
     "alertRulesView": {
@@ -1902,7 +2014,7 @@
     "enableTlsForAria": "Enable TLS for {service}",
     "enablingTLS": "Enabling TLS...",
     "enterNodeID": "Enter node ID",
-    "expires": "Expires",
+    "expires": "میعاد ختم",
     "expiringSoon30d": "Expiring Soon (30d)",
     "expiry": "Expiry",
     "failed": "ناکام",
@@ -2207,7 +2319,7 @@
       "nPUWorkersSettings": {
         "actions": "اقدامات",
         "areYouSureYou": "Are you sure you want to remove",
-        "busy": "Busy",
+        "busy": "مصروف",
         "cancel": "Cancel",
         "capabilities": "Capabilities",
         "close": "بند کریں",
@@ -2256,7 +2368,9 @@
         "weighted": "Weighted",
         "windows": "Windows",
         "worker": "Worker",
-        "workerName": "Worker Name *"
+        "workerName": "Worker Name *",
+        "connectionTestFailed": "Connection test failed",
+        "loadBalancingLoadFailed": "Failed to load load-balancing configuration"
       },
       "personalitySettings": {
         "active": "فعال",
@@ -2387,7 +2501,7 @@
         "sPEntityID": "SP Entity ID",
         "sSOOIDCConfiguration": "SSO / OIDC Configuration",
         "saving": "Saving...",
-        "scope": "Scope",
+        "scope": "دائرہ",
         "searchFilter": "Search Filter",
         "searchFilterExample": "(uid={username})",
         "serverURI": "Server URI",
@@ -2486,7 +2600,7 @@
         "createSLMAdministrator": "Create SLM Administrator",
         "createTeam": "Create Team",
         "created": "تخلیق شدہ",
-        "dark": "Dark",
+        "dark": "گہرا",
         "deleteProvider": "Delete provider",
         "deleteTeam": "Delete team",
         "deleteUser": "Delete user",
@@ -2513,7 +2627,7 @@
         "language": "Language",
         "lastLogin": "Last Login",
         "lastSync": "Last Sync",
-        "light": "Light",
+        "light": "ہلکا",
         "logout": "Logout",
         "lowercaseLettersNumbersUnderscores": "Lowercase, letters, numbers, underscores",
         "microsoftEntraID": "Microsoft Entra ID",
@@ -2757,7 +2871,7 @@
       "enterYourPassword": "Enter your password",
       "enterYourPasswordTo": "Enter your password to confirm disabling two-factor authentication.",
       "expiration": "Expiration",
-      "expires": "Expires",
+      "expires": "میعاد ختم",
       "keyPrefix": "Key Prefix",
       "lastVerifiedValue0": "Last verified: {value0}",
       "mFAIsEnabled": "MFA is enabled",
@@ -3055,7 +3169,7 @@
         "allStatus": "All Status",
         "capabilities": "Capabilities",
         "error": "Error",
-        "idle": "بیکار",
+        "idle": "Idle",
         "lastActivityValue0": "Last activity: {value0}",
         "loadingAgents": "ایجنٹس لوڈ ہو رہے ہیں...",
         "noAgentsFound": "No agents found",
@@ -3366,7 +3480,7 @@
   },
   "sharedLinksView": {
     "colCreated": "تخلیق شدہ",
-    "colExpires": "Expires",
+    "colExpires": "میعاد ختم",
     "colOwner": "مالک",
     "colPassword": "پاس ورڈ",
     "colSession": "Session",
@@ -3394,7 +3508,7 @@
     "period": "Period",
     "readOnlyNotice": "Audit view only. Budget policies are created and managed by users in the user app; this console does not modify them.",
     "refresh": "تازہ کریں",
-    "scope": "Scope",
+    "scope": "دائرہ",
     "scopeId": "Scope ID",
     "status": "Status",
     "subtitle": "Read-only oversight of all agent, project, task, and tenant budget policies and their hard-stop auto-pause configuration.",

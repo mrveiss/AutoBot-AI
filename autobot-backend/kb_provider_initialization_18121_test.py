@@ -70,7 +70,7 @@ def _constructs_knowledge_base(node: ast.AST) -> bool:
     return False
 
 
-@pytest.mark.parametrize("provider", ["get_knowledge_base", "get_cached_knowledge_base"])
+@pytest.mark.parametrize("provider", ["provide_knowledge_base", "get_cached_knowledge_base"])
 def test_dependency_provider_is_async(provider: str) -> None:
     """A sync provider cannot await initialize(), so it can only return a broken instance."""
     fn = _find_function(_parse(_DEPENDENCIES), provider)
@@ -81,7 +81,7 @@ def test_dependency_provider_is_async(provider: str) -> None:
     )
 
 
-@pytest.mark.parametrize("provider", ["get_knowledge_base", "get_cached_knowledge_base"])
+@pytest.mark.parametrize("provider", ["provide_knowledge_base", "get_cached_knowledge_base"])
 def test_dependency_provider_does_not_construct(provider: str) -> None:
     fn = _find_function(_parse(_DEPENDENCIES), provider)
     assert fn is not None, f"dependencies.{provider} not found"
@@ -93,18 +93,18 @@ def test_dependency_provider_does_not_construct(provider: str) -> None:
 
 def test_dependency_provider_delegates_to_the_canonical_factory() -> None:
     tree = _parse(_DEPENDENCIES)
-    live = _find_function(tree, "get_knowledge_base")
-    assert live is not None, "dependencies.get_knowledge_base not found"
+    live = _find_function(tree, "provide_knowledge_base")
+    assert live is not None, "dependencies.provide_knowledge_base not found"
     assert "get_or_create_knowledge_base" in _called_names(live), (
-        "dependencies.get_knowledge_base must return the app-state instance via "
+        "dependencies.provide_knowledge_base must return the app-state instance via "
         "knowledge_factory.get_or_create_knowledge_base"
     )
     cached = _find_function(tree, "get_cached_knowledge_base")
     assert cached is not None, "dependencies.get_cached_knowledge_base not found"
     delegates = _called_names(cached)
-    assert "get_knowledge_base" in delegates or "get_or_create_knowledge_base" in delegates, (
+    assert "provide_knowledge_base" in delegates or "get_or_create_knowledge_base" in delegates, (
         "dependencies.get_cached_knowledge_base must resolve the same instance as "
-        "get_knowledge_base — app.state is already the cache"
+        "provide_knowledge_base — app.state is already the cache"
     )
 
 

@@ -6,9 +6,10 @@
 # Runs the copy-paste detector (jscpd, the `cpd` 5.x CLI) over two scopes with
 # the exact flags used for the 2026-06-10 dedup sweep. A scope fails when its
 # duplicated-line COUNT exceeds its pin. This is a ratchet, not a "zero
-# duplication" gate: the repo carries known, deliberately deferred clusters
-# (the broken security package, #9856, and the Vue CSS/HTML campaign, #9859)
-# that need their own PRs. The gate ensures no PR grows duplication.
+# duplication" gate: the repo carries known clusters still being worked down
+# (the Vue SFC CSS/HTML mass, #18551, and the dedup programme under #17312;
+# #9856 and #9859, named here before, are closed). The gate ensures no PR
+# grows duplication.
 #
 # #16319: the pins are absolute counts, not percentages. A percentage pinned a
 # hair above its measurement fails a PR that deletes unique code. #16308 kept
@@ -98,7 +99,9 @@ jobs:
       # the reported number would have RAISED a ratchet, which is the one direction
       # it must never move. Measured here instead: the SLM scope is 2831 against a
       # 2831 pin, exact, so it stays.
-      MAX_DUP_LINES: '11707'
+      # 11707 -> 11231 (#16324): 476 lines of slack, the figure main run
+      # 39021692374 (base feae6de152) measured with this workflow's own gate.
+      MAX_DUP_LINES: '11231'
       # #13044: the three trees this guard used to skip get their OWN pin rather
       # than being folded into the one above. When first scanned they carried
       # 2.4x the duplication ratio of the gated trees, and averaging would hide
@@ -120,7 +123,10 @@ jobs:
       # 0 when the count is UNDER its pin, so a fall in duplication is never noticed
       # and a later PR can spend it. Both figures are recorded so the next person
       # can tell a real reduction from reclaimed slack.
-      SLM_MAX_DUP_LINES: '2831'
+      # 2831 -> 2617 (#16324): 214 lines of slack, measured by the same main run
+      # 39021692374 (base feae6de152); most of the fall is the retired agent
+      # mirror (#18548) and the one playwright-server.js (#18549).
+      SLM_MAX_DUP_LINES: '2617'
       JSCPD_VERSION: '5.0.6'
     steps:
       - uses: actions/checkout@v7
@@ -146,12 +152,9 @@ jobs:
       # UNMEASURED pin fails with the figure to pin (#16319), so one jscpd run per
       # scope is enough.
       #
-      # #16401: autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/ is a
-      # mandatory mirror of autobot-slm-backend/slm/agent/, kept byte-identical by
-      # ansible/tests/detect_agent_code_drift_test.py. jscpd counted the mirror as
-      # a clone of its own source on every agent change, so it is excluded below --
-      # the drift test already guarantees the two trees cannot differ, so there is
-      # nothing here this guard can ask anyone to deduplicate.
+      # #18548: the SLM agent has no Ansible-role mirror any more (the role
+      # deploys autobot-slm-backend/slm/agent/ itself), so nothing is excluded
+      # for it here; the #16401 exclusion for that mirror is retired.
       - name: Gate the previously ungated trees
         id: slm_scope
         run: |
@@ -160,7 +163,7 @@ jobs:
             autobot_shared autobot-slm-backend autobot-slm-frontend/src \
             -k 70 -l 8 --skip-comments \
             -f python,typescript,javascript,vue \
-            -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**,**/ansible/roles/slm_agent/files/**" \
+            -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**" \
             -r console 2>&1 | tee /tmp/slm-gate.log
           python3 scripts/duplication_gate.py /tmp/slm-gate.log "${SLM_MAX_DUP_LINES}"
 

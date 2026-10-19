@@ -27,8 +27,8 @@
 # Written by install.sh into /etc/autobot/slm-secrets.env as NETWORK_SUBNET
 # and NETWORK_GATEWAY.  Loaded here via env lookup so values are never
 # hardcoded in the repo — every install detects its own subnet automatically.
-network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0/0' }}"
-network_gateway: "{{ lookup('env', 'NETWORK_GATEWAY') or lookup('pipe', 'grep -oP \"NETWORK_GATEWAY=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0' }}"
+network_subnet: "{{ (lookup('env', 'NETWORK_SUBNET') | trim) or (lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || true') | trim) or undef(hint='network_subnet is unset: set NETWORK_SUBNET in the environment or in /etc/autobot/slm-secrets.env. It is a firewall source, so it never falls back to an open range (#17642)') }}"
+network_gateway: "{{ (lookup('env', 'NETWORK_GATEWAY') | trim) or (lookup('pipe', 'grep -oP \"NETWORK_GATEWAY=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || true') | trim) or undef(hint='network_gateway is unset: set NETWORK_GATEWAY in the environment or in /etc/autobot/slm-secrets.env (#17642)') }}"
 # DNS servers — override per-install via -e or inventory vars
 dns_nameservers:
   - "{{ lookup('env', 'DNS_PRIMARY') or '8.8.8.8' }}"

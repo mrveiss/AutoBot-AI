@@ -12,8 +12,8 @@ from unittest.mock import create_autospec, patch
 import pytest
 
 from voice_processing.providers import (
-    ProviderRegistry,
     SpeechProvider,
+    SpeechProviderRegistry,
     TranscriptionUnavailableError,
     TranscriptSegment,
 )
@@ -45,7 +45,7 @@ def _registry_with_defaults(monkeypatch, *, cloud_key: bool):
     import voice_processing.providers.registry_init as registry_init
     from voice_processing.providers import selection
 
-    fresh = ProviderRegistry()
+    fresh = SpeechProviderRegistry()
     monkeypatch.setattr(providers_pkg, "_registry", fresh)
     if not cloud_key:
         monkeypatch.setattr(selection, "_PROVIDER_MAP", {})
@@ -82,7 +82,7 @@ def test_cloud_provider_beats_whisper_for_english(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_failing_top_provider_falls_through_to_the_next():
-    registry = ProviderRegistry()
+    registry = SpeechProviderRegistry()
     top = _fake("top", error=RuntimeError("boom"))
     second = _fake("second")
     registry.register("en", top, priority=10)
@@ -94,7 +94,7 @@ async def test_failing_top_provider_falls_through_to_the_next():
 
 @pytest.mark.asyncio
 async def test_unavailable_provider_is_skipped_to_the_next_local_one():
-    registry = ProviderRegistry()
+    registry = SpeechProviderRegistry()
     unavailable = _fake("down", available=False)
     last = _fake("last")
     registry.register("en", unavailable, priority=10)
@@ -106,7 +106,7 @@ async def test_unavailable_provider_is_skipped_to_the_next_local_one():
 
 @pytest.mark.asyncio
 async def test_empty_result_ends_the_chain_and_never_reaches_a_second_provider():
-    registry = ProviderRegistry()
+    registry = SpeechProviderRegistry()
     empty = _fake("empty", segments=[])
     later = _fake("later")
     registry.register("en", empty, priority=10)
@@ -131,7 +131,7 @@ def _local(name, **kwargs):
 
 @pytest.mark.asyncio
 async def test_cloud_failure_never_reaches_another_cloud_and_goes_local():
-    registry = ProviderRegistry()
+    registry = SpeechProviderRegistry()
     selected = _external("selected", error=RuntimeError("down"))
     other = _external("other")
     whisper = _local("whisper")
@@ -145,7 +145,7 @@ async def test_cloud_failure_never_reaches_another_cloud_and_goes_local():
 
 @pytest.mark.asyncio
 async def test_cloud_failure_without_local_does_not_reach_another_cloud():
-    registry = ProviderRegistry()
+    registry = SpeechProviderRegistry()
     other = _external("other")
     registry.register("en", _external("selected", error=RuntimeError("down")), priority=20)
     registry.register("en", other, priority=15)
@@ -158,7 +158,7 @@ async def test_cloud_failure_without_local_does_not_reach_another_cloud():
 @pytest.mark.asyncio
 async def test_opt_in_enables_external_fallthrough(monkeypatch):
     monkeypatch.setenv("AUTOBOT_SPEECH_EXTERNAL_FALLTHROUGH", "true")
-    registry = ProviderRegistry()
+    registry = SpeechProviderRegistry()
     other = _external("other")
     registry.register("en", _external("selected", error=RuntimeError("down")), priority=20)
     registry.register("en", other, priority=15)
@@ -194,7 +194,7 @@ async def test_whisper_unavailable_means_generic_is_used(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_no_provider_raises_and_all_raising_is_a_failure_with_reasons():
-    registry = ProviderRegistry()
+    registry = SpeechProviderRegistry()
     with pytest.raises(ValueError, match="No speech provider"):
         await registry.transcribe_with_fallback("a.wav", "xx")
     registry.register("en", _fake("a", error=RuntimeError("first")), priority=1)
@@ -206,14 +206,14 @@ async def test_no_provider_raises_and_all_raising_is_a_failure_with_reasons():
 
 @pytest.mark.asyncio
 async def test_a_provider_that_ran_with_no_speech_is_a_genuine_empty_not_an_error():
-    registry = ProviderRegistry()
+    registry = SpeechProviderRegistry()
     registry.register("en", _fake("a", segments=[]), priority=0)
     outcome = await registry.transcribe_with_fallback("a.wav", "en")
     assert outcome.provider is not None and outcome.segments == []
 
 
 def _lv_registry(late, tilde, other_cloud=None):
-    registry = ProviderRegistry()
+    registry = SpeechProviderRegistry()
     registry.register("lv", late, priority=10)
     registry.register("lv", tilde, priority=5)
     registry.declare_primary_external("lv", tilde)

@@ -78,7 +78,7 @@ class RoleUpdate(BaseModel):
     description: Optional[str] = Field(None, max_length=_DESCRIPTION_MAX)
 
 
-class RoleResponse(BaseModel):
+class CompanyRoleResponse(BaseModel):
     id: uuid.UUID
     company_id: uuid.UUID
     name: str
@@ -152,9 +152,9 @@ class StepCostResponse(BaseModel):
     missing: List[str]
 
 
-def _as_role(role) -> RoleResponse:  # noqa: ANN001
+def _as_role(role) -> CompanyRoleResponse:  # noqa: ANN001
     """``org_id`` is the company — see the service docstring for why they are one column."""
-    return RoleResponse(
+    return CompanyRoleResponse(
         id=role.id,
         company_id=role.org_id,
         name=role.name,
@@ -174,25 +174,25 @@ def _as_holder(assignment) -> HolderResponse:  # noqa: ANN001
     )
 
 
-@router.get("/{company_id}", response_model=List[RoleResponse])
+@router.get("/{company_id}", response_model=List[CompanyRoleResponse])
 async def list_roles(
     company_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> List[RoleResponse]:
+) -> List[CompanyRoleResponse]:
     assert_company_access(ctx, company_id)
     return [_as_role(r) for r in await _get_roles().list_by_company(session, company_id)]
 
 
-@router.post("/{company_id}", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{company_id}", response_model=CompanyRoleResponse, status_code=status.HTTP_201_CREATED)
 async def create_role(
     company_id: uuid.UUID,
     payload: RoleCreate,
     session: AsyncSession = Depends(get_async_session),
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> RoleResponse:
+) -> CompanyRoleResponse:
     assert_company_access(ctx, company_id)
     try:
         role = await _get_roles().create(
@@ -210,7 +210,7 @@ async def create_role(
     return _as_role(role)
 
 
-@router.patch("/{company_id}/{role_id}", response_model=RoleResponse)
+@router.patch("/{company_id}/{role_id}", response_model=CompanyRoleResponse)
 async def update_role(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
@@ -218,7 +218,7 @@ async def update_role(
     session: AsyncSession = Depends(get_async_session),
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> RoleResponse:
+) -> CompanyRoleResponse:
     assert_company_access(ctx, company_id)
     fields = payload.model_dump(exclude_unset=True)
     try:

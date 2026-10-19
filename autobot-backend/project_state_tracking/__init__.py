@@ -21,7 +21,7 @@ from autobot_shared.logging_manager import get_logger
 from .database import (
     DATABASE_SCHEMA_INDICES,
     DATABASE_SCHEMA_TABLES,
-    init_database,
+    init_state_tracking_database,
     load_milestones_from_db,
     load_snapshots_from_db,
     record_state_change_sync,
@@ -213,7 +213,7 @@ __all__ = [
     # Database
     "DATABASE_SCHEMA_TABLES",
     "DATABASE_SCHEMA_INDICES",
-    "init_database",
+    "init_state_tracking_database",
     "save_snapshot_sync",
     "record_state_change_sync",
     "save_milestone_sync",

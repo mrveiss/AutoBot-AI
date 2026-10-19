@@ -24,10 +24,10 @@ from models.database import (
     AuditLog,
     Certificate,
     PolicyStatus,
-    SecurityEvent,
     SecurityEventSeverity,
     SecurityEventType,
     SecurityPolicy,
+    SlmSecurityEvent,
 )
 from models.schemas import (
     AuditLogListResponse,
@@ -109,18 +109,18 @@ async def _get_security_event_counts(db: AsyncSession, last_24h: datetime) -> di
     """
     # Failed logins in last 24h
     failed_logins = await db.execute(
-        select(func.count(SecurityEvent.id))
-        .where(SecurityEvent.event_type == SecurityEventType.LOGIN_FAILURE.value)
-        .where(SecurityEvent.timestamp >= last_24h)
+        select(func.count(SlmSecurityEvent.id))
+        .where(SlmSecurityEvent.event_type == SecurityEventType.LOGIN_FAILURE.value)
+        .where(SlmSecurityEvent.timestamp >= last_24h)
     )
     failed_logins_count = failed_logins.scalar() or 0
 
     # Active threats (unresolved security events with severity >= medium)
     active_threats = await db.execute(
-        select(func.count(SecurityEvent.id))
-        .where(SecurityEvent.is_resolved.is_(False))
+        select(func.count(SlmSecurityEvent.id))
+        .where(SlmSecurityEvent.is_resolved.is_(False))
         .where(
-            SecurityEvent.severity.in_(
+            SlmSecurityEvent.severity.in_(
                 [
                     SecurityEventSeverity.MEDIUM.value,
                     SecurityEventSeverity.HIGH.value,
@@ -133,23 +133,23 @@ async def _get_security_event_counts(db: AsyncSession, last_24h: datetime) -> di
 
     # Critical events
     critical_events = await db.execute(
-        select(func.count(SecurityEvent.id))
-        .where(SecurityEvent.is_resolved.is_(False))
-        .where(SecurityEvent.severity == SecurityEventSeverity.CRITICAL.value)
+        select(func.count(SlmSecurityEvent.id))
+        .where(SlmSecurityEvent.is_resolved.is_(False))
+        .where(SlmSecurityEvent.severity == SecurityEventSeverity.CRITICAL.value)
     )
     critical_count = critical_events.scalar() or 0
 
     # Policy violations
     policy_violations = await db.execute(
-        select(func.count(SecurityEvent.id))
-        .where(SecurityEvent.event_type == SecurityEventType.POLICY_VIOLATION.value)
-        .where(SecurityEvent.is_resolved.is_(False))
+        select(func.count(SlmSecurityEvent.id))
+        .where(SlmSecurityEvent.event_type == SecurityEventType.POLICY_VIOLATION.value)
+        .where(SlmSecurityEvent.is_resolved.is_(False))
     )
     violations_count = policy_violations.scalar() or 0
 
     # Total events in 24h
-    total_events = await db.execute(select(func.count(SecurityEvent.id)).where(SecurityEvent.timestamp >= last_24h))
-    total_events_count = total_events.scalar() or 0
+    total_24h = await db.execute(select(func.count(SlmSecurityEvent.id)).where(SlmSecurityEvent.timestamp >= last_24h))
+    total_events_count = total_24h.scalar() or 0
 
     return {
         "failed_logins": failed_logins_count,
@@ -208,7 +208,7 @@ async def get_security_overview(
     score = _calculate_security_score(counts, certs_expiring_count)
 
     # Recent events
-    recent = await db.execute(select(SecurityEvent).order_by(SecurityEvent.timestamp.desc()).limit(10))
+    recent = await db.execute(select(SlmSecurityEvent).order_by(SlmSecurityEvent.timestamp.desc()).limit(10))
     recent_events = recent.scalars().all()
 
     return SecurityOverviewResponse(
@@ -326,43 +326,43 @@ def _apply_security_event_filters(
 ):
     """Helper for list_security_events. Ref: #1088."""
     if event_type:
-        query = query.where(SecurityEvent.event_type == event_type)
+        query = query.where(SlmSecurityEvent.event_type == event_type)
     if severity:
-        query = query.where(SecurityEvent.severity == severity)
+        query = query.where(SlmSecurityEvent.severity == severity)
     if acknowledged is not None:
-        query = query.where(SecurityEvent.is_acknowledged == acknowledged)
+        query = query.where(SlmSecurityEvent.is_acknowledged == acknowledged)
     if resolved is not None:
-        query = query.where(SecurityEvent.is_resolved == resolved)
+        query = query.where(SlmSecurityEvent.is_resolved == resolved)
     if source_ip:
-        query = query.where(SecurityEvent.source_ip == source_ip)
+        query = query.where(SlmSecurityEvent.source_ip == source_ip)
     if node_id:
         query = query.where(
             or_(
-                SecurityEvent.source_node_id == node_id,
-                SecurityEvent.target_node_id == node_id,
+                SlmSecurityEvent.source_node_id == node_id,
+                SlmSecurityEvent.target_node_id == node_id,
             )
         )
     if since:
-        query = query.where(SecurityEvent.timestamp >= since)
+        query = query.where(SlmSecurityEvent.timestamp >= since)
     if until:
-        query = query.where(SecurityEvent.timestamp <= until)
+        query = query.where(SlmSecurityEvent.timestamp <= until)
     return query
 
 
 async def _get_security_event_aggregates(db: AsyncSession) -> dict:
     """Helper for list_security_events. Ref: #1088."""
-    count_result = await db.execute(select(func.count(SecurityEvent.id)))
+    count_result = await db.execute(select(func.count(SlmSecurityEvent.id)))
     total = count_result.scalar() or 0
 
     unack_result = await db.execute(
-        select(func.count(SecurityEvent.id)).where(SecurityEvent.is_acknowledged.is_(False))
+        select(func.count(SlmSecurityEvent.id)).where(SlmSecurityEvent.is_acknowledged.is_(False))
     )
     unacknowledged_count = unack_result.scalar() or 0
 
     critical_result = await db.execute(
-        select(func.count(SecurityEvent.id))
-        .where(SecurityEvent.severity == SecurityEventSeverity.CRITICAL.value)
-        .where(SecurityEvent.is_resolved.is_(False))
+        select(func.count(SlmSecurityEvent.id))
+        .where(SlmSecurityEvent.severity == SecurityEventSeverity.CRITICAL.value)
+        .where(SlmSecurityEvent.is_resolved.is_(False))
     )
     critical_count = critical_result.scalar() or 0
 
@@ -389,7 +389,7 @@ async def list_security_events(
     per_page: int = Query(50, ge=1, le=200),
 ) -> SecurityEventListResponse:
     """List security events with filtering."""
-    query = select(SecurityEvent)
+    query = select(SlmSecurityEvent)
     query = _apply_security_event_filters(
         query,
         event_type,
@@ -404,7 +404,7 @@ async def list_security_events(
 
     aggregates = await _get_security_event_aggregates(db)
 
-    query = query.order_by(SecurityEvent.timestamp.desc())
+    query = query.order_by(SlmSecurityEvent.timestamp.desc())
     query = query.offset((page - 1) * per_page).limit(per_page)
     result = await db.execute(query)
     events = result.scalars().all()
@@ -424,9 +424,9 @@ async def _get_threat_severity_counts(db: AsyncSession, since: datetime) -> dict
     severity_counts = {}
     for sev in SecurityEventSeverity:
         result = await db.execute(
-            select(func.count(SecurityEvent.id))
-            .where(SecurityEvent.severity == sev.value)
-            .where(SecurityEvent.timestamp >= since)
+            select(func.count(SlmSecurityEvent.id))
+            .where(SlmSecurityEvent.severity == sev.value)
+            .where(SlmSecurityEvent.timestamp >= since)
         )
         severity_counts[sev.value] = result.scalar() or 0
     return severity_counts
@@ -435,18 +435,18 @@ async def _get_threat_severity_counts(db: AsyncSession, since: datetime) -> dict
 async def _get_threat_distribution(db: AsyncSession, since: datetime) -> tuple:
     """Helper for get_threat_summary. Ref: #1088."""
     type_result = await db.execute(
-        select(SecurityEvent.event_type, func.count(SecurityEvent.id))
-        .where(SecurityEvent.timestamp >= since)
-        .group_by(SecurityEvent.event_type)
+        select(SlmSecurityEvent.event_type, func.count(SlmSecurityEvent.id))
+        .where(SlmSecurityEvent.timestamp >= since)
+        .group_by(SlmSecurityEvent.event_type)
     )
     by_type = {row[0]: row[1] for row in type_result.all()}
 
     ip_result = await db.execute(
-        select(SecurityEvent.source_ip, func.count(SecurityEvent.id))
-        .where(SecurityEvent.source_ip.isnot(None))
-        .where(SecurityEvent.timestamp >= since)
-        .group_by(SecurityEvent.source_ip)
-        .order_by(func.count(SecurityEvent.id).desc())
+        select(SlmSecurityEvent.source_ip, func.count(SlmSecurityEvent.id))
+        .where(SlmSecurityEvent.source_ip.isnot(None))
+        .where(SlmSecurityEvent.timestamp >= since)
+        .group_by(SlmSecurityEvent.source_ip)
+        .order_by(func.count(SlmSecurityEvent.id).desc())
         .limit(10)
     )
     by_source_ip = {row[0]: row[1] for row in ip_result.all() if row[0]}
@@ -466,20 +466,20 @@ async def get_threat_summary(
     by_type, by_source_ip = await _get_threat_distribution(db, since)
 
     ack_result = await db.execute(
-        select(func.count(SecurityEvent.id))
-        .where(SecurityEvent.is_acknowledged.is_(True))
-        .where(SecurityEvent.timestamp >= since)
+        select(func.count(SlmSecurityEvent.id))
+        .where(SlmSecurityEvent.is_acknowledged.is_(True))
+        .where(SlmSecurityEvent.timestamp >= since)
     )
     acknowledged = ack_result.scalar() or 0
 
     resolved_result = await db.execute(
-        select(func.count(SecurityEvent.id))
-        .where(SecurityEvent.is_resolved.is_(True))
-        .where(SecurityEvent.timestamp >= since)
+        select(func.count(SlmSecurityEvent.id))
+        .where(SlmSecurityEvent.is_resolved.is_(True))
+        .where(SlmSecurityEvent.timestamp >= since)
     )
     resolved = resolved_result.scalar() or 0
 
-    total_result = await db.execute(select(func.count(SecurityEvent.id)).where(SecurityEvent.timestamp >= since))
+    total_result = await db.execute(select(func.count(SlmSecurityEvent.id)).where(SlmSecurityEvent.timestamp >= since))
     total = total_result.scalar() or 0
 
     return ThreatSummary(
@@ -502,7 +502,7 @@ async def create_security_event(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> SecurityEventResponse:
     """Create a new security event."""
-    event = SecurityEvent(
+    event = SlmSecurityEvent(
         event_id=str(uuid.uuid4())[:16],
         event_type=event_data.event_type,
         severity=event_data.severity,
@@ -534,7 +534,7 @@ async def get_security_event(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> SecurityEventResponse:
     """Get a specific security event."""
-    result = await db.execute(select(SecurityEvent).where(SecurityEvent.event_id == event_id))
+    result = await db.execute(select(SlmSecurityEvent).where(SlmSecurityEvent.event_id == event_id))
     event = result.scalar_one_or_none()
 
     if not event:
@@ -554,7 +554,7 @@ async def acknowledge_security_event(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> SecurityEventResponse:
     """Acknowledge a security event."""
-    result = await db.execute(select(SecurityEvent).where(SecurityEvent.event_id == event_id))
+    result = await db.execute(select(SlmSecurityEvent).where(SlmSecurityEvent.event_id == event_id))
     event = result.scalar_one_or_none()
 
     if not event:
@@ -582,7 +582,7 @@ async def resolve_security_event(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> SecurityEventResponse:
     """Resolve a security event."""
-    result = await db.execute(select(SecurityEvent).where(SecurityEvent.event_id == event_id))
+    result = await db.execute(select(SlmSecurityEvent).where(SlmSecurityEvent.event_id == event_id))
     event = result.scalar_one_or_none()
 
     if not event:

@@ -379,6 +379,21 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "It is single-store, so the dual-store guard was never going to surface it: it "
         "belongs by judgement, not because a detector found it.",
     ),
+    "agent_live_state": Concept(
+        name="agent_live_state",
+        system_of_record=Store.PROCESS,
+        projections=(Store.REDIS,),
+        write_sites=("autobot_shared/coordination/ledger_projection.py",),
+        rebuilt_by="initialization.agent_presence_sync._sync_once republishes the whole snapshot "
+        "(ledger_projection.publish) every presence sweep; the Redis copy expires after "
+        "AUTOBOT_LEDGER_PROJECTION_TTL_S, so a restart or a stopped backend leaves nothing "
+        "stale behind. What a process exit loses is the live state itself: presence, "
+        "unread peer messages and idle waits are rebuilt only as agents report again.",
+        note="Agent presence (incl. AI-stack agents and live sessions), pending peer-message "
+        "metadata and idle subscriptions (#18632). Process-local by design (#16947 section 6); "
+        "the Redis projection exists only so the SLM admin ledger can read them, per the owner "
+        "ruling on #18632. Peer-message content is never projected.",
+    ),
     "pre_auth_lockout": Concept(
         name="pre_auth_lockout",
         system_of_record=Store.REDIS,

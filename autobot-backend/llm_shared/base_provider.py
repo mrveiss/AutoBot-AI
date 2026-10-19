@@ -18,20 +18,20 @@ from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from autobot_shared.async_compat import fire_and_forget
-from autobot_shared.coordination.run_progress import record_progress
-from autobot_shared.logging_manager import get_logger
-from circuit_breaker import (
+from autobot_shared.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerConfig,
     CircuitBreakerOpenError,
     get_circuit_breaker_manager,
 )
+from autobot_shared.coordination.run_progress import record_progress
+from autobot_shared.logging_manager import get_logger
 from constants import CircuitBreakerDefaults
 
 from .cross_worker_rate_limiter import get_llm_rate_limiter
 from .models import LLMRequest, LLMResponse, LLMSettings
 from .observability import registry as obs_registry
-from .provider_auth import ApiKeyAuth, ProviderAuthError, ProviderAuthStrategy, TokenExpiredError
+from .provider_auth import ProviderAuthError, ProviderAuthStrategy, StaticApiKeyAuth, TokenExpiredError
 from .provider_degradation import DegradationCause, get_degradation_store
 from .quota_headroom import get_quota_headroom_store
 from .rate_limit_backoff import extract_rate_limit_info, get_backoff_handler, raise_if_rate_limited
@@ -105,21 +105,21 @@ class BaseProvider(ABC):
             settings: Optional dict of provider-specific configuration values.
                       Keys are provider-specific (e.g., ``api_key``,
                       ``base_url``, ``default_model``).
-            auth_strategy: Optional auth strategy (``ApiKeyAuth``, ``OAuthAuth``,
+            auth_strategy: Optional auth strategy (``StaticApiKeyAuth``, ``OAuthAuth``,
                            ``DeviceCodeAuth``, ``SessionAuth``).  When omitted, the
                            legacy ``settings["api_key"]`` path is used via
-                           ``ApiKeyAuth`` — fully backward-compatible.
+                           ``StaticApiKeyAuth`` — fully backward-compatible.
         """
         self.settings: Dict[str, Any] = settings or {}
         self._total_requests = 0
         self._total_errors = 0
-        # Resolve auth strategy: explicit arg wins; fall back to ApiKeyAuth when an
+        # Resolve auth strategy: explicit arg wins; fall back to StaticApiKeyAuth when an
         # api_key is present in settings; leave None for local providers (Ollama etc.)
         # that need no credential at all.
         if auth_strategy is not None:
             self._auth_strategy: Optional[ProviderAuthStrategy] = auth_strategy
         elif self.settings.get("api_key"):
-            self._auth_strategy = ApiKeyAuth(self.settings["api_key"])
+            self._auth_strategy = StaticApiKeyAuth(self.settings["api_key"])
         else:
             self._auth_strategy = None
         # GH#16527: per-provider in-flight concurrency cap. settings takes a
@@ -406,7 +406,7 @@ class BaseProvider(ABC):
         if self._auth_strategy.is_vault_backed():
             # A successful vault-backed resolve proves the credential is
             # valid again — clear any stale needs_reauth mark (#15022).
-            # No-op when nothing was marked; skipped for ApiKeyAuth, which
+            # No-op when nothing was marked; skipped for StaticApiKeyAuth, which
             # can never have raised TokenExpiredError in the first place.
             await get_degradation_store().clear(self.provider_name)
         return token

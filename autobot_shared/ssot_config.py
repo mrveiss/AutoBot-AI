@@ -53,6 +53,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.paths import project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
+from autobot_shared.ssot_tls import TLSConfig, TLSMode
 
 # Determine project root for .env file location.
 #
@@ -1194,57 +1195,6 @@ class PermissionConfig(RedactedSettings):
         if is_admin:
             return list(PermissionMode)
         return [m for m in PermissionMode if m not in self.ADMIN_ONLY_MODES]
-
-
-class TLSMode(str, Enum):
-    """TLS operation modes."""
-
-    DISABLED = "disabled"
-    OPTIONAL = "optional"
-    REQUIRED = "required"
-
-
-class TLSConfig(RedactedSettings):
-    """TLS/PKI Configuration for secure communications.
-
-    Issue #164: Added frontend TLS support for HTTPS on the frontend VM.
-    TLS certificates are managed and deployed via SLM (AUTOBOT_SLM_HOST).
-    """
-
-    # Path to a public CA certificate — not key material.
-    NON_CREDENTIAL_FIELDS: ClassVar[FrozenSet[str]] = frozenset({"ca_cert"})
-
-    model_config = SettingsConfigDict(
-        env_file=str(PROJECT_ROOT / ".env"),
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
-    mode: TLSMode = Field(default=TLSMode.DISABLED, alias="AUTOBOT_TLS_MODE")
-    cert_dir: str = Field(default="certs", alias="AUTOBOT_TLS_CERT_DIR")
-    ca_cert: str = Field(default="certs/ca/ca-cert.pem", alias="AUTOBOT_TLS_CA_CERT")
-    remote_cert_dir: str = Field(default="/etc/autobot/certs", alias="AUTOBOT_TLS_REMOTE_CERT_DIR")
-    # Service-specific TLS settings
-    redis_tls_enabled: bool = Field(default=False, alias="AUTOBOT_REDIS_TLS_ENABLED")
-    redis_tls_port: int = Field(default=6380, alias="AUTOBOT_REDIS_TLS_PORT")
-    backend_tls_enabled: bool = Field(default=False, alias="AUTOBOT_BACKEND_TLS_ENABLED")
-    backend_tls_port: int = Field(default=8443, alias="AUTOBOT_BACKEND_TLS_PORT")
-    # Issue #164: Frontend TLS (HTTPS) support
-    frontend_tls_enabled: bool = Field(default=False, alias="AUTOBOT_FRONTEND_TLS_ENABLED")
-    frontend_tls_port: int = Field(default=443, alias="AUTOBOT_FRONTEND_TLS_PORT")
-    # SLM TLS settings (admin server)
-    slm_tls_enabled: bool = Field(default=False, alias="AUTOBOT_SLM_TLS_ENABLED")
-    slm_tls_port: int = Field(default=443, alias="AUTOBOT_SLM_TLS_PORT")
-
-    @property
-    def is_enabled(self) -> bool:
-        """Check if TLS is enabled."""
-        return self.mode != TLSMode.DISABLED
-
-    @property
-    def any_service_tls_enabled(self) -> bool:
-        """Check if any service has TLS enabled."""
-        return self.redis_tls_enabled or self.backend_tls_enabled or self.frontend_tls_enabled or self.slm_tls_enabled
 
 
 class DatabasePoolConfig(RedactedSettings):
@@ -3241,6 +3191,8 @@ __all__ = [
     "LLMConfig",
     "TimeoutConfig",
     "RedisConfig",
+    "TLSConfig",
+    "TLSMode",
     "CacheConfig",
     "CacheCoordinatorConfig",
     "CacheRedisConfig",

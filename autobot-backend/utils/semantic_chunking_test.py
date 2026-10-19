@@ -33,6 +33,8 @@ class TestSemanticChunking:
             max_chunk_size=500,
         )
 
+    # Real weights, fetched past the offline test default (#16994).
+    @pytest.mark.hf_model("sentence-transformers/all-MiniLM-L6-v2")
     async def test_basic_chunking(self):
         """Test basic semantic chunking functionality."""
         # Real semantic splitting needs the embedding model; without it the

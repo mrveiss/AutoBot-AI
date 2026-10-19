@@ -16,11 +16,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.sso_deps import get_audit_db
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.env_utils import env_int
 from models.database import AuditLog
 from services.auth import require_permission
-from services.database import get_db
 from services.step_up_auth import require_step_up
 from user_management.database import get_slm_db
 from user_management.schemas.sso import (
@@ -46,12 +46,6 @@ SSO_HEALTH_WINDOW_DAYS = env_int("SSO_HEALTH_WINDOW_DAYS", 7)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sso-providers", tags=["sso-providers"])
-
-
-async def get_audit_db():
-    """Dependency for the audit (main SLM security) database session."""
-    async for session in get_db():
-        yield session
 
 
 def _derive_health_status(

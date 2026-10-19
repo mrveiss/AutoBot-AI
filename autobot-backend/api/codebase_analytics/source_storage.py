@@ -12,9 +12,9 @@ Uses the analytics Redis database (DB 11) with keys:
 
 from typing import List
 
+from autobot_shared.error_boundaries.types import PassThroughError
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from utils.error_boundaries.types import PassThroughError
 
 from .source_models import CodeSource, SourceAccess
 

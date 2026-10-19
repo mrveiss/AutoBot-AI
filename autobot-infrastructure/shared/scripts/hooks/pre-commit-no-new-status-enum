@@ -32,7 +32,7 @@
 #   - autobot-backend/models/approval.py                          (PENDING/APPROVED/REJECTED — approval workflow)
 #   - autobot-backend/services/knowledge/sync_queue.py            (SyncStatus — domain sync states)
 #   - autobot-backend/services/load_balancer.py                   (WorkerStatus — load-balancer states)
-#   - autobot-backend/services/provider_health/base.py            (ProviderStatus — health, separate concept)
+#   - autobot-backend/services/provider_health/base.py            (ProviderHealthStatus — health, separate concept)
 #
 # Suppression: append `# noqa: status-shape` to the offending line (last resort).
 

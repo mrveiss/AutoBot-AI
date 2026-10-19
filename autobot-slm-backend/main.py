@@ -83,9 +83,9 @@ from middleware import install_middleware
 from services.a2a_card_fetcher import start_card_refresh_task
 from services.auth import require_service_management, require_service_management_or_internal
 from services.compose_fleet import (
-    _SLM_MGMT_IP,
     _compose_nodes_enabled,
     seed_compose_nodes,
+    slm_mgmt_ip,
     start_compose_heartbeat,
 )
 from services.database import db_service
@@ -415,7 +415,7 @@ async def _ensure_local_node() -> None:
     if _compose_nodes_enabled():
         # Use the SLM's static address on the shared autobot-mgmt network so the
         # manager matches the other compose nodes' IP range (#9761).
-        local_ip = _SLM_MGMT_IP
+        local_ip = slm_mgmt_ip()
     elif ip_match:
         local_ip = ip_match.group(1)
     else:
@@ -584,12 +584,11 @@ app = FastAPI(
     root_path=os.getenv("SLM_ROOT_PATH", ""),
     docs_url="/api/docs" if settings.debug else None,
     redoc_url="/api/redoc" if settings.debug else None,
-    # Security: MVA-3397 - Trust X-Forwarded-For from nginx proxy for rate limiting
-    proxy_headers=True,
-    forwarded_allow_ips=settings.trusted_proxies,
 )
+# MVA-3397 / #9616: the client IP behind nginx comes from get_client_ip(..., settings.trusted_proxies);
+# proxy-header trust is a uvicorn setting, never a FastAPI() argument (0.145 rejects it).
 # #16428 review: FastAPI's default 422 body echoes the submitted payload --
-# UserCreate.password and VNCCredentialCreate.password have the same
+# SlmAdminUserCreate.password and VNCCredentialCreate.password have the same
 # exposure the audit found on autobot-backend's secrets endpoint.
 register_validation_error_handlers(app)
 
@@ -649,9 +648,9 @@ app.include_router(scim_router)
 # --- Service-management–gated routers ---
 app.include_router(browser_router, prefix="/api", dependencies=_SM)
 app.include_router(agents_router, prefix="/api", dependencies=_SM)
+app.include_router(services_router, prefix="/api", dependencies=_SM)
 app.include_router(nodes_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(nodes_execution_router, prefix="/api", dependencies=_SM)  # Issue #3406
-app.include_router(services_router, prefix="/api", dependencies=_SM)
 app.include_router(fleet_services_router, prefix="/api", dependencies=_SM)
 app.include_router(deployments_router, prefix="/api", dependencies=_SM)
 app.include_router(blue_green_router, prefix="/api", dependencies=_SM)

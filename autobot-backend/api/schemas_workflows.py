@@ -1237,7 +1237,7 @@ class WorkflowApprovalResponse(BaseModel):
     timestamp: float
 
 
-class WorkflowStatusUpdate(BaseModel):
+class WorkflowStepStatusUpdate(BaseModel):
     workflow_id: str
     step_id: str
     status: str
@@ -1479,8 +1479,8 @@ class WorkflowState(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class ConnectionTestRequest(BaseModel):
-    """Request to test project management connection."""
+class ProjectManagementConnectionTestRequest(BaseModel):
+    """Credentials POST /test-connection probes against a Jira, Trello or Asana provider; nothing is stored."""
 
     provider: str = Field(..., description="Provider: jira, trello, or asana")
     base_url: str | None = Field(None, description="Base URL for the service")

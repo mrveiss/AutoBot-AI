@@ -32,8 +32,6 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-import uuid
-from dataclasses import dataclass
 from typing import Any
 
 from redis.exceptions import RedisError
@@ -42,11 +40,11 @@ from a2a.task_manager import get_task_manager
 from autobot_shared.coordination.claim_waitlist import Waiter, next_waiter
 from autobot_shared.coordination.ledger_events import (
     YIELD_ANSWERED,
-    YIELD_REQUESTED,
     YIELD_TIMEOUT_S,
     record_ledger_event,
 )
 from autobot_shared.coordination.work_claims import ClaimUnavailable, Scope
+from autobot_shared.coordination.yield_ask import YieldRequest, issue_yield_request
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
@@ -61,18 +59,6 @@ _DECISION_KEY = "work_claims:yield:{token}"
 
 YIELD = "yield"
 HOLD = "hold"
-
-
-@dataclass(frozen=True)
-class YieldRequest:
-    """A pending ask, and the token its answer will be written under."""
-
-    token: str
-    scope: str
-    holder_task_id: str
-    requester_agent_id: str
-    requester_task_id: str
-    reason: str
 
 
 async def _redis() -> Any:
@@ -96,36 +82,15 @@ async def request_yield(
     answer is awaited separately with :func:`await_decision`, so a caller that
     would rather queue than block can do both.
     """
-    parsed = Scope.parse(scope)
-    request = YieldRequest(
-        token=str(uuid.uuid4()),
-        scope=str(parsed),
+    return await issue_yield_request(
+        scope,
         holder_task_id=holder_task_id,
         requester_agent_id=requester_agent_id,
         requester_task_id=requester_task_id,
         reason=reason,
+        publish=get_task_manager().publish_event,
+        record=_record,
     )
-    get_task_manager().publish_event(
-        holder_task_id,
-        {
-            "event": "work_claim_yield_request",
-            "token": request.token,
-            "scope": request.scope,
-            "requester_agent_id": requester_agent_id,
-            "requester_task_id": requester_task_id,
-            "reason": reason,
-        },
-    )
-    await _record(
-        YIELD_REQUESTED,
-        token=request.token,
-        scope=request.scope,
-        holder_task_id=holder_task_id,
-        requester_agent_id=requester_agent_id,
-        requester_task_id=requester_task_id,
-        reason=reason,
-    )
-    return request
 
 
 async def _record(event_type: str, **fields: Any) -> None:

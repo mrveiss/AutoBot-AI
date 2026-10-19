@@ -25,9 +25,9 @@ from typing_extensions import Annotated
 from api._code_source_paths import _confined_repo_path, _similar_path_parent
 from autobot_shared.time_utils import utc_timestamp
 from models.database import (
-    CodeSource,
     CodeStatus,
     Node,
+    NodeCodeSource,
     NodeCodeVersion,
     NodeRole,
     RoleStatus,
@@ -92,7 +92,7 @@ async def get_active_code_source(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> CodeSourceResponse | None:
     """Get the active code source configuration."""
-    result = await db.execute(select(CodeSource).where(CodeSource.is_active.is_(True)))
+    result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.is_active.is_(True)))
     source = result.scalar_one_or_none()
 
     if not source:
@@ -114,18 +114,18 @@ async def get_active_code_source(
     )
 
 
-async def _upsert_code_source(db: AsyncSession, data: CodeSourceAssign) -> CodeSource:
+async def _upsert_code_source(db: AsyncSession, data: CodeSourceAssign) -> NodeCodeSource:
     """Deactivate existing sources and create/update the target source.
 
     Helper for assign_code_source (#829).
     """
     # Deactivate any existing code-source
-    existing_result = await db.execute(select(CodeSource).where(CodeSource.is_active.is_(True)))
+    existing_result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.is_active.is_(True)))
     for existing in existing_result.scalars().all():
         existing.is_active = False
 
     # Check if this node already has a code-source record
-    source_result = await db.execute(select(CodeSource).where(CodeSource.node_id == data.node_id))
+    source_result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.node_id == data.node_id))
     source = source_result.scalar_one_or_none()
 
     if source:
@@ -133,7 +133,7 @@ async def _upsert_code_source(db: AsyncSession, data: CodeSourceAssign) -> CodeS
         source.repo_path = data.repo_path
         source.branch = data.branch
     else:
-        source = CodeSource(
+        source = NodeCodeSource(
             node_id=data.node_id,
             repo_path=data.repo_path,
             branch=data.branch,
@@ -321,7 +321,7 @@ async def remove_code_source(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> dict:
     """Remove the active code-source assignment."""
-    result = await db.execute(select(CodeSource).where(CodeSource.is_active.is_(True)))
+    result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.is_active.is_(True)))
     source = result.scalar_one_or_none()
 
     if not source:
@@ -495,9 +495,9 @@ async def notify_new_commit(
     """
     # Verify this is from an active code-source
     source_result = await db.execute(
-        select(CodeSource).where(
-            CodeSource.node_id == notification.node_id,
-            CodeSource.is_active.is_(True),
+        select(NodeCodeSource).where(
+            NodeCodeSource.node_id == notification.node_id,
+            NodeCodeSource.is_active.is_(True),
         )
     )
     source = source_result.scalar_one_or_none()

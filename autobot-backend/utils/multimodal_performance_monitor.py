@@ -37,7 +37,7 @@ _metrics = get_metrics_manager()
 
 
 @dataclass
-class PerformanceMetrics:
+class MultiModalPerformanceMetrics:
     """Performance metrics data structure"""
 
     timestamp: float

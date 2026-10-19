@@ -196,9 +196,10 @@ class AsyncOperationsMixin:
         async with await self._get_async_lock():
             # For main config, return current config
             if config_type == "main":
-                if self._should_refresh_sync_cache():
-                    self._reload_config()
-                return self._config.copy()
+                # Same lock and re-entry guard as the sync readers (#18661).
+                with self._get_sync_lock():
+                    self._refresh_if_stale()
+                    return self._config.copy()
 
             # Try Redis cache first for other config types
             if use_cache:

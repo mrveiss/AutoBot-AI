@@ -17,8 +17,8 @@ import pytest
 
 from advanced_rag_optimizer import RAGMetrics, RankedResult
 from api.knowledge_rag import advanced_search
-from api.schemas_knowledge import AdvancedSearchRequest
 from knowledge.ownership import KnowledgeOwnership
+from knowledge.schemas.rag import AdvancedSearchRequest
 
 
 def _result(fact_id: str, owner_id: str, visibility: str = "private") -> RankedResult:

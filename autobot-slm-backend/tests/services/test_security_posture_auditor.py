@@ -108,7 +108,7 @@ class TestSensitivePortsSanity:
 
 
 class _RecordingEvent:
-    """Stand-in for the SecurityEvent model (stubbed by the slm conftest).
+    """Stand-in for the SlmSecurityEvent model (stubbed by the slm conftest).
 
     Records constructor kwargs as attributes so tests can assert on the fields
     the auditor populates without depending on the real SQLAlchemy model.
@@ -120,7 +120,7 @@ class _RecordingEvent:
 
 class TestBuildSecurityEvent:
     def test_metadata_only_fields(self, monkeypatch):
-        monkeypatch.setattr(spa, "SecurityEvent", _RecordingEvent)
+        monkeypatch.setattr(spa, "SlmSecurityEvent", _RecordingEvent)
         finding = {
             "port": 6379,
             "address": "0.0.0.0",
@@ -187,7 +187,7 @@ class TestAuditFleet:
             _Node("node-b", [{"port": 6379, "address": "127.0.0.1"}]),  # loopback → nothing
         ]
         session = _FakeSession(nodes)
-        monkeypatch.setattr(spa, "SecurityEvent", _RecordingEvent)
+        monkeypatch.setattr(spa, "SlmSecurityEvent", _RecordingEvent)
         monkeypatch.setattr(spa, "_get_session", lambda: _FakeSessionCtx(session))
 
         # node-a already has an open exposure for redis(6379) → only 5432 is new.

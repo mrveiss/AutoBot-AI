@@ -30,7 +30,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
 from autobot_shared.ssot_constants import SecurityConstants
 from transcriber.database import Database
-from transcriber.deps import authenticate, caller_can_access, caller_id_of, get_db
+from transcriber.deps import authenticate, caller_can_access, caller_id_of, get_transcriber_db_from_request
 from transcriber.models import RecordingOut
 from transcriber.upload_security import MAX_FILE_SIZE
 
@@ -55,7 +55,7 @@ async def upload_recording(
     project_id: int,
     request: Request,
     file: UploadFile = File(...),
-    db: Database = Depends(get_db),
+    db: Database = Depends(get_transcriber_db_from_request),
 ):
     project = await db.get_project(project_id)
     if not project or not caller_can_access(project, request):
@@ -125,7 +125,7 @@ async def upload_recording(
 async def list_recordings(
     project_id: int,
     request: Request,
-    db: Database = Depends(get_db),
+    db: Database = Depends(get_transcriber_db_from_request),
     limit: int = Query(200, ge=1, le=1000),
     offset: int = Query(0, ge=0),
 ):
@@ -137,7 +137,7 @@ async def list_recordings(
 
 
 @router.get("/recordings/{recording_id}", response_model=RecordingOut)
-async def get_recording(recording_id: int, request: Request, db: Database = Depends(get_db)):
+async def get_recording(recording_id: int, request: Request, db: Database = Depends(get_transcriber_db_from_request)):
     rec = await db.get_recording(recording_id)
     if not rec or not caller_can_access(rec, request):
         raise HTTPException(404, "Recording not found")
@@ -145,7 +145,9 @@ async def get_recording(recording_id: int, request: Request, db: Database = Depe
 
 
 @router.delete("/recordings/{recording_id}", status_code=204)
-async def delete_recording(recording_id: int, request: Request, db: Database = Depends(get_db)):
+async def delete_recording(
+    recording_id: int, request: Request, db: Database = Depends(get_transcriber_db_from_request)
+):
     rec = await db.get_recording(recording_id)
     if not rec or not caller_can_access(rec, request):
         raise HTTPException(404, "Recording not found")
@@ -258,7 +260,7 @@ async def _file_iterator(path: Path) -> AsyncIterator[bytes]:
 
 
 @router.get("/recordings/{recording_id}/audio/chunks")
-async def audio_chunks(recording_id: int, request: Request, db: Database = Depends(get_db)):
+async def audio_chunks(recording_id: int, request: Request, db: Database = Depends(get_transcriber_db_from_request)):
     """Stream audio file with HTTP Range support (RFC 7233)."""
     rec = await db.get_recording(recording_id)
     if not rec or not caller_can_access(rec, request):
@@ -320,7 +322,7 @@ def _handle_range_request(audio_path: Path, range_header: str, file_size: int, c
 async def audio_waveform(
     recording_id: int,
     request: Request,
-    db: Database = Depends(get_db),
+    db: Database = Depends(get_transcriber_db_from_request),
     width: int = Query(1000, ge=1, le=10000),
 ):
     """Return waveform peak data and speaker segments for timeline visualization."""

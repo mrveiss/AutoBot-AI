@@ -14,9 +14,9 @@ import pytest
 from config import ConfigManager
 from dependencies import (
     get_diagnostics,
-    get_knowledge_base,
-    get_orchestrator,
     provide_config_manager,
+    provide_knowledge_base,
+    provide_orchestrator,
 )
 from diagnostics import Diagnostics
 from knowledge_base import KnowledgeBase
@@ -161,8 +161,8 @@ class TestDependencyInjection:
 
         # Test that the provider functions exist and are callable
         assert callable(get_diagnostics)
-        assert callable(get_knowledge_base)
-        assert callable(get_orchestrator)
+        assert callable(provide_knowledge_base)
+        assert callable(provide_orchestrator)
 
         # Test manual dependency creation (simulates FastAPI behavior)
         config = provide_config_manager()

@@ -23,7 +23,7 @@ from typing import Any, Dict, List
 import aiofiles
 import aiohttp
 import psutil
-from metrics_types import DatabaseMetrics, InterVMMetrics, ServiceMetrics, SystemMetrics
+from metrics_types import DatabaseMetrics, HostPerformanceMetrics, InterVMMetrics, ServiceMetrics
 
 from autobot_shared.network_constants import NetworkConstants
 from autobot_shared.redis_client import get_redis_client
@@ -74,7 +74,7 @@ SERVICE_ENDPOINTS = {
 }
 
 
-class PerformanceMonitor:
+class FleetPerformanceMonitor:
     """Main performance monitoring class for AutoBot distributed system."""
 
     def __init__(self, log_level: str = "INFO"):
@@ -120,7 +120,7 @@ class PerformanceMonitor:
             self.logger.error(f"❌ Failed to connect to Redis for metrics: {e}")
             self.redis_client = None
 
-    async def collect_system_metrics(self, hostname: str = "localhost") -> SystemMetrics:
+    async def collect_system_metrics(self, hostname: str = "localhost") -> HostPerformanceMetrics:
         """Collect comprehensive system performance metrics."""
         try:
             # CPU and memory metrics
@@ -141,7 +141,7 @@ class PerformanceMonitor:
             # NPU metrics (Intel NPU if available)
             npu_util = await self.get_npu_metrics()
 
-            return SystemMetrics(
+            return HostPerformanceMetrics(
                 timestamp=utc_timestamp(),
                 hostname=hostname,
                 cpu_percent=cpu_percent,
@@ -716,7 +716,7 @@ async def main():
 
     args = parser.parse_args()
 
-    monitor = PerformanceMonitor(log_level=args.log_level)
+    monitor = FleetPerformanceMonitor(log_level=args.log_level)
 
     if args.once:
         metrics = await monitor.generate_performance_report()

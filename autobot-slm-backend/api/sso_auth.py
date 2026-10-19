@@ -19,12 +19,12 @@ from fastapi.responses import Response as RawResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.security import create_audit_log
+from api.sso_deps import get_audit_db
 from autobot_shared.proxy_utils import get_client_ip
 from autobot_shared.rate_limiter import RateLimiter
 from config import settings
 from models.schemas import TokenResponse
 from services.auth import auth_service
-from services.database import get_db
 from services.sso_exchange_code import (
     ExchangeCodeUnavailableError,
     consume_exchange_code,
@@ -90,12 +90,6 @@ def _get_allowed_callback_hosts() -> frozenset[str]:
 
 
 _ALLOWED_CALLBACK_HOSTS = _get_allowed_callback_hosts()
-
-
-async def get_audit_db():
-    """Dependency for the audit (main SLM security) database session."""
-    async for session in get_db():
-        yield session
 
 
 _ALLOWED_CALLBACK_SCHEMES = frozenset({"http", "https"})

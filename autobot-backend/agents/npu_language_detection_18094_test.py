@@ -67,18 +67,18 @@ NEWLY_CLASSIFIED = {
 
 @pytest.mark.parametrize("ext,name", sorted(NEWLY_CLASSIFIED.items()))
 def test_previously_unknown_extensions_follow_the_canonical_map(ext, name):
-    assert patterns.detect_language(ext) == name
+    assert patterns.language_name_for_extension(ext) == name
 
 
 @pytest.mark.parametrize("ext,name", sorted(LEGACY_EMITTED.items()))
 def test_emitted_names_are_unchanged(ext, name):
-    assert patterns.detect_language(ext) == name
-    assert patterns.detect_language(ext.upper()) == name
+    assert patterns.language_name_for_extension(ext) == name
+    assert patterns.language_name_for_extension(ext.upper()) == name
 
 
 def test_unknown_extension_still_emits_unknown():
-    assert patterns.detect_language(".zzz") == "unknown"
-    assert patterns.detect_language("") == "unknown"
+    assert patterns.language_name_for_extension(".zzz") == "unknown"
+    assert patterns.language_name_for_extension("") == "unknown"
 
 
 @pytest.mark.parametrize("ext", sorted(LEGACY_EMITTED))

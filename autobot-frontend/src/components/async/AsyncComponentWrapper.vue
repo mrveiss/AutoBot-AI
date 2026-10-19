@@ -41,6 +41,7 @@
 </template>
 
 <script setup lang="ts">
+import { RETRY_BACKOFF, backoffDelay } from '@autobot/ui'
 import { ref, computed, onUnmounted, inject, useAttrs } from 'vue'
 import type { Component, AsyncComponentLoader } from 'vue'
 import AsyncErrorFallback from './AsyncErrorFallback.vue'
@@ -157,7 +158,7 @@ async function loadComponent(attempt = 1): Promise<void> {
       emit('retry', attempt + 1)
 
       // Exponential backoff delay
-      const delay = Math.min(props.retryDelay * Math.pow(2, attempt - 1), 5000)
+      const delay = backoffDelay(attempt - 1, { base: props.retryDelay, max: RETRY_BACKOFF.max })
       await new Promise(resolve => setTimeout(resolve, delay))
 
       return loadComponent(attempt + 1)

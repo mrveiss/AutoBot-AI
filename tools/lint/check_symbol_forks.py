@@ -30,7 +30,9 @@ its detector never saw:
   - **Conditional definitions.** A `def` inside `if TYPE_CHECKING:` or a
     try/except fallback is not module-level and is not counted.
   - **Re-exports.** `from x import Foo` does not define `Foo` here, correctly;
-    but a module that aliases and subclasses will read as a second definition.
+    a module that aliases and subclasses the SAME-NAMED class from
+    `autobot_shared` is a binding of it and is not counted (#17312); a same-name
+    class with any other base still is. `conftest.py` counts as a test file.
   - **Route handlers.** A function decorated `@router.get(...)` / `@app.post(...)`
     is excluded. Its name is local to its own router, so eight modules each
     defining `test_connection` are eight endpoints, not eight forks. Dropping
@@ -83,11 +85,9 @@ _SHARED_NAMES = {
     "ROOTS": "FORK_ROOTS",
     "EXCLUDED_PARTS": "FORK_EXCLUDED_PARTS",
     "EXCLUDED_NAMES": "FORK_EXCLUDED_NAMES",
-    "MIRRORED_PREFIX": "FORK_MIRRORED_PREFIX",
     "Definition": "ForkDefinition",
     "Cluster": "ForkCluster",
     "is_test_file": "fork_is_test_file",
-    "is_mandatory_mirror": "fork_is_mandatory_mirror",
     "in_population": "fork_in_population",
     "is_route_handler": "fork_is_route_handler",
 }
@@ -220,7 +220,9 @@ def write_baseline(names: set[str]) -> None:
                 "_boundary": (
                     "Names bound by a MODULE-LEVEL class/def in >=2 tracked .py files under "
                     f"{list(shared.FORK_ROOTS)}, excluding {sorted(shared.FORK_EXCLUDED_PARTS)} dirs, test files, "
-                    f"underscore-prefixed names and {sorted(shared.FORK_EXCLUDED_NAMES)}. "
+                    f"underscore-prefixed names, {sorted(shared.FORK_EXCLUDED_NAMES)} and classes that subclass the "
+                    "same-named class from autobot_shared (a binding, not a second definition); "
+                    "test files include conftest.py. "
                     "Methods, differently-named forks and non-Python are NOT seen -- "
                     "this count is a FLOOR on canonical debt. See tools/lint/check_symbol_forks.py."
                 ),

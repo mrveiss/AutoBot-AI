@@ -108,7 +108,6 @@ INVENTORY: dict[str, int] = {
     "autobot-infrastructure/shared/scripts/zero_downtime_deploy.py": 2,
     "autobot-npu-worker/resources/windows-npu-worker/app/utils/backend_telemetry.py": 1,
     "autobot-npu-worker/resources/windows-npu-worker/app/utils/http_retry.py": 1,
-    "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 1,
     "autobot-slm-backend/monitoring/performance_benchmark.py": 2,
     "autobot-slm-backend/monitoring/performance_monitor.py": 1,
     "autobot-slm-backend/scripts/remove_orphaned_node.py": 3,

@@ -648,7 +648,7 @@ class GoalRequest(BaseModel):
     context: Dict[str, Any] = {}
 
 
-class GoalResponse(BaseModel):
+class AgentGoalResponse(BaseModel):
     """Response for POST /intelligent-agent/process."""
 
     success: bool
@@ -657,7 +657,7 @@ class GoalResponse(BaseModel):
     metadata: Dict[str, Any] = {}
 
 
-class HealthResponse(BaseModel):
+class IntelligentAgentHealthResponse(BaseModel):
     """Response for GET /intelligent-agent/health."""
 
     status: str
@@ -1706,7 +1706,7 @@ class GapRequest(BaseModel):
     agent_output: str = Field("")
 
 
-class ApprovalDecision(BaseModel):
+class SkillApprovalDecision(BaseModel):
     """Request body for approving or rejecting a skill approval record."""
 
     approved: bool

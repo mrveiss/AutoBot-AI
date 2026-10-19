@@ -144,7 +144,7 @@ part of that corpus worth having is its *statistics*, not its contents.
 | Capability | Where | State |
 |---|---|---|
 | Visual builder + canvas | `autobot-frontend/src/views/WorkflowBuilderView.vue`, `components/workflow/WorkflowCanvas.vue`, `composables/useWorkflowBuilder.ts` | Built |
-| DAG execution | `autobot-backend/orchestration/workflow_executor.py`, `dag_executor.py` (`NodeType` enum at `dag_executor.py:54`) | Built |
+| DAG execution | `autobot-backend/orchestration/workflow_executor.py`, `dag_executor.py` (`DagNodeType` enum at `dag_executor.py:54`) | Built |
 | Native template library | `autobot-backend/workflow_templates/` — 18 templates across 6 category modules (analysis, community, development, research, security, sysadmin) | Built |
 | Template model | `workflow_templates/types.py:87` — `id, name, description, category, complexity, steps, estimated_duration_minutes, agents_involved, tags, variables, required_secrets` | Built |
 | Template gallery UI | `components/workflow/WorkflowTemplateGallery.vue` — search box + category filter chips | Built |
@@ -163,7 +163,7 @@ Those documents are `{nodes, connections}` graphs typed to a third-party engine'
 (the reference work's own indexer normalises ~365 vendor-specific node type strings through a
 hand-written mapping table). AutoBot's interchange format is `{schema_version: "1.0", steps: [...]}`
 with `agents_involved` and an automation mode (`services/workflow_serializer.py:38,295`), executed
-against our own `NodeType` enum. There is no shared vocabulary. Only generic control flow —
+against our own `DagNodeType` enum. There is no shared vocabulary. Only generic control flow —
 trigger, HTTP request, conditional, loop, code, wait — has any AutoBot counterpart; the other ~350
 node types are connectors to services we have no node for. A translator would therefore convert a
 small fraction of workflows and silently mangle the rest.

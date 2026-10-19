@@ -28,7 +28,7 @@ from llm_shared.types import LLMType
 from models.atomic_fact import AtomicFact, FactExtractionResult, FactType, TemporalType
 from services.llm_service import get_llm_service
 
-from .base_agent import DeploymentMode
+from .base_agent import AgentDeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_llm_logger("knowledge_extraction")
@@ -63,7 +63,7 @@ class KnowledgeExtractionAgent(StandardizedAgent):
         Args:
             llm_interface: LLM interface for fact extraction (optional)
         """
-        super().__init__("knowledge_extraction", DeploymentMode.LOCAL)
+        super().__init__("knowledge_extraction", AgentDeploymentMode.LOCAL)
 
         # Use explicit SSOT config - raises AgentConfigurationError if not set
         self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)

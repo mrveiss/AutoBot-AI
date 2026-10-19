@@ -65,13 +65,13 @@ async def _handle_librarian_step(ctx: WorkflowStepContext) -> None:
 
 async def _handle_research_step(ctx: WorkflowStepContext) -> None:
     """Handle research agent step (Issue #336 - extracted handler, Issue #322 - context)."""
-    from agents.web_researcher import ResearchRequest, WebResearcher
+    from agents.web_researcher import WebResearcher, WebResearchRequest
 
     research_agent = WebResearcher()
     action_lower = ctx.action.lower()
 
     if "research tools" in action_lower:
-        request = ResearchRequest(query="network security scanning tools", focus="tools")
+        request = WebResearchRequest(query="network security scanning tools", focus="tools")
         result = await research_agent.research_specific_tools(request)
         ctx.step["result"] = f"Research completed: {result.get('summary', 'Tools researched')}"
     elif "installation guide" in action_lower:
@@ -79,7 +79,7 @@ async def _handle_research_step(ctx: WorkflowStepContext) -> None:
         guide = result.get("installation_guide", "Guide obtained")
         ctx.step["result"] = f"Installation guide retrieved: {guide}"
     else:
-        request = ResearchRequest(query=ctx.action, focus="general")
+        request = WebResearchRequest(query=ctx.action, focus="general")
         result = await research_agent.perform_research(request)
         ctx.step["result"] = f"Research completed: {result.summary}"
 

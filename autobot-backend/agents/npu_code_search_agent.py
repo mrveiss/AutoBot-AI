@@ -33,9 +33,9 @@ from worker_node import WorkerNode
 from .base_agent import AgentRequest
 from .npu_code_search_patterns import (
     LANGUAGE_PATTERNS,
-    detect_language,
     extract_code_elements,
     extract_element_code,
+    language_name_for_extension,
 )
 from .standardized_agent import ActionHandler, StandardizedAgent
 
@@ -549,7 +549,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 return
 
             file_ext = os.path.splitext(file_path)[1]
-            language = detect_language(file_ext)
+            language = language_name_for_extension(file_ext)
             elements = extract_code_elements(content, language, self.language_patterns)
 
             embedding_count = await self._generate_and_store_embeddings(content, relative_path, language, elements)
@@ -1200,7 +1200,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
     def _file_matches_language(self, file_path: str, language: str) -> bool:
         """Check if file matches the specified language"""
         file_ext = os.path.splitext(file_path)[1]
-        detected_language = detect_language(file_ext)
+        detected_language = language_name_for_extension(file_ext)
         return detected_language == language
 
     async def _get_file_context(self, file_path: str, line_number: int, context_size: int = 3) -> List[str]:

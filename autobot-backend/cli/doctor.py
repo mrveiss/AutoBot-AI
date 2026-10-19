@@ -23,7 +23,7 @@ from typing import Any, Callable
 
 
 @dataclass
-class CheckResult:
+class DoctorCheckResult:
     name: str
     ok: bool
     message: str
@@ -31,7 +31,7 @@ class CheckResult:
     fix: Callable[[], None] | None = None
 
 
-def check_redis_schemas() -> CheckResult:
+def check_redis_schemas() -> DoctorCheckResult:
     """Verify required Redis key-space schemas are present."""
     try:
         import redis  # noqa: F401 — presence check only
@@ -39,14 +39,14 @@ def check_redis_schemas() -> CheckResult:
         # Check connection and basic schema presence.
         # A real implementation would inspect specific key patterns;
         # connection reachability is sufficient as a boot-time gate.
-        return CheckResult(
+        return DoctorCheckResult(
             name="Redis schemas",
             ok=True,
             message="Redis schemas (main, knowledge, prompts, analytics): OK",
             fixable=False,
         )
     except Exception as exc:
-        return CheckResult(
+        return DoctorCheckResult(
             name="Redis schemas",
             ok=False,
             message=f"Redis unreachable: {exc}",
@@ -75,7 +75,7 @@ def _chromadb_http_client() -> Any:
     )
 
 
-def check_chromadb_collections() -> CheckResult:
+def check_chromadb_collections() -> DoctorCheckResult:
     """Verify required ChromaDB collections exist."""
     try:
         client = _chromadb_http_client()
@@ -83,20 +83,20 @@ def check_chromadb_collections() -> CheckResult:
         expected = {"autobot_docs", "code_kb"}
         missing = expected - collections
         if missing:
-            return CheckResult(
+            return DoctorCheckResult(
                 name="ChromaDB collections",
                 ok=False,
                 message=f"Missing collections: {missing}",
                 fixable=True,
                 fix=lambda: _bootstrap_chromadb_collections(missing),
             )
-        return CheckResult(
+        return DoctorCheckResult(
             name="ChromaDB collections",
             ok=True,
             message="ChromaDB collections: OK",
         )
     except Exception as exc:
-        return CheckResult(
+        return DoctorCheckResult(
             name="ChromaDB collections",
             ok=False,
             message=f"ChromaDB unreachable: {exc}",
@@ -110,7 +110,7 @@ def _bootstrap_chromadb_collections(missing: set[str]) -> None:
         client.get_or_create_collection(name)
 
 
-def check_env_file(env_path: str | None = None) -> CheckResult:
+def check_env_file(env_path: str | None = None) -> DoctorCheckResult:
     """Validate required environment variables are present.
 
     #13149: the default used to be a hardcoded `/opt/autobot` literal, so the
@@ -134,7 +134,7 @@ def check_env_file(env_path: str | None = None) -> CheckResult:
     ]
     try:
         if not os.path.exists(env_path):
-            return CheckResult(
+            return DoctorCheckResult(
                 name="Env file",
                 ok=False,
                 message=f"Env file not found: {env_path}",
@@ -147,19 +147,19 @@ def check_env_file(env_path: str | None = None) -> CheckResult:
         }
         missing = [v for v in required_vars if v not in defined]
         if missing:
-            return CheckResult(
+            return DoctorCheckResult(
                 name="Env file",
                 ok=False,
                 message=f"Missing env vars: {missing} (see Issue #5620)",
                 fixable=False,
             )
-        return CheckResult(
+        return DoctorCheckResult(
             name="Env file",
             ok=True,
             message=f"Env file {env_path}: OK",
         )
     except Exception as exc:
-        return CheckResult(
+        return DoctorCheckResult(
             name="Env file",
             ok=False,
             message=f"Env file check failed: {exc}",
@@ -202,7 +202,7 @@ def _npu_worker_host() -> str:
     return str(ssot_config.vm.npu)
 
 
-def check_npu_worker_registry() -> CheckResult:
+def check_npu_worker_registry() -> DoctorCheckResult:
     """Verify NPU workers are registered and responsive."""
     try:
         import urllib.request
@@ -212,19 +212,19 @@ def check_npu_worker_registry() -> CheckResult:
         url = f"http://{npu_host}:{npu_port}/health"
         with urllib.request.urlopen(url, timeout=2) as resp:  # nosec B310
             if resp.status == 200:
-                return CheckResult(
+                return DoctorCheckResult(
                     name="NPU worker registry",
                     ok=True,
                     message="NPU worker registry: OK",
                 )
-        return CheckResult(
+        return DoctorCheckResult(
             name="NPU worker registry",
             ok=False,
             message="NPU worker health check failed",
             fixable=False,
         )
     except Exception as exc:
-        return CheckResult(
+        return DoctorCheckResult(
             name="NPU worker registry",
             ok=False,
             message=f"NPU worker unreachable: {exc}",
@@ -232,7 +232,7 @@ def check_npu_worker_registry() -> CheckResult:
         )
 
 
-ALL_CHECKS: list[Callable[[], CheckResult]] = [
+ALL_CHECKS: list[Callable[[], DoctorCheckResult]] = [
     check_redis_schemas,
     check_chromadb_collections,
     check_env_file,
@@ -240,9 +240,9 @@ ALL_CHECKS: list[Callable[[], CheckResult]] = [
 ]
 
 
-def run_doctor(fix: bool = False) -> int:
+def run_environment_doctor(fix: bool = False) -> int:
     """Run all health checks. Returns 0 if all pass, 1 otherwise."""
-    results: list[CheckResult] = [fn() for fn in ALL_CHECKS]
+    results: list[DoctorCheckResult] = [fn() for fn in ALL_CHECKS]
     failures = [r for r in results if not r.ok]
     fixable = [r for r in failures if r.fixable and r.fix is not None]
 
@@ -292,7 +292,7 @@ def main(argv: list[str] | None = None) -> int:
     group.add_argument("--check", action="store_true", default=True, help="Check only (default)")
     group.add_argument("--fix", action="store_true", help="Check and auto-repair fixable issues")
     args = parser.parse_args(argv)
-    return run_doctor(fix=args.fix)
+    return run_environment_doctor(fix=args.fix)
 
 
 if __name__ == "__main__":

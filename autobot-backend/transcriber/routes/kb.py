@@ -8,7 +8,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from transcriber.database import Database
-from transcriber.deps import authenticate, caller_can_access, caller_id_of, get_db
+from transcriber.deps import authenticate, caller_can_access, caller_id_of, get_transcriber_db_from_request
 from transcriber.export.segments import build_segment_list
 from transcriber.knowledge.kb_push import push_to_kb
 from transcriber.models import KbPushRequest, KbPushStatus
@@ -37,7 +37,7 @@ async def kb_push(
     recording_id: int,
     body: KbPushRequest,
     request: Request,
-    db: Database = Depends(get_db),
+    db: Database = Depends(get_transcriber_db_from_request),
 ):
     rec = await db.get_recording(recording_id)
     if not rec or not caller_can_access(rec, request):
@@ -72,7 +72,7 @@ async def kb_push(
 
 
 @router.get("/recordings/{recording_id}/kb/status", response_model=KbPushStatus)
-async def kb_status(recording_id: int, request: Request, db: Database = Depends(get_db)):
+async def kb_status(recording_id: int, request: Request, db: Database = Depends(get_transcriber_db_from_request)):
     rec = await db.get_recording(recording_id)
     if not rec or not caller_can_access(rec, request):
         raise HTTPException(404, "Recording not found")

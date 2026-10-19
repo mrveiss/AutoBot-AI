@@ -344,7 +344,7 @@
     "runRsyncFromTo": "Run rsync from {source} to {dest}",
     "running": "Wird ausgeführt...",
     "sLMManagerRestarting": "SLM Manager Restarting",
-    "schedule": "Schedule",
+    "schedule": "Zeitplan",
     "scheduledUpdates": "Scheduled Updates",
     "showDetails": "Show details",
     "slmSelfUpdateStage": "SLM server",
@@ -1326,6 +1326,107 @@
       "services": "Services",
       "systemHealth": "System Health",
       "systemMonitoring": "Systemüberwachung"
+    },
+    "agentLedger": {
+      "title": "Agenten-Ledger",
+      "subtitle": "Every company's agent coordination: shared resources, claims, conflicts and dev-loop history.",
+      "refresh": "Aktualisieren",
+      "tabsAria": "Ledger-Ansichten",
+      "tabs": {
+        "now": "Arbeitet gerade",
+        "contention": "Konkurrenz",
+        "claims": "Ansprüche",
+        "conflicts": "Konflikte",
+        "devLoop": "Dev loop",
+        "activity": "Aktivität"
+      },
+      "col": {
+        "scope": "Bereich",
+        "agent": "Agent",
+        "company": "Company",
+        "mode": "Modus",
+        "intent": "Absicht",
+        "expires": "Läuft ab",
+        "renewals": "Verlängerungen",
+        "kind": "Art",
+        "status": "Status",
+        "task": "Aktuelle Aufgabe",
+        "detail": "Details"
+      },
+      "installWide": "Install-wide",
+      "heldBy": "Held by {agent} ({company})",
+      "waiting": "{n} waiting",
+      "waitlistAria": "Warteliste in Reihenfolge",
+      "silenceMeansHold": "Bitten ist keine Freigabe: Schweigen heißt Halten, und ein nicht verlängerter Anspruch läuft von selbst ab.",
+      "ask": "Inhaber um Freigabe bitten",
+      "askAria": "Den Inhaber von {scope} um Freigabe bitten",
+      "askState": {
+        "sending": "Wird gesendet…",
+        "sent": "Anfrage gesendet — der Inhaber entscheidet; Schweigen heißt Halten.",
+        "tooSoon": "Sie haben gerade erst nach diesem Anspruch gefragt; versuchen Sie es in einer Minute erneut.",
+        "notFound": "Diese Aufgabe hält den Anspruch nicht mehr — aktualisieren Sie, um den aktuellen Inhaber zu sehen.",
+        "unavailable": "Ledger nicht erreichbar; es wurde nichts gesendet.",
+        "error": "Etwas ist schiefgelaufen, und die Zustellung konnte nicht bestätigt werden. Aktualisieren Sie, um zu sehen, ob der Claim noch gehalten wird."
+      },
+      "conflict": {
+        "release_refused": "Eine Freigabe wurde verweigert",
+        "claim_expired": "Ein Anspruch lief während des Haltens ab",
+        "yield_unanswered": "Eine Freigabebitte blieb unbeantwortet",
+        "claim_lapsed_during_action": "Ein Anspruch lief während einer Aktion ab"
+      },
+      "devLoop": {
+        "issue": "Issue",
+        "choose": "Choose an issue",
+        "col": {
+          "at": "When",
+          "intent": "Absicht",
+          "outcome": "Outcome",
+          "tokens": "Estimated tokens",
+          "reason": "Grund"
+        }
+      },
+      "empty": {
+        "contention": "Nichts ist umkämpft",
+        "claims": "Keine Ansprüche",
+        "conflicts": "Keine Konflikte",
+        "activity": "No recent activity",
+        "devLoop": "No dev-loop history",
+        "devLoopActions": "No actions recorded for this issue",
+        "presence": "Keine Agenten gemeldet",
+        "peerMessages": "Keine ausstehenden Nachrichten",
+        "idleSubscribers": "Keine Untätigkeits-Abos"
+      },
+      "notes": {
+        "title": "What this view cannot see",
+        "storeDown": "Couldn't read the {source} store just now. Its entries are missing here, not empty.",
+        "sourcesUnknown": "Couldn't check which ledger sources are readable.",
+        "peerIdentity": "Agents have no per-peer identity yet: an agent that is refused an action can ask another agent to do it (#16950).",
+        "busAuth": "Messages between agents are not authenticated yet, so this view cannot prove who sent one (#16962)."
+      },
+      "source": {
+        "presence": "agent presence",
+        "ai_stack_agents": "AI-stack agents",
+        "live_sessions": "live sessions",
+        "peer_messages": "pending peer messages",
+        "idle_subscribers": "idle subscriptions",
+        "claims": "claims",
+        "waitlists": "waitlists",
+        "events": "ledger activity",
+        "dev_loop": "dev-loop history"
+      },
+      "state": {
+        "loading": "Ledger wird gelesen…",
+        "unavailableTitle": "Ledger konnte nicht gelesen werden",
+        "unavailableBody": "Der Speicher {source} hat nicht geantwortet. Das ist nicht dasselbe wie keine Einträge.",
+        "errorTitle": "Beim Laden dieses Abschnitts ist ein Fehler aufgetreten"
+      },
+      "busy": "Beschäftigt",
+      "idle": "Idle",
+      "peerMessages": "Ausstehende Peer-Nachrichten",
+      "idleSubscribers": "Untätigkeits-Abos",
+      "pendingFor": "{n} ausstehend für {name}",
+      "sentBy": "von {names}",
+      "waitsForIdle": "{who} wartet, bis {target} untätig ist"
     }
   },
   "monitoringView": {
@@ -1334,7 +1435,17 @@
     "monitoring": "Überwachung",
     "monitoringSections": "Monitoring sections",
     "systemHealthStatusAria": "System health: {status}",
-    "value0AlertPlural": "{value0} Alert{plural}"
+    "value0AlertPlural": "{value0} Alert{plural}",
+    "tabs": {
+      "system": "System",
+      "logs": "Logs",
+      "dashboards": "Dashboards",
+      "alerts": "Alerts",
+      "errors": "Fehler",
+      "backendHealth": "Backend Health",
+      "performance": "Leistung",
+      "agentLedger": "Agenten-Ledger"
+    }
   },
   "orchestration": {
     "nodeHealthCard": {
@@ -1499,7 +1610,8 @@
     "value0AnsibleMigrationOf": "{value0} Ansible migration of",
     "value0Nodes": "({value0} nodes)",
     "value0OnlineValue1Offline": "{value0} online, {value1} offline",
-    "value0Required": "{value0} (required)"
+    "value0Required": "{value0} (required)",
+    "serviceCount": "{count} service | {count} services"
   },
   "performance": {
     "alertRulesView": {
@@ -1902,7 +2014,7 @@
     "enableTlsForAria": "Enable TLS for {service}",
     "enablingTLS": "Enabling TLS...",
     "enterNodeID": "Enter node ID",
-    "expires": "Expires",
+    "expires": "Läuft ab",
     "expiringSoon30d": "Expiring Soon (30d)",
     "expiry": "Expiry",
     "failed": "Fehlgeschlagen",
@@ -2207,7 +2319,7 @@
       "nPUWorkersSettings": {
         "actions": "Aktionen",
         "areYouSureYou": "Are you sure you want to remove",
-        "busy": "Busy",
+        "busy": "Beschäftigt",
         "cancel": "Abbrechen",
         "capabilities": "Capabilities",
         "close": "Schließen",
@@ -2256,7 +2368,9 @@
         "weighted": "Weighted",
         "windows": "Windows",
         "worker": "Mitarbeiter",
-        "workerName": "Worker Name *"
+        "workerName": "Worker Name *",
+        "connectionTestFailed": "Connection test failed",
+        "loadBalancingLoadFailed": "Failed to load load-balancing configuration"
       },
       "personalitySettings": {
         "active": "Aktiv",
@@ -2757,7 +2871,7 @@
       "enterYourPassword": "Passwort eingeben",
       "enterYourPasswordTo": "Enter your password to confirm disabling two-factor authentication.",
       "expiration": "Expiration",
-      "expires": "Expires",
+      "expires": "Läuft ab",
       "keyPrefix": "Key Prefix",
       "lastVerifiedValue0": "Last verified: {value0}",
       "mFAIsEnabled": "MFA is enabled",
@@ -3366,7 +3480,7 @@
   },
   "sharedLinksView": {
     "colCreated": "Erstellt",
-    "colExpires": "Expires",
+    "colExpires": "Läuft ab",
     "colOwner": "Owner",
     "colPassword": "Passwort",
     "colSession": "Sitzung",

@@ -158,11 +158,11 @@
           <div class="comments-list">
             <div v-for="c in comments" :key="c.id" class="comment-item">
               <div class="comment-author">
-                <span class="author-avatar">{{ initials(c.author_name) }}</span>
+                <span class="author-avatar">{{ initials(commentAuthor(c)) }}</span>
                 <div class="author-meta">
-                  <span class="author-name">{{ c.author_name }}</span>
-                  <span class="comment-time">{{ formatTime(c.created_at) }}</span>
-                  <span v-if="c.author_type === 'agent'" class="agent-chip">{{ $t('llc.workItem.agentChip') }}</span>
+                  <span class="author-name">{{ commentAuthor(c) }}</span>
+                  <span class="comment-time">{{ formatTime(c.created_at ?? '') }}</span>
+                  <span v-if="c.author_agent_id" class="agent-chip">{{ $t('llc.workItem.agentChip') }}</span>
                 </div>
               </div>
               <div class="comment-body" v-html="renderMarkdown(c.body)" />
@@ -193,7 +193,7 @@
                 <span class="artifact-name">{{ a.name }}</span>
                 <span class="artifact-type-label">{{ a.type }}</span>
               </div>
-              <a :href="a.url" target="_blank" class="artifact-link" rel="noopener">{{ $t('llc.workItem.viewArtifact') }}</a>
+              <a v-if="a.url" :href="a.url" target="_blank" class="artifact-link" rel="noopener">{{ $t('llc.workItem.viewArtifact') }}</a>
             </div>
             <div v-if="artifacts.length === 0 && !isLoadingArtifacts" class="meta-empty">
               {{ $t('llc.workItem.noArtifacts') }}
@@ -246,37 +246,15 @@ import { useCompanyPeople } from '@/composables/llc/useCompanyPeople'
 import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
 
 const logger = createLogger('WorkItemDetail')
+
+// Comments return with their read route (#18750): only POST .../comments is served, no GET.
+const COMMENTS_ENABLED = false
 const api = useApiClient()
 const { t } = useI18n()
 
 import type { WorkItem } from './workItemTypes'
-
-interface Comment {
-  id: string
-  body: string
-  author_name: string
-  author_type: 'human' | 'agent'
-  created_at: string
-}
-
-interface Artifact {
-  id: string
-  name: string
-  type: string
-  url: string
-}
-
-interface ActivityEvent {
-  id: string
-  actor_name: string
-  description: string
-  created_at: string
-}
-
-interface GoalAncestor {
-  id: string
-  title: string
-}
+import { commentAuthor, toArtifact, toActivityEvent } from './workItemDetailTypes'
+import type { Comment, Artifact, ActivityEvent, GoalAncestor, RawWorkProduct, RawActivityEntry } from './workItemDetailTypes'
 
 const props = defineProps<{
   item: WorkItem
@@ -294,7 +272,7 @@ const TABS = computed(() => [
   { key: 'artifacts', label: t('llc.workItem.tabArtifacts') },
   { key: 'activity', label: t('llc.workItem.tabActivity') },
   { key: 'handoff', label: t('llc.workItem.tabHandoff') },
-])
+].filter((tab) => COMMENTS_ENABLED || tab.key !== 'comments'))
 
 const activeTab = ref('details')
 const localItem = ref<WorkItem>({ ...props.item })
@@ -520,10 +498,9 @@ async function fetchComments() {
 async function fetchArtifacts() {
   isLoadingArtifacts.value = true
   try {
-    // GH#9851: backend names these "products" (work products), returned as
-    // {products:[...]}. The api client returns parsed JSON directly.
-    const result = await api.get<{ products: Artifact[] }>(`/api/llc/work-items/${props.item.id}/products`)
-    artifacts.value = result.products ?? []
+    // GH#9851: the backend calls these work "products" and returns {products:[...]}.
+    const result = await api.get<{ products: RawWorkProduct[] }>(`/api/llc/work-items/${props.item.id}/products`)
+    artifacts.value = (result.products ?? []).map(toArtifact)
   } catch (err) {
     logger.error('Failed to load artifacts', err)
   } finally {
@@ -535,8 +512,8 @@ async function fetchActivity() {
   isLoadingActivity.value = true
   try {
     // GH#9851: /activity returns an ActivityLogResponse ({items:[...]}).
-    const result = await api.get<{ items: ActivityEvent[] }>(`/api/llc/work-items/${props.item.id}/activity`)
-    activity.value = result.items ?? []
+    const result = await api.get<{ items: RawActivityEntry[] }>(`/api/llc/work-items/${props.item.id}/activity`)
+    activity.value = (result.items ?? []).map(toActivityEvent)
   } catch (err) {
     logger.error('Failed to load activity', err)
   } finally {

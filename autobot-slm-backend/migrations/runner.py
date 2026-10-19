@@ -26,6 +26,7 @@ from typing import List, Tuple
 
 import psycopg2
 
+from autobot_shared.secret_redaction import redact_url_credentials
 from migrations import utils as _migration_utils
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,9 @@ MIGRATIONS = [
     "add_audit_logs_canonical_columns",
     # Issue #17455: one row per post-sync command/restart a code sync executed.
     "add_post_sync_action_runs_table",
+    # Issue #18663: the jti denylist and password epoch move from Redis to PostgreSQL,
+    # so the SLM works without the Redis it deploys.
+    "add_auth_revocation_tables",
 ]
 
 
@@ -447,7 +451,8 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     db_url = sys.argv[1] if len(sys.argv) > 1 else get_db_url()
-    logger.info(f"Running migrations on PostgreSQL: {db_url}")
+    # #18664: never the password -- the URL is logged with its userinfo credentials masked.
+    logger.info("Running migrations on PostgreSQL: %s", redact_url_credentials(db_url))
 
     results = run_all_migrations(db_url)
 

@@ -316,7 +316,6 @@
 1|other|autobot-backend/knowledge/pipeline/cognifiers/relationship_extractor.py|"user"
 1|other|autobot-backend/knowledge/pipeline/cognifiers/summarizer.py|"user"
 1|other|autobot-backend/knowledge/relations.py|10
-1|other|autobot-backend/knowledge/schemas/rag.py|5
 2|other|autobot-backend/knowledge/search.py|10
 3|other|autobot-backend/knowledge/search_components/agentic_search.py|5
 1|ssot|autobot-backend/knowledge/search_components/agentic_search.py|llama3.2:latest
@@ -362,11 +361,10 @@
 1|other|autobot-backend/llm_shared/optimization/token_optimizer.py|"user"
 1|other|autobot-backend/llm_shared/provider_auth.py|https://accounts.google.com
 1|other|autobot-backend/llm_shared/provider_auth.py|https://login.microsoftonline.com/
-1|other|autobot-backend/llm_shared/providers/anthropic.py|"system"
-2|other|autobot-backend/llm_shared/providers/anthropic.py|"user"
+1|other|autobot-backend/llm_shared/providers/anthropic.py|"user"
 2|other|autobot-backend/llm_shared/providers/bedrock.py|"assistant"
-5|other|autobot-backend/llm_shared/providers/bedrock.py|"system"
-6|other|autobot-backend/llm_shared/providers/bedrock.py|"user"
+4|other|autobot-backend/llm_shared/providers/bedrock.py|"system"
+5|other|autobot-backend/llm_shared/providers/bedrock.py|"user"
 1|other|autobot-backend/llm_shared/providers/huggingface.py|https://api-inference.huggingface.co
 2|other|autobot-backend/llm_shared/providers/mistral.py|https://api.mistral.ai/v1
 1|other|autobot-backend/llm_shared/providers/nous_portal.py|https://api-inference.huggingface.co/v1
@@ -374,8 +372,8 @@
 1|ssot|autobot-backend/llm_shared/providers/ollama_provider.py|:11434
 2|other|autobot-backend/llm_shared/providers/openrouter.py|https://openrouter.ai/api/v1
 1|other|autobot-backend/llm_shared/providers/vertexai.py|"assistant"
-2|other|autobot-backend/llm_shared/providers/vertexai.py|"system"
-2|other|autobot-backend/llm_shared/providers/vertexai.py|"user"
+1|other|autobot-backend/llm_shared/providers/vertexai.py|"system"
+1|other|autobot-backend/llm_shared/providers/vertexai.py|"user"
 1|other|autobot-backend/llm_shared/providers/vertexai.py|https://www.googleapis.com/auth/cloud-platform
 1|other|autobot-backend/llm_shared/providers/vllm.py|"assistant"
 1|other|autobot-backend/llm_shared/tiered_routing/complexity_router.py|"system"
@@ -1238,8 +1236,6 @@
 1|other|autobot-slm-backend/ansible/roles/redis/tasks/main.yml|https://packages.redis.io/gpg
 1|other|autobot-slm-backend/ansible/roles/redis/tasks/redis_exporter.yml|https://github.com/oliver006/redis_exporter/releases/download/v{{
 1|other|autobot-slm-backend/ansible/roles/redis/vars/main.yml|300
-1|other|autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/health_collector.py|30
-1|other|autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/version.py|"/opt/autobot/autobot-slm-agent
 1|other|autobot-slm-backend/ansible/roles/slm_agent/tasks/main.yml|300
 1|other|autobot-slm-backend/ansible/roles/slm_agent/tasks/node_exporter.yml|https://github.com/prometheus/node_exporter/releases/download/v{{
 1|other|autobot-slm-backend/ansible/roles/slm_manager/tasks/grafana.yml|https://apt.grafana.com
@@ -1327,7 +1323,7 @@
 1|other|autobot-slm-backend/user_management/services/sso_service.py|https://login.microsoftonline.com/{domain}/oauth2/v2.0/token
 1|other|autobot-slm-backend/user_management/services/sso_service.py|https://oauth2.googleapis.com/token
 1|other|autobot-slm-backend/user_management/services/sso_service.py|https://openidconnect.googleapis.com/v1/userinfo
-2|ssot|autobot-slm-backend/user_management/services/vault_client.py|:8001
+1|ssot|autobot-slm-backend/user_management/services/vault_client.py|:8001
 1|other|autobot-slm-frontend/src/components/CodeSourceModal.vue|'/opt/autobot/code_source
 2|other|autobot-slm-frontend/src/components/agents/ProcessMonitorTab.vue|300
 1|other|autobot-slm-frontend/src/components/fleet/NodeLifecyclePanel.vue|offset=0

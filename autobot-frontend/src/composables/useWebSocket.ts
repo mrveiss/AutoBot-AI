@@ -10,6 +10,7 @@
  * For the global singleton WebSocket, use useGlobalWebSocket instead.
  */
 
+import { backoffDelay } from '@autobot/ui'
 import { ref, computed, onScopeDispose, getCurrentScope, watch, unref, toValue, type Ref, type MaybeRefOrGetter } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { redactUrlForLogging, redactErrorForLogging } from '@/utils/redactUrlForLogging'
@@ -289,10 +290,10 @@ export function useWebSocket(
           (opts.maxReconnectAttempts === 0 || reconnectAttempts.value < opts.maxReconnectAttempts)
         ) {
           // Exponential backoff: delay * 2^attempts
-          const delay = Math.min(
-            opts.reconnectDelay * Math.pow(2, reconnectAttempts.value),
-            opts.maxReconnectDelay
-          )
+          const delay = backoffDelay(reconnectAttempts.value, {
+            base: opts.reconnectDelay,
+            max: opts.maxReconnectDelay,
+          })
 
           logger.info(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts.value + 1})`)
 

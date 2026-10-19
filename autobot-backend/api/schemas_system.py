@@ -35,7 +35,7 @@ class SystemFrontendConfigResponse(BaseModel):
     timestamp: str
 
 
-class SystemHealthResponse(BaseModel):
+class ProbeHealthResponse(BaseModel):
     """Response for GET /health and GET /system/health.
 
     Issue #6909: status uses probe vocabulary ("ok"/"degraded"/"down") — the
@@ -125,7 +125,7 @@ class SystemMetricsResponse(BaseModel):
 
 
 class SystemCacheCoordinatorStatsResponse(BaseModel):
-    """Response for GET /api/cache/stats.
+    """Response for GET /api/system/cache/coordinator/stats.
 
     Shape is defined by CacheCoordinator.get_cache_stats() — opaque.
     """
@@ -134,7 +134,7 @@ class SystemCacheCoordinatorStatsResponse(BaseModel):
 
 
 class SystemCacheEvictResponse(BaseModel):
-    """Response for POST /api/cache/evict."""
+    """Response for POST /api/system/cache/evict."""
 
     status: str
     evicted: int
@@ -142,7 +142,7 @@ class SystemCacheEvictResponse(BaseModel):
 
 
 class SystemCacheClearResponse(BaseModel):
-    """Response for POST /api/cache/clear/{cache_name}."""
+    """Response for POST /api/system/cache/clear/{cache_name}."""
 
     status: str
     cache: str
@@ -1766,7 +1766,7 @@ class InvalidateCacheResponse(BaseModel):
     deleted_count: int
 
 
-class ClearAllResponse(BaseModel):
+class CacheClearAllResponse(BaseModel):
     success: bool
     message: str
     total_deleted: int

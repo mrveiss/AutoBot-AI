@@ -240,7 +240,8 @@ def test_the_getenv_drift_checker_refuses_a_lost_sweep(thin_repo: Path, tmp_path
     repo.mkdir()
     _git(repo, "init", "-q")
     _seed(repo)
-    shutil.copy2(_REPO_ROOT / "autobot_shared" / "ssot_config.py", repo / "autobot_shared" / "ssot_config.py")
+    for name in ("ssot_config.py", "ssot_tls.py"):
+        shutil.copy2(_REPO_ROOT / "autobot_shared" / name, repo / "autobot_shared" / name)
     _git(repo, "add", "-A")
 
     result = _run(repo, "check_getenv_ssot_drift.py")

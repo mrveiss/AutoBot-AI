@@ -199,7 +199,7 @@ async def recover_index_queue() -> int:
 
     Returns the number of recovered entries.
     """
-    from .progress_tracker import recover_index_queue as _pt_recover
+    from .progress_tracker import recover_index_queue_into as _pt_recover
 
     return await _pt_recover(_tasks_lock, _index_queue)
 

@@ -22,7 +22,7 @@ async def test_monitoring_alerts():
     logger.info("🧪 Testing Monitoring Alerts System")
 
     try:
-        from utils.monitoring_alerts import AlertRule, AlertSeverity, get_alerts_manager
+        from utils.monitoring_alerts import AlertSeverity, MetricAlertRule, get_alerts_manager
 
         # Get the alerts manager
         alerts_manager = get_alerts_manager()
@@ -42,7 +42,7 @@ async def test_monitoring_alerts():
 
         # Test creating a custom alert rule
         logger.info("➕ Testing custom alert rule creation...")
-        test_rule = AlertRule(
+        test_rule = MetricAlertRule(
             id="test_high_cpu_custom",
             name="Test High CPU Alert",
             metric_path="vm0.stats.cpu_usage",

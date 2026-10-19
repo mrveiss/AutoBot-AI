@@ -344,7 +344,7 @@
     "runRsyncFromTo": "Run rsync from {source} to {dest}",
     "running": "Executando...",
     "sLMManagerRestarting": "SLM Manager Restarting",
-    "schedule": "Schedule",
+    "schedule": "Agendamento",
     "scheduledUpdates": "Scheduled Updates",
     "showDetails": "Show details",
     "slmSelfUpdateStage": "SLM server",
@@ -1326,6 +1326,107 @@
       "services": "Services",
       "systemHealth": "Saúde do sistema",
       "systemMonitoring": "Monitoramento do sistema"
+    },
+    "agentLedger": {
+      "title": "Registo de agentes",
+      "subtitle": "Every company's agent coordination: shared resources, claims, conflicts and dev-loop history.",
+      "refresh": "Atualizar",
+      "tabsAria": "Vistas do registo",
+      "tabs": {
+        "now": "A trabalhar agora",
+        "contention": "Contenção",
+        "claims": "Reservas",
+        "conflicts": "Conflitos",
+        "devLoop": "Dev loop",
+        "activity": "Atividade"
+      },
+      "col": {
+        "scope": "Scope",
+        "agent": "Agente",
+        "company": "Company",
+        "mode": "Modo",
+        "intent": "Intenção",
+        "expires": "Expira",
+        "renewals": "Renovações",
+        "kind": "Tipo",
+        "status": "Estado",
+        "task": "Tarefa atual",
+        "detail": "Detalhe"
+      },
+      "installWide": "Install-wide",
+      "heldBy": "Held by {agent} ({company})",
+      "waiting": "{n} waiting",
+      "waitlistAria": "Lista de espera por ordem",
+      "silenceMeansHold": "Pedir não é libertar: o silêncio significa manter, e uma reserva não renovada expira sozinha.",
+      "ask": "Pedir ao titular que liberte",
+      "askAria": "Pedir ao titular de {scope} que o liberte",
+      "askState": {
+        "sending": "A enviar…",
+        "sent": "Pedido enviado — o titular decide; o silêncio significa manter.",
+        "tooSoon": "Acabou de pedir por esta reserva; tente novamente dentro de um minuto.",
+        "notFound": "Esta tarefa já não detém a reserva — atualize para ver quem a detém agora.",
+        "unavailable": "Não foi possível contactar o registo; nada foi enviado.",
+        "error": "Ocorreu um erro e não foi possível confirmar a entrega. Atualize para ver se a reserva ainda está ativa."
+      },
+      "conflict": {
+        "release_refused": "Uma libertação foi recusada",
+        "claim_expired": "Uma reserva expirou enquanto retida",
+        "yield_unanswered": "Um pedido de cedência ficou sem resposta",
+        "claim_lapsed_during_action": "Uma reserva expirou durante uma ação"
+      },
+      "devLoop": {
+        "issue": "Issue",
+        "choose": "Choose an issue",
+        "col": {
+          "at": "When",
+          "intent": "Intenção",
+          "outcome": "Outcome",
+          "tokens": "Estimated tokens",
+          "reason": "Reason"
+        }
+      },
+      "empty": {
+        "contention": "Nada está em contenção",
+        "claims": "Sem reservas",
+        "conflicts": "Sem conflitos",
+        "activity": "No recent activity",
+        "devLoop": "No dev-loop history",
+        "devLoopActions": "No actions recorded for this issue",
+        "presence": "Nenhum agente se registou",
+        "peerMessages": "Sem mensagens pendentes",
+        "idleSubscribers": "Sem subscrições de inatividade"
+      },
+      "notes": {
+        "title": "What this view cannot see",
+        "storeDown": "Couldn't read the {source} store just now. Its entries are missing here, not empty.",
+        "sourcesUnknown": "Couldn't check which ledger sources are readable.",
+        "peerIdentity": "Agents have no per-peer identity yet: an agent that is refused an action can ask another agent to do it (#16950).",
+        "busAuth": "Messages between agents are not authenticated yet, so this view cannot prove who sent one (#16962)."
+      },
+      "source": {
+        "presence": "agent presence",
+        "ai_stack_agents": "AI-stack agents",
+        "live_sessions": "live sessions",
+        "peer_messages": "pending peer messages",
+        "idle_subscribers": "idle subscriptions",
+        "claims": "claims",
+        "waitlists": "waitlists",
+        "events": "ledger activity",
+        "dev_loop": "dev-loop history"
+      },
+      "state": {
+        "loading": "A ler o registo…",
+        "unavailableTitle": "Não foi possível ler o registo",
+        "unavailableBody": "O armazenamento {source} não respondeu. Não é o mesmo que não ter entradas.",
+        "errorTitle": "Ocorreu um erro ao carregar esta secção"
+      },
+      "busy": "Ocupado",
+      "idle": "Idle",
+      "peerMessages": "Mensagens entre pares pendentes",
+      "idleSubscribers": "Subscrições de inatividade",
+      "pendingFor": "{n} pendentes para {name}",
+      "sentBy": "de {names}",
+      "waitsForIdle": "{who} espera que {target} fique inativo"
     }
   },
   "monitoringView": {
@@ -1334,7 +1435,17 @@
     "monitoring": "Monitoramento",
     "monitoringSections": "Monitoring sections",
     "systemHealthStatusAria": "System health: {status}",
-    "value0AlertPlural": "{value0} Alert{plural}"
+    "value0AlertPlural": "{value0} Alert{plural}",
+    "tabs": {
+      "system": "Sistema",
+      "logs": "Logs",
+      "dashboards": "Dashboards",
+      "alerts": "Alerts",
+      "errors": "Erros",
+      "backendHealth": "Backend Health",
+      "performance": "Desempenho",
+      "agentLedger": "Registo de agentes"
+    }
   },
   "orchestration": {
     "nodeHealthCard": {
@@ -1499,7 +1610,8 @@
     "value0AnsibleMigrationOf": "{value0} Ansible migration of",
     "value0Nodes": "({value0} nodes)",
     "value0OnlineValue1Offline": "{value0} online, {value1} offline",
-    "value0Required": "{value0} (required)"
+    "value0Required": "{value0} (required)",
+    "serviceCount": "{count} service | {count} services"
   },
   "performance": {
     "alertRulesView": {
@@ -1902,7 +2014,7 @@
     "enableTlsForAria": "Enable TLS for {service}",
     "enablingTLS": "Enabling TLS...",
     "enterNodeID": "Enter node ID",
-    "expires": "Expires",
+    "expires": "Expira",
     "expiringSoon30d": "Expiring Soon (30d)",
     "expiry": "Expiry",
     "failed": "Failed",
@@ -2207,7 +2319,7 @@
       "nPUWorkersSettings": {
         "actions": "Ações",
         "areYouSureYou": "Are you sure you want to remove",
-        "busy": "Busy",
+        "busy": "Ocupado",
         "cancel": "Cancelar",
         "capabilities": "Capabilities",
         "close": "Fechar",
@@ -2256,7 +2368,9 @@
         "weighted": "Weighted",
         "windows": "Windows",
         "worker": "Trabalhador",
-        "workerName": "Worker Name *"
+        "workerName": "Worker Name *",
+        "connectionTestFailed": "Connection test failed",
+        "loadBalancingLoadFailed": "Failed to load load-balancing configuration"
       },
       "personalitySettings": {
         "active": "Active",
@@ -2387,7 +2501,7 @@
         "sPEntityID": "SP Entity ID",
         "sSOOIDCConfiguration": "SSO / OIDC Configuration",
         "saving": "Salvando...",
-        "scope": "Escopo",
+        "scope": "Scope",
         "searchFilter": "Search Filter",
         "searchFilterExample": "(uid={username})",
         "serverURI": "Server URI",
@@ -2757,7 +2871,7 @@
       "enterYourPassword": "Introduza a sua palavra-passe",
       "enterYourPasswordTo": "Enter your password to confirm disabling two-factor authentication.",
       "expiration": "Expiration",
-      "expires": "Expires",
+      "expires": "Expira",
       "keyPrefix": "Key Prefix",
       "lastVerifiedValue0": "Last verified: {value0}",
       "mFAIsEnabled": "MFA is enabled",
@@ -3366,7 +3480,7 @@
   },
   "sharedLinksView": {
     "colCreated": "Created",
-    "colExpires": "Expires",
+    "colExpires": "Expira",
     "colOwner": "Owner",
     "colPassword": "Senha",
     "colSession": "Sessão",
@@ -3394,7 +3508,7 @@
     "period": "Período",
     "readOnlyNotice": "Audit view only. Budget policies are created and managed by users in the user app; this console does not modify them.",
     "refresh": "Atualizar",
-    "scope": "Escopo",
+    "scope": "Scope",
     "scopeId": "ID de escopo",
     "status": "Estado",
     "subtitle": "Read-only oversight of all agent, project, task, and tenant budget policies and their hard-stop auto-pause configuration.",

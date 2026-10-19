@@ -357,6 +357,27 @@ async def check_command(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/memory/stats", response_model=PermissionMemoryStatsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_memory_stats",
+    error_code_prefix="PERMISSIONS",
+)
+async def get_memory_stats(admin_check: bool = Depends(check_admin_permission)):
+    """
+    Get approval memory statistics.
+
+    Issue #744: Requires admin authentication.
+    """
+    try:
+        memory = get_approval_memory()
+        stats = await memory.get_memory_stats()
+        return stats
+    except Exception as e:
+        logger.error(f"Failed to get memory stats: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.get("/memory/{project_path:path}", response_model=ProjectApprovalsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -483,25 +504,4 @@ async def store_approval(
         raise
     except Exception:
         logger.error("Failed to store approval")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.get("/memory/stats", response_model=PermissionMemoryStatsResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_memory_stats",
-    error_code_prefix="PERMISSIONS",
-)
-async def get_memory_stats(admin_check: bool = Depends(check_admin_permission)):
-    """
-    Get approval memory statistics.
-
-    Issue #744: Requires admin authentication.
-    """
-    try:
-        memory = get_approval_memory()
-        stats = await memory.get_memory_stats()
-        return stats
-    except Exception as e:
-        logger.error(f"Failed to get memory stats: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

@@ -30,7 +30,7 @@ from autobot_shared.coordination.work_claims import release_scope, try_acquire
 from protocols import idle_notice
 from protocols.agent_communication import AgentIdentity
 from protocols.agent_kind import AgentKind
-from protocols.agent_presence import AgentPresenceRegistry
+from protocols.agent_presence import AgentPresenceRegistry, PresenceTask
 from protocols.idle_notice import IdleSubscription
 from protocols.peer_inbox import PeerInboxDirectory
 from user_management.services import TenantContext
@@ -144,6 +144,24 @@ def test_presence_peer_messages_and_idle_subscribers_are_scoped_to_the_callers_c
         assert [s["subscriber"] for s in _get(company, "idle-subscribers").json()["subscribers"]] == [f"{name}-waiter"]
 
 
+def test_presence_carries_a_busy_agents_current_task_and_null_for_an_idle_one_18391(world):
+    registry, _directory = world
+    registry.report(
+        kind=AgentKind.COMPANY_OS,
+        tenant_id=str(CO_A),
+        name="writer",
+        instance_id="i",
+        busy=True,
+        task=PresenceTask(id="wi-1", title="Draft the Q3 report"),
+    )
+    registry.report(kind=AgentKind.COMPANY_OS, tenant_id=str(CO_A), name="idler", instance_id="j", busy=False)
+
+    rows = {r["name"]: r for r in _get(CO_A, "presence").json()["agents"]}
+
+    assert rows["writer"]["current_task"] == {"id": "wi-1", "title": "Draft the Q3 report"}
+    assert rows["idler"]["current_task"] is None
+
+
 def test_reading_pending_messages_does_not_drain_them(world):
     registry, directory = world
     registry.report(kind=AgentKind.COMPANY_OS, tenant_id=str(CO_A), name="a-agent", instance_id="i", busy=False)
@@ -194,11 +212,13 @@ def test_an_unreachable_ledger_is_503_with_a_typed_body_never_an_empty_list(monk
 def test_the_ledger_routes_are_read_only_and_authenticated(world):
     app = FastAPI()
     app.include_router(agent_ledger.router, prefix="/coordination")
-    unsafe = {m for r in app.routes for m in getattr(r, "methods", set())} - {"GET", "HEAD"}
-    assert unsafe == set(), "the ledger must expose no mutating verb"
+    # The router's own routes: `app.routes` can defer an included router (#15093), which made this vacuous.
+    unsafe = {(m, r.path) for r in agent_ledger.router.routes for m in getattr(r, "methods", set()) - {"GET", "HEAD"}}
+    # The one write is a request to a holder (#18599): it never releases or deletes.
+    assert unsafe == {("POST", "/ledger/claims/yield-request")}, "the ledger's only write is the yield request"
     assert any(d.dependency is get_current_user for d in agent_ledger.router.dependencies)
     client = _client(CO_A)
-    assert client.post("/coordination/ledger/claims").status_code == 405
+    assert client.post("/coordination/ledger/claims").status_code == 405  # only the yield-request path takes POST
     assert client.delete("/coordination/ledger/claims").status_code == 405
 
 

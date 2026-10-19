@@ -5091,7 +5091,6 @@
     "role": "Role:",
     "lastLogin": "Last Login:",
     "preferences": "Preferences",
-    "theme": "Theme",
     "notifications": "Notifications",
     "emailNotifications": "Email notifications",
     "browserNotifications": "Browser notifications",
@@ -5101,7 +5100,6 @@
     "showTooltips": "Show tooltips",
     "enableAnimations": "Enable animations",
     "savePreferences": "Save Preferences",
-    "appearance": "Appearance",
     "voiceChatDisplay": "Voice Chat Display",
     "fullScreen": "Full-screen",
     "sidePanel": "Side panel",
@@ -5117,9 +5115,6 @@
     "pwTooShort": "Password must be at least 8 characters",
     "pwChanged": "Password changed successfully!",
     "never": "Never",
-    "themeLight": "Light",
-    "themeDark": "Dark",
-    "themeAuto": "Auto",
     "tabDevices": "Tab devices"
   },
   "charts": {
@@ -5799,11 +5794,6 @@
       "postExecutionFailed": "The command ran, but a follow-up step failed. Its output is shown; some updates may be missing.",
       "enterComment": "Please enter a comment before submitting"
     },
-    "darkModeToggle": {
-      "switchToLight": "Switch to light mode",
-      "switchToDark": "Switch to dark mode",
-      "toggleDarkMode": "Toggle dark mode"
-    },
     "dataTable": {
       "sortBy": "Sort by {column}",
       "actions": "Actions",
@@ -5962,10 +5952,6 @@
       "actions": "Actions",
       "noDataAvailable": "No data available",
       "selectRow": "Select row {row}"
-    },
-    "panel": {
-      "collapse": "Collapse panel",
-      "expand": "Expand panel"
     }
   },
   "views": {
@@ -8001,7 +7987,6 @@
     "slmAdmin": "SLM Admin",
     "slmAdminTitle": "SLM Admin — opens in new tab",
     "profileSettings": "Profile Settings",
-    "switchLanguage": "Switch language",
     "openMainMenu": "Open main menu",
     "profile": "Profile",
     "services": "Services",
@@ -8092,7 +8077,8 @@
       "tip": "Minimal interface — hide advanced features",
       "announceMinimal": "Minimal interface on. Advanced features hidden.",
       "announceFull": "Full interface on. All features shown."
-    }
+    },
+    "llcLedger": "Agent ledger"
   },
   "llcCompanyStatus": {
     "showArchived": "Show archived",
@@ -8919,6 +8905,72 @@
       "retry": "Retry",
       "loadingItem": "Loading work item…",
       "itemLoadFailed": "Could not load this work item"
+    },
+    "ledger": {
+      "title": "Agent ledger",
+      "subtitle": "Who is working on what in this company, and who is waiting.",
+      "tabsAria": "Ledger views",
+      "tabs": {
+        "now": "Now working",
+        "claims": "Claims",
+        "contention": "Contention",
+        "activity": "Activity"
+      },
+      "col": {
+        "agent": "Agent",
+        "kind": "Kind",
+        "status": "Status",
+        "task": "Current task",
+        "detail": "Detail",
+        "scope": "Scope",
+        "mode": "Mode",
+        "intent": "Intent",
+        "expires": "Expires",
+        "renewals": "Renewals"
+      },
+      "busy": "Busy",
+      "idle": "Idle",
+      "peerMessages": "Pending peer messages",
+      "idleSubscribers": "Idle subscriptions",
+      "pendingFor": "{n} pending for {name}",
+      "sentBy": "from {names}",
+      "waitsForIdle": "{who} waits for {target} to go idle",
+      "heldBy": "Held by {agent}",
+      "waitlistAria": "Waitlist in order",
+      "silenceMeansHold": "Asking is a request, not a release: silence means hold, and an unrenewed claim expires on its own.",
+      "ask": "Ask holder to release",
+      "askAria": "Ask the holder of {scope} to release it",
+      "conflicts": "Conflicts",
+      "recent": "Recent activity",
+      "conflict": {
+        "release_refused": "A release was refused",
+        "claim_expired": "A claim expired while held",
+        "yield_unanswered": "A yield request went unanswered",
+        "claim_lapsed_during_action": "A claim lapsed during an action"
+      },
+      "empty": {
+        "presence": "No agents have reported in",
+        "peerMessages": "No pending messages",
+        "idleSubscribers": "No idle subscriptions",
+        "claims": "No claims",
+        "contention": "Nothing is contended",
+        "conflicts": "No conflicts",
+        "activity": "No recent activity"
+      },
+      "state": {
+        "loading": "Reading the ledger…",
+        "unavailableTitle": "Couldn't read the ledger",
+        "unavailableBody": "The {source} store did not answer. This is not the same as having no entries.",
+        "errorTitle": "Something went wrong loading this section"
+      },
+      "askState": {
+        "sending": "Sending…",
+        "sent": "Request sent — the holder decides; silence means hold.",
+        "tooSoon": "You asked about this claim a moment ago; try again in a minute.",
+        "notFound": "That claim is no longer held by this task — refresh to see who holds it now.",
+        "unavailable": "Couldn't reach the ledger; nothing was sent.",
+        "error": "Something went wrong and delivery could not be confirmed. Refresh to see whether the claim is still held."
+      }
     }
   },
   "mobile": {
@@ -9745,5 +9797,104 @@
       "unreachableAsOf": "Unreachable — service status unknown — status as of {time}"
     },
     "lastKnown": "{text} (last known)"
+  },
+  "schedule": {
+    "title": "Schedule",
+    "repeats": "Repeats",
+    "repeat": {
+      "minutes": "Every few minutes",
+      "hourly": "Hourly",
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "once": "Once"
+    },
+    "every": "Every",
+    "minutesUnit": "minutes",
+    "onlyBetween": "Only between",
+    "windowFrom": "From",
+    "windowTo": "To",
+    "and": "and",
+    "onDays": "On days (optional)",
+    "daysHintAny": "None selected means every day.",
+    "onDaysRequired": "On days",
+    "atMinute": "At minute",
+    "at": "At",
+    "hour": "Hour",
+    "minute": "Minute",
+    "weekdaysOnly": "Weekdays only",
+    "monthly": {
+      "which": "Which day of the month",
+      "day": "Day of month",
+      "lastDay": "Last day",
+      "nth": "Weekday of the month",
+      "onDay": "On day",
+      "onThe": "On the"
+    },
+    "nth": {
+      "1": "first",
+      "2": "second",
+      "3": "third",
+      "4": "fourth",
+      "last": "last"
+    },
+    "weekday": "Weekday",
+    "shortMonths": "Months without this day run on the last day.",
+    "date": "Date",
+    "timezone": "Time zone",
+    "zone": {
+      "company": "company time",
+      "usesCompany": "Uses the company time zone."
+    },
+    "summary": {
+      "minutes": "Every {every} minutes",
+      "minutesWeekdays": "Every {every} minutes on weekdays",
+      "minutesDays": "Every {every} minutes on {days}",
+      "minutesWindow": "Every {every} minutes between {from} and {to}",
+      "minutesWindowWeekdays": "Every {every} minutes between {from} and {to} on weekdays",
+      "minutesWindowDays": "Every {every} minutes between {from} and {to} on {days}",
+      "hourly": "Every hour at minute {minute}",
+      "daily": "Every day at {time}",
+      "dailyWeekdays": "Every weekday at {time}",
+      "weekly": "Every {days} at {time}",
+      "monthlyDay": "On day {day} of every month at {time}",
+      "monthlyLastDay": "On the last day of every month at {time}",
+      "monthlyNth1": "On the first {weekday} of every month at {time}",
+      "monthlyNth2": "On the second {weekday} of every month at {time}",
+      "monthlyNth3": "On the third {weekday} of every month at {time}",
+      "monthlyNth4": "On the fourth {weekday} of every month at {time}",
+      "monthlyNthLast": "On the last {weekday} of every month at {time}",
+      "once": "Once on {date} at {time}",
+      "withZone": "{summary}, {zone}",
+      "custom": "Custom schedule"
+    },
+    "customNote": "This schedule cannot be shown as clicks.",
+    "editCron": "Edit as cron",
+    "doneEditing": "Done editing",
+    "nextRuns": "Next runs",
+    "noRuns": "No upcoming runs.",
+    "previewLoading": "Checking with the server...",
+    "previewApprox": "Approximate: the server confirms the exact times when you save.",
+    "previewUnavailable": "Next runs cannot be previewed for this schedule.",
+    "advanced": "Advanced: saved as",
+    "saved": {
+      "cron": "Standard cron",
+      "calendar": "Calendar rule",
+      "once": "One-off run"
+    },
+    "savedAs": "Saved schedule",
+    "savedNote": {
+      "once": "Runs once. No repeating cron is saved."
+    },
+    "cronLabel": "Cron expression",
+    "cronHint": "Standard five-field cron only: minute, hour, day of month, month, weekday. The picker and this field stay in sync.",
+    "cron_extension_unsupported": "{token} is not standard cron. Use the picker for schedules such as the last Friday of the month.",
+    "invalid_timezone": "This time zone is not recognised.",
+    "once_in_past": "That date and time has already passed.",
+    "invalid_rrule": "This calendar rule is not valid.",
+    "invalid_cron": "Enter standard five-field cron, for example 0 9 * * 1-5.",
+    "invalid_generic": "This schedule is not valid.",
+    "conflicting_fields": "A schedule is saved either as cron or as a calendar rule or one-off run, never both.",
+    "gatedNote": "Last day, weekday of the month, days 29 to 31 and one-off runs become available once the scheduler is updated."
   }
 }

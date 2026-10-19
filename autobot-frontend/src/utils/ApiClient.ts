@@ -1,5 +1,6 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
+import { RETRY_BACKOFF, backoffDelay } from '@autobot/ui'
 import appConfig from '@/config/AppConfig.js';
 import { createLogger } from '@/utils/debugUtils';
 import { getApiBase } from '@/config/ssot-config';
@@ -401,8 +402,7 @@ export class ApiClient {
         }
 
         if (attempt < maxRetries) {
-          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-          await new Promise(resolve => window.setTimeout(resolve, delay));
+          await new Promise(resolve => window.setTimeout(resolve, backoffDelay(attempt - 1, RETRY_BACKOFF)));
         }
       }
     }

@@ -450,10 +450,10 @@ in #16539.
 
 **Grep check:** `grep -rln "OllamaConnectionPool\|get_ollama_pool" autobot-backend/ | grep -v ollama_connection_pool` should show only `llm_shared/adapters/ollama_adapter_test.py` or nothing — no new production caller should appear without updating this entry.
 
-## Per-Service `User`, `Organization` and `UserService` Bindings
+## Per-Service `User`, `Organization`, `UserService` and `OrganizationService` Bindings
 
-**Files:** `autobot-backend/user_management/models/{user,organization}.py`, `autobot-slm-backend/user_management/models/{user,organization}.py`, `autobot-backend/user_management/services/user_service.py`, `autobot-slm-backend/user_management/services/user_service.py`
-**Shared core:** `autobot_shared/user_management/models/user.py` (`UserCore`) and `autobot_shared/user_management/user_service*.py`
+**Files:** `autobot-backend/user_management/models/{user,organization}.py`, `autobot-slm-backend/user_management/models/{user,organization}.py`, `autobot-backend/user_management/services/user_service.py`, `autobot-slm-backend/user_management/services/user_service.py`, `autobot-backend/user_management/services/organization_service.py`, `autobot-slm-backend/user_management/services/organization_service.py`
+**Shared core:** `autobot_shared/user_management/models/user.py` (`UserCore`), `autobot_shared/user_management/user_service*.py` and `autobot_shared/user_management/organization_service.py` (`OrganizationService`, abstract: raises `TypeError` when `organization_model`/`user_model` are unbound)
 **Issues:** #12647, #15068, #17312 (symbol-fork ratchet), #18449
 
 **Pattern bypassed:** "One definition per concept" as measured by `repo_tests/symbol_fork_baseline.json`.
@@ -463,14 +463,34 @@ definition in `autobot_shared`; each service keeps a thin binding that must be a
 separately mapped class: the two services attach different SQLAlchemy relationships and
 columns (backend: activity tracking and LLC columns; SLM: none) and register in different
 mapper registries, so one shared mapped class would break `configure_mappers()` on one side.
-`UserService` bindings only set `user_model` and, in the backend, two hooks.
+`UserService` bindings only set `user_model` and, in the backend, two hooks. Each service's
+`OrganizationService` only binds its own concrete `Organization` and `User` mappings (two
+ClassVars); the behaviour has one definition in `autobot_shared`. Same registry-per-service
+constraint as `User`/`Organization`. Since the detector now counts a same-name subclass of a
+shared definition as a binding (#17312), `UserService` and `OrganizationService` no longer
+appear in `symbol_fork_baseline.json`; `User` and `Organization` do and stay, because they
+subclass `UserCore`/a differently named core, not a same-name shared class.
 `repo_tests/one_user_service_15068_test.py` pins that shape by behaviour: a class carrying the
 account-handling methods anywhere else is a failure whatever it is called.
 
 **Revisit when:** the two services share one SQLAlchemy registry, or the detector learns to
-treat a subclass of a shared definition as a binding rather than a second definition.
+treat a subclass of a differently named shared core (`UserCore`) as a binding. (Its same-name
+subclass half landed in #17312.)
 
-**Grep check:** `grep -rn "^class \(User\|Organization\|UserService\)\b" autobot-backend/user_management autobot-slm-backend/user_management autobot_shared/user_management` should list `UserService` in `autobot_shared` plus one `UserService`, `User` and `Organization` subclass binding per service.
+**Grep check:** `grep -rn "^class \(User\|Organization\|UserService\|OrganizationService\)\b" autobot-backend/user_management autobot-slm-backend/user_management autobot_shared/user_management` should list `UserService` and `OrganizationService` in `autobot_shared` plus one `UserService`, `OrganizationService`, `User` and `Organization` subclass binding per service.
+
+## SLM Admin `Base` and Shared User-Management `Base`
+
+**Files:** `autobot-slm-backend/models/database.py` (`Base`), `autobot_shared/user_management/models/base.py` (`Base`, re-exported by both services' `user_management/models/base.py`)
+**Issues:** #1878, #10862 (tablename collision guard), #17312 (symbol-fork ratchet)
+
+**Pattern bypassed:** "One definition per concept" as measured by `repo_tests/symbol_fork_baseline.json`.
+
+**Reason:** the two `Base` classes own different metadata registries bound to different PostgreSQL databases (`slm` and `slm_users`). `main.py` creates each registry's tables on its own engine. One shared `Base` would put both databases' tables in one metadata (each `create_all` would create the other database's tables) and would add the shared Base's `created_at`/`updated_at` columns to SLM tables that declare their own (a schema change). The shared `Base` is already the single definition for the backend and the SLM user-management side. `check_tablename_collisions` polices the split. `Base` stays in `symbol_fork_baseline.json`, as `User` and `Organization` do.
+
+**Revisit when:** the SLM admin models and user-management models move to one database, at which point `INTENTIONALLY_SHARED_TABLENAMES` ("roles") must also be resolved.
+
+**Grep check:** `grep -rn "^class Base(" autobot-slm-backend autobot_shared` should show exactly `models/database.py` and `user_management/models/base.py`.
 
 ## `config/loader.py` — Stdlib `logging`, Own YAML Read (not `load_config_file`)
 
@@ -493,3 +513,21 @@ imports `logging_manager`, at which point `load_yaml_config` should delegate to
 it and this entry be removed.
 
 **Grep check:** `grep -n "logging_manager" autobot_shared/config_file_loading.py` — if empty, this exception is obsolete.
+
+---
+
+## Direct Redis Health Probes
+
+**Files:** `autobot-backend/utils/distributed_service_discovery.py`, `autobot-backend/utils/service_discovery.py`
+**Canonical it does not use:** `autobot_shared/redis_client.py`
+**Issue:** #18553
+
+**Reason:** each builds a fresh `redis.Redis(...)` to ask "is THIS endpoint answering" for a host and
+port supplied by the caller, with its own short timeouts, and closes it
+afterwards. The canonical client addresses named databases on the configured Redis through pooled,
+circuit-broken connections, so it cannot probe an arbitrary endpoint and would report the pool's
+state instead of the endpoint's. The sites are frozen in `repo_tests/redis_direct_constructor_baseline_18553.py`.
+
+**Revisit when:** the canonical layer grows an endpoint-probe entry point; delete these constructors then.
+
+**Grep check:** `grep -n "redis.Redis(" autobot-backend/utils/distributed_service_discovery.py autobot-backend/utils/service_discovery.py` — if empty, this exception is obsolete.

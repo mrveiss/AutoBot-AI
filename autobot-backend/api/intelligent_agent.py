@@ -24,10 +24,10 @@ if TYPE_CHECKING:
     from intelligence.intelligent_agent import IntelligentAgent
 
 from api.schemas_agent import (
+    AgentGoalResponse,
     AgentReloadResponse,
     AgentSystemCapabilitiesResponse,
     GoalRequest,
-    GoalResponse,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from monitoring.prometheus_metrics import get_metrics_manager
@@ -107,7 +107,7 @@ async def get_agent() -> "IntelligentAgent":
 router = APIRouter(tags=["intelligent-agent"])
 
 
-@router.post("/process", response_model=GoalResponse)
+@router.post("/process", response_model=AgentGoalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="process_natural_language_goal",
@@ -155,7 +155,7 @@ async def process_natural_language_goal(
         duration=execution_time,
     )
 
-    return GoalResponse(
+    return AgentGoalResponse(
         success=True,
         result=result,
         execution_time=execution_time,

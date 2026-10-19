@@ -249,7 +249,7 @@ const fetchDataWithRetry = async (maxRetries = 3) => {
       lastError = error instanceof Error ? error : new Error(String(error))
 
       if (attempt < maxRetries - 1) {
-        const delay = 1000 * Math.pow(2, attempt) // Exponential backoff
+        const delay = backoffDelay(attempt, { base: 1000 }) // from '@autobot/ui' (#15402)
         console.warn(`Attempt ${attempt + 1} failed. Retrying in ${delay}ms...`)
         await new Promise(resolve => setTimeout(resolve, delay))
       }

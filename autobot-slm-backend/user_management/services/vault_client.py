@@ -40,21 +40,9 @@ import aiohttp
 from autobot_shared import node_proxy
 from autobot_shared.env_utils import env_float
 from autobot_shared.http_client import get_http_client, sign_request
+from config import _get_ssot_backend_url
 
 logger = logging.getLogger(__name__)
-
-
-def _ssot_backend_url() -> str:
-    """Derive the autobot-backend base URL from SSOT config (#10573).
-
-    Falls back to localhost:8001 if autobot_shared is unavailable.
-    """
-    try:
-        from autobot_shared.ssot_config import get_config
-
-        return get_config().backend_url
-    except Exception:
-        return "http://127.0.0.1:8001"  # canonical: ignore py-hardcoded-url - bootstrap: ssot_config unavailable
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +51,7 @@ def _ssot_backend_url() -> str:
 _INTERNAL_API_KEY: str = node_proxy.internal_api_key()  # primary auth (#10492 Option A)
 _SERVICE_ID: str = os.getenv("SLM_SERVICE_ID", "slm-backend")
 _SERVICE_KEY: str = os.getenv("SLM_SERVICE_KEY", "")  # HMAC fallback
-_BACKEND_BASE_URL: str = os.getenv("SLM_AUTHORITY_BASE_URL", _ssot_backend_url()).rstrip("/")
+_BACKEND_BASE_URL: str = os.getenv("SLM_AUTHORITY_BASE_URL", _get_ssot_backend_url()).rstrip("/")
 _SYSTEM_VAULT_PATH = "/api/v2/secrets/system"
 _REQUEST_TIMEOUT_SECONDS: float = env_float("SLM_VAULT_CLIENT_TIMEOUT", 10)
 

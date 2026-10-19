@@ -63,7 +63,7 @@ class SpeechProvider(ABC):
         """Whether the provider can transcribe right now (default: yes).
 
         A provider that depends on something loadable (a model, a binary) overrides
-        this so :meth:`ProviderRegistry.transcribe_with_fallback` can skip it.
+        this so :meth:`SpeechProviderRegistry.transcribe_with_fallback` can skip it.
         """
         return True
 
@@ -160,7 +160,7 @@ class ProviderTranscription:
     segments: List[TranscriptSegment]
 
 
-class ProviderRegistry:
+class SpeechProviderRegistry:
     """Registry for language-keyed speech providers."""
 
     def __init__(self):
@@ -299,10 +299,10 @@ class ProviderRegistry:
 
 
 # Global registry instance
-_registry = ProviderRegistry()
+_registry = SpeechProviderRegistry()
 
 
-def get_speech_provider_registry() -> ProviderRegistry:
+def get_speech_provider_registry() -> SpeechProviderRegistry:
     """Get global speech provider registry instance."""
     return _registry
 

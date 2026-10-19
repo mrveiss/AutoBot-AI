@@ -52,7 +52,7 @@
                 <span class="members-name">{{ member.display_name }}</span>
               </td>
               <td>
-                <BaseBadge :variant="roleBadgeVariant(member.role)">
+                <BaseBadge size="sm" :variant="roleBadgeVariant(member.role)">
                   {{ roleLabel(member.role) }}
                 </BaseBadge>
               </td>
@@ -142,9 +142,7 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useCollaborationInvite } from '@/composables/collaboration/useCollaborationInvite'
 import BaseButton from '@/components/base/BaseButton.vue'
-import BaseCard from '@/components/base/BaseCard.vue'
-import BaseBadge from '@/components/base/BaseBadge.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseBadge, BaseCard, BaseModal } from '@autobot/ui'
 import ErrorBanner from '@/components/base/ErrorBanner.vue'
 
 // Backend MembershipRole enum (autobot-backend/llc/models/enums.py).

@@ -529,6 +529,32 @@ async def create_node(
     return NodeResponse.model_validate(node)
 
 
+@router.get("/a2a-cards", tags=["a2a"])
+async def list_a2a_cards(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> list:
+    """
+    Return cached A2A Agent Cards for all backend nodes.
+
+    Each entry includes node_id, hostname, ip_address, and the card dict
+    (or null if no card has been fetched yet).
+    """
+    result = await db.execute(select(Node))
+    nodes = result.scalars().all()
+    return [
+        {
+            "node_id": n.node_id,
+            "hostname": n.hostname,
+            "ip_address": n.ip_address,
+            "a2a_card": (n.extra_data or {}).get("a2a_card"),
+            "fetched_at": (n.extra_data or {}).get("a2a_card_fetched_at"),
+        }
+        for n in nodes
+        if "backend" in (n.roles or [])
+    ]
+
+
 @router.get("/{node_id}", response_model=NodeResponse)
 async def get_node(
     node_id: str,
@@ -1623,7 +1649,7 @@ async def reenroll_node(
     await create_node_event(
         db,
         node_id,
-        EventType.STATUS_CHANGED,
+        EventType.STATE_CHANGE,
         EventSeverity.INFO,
         f"Node reset to pending for re-enrollment by {current_user.get('username', 'unknown')}",
     )
@@ -2833,32 +2859,6 @@ async def exec_node_command(
 # ---------------------------------------------------------------------------
 # A2A Agent Card endpoints (Issue #962)
 # ---------------------------------------------------------------------------
-
-
-@router.get("/a2a-cards", tags=["a2a"])
-async def list_a2a_cards(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
-) -> list:
-    """
-    Return cached A2A Agent Cards for all backend nodes.
-
-    Each entry includes node_id, hostname, ip_address, and the card dict
-    (or null if no card has been fetched yet).
-    """
-    result = await db.execute(select(Node))
-    nodes = result.scalars().all()
-    return [
-        {
-            "node_id": n.node_id,
-            "hostname": n.hostname,
-            "ip_address": n.ip_address,
-            "a2a_card": (n.extra_data or {}).get("a2a_card"),
-            "fetched_at": (n.extra_data or {}).get("a2a_card_fetched_at"),
-        }
-        for n in nodes
-        if "backend" in (n.roles or [])
-    ]
 
 
 @router.get("/{node_id}/a2a-card", tags=["a2a"])

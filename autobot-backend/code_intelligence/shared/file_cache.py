@@ -73,7 +73,7 @@ ALL_CODE_EXTENSIONS: FrozenSet[str] = PYTHON_EXTENSIONS | FRONTEND_EXTENSIONS | 
 
 
 @dataclass
-class CacheEntry:
+class FileListCacheEntry:
     """Single cache entry with metadata."""
 
     files: List[Path]
@@ -153,7 +153,7 @@ class FileListCache:
         """Initialize cache."""
         self._ttl = ttl
         self._root_path = root_path or DEFAULT_ROOT_PATH
-        self._cache: Dict[str, CacheEntry] = {}
+        self._cache: Dict[str, FileListCacheEntry] = {}
         self._stats = CacheStats()
         self._cache_lock = threading.Lock()
 
@@ -164,7 +164,7 @@ class FileListCache:
         ext_str = ",".join(sorted(extensions))
         return f"{root_path}:{ext_str}"
 
-    def _is_valid(self, entry: CacheEntry) -> bool:
+    def _is_valid(self, entry: FileListCacheEntry) -> bool:
         """Check if cache entry is still valid."""
         return (time.time() - entry.timestamp) < self._ttl
 
@@ -238,7 +238,7 @@ class FileListCache:
         files = await self._scan_files(extensions, root)
 
         with self._cache_lock:
-            self._cache[cache_key] = CacheEntry(
+            self._cache[cache_key] = FileListCacheEntry(
                 files=files,
                 timestamp=time.time(),
                 root_path=str(root),

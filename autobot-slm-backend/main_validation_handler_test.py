@@ -5,7 +5,7 @@
 """main.py's real password-field shapes never leak through a 422 (#16428
 security review).
 
-`UserCreate.password` (`Field(..., min_length=8)`) and
+`SlmAdminUserCreate.password` (`Field(..., min_length=8)`) and
 `VNCCredentialCreate.password` (`Field(..., min_length=1)`), both in
 `models/schemas.py`, were the two concrete plaintext fields c0's review named
 on this app. `models.schemas` is globally stubbed as a MagicMock in
@@ -51,7 +51,9 @@ def test_field_constraints_still_match_the_real_schemas():
     change on either real field is caught here instead of silently making
     the tests below check a shape that no longer exists."""
     source = (Path(__file__).parent / "models" / "schemas.py").read_text(encoding="utf-8")
-    assert re.search(r"password:\s*str\s*=\s*Field\(\.\.\.,\s*min_length=8\)", source), "UserCreate.password changed"
+    assert re.search(
+        r"password:\s*str\s*=\s*Field\(\.\.\.,\s*min_length=8\)", source
+    ), "SlmAdminUserCreate.password changed"
     assert re.search(
         r"password:\s*str\s*=\s*Field\(\.\.\.,\s*min_length=1", source
     ), "VNCCredentialCreate.password changed"
@@ -74,7 +76,7 @@ def client() -> TestClient:
 
 
 def test_user_create_password_below_min_length_never_echoed(client: TestClient):
-    """UserCreate.password requires min_length=8 -- a short real password
+    """SlmAdminUserCreate.password requires min_length=8 -- a short real password
     submitted here must not come back in the 422."""
     response = client.post("/users", json={"username": "someone", "password": _LEAKED_MARKER[:4]})
 

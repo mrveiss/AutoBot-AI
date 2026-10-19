@@ -11,9 +11,7 @@ Structured output ensures valid manifests every time.
 
 from typing import Any, Dict
 
-import yaml
-
-from autobot_shared.frontmatter import split_frontmatter
+from autobot_shared.frontmatter import parse_frontmatter_mapping as _parse_manifest
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -91,14 +89,3 @@ class SkillGenerator:
         from services.llm_service import get_llm_service
 
         return get_llm_service()
-
-
-def _parse_manifest(skill_md: str) -> Dict[str, Any]:
-    """Parse YAML frontmatter from SKILL.md content into manifest dict."""
-    raw, _ = split_frontmatter(skill_md)
-    if raw is None:
-        return {}
-    try:
-        return yaml.safe_load(raw) or {}
-    except yaml.YAMLError:
-        return {}

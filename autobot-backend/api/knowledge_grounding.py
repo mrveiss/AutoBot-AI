@@ -11,11 +11,11 @@ claim verification, and conflict resolution.
 Issue: #4070 (Knowledge Grounding Tier 4)
 
 Endpoints:
-- POST /api/ground-response - Ground a response with KB verification
-- POST /api/verify-claim - Verify a single claim
-- GET /api/kb-conflicts - List conflicts awaiting resolution
-- POST /api/kb-conflicts/{conflict_id}/resolve - Resolve a conflict
-- GET /api/kb-stats - Statistics on grounding operations
+- POST /api/knowledge_base/ground-response - Ground a response with KB verification
+- POST /api/knowledge_base/verify-claim - Verify a single claim
+- GET /api/knowledge_base/kb-conflicts - List conflicts awaiting resolution
+- POST /api/knowledge_base/kb-conflicts/{conflict_id}/resolve - Resolve a conflict
+- GET /api/knowledge_base/kb-stats - Statistics on grounding operations
 
 Auth: Depends(get_current_user) for most endpoints, Depends(check_admin_permission)
 for conflict resolution and stats.
@@ -38,6 +38,7 @@ from api.schemas_knowledge import (
     VerifyClaimRequest,
 )
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.api_routing.deprecated_redirects import add_deprecated_redirects
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_utils import decode_redis_value
@@ -47,9 +48,18 @@ from services.knowledge_grounding_models import Claim, VerificationMethod
 
 logger = get_logger(__name__)
 
-router = APIRouter(
-    tags=["knowledge-grounding"],
-    prefix="/api",
+router = APIRouter(tags=["knowledge-grounding"])
+
+# #18722: the doubled paths answer 308 for one release; removal tracked in #18793.
+add_deprecated_redirects(
+    router,
+    {
+        ("POST", "/api/ground-response"): "/ground-response",
+        ("POST", "/api/verify-claim"): "/verify-claim",
+        ("GET", "/api/kb-conflicts"): "/kb-conflicts",
+        ("POST", "/api/kb-conflicts/{conflict_id}/resolve"): "/kb-conflicts/{conflict_id}/resolve",
+        ("GET", "/api/kb-stats"): "/kb-stats",
+    },
 )
 
 

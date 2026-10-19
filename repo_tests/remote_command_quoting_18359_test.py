@@ -79,6 +79,11 @@ _ALLOWED: dict[tuple[str, str, str], str] = {
     (
         "autobot-slm-backend/services/service_restart.py",
         "systemctl_remote_command",
+        "flags",
+    ): "` --no-pager` or empty, selected from a bool (#18714 diagnostics)",
+    (
+        "autobot-slm-backend/services/service_restart.py",
+        "systemctl_remote_command",
         "quoted",
     ): "built from shlex.quote(validate_unit_name(u)) in the line above",
 }

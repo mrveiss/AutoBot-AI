@@ -42,7 +42,7 @@ from dataclasses import dataclass, field
 from autobot_shared.singleton_factory import lazy_singleton
 from protocols.agent_communication import AgentIdentity
 from protocols.agent_kind import AgentKind
-from protocols.agent_presence import AgentPresenceRegistry, get_presence_registry
+from protocols.agent_presence import UNKNOWN_TENANT, AgentPresenceRegistry, get_presence_registry
 
 
 @dataclass
@@ -145,6 +145,18 @@ class PeerInboxDirectory:
             (kind, name, inbox.pending())
             for (kind, owner, name), inbox in self._inboxes.items()
             if owner == tenant_id and inbox.pending()
+        ]
+
+    def pending_for_projection(self) -> list[tuple[AgentKind, str | None, str, list[PeerMessageEntry]]]:
+        """Every non-empty inbox of every owner, as ``(kind, tenant_id, name, queued)`` (#18632).
+
+        For the install-wide SLM projection only -- callers turn it into counts and
+        sender names; content never leaves this process. Never drains.
+        """
+        return [
+            (kind, owner, name, inbox.pending())
+            for (kind, owner, name), inbox in self._inboxes.items()
+            if inbox.pending() and owner != UNKNOWN_TENANT
         ]
 
     def send(

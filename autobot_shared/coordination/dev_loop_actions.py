@@ -127,7 +127,7 @@ def build_action(
     )
 
 
-async def record(action: DevLoopAction) -> bool:
+async def record_dev_loop_action(action: DevLoopAction) -> bool:
     """Append *action* to its issue's history. ``False`` means not recorded.
 
     Never raises: the caller has already claimed the issue and may already have
@@ -144,7 +144,7 @@ async def record(action: DevLoopAction) -> bool:
         # One transaction, not three round-trips (review finding on #17380).
         # If `LPUSH` succeeded and `EXPIRE` then failed, the history key was
         # left with no TTL and unbounded by anything but `LTRIM` -- and
-        # `record` returns False while neither caller repairs the partial
+        # `record_dev_loop_action` returns False while neither caller repairs the partial
         # write, so the bounded-history contract broke silently. Same shape,
         # and the same fix, as `token_budget._increment` in this PR: before
         # EXEC none of the three has applied, after EXEC all of them have.
@@ -239,5 +239,5 @@ __all__ = [
     "issues_with_history",
     "last_refusal",
     "recent",
-    "record",
+    "record_dev_loop_action",
 ]

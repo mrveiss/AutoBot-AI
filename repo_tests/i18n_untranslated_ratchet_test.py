@@ -55,64 +55,36 @@ see must not read as the good state.
 
 from __future__ import annotations
 
-import json
-
 import pytest
-from repo_tests._paths import repo_root
 
-_REPO_ROOT = repo_root()
-_LOCALES = _REPO_ROOT / "autobot-frontend" / "src" / "i18n" / "locales"
+from scripts.list_untranslated import LOCALES, MIN_MEANINGFUL_LENGTH, is_meaningful, load, untranslated_keys
+
+_LOCALES = LOCALES
 
 # Lower these as translations land. Never raise one to admit a new untranslated
 # string: translate it, or leave the key out until it can be translated.
 BASELINE = {
-    "ar": 3719,  # #17561/#17565: skip-link labels and palette strings translated
-    "de": 1613,  # #17561/#17565: skip-link labels and palette strings translated
-    "es": 1661,  # #17561/#17565: skip-link labels and palette strings translated
-    "fa": 3782,  # #17561/#17565: skip-link labels and palette strings translated
-    "fr": 1858,  # #17561/#17565: skip-link labels and palette strings translated
-    "he": 3782,  # #17561/#17565: skip-link labels and palette strings translated
-    "lv": 2253,  # #17561/#17565: skip-link labels and palette strings translated
-    "pl": 2219,  # #17561/#17565: skip-link labels and palette strings translated
-    "pt": 2056,  # #17561/#17565: skip-link labels and palette strings translated
-    "ur": 3782,  # #17561/#17565: skip-link labels and palette strings translated
+    "ar": 3714,  # #14776: the retired BasePanel's untranslated base.panel keys removed (-1); #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
+    "de": 1609,  # #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
+    "es": 1657,  # #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
+    "fa": 3777,  # #14776: the retired BasePanel's untranslated base.panel keys removed (-1); #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
+    "fr": 1854,  # #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
+    "he": 3777,  # #14776: the retired BasePanel's untranslated base.panel keys removed (-1); #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
+    "lv": 2249,  # #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
+    "pl": 2215,  # #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
+    "pt": 2052,  # #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
+    "ur": 3777,  # #14776: the retired BasePanel's untranslated base.panel keys removed (-1); #17561/#17565: skip-link labels and palette strings translated; #18354: unused theme/darkMode/switchLanguage keys removed (-4)
 }
 
-# Below this length a match is far more likely to be a shared token than an
-# untranslated sentence.
-_MIN_MEANINGFUL_LENGTH = 12
-
-
-def _flatten(node: dict, prefix: str = "") -> dict[str, str]:
-    flat: dict[str, str] = {}
-    for key, value in node.items():
-        path = f"{prefix}.{key}" if prefix else key
-        if isinstance(value, dict):
-            flat.update(_flatten(value, path))
-        elif isinstance(value, str):
-            flat[path] = value
-    return flat
+# The ONE definition of "untranslated" lives in scripts/list_untranslated.py, which
+# translators run to find work (#18768); this guard counts with the same code.
+_MIN_MEANINGFUL_LENGTH = MIN_MEANINGFUL_LENGTH
+_untranslated_keys = untranslated_keys
+_is_meaningful = is_meaningful
 
 
 def _load(code: str) -> dict[str, str]:
-    return _flatten(json.loads((_LOCALES / f"{code}.json").read_text(encoding="utf-8")))
-
-
-def _is_meaningful(value: str) -> bool:
-    """Long enough and wordy enough that matching English means something."""
-    return len(value) > _MIN_MEANINGFUL_LENGTH and any(character.isalpha() for character in value)
-
-
-def _untranslated_keys(english: dict[str, str], locale: dict[str, str]) -> list[str]:
-    """English keys the locale does not render in its own words.
-
-    `locale.get(key, source)` is what folds the two states into one count: a
-    missing key falls back to the English source here exactly as it does at
-    runtime, so absent and present-but-identical are both equal to `source`.
-    Keys the locale carries that English does not are excluded by construction
-    — `locale-parity.test.ts` is what fails on those.
-    """
-    return [key for key, source in english.items() if _is_meaningful(source) and locale.get(key, source) == source]
+    return load(code, _LOCALES)
 
 
 def _untranslated(code: str) -> list[str]:
@@ -155,7 +127,9 @@ def test_untranslated_strings_only_shrink(code: str) -> None:
 
     assert actual <= baseline, (
         f"{code}: {actual} strings are still English, ratchet allows {baseline} (#14209). "
-        "A new user-facing string needs a translation in every locale, not the English text copied across."
+        "English is the only required language for now (owner, 2026-10-18; #12732): a new key goes into en.json "
+        "alone, and a PR that moves hard-coded literals into en.json raises this baseline by exactly the keys it "
+        "moved, citing them. Never copy English text into another locale's file."
     )
     assert actual == baseline, (
         f"{code}: down to {actual} untranslated but the baseline still says {baseline} — "

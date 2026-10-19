@@ -8,6 +8,7 @@
  * Preserves identical public API: class TerminalService, useTerminalService, singleton
  */
 
+import { backoffDelay } from '@autobot/ui'
 import { reactive, ref, type Ref } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import apiClient from '@/utils/ApiClient'
@@ -522,7 +523,6 @@ class TerminalService {
     const attempts = this.reconnectAttempts.get(sessionId) || 0
     this.reconnectAttempts.set(sessionId, attempts + 1)
 
-    const delay = this.reconnectDelay * Math.pow(2, attempts)
     this.setConnectionState(sessionId, CONNECTION_STATES.RECONNECTING)
 
     setTimeout(async () => {
@@ -534,7 +534,7 @@ class TerminalService {
           this.setConnectionState(sessionId, CONNECTION_STATES.ERROR)
         }
       }
-    }, delay)
+    }, backoffDelay(attempts, { base: this.reconnectDelay }))
   }
 
   /** Remove the WebSocket reference and stop its health-check. */

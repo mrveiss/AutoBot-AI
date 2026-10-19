@@ -6,9 +6,9 @@
 
 BrowserContentBackend asks the canonical browser interface for a browser that can
 navigate *and* extract structured content, and maps the ``BrowserResult`` onto
-``ContentResult``. It no longer names a stack: ``EXTRACT_STRUCTURED`` is what
+``ContentReachResult``. It no longer names a stack: ``EXTRACT_STRUCTURED`` is what
 selects the research browser, because that is the only stack producing the
-``structured`` half of a ``ContentResult`` (ADR-009 step 3).
+``structured`` half of a ``ContentReachResult`` (ADR-009 step 3).
 
 Everything stays lazy — the interface, the backends and Playwright itself are
 imported inside the methods that need them, so importing this module never
@@ -30,7 +30,7 @@ from autobot_shared.browser import (
 )
 from autobot_shared.logging_manager import get_logger
 from content_reach._url_guard import ensure_public_url, ensure_robots_allowed
-from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
+from content_reach.base import BackendError, ContentBackend, ContentReachResult, ContentRequest
 from source_attribution import SourceKind, SourceReliability
 
 logger = get_logger(__name__)
@@ -46,7 +46,7 @@ class BrowserContentBackend(ContentBackend):
     """
 
     #: What this backend needs from a browser. EXTRACT_STRUCTURED because the
-    #: ContentResult carries `structured` alongside `text`, and only the
+    #: ContentReachResult carries `structured` alongside `text`, and only the
     #: research stack produces it — so this both states the requirement and
     #: pins the routing (#13236).
     _REQUIRES = frozenset({BrowserCapability.NAVIGATE, BrowserCapability.EXTRACT_STRUCTURED})
@@ -77,7 +77,7 @@ class BrowserContentBackend(ContentBackend):
         except NoCapableBackendError:
             return False
 
-    async def fetch(self, request: ContentRequest) -> ContentResult:
+    async def fetch(self, request: ContentRequest) -> ContentReachResult:
         """Navigate to request.url and return extracted content.
 
         Raises BackendError if request.url is empty or the browser fetch fails.
@@ -107,8 +107,8 @@ class BrowserContentBackend(ContentBackend):
         error = result.error or "unknown error"
         raise BackendError(f"BrowserContentBackend: navigation failed for {url!r}: {error}")
 
-    async def _navigate(self, request: ContentRequest) -> ContentResult:
-        """Issue the browser navigation call and map result to ContentResult.
+    async def _navigate(self, request: ContentRequest) -> ContentReachResult:
+        """Issue the browser navigation call and map result to ContentReachResult.
 
         Guards (SSRF/robots) are NOT re-checked here — callers must run them
         before calling _navigate (BrowserContentBackend.fetch does; BrowserSearchBackend
@@ -135,7 +135,7 @@ class BrowserContentBackend(ContentBackend):
         if not result.success:
             self._raise_for_failed_result(result, request.url)
 
-        return ContentResult(
+        return ContentReachResult(
             success=True,
             source_type=self.source_type,
             backend_used=self.name,
@@ -161,7 +161,7 @@ class BrowserSearchBackend(BrowserContentBackend):
     def __init__(self, source_type: SourceKind) -> None:
         super().__init__(source_type=source_type, name="browser_search")
 
-    async def fetch(self, request: ContentRequest) -> ContentResult:
+    async def fetch(self, request: ContentRequest) -> ContentReachResult:
         """Build a DDG search URL from request.query and fetch via browser."""
         search_url = _DDG_SEARCH_URL.format(quote_plus(request.query))
         await ensure_public_url(search_url)

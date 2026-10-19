@@ -106,7 +106,9 @@ _BASELINES = {
         # OrphanListResponse, OrphanRepairResponse, AuditQueryResponse) for the
         # Data Hygiene page's new orphan-storage/orphan-repair/audit calls
         # (#17157). None has a generated contract yet to derive from.
-        "responses": 34,
+        # #18739: 34 -> 33. `interface UserResponse` left useAutobotApi.ts with
+        # the stale /users calls it typed.
+        "responses": 33,
         "inline_generics": 87,
     },
 }

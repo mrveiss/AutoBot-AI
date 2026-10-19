@@ -5,17 +5,17 @@
 """Explicit state-machine routing for workflow automation (#1380).
 
 Replaces implicit hardcoded step sequencing with a data-driven
-``WorkflowState`` model and ``route_next()`` dispatcher.  State is
+``AutomationWorkflowState`` model and ``route_automation_next()`` dispatcher.  State is
 persisted in Redis (keyed ``autobot:workflow:state:{id}``) and every
 transition is logged to the :class:`ServiceMessageBus` for audit.
 
 Usage::
 
     from services.workflow_automation.state_machine import (
-        WorkflowStateMachine,
+        AutomationWorkflowStateMachine,
     )
 
-    sm = WorkflowStateMachine()
+    sm = AutomationWorkflowStateMachine()
     state = await sm.create(workflow_id="abc", goal="deploy app")
     state = await sm.transition(state, "executing", "browser-worker")
 """
@@ -61,7 +61,7 @@ DEFAULT_ROUTING_TABLE: Dict[str, str] = {
 }
 
 
-class WorkflowState(BaseModel):
+class AutomationWorkflowState(BaseModel):
     """Inspectable state for a single workflow execution (#1380)."""
 
     workflow_id: str
@@ -88,7 +88,7 @@ class WorkflowState(BaseModel):
 # ------------------------------------------------------------------
 
 
-def route_next(state: WorkflowState) -> str:
+def route_automation_next(state: AutomationWorkflowState) -> str:
     """Determine the next service based on current workflow state.
 
     Returns the service name from the routing table, or ``"complete"``
@@ -118,7 +118,7 @@ def _state_key(workflow_id: str) -> str:
 # ------------------------------------------------------------------
 
 
-class WorkflowStateMachine(AsyncRedisClientMixin):
+class AutomationWorkflowStateMachine(AsyncRedisClientMixin):
     """Manages workflow state lifecycle with Redis persistence.
 
     Every transition is:
@@ -136,9 +136,9 @@ class WorkflowStateMachine(AsyncRedisClientMixin):
         workflow_id: str,
         goal: str = "",
         routing_table: Dict[str, str] | None = None,
-    ) -> WorkflowState:
+    ) -> AutomationWorkflowState:
         """Create and persist a new workflow state."""
-        state = WorkflowState(
+        state = AutomationWorkflowState(
             workflow_id=workflow_id,
             goal=goal,
             current_step=WorkflowPhase.PLANNING.value,
@@ -160,12 +160,12 @@ class WorkflowStateMachine(AsyncRedisClientMixin):
 
     async def transition(
         self,
-        state: WorkflowState,
+        state: AutomationWorkflowState,
         to_phase: str,
         active_service: str | None = None,
         step_id: str | None = None,
         error: str | None = None,
-    ) -> WorkflowState:
+    ) -> AutomationWorkflowState:
         """Move *state* to *to_phase*, updating active service.
 
         If *step_id* is given it is appended to ``steps_completed``.
@@ -177,7 +177,7 @@ class WorkflowStateMachine(AsyncRedisClientMixin):
         if active_service:
             state.active_service = active_service
         else:
-            state.active_service = route_next(state)
+            state.active_service = route_automation_next(state)
 
         if step_id:
             state.steps_completed.append(step_id)
@@ -197,14 +197,14 @@ class WorkflowStateMachine(AsyncRedisClientMixin):
 
     # -- Load ----------------------------------------------------------
 
-    async def load(self, workflow_id: str) -> WorkflowState | None:
+    async def load(self, workflow_id: str) -> AutomationWorkflowState | None:
         """Load workflow state from Redis."""
         redis = await self._get_redis()
         raw = await redis.get(_state_key(workflow_id))
         if raw is None:
             return None
         text = raw.decode("utf-8") if isinstance(raw, bytes) else raw
-        return WorkflowState.model_validate_json(text)
+        return AutomationWorkflowState.model_validate_json(text)
 
     # -- Delete --------------------------------------------------------
 
@@ -215,7 +215,7 @@ class WorkflowStateMachine(AsyncRedisClientMixin):
 
     # -- Internal helpers ----------------------------------------------
 
-    async def _persist(self, state: WorkflowState) -> None:
+    async def _persist(self, state: AutomationWorkflowState) -> None:
         redis = await self._get_redis()
         await redis.set(
             _state_key(state.workflow_id),
@@ -225,7 +225,7 @@ class WorkflowStateMachine(AsyncRedisClientMixin):
 
     async def _log_transition(
         self,
-        state: WorkflowState,
+        state: AutomationWorkflowState,
         from_phase: str,
         to_phase: str,
     ) -> None:

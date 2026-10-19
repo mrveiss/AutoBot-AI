@@ -6,7 +6,7 @@
 Tests for the provider auth abstraction (#10551).
 
 Coverage:
-- ApiKeyAuth backward-compat: wraps api_key, BaseProvider init unchanged.
+- StaticApiKeyAuth backward-compat: wraps api_key, BaseProvider init unchanged.
 - OAuthAuth resolves + refreshes a token from a mocked vault.
 - Expired token triggers transparent refresh via the token endpoint.
 - Token value is never logged (no plaintext in log output).
@@ -31,11 +31,11 @@ import pytest
 import llm_shared.provider_auth as _provider_auth_mod  # standard import path
 from llm_shared.provider_auth import (
     LEGACY_SUBJECT,
-    ApiKeyAuth,
     DeviceCodeAuth,
     OAuthAuth,
     ProviderAuthError,
     SessionAuth,
+    StaticApiKeyAuth,
     TokenExpiredError,
     _merge_token_response,
     build_token_data,
@@ -53,28 +53,28 @@ _PA_MOD = _sys.modules.get(_PA_GLOBALS.get("__name__", ""), _provider_auth_mod)
 
 
 # ---------------------------------------------------------------------------
-# ApiKeyAuth — backward-compat
+# StaticApiKeyAuth — backward-compat
 # ---------------------------------------------------------------------------
 
 
 class TestApiKeyAuth:
     def test_returns_key(self):
-        auth = ApiKeyAuth("sk-test123")
+        auth = StaticApiKeyAuth("sk-test123")
         result = _sync_resolve(auth)
         assert result == "sk-test123"
 
     def test_repr_does_not_leak_key(self):
-        auth = ApiKeyAuth("sk-super-secret")
+        auth = StaticApiKeyAuth("sk-super-secret")
         r = repr(auth)
         assert "sk-super-secret" not in r
-        assert "ApiKeyAuth" in r
+        assert "StaticApiKeyAuth" in r
 
     def test_empty_key_raises(self):
         with pytest.raises(ProviderAuthError):
-            ApiKeyAuth("")
+            StaticApiKeyAuth("")
 
     def test_not_vault_backed(self):
-        auth = ApiKeyAuth("sk-x")
+        auth = StaticApiKeyAuth("sk-x")
         assert not auth.is_vault_backed()
 
 
@@ -94,7 +94,7 @@ class TestBaseProviderAuthIntegration:
     def _make_provider(self, settings=None, auth_strategy=None):
         """Return a minimal object that mirrors BaseProvider's auth wiring."""
 
-        from llm_shared.provider_auth import ApiKeyAuth, ProviderAuthStrategy  # noqa: PLC0415,F401
+        from llm_shared.provider_auth import ProviderAuthStrategy, StaticApiKeyAuth  # noqa: PLC0415,F401
 
         class _Stub:
             provider_name = "stub"
@@ -106,7 +106,7 @@ class TestBaseProviderAuthIntegration:
                 if auth_strategy_ is not None:
                     self._auth_strategy = auth_strategy_
                 elif self.settings.get("api_key"):
-                    self._auth_strategy = ApiKeyAuth(self.settings["api_key"])
+                    self._auth_strategy = StaticApiKeyAuth(self.settings["api_key"])
                 else:
                     self._auth_strategy = None
 
@@ -128,10 +128,10 @@ class TestBaseProviderAuthIntegration:
 
     def test_apikey_in_settings_creates_apikey_auth(self):
         p = self._make_provider(settings={"api_key": "sk-from-settings"})
-        assert isinstance(p._auth_strategy, ApiKeyAuth)
+        assert isinstance(p._auth_strategy, StaticApiKeyAuth)
 
     def test_explicit_strategy_wins_over_settings_key(self):
-        explicit = ApiKeyAuth("explicit-key")
+        explicit = StaticApiKeyAuth("explicit-key")
         p = self._make_provider(settings={"api_key": "settings-key"}, auth_strategy=explicit)
         assert p._auth_strategy is explicit
 
@@ -152,7 +152,7 @@ class TestBaseProviderAuthIntegration:
     def test_get_stats_includes_auth_strategy(self):
         p = self._make_provider(settings={"api_key": "sk-abc"})
         stats = p.get_stats()
-        assert stats["auth_strategy"] == "ApiKeyAuth"
+        assert stats["auth_strategy"] == "StaticApiKeyAuth"
 
     def test_get_stats_none_strategy(self):
         p = self._make_provider()
@@ -278,7 +278,7 @@ class TestTokenNotLogged:
 
     def test_api_key_not_logged(self, caplog):
         with caplog.at_level(logging.DEBUG, logger="llm_shared.provider_auth"):
-            auth = ApiKeyAuth("sk-ultra-secret-value")
+            auth = StaticApiKeyAuth("sk-ultra-secret-value")
             _sync(auth.resolve_token())
         assert "sk-ultra-secret-value" not in caplog.text
 

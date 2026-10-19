@@ -138,7 +138,7 @@ class AbstractConnector(ABC):
         """Return the auth dataclass this connector expects, or None (Issue #8145).
 
         Override in subclasses to declare the expected credential type:
-            return BearerAuth  # from knowledge.connectors.auth
+            return BearerAuth  # from autobot_shared.auth
         """
         return None
 

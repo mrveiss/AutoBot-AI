@@ -222,7 +222,7 @@ async def _load_queue_from_redis() -> List[Dict]:
         return []
 
 
-async def recover_index_queue(tasks_lock: asyncio.Lock, index_queue) -> int:
+async def recover_index_queue_into(tasks_lock: asyncio.Lock, index_queue) -> int:
     """Restore in-memory queue from Redis on startup (#1717).
 
     Args:

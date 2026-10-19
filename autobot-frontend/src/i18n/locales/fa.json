@@ -124,7 +124,6 @@
     "agentActivity": "فعالیت عامل",
     "mainNavigation": "ناوبری اصلی",
     "plugins": "Plugins",
-    "switchLanguage": "Switch language",
     "automation": "Automation",
     "secrets": "Secrets",
     "skipToContent": "رفتن به محتوای اصلی",
@@ -224,7 +223,8 @@
       "tip": "رابط حداقلی — پنهان کردن قابلیت‌های پیشرفته",
       "announceMinimal": "رابط حداقلی روشن شد. قابلیت‌های پیشرفته پنهان هستند.",
       "announceFull": "رابط کامل روشن شد. همه قابلیت‌ها نمایش داده می‌شوند."
-    }
+    },
+    "llcLedger": "دفتر عامل‌ها"
   },
   "llcCompanyStatus": {
     "showArchived": "نمایش بایگانی‌شده‌ها",
@@ -4227,7 +4227,7 @@
     "cursorBlink": "Cursor Blink",
     "keyboardHint": "Press Enter to send, Shift+Enter for new line, ↑/↓ for history",
     "reconnect": "Reconnect",
-    "dark": "Dark",
+    "dark": "تیره",
     "underline": "Underline",
     "settings": "Terminal Settings",
     "lines": "Lines:",
@@ -4235,7 +4235,7 @@
     "fontSize": "Font Size",
     "session": "Session:",
     "autobotVMs": "AutoBot VMs",
-    "light": "Light",
+    "light": "روشن",
     "closeWindow": "Close Window",
     "cursorStyle": "Cursor Style",
     "saveLog": "Save Log",
@@ -4804,7 +4804,6 @@
   "profile": {
     "confirmNewPassword": "Confirm new password",
     "newPassword": "New password",
-    "themeDark": "Dark",
     "changing": "Changing...",
     "tabGeneral": "General",
     "enableAnimations": "Enable animations",
@@ -4812,7 +4811,6 @@
     "soundNotifications": "Sound notifications",
     "tabSecurity": "Security",
     "voiceProfiles": "Voice Profiles",
-    "theme": "Theme",
     "pwFillAll": "Please fill in all password fields",
     "lastLogin": "Last Login:",
     "tabAppearance": "Appearance & Voice",
@@ -4820,7 +4818,6 @@
     "notifications": "Notifications",
     "emailNotifications": "Email notifications",
     "accountInfo": "Account Information",
-    "appearance": "Appearance",
     "savePreferences": "Save Preferences",
     "role": "Role:",
     "changePassword": "Change Password",
@@ -4830,7 +4827,6 @@
     "preferencesSaved": "Preferences saved!",
     "pwMismatch": "Passwords do not match",
     "fullScreen": "Full-screen",
-    "themeLight": "Light",
     "email": "Email:",
     "interface": "Interface",
     "pwTooShort": "Password must be at least 8 characters",
@@ -4840,7 +4836,6 @@
     "compactMode": "Compact mode",
     "voiceChatDisplay": "Voice Chat Display",
     "closeAria": "Close profile",
-    "themeAuto": "Auto",
     "pwChanged": "Password changed successfully!",
     "username": "Username:",
     "tabDevices": "Tab devices"
@@ -4854,8 +4849,8 @@
       "baseThemeChanged": "پوسته پایه به {name} تغییر کرد",
       "accentChanged": "رنگ تأکیدی به {name} تغییر کرد",
       "presetChanged": "پیش‌تنظیم پوسته به {name} تغییر کرد",
-      "dark": "Dark",
-      "light": "Light",
+      "dark": "تیره",
+      "light": "روشن",
       "switchToDark": "Switch to dark mode",
       "theme": "Theme",
       "switchToLight": "Switch to light mode",
@@ -4921,11 +4916,6 @@
       "feedbackDescription": "Help improve AutoBot by explaining your decision",
       "title": "Command Permission Required",
       "comment": "Comment"
-    },
-    "darkModeToggle": {
-      "toggleDarkMode": "Toggle dark mode",
-      "switchToLight": "Switch to light mode",
-      "switchToDark": "Switch to dark mode"
     },
     "messageStatus": {
       "sending": "Sending",
@@ -7579,10 +7569,6 @@
     },
     "input": {
       "clearInput": "Clear input"
-    },
-    "panel": {
-      "collapse": "Collapse panel",
-      "expand": "Expand panel"
     }
   },
   "voice": {
@@ -8931,6 +8917,72 @@
       "retry": "تلاش دوباره",
       "loadingItem": "در حال بارگذاری آیتم کاری…",
       "itemLoadFailed": "بارگذاری این آیتم کاری ممکن نشد"
+    },
+    "ledger": {
+      "title": "دفتر عامل‌ها",
+      "subtitle": "چه کسی در این شرکت روی چه کاری کار می‌کند و چه کسی منتظر است.",
+      "tabsAria": "نماهای دفتر",
+      "tabs": {
+        "now": "در حال کار",
+        "claims": "ادعاها",
+        "contention": "رقابت",
+        "activity": "فعالیت"
+      },
+      "col": {
+        "agent": "عامل",
+        "kind": "نوع",
+        "status": "وضعیت",
+        "task": "وظیفه فعلی",
+        "detail": "جزئیات",
+        "scope": "دامنه",
+        "mode": "حالت",
+        "intent": "هدف",
+        "expires": "انقضا",
+        "renewals": "تمدیدها"
+      },
+      "busy": "مشغول",
+      "idle": "بیکار",
+      "peerMessages": "پیام‌های همتای در انتظار",
+      "idleSubscribers": "اشتراک‌های بیکاری",
+      "pendingFor": "{n} در انتظار برای {name}",
+      "sentBy": "از {names}",
+      "waitsForIdle": "{who} منتظر است تا {target} بیکار شود",
+      "heldBy": "در اختیار {agent}",
+      "waitlistAria": "فهرست انتظار به ترتیب",
+      "silenceMeansHold": "درخواست، آزادسازی نیست: سکوت یعنی نگه‌داشتن، و ادعای تمدیدنشده خودبه‌خود منقضی می‌شود.",
+      "ask": "از دارنده بخواهید آزاد کند",
+      "askAria": "از دارنده {scope} بخواهید آن را آزاد کند",
+      "conflicts": "تعارض‌ها",
+      "recent": "فعالیت اخیر",
+      "conflict": {
+        "release_refused": "یک آزادسازی رد شد",
+        "claim_expired": "یک ادعا هنگام نگه‌داری منقضی شد",
+        "yield_unanswered": "یک درخواست واگذاری بی‌پاسخ ماند",
+        "claim_lapsed_during_action": "یک ادعا در حین یک اقدام منقضی شد"
+      },
+      "empty": {
+        "presence": "هیچ عاملی گزارش نداده است",
+        "peerMessages": "پیام در انتظاری نیست",
+        "idleSubscribers": "اشتراک بیکاری وجود ندارد",
+        "claims": "ادعایی وجود ندارد",
+        "contention": "رقابتی وجود ندارد",
+        "conflicts": "تعارضی وجود ندارد",
+        "activity": "فعالیت اخیری نیست"
+      },
+      "state": {
+        "loading": "در حال خواندن دفتر…",
+        "unavailableTitle": "خواندن دفتر ممکن نشد",
+        "unavailableBody": "مخزن {source} پاسخ نداد. این با نبودن هیچ ورودی یکی نیست.",
+        "errorTitle": "هنگام بارگذاری این بخش خطایی رخ داد"
+      },
+      "askState": {
+        "sending": "در حال ارسال…",
+        "sent": "درخواست ارسال شد — تصمیم با دارنده است؛ سکوت یعنی نگه‌داشتن.",
+        "tooSoon": "همین الان دربارهٔ این ادعا پرسیدید؛ یک دقیقه دیگر دوباره تلاش کنید.",
+        "notFound": "این وظیفه دیگر این ادعا را در اختیار ندارد — برای دیدن دارندهٔ فعلی بازخوانی کنید.",
+        "unavailable": "دسترسی به دفتر ممکن نشد؛ چیزی ارسال نشد.",
+        "error": "خطایی رخ داد و تحویل تأیید نشد. صفحه را تازه کنید تا ببینید آیا ادعا هنوز نگه داشته شده است."
+      }
     }
   },
   "code": {
@@ -9745,5 +9797,104 @@
       "unreachableAsOf": "غیرقابل دسترس — وضعیت سرویس‌ها نامشخص — وضعیت در {time}"
     },
     "lastKnown": "{text} (آخرین وضعیت شناخته‌شده)"
+  },
+  "schedule": {
+    "title": "زمان‌بندی",
+    "repeats": "تکرار",
+    "repeat": {
+      "minutes": "هر چند دقیقه",
+      "hourly": "ساعتی",
+      "daily": "روزانه",
+      "weekly": "هفتگی",
+      "monthly": "ماهانه",
+      "once": "یک‌بار"
+    },
+    "every": "هر",
+    "minutesUnit": "دقیقه",
+    "onlyBetween": "فقط بین",
+    "windowFrom": "از",
+    "windowTo": "تا",
+    "and": "و",
+    "onDays": "در روزهای (اختیاری)",
+    "daysHintAny": "اگر چیزی انتخاب نشود، هر روز اجرا می‌شود.",
+    "onDaysRequired": "در روزهای",
+    "atMinute": "در دقیقه",
+    "at": "در ساعت",
+    "hour": "ساعت",
+    "minute": "دقیقه",
+    "weekdaysOnly": "فقط روزهای کاری",
+    "monthly": {
+      "which": "کدام روز ماه",
+      "day": "روز ماه",
+      "lastDay": "آخرین روز",
+      "nth": "روز هفته در ماه",
+      "onDay": "در روز",
+      "onThe": "در"
+    },
+    "nth": {
+      "1": "اولین",
+      "2": "دومین",
+      "3": "سومین",
+      "4": "چهارمین",
+      "last": "آخرین"
+    },
+    "weekday": "روز هفته",
+    "shortMonths": "ماه‌هایی که این روز را ندارند در آخرین روز ماه اجرا می‌شوند.",
+    "date": "تاریخ",
+    "timezone": "منطقه زمانی",
+    "zone": {
+      "company": "زمان شرکت",
+      "usesCompany": "از منطقه زمانی شرکت استفاده می‌کند."
+    },
+    "summary": {
+      "minutes": "هر {every} دقیقه",
+      "minutesWeekdays": "هر {every} دقیقه در روزهای کاری",
+      "minutesDays": "هر {every} دقیقه، در روزهای {days}",
+      "minutesWindow": "هر {every} دقیقه بین {from} و {to}",
+      "minutesWindowWeekdays": "هر {every} دقیقه بین {from} و {to} در روزهای کاری",
+      "minutesWindowDays": "هر {every} دقیقه بین {from} و {to}، در روزهای {days}",
+      "hourly": "هر ساعت در دقیقه {minute}",
+      "daily": "هر روز ساعت {time}",
+      "dailyWeekdays": "هر روز کاری ساعت {time}",
+      "weekly": "هر هفته {days} ساعت {time}",
+      "monthlyDay": "روز {day} هر ماه ساعت {time}",
+      "monthlyLastDay": "آخرین روز هر ماه ساعت {time}",
+      "monthlyNth1": "اولین {weekday} هر ماه ساعت {time}",
+      "monthlyNth2": "دومین {weekday} هر ماه ساعت {time}",
+      "monthlyNth3": "سومین {weekday} هر ماه ساعت {time}",
+      "monthlyNth4": "چهارمین {weekday} هر ماه ساعت {time}",
+      "monthlyNthLast": "آخرین {weekday} هر ماه ساعت {time}",
+      "once": "یک‌بار در {date} ساعت {time}",
+      "withZone": "{summary}، {zone}",
+      "custom": "زمان‌بندی سفارشی"
+    },
+    "customNote": "این زمان‌بندی را نمی‌توان با کلیک نمایش داد.",
+    "editCron": "ویرایش به‌صورت cron",
+    "doneEditing": "پایان ویرایش",
+    "nextRuns": "اجراهای بعدی",
+    "noRuns": "اجرای آینده‌ای وجود ندارد.",
+    "previewLoading": "در حال بررسی با سرور...",
+    "previewApprox": "تقریبی: سرور هنگام ذخیره، زمان‌های دقیق را تأیید می‌کند.",
+    "previewUnavailable": "برای این زمان‌بندی پیش‌نمایش ممکن نیست.",
+    "advanced": "پیشرفته: ذخیره‌شده به‌صورت",
+    "saved": {
+      "cron": "cron استاندارد",
+      "calendar": "قانون تقویم",
+      "once": "اجرای یک‌باره"
+    },
+    "savedAs": "زمان‌بندی ذخیره‌شده",
+    "savedNote": {
+      "once": "یک‌بار اجرا می‌شود. هیچ cron تکرارشونده‌ای ذخیره نمی‌شود."
+    },
+    "cronLabel": "عبارت cron",
+    "cronHint": "فقط cron استاندارد پنج‌فیلدی: دقیقه، ساعت، روز ماه، ماه، روز هفته. انتخابگر و این فیلد همگام می‌مانند.",
+    "cron_extension_unsupported": "{token} در cron استاندارد وجود ندارد. برای زمان‌بندی‌هایی مانند آخرین جمعه ماه از انتخابگر استفاده کنید.",
+    "invalid_timezone": "این منطقه زمانی شناخته نشد.",
+    "once_in_past": "آن تاریخ و ساعت گذشته است.",
+    "invalid_rrule": "این قانون تقویم معتبر نیست.",
+    "invalid_cron": "یک cron استاندارد پنج‌فیلدی وارد کنید، مثلاً 0 9 * * 1-5.",
+    "invalid_generic": "این زمان‌بندی معتبر نیست.",
+    "conflicting_fields": "زمان‌بندی یا به‌صورت cron ذخیره می‌شود یا به‌صورت قانون تقویم یا اجرای یک‌باره، نه هر دو.",
+    "gatedNote": "آخرین روز، روز هفته در ماه، روزهای ۲۹ تا ۳۱ و اجرای یک‌باره پس از به‌روزرسانی زمان‌بند در دسترس خواهند بود."
   }
 }

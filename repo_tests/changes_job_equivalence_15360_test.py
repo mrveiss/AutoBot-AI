@@ -170,6 +170,22 @@ ALLOWED_ADDITIONS = {
             # #18549: one_playwright_server_18549_test.py reads the canonical server and its store.
             "autobot-browser-worker/playwright-server.js",
             "autobot-browser-worker/session-store.js",
+            # #18553: redis_direct_constructor_18553_test.py scans this installer for direct redis constructors.
+            "autobot-backend/code_analysis/install.sh",
+            # #15469: one_brand_mark_and_announcer_18240_test.py pins these icons to the kit mark.
+            "autobot-frontend/public/favicon.ico",
+            "autobot-frontend/public/favicon.svg",
+            "autobot-slm-frontend/public/favicon.svg",
+            # #18500: the autofix steps moved into a composite action with a dispatch-only caller; its guards read both.
+            ".github/actions/generated-types-autofix/action.yml",
+            f"{WORKFLOWS}/dispatch-generated-types.yml",
+            # #18555: env_file_family_18555_test.py reads every tracked env file.
+            "**/.env*",
+            "**/*.env",
+            # #18653: uninstall_covers_role_packages_18653_test.py reads .python-version.
+            ".python-version",
+            # #18729: docker_admin_seed_18729_test.py reads every Docker entrypoint.
+            "docker/*/*entrypoint*.sh",
         ]
     },
     # frontend_path_filter_mirror_test pins frontend-test.yml's on.push.paths to this file, so the

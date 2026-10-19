@@ -235,7 +235,9 @@ MUST_STAY_VISIBLE = {
         "llm_key_rotation_interval_minutes",
         "tokenizers_parallelism",
     ],
-    "tls": ["ca_cert", "cert_dir", "remote_cert_dir"],
+    # ca_cert / ca_key / ssh_key are file PATHS (the PKI tooling reads them), not key material;
+    # cert_validity_days is an int. None holds a secret value (#17312).
+    "tls": ["ca_cert", "ca_key", "ssh_key", "cert_validity_days", "cert_dir", "remote_cert_dir"],
     "path": [
         # Service-account inter-node key (#12429) -- location of a credential,
         # not the credential; `is_credential_field` already excludes it via the

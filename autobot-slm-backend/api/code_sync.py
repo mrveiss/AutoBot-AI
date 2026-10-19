@@ -68,11 +68,11 @@ from autobot_shared.secret_redaction import redact_mapping
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 from config import settings
-from models.database import CodeSource, CodeStatus
+from models.database import CodeStatus
 from models.database import ComponentSyncJob as ComponentSyncJobModel
 from models.database import FleetSyncJob as FleetSyncJobModel
 from models.database import FleetSyncNodeState as FleetSyncNodeStateModel
-from models.database import Node, NodeRole, RoleStatus, Setting, UpdateSchedule
+from models.database import Node, NodeCodeSource, NodeRole, RoleStatus, Setting, UpdateSchedule
 from models.schemas import (
     CodeSyncRefreshResponse,
     CodeSyncStatusResponse,
@@ -140,7 +140,7 @@ class NodeSyncState:
 
 
 @dataclass
-class FleetSyncJob:
+class FleetSyncJobState:
     """Fleet sync job state (Issue #741 Phase 8)."""
 
     job_id: str
@@ -434,7 +434,7 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
 
 
 async def _persist_fleet_sync_job(
-    job: FleetSyncJob,
+    job: FleetSyncJobState,
 ) -> None:
     """Persist a fleet sync job and its node states to DB (#1707)."""
     from services.database import db_service
@@ -620,12 +620,12 @@ async def _list_jobs_from_db(limit: int = 10) -> List[FleetSyncJobStatus]:
 
 
 async def _get_tracker_for_db(db: AsyncSession):
-    """Return a GitTracker configured from the active CodeSource DB record.
+    """Return a GitTracker configured from the active NodeCodeSource DB record.
 
     Falls back to DEFAULT_REPO_PATH / DEFAULT_BRANCH when no active
     source is configured.  Issue #1185.
     """
-    result = await db.execute(select(CodeSource).where(CodeSource.is_active.is_(True)))
+    result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.is_active.is_(True)))
     source = result.scalar_one_or_none()
     repo_path = source.repo_path if source else DEFAULT_REPO_PATH
     branch = source.branch if source else DEFAULT_BRANCH
@@ -2913,11 +2913,11 @@ async def _fetch_code_source_connection_info(
         Tuple of (source_ip, source_user, repo_path)
         or None if the required records are missing.
     """
-    from models.database import CodeSource, Node  # avoid circular import
+    from models.database import Node, NodeCodeSource  # avoid circular import
 
     try:
         async with db_service.session() as db:
-            source_result = await db.execute(select(CodeSource).where(CodeSource.is_active.is_(True)))
+            source_result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.is_active.is_(True)))
             source = source_result.scalar_one_or_none()
             if not source:
                 logger.error("SLM self-sync failed: no active code source")
@@ -2944,7 +2944,7 @@ async def _mark_slm_node_up_to_date(db_service, node_id: str) -> None:
 
     Persist UP_TO_DATE status for the SLM node after a successful rsync.
     Uses git_tracker.get_local_commit() for the actual code_source HEAD
-    instead of the potentially-stale CodeSource.last_known_commit.
+    instead of the potentially-stale NodeCodeSource.last_known_commit.
     """
     from models.database import Node  # avoid circular import
 
@@ -3305,7 +3305,7 @@ async def self_update(
     return await resolve_and_queue_self_update(db)
 
 
-async def _sync_regular_nodes(executor, job: FleetSyncJob, regular_nodes: list) -> None:
+async def _sync_regular_nodes(executor, job: FleetSyncJobState, regular_nodes: list) -> None:
     """Phase 1: sync all regular nodes via Ansible batches.
 
     Helper for _run_fleet_sync_job (#1707 refactor).
@@ -3334,7 +3334,7 @@ async def _sync_regular_nodes(executor, job: FleetSyncJob, regular_nodes: list) 
             await asyncio.sleep(5)
 
 
-async def _sync_slm_self_node(executor, job: FleetSyncJob, slm_self_node: NodeSyncState) -> None:
+async def _sync_slm_self_node(executor, job: FleetSyncJobState, slm_self_node: NodeSyncState) -> None:
     """Phase 2: sync SLM self-node LAST (#1209).
 
     Helper for _run_fleet_sync_job. Persists final status to DB before
@@ -3391,7 +3391,7 @@ async def _sync_slm_self_node(executor, job: FleetSyncJob, slm_self_node: NodeSy
         await _sync_single_node(executor, slm_self_node, restart=False, job_id=job.job_id)
 
 
-async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
+async def _run_fleet_sync_job(job: FleetSyncJobState) -> None:
     """Background task to execute fleet sync job using Ansible playbooks.
 
     Processes nodes according to the specified strategy and batch size.
@@ -3640,13 +3640,13 @@ async def mark_node_synced(
     return MarkSyncedResponse(success=True, node_id=node_id, version=version)
 
 
-def _build_fleet_sync_job_from_nodes(nodes: List[Node], request: FleetSyncRequest) -> FleetSyncJob:
+def _build_fleet_sync_job_from_nodes(nodes: List[Node], request: FleetSyncRequest) -> FleetSyncJobState:
     """Helper for sync_fleet. Ref: #1088.
 
-    Construct a FleetSyncJob with one NodeSyncState per node.
+    Construct a FleetSyncJobState with one NodeSyncState per node.
     """
     job_id = str(uuid.uuid4())[:16]
-    job = FleetSyncJob(
+    job = FleetSyncJobState(
         job_id=job_id,
         strategy=request.strategy,
         batch_size=request.batch_size,
@@ -4108,7 +4108,7 @@ async def _get_schedule_target_nodes(db: AsyncSession, schedule: UpdateSchedule)
     return nodes_result.scalars().all()
 
 
-def _create_fleet_sync_job(nodes: List[Node], schedule: UpdateSchedule) -> FleetSyncJob:
+def _create_fleet_sync_job(nodes: List[Node], schedule: UpdateSchedule) -> FleetSyncJobState:
     """
     Create a fleet sync job with target nodes.
 
@@ -4116,7 +4116,7 @@ def _create_fleet_sync_job(nodes: List[Node], schedule: UpdateSchedule) -> Fleet
     """
     job_id = str(uuid.uuid4())[:16]
 
-    job = FleetSyncJob(
+    job = FleetSyncJobState(
         job_id=job_id,
         strategy="rolling",
         batch_size=1,
@@ -4243,7 +4243,7 @@ async def _get_active_commit(db: AsyncSession) -> str:
     Raises:
         HTTPException: If no active code source or commit is available
     """
-    result = await db.execute(select(CodeSource).where(CodeSource.is_active == True))  # noqa: E712
+    result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.is_active == True))  # noqa: E712
     source = result.scalar_one_or_none()
 
     if not source or not source.last_known_commit:

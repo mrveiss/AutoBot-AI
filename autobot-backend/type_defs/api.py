@@ -27,7 +27,7 @@ class APISuccessResponse(BaseModel, Generic[T]):
     timestamp: TimestampStr | None = None
 
 
-class APIErrorResponse(BaseModel):
+class APIErrorEnvelope(BaseModel):
     """Standard error response structure."""
 
     success: bool = False
@@ -38,7 +38,7 @@ class APIErrorResponse(BaseModel):
 
 
 # Union type for any API response
-APIResponse = APISuccessResponse | APIErrorResponse
+APIResponse = APISuccessResponse | APIErrorEnvelope
 
 
 class PaginatedResponse(BaseModel, Generic[T]):
@@ -52,7 +52,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
     next_cursor: str | None = None
 
 
-class HealthCheckResponse(BaseModel):
+class HealthCheckSummaryResponse(BaseModel):
     """Health check response structure."""
 
     status: str = Field(..., description="Service status: healthy, degraded, unhealthy")
@@ -61,7 +61,7 @@ class HealthCheckResponse(BaseModel):
     checks: Metadata | None = None
 
 
-class ServiceStatusResponse(BaseModel):
+class ServiceLatencyStatusResponse(BaseModel):
     """Service status response structure."""
 
     service_name: str
@@ -82,7 +82,7 @@ class BatchOperationResponse(BaseModel):
     errors: List[Metadata] | None = None
 
 
-class SearchResponse(BaseModel, Generic[T]):
+class SearchResultsResponse(BaseModel, Generic[T]):
     """Search response structure."""
 
     results: List[T]

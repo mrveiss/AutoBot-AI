@@ -136,10 +136,10 @@ class LibrarianAssistant:
             return []
 
     def _content_data_from_result(self, result: Any, url: str) -> Dict[str, Any]:
-        """Map a ContentResult to the 8-key content_data shape. Issue #10932.
+        """Map a ContentReachResult to the 8-key content_data shape. Issue #10932.
 
         Args:
-            result: ContentResult from content_reach registry
+            result: ContentReachResult from content_reach registry
             url: Original request URL (fallback when result.url is empty)
 
         Returns:

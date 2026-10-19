@@ -24,7 +24,7 @@ from constants.threshold_constants import (
     TimingConstants,
 )
 from events.types import create_plan_event
-from planner.types import ExecutionPlan, PlanStatus, PlanStep, StepStatus
+from planner.types import ExecutionPlan, PlanStatus, PlanStep, PlanStepStatus
 
 logger = get_logger(__name__)
 
@@ -383,7 +383,7 @@ Output ONLY valid JSON in this format:
         """
         plan, step = await self._get_plan_and_step(plan_id, step_id)
 
-        step.status = StepStatus.IN_PROGRESS
+        step.status = PlanStepStatus.IN_PROGRESS
         step.started_at = now_utc()
         plan.status = PlanStatus.IN_PROGRESS
 
@@ -457,7 +457,7 @@ Output ONLY valid JSON in this format:
             reflection: Optional reflection text
             tools_used: Optional list of tools used
         """
-        step.status = StepStatus.COMPLETED
+        step.status = PlanStepStatus.COMPLETED
         step.completed_at = now_utc()
         step.reflection = reflection
 
@@ -531,7 +531,7 @@ Output ONLY valid JSON in this format:
             error: Error message
             reflection: Optional reflection text
         """
-        step.status = StepStatus.FAILED
+        step.status = PlanStepStatus.FAILED
         step.completed_at = now_utc()
         step.reflection = reflection or f"Failed: {error}"
 
@@ -543,7 +543,7 @@ Output ONLY valid JSON in this format:
         # Mark dependent steps as blocked
         for other_step in plan.steps:
             if step.step_id in other_step.depends_on:
-                other_step.status = StepStatus.BLOCKED
+                other_step.status = PlanStepStatus.BLOCKED
 
         # Update plan status
         if plan.has_failures():
@@ -568,7 +568,7 @@ Output ONLY valid JSON in this format:
         """
         plan, step = await self._get_plan_and_step(plan_id, step_id)
 
-        step.status = StepStatus.SKIPPED
+        step.status = PlanStepStatus.SKIPPED
         step.reflection = f"Skipped: {reason}"
         step.completed_at = now_utc()
 
@@ -640,7 +640,7 @@ Output ONLY valid JSON in this format:
             plan: The plan to update
             new_context: New context for replanning
         """
-        remaining = [s for s in plan.steps if s.status in (StepStatus.PENDING, StepStatus.BLOCKED)]
+        remaining = [s for s in plan.steps if s.status in (PlanStepStatus.PENDING, PlanStepStatus.BLOCKED)]
 
         if not remaining:
             return
@@ -655,8 +655,8 @@ Output ONLY valid JSON in this format:
         )
 
         # Replace pending/blocked steps
-        completed_steps = [s for s in plan.steps if s.status == StepStatus.COMPLETED]
-        in_progress = [s for s in plan.steps if s.status == StepStatus.IN_PROGRESS]
+        completed_steps = [s for s in plan.steps if s.status == PlanStepStatus.COMPLETED]
+        in_progress = [s for s in plan.steps if s.status == PlanStepStatus.IN_PROGRESS]
 
         plan.steps = completed_steps + in_progress + new_plan.steps
 
@@ -812,7 +812,7 @@ class InMemoryPlannerModule(PlannerModule):
         if not step:
             raise ValueError(f"Step not found: {step_id}")
 
-        step.status = StepStatus.IN_PROGRESS
+        step.status = PlanStepStatus.IN_PROGRESS
         step.started_at = now_utc()
         plan.status = PlanStatus.IN_PROGRESS
         plan.update_metrics()
@@ -834,7 +834,7 @@ class InMemoryPlannerModule(PlannerModule):
         if not step:
             raise ValueError(f"Step not found: {step_id}")
 
-        step.status = StepStatus.COMPLETED
+        step.status = PlanStepStatus.COMPLETED
         step.completed_at = now_utc()
         step.reflection = reflection
         plan.update_metrics()
@@ -861,7 +861,7 @@ class InMemoryPlannerModule(PlannerModule):
         if not step:
             raise ValueError(f"Step not found: {step_id}")
 
-        step.status = StepStatus.FAILED
+        step.status = PlanStepStatus.FAILED
         step.reflection = reflection or error
         plan.status = PlanStatus.FAILED
         plan.update_metrics()

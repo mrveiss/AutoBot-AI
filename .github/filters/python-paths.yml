@@ -38,6 +38,16 @@ python:
   # must run it.
   - '.env.example'
   - 'autobot-frontend/.env.example'
+  # #18555: env_file_family_18555_test.py reads every tracked env file -- one
+  # host-key format across the family, one Docker env file; an edit confined to
+  # any of them, or a new one, must run it.
+  - '**/.env*'
+  - '**/*.env'
+  # #18653: uninstall_covers_role_packages_18653_test.py reads the interpreter
+  # version the python_interpreter role installs (python{{ version }} packages).
+  - '.python-version'
+  # #18729: docker_admin_seed_18729_test.py reads every Docker entrypoint's user-mode default.
+  - 'docker/*/*entrypoint*.sh'
   # #18592: install_preflight_and_source_18581_test.py reads INSTALL.md; compose_slm_gui_profile_18585_test.py reads the root compose file and the frontend Dockerfile.
   - 'INSTALL.md'
   - 'docker-compose.yml'
@@ -151,6 +161,17 @@ python:
   - 'autobot-slm-backend/ansible/**'
   - 'tools/git-hooks/**'
   - 'scripts/install-git-hooks.sh'
+
+  # #18553: redis_direct_constructor_baseline_18553.py names this shell script, which embeds a
+  # direct Redis client. A change confined to it touches no `**/*.py`, so python-suite would
+  # report green while the guard that counts its constructor never ran. (The two deploy scripts
+  # it also names sit under the ansible tree above.)
+  - 'autobot-backend/code_analysis/install.sh'
+  # #15469: one_brand_mark_and_announcer_18240_test.py pins these icons to the kit mark (byte
+  # identity / a sha256 pair). A change confined to one touches no `**/*.py`, so the guard must still run.
+  - 'autobot-frontend/public/favicon.ico'
+  - 'autobot-frontend/public/favicon.svg'
+  - 'autobot-slm-frontend/public/favicon.svg'
 
   # #16249: the CI wrappers under pipeline-scripts/ and the one library they
   # source. Each has a python-suite test that runs the script, so a change
@@ -317,6 +338,10 @@ python:
   # here, a change confined to this file -- the only change that could add
   # `install-git-hooks.sh` back in -- skips the guard.
   - '.github/workflows/auto-fix-generated-types.yml'
+  # #18500: the autofix steps moved into a composite action with a dispatch-only
+  # caller; the guards above (and autofix_types_dispatch_18500_test.py) read both.
+  - '.github/actions/generated-types-autofix/action.yml'
+  - '.github/workflows/dispatch-generated-types.yml'
   # #17173: `repo_tests/secrets_baseline_reason_entries.py`'s `SPECIFIC_REASONS`
   # table names files under this tree by concrete literal (baseline keys are
   # (filename, type, hashed_secret) triples) -- the same filter-gap shape as

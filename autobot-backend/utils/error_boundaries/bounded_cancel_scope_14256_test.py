@@ -24,6 +24,7 @@ import threading
 import pytest
 from fastapi import HTTPException
 
+import utils.error_boundaries  # noqa: F401  registers the backend cancel-scope provider
 from autobot_shared.error_boundaries import bounded
 from utils import cancel_tokens as ct
 

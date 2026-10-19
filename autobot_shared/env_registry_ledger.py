@@ -54,3 +54,91 @@ register_env_var(
         range=(32, 2000),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LEDGER_PROJECTION_TTL_S",
+        type=int,
+        default=120,
+        description=(
+            "How long the user backend's snapshot of live agent state (presence, pending peer "
+            "messages, idle subscriptions) stays readable by the SLM ledger without a refresh "
+            "(#18632). Longer than the presence sweep so one slow sweep does not blank the SLM; "
+            "a stopped backend's snapshot expires and reads as 'couldn't read', never as stale."
+        ),
+        component="orchestration",
+        range=(10, 3600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LEDGER_SCOPE_MAX_LEN",
+        type=int,
+        default=512,
+        description=(
+            "Longest claim scope a yield request may name (#18607). A longer request body is "
+            "refused with HTTP 422 at parse time, before anything reads it."
+        ),
+        component="orchestration",
+        range=(64, 4096),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LEDGER_ID_MAX_LEN",
+        type=int,
+        default=256,
+        description=(
+            "Longest holder task id a yield request may name (#18607). A longer request body is "
+            "refused with HTTP 422 at parse time, before anything reads it."
+        ),
+        component="orchestration",
+        range=(32, 1024),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LEDGER_YIELD_ASK_WINDOW_S",
+        type=int,
+        default=60,
+        description=(
+            "Seconds over which one person may ask the holder of one claim to release it at most "
+            "AUTOBOT_LEDGER_YIELD_ASK_LIMIT times (#18599). Keyed by user and scope."
+        ),
+        component="orchestration",
+        range=(1, 86400),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LEDGER_YIELD_ASK_LIMIT",
+        type=int,
+        default=1,
+        description=(
+            "How many times one person may ask the holder of one claim to release it inside "
+            "AUTOBOT_LEDGER_YIELD_ASK_WINDOW_S (#18599); further asks answer HTTP 429."
+        ),
+        component="orchestration",
+        range=(1, 100),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ISSUE_CLAIM_SESSION_TTL_S",
+        type=int,
+        default=14400,
+        description=(
+            "How long a developer session's claim on a GitHub issue survives without a ledger "
+            "heartbeat (#17098). The session ledger writes through to the work-claims registry "
+            "for its issue kind; a crashed session frees the issue after this long. Mirrors the "
+            "ledger's own 4h default."
+        ),
+        component="orchestration",
+        range=(60, 172800),
+    )
+)

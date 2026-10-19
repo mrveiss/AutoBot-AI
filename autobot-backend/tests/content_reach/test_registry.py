@@ -5,7 +5,7 @@
 import pytest
 
 from circuit_breaker import CircuitBreakerOpenError
-from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
+from content_reach.base import BackendError, ContentBackend, ContentReachResult, ContentRequest
 from content_reach.chain import ContentSourceChain
 from content_reach.registry import ContentSourceRegistry
 from source_attribution import SourceKind
@@ -27,10 +27,10 @@ class StubBackend(ContentBackend):
         if self._mode == "fail_exc":
             raise BackendError("nope")
         if self._mode == "fail_result":
-            return ContentResult.failure(self.source_type, "empty")
+            return ContentReachResult.failure(self.source_type, "empty")
         if self._mode == "cb_open":
             raise CircuitBreakerOpenError("stub", 1, 0.0)
-        return ContentResult(
+        return ContentReachResult(
             success=True,
             source_type=self.source_type,
             backend_used=self.name,

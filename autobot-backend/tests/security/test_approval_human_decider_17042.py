@@ -53,19 +53,21 @@ from tests.security._credential_harness import (
 )
 
 #: (status, refuser) per credential kind for each system. "human" means the
-#: #17042 check refused it; any other refuser is credential resolution, which
-#: the LLC route's sync ``get_current_user`` never extends to service/run/device.
+#: #17042 check refused it; any other refuser is credential resolution or a gate
+#: before it. Since #18688 the LLC route resolves credentials through the same
+#: canonical ``get_current_user`` as the async route, so run/device JWTs are now
+#: refused by their path allow-lists (403, was 401 "no user") and the internal
+#: service key resolves to a service principal that the wrapper refuses at
+#: authentication (401, as before): service principals are not tenant admins.
 _LLC_EXPECTED = {
     "pre_17042_login_jwt": (403, REFUSED_BY_HUMAN_CHECK),
-    "internal_service_key": (401, "resolution"),
-    "run_jwt": (401, "resolution"),
-    "run_jwt_on_platform_key": (401, "resolution"),
-    "device_jwt": (401, "resolution"),
-    # #17049: refused at AUTHENTICATION now, not by the human check. Still
-    # refused, earlier, and the LLC route's sync `get_current_user` does not
-    # extend to the device reader -- so unlike ASYNC_ROUTE_EXPECTED, the device
-    # kind lands on 401 here rather than the device allow-list's 403.
-    "device_jwt_on_platform_key": (401, REFUSED_AT_AUTHENTICATION),
+    "internal_service_key": (401, REFUSED_AT_AUTHENTICATION),
+    "run_jwt": (403, "run-JWT path allow-list"),
+    "run_jwt_on_platform_key": (403, "run-JWT path allow-list"),
+    "device_jwt": (403, "device-JWT path allow-list"),
+    # #17049: refused as a login, then recognised by the device reader and
+    # refused by its allow-list, exactly as on the async route.
+    "device_jwt_on_platform_key": (403, "device-JWT path allow-list"),
     "slm_mfa_pending_token": (401, REFUSED_AT_AUTHENTICATION),
     "slm_service_token": (401, REFUSED_AT_AUTHENTICATION),
     "dev_header": (403, REFUSED_BY_HUMAN_CHECK),
@@ -330,9 +332,9 @@ def test_classify_author_type_never_defaults_to_human_for_no_user():
 def test_the_llc_human_check_is_still_exercised():
     """#17049 moved three kinds to an earlier refusal on this route too.
 
-    Same argument as the agent-terminal table, with a lower floor: this route's
-    sync `get_current_user` never resolved `internal_service_key` to a user, so
-    it reached the human check on neither side of #17049. This fails if the remaining coverage
+    Same argument as the agent-terminal table, with a lower floor: the tenant
+    gate refuses `internal_service_key` (#18688) before the human check, so it
+    never reaches it on this route. This fails if the remaining coverage
     drops, so the gate cannot end up tested by nothing while each individual
     move looks like an improvement.
     """

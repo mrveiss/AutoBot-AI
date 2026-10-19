@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.ssot_config import config
-from models.database import CodeSource, Node, NodeRole, Role, RoleStatus
+from models.database import Node, NodeCodeSource, NodeRole, Role, RoleStatus
 from services.database import db_service
 from services.deploy_artifacts import rsync_artifact_excludes
 from services.post_sync_timeouts import POST_SYNC_TIMEOUT_S
@@ -238,7 +238,7 @@ class SyncOrchestrator:
             node_ip, node_user, repo_path, and commit.
         """
         # Get active code source
-        result = await db.execute(select(CodeSource).where(CodeSource.is_active == True))  # noqa: E712
+        result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.is_active == True))  # noqa: E712
         source = result.scalar_one_or_none()
 
         if not source:
@@ -366,13 +366,13 @@ class SyncOrchestrator:
             db: Database session
             commit: New commit hash to set
         """
-        result = await db.execute(select(CodeSource).where(CodeSource.is_active == True))  # noqa: E712
+        result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.is_active == True))  # noqa: E712
         source = result.scalar_one_or_none()
 
         if source:
             source.last_known_commit = commit
             await db.commit()
-            logger.info("Updated CodeSource commit to %s", commit[:12])
+            logger.info("Updated NodeCodeSource commit to %s", commit[:12])
 
     async def _run_rsync(
         self,

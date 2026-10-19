@@ -62,6 +62,7 @@
 </template>
 
 <script setup lang="ts">
+import { RETRY_BACKOFF, backoffDelay } from '@autobot/ui'
 import { ref, computed, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -147,7 +148,7 @@ const retry = async () => {
 
   try {
     // Wait a moment before retrying (exponential backoff)
-    const delay = Math.min(1000 * Math.pow(2, props.retryCount), 5000)
+    const delay = backoffDelay(props.retryCount, RETRY_BACKOFF)
     await new Promise(resolve => setTimeout(resolve, delay))
 
     // Emit retry event to parent

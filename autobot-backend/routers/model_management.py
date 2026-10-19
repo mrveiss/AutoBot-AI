@@ -77,7 +77,7 @@ _model_lock = threading.Lock()
 # =============================================================================
 
 
-class TrainRequest(BaseModel):
+class ModelTrainingRequest(BaseModel):
     """Request to trigger model training."""
 
     language: str | None = Field(None, description="Filter training data by language")
@@ -87,7 +87,7 @@ class TrainRequest(BaseModel):
     notes: str | None = Field(None, description="Training notes")
 
 
-class TrainResponse(BaseModel):
+class ModelTrainingResponse(BaseModel):
     """Response from training trigger."""
 
     status: str
@@ -190,9 +190,9 @@ def _train_background(request):
         logger.error("Training failed: %s", e, exc_info=True)
 
 
-@router.post("/train", response_model=TrainResponse)
+@router.post("/train", response_model=ModelTrainingResponse)
 async def train_model(
-    request: TrainRequest, background_tasks: BackgroundTasks, _: bool = Depends(check_admin_permission)
+    request: ModelTrainingRequest, background_tasks: BackgroundTasks, _: bool = Depends(check_admin_permission)
 ):
     """
     Trigger model training in background.
@@ -203,7 +203,7 @@ async def train_model(
     - **batch_size**: Training batch size
     """
     background_tasks.add_task(_train_background, request)
-    return TrainResponse(
+    return ModelTrainingResponse(
         status="success",
         message="Training started in background",
         training_started=True,

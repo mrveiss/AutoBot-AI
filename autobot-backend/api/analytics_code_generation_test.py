@@ -253,16 +253,16 @@ class TestValidatePythonRejectsInvalidCode:
     `UnboundLocalError` and discarded the `SyntaxError` it had just formatted.
 
     This is reachable with caller-controlled input: `POST /validate` passes
-    `request.code` straight to `CodeValidator.validate`, which dispatches here.
+    `request.code` straight to `MultiLanguageCodeValidator.validate`, which dispatches here.
     The pre-existing invalid-code coverage exercises the separate
     `code_intelligence` validator, so it could not catch this one.
     """
 
     def test_invalid_python_returns_a_result_instead_of_raising(self):
-        from api.analytics_code_generation import CodeValidator
+        from api.analytics_code_generation import MultiLanguageCodeValidator
         from code_intelligence.code_generation.types import ValidationStatus
 
-        result = CodeValidator.validate_python("def (")
+        result = MultiLanguageCodeValidator.validate_python("def (")
 
         assert result.is_valid is False
         assert result.status is ValidationStatus.SYNTAX_ERROR
@@ -272,10 +272,10 @@ class TestValidatePythonRejectsInvalidCode:
 
     def test_valid_python_still_reports_what_it_parsed(self):
         """The contrast case: the happy path must keep its ast_info summary."""
-        from api.analytics_code_generation import CodeValidator
+        from api.analytics_code_generation import MultiLanguageCodeValidator
         from code_intelligence.code_generation.types import ValidationStatus
 
-        result = CodeValidator.validate_python("def f():\n    return 1\n")
+        result = MultiLanguageCodeValidator.validate_python("def f():\n    return 1\n")
 
         assert result.is_valid is True
         assert result.status is ValidationStatus.VALID

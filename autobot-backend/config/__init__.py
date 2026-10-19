@@ -225,8 +225,8 @@ def get_redis_config():
     return _get_cached_config_manager().get_redis_config()
 
 
-def reload_config():
-    """Reload configuration from files"""
+def reload_config_files():
+    """Reload the file-backed ConfigManager (not the SSOT settings: see autobot_shared.ssot_config.reload_config)."""
     _get_cached_config_manager().reload()
 
 
@@ -284,7 +284,7 @@ __all__ = [
     "get_config_section",
     "get_llm_config",
     "get_redis_config",
-    "reload_config",
+    "reload_config_files",
     "validate_config",
     # Async convenience functions
     "get_config_manager_async",

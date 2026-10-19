@@ -64,6 +64,24 @@ same one; `autobot-backend/agents/dev_loop_issue_gate.py` is the first caller.
 Not a `task` (Principle 1's `task` refusal is about task *identity*, which an
 issue outlives), so `services/task_claim.py` is the wrong place for it.
 
+**One registry for "who is working on issue N"** (#17098). Developer sessions keep a
+machine-local ledger (claims for pr, branch, worktree, issue, task). For `issue` that ledger
+is **not** a second registry: `work_claims` (`issue:<n>`) is the single source of truth and the
+ledger writes through to it and reads holders back from it. The documented interface is
+`autobot_shared/coordination/issue_claims.py`, run as
+`python -m autobot_shared.coordination.issue_claims {claim|release|who|list}`; it prints one
+JSON object and its exit code is the verdict (0 granted/free, 1 held by someone else with the
+holder named, 3 registry unreadable). A session holds `agent_id=<ledger name>`,
+`task_id=dev-ledger`; the dev loop holds `autobot-dev-loop`, so each refusal names the other.
+Cross-refusal is therefore the registry's own conflict rule, not a second check that can drift.
+Rules for the ledger side: call the CLI **before** writing any ledger-local state, treat every
+exit other than 0 as a refusal (fail closed -- an unreadable registry never grants), and keep
+pr, branch and worktree claims local. A session `--steal` of an `issue` claim is not supported:
+the holder releases or the TTL (`AUTOBOT_ISSUE_CLAIM_SESSION_TTL_S`) lapses. The ledger script
+is owner tooling outside this repo, so the owner applies the ledger-side change separately.
+Until it is applied the ledger still holds issue claims locally and AutoBot cannot see them; the cross-refusal is tested at the registry
+(`autobot-backend/tests/coordination/test_issue_claims.py`).
+
 **The dev loop's action history** lives beside the claims, in the same keyspace
 (`work_claims:actions:issue:<n>`, `autobot_shared/coordination/dev_loop_actions.py`).
 A claim says who holds an issue *now* and disappears on release; this is what was

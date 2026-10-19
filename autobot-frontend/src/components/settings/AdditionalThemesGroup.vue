@@ -28,7 +28,7 @@
       >
         <span class="font-semibold text-autobot-text-primary">{{ item.name }}</span>
         <span class="text-sm text-autobot-text-secondary">{{ item.author }}</span>
-        <BaseBadge variant="neutral" size="sm" class="self-start">{{ $t('settings.additionalThemes.deployed', { version: item.version }) }}</BaseBadge>
+        <BaseBadge variant="neutral" size="sm" tone="solid" class="self-start">{{ $t('settings.additionalThemes.deployed', { version: item.version }) }}</BaseBadge>
       </button>
     </div>
     <p v-else class="text-sm text-autobot-text-secondary">{{ $t('settings.additionalThemes.empty') }}</p>

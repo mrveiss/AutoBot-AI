@@ -479,7 +479,7 @@ if "llm_shared" not in sys.modules:
     _llm_stub.LLMResponseCache = MagicMock()  # type: ignore[attr-defined]
     _llm_stub.get_llm_cache = MagicMock()  # type: ignore[attr-defined]
     _llm_stub.TORCH_AVAILABLE = False  # type: ignore[attr-defined]
-    _llm_stub.HardwareDetector = MagicMock()  # type: ignore[attr-defined]
+    _llm_stub.AccelerationDetector = MagicMock()  # type: ignore[attr-defined]
     _llm_stub.LLMType = MagicMock()  # type: ignore[attr-defined]
     _llm_stub.ProviderType = MagicMock()  # type: ignore[attr-defined]
     _llm_stub.StreamingManager = MagicMock()  # type: ignore[attr-defined]
@@ -660,8 +660,8 @@ if "llm_shared" not in sys.modules:
         # Parent bind (so patch("llm_shared.hardware.X") targets the real
         # module) now happens inside _real_load_and_bind (#11661); only the
         # top-level re-exports remain here.
-        if hasattr(_hw_mod, "HardwareDetector"):
-            _llm_stub.HardwareDetector = _hw_mod.HardwareDetector  # type: ignore[attr-defined]
+        if hasattr(_hw_mod, "AccelerationDetector"):
+            _llm_stub.AccelerationDetector = _hw_mod.AccelerationDetector  # type: ignore[attr-defined]
         if hasattr(_hw_mod, "TORCH_AVAILABLE"):
             _llm_stub.TORCH_AVAILABLE = _hw_mod.TORCH_AVAILABLE  # type: ignore[attr-defined]
 

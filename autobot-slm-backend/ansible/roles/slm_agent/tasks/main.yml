@@ -159,103 +159,59 @@
   notify: Restart SLM agent
   tags: ['slm_agent', 'deploy']
 
-- name: "SLM Agent | Copy agent source - __init__.py (agent module)"
-  copy:
-    src: slm/agent/__init__.py
-    dest: "{{ slm_agent_dir }}/slm/agent/__init__.py"
-    owner: "{{ slm_agent_user }}"
-    group: "{{ slm_agent_group }}"
-    mode: '0644'
-  become: true
-  notify: Restart SLM agent
+# #18548 (subsumes #16100): the agent is deployed from its ONE source tree,
+# code_source/autobot-slm-backend/slm/agent/ -- the same tree the SLM backend's
+# own tests run against -- not from a checked-in mirror under files/ and not
+# from a hand-kept `copy:` per module. A module added to or removed from
+# slm/agent/ therefore ships (or stops shipping) with no second edit.
+# Production modules only: the co-located tests are source-only
+# (services/drift_checker.py _SOURCE_ONLY_PATTERNS). The find/exclude set below
+# is what ansible/tests/slm_agent_deploys_source_tree_18548_test.py reads.
+- name: "SLM Agent | Enumerate agent source modules in code_source (#18548)"
+  ansible.builtin.find:
+    paths: "{{ slm_agent_source_dir }}"
+    patterns: "{{ slm_agent_source_patterns }}"
+    excludes: "{{ slm_agent_source_excludes }}"
+    recurse: false
+  delegate_to: localhost
+  run_once: true
+  become: false
+  register: slm_agent_source_modules
   tags: ['slm_agent', 'deploy']
 
-- name: "SLM Agent | Copy agent source - agent.py"
-  copy:
-    src: slm/agent/agent.py
-    dest: "{{ slm_agent_dir }}/slm/agent/agent.py"
-    owner: "{{ slm_agent_user }}"
-    group: "{{ slm_agent_group }}"
-    mode: '0644'
-  become: true
-  notify: Restart SLM agent
+# A missing or empty source tree would match nothing and the copy loop would
+# "succeed" with no agent update; fail loudly instead (#18548 review).
+- name: "SLM Agent | Fail when the agent source tree is missing or empty (#18548)"
+  ansible.builtin.assert:
+    that:
+      - slm_agent_source_modules.matched | int > 0
+    fail_msg: >-
+      No agent modules found under {{ slm_agent_source_dir }} on the controller;
+      refusing to report a deploy that copied nothing.
+  run_once: true
   tags: ['slm_agent', 'deploy']
 
-- name: "SLM Agent | Copy agent source - health_collector.py"
-  copy:
-    src: slm/agent/health_collector.py
-    dest: "{{ slm_agent_dir }}/slm/agent/health_collector.py"
+- name: "SLM Agent | Copy agent source modules from code_source (#18548)"
+  ansible.builtin.copy:
+    src: "{{ item.path }}"
+    dest: "{{ slm_agent_dir }}/slm/agent/{{ item.path | basename }}"
     owner: "{{ slm_agent_user }}"
     group: "{{ slm_agent_group }}"
     mode: '0644'
-  become: true
-  notify: Restart SLM agent
-  tags: ['slm_agent', 'deploy']
-
-# Issue #741: Deploy version tracking module
-- name: "SLM Agent | Copy agent source - version.py"
-  copy:
-    src: slm/agent/version.py
-    dest: "{{ slm_agent_dir }}/slm/agent/version.py"
-    owner: "{{ slm_agent_user }}"
-    group: "{{ slm_agent_group }}"
-    mode: '0644'
-  become: true
-  notify: Restart SLM agent
-  tags: ['slm_agent', 'deploy']
-
-# Issue #1164: Deploy role detection modules (added after #779)
-- name: "SLM Agent | Copy agent source - role_detector.py"
-  copy:
-    src: slm/agent/role_detector.py
-    dest: "{{ slm_agent_dir }}/slm/agent/role_detector.py"
-    owner: "{{ slm_agent_user }}"
-    group: "{{ slm_agent_group }}"
-    mode: '0644'
-  become: true
-  notify: Restart SLM agent
-  tags: ['slm_agent', 'deploy']
-
-- name: "SLM Agent | Copy agent source - port_scanner.py"
-  copy:
-    src: slm/agent/port_scanner.py
-    dest: "{{ slm_agent_dir }}/slm/agent/port_scanner.py"
-    owner: "{{ slm_agent_user }}"
-    group: "{{ slm_agent_group }}"
-    mode: '0644'
-  become: true
-  notify: Restart SLM agent
-  tags: ['slm_agent', 'deploy']
-
-- name: "SLM Agent | Copy agent source - event_buffer.py"
-  copy:
-    src: slm/agent/event_buffer.py
-    dest: "{{ slm_agent_dir }}/slm/agent/event_buffer.py"
-    owner: "{{ slm_agent_user }}"
-    group: "{{ slm_agent_group }}"
-    mode: '0644'
-  become: true
-  notify: Restart SLM agent
-  tags: ['slm_agent', 'deploy']
-
-- name: "SLM Agent | Copy agent source - heartbeat_payload.py"
-  copy:
-    src: slm/agent/heartbeat_payload.py
-    dest: "{{ slm_agent_dir }}/slm/agent/heartbeat_payload.py"
-    owner: "{{ slm_agent_user }}"
-    group: "{{ slm_agent_group }}"
-    mode: '0644'
+  loop: "{{ slm_agent_source_modules.files | sort(attribute='path') }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
   become: true
   notify: Restart SLM agent
   tags: ['slm_agent', 'deploy']
 
 # #16310 review round 6: autobot-slm-agent is in ALLOWED_COMPONENTS
 # (services/drift_checker.py) with a verified nonstandard source mapping
-# (_NONSTANDARD_COMPONENT_PATHS) -- its source of truth is this role's own
-# files/slm/agent/ tree, deployed one `copy:` task at a time above rather
-# than a bulk sync. That does not change what deletion needs: if a file is
-# removed from files/slm/agent/, its `copy:` task above is removed too, and
-# the deployed copy is never cleaned up on its own. This role is
+# (_NONSTANDARD_COMPONENT_PATHS) -- its source of truth is
+# autobot-slm-backend/slm/agent/, deployed by the copy task above rather than
+# a bulk sync. That does not change what deletion needs: if a module is
+# removed from slm/agent/, it stops being copied above, and the deployed copy
+# is never cleaned up on its own. This role is
 # `import_role`'d in full from BOTH update-all-nodes.yml plays (PLAY 1's own
 # agent redeploy and PLAY 2's fleet agent redeploy), so wiring it here --
 # once -- covers both, unlike roles/backend and roles/frontend where the
@@ -264,9 +220,7 @@
   ansible.builtin.include_tasks: ../../_shared/tasks/sync_deletions.yml
   vars:
     sync_deletions_label: "SLM Agent"
-    sync_deletions_source_dir: >-
-      {{ (code_source_dir | default(autobot.base_dir ~ '/code_source')) ~
-      '/autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent' }}
+    sync_deletions_source_dir: "{{ slm_agent_source_dir }}"
     sync_deletions_target_dir: "{{ slm_agent_dir }}/slm/agent"
     sync_deletions_owner: "{{ slm_agent_user }}"
   tags: ['slm_agent', 'deploy']

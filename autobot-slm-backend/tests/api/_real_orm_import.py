@@ -66,7 +66,10 @@ def _build_real_modules() -> dict:
     """
     saved = {name: mod for name, mod in sys.modules.items() if _is_sqlalchemy_key(name)}
     saved.update(
-        {name: sys.modules.get(name) for name in ("models.database", "models.schemas", "models.post_sync_action_run")}
+        {
+            name: sys.modules.get(name)
+            for name in ("models.database", "models.schemas", "models.fleet_schemas", "models.post_sync_action_run")
+        }
     )
     for name in list(saved):
         sys.modules.pop(name, None)
@@ -76,11 +79,13 @@ def _build_real_modules() -> dict:
         importlib.import_module("sqlalchemy.dialects.sqlite")
         load_real_module("models.database", SLM_ROOT / "models" / "database.py")
         load_real_module("models.schemas", SLM_ROOT / "models" / "schemas.py")
+        load_real_module("models.fleet_schemas", SLM_ROOT / "models" / "fleet_schemas.py")  # imports schemas (#18714)
         # Loaded ONCE here: two loads would declare the same table on the one real Base (#17455).
         load_real_module("models.post_sync_action_run", SLM_ROOT / "models" / "post_sync_action_run.py")
         return {name: mod for name, mod in sys.modules.items() if _is_sqlalchemy_key(name)} | {
             "models.database": sys.modules["models.database"],
             "models.schemas": sys.modules["models.schemas"],
+            "models.fleet_schemas": sys.modules["models.fleet_schemas"],
             "models.post_sync_action_run": sys.modules["models.post_sync_action_run"],
         }
     finally:
@@ -88,6 +93,7 @@ def _build_real_modules() -> dict:
             del sys.modules[name]
         sys.modules.pop("models.database", None)
         sys.modules.pop("models.schemas", None)
+        sys.modules.pop("models.fleet_schemas", None)
         sys.modules.pop("models.post_sync_action_run", None)
         for name, mod in saved.items():
             if mod is not None:

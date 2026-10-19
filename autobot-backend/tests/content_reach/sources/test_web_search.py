@@ -51,7 +51,7 @@ async def test_ddgs_probe_false_when_absent(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_ddgs_fetch_maps_results(monkeypatch):
-    """fetch() maps two DDGS results into ContentResult correctly."""
+    """fetch() maps two DDGS results into ContentReachResult correctly."""
     from content_reach.sources import web_search as ws_mod
 
     fake_results = [
@@ -107,7 +107,7 @@ async def test_ddgs_fetch_empty_raises(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_jina_search_fetch():
-    """fetch() maps a 200 response into a successful ContentResult."""
+    """fetch() maps a 200 response into a successful ContentReachResult."""
     from content_reach.sources.web_search import JinaSearchBackend
 
     mock_response = MagicMock()

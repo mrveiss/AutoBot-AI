@@ -9,13 +9,13 @@ from datetime import datetime, timezone
 
 import pytest
 
-from api.analytics_llm_patterns import LLMPatternAnalyzer
+from api.analytics_llm_patterns import LLMUsagePatternAnalyzer
 from constants.threshold_constants import CategoryDefaults
 
 
 def _todays_usage_key() -> str:
     today = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
-    return f"{LLMPatternAnalyzer()._usage_key}:{today}"
+    return f"{LLMUsagePatternAnalyzer()._usage_key}:{today}"
 
 
 class _FakePipe:
@@ -45,7 +45,7 @@ class _FakeRedis:
 
 
 def _analyzer_with_records(records_by_key):
-    analyzer = LLMPatternAnalyzer()
+    analyzer = LLMUsagePatternAnalyzer()
 
     async def _fake_get_redis():
         return _FakeRedis(records_by_key)

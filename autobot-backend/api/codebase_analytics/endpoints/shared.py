@@ -42,7 +42,7 @@ __all__ = [
     "filter_problems_by_file_existence",
     "get_project_root",
     "require_source_access",
-    "resolve_project_root",
+    "resolve_git_repo_root",
     "resolve_scan_root",
     "resolve_source_root",
     "trigger_auto_index_if_unindexed",
@@ -113,7 +113,7 @@ async def resolve_scan_root(source_id: "str | None", use_default: bool = True, s
     AutoBot project root only when no source can be resolved (e.g. dev checkout
     with no registered sources).
 
-    Issue #12393: The fallback uses ``resolve_project_root()`` (the git-walk-up /
+    Issue #12393: The fallback uses ``resolve_git_repo_root()`` (the git-walk-up /
     deployed ``code_source`` probe, #10730) rather than the plain
     ``get_project_root()`` (hardcoded ``parents[4]``). In the deployed standalone
     rsync layout ``parents[4]`` resolves to ``/opt/autobot`` -- not a git repo --
@@ -151,7 +151,7 @@ async def resolve_scan_root(source_id: "str | None", use_default: bool = True, s
         # "you did not say which project" and "you said one that is not there" are
         # different questions and only the second is a mistake.
         raise UnresolvedSourceError(source_id)
-    return Path(resolve_project_root())
+    return Path(resolve_git_repo_root())
 
 
 # Issue #12364: sources whose auto-index has already been fired this process
@@ -303,7 +303,7 @@ def get_project_root() -> Path:
     return Path(__file__).resolve().parents[4]
 
 
-def resolve_project_root() -> str:
+def resolve_git_repo_root() -> str:
     """
     Resolve the real git repository root robustly for dev and deployed layouts.
 
@@ -325,7 +325,7 @@ def resolve_project_root() -> str:
     # Walk up the directory tree looking for a .git entry
     for parent in current.parents:
         if (parent / ".git").exists():
-            logger.debug("resolve_project_root: found git root via walk-up: %s", parent)
+            logger.debug("resolve_git_repo_root: found git root via walk-up: %s", parent)
             return str(parent)
 
     # No .git found walking up — check for deployed-layout sibling code_source
@@ -337,11 +337,11 @@ def resolve_project_root() -> str:
         candidate.parent / "code_source",  # one level higher, just in case
     ):
         if (probe / ".git").exists():
-            logger.debug("resolve_project_root: found git root via code_source probe: %s", probe)
+            logger.debug("resolve_git_repo_root: found git root via code_source probe: %s", probe)
             return str(probe)
 
     # Final fallback: original parents[4] (works in dev checkout)
-    logger.debug("resolve_project_root: falling back to parents[4]: %s", candidate)
+    logger.debug("resolve_git_repo_root: falling back to parents[4]: %s", candidate)
     return str(candidate)
 
 
@@ -373,7 +373,7 @@ def filter_problems_by_file_existence(
     if not problems:
         return problems
 
-    base = Path(root_path) if root_path else Path(resolve_project_root())
+    base = Path(root_path) if root_path else Path(resolve_git_repo_root())
 
     validated: list[dict] = []
     dropped = 0

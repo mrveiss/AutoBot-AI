@@ -418,11 +418,6 @@ def get_service_url(service_name: str, path: str = "") -> str:
 
 
 # Legacy compatibility functions
-def get_redis_url() -> str:
-    """Get Redis connection URL"""
-    return get_service_url("redis")
-
-
 def get_ai_stack_url(path: str = "") -> str:
     """Get AI stack URL"""
     return get_service_url("ai-stack", path)

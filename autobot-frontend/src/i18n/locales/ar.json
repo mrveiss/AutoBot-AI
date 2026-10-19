@@ -4818,8 +4818,8 @@
     "settings": "Terminal Settings",
     "fontSize": "Font Size",
     "theme": "Theme",
-    "dark": "Dark",
-    "light": "Light",
+    "dark": "داكن",
+    "light": "فاتح",
     "cursorStyle": "Cursor Style",
     "block": "Block",
     "underline": "Underline",
@@ -5091,7 +5091,6 @@
     "role": "Role:",
     "lastLogin": "Last Login:",
     "preferences": "Preferences",
-    "theme": "Theme",
     "notifications": "Notifications",
     "emailNotifications": "Email notifications",
     "browserNotifications": "Browser notifications",
@@ -5101,7 +5100,6 @@
     "showTooltips": "Show tooltips",
     "enableAnimations": "Enable animations",
     "savePreferences": "Save Preferences",
-    "appearance": "المظهر",
     "voiceChatDisplay": "Voice Chat Display",
     "fullScreen": "Full-screen",
     "sidePanel": "Side panel",
@@ -5117,9 +5115,6 @@
     "pwTooShort": "Password must be at least 8 characters",
     "pwChanged": "Password changed successfully!",
     "never": "Never",
-    "themeLight": "Light",
-    "themeDark": "Dark",
-    "themeAuto": "Auto",
     "tabDevices": "Tab devices"
   },
   "charts": {
@@ -5792,11 +5787,6 @@
       "postExecutionFailed": "تم تنفيذ الأمر، لكن فشلت خطوة لاحقة. يتم عرض المخرجات؛ قد تكون بعض التحديثات مفقودة.",
       "enterComment": "Please enter a comment before submitting"
     },
-    "darkModeToggle": {
-      "switchToLight": "Switch to light mode",
-      "switchToDark": "Switch to dark mode",
-      "toggleDarkMode": "Toggle dark mode"
-    },
     "dataTable": {
       "sortBy": "Sort by {column}",
       "actions": "إجراءات",
@@ -5918,8 +5908,8 @@
       "selectTheme": "Select theme",
       "switchToLight": "Switch to light mode",
       "switchToDark": "Switch to dark mode",
-      "light": "Light",
-      "dark": "Dark"
+      "light": "فاتح",
+      "dark": "داكن"
     },
     "toastContainer": {
       "notifications": "Notifications",
@@ -5955,10 +5945,6 @@
       "actions": "إجراءات",
       "noDataAvailable": "No data available",
       "selectRow": "Select row {row}"
-    },
-    "panel": {
-      "collapse": "Collapse panel",
-      "expand": "Expand panel"
     }
   },
   "views": {
@@ -7944,7 +7930,6 @@
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents",
     "agentActivity": "نشاط الوكيل",
-    "switchLanguage": "Switch language",
     "openMainMenu": "Open main menu",
     "skipToContent": "انتقل إلى المحتوى الرئيسي",
     "services": "Services",
@@ -8043,7 +8028,8 @@
       "tip": "واجهة الحد الأدنى — إخفاء الميزات المتقدمة",
       "announceMinimal": "تم تفعيل واجهة الحد الأدنى. الميزات المتقدمة مخفية.",
       "announceFull": "تم تفعيل الواجهة الكاملة. جميع الميزات معروضة."
-    }
+    },
+    "llcLedger": "سجل الوكلاء"
   },
   "llcCompanyStatus": {
     "showArchived": "عرض المؤرشفة",
@@ -8931,6 +8917,72 @@
       "retry": "إعادة المحاولة",
       "loadingItem": "جارٍ تحميل عنصر العمل…",
       "itemLoadFailed": "تعذّر تحميل عنصر العمل هذا"
+    },
+    "ledger": {
+      "title": "سجل الوكلاء",
+      "subtitle": "من يعمل على ماذا في هذه الشركة، ومن ينتظر.",
+      "tabsAria": "طرق عرض السجل",
+      "tabs": {
+        "now": "يعمل الآن",
+        "claims": "الحجوزات",
+        "contention": "التنافس",
+        "activity": "النشاط"
+      },
+      "col": {
+        "agent": "الوكيل",
+        "kind": "النوع",
+        "status": "الحالة",
+        "task": "المهمة الحالية",
+        "detail": "التفاصيل",
+        "scope": "النطاق",
+        "mode": "الوضع",
+        "intent": "الغرض",
+        "expires": "ينتهي",
+        "renewals": "التجديدات"
+      },
+      "busy": "مشغول",
+      "idle": "خامل",
+      "peerMessages": "رسائل الأقران المعلقة",
+      "idleSubscribers": "اشتراكات الخمول",
+      "pendingFor": "{n} معلقة لـ {name}",
+      "sentBy": "من {names}",
+      "waitsForIdle": "{who} ينتظر حتى يصبح {target} خاملاً",
+      "heldBy": "يحتفظ به {agent}",
+      "waitlistAria": "قائمة الانتظار بالترتيب",
+      "silenceMeansHold": "الطلب ليس إفراجاً: الصمت يعني الاحتفاظ، والحجز غير المجدد ينتهي من تلقاء نفسه.",
+      "ask": "اطلب من المالك الإفراج",
+      "askAria": "اطلب من مالك {scope} الإفراج عنه",
+      "conflicts": "التعارضات",
+      "recent": "النشاط الأخير",
+      "conflict": {
+        "release_refused": "رُفض إفراج",
+        "claim_expired": "انتهى حجز أثناء الاحتفاظ به",
+        "yield_unanswered": "بقي طلب تنازل بلا رد",
+        "claim_lapsed_during_action": "انتهى حجز أثناء إجراء"
+      },
+      "empty": {
+        "presence": "لم يبلّغ أي وكيل",
+        "peerMessages": "لا توجد رسائل معلقة",
+        "idleSubscribers": "لا توجد اشتراكات خمول",
+        "claims": "لا توجد حجوزات",
+        "contention": "لا يوجد تنافس",
+        "conflicts": "لا توجد تعارضات",
+        "activity": "لا يوجد نشاط حديث"
+      },
+      "state": {
+        "loading": "جارٍ قراءة السجل…",
+        "unavailableTitle": "تعذّرت قراءة السجل",
+        "unavailableBody": "لم يستجب مخزن {source}. هذا ليس مثل عدم وجود إدخالات.",
+        "errorTitle": "حدث خطأ أثناء تحميل هذا القسم"
+      },
+      "askState": {
+        "sending": "جارٍ الإرسال…",
+        "sent": "أُرسل الطلب — القرار للمالك؛ الصمت يعني الاحتفاظ.",
+        "tooSoon": "سألت عن هذا الحجز للتو؛ حاول مرة أخرى بعد دقيقة.",
+        "notFound": "لم تعد هذه المهمة تحتفظ بالحجز — حدّث الصفحة لترى من يحتفظ به الآن.",
+        "unavailable": "تعذّر الوصول إلى السجل؛ لم يُرسل شيء.",
+        "error": "حدث خطأ ولم يمكن تأكيد التسليم. حدّث الصفحة لمعرفة ما إذا كانت المطالبة لا تزال محجوزة."
+      }
     }
   },
   "code": {
@@ -9745,5 +9797,104 @@
       "unreachableAsOf": "يتعذر الوصول — حالة الخدمات غير معروفة — الحالة عند {time}"
     },
     "lastKnown": "{text} (آخر حالة معروفة)"
+  },
+  "schedule": {
+    "title": "الجدولة",
+    "repeats": "التكرار",
+    "repeat": {
+      "minutes": "كل بضع دقائق",
+      "hourly": "كل ساعة",
+      "daily": "يوميًا",
+      "weekly": "أسبوعيًا",
+      "monthly": "شهريًا",
+      "once": "مرة واحدة"
+    },
+    "every": "كل",
+    "minutesUnit": "دقيقة",
+    "onlyBetween": "فقط بين",
+    "windowFrom": "من",
+    "windowTo": "إلى",
+    "and": "و",
+    "onDays": "في الأيام (اختياري)",
+    "daysHintAny": "عدم تحديد أي يوم يعني كل الأيام.",
+    "onDaysRequired": "في الأيام",
+    "atMinute": "عند الدقيقة",
+    "at": "في الساعة",
+    "hour": "الساعة",
+    "minute": "الدقيقة",
+    "weekdaysOnly": "أيام العمل فقط",
+    "monthly": {
+      "which": "أي يوم من الشهر",
+      "day": "يوم من الشهر",
+      "lastDay": "اليوم الأخير",
+      "nth": "يوم من أيام الأسبوع في الشهر",
+      "onDay": "في اليوم",
+      "onThe": "في"
+    },
+    "nth": {
+      "1": "الأول",
+      "2": "الثاني",
+      "3": "الثالث",
+      "4": "الرابع",
+      "last": "الأخير"
+    },
+    "weekday": "يوم الأسبوع",
+    "shortMonths": "الأشهر التي لا تحتوي هذا اليوم تُنفَّذ في آخر يوم من الشهر.",
+    "date": "التاريخ",
+    "timezone": "المنطقة الزمنية",
+    "zone": {
+      "company": "توقيت الشركة",
+      "usesCompany": "تستخدم المنطقة الزمنية للشركة."
+    },
+    "summary": {
+      "minutes": "كل {every} دقيقة",
+      "minutesWeekdays": "كل {every} دقيقة في أيام العمل",
+      "minutesDays": "كل {every} دقيقة، في أيام: {days}",
+      "minutesWindow": "كل {every} دقيقة بين {from} و{to}",
+      "minutesWindowWeekdays": "كل {every} دقيقة بين {from} و{to} في أيام العمل",
+      "minutesWindowDays": "كل {every} دقيقة بين {from} و{to}، في أيام: {days}",
+      "hourly": "كل ساعة عند الدقيقة {minute}",
+      "daily": "كل يوم في الساعة {time}",
+      "dailyWeekdays": "كل يوم عمل في الساعة {time}",
+      "weekly": "كل أسبوع: {days}، في الساعة {time}",
+      "monthlyDay": "في اليوم {day} من كل شهر في الساعة {time}",
+      "monthlyLastDay": "في آخر يوم من كل شهر في الساعة {time}",
+      "monthlyNth1": "في {weekday} الأول من كل شهر في الساعة {time}",
+      "monthlyNth2": "في {weekday} الثاني من كل شهر في الساعة {time}",
+      "monthlyNth3": "في {weekday} الثالث من كل شهر في الساعة {time}",
+      "monthlyNth4": "في {weekday} الرابع من كل شهر في الساعة {time}",
+      "monthlyNthLast": "في {weekday} الأخير من كل شهر في الساعة {time}",
+      "once": "مرة واحدة في {date} في الساعة {time}",
+      "withZone": "{summary}، {zone}",
+      "custom": "جدولة مخصصة"
+    },
+    "customNote": "لا يمكن عرض هذه الجدولة بالنقرات.",
+    "editCron": "تحرير بصيغة cron",
+    "doneEditing": "إنهاء التحرير",
+    "nextRuns": "عمليات التشغيل القادمة",
+    "noRuns": "لا توجد عمليات تشغيل قادمة.",
+    "previewLoading": "جارٍ التحقق من الخادم...",
+    "previewApprox": "تقريبي: يؤكد الخادم الأوقات الدقيقة عند الحفظ.",
+    "previewUnavailable": "لا يمكن معاينة عمليات التشغيل لهذه الجدولة.",
+    "advanced": "متقدم: تُحفظ بصيغة",
+    "saved": {
+      "cron": "cron قياسي",
+      "calendar": "قاعدة تقويم",
+      "once": "تشغيل لمرة واحدة"
+    },
+    "savedAs": "الجدولة المحفوظة",
+    "savedNote": {
+      "once": "تعمل مرة واحدة. لا يُحفظ أي cron متكرر."
+    },
+    "cronLabel": "تعبير cron",
+    "cronHint": "cron قياسي بخمسة حقول فقط: الدقيقة، الساعة، يوم الشهر، الشهر، يوم الأسبوع. يبقى المحدد وهذا الحقل متزامنين.",
+    "cron_extension_unsupported": "{token} ليس بصيغة cron قياسية. استخدم المحدد لجداول مثل آخر جمعة في الشهر.",
+    "invalid_timezone": "هذه المنطقة الزمنية غير معروفة.",
+    "once_in_past": "هذا التاريخ والوقت قد مضيا بالفعل.",
+    "invalid_rrule": "قاعدة التقويم هذه غير صالحة.",
+    "invalid_cron": "أدخل cron قياسيًا بخمسة حقول، مثل 0 9 * * 1-5.",
+    "invalid_generic": "هذه الجدولة غير صالحة.",
+    "conflicting_fields": "تُحفظ الجدولة إما بصيغة cron أو كقاعدة تقويم أو تشغيل لمرة واحدة، وليس كليهما.",
+    "gatedNote": "سيتوفر اليوم الأخير ويوم الأسبوع من الشهر والأيام من 29 إلى 31 والتشغيل لمرة واحدة بعد تحديث المجدول."
   }
 }

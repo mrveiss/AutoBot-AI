@@ -55,7 +55,7 @@
         pg_hba_remote_access:
           - database: autobot_users
             user: slm_app
-            address: "{{ network_subnet | default('0.0.0.0/0', true) }}"
+            address: "{{ network_subnet }}"
     - role: slm_manager
     - role: monitoring
       tags: ['monitoring']

@@ -210,7 +210,7 @@ class RedisServiceManager:
     async def get_service_status(self) -> ServiceStatus:
         """Get current service status (cached)"""
 
-    async def check_health(self) -> HealthStatus:
+    async def check_health(self) -> ServiceHealthReport:
         """Perform comprehensive health check"""
 
     async def auto_recover(self) -> RecoveryResult:
@@ -2215,7 +2215,7 @@ async def test_start_service_when_stopped():
 
     # Mock health check to confirm service started
     manager.check_health = AsyncMock(
-        return_value=HealthStatus(overall_status="healthy")
+        return_value=ServiceHealthReport(overall_status="healthy")
     )
 
     # Execute start operation
@@ -2234,7 +2234,7 @@ async def test_auto_recovery_on_failure():
 
     # Mock health check failure
     manager.check_health = AsyncMock(
-        return_value=HealthStatus(overall_status="critical")
+        return_value=ServiceHealthReport(overall_status="critical")
     )
 
     # Mock auto-recovery success

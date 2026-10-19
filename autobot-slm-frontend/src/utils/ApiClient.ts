@@ -29,7 +29,7 @@
 import { createLogger } from '@/utils/debugUtils'
 import { getSlmApiBase } from '@/config/ssot-config'
 import { clearSlmSession, readSlmToken } from '@/utils/authStorage'
-import type { GetPath, GetResponse } from '@autobot/ui'
+import { backoffDelay, RETRY_BACKOFF, type GetPath, type GetResponse } from '@autobot/ui'
 import type { paths } from '@/types/generated/api'
 
 const logger = createLogger('SlmApiClient')
@@ -287,7 +287,7 @@ export class SlmApiClient {
         }
 
         if (attempt < maxRetries) {
-          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000)
+          const delay = backoffDelay(attempt - 1, RETRY_BACKOFF)
           await new Promise((resolve) => setTimeout(resolve, delay))
         }
       }

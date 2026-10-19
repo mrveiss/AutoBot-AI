@@ -344,7 +344,7 @@
     "runRsyncFromTo": "Run rsync from {source} to {dest}",
     "running": "Ejecutando...",
     "sLMManagerRestarting": "SLM Manager Restarting",
-    "schedule": "Schedule",
+    "schedule": "Programación",
     "scheduledUpdates": "Scheduled Updates",
     "showDetails": "Show details",
     "slmSelfUpdateStage": "SLM server",
@@ -1326,6 +1326,107 @@
       "services": "Services",
       "systemHealth": "Salud del sistema",
       "systemMonitoring": "Monitorización del sistema"
+    },
+    "agentLedger": {
+      "title": "Registro de agentes",
+      "subtitle": "Every company's agent coordination: shared resources, claims, conflicts and dev-loop history.",
+      "refresh": "Actualizar",
+      "tabsAria": "Vistas del registro",
+      "tabs": {
+        "now": "Trabajando ahora",
+        "contention": "Contención",
+        "claims": "Reservas",
+        "conflicts": "Conflictos",
+        "devLoop": "Dev loop",
+        "activity": "Actividad"
+      },
+      "col": {
+        "scope": "Ámbito",
+        "agent": "Agente",
+        "company": "Company",
+        "mode": "Modo",
+        "intent": "Intención",
+        "expires": "Caduca",
+        "renewals": "Renovaciones",
+        "kind": "Tipo",
+        "status": "Estado",
+        "task": "Tarea actual",
+        "detail": "Detalle"
+      },
+      "installWide": "Install-wide",
+      "heldBy": "Held by {agent} ({company})",
+      "waiting": "{n} waiting",
+      "waitlistAria": "Lista de espera en orden",
+      "silenceMeansHold": "Pedir no es liberar: el silencio significa retener, y una reserva no renovada caduca sola.",
+      "ask": "Pedir al titular que la libere",
+      "askAria": "Pedir al titular de {scope} que lo libere",
+      "askState": {
+        "sending": "Enviando…",
+        "sent": "Solicitud enviada: el titular decide; el silencio significa retener.",
+        "tooSoon": "Ya preguntaste por esta reserva hace un momento; inténtalo de nuevo en un minuto.",
+        "notFound": "Esta tarea ya no tiene esa reserva; actualiza para ver quién la tiene ahora.",
+        "unavailable": "No se pudo contactar con el registro; no se envió nada.",
+        "error": "Algo salió mal y no se pudo confirmar la entrega. Actualiza para ver si la reserva sigue activa."
+      },
+      "conflict": {
+        "release_refused": "Se rechazó una liberación",
+        "claim_expired": "Una reserva caducó mientras se retenía",
+        "yield_unanswered": "Una solicitud de cesión quedó sin respuesta",
+        "claim_lapsed_during_action": "Una reserva caducó durante una acción"
+      },
+      "devLoop": {
+        "issue": "Issue",
+        "choose": "Choose an issue",
+        "col": {
+          "at": "When",
+          "intent": "Intención",
+          "outcome": "Outcome",
+          "tokens": "Estimated tokens",
+          "reason": "Razón"
+        }
+      },
+      "empty": {
+        "contention": "Nada está en contención",
+        "claims": "No hay reservas",
+        "conflicts": "No hay conflictos",
+        "activity": "No recent activity",
+        "devLoop": "No dev-loop history",
+        "devLoopActions": "No actions recorded for this issue",
+        "presence": "Ningún agente se ha reportado",
+        "peerMessages": "No hay mensajes pendientes",
+        "idleSubscribers": "No hay suscripciones de inactividad"
+      },
+      "notes": {
+        "title": "What this view cannot see",
+        "storeDown": "Couldn't read the {source} store just now. Its entries are missing here, not empty.",
+        "sourcesUnknown": "Couldn't check which ledger sources are readable.",
+        "peerIdentity": "Agents have no per-peer identity yet: an agent that is refused an action can ask another agent to do it (#16950).",
+        "busAuth": "Messages between agents are not authenticated yet, so this view cannot prove who sent one (#16962)."
+      },
+      "source": {
+        "presence": "agent presence",
+        "ai_stack_agents": "AI-stack agents",
+        "live_sessions": "live sessions",
+        "peer_messages": "pending peer messages",
+        "idle_subscribers": "idle subscriptions",
+        "claims": "claims",
+        "waitlists": "waitlists",
+        "events": "ledger activity",
+        "dev_loop": "dev-loop history"
+      },
+      "state": {
+        "loading": "Leyendo el registro…",
+        "unavailableTitle": "No se pudo leer el registro",
+        "unavailableBody": "El almacén {source} no respondió. No es lo mismo que no tener entradas.",
+        "errorTitle": "Algo salió mal al cargar esta sección"
+      },
+      "busy": "Ocupado",
+      "idle": "Idle",
+      "peerMessages": "Mensajes entre pares pendientes",
+      "idleSubscribers": "Suscripciones de inactividad",
+      "pendingFor": "{n} pendientes para {name}",
+      "sentBy": "de {names}",
+      "waitsForIdle": "{who} espera a que {target} quede inactivo"
     }
   },
   "monitoringView": {
@@ -1334,7 +1435,17 @@
     "monitoring": "Monitorización",
     "monitoringSections": "Monitoring sections",
     "systemHealthStatusAria": "System health: {status}",
-    "value0AlertPlural": "{value0} Alert{plural}"
+    "value0AlertPlural": "{value0} Alert{plural}",
+    "tabs": {
+      "system": "Sistema",
+      "logs": "Logs",
+      "dashboards": "Dashboards",
+      "alerts": "Alerts",
+      "errors": "Errores",
+      "backendHealth": "Backend Health",
+      "performance": "Performance",
+      "agentLedger": "Registro de agentes"
+    }
   },
   "orchestration": {
     "nodeHealthCard": {
@@ -1499,7 +1610,8 @@
     "value0AnsibleMigrationOf": "{value0} Ansible migration of",
     "value0Nodes": "({value0} nodes)",
     "value0OnlineValue1Offline": "{value0} online, {value1} offline",
-    "value0Required": "{value0} (required)"
+    "value0Required": "{value0} (required)",
+    "serviceCount": "{count} service | {count} services"
   },
   "performance": {
     "alertRulesView": {
@@ -1902,7 +2014,7 @@
     "enableTlsForAria": "Enable TLS for {service}",
     "enablingTLS": "Enabling TLS...",
     "enterNodeID": "Enter node ID",
-    "expires": "Expires",
+    "expires": "Caduca",
     "expiringSoon30d": "Expiring Soon (30d)",
     "expiry": "Expiry",
     "failed": "Fallido",
@@ -2207,7 +2319,7 @@
       "nPUWorkersSettings": {
         "actions": "Acciones",
         "areYouSureYou": "Are you sure you want to remove",
-        "busy": "Busy",
+        "busy": "Ocupado",
         "cancel": "Cancelar",
         "capabilities": "Capabilities",
         "close": "Cerrar",
@@ -2256,7 +2368,9 @@
         "weighted": "Weighted",
         "windows": "Windows",
         "worker": "Trabajador",
-        "workerName": "Worker Name *"
+        "workerName": "Worker Name *",
+        "connectionTestFailed": "Connection test failed",
+        "loadBalancingLoadFailed": "Failed to load load-balancing configuration"
       },
       "personalitySettings": {
         "active": "Active",
@@ -2757,7 +2871,7 @@
       "enterYourPassword": "Introduzca su contraseña",
       "enterYourPasswordTo": "Enter your password to confirm disabling two-factor authentication.",
       "expiration": "Expiration",
-      "expires": "Expires",
+      "expires": "Caduca",
       "keyPrefix": "Key Prefix",
       "lastVerifiedValue0": "Last verified: {value0}",
       "mFAIsEnabled": "MFA is enabled",
@@ -3366,7 +3480,7 @@
   },
   "sharedLinksView": {
     "colCreated": "Created",
-    "colExpires": "Expires",
+    "colExpires": "Caduca",
     "colOwner": "Propietario",
     "colPassword": "Contraseña",
     "colSession": "Sesión",

@@ -17,7 +17,7 @@ from typing import Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.database import CodeSource, Setting
+from models.database import NodeCodeSource, Setting
 from services.git_subprocess import GIT_TIMEOUT_S, GIT_TRANSPORT_TIMEOUT_S, run_git_capture
 
 logger = logging.getLogger(__name__)
@@ -222,7 +222,7 @@ def get_git_tracker(
     Get or create the GitTracker singleton instance.
 
     Resets the singleton when repo_path or branch changes so that
-    version_check_task always tracks the active CodeSource config.
+    version_check_task always tracks the active NodeCodeSource config.
 
     Issue #1185: accept branch param and reset on config change.
 
@@ -254,7 +254,7 @@ def get_git_tracker(
 
 
 async def _get_active_code_source_config() -> Tuple[str, str]:
-    """Read repo_path and branch from the active CodeSource DB record.
+    """Read repo_path and branch from the active NodeCodeSource DB record.
 
     Falls back to DEFAULT_REPO_PATH / DEFAULT_BRANCH when no active
     source exists or DB is unavailable.
@@ -265,12 +265,12 @@ async def _get_active_code_source_config() -> Tuple[str, str]:
         return DEFAULT_REPO_PATH, DEFAULT_BRANCH
     try:
         async with db_service.session() as db:
-            result = await db.execute(select(CodeSource).where(CodeSource.is_active.is_(True)))
+            result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.is_active.is_(True)))
             source = result.scalar_one_or_none()
             if source:
                 return source.repo_path, source.branch
     except Exception as e:
-        logger.debug("Failed to read CodeSource config from DB: %s", e)
+        logger.debug("Failed to read NodeCodeSource config from DB: %s", e)
     return DEFAULT_REPO_PATH, DEFAULT_BRANCH
 
 
@@ -307,10 +307,10 @@ async def version_check_task(
     """
     Background task that periodically checks for code updates.
 
-    Reads repo_path and branch from the active CodeSource DB record on
+    Reads repo_path and branch from the active NodeCodeSource DB record on
     each iteration so config changes take effect without restart.
 
-    Issue #1185: use dynamic CodeSource config instead of static env var.
+    Issue #1185: use dynamic NodeCodeSource config instead of static env var.
 
     Args:
         interval: Check interval in seconds (default: 300 = 5 min)
@@ -365,7 +365,7 @@ def start_version_checker(
     """
     Start the version checker background task.
 
-    Repo path and branch are read from the active CodeSource DB record
+    Repo path and branch are read from the active NodeCodeSource DB record
     on each check iteration (issue #1185).
 
     Args:

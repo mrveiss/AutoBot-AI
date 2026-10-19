@@ -138,7 +138,7 @@ _SKIP_PARTS = {"node_modules", ".worktrees", "__pycache__", "venv", ".venv"}
 
 # The one file allowed to define it. Anything else defining a function or
 # async function with this exact name is the fork this test exists to catch.
-_CANONICAL_DEFINER = (_BACKEND / "utils" / "error_boundaries" / "decorators.py").resolve()
+_CANONICAL_DEFINER = (_REPO / "autobot_shared" / "error_boundaries" / "decorators.py").resolve()
 
 # Trees the widened scan must keep reaching. Narrowing the scan back to
 # `autobot-backend/` -- the #15202 item 1 regression -- empties these without
