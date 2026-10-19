@@ -209,3 +209,23 @@ def test_the_hooks_still_land_when_a_hooks_path_was_removed(seeded: Path) -> Non
         installed = seeded / ".git" / "hooks" / name
         assert installed.is_file(), f"{name} was not installed"
         assert os.access(installed, os.X_OK), f"{name} is not executable"
+
+
+def test_a_reinstall_replaces_the_hook_by_rename_so_a_running_shell_keeps_its_file(seeded: Path) -> None:
+    """#18921: another worktree's push may be executing the shared hook during a reinstall.
+
+    An in-place write keeps the inode and changes the bytes under that shell; a rename gives
+    the path a new inode while an already-open handle keeps reading the old content.
+    """
+    hook = seeded / ".git" / "hooks" / "pre-push"
+    assert _install_from(seeded, seeded).returncode == 0
+    with hook.open("rb") as running:
+        old_bytes, old_inode = running.read(), os.fstat(running.fileno()).st_ino
+        template = seeded / "tools" / "git-hooks" / "pre-push"
+        template.write_bytes(template.read_bytes() + b"\n# a newer revision of the hook\n")
+        assert _install_from(seeded, seeded).returncode == 0
+        running.seek(0)
+        assert running.read() == old_bytes, "the running shell's file changed under it"
+    assert hook.stat().st_ino != old_inode, "the hook was rewritten in place, not replaced"
+    assert hook.read_bytes().endswith(b"# a newer revision of the hook\n")
+    assert not (hook.parent / "pre-push.new").exists(), "the temp file was left behind"

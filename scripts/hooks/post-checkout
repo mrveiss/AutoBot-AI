@@ -317,11 +317,11 @@ fi
 # destroying a developer's own. It also unsets GIT_DIR up front (#15246) --
 # the same trap #17035 fixed one file over.
 #
-# Not the atomic-rename dance the self-sync below needs: `pre-push` is not the
-# script executing here, so a plain copy cannot make a running shell resume at
-# a byte offset inside new content (#15532). Anyone extending this to a hook
-# that IS running must use that idiom instead -- see
-# repo_tests/hook_self_sync_atomic_test.py.
+# The installer replaces hooks by atomic rename (#18921): `pre-push` is not the
+# script executing HERE, but `.git/hooks` is shared by every worktree, so another
+# session's push can be running it, and an in-place copy resumed that shell at a
+# byte offset inside new content (#15532's class) -- see
+# repo_tests/git_hooks_installer_test.py.
 # The probe is load-bearing, not defensive politeness. `.git/hooks` is ONE
 # directory shared by every worktree; this installer is per worktree. So a hook
 # installed from a tree that has the --sync mode will be invoked from trees that

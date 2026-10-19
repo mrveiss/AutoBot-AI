@@ -27,6 +27,10 @@ To make changes:
 - **Network**: Uses distributed IP addresses (172.16.168.x)
 - **Used by**: Backend FastAPI application, system services
 
+> **Base + overlays (#18555).** `.env.base` holds the keys every native environment shares;
+> `.env.localhost`, `.env.native-vm`, `.env.network` and `.env.network-template` hold only what
+> differs. Always load the base first, then one overlay.
+
 ### 2. **`.env.localhost` (Local Development)**
 - **Purpose**: Local development with all services on localhost
 - **Scope**: All services running on 127.0.0.1
@@ -130,11 +134,11 @@ The standardization process resolved these critical conflicts:
 ### Switching Deployment Modes
 
 ```bash
-# Use local development
-cp .env.localhost .env
+# Use local development: the shared base, then the overlay (#18555)
+cat .env.base .env.localhost > .env
 
-# Use distributed VMs  
-cp .env.native-vm .env
+# Use distributed VMs
+cat .env.base .env.native-vm > .env
 
 # Use hybrid mode (default)
 python scripts/generate-env-files.py  # Regenerates .env as hybrid

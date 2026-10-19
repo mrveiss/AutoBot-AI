@@ -42,7 +42,11 @@ python:
   # host-key format across the family, one Docker env file; an edit confined to
   # any of them, or a new one, must run it.
   - '**/.env*'
+  # #18555: root-level env files (.env.base and the overlays) -- `**/` alone does not match the root here.
+  - '.env*'
   - '**/*.env'
+  # #18922: locale_completeness_allow_missing_18922_test.py reads the SLM app's check:locales script.
+  - 'autobot-slm-frontend/package.json'
   # #18653: uninstall_covers_role_packages_18653_test.py reads the interpreter
   # version the python_interpreter role installs (python{{ version }} packages).
   - '.python-version'

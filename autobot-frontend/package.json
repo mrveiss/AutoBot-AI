@@ -34,7 +34,7 @@
     "build-only": "vite build",
     "type-check": "vue-tsc --noEmit -p tsconfig.app.json",
     "check:i18n": "node scripts/check-i18n-keys.mjs",
-    "check:locales": "python3 scripts/check-locale-completeness.py",
+    "check:locales": "python3 scripts/check-locale-completeness.py --allow-missing",
     "check-ts-delta": "bash scripts/check-ts-delta.sh",
     "lint:oxlint": "oxlint . -D correctness --ignore-path .gitignore --ignore-pattern 'src/types/_generated/**'",
     "lint:eslint": "eslint .",

@@ -28,7 +28,8 @@ The tracked env files are templates. The installer and the Ansible roles write t
 |---|---|
 | `docker/.env.docker` | Docker Compose, through `--env-file docker/.env.docker`. This is the **only** Docker env file. |
 | `.env.example` | The full annotated reference for a native install. |
-| `.env.localhost`, `.env.native-vm`, `.env.network`, `.env.network-template` | Per-environment overlays, read by the `autobot-infrastructure/shared/scripts` tooling. |
+| `.env.base` | The keys every native environment shares, written once. Always loaded first. |
+| `.env.localhost`, `.env.native-vm`, `.env.network`, `.env.network-template` | Per-environment overlays on `.env.base`: each holds only what differs. Load the base, then one overlay (`cat .env.base .env.localhost > .env`, or `source` both in that order). |
 
 Host keys use one format in every file:
 
@@ -38,8 +39,9 @@ Host keys use one format in every file:
 - `OLLAMA_HOST` is Ollama's own variable. Its upstream format is `host[:port]`, and it is the only exception.
 
 `repo_tests/env_file_family_18555_test.py` enforces both rules over every tracked env file. It fails when
-a host key breaks the format, when two files disagree on a key's format, or when a second Docker env file
-appears.
+a host key breaks the format, when two files disagree on a key's format, when a second Docker env file
+appears, when an overlay repeats a `.env.base` key with the same value, or when a root `.env.<env>` file
+appears outside the known overlays.
 
 <!-- BEGIN_AUTOGEN_ENV_DOCS -->
 | Name | Component | Type | Default | Description |

@@ -234,7 +234,9 @@ automatically.
 
 Every command above passes `--env-file docker/.env.docker`. That is the only Docker env file
 (#18555). To change a value, edit a copy of it and pass the copy with `--env-file` instead.
-`.env.example` is the reference for native installs, not for Docker.
+`.env.example` is the reference for native installs, not for Docker. Native-install development
+tooling reads `.env.base` (the shared keys) and then one overlay -- `.env.localhost`, `.env.native-vm`
+or `.env.network` -- in that order (#18555).
 
 ---
 
