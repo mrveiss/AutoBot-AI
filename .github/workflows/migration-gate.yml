@@ -230,7 +230,7 @@ jobs:
           # backend conftest stubs the module and TriggerType becomes a MagicMock. Version: constraints.
           python -m pip install -c requirements-ci/storage.txt -c constraints/shared.txt \
             "alembic>=1.13" "sqlalchemy[asyncio]>=2.0" asyncpg aiosqlite croniter \
-            pydantic pydantic-settings \
+            pydantic pydantic-settings "email-validator>=2.3.0" \
             bcrypt pyjwt redis httpx aiofiles python-dotenv pyyaml \
             cryptography fastapi structlog aiohttp prometheus_client cachetools \
             pytest pytest-asyncio

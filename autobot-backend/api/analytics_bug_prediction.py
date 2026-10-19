@@ -21,6 +21,7 @@ from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.analytics_shared import no_data_response
+from api.codebase_analytics.task_routes import add_clear_stuck_route
 from api.schemas_analytics import (
     BugPredictionAnalysisResponse,
     BugPredictionAnalyzeResponse,
@@ -928,18 +929,13 @@ async def get_bug_prediction_status(
     return status
 
 
-@router.post("/tasks/clear-stuck", response_model=BugPredictionClearStuckResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="clear_stuck_bug_tasks",
-    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+add_clear_stuck_route(
+    router,
+    "/tasks/clear-stuck",
+    name="clear_stuck_bug_tasks",
+    error_prefix="ANALYTICS_BUG_PREDICTION",
+    response_model=BugPredictionClearStuckResponse,
 )
-async def clear_stuck_bug_tasks(
-    force: bool = Query(default=False, description="Force clear ALL running tasks"),
-    admin_check: bool = Depends(check_admin_permission),
-):
-    """No-op: Celery handles stuck-task recovery automatically (GH#6505)."""
-    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}
 
 
 @router.get("/high-risk", response_model=BugPredictionHighRiskResponse)

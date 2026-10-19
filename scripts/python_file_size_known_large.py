@@ -50,9 +50,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/agent.py": 1370,
     "autobot-backend/api/agent_config.py": 1371,
     "autobot-backend/api/agent_terminal.py": 773,
-    "autobot-backend/api/analytics.py": 1283,
+    "autobot-backend/api/analytics.py": 1281,
     "autobot-backend/api/analytics_architecture.py": 1264,
-    "autobot-backend/api/analytics_bug_prediction.py": 1438,
+    "autobot-backend/api/analytics_bug_prediction.py": 1434,
     "autobot-backend/api/analytics_cfg.py": 1331,
     "autobot-backend/api/analytics_code_generation.py": 992,
     "autobot-backend/api/analytics_code_review.py": 927,
@@ -73,12 +73,12 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/analytics_root_cause_test.py": 628,
     "autobot-backend/api/api_endpoint_migrations_test.py": 31020,
     "autobot-backend/api/auth.py": 698,
-    "autobot-backend/api/batch_jobs.py": 964,
+    "autobot-backend/api/batch_jobs.py": 916,
     "autobot-backend/api/browser_mcp.py": 1323,
     "autobot-backend/api/cache_management.py": 779,
     "autobot-backend/api/chat.py": 2690,  # #18316: delete delegates to the canonical path
     "autobot-backend/api/chat_sessions.py": 1938,  # #18293: legacy transcripts only ever proposed
-    "autobot-backend/api/code_intelligence.py": 2154,
+    "autobot-backend/api/code_intelligence.py": 2151,
     "autobot-backend/api/code_search.py": 828,
     "autobot-backend/api/codebase_analytics/analyzers.py": 1684,
     "autobot-backend/api/codebase_analytics/api_endpoint_scanner.py": 1444,
@@ -86,7 +86,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1119,
     "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 756,
     "autobot-backend/api/codebase_analytics/endpoints/environment.py": 698,  # #13602: sanitised traversal log
-    "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 827,
+    "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 817,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2266,
     "autobot-backend/api/codebase_analytics/endpoints/stats.py": 663,
     "autobot-backend/api/conversation_files.py": 996,
@@ -132,7 +132,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_code.py": 3265,
     "autobot-backend/api/schemas_knowledge.py": 5133,
     "autobot-backend/api/schemas_system.py": 4362,  # #13051: SecretModel ownership fields
-    "autobot-backend/api/schemas_workflows.py": 2917,
+    "autobot-backend/api/schemas_workflows.py": 2907,
     "autobot-backend/api/secrets.py": 1182,  # #16444 review: except HTTPException, ValueError handlers
     "autobot-backend/api/security_assessment.py": 913,
     "autobot-backend/api/settings.py": 881,
@@ -476,7 +476,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
     "autobot-slm-backend/user_management/services/sso_service.py": 775,
     "autobot_shared/circuit_breaker.py": 689,
-    "autobot_shared/env_registry.py": 1176,  # #13602: +1 sibling import, -14 registration
+    "autobot_shared/env_registry.py": 1164,  # #13602, #18765: sibling imports; blocks moved to siblings
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
     "autobot_shared/network_constants.py": 614,
     "autobot_shared/npu/integration.py": 929,

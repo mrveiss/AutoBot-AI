@@ -330,6 +330,42 @@ def test_guarded_forms_count_as_guarded(name: str) -> None:
     assert len(sites) == 1 and sites[0].guarded, f"{name}: {sites}"
 
 
+_IN_PROCESS = (
+    "import httpx\nasync def f(app, p):\n"
+    "    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://t') as c:\n"
+    "        return await c.get(p)\n"
+)
+
+
+def test_an_in_process_asgi_client_is_not_an_outbound_call() -> None:
+    """#18765: ``ASGITransport`` opens no socket; the same client over the network is still flagged."""
+    assert outbound_sites(_IN_PROCESS) == ()
+    network = _IN_PROCESS.replace("transport=httpx.ASGITransport(app=app), ", "")
+    sites = outbound_sites(network)
+    assert len(sites) == 1 and not sites[0].guarded, "contrast: a network httpx client must still be detected"
+
+
+@pytest.mark.parametrize("name", ["client", "http_client"])
+def test_an_in_process_client_is_not_flagged_by_its_receiver_name(name: str) -> None:
+    """The binding is honoured before the name fallbacks (``client``) and the manager-name match (``http_client``)."""
+    named = _IN_PROCESS.replace(" as c:", f" as {name}:").replace("c.get(p)", f"{name}.get(p)")
+    assert named != _IN_PROCESS
+    assert outbound_sites(named) == ()
+    network = named.replace("transport=httpx.ASGITransport(app=app), ", "")
+    assert len(outbound_sites(network)) == 1, "contrast: the same name over the network is still detected"
+
+
+def test_an_asgi_client_with_network_mounts_is_still_an_outbound_call() -> None:
+    """``mounts=`` sends matching URLs to a network transport, so the exemption does not apply."""
+    mounted = _IN_PROCESS.replace(
+        "transport=httpx.ASGITransport(app=app), ",
+        "transport=httpx.ASGITransport(app=app), mounts={'https://': httpx.AsyncHTTPTransport()}, ",
+    )
+    assert mounted != _IN_PROCESS
+    sites = outbound_sites(mounted)
+    assert len(sites) == 1 and not sites[0].guarded
+
+
 def test_known_live_misses_are_now_found() -> None:
     """The review's three live misses: an aliased session under ``with`` and an httpx client."""
     found = scan_paths(repo_root(), ["autobot-backend/api/provider_auth.py", "autobot-backend/content_reach/_http.py"])

@@ -85,7 +85,7 @@ def _user_mode_defaults() -> dict[str, str]:
 def test_every_compose_user_mode_default_is_a_mode_the_backend_accepts() -> None:
     """Every service, not just the backend: autobot-worker kept the retired default (#18729)."""
     source = (_ROOT / "autobot-backend" / "user_management" / "config.py").read_text(encoding="utf-8")
-    enum = re.search(r"class DeploymentMode\(str, Enum\):(.*?)\n\n\n", source, re.S).group(1)
+    enum = re.search(r"class UserManagementMode\(str, Enum\):(.*?)\n\n\n", source, re.S).group(1)
     modes = set(re.findall(r'=\s*"(\w+)"', enum))
     defaults = _user_mode_defaults()
     assert {"autobot-backend", "autobot-worker"} <= set(defaults), defaults

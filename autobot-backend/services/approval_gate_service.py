@@ -106,6 +106,7 @@ class ApprovalGateService:
 
         await self.session.commit()
         await self.session.refresh(approval)
+        await self.session.refresh(approval, attribute_names=["comments", "task_links"])
 
         await self._notify("approval_pending", approval)
         logger.info("Approval %s created: type=%s, agent=%s", approval.id, approval_type, requested_by_agent)

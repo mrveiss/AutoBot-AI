@@ -439,7 +439,7 @@ admin (see Issue #2953 for that removal), and no `/user-management/*` route retu
 gate. AutoBot always runs full, Postgres-backed user management.
 
 The only remaining mode axis for this subsystem is `AUTOBOT_USER_MODE` (`single_company` /
-`multi_company` / `provider` — see `user_management/config.py`'s `DeploymentMode`), which
+`multi_company` / `provider` — see `user_management/config.py`'s `UserManagementMode`), which
 toggles feature flags (team switcher, SSO, billing) but never disables authentication or the
 signup endpoint. `AUTOBOT_DEPLOYMENT_MODE` is a separate, infrastructure-only setting
 (`hybrid` / `local` / `distributed`) and has no bearing on user-management authorization.

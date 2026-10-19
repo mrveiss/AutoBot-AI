@@ -43,7 +43,7 @@ class _FakeSession:
     async def commit(self):
         return None
 
-    async def refresh(self, obj):
+    async def refresh(self, obj, *, attribute_names=None):
         return None
 
 

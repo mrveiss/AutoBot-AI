@@ -167,11 +167,11 @@ Not every hook's verdict carries the same weight in CI, and the split is deliber
 
 ## Good First Issues
 
-New to the codebase? Start with issues tagged [`good first issue`](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aopen+label%3A%22good+first+issue%22).
+New to the codebase? Start with issues tagged [`good-first-issue`](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aopen+label%3Agood-first-issue).
 
 ## Translating AutoBot
 
-No code needed: each language is one JSON file, and every language issue is a [good first issue](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aopen+label%3A%22good+first+issue%22+label%3Ai18n) (umbrella: #18768). English is the source. Any string a language lacks is shown in English, so a partial translation is always safe to merge.
+No code needed: each language is one JSON file, and every language issue is a [good first issue](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aopen+label%3Agood-first-issue+label%3Ai18n) (umbrella: #18768). English is the source. Any string a language lacks is shown in English, so a partial translation is always safe to merge.
 
 1. **Pick one section.** Open your language's issue, choose one section from its table and comment with the section's name so nobody else takes it. To see what's left:
 
