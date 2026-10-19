@@ -8,7 +8,7 @@
 -e ../autobot_shared
 
 # Browser automation
-playwright>=1.63.0
+playwright>=1.64.0
 # #15660: `roles/browser` installs this into the worker venv and no manifest
 # declared it, so `update-all-nodes.yml`'s `pip install -r` of this file built a
 # different venv from the one the role builds. Bare, which is the text the role
@@ -20,5 +20,6 @@ playwright-stealth
 # Range-header DoS). Declared here so the floors have an anchor in the
 # component's own manifest rather than agreeing with the backend's by
 # coincidence, which is the blindness #15629 removed from the parity guard.
-fastapi>=0.143.0
+fastapi>=0.143.2
+starlette==1.7.0  # security floor; fastapi itself only requires starlette>=0.46.0
 uvicorn>=0.54.0
