@@ -105,7 +105,7 @@
 
       <!-- Network view (Cytoscape) - DEFAULT, lazy-loaded on demand (#5158) -->
       <div v-show="viewMode === 'network'" class="network-view">
-        <div v-if="cytoscapeLoading && !cy" class="cytoscape-loading">
+        <div v-if="cytoscapeLoading" class="cytoscape-loading">
           <div class="loading-spinner"></div>
           <span>{{ $t('charts.callGraph.loadingVisualization', 'Loading visualization library...') }}</span>
         </div>
