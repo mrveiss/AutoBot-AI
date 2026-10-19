@@ -11,14 +11,16 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from auth_middleware import get_current_user
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
 from constants.path_constants import PATH
+from security.human_admin import HUMAN_ADMIN_DEPENDENCIES
 
 
 class IndexCodebaseRequest(BaseModel):
@@ -266,7 +268,7 @@ async def index_codebase(http_request: Request, request: IndexCodebaseRequest | 
     )
 
 
-@router.get("/index/status/{task_id}")
+@router.get("/index/status/{task_id}", dependencies=[Depends(get_current_user)])
 @bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -421,7 +423,7 @@ def _cancel_active_task(task_id: str, existing_task) -> JSONResponse:
         )
 
 
-@router.post("/index/cancel")
+@router.post("/index/cancel", dependencies=HUMAN_ADMIN_DEPENDENCIES)
 @bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

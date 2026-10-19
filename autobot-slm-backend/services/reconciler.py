@@ -29,9 +29,9 @@ from models.database import (
     Deployment,
     DeploymentStatus,
     EventSeverity,
-    EventType,
     Node,
     NodeEvent,
+    NodeEventType,
     NodeStatus,
     Service,
     ServiceCategory,
@@ -537,7 +537,7 @@ class ReconcilerService:
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node.node_id,
-            event_type=EventType.HEALTH_CHECK.value,
+            event_type=NodeEventType.HEALTH_CHECK.value,
             severity=EventSeverity.WARNING.value,
             message=f"Node {node.hostname} reachable but agent not responding",
             details={"old_status": old_status, "reason": "no_heartbeat"},
@@ -559,7 +559,7 @@ class ReconcilerService:
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node.node_id,
-            event_type=EventType.HEALTH_CHECK.value,
+            event_type=NodeEventType.HEALTH_CHECK.value,
             severity=EventSeverity.ERROR.value,
             message=f"Node {node.hostname} is unreachable",
             details={"old_status": old_status, "reason": "unreachable"},
@@ -774,7 +774,7 @@ class ReconcilerService:
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node.node_id,
-            event_type=EventType.REMEDIATION_COMPLETED.value,
+            event_type=NodeEventType.REMEDIATION_COMPLETED.value,
             severity=EventSeverity.WARNING.value,
             message=(
                 f"Node {node.hostname} requires human intervention after "
@@ -821,7 +821,7 @@ class ReconcilerService:
         - Persists a throttled `NodeEvent` (`_create_still_exhausted_event`)
           so the DB-backed timeline shows the node is STILL stuck, not just
           the one original exhaustion event -- reusing the same generic,
-          already-rendered `EventType.REMEDIATION_COMPLETED` shape rather
+          already-rendered `NodeEventType.REMEDIATION_COMPLETED` shape rather
           than inventing a new one, so this needs no new frontend work.
         - Broadcasts over the websocket for anyone watching live, with
           `event_type="still_exhausted"` -- deliberately NOT `"completed"`:
@@ -869,7 +869,7 @@ class ReconcilerService:
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node.node_id,
-            event_type=EventType.REMEDIATION_COMPLETED.value,
+            event_type=NodeEventType.REMEDIATION_COMPLETED.value,
             severity=EventSeverity.WARNING.value,
             message=(
                 f"Node {node.hostname} still requires human intervention "
@@ -903,7 +903,7 @@ class ReconcilerService:
             event = NodeEvent(
                 event_id=str(uuid.uuid4())[:16],
                 node_id=node_id,
-                event_type=EventType.REMEDIATION_COMPLETED.value,
+                event_type=NodeEventType.REMEDIATION_COMPLETED.value,
                 severity=EventSeverity.INFO.value,
                 message=f"SLM agent on {node.hostname} restarted and resumed heartbeating",
                 details={"action": "restart_agent", "success": True, "verified_by": "heartbeat"},
@@ -928,7 +928,7 @@ class ReconcilerService:
             event = NodeEvent(
                 event_id=str(uuid.uuid4())[:16],
                 node_id=node_id,
-                event_type=EventType.REMEDIATION_COMPLETED.value,
+                event_type=NodeEventType.REMEDIATION_COMPLETED.value,
                 severity=EventSeverity.WARNING.value,
                 message=failure_message,
                 details={
@@ -1003,7 +1003,7 @@ class ReconcilerService:
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node_id,
-            event_type=EventType.REMEDIATION_STARTED.value,
+            event_type=NodeEventType.REMEDIATION_STARTED.value,
             severity=EventSeverity.INFO.value,
             message=f"Starting auto-remediation for {node.hostname}",
             details={"attempt": tracker["count"] + 1, "action": "restart_agent"},
@@ -1234,7 +1234,7 @@ class ReconcilerService:
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node.node_id,
-            event_type=EventType.REMEDIATION_COMPLETED.value,
+            event_type=NodeEventType.REMEDIATION_COMPLETED.value,
             severity=EventSeverity.WARNING.value,
             message=(
                 f"Service {service.service_name} on {node.hostname} requires "
@@ -1460,7 +1460,7 @@ class ReconcilerService:
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node.node_id,
-            event_type=EventType.ROLLBACK_STARTED.value,
+            event_type=NodeEventType.ROLLBACK_STARTED.value,
             severity=EventSeverity.WARNING.value,
             message=f"Auto-rollback triggered for deployment {deployment.deployment_id}",
             details={
@@ -1490,7 +1490,7 @@ class ReconcilerService:
             event = NodeEvent(
                 event_id=str(uuid.uuid4())[:16],
                 node_id=node.node_id,
-                event_type=EventType.ROLLBACK_COMPLETED.value,
+                event_type=NodeEventType.ROLLBACK_COMPLETED.value,
                 severity=EventSeverity.INFO.value,
                 message=f"Auto-rollback completed for deployment {deployment.deployment_id}",
                 details={
@@ -1510,7 +1510,7 @@ class ReconcilerService:
             event = NodeEvent(
                 event_id=str(uuid.uuid4())[:16],
                 node_id=node.node_id,
-                event_type=EventType.ROLLBACK_COMPLETED.value,
+                event_type=NodeEventType.ROLLBACK_COMPLETED.value,
                 severity=EventSeverity.ERROR.value,
                 message=f"Auto-rollback failed for deployment {deployment.deployment_id}",
                 details={
@@ -1724,7 +1724,7 @@ class ReconcilerService:
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node.node_id,
-            event_type=EventType.HEALTH_CHECK.value,
+            event_type=NodeEventType.HEALTH_CHECK.value,
             severity=severity.value,
             message=f"Node status changed from {old_status} to {new_status}",
             details={

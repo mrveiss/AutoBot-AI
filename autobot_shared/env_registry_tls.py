@@ -1,6 +1,6 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""TLS AUTOBOT_* environment variable registrations.
+"""TLS and network AUTOBOT_* environment variable registrations.
 
 Moved out of ``env_registry.py``, which sits at its grandfathered file-size ceiling
 (#14236), to make room for the import lines every split module needs there. Imported
@@ -48,5 +48,21 @@ register_env_var(
         default=None,
         description="Path to the TLS private key file.",
         component="tls",
+    )
+)
+
+
+# --- network (moved from env_registry.py, #18765) ---
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_TRUSTED_PROXIES",
+        type=str,
+        default="",
+        description=(
+            "Comma-separated list of trusted reverse-proxy IP addresses or CIDR ranges "
+            "for X-Forwarded-For header trust."
+        ),
+        component="network",
     )
 )

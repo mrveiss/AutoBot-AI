@@ -56,7 +56,7 @@ class _Session:
     async def commit(self):
         self.commits += 1
 
-    async def refresh(self, obj):
+    async def refresh(self, obj, *, attribute_names=None):
         return None
 
     async def execute(self, stmt):
