@@ -30,7 +30,7 @@ class ContentRequest:
 
 
 @dataclass
-class ContentResult:
+class ContentReachResult:
     """Normalized result returned by a backend."""
 
     success: bool
@@ -43,7 +43,7 @@ class ContentResult:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def failure(cls, source_type: SourceKind, detail: str) -> "ContentResult":
+    def failure(cls, source_type: SourceKind, detail: str) -> "ContentReachResult":
         """Build a non-successful result carrying an error detail."""
         return cls(
             success=False,
@@ -64,5 +64,5 @@ class ContentBackend(ABC):
         """Return True if this backend is actually working right now."""
 
     @abstractmethod
-    async def fetch(self, request: ContentRequest) -> ContentResult:
+    async def fetch(self, request: ContentRequest) -> ContentReachResult:
         """Fetch content; raise BackendError (or return success=False) on failure."""

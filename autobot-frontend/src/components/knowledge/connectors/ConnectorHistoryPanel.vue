@@ -8,7 +8,7 @@
  */
 
 import { ref, computed, onMounted, watch } from 'vue'
-import BaseBadge from '@/components/base/BaseBadge.vue'
+import { BaseBadge } from '@autobot/ui'
 import { useConnectorJob, fetchConnectorHistory } from '@/composables/knowledge/useConnectorJob'
 import { formatTimeAgo } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'

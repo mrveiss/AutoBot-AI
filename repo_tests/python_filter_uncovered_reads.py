@@ -64,6 +64,9 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         # twelve shards on every CLAUDE.md edit for a guard that does not depend on
         # its content. Recorded, not covered, per this file's own trade-off rule.
         "CLAUDE.md",
+        # #18653: uninstall_covers_role_components_18653_test.py composes `Path(tmp) / "autobot"`
+        # -- a synthetic /opt/autobot inside a tmp dir, never a read of a repo tree.
+        "autobot",
         "constraints/shared.txt",
         "docker/generate-secrets.sh",
         "docker/secrets-init.sh",
@@ -141,7 +144,9 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 # 45 -> 39: #17885 added 'autobot-frontend/src/**' and
 # 'autobot-slm-frontend/src/**' to the filter for the frontend ratchet's 184
 # literal reads, which covered six entries recorded here as uncovered.
-MAX_UNCOVERED_READS = 39
+#: RAISED 39 -> 40 by #18653: `autobot` above is a tmp_path fixture segment of the
+#: uninstall guard (a fake /opt/autobot tree), a new bypass and not a real read.
+MAX_UNCOVERED_READS = 40
 
 #: A deliberate raise of ``MAX_UNCOVERED_READS`` is recorded here, as
 #: ``(value, "#issue")``. #17650's criterion is that raising is **justified**, not
@@ -153,4 +158,4 @@ MAX_UNCOVERED_READS = 39
 #: It is checked in both directions, like every other baseline on this page: a record
 #: that no longer matches MAX fails as stale, so lowering MAX later cannot leave a
 #: standing permission behind it.
-ACKNOWLEDGED_RAISE: tuple[int, str] | None = None
+ACKNOWLEDGED_RAISE: tuple[int, str] | None = (40, "#18653")

@@ -35,18 +35,18 @@ from api.schemas_ai_stack import (
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     ChatRequest,
+    ComprehensiveResearchRequest,
     ContentClassificationRequest,
     DevelopmentAnalysisRequest,
     KbCodeSearchRequest,
     KnowledgeExtractionRequest,
     RAGQueryRequest,
-    ResearchRequest,
 )
 from api.system_health import register_singleton_probe
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from dependencies import get_knowledge_base
+from dependencies import provide_knowledge_base
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.search_filters import (
     extract_user_context_from_request,
@@ -119,7 +119,7 @@ async def list_ai_agents(admin_check: bool = Depends(check_admin_permission)):
 async def rag_query(
     request: RAGQueryRequest,
     admin_check: bool = Depends(check_admin_permission),
-    knowledge_base=Depends(get_knowledge_base),
+    knowledge_base=Depends(provide_knowledge_base),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -221,7 +221,7 @@ async def analyze_documents(documents: List[Metadata], admin_check: bool = Depen
 async def chat(
     request: ChatRequest,
     admin_check: bool = Depends(check_admin_permission),
-    knowledge_base=Depends(get_knowledge_base),
+    knowledge_base=Depends(provide_knowledge_base),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -310,7 +310,7 @@ async def knowledge_search(
     search_type: str = "comprehensive",
     max_results: int = 10,
     admin_check: bool = Depends(check_admin_permission),
-    knowledge_base=Depends(get_knowledge_base),
+    knowledge_base=Depends(provide_knowledge_base),
 ):
     """
     Knowledge search combining local KB and AI Stack capabilities.
@@ -379,7 +379,9 @@ async def get_system_knowledge(
     operation="comprehensive_research",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-async def comprehensive_research(request: ResearchRequest, admin_check: bool = Depends(check_admin_permission)):
+async def comprehensive_research(
+    request: ComprehensiveResearchRequest, admin_check: bool = Depends(check_admin_permission)
+):
     """
     Perform comprehensive research with multiple AI agents.
 

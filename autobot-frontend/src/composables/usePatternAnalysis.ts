@@ -735,14 +735,12 @@ export function usePatternAnalysis() {
    */
   const clearStorage = async (): Promise<boolean> => {
     return wrap(async () => {
-      const data = await apiClient.delete<{ status: string }>(
+      // Handler returns {message} on 2xx and raises on failure (no status field).
+      await apiClient.post(
         '/api/analytics/codebase/patterns/storage/clear',
       )
-      if (data.status === 'success') {
-        storageStats.value = null
-        return true
-      }
-      return false
+      storageStats.value = null
+      return true
     }).catch((e: unknown) => {
       logger.error('Clear storage failed:', e)
       return false

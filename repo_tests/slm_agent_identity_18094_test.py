@@ -15,7 +15,6 @@ from repo_tests._paths import repo_root
 _ROOT = repo_root()
 _STANDALONE = _ROOT / "autobot-infrastructure" / "shared" / "scripts" / "slm-agent-standalone.py"
 _AGENT = _ROOT / "autobot-slm-backend" / "slm" / "agent" / "agent.py"
-_MIRROR = _ROOT / "autobot-slm-backend" / "ansible" / "roles" / "slm_agent" / "files" / "slm" / "agent" / "agent.py"
 _KEY_NAME = "AUTOBOT_INTERNAL_API_KEY"
 
 
@@ -45,7 +44,9 @@ def test_standalone_agent_uses_the_configured_node_id(monkeypatch, tmp_path):
     assert agent.config["node_id"] == "node-under-test"
 
 
-@pytest.mark.parametrize("path", [_AGENT, _MIRROR], ids=["canonical", "mirror"])
+# The Ansible mirror is gone (#18548); the role deploys this one file, and
+# slm_agent_deploys_source_tree_18548_test fails if a copy reappears.
+@pytest.mark.parametrize("path", [_AGENT], ids=["canonical"])
 def test_agent_reads_the_key_through_the_one_reader(path):
     tree = ast.parse(path.read_text(encoding="utf-8"))
     imported = {
@@ -65,7 +66,3 @@ def test_agent_reads_the_key_through_the_one_reader(path):
     assert "node_proxy" in imported
     assert reader_calls, "the agent must call node_proxy.internal_api_key() (#17856 row 13a)"
     assert env_name == [] and literals == [], "the agent must not read the key's env var itself"
-
-
-def test_agent_and_mirror_stay_byte_identical():
-    assert _AGENT.read_bytes() == _MIRROR.read_bytes()

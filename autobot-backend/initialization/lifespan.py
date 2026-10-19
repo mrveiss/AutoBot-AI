@@ -552,7 +552,7 @@ async def _init_transcriber_db(app: FastAPI) -> None:
     Skipped entirely when TRANSCRIBER_ENABLED != true.
     Sets ``app.state.transcriber_db``, ``app.state.transcriber_upload_dir``,
     and ``app.state.transcriber_export_dir`` for use by the dependency
-    injection layer (``transcriber.deps.get_db``).
+    injection layer (``transcriber.deps.get_transcriber_db_from_request``).
     """
     import os
     from pathlib import Path as _Path
@@ -862,10 +862,10 @@ async def _run_background_doc_indexing():
 
         # Fix HNSW pickle format after indexing (#1390)
         from autobot_shared.paths import chromadb_data_dir
-        from utils.chromadb_client import _fix_hnsw_pickle_format
+        from utils.chromadb_store_repairs import repair_hnsw_pickles_locked
 
         chroma_path = chromadb_data_dir()
-        _fix_hnsw_pickle_format(chroma_path)
+        await asyncio.to_thread(repair_hnsw_pickles_locked, chroma_path)  # flock wait + fsync: off the loop
     except Exception as e:
         logger.warning("Background doc indexing failed (non-critical): %s", e)
 
@@ -1559,9 +1559,9 @@ async def _init_orchestrator(app: FastAPI) -> None:
 
 
 async def _wire_npu_task_queue() -> None:
-    """Wire NPUWorkerManager into the global TaskQueue for per-worker task tracking (#2985).
+    """Wire NPUWorkerManager into the global RedisTaskQueue for per-worker task tracking (#2985).
 
-    TaskQueue._worker_loop already calls assign_task_to_worker / release_worker_task
+    RedisTaskQueue._worker_loop already calls assign_task_to_worker / release_worker_task
     behind an ``if self.npu_worker_manager is not None:`` guard, but the attribute was
     never set to an actual instance — making all tracking code dead (#2944).  This helper
     runs during Phase 2 (non-critical) so that startup is never blocked by NPU issues.

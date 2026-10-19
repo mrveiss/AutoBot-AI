@@ -322,7 +322,11 @@ PASSTHROUGH_ROUTES: frozenset[tuple[str, str, str]] = frozenset(
         ("autobot-backend/api/skills.py", "GET /{name}/metrics", "SkillMetricsResponse"),
         ("autobot-backend/api/skills.py", "GET /{name}/suggestions", "SkillSuggestionsResponse"),
         ("autobot-backend/api/skills.py", "POST /initialize", "SkillsInitializeResponse"),
-        ("autobot-backend/api/system.py", "GET /api/cache/stats", "SystemCacheCoordinatorStatsResponse"),
+        (
+            "autobot-backend/api/system_cache_coordinator.py",
+            "GET /cache/coordinator/stats",
+            "SystemCacheCoordinatorStatsResponse",
+        ),  # #18796 moved it
         ("autobot-backend/api/terminal.py", "GET /stats", "TerminalStatsResponse"),
         ("autobot-backend/api/usage.py", "GET /by-user/{user_id}", "UsageByUserSingleResponse"),
         ("autobot-backend/api/usage.py", "GET /me", "UsageMyUsageResponse"),

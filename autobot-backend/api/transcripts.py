@@ -37,7 +37,7 @@ from knowledge import get_knowledge_base
 from llm_shared import LLMRequest, get_provider_registry
 from transcriber.ai.context import build_context
 from transcriber.ai.prompts import get_system_prompt
-from transcriber.deps import can_access, resolve_user_id
+from transcriber.deps import can_access_transcriber_row, resolve_user_id
 from transcriber.export.segments import build_segment_list
 
 logger = get_logger(__name__)
@@ -57,7 +57,7 @@ async def _load_recording(state: State, transcript_id: str, caller_id: str) -> d
     except ValueError:
         raise HTTPException(status_code=404, detail="Transcript not found") from None
     rec = await db.get_recording(recording_id)
-    if not rec or not can_access(rec, caller_id):
+    if not rec or not can_access_transcriber_row(rec, caller_id):
         raise HTTPException(status_code=404, detail="Transcript not found")
     return rec
 

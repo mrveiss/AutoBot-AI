@@ -81,7 +81,7 @@ logged.
 | *(none)* | Standard interactive install |
 | `--unattended` | Run without prompts, use all defaults (CI/automation) |
 | `--reinstall` | Force a reinstall over an existing installation |
-| `--uninstall` | Completely remove AutoBot and its dependencies (asks for confirmation) |
+| `--uninstall` | Remove AutoBot: shows what it will remove, then asks you to type `UNINSTALL`. See [Uninstalling](#uninstalling) |
 | `--yes`, `-y` | Skip confirmation prompts (use with `--uninstall`) |
 | `--validate` | Verify installation integrity (required service directories present) |
 | `--branch=BRANCH` | Git branch to install (default: `main`) |
@@ -98,6 +98,7 @@ Environment variables skip the matching interactive prompt:
 | `AUTOBOT_SLM_ADMIN_PASSWORD=<pass>` | Same as `--admin-pass=` |
 | `AUTOBOT_INSTALL_INTERFACE=<iface>` | Pick the network interface by name instead of the menu |
 | `OVERRIDE_IP=<ip>` | Skip IP detection and use this address |
+| `NETWORK_SUBNET=<cidr>` / `NETWORK_GATEWAY=<ip>` | Use this network instead of detecting it. The subnet is the source the firewall rules allow, so if it cannot be detected the installer stops and asks for these instead of guessing |
 
 ### Log Files
 
@@ -115,10 +116,36 @@ the legacy `docker-compose` v1). Memory depends on what you start — the figure
 the containers' configured memory limits (ceilings, not measured use), and building the
 images needs headroom on top:
 
-| What you start | Containers | Memory limits (sum) | Host RAM |
-|----------------|------------|---------------------|----------|
-| SLM web GUI only (`--profile slm`) | SLM, its GUI, Redis, PostgreSQL | ~3.1 GB | 4 GB+ free |
-| Full stack | backend, worker, celery-beat, SLM, frontend, Redis, PostgreSQL, ChromaDB | ~9 GB | 16 GB recommended |
+| What you start | Containers | Memory limits (sum) | Measured use | Host RAM |
+|----------------|------------|---------------------|--------------|----------|
+| SLM web GUI only (`--profile slm`) | SLM, its GUI, Redis, PostgreSQL | ~3.1 GB | ~215 MiB idle just after start (CI); ~414 MiB with the SLM restarting (an external test) | 1 GB+ free to run; building the images needs more (not measured) |
+| Full stack | backend, worker, celery-beat, SLM, frontend, Redis, PostgreSQL, ChromaDB | ~9 GB | not measured | 16 GB recommended |
+
+### First: per-host secrets and network range
+
+```bash
+bash docker/generate-secrets.sh
+```
+
+This writes the gitignored `docker/.env.secrets`: unique signing secrets and passwords,
+and `AUTOBOT_DOCKER_MGMT_PREFIX`, a private `/24` for the stack's management network that
+overlaps none of this host's routes or existing Docker networks. Compose refuses to start
+without it; there is no built-in default range, because a fixed one can collide with your
+LAN and cut the host off the network. To choose the range yourself, set
+`AUTOBOT_DOCKER_MGMT_PREFIX=<first three octets>` (e.g. `10.77.3`) before running the
+script. Keep the file: every command below passes it.
+
+It also holds `AUTOBOT_ADMIN_PASSWORD`, the password of the main app's first admin
+account (user `admin`). The backend creates that account on its first start. To read it:
+
+```bash
+grep '^AUTOBOT_ADMIN_PASSWORD=' docker/.env.secrets
+```
+
+Log in to the main app at **http://localhost** with `admin` and that password, then change
+it. A stack started without the line has no main-app account; add the line with
+`bash docker/generate-secrets.sh` (it keeps every value already in the file) and restart the
+backend.
 
 ### SLM web GUI first (smallest start)
 
@@ -128,7 +155,8 @@ from the GUI's Setup Wizard:
 ```bash
 git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
-docker compose --profile slm up -d --build autobot-slm-gui
+bash docker/generate-secrets.sh
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets --profile slm up -d --build autobot-slm-gui
 ```
 
 The SLM GUI is then at **http://localhost/slm/**. It binds port 80, like the full stack's
@@ -137,7 +165,7 @@ frontend — run one or the other, not both.
 ### Full stack
 
 ```bash
-docker compose up -d --build
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d --build
 ```
 
 This starts the core services: backend, SLM, frontend, Redis, PostgreSQL, and
@@ -148,11 +176,21 @@ ChromaDB.
 Optional services are activated with `--profile`:
 
 ```bash
-# Add a local Ollama LLM server
-docker compose --profile ollama up -d --build
+# Add a local Ollama LLM server (only for running models on this host)
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets --profile ollama up -d --build
 
 # Add Prometheus + Grafana monitoring
-docker compose --profile monitoring up -d --build
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets --profile monitoring up -d --build
+```
+
+Which AI providers to use is your choice: local, hybrid or cloud (#15494). Cloud and
+hybrid providers need no local model. Only on the fully local path, with the `ollama`
+profile, does Ollama start empty: pull the models `docker/.env.docker` names, or the
+ones you set there instead:
+
+```bash
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec autobot-ollama ollama pull qwen3.5:9b
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec autobot-ollama ollama pull nomic-embed-text:latest
 ```
 
 ### Exposed Services
@@ -172,7 +210,7 @@ Copy the override template to enable live-reload for frontend and backend code:
 
 ```bash
 cp docker-compose.override.example.yml docker-compose.override.yml
-docker compose up -d
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d
 ```
 
 Edit source files on the host and changes are reflected inside the containers
@@ -180,8 +218,9 @@ automatically.
 
 ### Environment
 
-Docker Compose reads `.env.docker` by default. Copy `.env.example` to
-`.env.docker` and adjust values as needed before starting.
+Every command above passes `--env-file docker/.env.docker`. That is the only Docker env file
+(#18555). To change a value, edit a copy of it and pass the copy with `--env-file` instead.
+`.env.example` is the reference for native installs, not for Docker.
 
 ---
 
@@ -260,6 +299,42 @@ sudo systemctl status postgresql
 ```
 
 ---
+
+## Uninstalling
+
+```bash
+sudo /opt/autobot/code_source/install.sh --uninstall                       # shows the plan, then asks
+sudo bash /opt/autobot/code_source/scripts/uninstall.sh --dry-run          # only shows what would go
+sudo bash /opt/autobot/code_source/scripts/uninstall.sh --purge-data       # also your AutoBot data
+```
+
+The uninstaller first prints its plan, then asks you to type `UNINSTALL`. `--yes` skips the
+question for scripted use. Without a terminal and without `--yes`, it refuses instead of
+proceeding.
+
+By default it removes AutoBot's services and units, its code, configs, nginx sites, sudoers
+files and the apt sources it added. **Your data stays** unless you add a flag:
+
+| Flag | Also removes |
+|---|---|
+| `--purge-data` | AutoBot's databases; the whole `/opt/autobot` tree, including anything else in it (by default only AutoBot's own code there goes; its `backups`, `db-backups`, `snapshots`, `data`, `models`, `plugins`, `.env`, `config`, certificates, any folder AutoBot does not know as its code, and the data inside its code folders -- the backends' `data` and `.env`, the ChromaDB store -- stay); `/etc/autobot` (secrets and credentials); its state and backups elsewhere; and the accounts the installer created, with their homes. PostgreSQL itself only if every cluster was inspected and holds nothing but AutoBot's databases and roles, and its directories only if empty afterwards |
+| `--purge-shared` | grafana, prometheus, node-exporter, redis-stack and python3-psycopg2, with their data. Nothing records who installed them, so they stay by default |
+
+It never removes:
+- **An account it did not create.** The installer records the `autobot` account only if it
+  created it, in `/etc/autobot/install-record`. On a machine where `autobot` already existed,
+  for example your own login, the account and its home stay. An install made before this record
+  existed has no record, so no account, recorded package or recorded apt source is removed there.
+- **More than it asked apt for.** If purging a package would also remove something else, the
+  purge is skipped and the plan names it. No `apt autoremove` is run.
+- **nginx, the base packages** the installer needs (git, curl, openssh-server, ...), `ollama`,
+  the `docker` and `intel-openvino` sources, and `deadsnakes` unless the installer recorded
+  adding it. Nor the service accounts the roles create (prometheus, node_exporter, ...).
+
+A partial install that never got as far as cloning the code has no uninstaller copy on the
+machine; `install.sh --uninstall` says so instead of guessing.
+
+The log is written to `/var/tmp/autobot-uninstall-<timestamp>.log`, which survives the uninstall.
 
 ## Troubleshooting
 

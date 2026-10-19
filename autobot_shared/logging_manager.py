@@ -414,8 +414,12 @@ def get_debug_logger(name: str) -> logging.Logger:
     return get_logger(name, "debug")
 
 
-def get_audit_logger(name: str) -> logging.Logger:
-    """Get audit logger"""
+def get_audit_channel_logger(name: str) -> logging.Logger:
+    """Get the stdlib logger of the ``audit`` log channel.
+
+    This is a log channel only: it writes no audit record. Audit records go
+    through ``services.audit.audit.record`` (#17312).
+    """
     return get_logger(name, "audit")
 
 

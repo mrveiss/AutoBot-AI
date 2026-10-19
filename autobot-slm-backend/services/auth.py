@@ -37,8 +37,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared import node_proxy
 from autobot_shared.auth.interactive_principal import is_purpose_bound
+from autobot_shared.auth.internal_api_key import verify_internal_api_key  # noqa: F401 (re-export)
 from autobot_shared.auth.jwt_core import _peek_alg, decode_jwt_or_none, encode_jwt, hash_password
 from autobot_shared.auth.permission_evaluator import evaluate_permission
 from autobot_shared.auth.permission_gate import PermissionGate
@@ -48,7 +48,7 @@ from autobot_shared.user_management.password_epoch import (
     is_token_revoked_by_password_change,
 )
 from config import settings
-from models.schemas import TokenResponse, UserCreate, UserResponse
+from models.schemas import SlmAdminUserCreate, SlmAdminUserResponse, TokenResponse
 from services.api_key_audit import AUDIT_UNAVAILABLE_DETAIL, AuditUnavailable, audit_key_request
 from services.api_key_authority import legacy_grace_deadline, role_for_user
 from services.api_key_routes import mark_key_permission
@@ -65,11 +65,12 @@ logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
 
-# #16387: the narrow set of failure modes a revocation-check Redis call can
+# #16387: the narrow set of failure modes a revocation check can
 # raise -- the client's own error type plus the connection/timeout errors it
 # can surface. Deliberately NOT `except Exception`: a check that cannot run
 # must be told apart from a genuine "not revoked" answer, and a blanket catch
-# would also swallow real bugs and relabel them as Redis outages.
+# would also swallow real bugs and relabel them as store outages. The SLM's own
+# stores (#18663) raise ConnectionError/TimeoutError; RedisError stays for the RS256 path.
 _REVOCATION_CHECK_FAILURES = (asyncio.TimeoutError, ConnectionError, OSError, _RedisError)
 
 
@@ -84,10 +85,10 @@ class AuthService:
         """Create a JWT access token.
 
         Every SLM-minted HS256 token receives a unique ``jti`` claim so that
-        individual tokens can be revoked via the Redis denylist without
+        individual tokens can be revoked via the jti denylist (the SLM's PostgreSQL, #18663) without
         invalidating other tokens issued to the same user.  Revocation is
         enforced on the async decode path (``decode_token_async``).
-        The sync ``decode_token`` path does not check Redis — see its docstring.
+        The sync ``decode_token`` path does not check the denylist — see its docstring.
         """
         payload = dict(data)
         payload.setdefault("jti", secrets.token_urlsafe(16))
@@ -111,7 +112,7 @@ class AuthService:
         Use ``decode_token_async`` in async contexts — it handles both alg
         values and performs JWKS key lookup for RS256 tokens.
 
-        **Revocation note:** ``jti`` denylist checks require Redis (async).
+        **Revocation note:** ``jti`` denylist checks are async (a database query).
         This sync path does NOT check the denylist.  Token revocation is
         enforced on the async HTTP auth path via ``decode_token_async``.
         """
@@ -139,8 +140,8 @@ class AuthService:
 
         Raises ``HTTPException`` (401, matching ``get_current_user``'s normal
         invalid-token response) when a revocation check itself cannot run --
-        the HS256 jti denylist or the password-epoch check -- because Redis
-        errored. Fail CLOSED (#16387): the caller must not treat "could not
+        the HS256 jti denylist or the password-epoch check -- because its store
+        (the SLM's PostgreSQL since #18663) could not answer. Fail CLOSED (#16387): the caller must not treat "could not
         check" as "not revoked".
         """
         alg = _peek_alg(token)
@@ -160,7 +161,7 @@ class AuthService:
                     revoked = await is_jti_revoked(jti)
                 except _REVOCATION_CHECK_FAILURES as exc:
                     # #16387: fail CLOSED. The jti denylist is the only record
-                    # of a logged-out or leaked-credential token; if Redis
+                    # of a logged-out or leaked-credential token; if its store
                     # cannot answer we cannot tell "not revoked" from
                     # "unknown", so the token is denied rather than honoured.
                     # This also gates the backend admin path reached through
@@ -205,7 +206,7 @@ class AuthService:
         logger.warning("decode_token_async: rejecting token with unsupported alg=%r", alg)
         return None
 
-    async def create_user(self, db: AsyncSession, user_data: UserCreate) -> UserResponse:
+    async def create_user(self, db: AsyncSession, user_data: SlmAdminUserCreate) -> SlmAdminUserResponse:
         """Create a new user."""
         result = await db.execute(select(User).where(User.username == user_data.username))
         if result.scalar_one_or_none():
@@ -228,7 +229,7 @@ class AuthService:
         await db.commit()
         await db.refresh(user)
 
-        return UserResponse.model_validate(user)
+        return SlmAdminUserResponse.model_validate(user)
 
     async def get_user_by_username(self, db: AsyncSession, username: str) -> User | None:
         """Get a user by username."""
@@ -299,21 +300,6 @@ require_any_permission = _permission_gate.require_any_permission
 # instead of 401 when no Authorization header is present, so a machine caller
 # authenticating via the internal API key is not rejected first (#11450).
 _optional_security = HTTPBearer(auto_error=False)
-
-
-def verify_internal_api_key(provided: str | None) -> bool:
-    """Constant-time check of the trusted internal-service API key (#11450).
-
-    Mirrors autobot-backend ``auth_middleware.verify_internal_api_key`` (#1145):
-    the slm-agent and sibling services authenticate machine-to-machine with the
-    shared ``AUTOBOT_INTERNAL_API_KEY`` (#10263/#10492), never a user JWT.
-    Returns True only when the key is configured AND *provided* matches exactly;
-    ``secrets.compare_digest`` prevents timing inference and a None can't match.
-    """
-    expected = node_proxy.internal_api_key()
-    if not expected or not provided:
-        return False
-    return secrets.compare_digest(provided, expected)
 
 
 async def require_service_management_or_internal(

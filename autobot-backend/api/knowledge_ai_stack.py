@@ -28,7 +28,7 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
-from dependencies import get_knowledge_base
+from dependencies import provide_knowledge_base
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.search_filters import (
     extract_user_context_from_request,
@@ -89,7 +89,7 @@ router = APIRouter(tags=["knowledge-aistack"])
 )
 async def rag_search(
     request_data: AIStackRAGQueryRequest,
-    knowledge_base=Depends(get_knowledge_base),
+    knowledge_base=Depends(provide_knowledge_base),
     current_user: dict = Depends(get_current_user),
 ):
     """

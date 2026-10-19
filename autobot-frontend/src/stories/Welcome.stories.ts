@@ -22,10 +22,9 @@ interface Card {
 const baseCards: Card[] = [
   { name: 'BaseButton', description: 'Interactive button component with variants and states', href: '?path=/docs/components-base-basebutton--docs' },
   { name: 'BaseInput', description: 'Form input component with validation and helpers', href: '?path=/docs/components-base-baseinput--docs' },
-  { name: 'BaseCard', description: 'Card container with multiple styling variants', href: '?path=/docs/components-base-basecard--docs' },
-  { name: 'BaseBadge', description: 'Badge component for labels and status indicators', href: '?path=/docs/components-base-basebadge--docs' },
+  { name: 'BaseCard', description: 'Card and panel container, variants and sizes (shared kit)', href: '?path=/docs/kit-basecard--docs' },
+  { name: 'BaseBadge', description: 'Badge component for labels and status indicators (shared kit)', href: '?path=/docs/kit-basebadge--docs' },
   { name: 'BaseTable', description: 'Data table component with sorting and filtering', href: '?path=/docs/components-base-basetable--docs' },
-  { name: 'BasePanel', description: 'Collapsible panel component for organizing content', href: '?path=/docs/components-base-basepanel--docs' },
 ];
 
 const commonCards: Card[] = [
@@ -48,7 +47,6 @@ const uiCards: Card[] = [
   { name: 'ThemeToggle', description: 'Theme switcher between light and dark', href: '?path=/docs/components-ui-themetoggle--docs' },
   { name: 'ToastContainer', description: 'Toast notification host container', href: '?path=/docs/components-ui-toastcontainer--docs' },
   { name: 'Icon', description: 'Single-path SVG icon from the ICONS registry', href: '?path=/docs/components-ui-icon--docs' },
-  { name: 'DarkModeToggle', description: 'Dark mode toggle switch', href: '?path=/docs/components-ui-darkmodetoggle--docs' },
   { name: 'OfflineBanner', description: 'Banner shown when network is offline', href: '?path=/docs/components-ui-offlinebanner--docs' },
   { name: 'MessageStatus', description: 'Status indicator for chat messages', href: '?path=/docs/components-ui-messagestatus--docs' },
   { name: 'PreferencesPanel', description: 'User preferences panel', href: '?path=/docs/components-ui-preferencespanel--docs' },
@@ -62,7 +60,7 @@ const uiCards: Card[] = [
 ];
 
 const layoutCards: Card[] = [
-  { name: 'LanguageSwitcher', description: 'Globe icon language switcher for the nav bar', href: '?path=/docs/components-layout-languageswitcher--docs' },
+  { name: 'LanguageSwitcher', description: 'Language picker (select or globe menu), shared with the SLM', href: '?path=/docs/kit-languageswitcher--docs' },
   { name: 'NavOverflowMenu', description: 'Overflow "More" menu for nav items', href: '?path=/docs/components-layout-navoverflowmenu--docs' },
 ];
 
@@ -167,7 +165,7 @@ export const Overview: Story = {
             <code class="block bg-white p-3 rounded text-xs text-gray-800 border border-gray-200">
               src/components/base/BaseButton.stories.ts<br/>
               libs/autobot-ui/src/components/BaseModal.stories.ts<br/>
-              src/components/layout/LanguageSwitcher.stories.ts<br/>
+              libs/autobot-ui/src/components/LanguageSwitcher.stories.ts<br/>
               src/stories/IconLibrary.stories.ts<br/>
               src/stories/DesignTokens.stories.ts
             </code>

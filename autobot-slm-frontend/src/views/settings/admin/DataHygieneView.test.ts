@@ -108,7 +108,7 @@ const EMPTY_AUDIT_RESPONSE = { success: true, total_returned: 0, has_more: false
 function defaultGetImplementation(url: string) {
   if (url.startsWith('/admin/orphan-storage')) return Promise.resolve({ data: STORAGE_RESPONSE })
   if (url.startsWith('/admin/orphans')) return Promise.resolve({ data: ORPHANS_RESPONSE })
-  if (url === '/users') return Promise.resolve({ data: USERS_RESPONSE })
+  if (url === '/user-management/users') return Promise.resolve({ data: USERS_RESPONSE })
   if (url.startsWith('/audit/logs')) return Promise.resolve({ data: EMPTY_AUDIT_RESPONSE })
   return Promise.reject(new Error(`unexpected GET ${url}`))
 }

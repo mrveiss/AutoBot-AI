@@ -23,7 +23,13 @@ from fastapi import FastAPI, HTTPException, Request
 from httpx import ASGITransport, AsyncClient
 
 from transcriber.database import Database
-from transcriber.deps import DEFAULT_USER, authenticate, get_current_user, get_db, resolve_user_id
+from transcriber.deps import (
+    DEFAULT_USER,
+    authenticate,
+    get_current_user,
+    get_transcriber_db_from_request,
+    resolve_user_id,
+)
 from transcriber.routes.ai import router as ai_router
 from transcriber.routes.export import router as export_router
 from transcriber.routes.kb import router as kb_router
@@ -72,7 +78,7 @@ async def seeded(tmp_path):
         return await call_next(request)
 
     await db.connect()
-    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_transcriber_db_from_request] = override_db
     app.dependency_overrides[authenticate] = lambda: None
     for router in (ai_router, kb_router, recordings_router):
         app.include_router(router, prefix=PREFIX)
@@ -128,7 +134,7 @@ def _unauthenticated_app(current_user=None) -> FastAPI:
     app = FastAPI()
     for router in _ALL_ROUTERS:
         app.include_router(router, prefix=PREFIX)
-    app.dependency_overrides[get_db] = lambda: MagicMock()
+    app.dependency_overrides[get_transcriber_db_from_request] = lambda: MagicMock()
     app.dependency_overrides[get_current_user] = current_user or _refuse_login
     return app
 

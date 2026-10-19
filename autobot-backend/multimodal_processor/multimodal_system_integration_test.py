@@ -20,9 +20,9 @@ from multimodal_processor import (
     ContextProcessor,
     ModalityType,
     MultiModalInput,
+    MultimodalProcessingIntent,
     MultiModalProcessor,
-    ProcessingIntent,
-    ProcessingResult,
+    MultimodalResult,
     VisionProcessor,
     VoiceProcessor,
 )
@@ -84,7 +84,7 @@ class TestUnifiedMultiModalSystem:
         image_input = MultiModalInput(
             input_id="test_image_001",
             modality_type=ModalityType.IMAGE,
-            intent=ProcessingIntent.SCREEN_ANALYSIS,
+            intent=MultimodalProcessingIntent.SCREEN_ANALYSIS,
             data=b"fake_image_data",
             metadata={"source": "test", "format": "png"},
         )
@@ -95,7 +95,7 @@ class TestUnifiedMultiModalSystem:
             mock_result.result_id = "vision_test_image_001"
             mock_result.input_id = "test_image_001"
             mock_result.modality_type = ModalityType.IMAGE
-            mock_result.intent = ProcessingIntent.SCREEN_ANALYSIS
+            mock_result.intent = MultimodalProcessingIntent.SCREEN_ANALYSIS
             mock_result.success = True
             mock_result.confidence = 0.85
             mock_result.processing_time = 1.2
@@ -127,7 +127,7 @@ class TestUnifiedMultiModalSystem:
         audio_input = MultiModalInput(
             input_id="test_audio_001",
             modality_type=ModalityType.AUDIO,
-            intent=ProcessingIntent.VOICE_COMMAND,
+            intent=MultimodalProcessingIntent.VOICE_COMMAND,
             data=b"fake_audio_data",
             metadata={"format": "wav", "duration": 3.5},
         )
@@ -138,7 +138,7 @@ class TestUnifiedMultiModalSystem:
             mock_result.result_id = "voice_test_audio_001"
             mock_result.input_id = "test_audio_001"
             mock_result.modality_type = ModalityType.AUDIO
-            mock_result.intent = ProcessingIntent.VOICE_COMMAND
+            mock_result.intent = MultimodalProcessingIntent.VOICE_COMMAND
             mock_result.success = True
             mock_result.confidence = 0.9
             mock_result.processing_time = 0.8
@@ -168,31 +168,31 @@ class TestUnifiedMultiModalSystem:
         combined_input = MultiModalInput(
             input_id="test_combined_001",
             modality_type=ModalityType.COMBINED,
-            intent=ProcessingIntent.AUTOMATION_TASK,
+            intent=MultimodalProcessingIntent.AUTOMATION_TASK,
             data=None,
             metadata={"image": b"fake_image_data", "audio": b"fake_audio_data"},
         )
 
-        # Real ProcessingResult instances: _simple_combination
+        # Real MultimodalResult instances: _simple_combination
         # (processor.py:485) deliberately skips anything that is not a
-        # ProcessingResult, because asyncio.gather(return_exceptions=True)
+        # MultimodalResult, because asyncio.gather(return_exceptions=True)
         # can hand it raw exceptions. Mocks are silently dropped by that
         # guard, so they can never exercise the combination logic.
-        vision_result = ProcessingResult(
+        vision_result = MultimodalResult(
             result_id="vision_test_combined_001_image",
             input_id="test_combined_001_image",
             modality_type=ModalityType.IMAGE,
-            intent=ProcessingIntent.AUTOMATION_TASK,
+            intent=MultimodalProcessingIntent.AUTOMATION_TASK,
             success=True,
             confidence=0.8,
             result_data={"elements": ["button"]},
             processing_time=0.1,
         )
-        voice_result = ProcessingResult(
+        voice_result = MultimodalResult(
             result_id="voice_test_combined_001_audio",
             input_id="test_combined_001_audio",
             modality_type=ModalityType.AUDIO,
-            intent=ProcessingIntent.AUTOMATION_TASK,
+            intent=MultimodalProcessingIntent.AUTOMATION_TASK,
             success=True,
             confidence=0.9,
             result_data={"command": "click button"},
@@ -232,7 +232,7 @@ class TestUnifiedMultiModalSystem:
         error_input = MultiModalInput(
             input_id="test_error_001",
             modality_type=ModalityType.IMAGE,
-            intent=ProcessingIntent.VISUAL_QA,
+            intent=MultimodalProcessingIntent.VISUAL_QA,
             data=None,  # Invalid data
         )
 
@@ -305,7 +305,7 @@ class TestUnifiedMultiModalSystem:
         test_input = MultiModalInput(
             input_id="test_memory_001",
             modality_type=ModalityType.TEXT,
-            intent=ProcessingIntent.DECISION_MAKING,
+            intent=MultimodalProcessingIntent.DECISION_MAKING,
             data="test decision context",
             # #13688: the memory plane refuses unowned writes, so a stored
             # result must carry the owner of the input that produced it.
@@ -318,11 +318,11 @@ class TestUnifiedMultiModalSystem:
             patch.object(processor.context_processor, "process", new_callable=AsyncMock) as mock_process,
             patch.object(processor.memory_manager, "store_memory", new_callable=AsyncMock) as mock_store,
         ):
-            mock_result = ProcessingResult(
+            mock_result = MultimodalResult(
                 result_id="context_test_memory_001",
                 input_id="test_memory_001",
                 modality_type=ModalityType.TEXT,
-                intent=ProcessingIntent.DECISION_MAKING,
+                intent=MultimodalProcessingIntent.DECISION_MAKING,
                 success=True,
                 confidence=0.95,
                 result_data={
@@ -372,7 +372,7 @@ class TestUnifiedMultiModalSystem:
             image_input = MultiModalInput(
                 input_id="vision_test_001",
                 modality_type=ModalityType.IMAGE,
-                intent=ProcessingIntent.SCREEN_ANALYSIS,
+                intent=MultimodalProcessingIntent.SCREEN_ANALYSIS,
                 data=b"fake_image_data",
             )
 
@@ -402,7 +402,7 @@ class TestUnifiedMultiModalSystem:
 
         Same #466/#6755 contract as the vision case: the model guard in
         voice._validate_audio_models_available raises RuntimeError and
-        process() must convert it into a failure ProcessingResult.
+        process() must convert it into a failure MultimodalResult.
         """
         voice_proc = VoiceProcessor()
 
@@ -410,7 +410,7 @@ class TestUnifiedMultiModalSystem:
         audio_input = MultiModalInput(
             input_id="voice_test_001",
             modality_type=ModalityType.AUDIO,
-            intent=ProcessingIntent.VOICE_COMMAND,
+            intent=MultimodalProcessingIntent.VOICE_COMMAND,
             data=b"fake_audio_data",
         )
 
@@ -444,7 +444,7 @@ class TestUnifiedMultiModalSystem:
         context_input = MultiModalInput(
             input_id="context_test_001",
             modality_type=ModalityType.TEXT,
-            intent=ProcessingIntent.DECISION_MAKING,
+            intent=MultimodalProcessingIntent.DECISION_MAKING,
             data="Make a decision based on this context",
         )
 

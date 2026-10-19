@@ -173,20 +173,6 @@ def _mint_token(secret: str = _SECRET_KEY, **claims: object) -> str:
     return encode_jwt(data, secret=secret, expires_delta=timedelta(minutes=_EXPIRE_MINUTES))
 
 
-class _FakeDenylistRedis:
-    """A working (not unavailable) Redis stand-in for the jti denylist.
-
-    #16387 made ``is_jti_revoked`` fail CLOSED: a Redis client that is
-    unavailable (``None``) now raises rather than reporting "not revoked", so
-    this suite's valid-token test needs a Redis that actually answers, not one
-    that is absent. Nothing in these tests ever revokes a jti, so the real
-    denylist key is always empty here.
-    """
-
-    async def exists(self, _key: str) -> int:
-        return 0
-
-
 class _FakeEpochRedis:
     """A working Redis stand-in for the password-epoch store (#16411).
 
@@ -232,7 +218,9 @@ def _get_me(
     epoch_client = _FakeEpochRedis(epoch_marker, epoch_error) if epoch_client_present else None
     epoch_redis = AsyncMock(return_value=epoch_client)
     with (
-        patch.object(_dl_mod, "get_async_redis_client", AsyncMock(return_value=_FakeDenylistRedis())),
+        # #18663: the denylist lives in the SLM's PostgreSQL; stub only its lookup so the
+        # real is_jti_revoked wrapper still runs (deadline, error mapping).
+        patch.object(_dl_mod, "_lookup", AsyncMock(return_value=False)),
         patch.object(password_epoch_mod, "get_async_redis_client", epoch_redis),
         TestClient(app) as client,
     ):

@@ -10,9 +10,9 @@ from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from services.ssh_utils import SshHost, SshUser
+from services.ssh_utils import SshHost, SshPassword, SshUser
 
-from .database import BackupServiceType, NodeStatus
+from .database import BackupServiceType, NodeStatus, ScheduleTargetType  # noqa: F401  (re-exported)
 
 # =============================================================================
 # Authentication Schemas
@@ -50,7 +50,7 @@ class MfaChallengeResponse(BaseModel):
     temp_token: str
 
 
-class UserCreate(BaseModel):
+class SlmAdminUserCreate(BaseModel):
     """User creation request."""
 
     username: str = Field(..., min_length=3, max_length=64)
@@ -58,7 +58,7 @@ class UserCreate(BaseModel):
     is_admin: bool = False
 
 
-class UserResponse(BaseModel):
+class SlmAdminUserResponse(BaseModel):
     """User response (excludes password)."""
 
     id: Any
@@ -168,7 +168,7 @@ class NodeCreate(BaseModel):
     roles: List[str] = Field(default_factory=list)
     ssh_user: SshUser | None = "autobot"
     ssh_port: int | None = 22
-    ssh_password: str | None = None
+    ssh_password: SshPassword | None = None
     auth_method: str | None = "password"
     import_existing: bool = False
     auto_enroll: bool = False
@@ -269,7 +269,7 @@ class HeartbeatResponse(BaseModel):
 class EnrollRequest(BaseModel):
     """Node enrollment request with SSH credentials."""
 
-    ssh_password: str | None = None
+    ssh_password: SshPassword | None = None
 
 
 # =============================================================================
@@ -1836,14 +1836,6 @@ class CodeVersionNotificationResponse(BaseModel):
 # =============================================================================
 # Schedule Schemas (Issue #741 - Phase 7)
 # =============================================================================
-
-
-class ScheduleTargetType(str, Enum):
-    """Schedule target type enumeration."""
-
-    ALL = "all"
-    SPECIFIC = "specific"
-    TAG = "tag"
 
 
 class ScheduleCreate(BaseModel):

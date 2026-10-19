@@ -369,7 +369,6 @@
      "pipeline-scripts/**",
      "tools/lint/**",
      "autobot-infrastructure/shared/scripts/**",
-     "autobot-slm-backend/ansible/roles/slm_agent/files/**",
      "autobot-slm-backend/ansible/roles/backend/files/**",
      "autobot-backend/config/permission_rules.yaml",
      "autobot-backend/static/error_messages.yaml",
@@ -387,9 +386,9 @@
     ]
    },
    "file": ".github/filters/code-quality-paths.yml",
-   "sha256": "510ea95c-df2d88cf-736421c4-38b2065a-654721c1-bacbdd63-4010eb4b-96f2f992"
+   "sha256": "83ac730c-745162c5-e32f6573-c5f40561-fe25f4f4-d55e69d5-de2748cc-1362af3e"
   },
-  "header_sha256": "09836f9e-d91a04a1-1347aadd-9686eee8-b16f35c7-1282cd7b-b23628ca-5396ac5d",
+  "header_sha256": "5038f297-5490d82c-e53d78c7-b13d9f9a-44d5ece5-70782fbe-346d8ec4-5f6496fd",
   "job_level_extras": [],
   "on": {
    "merge_group": null,
@@ -429,7 +428,6 @@
      "pipeline-scripts/**",
      "tools/lint/**",
      "autobot-infrastructure/shared/scripts/**",
-     "autobot-slm-backend/ansible/roles/slm_agent/files/**",
      "autobot-slm-backend/ansible/roles/backend/files/**",
      "autobot-backend/config/permission_rules.yaml",
      "autobot-backend/static/error_messages.yaml",
@@ -454,7 +452,7 @@
    ]
   },
   "other_jobs_sha256": {
-   "code-quality": "6370ad2f-9ced1aa9-3a9cf6ee-d7647683-f9d4d607-3cf52227-48bf1df6-2484b545"
+   "code-quality": "cb97cf12-159777fa-d69b74c9-bcd72b61-e1a2c6ce-d2bcbe8e-d0ca643a-e422e26f"
   },
   "outputs": [
    "backend"
@@ -493,7 +491,6 @@
      "pipeline-scripts/**",
      "tools/lint/**",
      "autobot-infrastructure/shared/scripts/**",
-     "autobot-slm-backend/ansible/roles/slm_agent/files/**",
      "autobot-slm-backend/ansible/roles/backend/files/**",
      "autobot-backend/config/permission_rules.yaml",
      "autobot-backend/static/error_messages.yaml",
@@ -511,7 +508,7 @@
     ]
    },
    "file": ".github/filters/code-quality-paths.yml",
-   "sha256": "510ea95c-df2d88cf-736421c4-38b2065a-654721c1-bacbdd63-4010eb4b-96f2f992"
+   "sha256": "83ac730c-745162c5-e32f6573-c5f40561-fe25f4f4-d55e69d5-de2748cc-1362af3e"
   },
   "header_sha256": "cad81a4c-5ce99eec-c4f17ee4-2194a963-a7672eb9-d6251c56-2b4a1602-c65966fd",
   "job_level_extras": [],
@@ -692,7 +689,7 @@
    ]
   },
   "other_jobs_sha256": {
-   "smoke-test": "06bcc195-df9d6538-64caad52-829ffc70-45f2ed32-e51ca8b3-7f01d80c-e3c02d9e"
+   "smoke-test": "86df66ee-4473adb3-585d2846-0227d3a1-70e93983-8dd69fe3-892886d6-c648f4e8"
   },
   "outputs": [
    "docker"

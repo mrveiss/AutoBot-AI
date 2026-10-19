@@ -11,9 +11,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_agent import (
-    ApprovalDecision,
     GapRequest,
     GovernanceModeUpdate,
+    SkillApprovalDecision,
 )
 from api.schemas_code import (
     SkillsApprovalDecisionResponse,
@@ -261,7 +261,7 @@ async def list_approvals(_: None = Depends(check_admin_permission)) -> List[Dict
 )
 async def decide_approval(
     approval_id: str,
-    body: ApprovalDecision,
+    body: SkillApprovalDecision,
     _: None = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
     """Update an approval record with an approve or reject decision."""

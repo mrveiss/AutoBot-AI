@@ -1,0 +1,100 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# Install autobot_shared for the SLM agent (#18611, #18606). The single implementation
+# behind enroll-slm-agent.yml and deploy-slm-agent.yml, included before the slm_agent role.
+# Reads autobot.base_dir (inventory group_vars/all.yml) and optional code_source_dir,
+# slm_agent_user, slm_agent_group (default autobot).
+#
+# Source tree: an explicit code_source_dir, else the tree the playbook itself runs from
+# (playbook_dir is <tree>/autobot-slm-backend/ansible/playbooks, so three dirnames up is
+# <tree>). The SLM backend passes no code_source_dir (services/deployment.py
+# _enrollment_var_args) and runs from settings.ansible_dir, so the playbook's own tree is
+# the one that is certainly present; it need not be under autobot.base_dir/code_source.
+#
+# The real agent imports autobot_shared (health_collector -> redis_client); the
+# unit's PYTHONPATH includes {{ slm_agent_dir | dirname }} (= autobot.base_dir).
+# Not the autobot_shared role: its sync notifies the backend/celery restart
+# handlers, which a fresh enrollee lacks, so the run would exit non-zero. And no
+# synchronize here: it escalates only with passwordless sudo, which the
+# password-auth enrollment does not have until its sudoers task has run.
+# The excludes mirror the autobot_shared role's rsync list (a test pins parity).
+- name: Ship autobot_shared as one filtered archive
+  vars:
+    shared_parent: "{{ code_source_dir | default(playbook_dir | dirname | dirname | dirname, true) }}"
+    shared_excludes:
+      - __pycache__
+      - "*.pyc"
+      - "*.egg-info"
+      - .git
+      - .env
+      - "*.env"
+      - ".env.*"
+      - .envrc
+  block:
+    - name: Check autobot_shared exists in the source tree on the controller
+      ansible.builtin.stat:
+        path: "{{ shared_parent }}/autobot_shared/__init__.py"
+      register: shared_src
+      delegate_to: localhost
+      run_once: true
+      become: false
+
+    - name: Fail clearly when the autobot_shared source tree is missing
+      ansible.builtin.assert:
+        that: shared_src.stat.exists
+        fail_msg: >-
+          autobot_shared not found at {{ shared_parent }}/autobot_shared on the controller.
+          Set code_source_dir to a checkout that contains autobot_shared/.
+      run_once: true
+
+    - name: Create a unique controller temp file for the archive
+      ansible.builtin.tempfile:
+        state: file
+        prefix: autobot_shared-
+        suffix: .tar.gz
+      register: shared_tar
+      delegate_to: localhost
+      run_once: true
+      become: false
+
+    - name: Build the filtered autobot_shared archive on the controller
+      ansible.builtin.command:
+        argv: >-
+          {{ ['tar', '-czf', shared_tar.path]
+             + (shared_excludes | map('regex_replace', '^', '--exclude=') | list)
+             + ['--mode=u=rwX,g=rX,o=rX', '--owner=0', '--group=0', '--numeric-owner',
+                '-C', shared_parent, 'autobot_shared'] }}
+      changed_when: true
+      delegate_to: localhost
+      run_once: true
+      become: false
+
+    - name: Ensure the autobot_shared directory exists
+      ansible.builtin.file:
+        path: "{{ autobot.base_dir }}/autobot_shared"
+        state: directory
+        owner: "{{ slm_agent_user | default('autobot') }}"
+        group: "{{ slm_agent_group | default('autobot') }}"
+        mode: 'u=rwX,g=rX,o=rX'
+
+    - name: Install autobot_shared for the agent (no backend/celery handlers)
+      ansible.builtin.unarchive:
+        src: "{{ shared_tar.path }}"
+        dest: "{{ autobot.base_dir }}/autobot_shared"
+        remote_src: false
+        owner: "{{ slm_agent_user | default('autobot') }}"
+        group: "{{ slm_agent_group | default('autobot') }}"
+        extra_opts:
+          - --strip-components=1
+  always:
+    - name: Remove the controller temp archive
+      ansible.builtin.file:
+        path: "{{ shared_tar.path }}"
+        state: absent
+      when: shared_tar.path is defined
+      delegate_to: localhost
+      run_once: true
+      become: false

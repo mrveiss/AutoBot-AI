@@ -344,7 +344,7 @@
     "runRsyncFromTo": "Run rsync from {source} to {dest}",
     "running": "Running...",
     "sLMManagerRestarting": "SLM Manager Restarting",
-    "schedule": "Schedule",
+    "schedule": "תזמון",
     "scheduledUpdates": "Scheduled Updates",
     "showDetails": "Show details",
     "slmSelfUpdateStage": "SLM server",
@@ -1326,6 +1326,107 @@
       "services": "Services",
       "systemHealth": "System Health",
       "systemMonitoring": "ניטור מערכת"
+    },
+    "agentLedger": {
+      "title": "יומן הסוכנים",
+      "subtitle": "Every company's agent coordination: shared resources, claims, conflicts and dev-loop history.",
+      "refresh": "Refresh",
+      "tabsAria": "תצוגות היומן",
+      "tabs": {
+        "now": "עובדים כעת",
+        "contention": "תחרות",
+        "claims": "תפיסות",
+        "conflicts": "התנגשויות",
+        "devLoop": "Dev loop",
+        "activity": "פעילות"
+      },
+      "col": {
+        "scope": "היקף",
+        "agent": "סוכן",
+        "company": "Company",
+        "mode": "מצב פעולה",
+        "intent": "כוונה",
+        "expires": "פג תוקף",
+        "renewals": "חידושים",
+        "kind": "סוג",
+        "status": "סטטוס",
+        "task": "משימה נוכחית",
+        "detail": "פרטים"
+      },
+      "installWide": "Install-wide",
+      "heldBy": "Held by {agent} ({company})",
+      "waiting": "{n} waiting",
+      "waitlistAria": "רשימת המתנה לפי הסדר",
+      "silenceMeansHold": "בקשה אינה שחרור: שתיקה פירושה החזקה, ותפיסה שלא חודשה פגה מעצמה.",
+      "ask": "בקשו מהמחזיק לשחרר",
+      "askAria": "בקשו ממחזיק {scope} לשחרר אותו",
+      "askState": {
+        "sending": "שולח…",
+        "sent": "הבקשה נשלחה — המחזיק מחליט; שתיקה פירושה החזקה.",
+        "tooSoon": "שאלתם על התפיסה הזו לפני רגע; נסו שוב בעוד דקה.",
+        "notFound": "המשימה הזו כבר לא מחזיקה בתפיסה — רעננו כדי לראות מי מחזיק בה כעת.",
+        "unavailable": "לא ניתן היה להגיע ליומן; דבר לא נשלח.",
+        "error": "משהו השתבש ולא ניתן היה לאשר את המסירה. רעננו כדי לראות אם התביעה עדיין מוחזקת."
+      },
+      "conflict": {
+        "release_refused": "שחרור נדחה",
+        "claim_expired": "תפיסה פגה בזמן החזקה",
+        "yield_unanswered": "בקשת ויתור נותרה ללא מענה",
+        "claim_lapsed_during_action": "תפיסה פגה במהלך פעולה"
+      },
+      "devLoop": {
+        "issue": "Issue",
+        "choose": "Choose an issue",
+        "col": {
+          "at": "When",
+          "intent": "כוונה",
+          "outcome": "Outcome",
+          "tokens": "Estimated tokens",
+          "reason": "סיבה"
+        }
+      },
+      "empty": {
+        "contention": "אין תחרות",
+        "claims": "אין תפיסות",
+        "conflicts": "אין התנגשויות",
+        "activity": "אין פעילות אחרונה",
+        "devLoop": "No dev-loop history",
+        "devLoopActions": "No actions recorded for this issue",
+        "presence": "אף סוכן לא דיווח",
+        "peerMessages": "אין הודעות ממתינות",
+        "idleSubscribers": "אין מינויי זמן סרק"
+      },
+      "notes": {
+        "title": "What this view cannot see",
+        "storeDown": "Couldn't read the {source} store just now. Its entries are missing here, not empty.",
+        "sourcesUnknown": "Couldn't check which ledger sources are readable.",
+        "peerIdentity": "Agents have no per-peer identity yet: an agent that is refused an action can ask another agent to do it (#16950).",
+        "busAuth": "Messages between agents are not authenticated yet, so this view cannot prove who sent one (#16962)."
+      },
+      "source": {
+        "presence": "agent presence",
+        "ai_stack_agents": "AI-stack agents",
+        "live_sessions": "live sessions",
+        "peer_messages": "pending peer messages",
+        "idle_subscribers": "idle subscriptions",
+        "claims": "claims",
+        "waitlists": "waitlists",
+        "events": "ledger activity",
+        "dev_loop": "dev-loop history"
+      },
+      "state": {
+        "loading": "קורא את היומן…",
+        "unavailableTitle": "לא ניתן היה לקרוא את היומן",
+        "unavailableBody": "המאגר {source} לא הגיב. זה לא כמו שאין רשומות.",
+        "errorTitle": "אירעה שגיאה בטעינת הקטע הזה"
+      },
+      "busy": "עסוק",
+      "idle": "Idle",
+      "peerMessages": "הודעות עמיתים ממתינות",
+      "idleSubscribers": "מינויי זמן סרק",
+      "pendingFor": "{n} ממתינות עבור {name}",
+      "sentBy": "מאת {names}",
+      "waitsForIdle": "{who} ממתין עד ש-{target} יתפנה"
     }
   },
   "monitoringView": {
@@ -1334,7 +1435,17 @@
     "monitoring": "ניטור",
     "monitoringSections": "Monitoring sections",
     "systemHealthStatusAria": "System health: {status}",
-    "value0AlertPlural": "{value0} Alert{plural}"
+    "value0AlertPlural": "{value0} Alert{plural}",
+    "tabs": {
+      "system": "מערכת",
+      "logs": "Logs",
+      "dashboards": "Dashboards",
+      "alerts": "Alerts",
+      "errors": "שגיאות",
+      "backendHealth": "Backend Health",
+      "performance": "ביצועים",
+      "agentLedger": "יומן הסוכנים"
+    }
   },
   "orchestration": {
     "nodeHealthCard": {
@@ -1499,7 +1610,8 @@
     "value0AnsibleMigrationOf": "{value0} Ansible migration of",
     "value0Nodes": "({value0} nodes)",
     "value0OnlineValue1Offline": "{value0} online, {value1} offline",
-    "value0Required": "{value0} (required)"
+    "value0Required": "{value0} (required)",
+    "serviceCount": "{count} service | {count} services"
   },
   "performance": {
     "alertRulesView": {
@@ -1902,7 +2014,7 @@
     "enableTlsForAria": "Enable TLS for {service}",
     "enablingTLS": "Enabling TLS...",
     "enterNodeID": "Enter node ID",
-    "expires": "Expires",
+    "expires": "פג תוקף",
     "expiringSoon30d": "Expiring Soon (30d)",
     "expiry": "Expiry",
     "failed": "נכשל",
@@ -2207,7 +2319,7 @@
       "nPUWorkersSettings": {
         "actions": "פעולות",
         "areYouSureYou": "Are you sure you want to remove",
-        "busy": "Busy",
+        "busy": "עסוק",
         "cancel": "Cancel",
         "capabilities": "Capabilities",
         "close": "סגור",
@@ -2256,7 +2368,9 @@
         "weighted": "Weighted",
         "windows": "Windows",
         "worker": "Worker",
-        "workerName": "Worker Name *"
+        "workerName": "Worker Name *",
+        "connectionTestFailed": "Connection test failed",
+        "loadBalancingLoadFailed": "Failed to load load-balancing configuration"
       },
       "personalitySettings": {
         "active": "Active",
@@ -2387,7 +2501,7 @@
         "sPEntityID": "SP Entity ID",
         "sSOOIDCConfiguration": "SSO / OIDC Configuration",
         "saving": "Saving...",
-        "scope": "Scope",
+        "scope": "היקף",
         "searchFilter": "Search Filter",
         "searchFilterExample": "(uid={username})",
         "serverURI": "Server URI",
@@ -2486,7 +2600,7 @@
         "createSLMAdministrator": "Create SLM Administrator",
         "createTeam": "Create Team",
         "created": "Created",
-        "dark": "Dark",
+        "dark": "כהה",
         "deleteProvider": "Delete provider",
         "deleteTeam": "Delete team",
         "deleteUser": "Delete user",
@@ -2513,7 +2627,7 @@
         "language": "Language",
         "lastLogin": "Last Login",
         "lastSync": "Last Sync",
-        "light": "Light",
+        "light": "בהיר",
         "logout": "Logout",
         "lowercaseLettersNumbersUnderscores": "Lowercase, letters, numbers, underscores",
         "microsoftEntraID": "Microsoft Entra ID",
@@ -2757,7 +2871,7 @@
       "enterYourPassword": "Enter your password",
       "enterYourPasswordTo": "Enter your password to confirm disabling two-factor authentication.",
       "expiration": "Expiration",
-      "expires": "Expires",
+      "expires": "פג תוקף",
       "keyPrefix": "Key Prefix",
       "lastVerifiedValue0": "Last verified: {value0}",
       "mFAIsEnabled": "MFA is enabled",
@@ -3055,7 +3169,7 @@
         "allStatus": "All Status",
         "capabilities": "Capabilities",
         "error": "שגיאה",
-        "idle": "במנוחה",
+        "idle": "Idle",
         "lastActivityValue0": "Last activity: {value0}",
         "loadingAgents": "טוען סוכנים...",
         "noAgentsFound": "No agents found",
@@ -3366,7 +3480,7 @@
   },
   "sharedLinksView": {
     "colCreated": "Created",
-    "colExpires": "Expires",
+    "colExpires": "פג תוקף",
     "colOwner": "בעלים",
     "colPassword": "סיסמה",
     "colSession": "Session",
@@ -3394,7 +3508,7 @@
     "period": "Period",
     "readOnlyNotice": "Audit view only. Budget policies are created and managed by users in the user app; this console does not modify them.",
     "refresh": "Refresh",
-    "scope": "Scope",
+    "scope": "היקף",
     "scopeId": "Scope ID",
     "status": "סטטוס",
     "subtitle": "Read-only oversight of all agent, project, task, and tenant budget policies and their hard-stop auto-pause configuration.",

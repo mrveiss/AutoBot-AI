@@ -14,7 +14,7 @@
 -->
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import BaseBadge from '@/components/base/BaseBadge.vue'
+import { BaseBadge } from '@autobot/ui'
 import { useProviderFallbackApi } from '@/composables/useProviderFallbackApi'
 import type {
   ActiveFallbackEntry,

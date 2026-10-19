@@ -245,9 +245,15 @@ def test_negative_control_the_pre_16923_hook_would_not_have_caught_this(tmp_path
 
 
 def test_the_bot_commit_workflow_never_installs_local_hooks() -> None:
-    workflow = _REPO_ROOT / ".github" / "workflows" / "auto-fix-generated-types.yml"
-    assert workflow.is_file(), f"{workflow} is missing — the named exemption's subject vanished"
-    text = workflow.read_text(encoding="utf-8")
+    # The caller and, since #18500, the composite action that holds its steps.
+    workflows = [
+        _REPO_ROOT / ".github" / "workflows" / "auto-fix-generated-types.yml",
+        _REPO_ROOT / ".github" / "actions" / "generated-types-autofix" / "action.yml",
+    ]
+    for workflow in workflows:
+        assert workflow.is_file(), f"{workflow} is missing — the named exemption's subject vanished"
+    text = "\n".join(w.read_text(encoding="utf-8") for w in workflows)
+    assert "Report drift with the command that fixes it" in text, "the autofix steps are not in the files read here"
     # #15362 removed this workflow's commit entirely: it reports the drift with the patch instead
     # of pushing a fix, and holds `contents: read`, so it CANNOT commit. AC6's exemption was
     # "this automation's commits are hook-less by construction"; "it makes no commits" satisfies

@@ -26,7 +26,7 @@ from memory.storage.general_storage import SYSTEM_OWNER
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,
-    ProcessingIntent,
+    MultimodalProcessingIntent,
     processor,
 )
 from task_execution_tracker import get_task_tracker
@@ -200,7 +200,7 @@ class ScreenAnalyzer:
         return MultiModalInput(
             input_id=f"screen_vision_{int(time.time())}",
             modality_type=ModalityType.IMAGE,
-            intent=ProcessingIntent.SCREEN_ANALYSIS,
+            intent=MultimodalProcessingIntent.SCREEN_ANALYSIS,
             data=screenshot,
             metadata={"session_id": session_id},
             # #13688: screen analysis is system-initiated — there is no human
@@ -214,7 +214,7 @@ class ScreenAnalyzer:
         return MultiModalInput(
             input_id=f"screen_audio_{int(time.time())}",
             modality_type=ModalityType.AUDIO,
-            intent=ProcessingIntent.VOICE_COMMAND,
+            intent=MultimodalProcessingIntent.VOICE_COMMAND,
             data=context_audio,
             metadata={"session_id": session_id, "context": "screen_analysis"},
             user_id=SYSTEM_OWNER,
@@ -225,7 +225,7 @@ class ScreenAnalyzer:
         combined_input = MultiModalInput(
             input_id=f"screen_combined_{int(time.time())}",
             modality_type=ModalityType.COMBINED,
-            intent=ProcessingIntent.SCREEN_ANALYSIS,
+            intent=MultimodalProcessingIntent.SCREEN_ANALYSIS,
             data="",
             user_id=SYSTEM_OWNER,
             metadata={

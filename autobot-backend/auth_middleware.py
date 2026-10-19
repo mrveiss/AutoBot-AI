@@ -18,8 +18,8 @@ from typing import Dict, Tuple
 from fastapi import HTTPException, Request, status
 
 from auth_revocation import reject_if_revoked_by_password_change
-from autobot_shared import node_proxy
 from autobot_shared.auth.interactive_principal import LOGIN_TOKEN_TYPE, is_login_token, is_purpose_bound
+from autobot_shared.auth.internal_api_key import verify_internal_api_key
 from autobot_shared.auth.jwt_core import (
     decode_jwt_multi,
     encode_jwt,
@@ -857,6 +857,22 @@ class AuthenticationMiddleware:
 get_auth_middleware = lazy_singleton(AuthenticationMiddleware)
 
 
+async def resolve_human_user(request: Request) -> Dict | None:
+    """The human a request's JWT / session / dev header names, or None; reads no internal key (#18688)."""
+    user_data = get_auth_middleware().get_user_from_request(request)
+    if not user_data:
+        return None
+    if user_data.get("auth_method") == "device_jwt":  # device JWTs: see get_current_user (GH#9493)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Device tokens not permitted on this endpoint. Use mobile-specific API.",
+        )
+    # #12924, #16411: a token minted before a password change is void; a check that cannot run denies.
+    if user_data.get("auth_method") == "jwt":
+        await reject_if_revoked_by_password_change(user_data)
+    return user_data
+
+
 async def get_current_user(request: Request) -> Dict:
     """
     Dependency for FastAPI endpoints to get current authenticated user.
@@ -883,24 +899,8 @@ async def get_current_user(request: Request) -> Dict:
 
     middleware = get_auth_middleware()
 
-    # Primary: user JWT / session / dev-header auth (sync, no Redis needed)
-    user_data = middleware.get_user_from_request(request)
+    user_data = await resolve_human_user(request)  # primary: user JWT / session / dev header
     if user_data:
-        # Defensive: get_user_from_request never yields device-JWT users; the
-        # GH#9493 device-JWT path (allow-list + scope checks) is below.
-        if user_data.get("auth_method") == "device_jwt":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Device tokens not permitted on this endpoint. Use mobile-specific API.",
-            )
-
-        # #12924: a token minted before its subject's password changed is no
-        # longer valid. This is the first point on the request path that can
-        # await, which is why the check lives here rather than in the
-        # synchronous extraction above. A check that cannot run denies (#16411).
-        if user_data.get("auth_method") == "jwt":
-            await reject_if_revoked_by_password_change(user_data)
-
         return user_data
 
     # Fallback: run-scoped JWT — async because it hits the Redis denylist.
@@ -945,18 +945,6 @@ async def get_current_user(request: Request) -> Dict:
         return device_user
 
     raise_auth_error("AUTH_0002")
-
-
-def verify_internal_api_key(provided: str | None) -> bool:
-    """Constant-time check of the trusted internal-service API key (Issue #1145).
-
-    True only when the key (``node_proxy.internal_api_key()``, its one reader, #17856) is configured AND
-    ``provided`` matches it exactly; ``compare_digest`` blocks timing inference; a missing header never matches.
-    """
-    expected = node_proxy.internal_api_key()
-    if not expected or not provided:
-        return False
-    return secrets.compare_digest(provided, expected)
 
 
 def check_admin_permission(request: Request) -> bool:

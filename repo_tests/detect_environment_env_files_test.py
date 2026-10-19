@@ -41,7 +41,7 @@ def _tracked_env_files(root: Path | None = None) -> list[str]:
 REACH = declare(
     "detect-environment-env-files",
     discover=_tracked_env_files,
-    floor=6,
+    floor=5,
     growth=2,
     what=".env* files tracked at the repo root",
 )

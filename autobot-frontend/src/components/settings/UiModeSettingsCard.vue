@@ -28,7 +28,7 @@
         >
           <span class="flex items-center gap-2 font-semibold text-autobot-text-primary">
             {{ $t(card.label) }}
-            <BaseBadge v-if="uiMode === card.mode" variant="info" size="sm" class="ms-auto">{{ $t('settings.preferredMode.selected') }}</BaseBadge>
+            <BaseBadge v-if="uiMode === card.mode" variant="info" size="sm" tone="solid" class="ms-auto">{{ $t('settings.preferredMode.selected') }}</BaseBadge>
           </span>
           <span class="text-sm text-autobot-text-secondary">{{ $t(card.desc) }}</span>
         </button>

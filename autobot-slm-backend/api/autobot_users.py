@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.user_management.user_service_errors import UserNotFoundError
 from services.auth import require_permission
-from user_management.database import get_autobot_session
+from user_management.database import get_autobot_db
 from user_management.schemas.user import (
     PasswordChange,
     UserCreate,
@@ -30,12 +30,6 @@ from user_management.services import TenantContext, UserService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/autobot-users", tags=["autobot-users"])
-
-
-async def get_autobot_db():
-    """Dependency for AutoBot database session."""
-    async with get_autobot_session() as session:
-        yield session
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

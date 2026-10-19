@@ -9,7 +9,7 @@
 import { ref, computed } from 'vue'
 import type { ConnectorConfig, ConnectorStatus } from '@/types/knowledgeBase'
 import { formatTimeAgo } from '@/utils/formatHelpers'
-import BaseBadge from '@/components/base/BaseBadge.vue'
+import { BaseBadge } from '@autobot/ui'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { useI18n } from 'vue-i18n'
 

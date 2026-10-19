@@ -344,7 +344,7 @@
     "runRsyncFromTo": "Run rsync from {source} to {dest}",
     "running": "Running...",
     "sLMManagerRestarting": "SLM Manager Restarting",
-    "schedule": "Schedule",
+    "schedule": "الجدولة",
     "scheduledUpdates": "Scheduled Updates",
     "showDetails": "Show details",
     "slmSelfUpdateStage": "SLM server",
@@ -1326,6 +1326,107 @@
       "services": "Services",
       "systemHealth": "System Health",
       "systemMonitoring": "مراقبة النظام"
+    },
+    "agentLedger": {
+      "title": "سجل الوكلاء",
+      "subtitle": "Every company's agent coordination: shared resources, claims, conflicts and dev-loop history.",
+      "refresh": "تحديث",
+      "tabsAria": "طرق عرض السجل",
+      "tabs": {
+        "now": "يعمل الآن",
+        "contention": "التنافس",
+        "claims": "الحجوزات",
+        "conflicts": "التعارضات",
+        "devLoop": "Dev loop",
+        "activity": "النشاط"
+      },
+      "col": {
+        "scope": "النطاق",
+        "agent": "Agent",
+        "company": "Company",
+        "mode": "الوضع",
+        "intent": "الغرض",
+        "expires": "ينتهي",
+        "renewals": "التجديدات",
+        "kind": "النوع",
+        "status": "الحالة",
+        "task": "المهمة الحالية",
+        "detail": "التفاصيل"
+      },
+      "installWide": "Install-wide",
+      "heldBy": "Held by {agent} ({company})",
+      "waiting": "{n} waiting",
+      "waitlistAria": "قائمة الانتظار بالترتيب",
+      "silenceMeansHold": "الطلب ليس إفراجاً: الصمت يعني الاحتفاظ، والحجز غير المجدد ينتهي من تلقاء نفسه.",
+      "ask": "اطلب من المالك الإفراج",
+      "askAria": "اطلب من مالك {scope} الإفراج عنه",
+      "askState": {
+        "sending": "جارٍ الإرسال…",
+        "sent": "أُرسل الطلب — القرار للمالك؛ الصمت يعني الاحتفاظ.",
+        "tooSoon": "سألت عن هذا الحجز للتو؛ حاول مرة أخرى بعد دقيقة.",
+        "notFound": "لم تعد هذه المهمة تحتفظ بالحجز — حدّث الصفحة لترى من يحتفظ به الآن.",
+        "unavailable": "تعذّر الوصول إلى السجل؛ لم يُرسل شيء.",
+        "error": "حدث خطأ ولم يمكن تأكيد التسليم. حدّث الصفحة لمعرفة ما إذا كانت المطالبة لا تزال محجوزة."
+      },
+      "conflict": {
+        "release_refused": "رُفض إفراج",
+        "claim_expired": "انتهى حجز أثناء الاحتفاظ به",
+        "yield_unanswered": "بقي طلب تنازل بلا رد",
+        "claim_lapsed_during_action": "انتهى حجز أثناء إجراء"
+      },
+      "devLoop": {
+        "issue": "Issue",
+        "choose": "Choose an issue",
+        "col": {
+          "at": "When",
+          "intent": "الغرض",
+          "outcome": "Outcome",
+          "tokens": "Estimated tokens",
+          "reason": "السبب"
+        }
+      },
+      "empty": {
+        "contention": "لا يوجد تنافس",
+        "claims": "لا توجد حجوزات",
+        "conflicts": "لا توجد تعارضات",
+        "activity": "لا يوجد نشاط حديث",
+        "devLoop": "No dev-loop history",
+        "devLoopActions": "No actions recorded for this issue",
+        "presence": "لم يبلّغ أي وكيل",
+        "peerMessages": "لا توجد رسائل معلقة",
+        "idleSubscribers": "لا توجد اشتراكات خمول"
+      },
+      "notes": {
+        "title": "What this view cannot see",
+        "storeDown": "Couldn't read the {source} store just now. Its entries are missing here, not empty.",
+        "sourcesUnknown": "Couldn't check which ledger sources are readable.",
+        "peerIdentity": "Agents have no per-peer identity yet: an agent that is refused an action can ask another agent to do it (#16950).",
+        "busAuth": "Messages between agents are not authenticated yet, so this view cannot prove who sent one (#16962)."
+      },
+      "source": {
+        "presence": "agent presence",
+        "ai_stack_agents": "AI-stack agents",
+        "live_sessions": "live sessions",
+        "peer_messages": "pending peer messages",
+        "idle_subscribers": "idle subscriptions",
+        "claims": "claims",
+        "waitlists": "waitlists",
+        "events": "ledger activity",
+        "dev_loop": "dev-loop history"
+      },
+      "state": {
+        "loading": "جارٍ قراءة السجل…",
+        "unavailableTitle": "تعذّرت قراءة السجل",
+        "unavailableBody": "لم يستجب مخزن {source}. هذا ليس مثل عدم وجود إدخالات.",
+        "errorTitle": "حدث خطأ أثناء تحميل هذا القسم"
+      },
+      "busy": "مشغول",
+      "idle": "خامل",
+      "peerMessages": "رسائل الأقران المعلقة",
+      "idleSubscribers": "اشتراكات الخمول",
+      "pendingFor": "{n} معلقة لـ {name}",
+      "sentBy": "من {names}",
+      "waitsForIdle": "{who} ينتظر حتى يصبح {target} خاملاً"
     }
   },
   "monitoringView": {
@@ -1334,7 +1435,17 @@
     "monitoring": "المراقبة",
     "monitoringSections": "Monitoring sections",
     "systemHealthStatusAria": "System health: {status}",
-    "value0AlertPlural": "{value0} Alert{plural}"
+    "value0AlertPlural": "{value0} Alert{plural}",
+    "tabs": {
+      "system": "النظام",
+      "logs": "Logs",
+      "dashboards": "Dashboards",
+      "alerts": "Alerts",
+      "errors": "الأخطاء",
+      "backendHealth": "Backend Health",
+      "performance": "الأداء",
+      "agentLedger": "سجل الوكلاء"
+    }
   },
   "orchestration": {
     "nodeHealthCard": {
@@ -1499,7 +1610,8 @@
     "value0AnsibleMigrationOf": "{value0} Ansible migration of",
     "value0Nodes": "({value0} nodes)",
     "value0OnlineValue1Offline": "{value0} online, {value1} offline",
-    "value0Required": "{value0} (required)"
+    "value0Required": "{value0} (required)",
+    "serviceCount": "{count} service | {count} services"
   },
   "performance": {
     "alertRulesView": {
@@ -1902,7 +2014,7 @@
     "enableTlsForAria": "Enable TLS for {service}",
     "enablingTLS": "Enabling TLS...",
     "enterNodeID": "Enter node ID",
-    "expires": "Expires",
+    "expires": "ينتهي",
     "expiringSoon30d": "Expiring Soon (30d)",
     "expiry": "Expiry",
     "failed": "فشل",
@@ -2207,7 +2319,7 @@
       "nPUWorkersSettings": {
         "actions": "Actions",
         "areYouSureYou": "Are you sure you want to remove",
-        "busy": "Busy",
+        "busy": "مشغول",
         "cancel": "إلغاء",
         "capabilities": "Capabilities",
         "close": "إغلاق",
@@ -2256,7 +2368,9 @@
         "weighted": "Weighted",
         "windows": "Windows",
         "worker": "Worker",
-        "workerName": "Worker Name *"
+        "workerName": "Worker Name *",
+        "connectionTestFailed": "Connection test failed",
+        "loadBalancingLoadFailed": "Failed to load load-balancing configuration"
       },
       "personalitySettings": {
         "active": "Active",
@@ -2387,7 +2501,7 @@
         "sPEntityID": "SP Entity ID",
         "sSOOIDCConfiguration": "SSO / OIDC Configuration",
         "saving": "جارٍ الحفظ...",
-        "scope": "Scope",
+        "scope": "النطاق",
         "searchFilter": "Search Filter",
         "searchFilterExample": "(uid={username})",
         "serverURI": "Server URI",
@@ -2486,7 +2600,7 @@
         "createSLMAdministrator": "Create SLM Administrator",
         "createTeam": "Create Team",
         "created": "Created",
-        "dark": "Dark",
+        "dark": "داكن",
         "deleteProvider": "Delete provider",
         "deleteTeam": "Delete team",
         "deleteUser": "Delete user",
@@ -2513,7 +2627,7 @@
         "language": "اللغة",
         "lastLogin": "Last Login",
         "lastSync": "Last Sync",
-        "light": "Light",
+        "light": "فاتح",
         "logout": "Logout",
         "lowercaseLettersNumbersUnderscores": "Lowercase, letters, numbers, underscores",
         "microsoftEntraID": "Microsoft Entra ID",
@@ -2757,7 +2871,7 @@
       "enterYourPassword": "Enter your password",
       "enterYourPasswordTo": "Enter your password to confirm disabling two-factor authentication.",
       "expiration": "Expiration",
-      "expires": "Expires",
+      "expires": "ينتهي",
       "keyPrefix": "Key Prefix",
       "lastVerifiedValue0": "Last verified: {value0}",
       "mFAIsEnabled": "MFA is enabled",
@@ -3366,7 +3480,7 @@
   },
   "sharedLinksView": {
     "colCreated": "Created",
-    "colExpires": "Expires",
+    "colExpires": "ينتهي",
     "colOwner": "المالك",
     "colPassword": "كلمة المرور",
     "colSession": "Session",
@@ -3394,7 +3508,7 @@
     "period": "Period",
     "readOnlyNotice": "Audit view only. Budget policies are created and managed by users in the user app; this console does not modify them.",
     "refresh": "تحديث",
-    "scope": "Scope",
+    "scope": "النطاق",
     "scopeId": "Scope ID",
     "status": "الحالة",
     "subtitle": "Read-only oversight of all agent, project, task, and tenant budget policies and their hard-stop auto-pause configuration.",

@@ -230,7 +230,7 @@ export function useOrchestrationManagement() {
         serviceCount: response.data.services?.length,
         totalServices: response.data.total_services,
       })
-      fleetServices.value = response.data.services
+      fleetServices.value = response.data.services ?? [] // may be omitted; keep the array invariant (#18802)
       totalFleetServices.value = response.data.total_services
       lastRefresh.value = new Date()
       return response.data

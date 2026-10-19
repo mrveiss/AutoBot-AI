@@ -20,7 +20,7 @@ cause instead of trimming any assertion to fit under the cap:
   (#1948): fires once per cooldown window, never fires for a transient mark.
 - base_provider.BaseProvider._get_auth_token() wiring against the REAL
   class (not a test stub): TokenExpiredError -> mark needs_reauth, a
-  successful vault-backed resolve -> clear, ApiKeyAuth success leaves the
+  successful vault-backed resolve -> clear, StaticApiKeyAuth success leaves the
   store untouched.
 
 Shared store/global-injection fixtures live in conftest.py (fixtures, not
@@ -345,7 +345,7 @@ async def test_get_auth_token_apikey_success_does_not_touch_degradation_store(
     _make_store_with_fake_server,
     _inject_globals,
 ):
-    """ApiKeyAuth (is_vault_backed()==False) never calls the degradation store —
+    """StaticApiKeyAuth (is_vault_backed()==False) never calls the degradation store —
     it can never have raised TokenExpiredError, so there is nothing to clear.
     """
     server = fakeredis.FakeServer()
@@ -354,7 +354,7 @@ async def test_get_auth_token_apikey_success_does_not_touch_degradation_store(
     from llm_shared.base_provider import BaseProvider
     from llm_shared.provider_degradation import DegradationCause
 
-    # Pre-mark needs_reauth for a DIFFERENT reason to prove ApiKeyAuth's
+    # Pre-mark needs_reauth for a DIFFERENT reason to prove StaticApiKeyAuth's
     # success path leaves existing store state alone.
     with _inject_globals(store_instance.mark_degraded, _get_alert_cooldown=lambda: _NoopCooldown()):
         await store_instance.mark_degraded("static", cause=DegradationCause.NEEDS_REAUTH)

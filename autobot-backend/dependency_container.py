@@ -371,7 +371,7 @@ async def get_config_manager_from_container() -> ConfigManager:
     return await get_container().get_service("config")
 
 
-async def get_llm() -> LLMService:
+async def get_llm_from_container() -> LLMService:
     """Get LLM service (#3185)"""
     return await get_container().get_service("llm")
 

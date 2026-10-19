@@ -5,8 +5,9 @@
 
 # The env files this repo actually tracks (#15143). Four of the five branches
 # below used to name a file outside this set, so every one of them silently
-# fell through to "using defaults" instead of loading anything.
-TRACKED_ENV_FILES=(".env.docker" ".env.example" ".env.localhost" ".env.native-vm" ".env.network" ".env.network-template")
+# fell through to "using defaults" instead of loading anything. Docker's env file
+# is docker/.env.docker, passed to compose with --env-file (#18555).
+TRACKED_ENV_FILES=(".env.example" ".env.localhost" ".env.native-vm" ".env.network" ".env.network-template")
 
 detect_environment() {
     # Check if running in WSL

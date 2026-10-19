@@ -558,8 +558,8 @@ class VoiceRecognitionConfig:
     PHRASE_THRESHOLD = 0.3
 
 
-class CacheConfig:
-    """Cache configuration constants."""
+class CacheSizeDefaults:
+    """Embedding/database cache size and TTL defaults (not the SSOT settings model ssot_config.CacheConfig)."""
 
     EMBEDDING_CACHE_MAX_SIZE = 1000
     EMBEDDING_CACHE_TTL_SECONDS = 3600

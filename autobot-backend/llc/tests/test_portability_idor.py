@@ -21,6 +21,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from testkit.canonical_gate import unauthenticated_canonical_gate
 from user_management.services import TenantContext
 
 _FIXED_USER_ID = uuid.UUID("66666666-6666-6666-6666-666666666666")
@@ -77,15 +78,13 @@ class TestPortabilityNoAuth:
         return TestClient(app)
 
     def test_preview_no_token_returns_401(self):
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = self._make_unauthenticated_client()
             resp = client.post("/api/llc/import/preview", json={"template": {}})
         assert resp.status_code == 401
 
     def test_execute_no_token_returns_401(self):
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = self._make_unauthenticated_client()
             resp = client.post("/api/llc/import/execute", json={"template": {}})
         assert resp.status_code == 401

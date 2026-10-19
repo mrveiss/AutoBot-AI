@@ -167,7 +167,7 @@ class ProcessingTask:
 
 
 @dataclass
-class ProcessingResult:
+class AcceleratorProcessingResult:
     """AI processing result."""
 
     task_id: str
@@ -477,7 +477,7 @@ class AIHardwareAccelerator:
         else:  # HEAVY tasks
             return self._route_heavy_task()
 
-    async def process_task(self, task: ProcessingTask) -> ProcessingResult:
+    async def process_task(self, task: ProcessingTask) -> AcceleratorProcessingResult:
         """Process an AI task using optimal hardware (Issue #315 - refactored)."""
         start_time = time.time()
         selected_device = self._select_optimal_device(task)
@@ -504,10 +504,10 @@ class AIHardwareAccelerator:
         device: HardwareDevice,
         result: Any,
         start_time: float,
-    ) -> ProcessingResult:
+    ) -> AcceleratorProcessingResult:
         """Create successful processing result (Issue #315 - extracted)."""
         processing_time = (time.time() - start_time) * 1000
-        return ProcessingResult(
+        return AcceleratorProcessingResult(
             task_id=task.task_id,
             success=True,
             result=result,
@@ -522,7 +522,7 @@ class AIHardwareAccelerator:
         selected_device: HardwareDevice,
         error: Exception,
         start_time: float,
-    ) -> ProcessingResult:
+    ) -> AcceleratorProcessingResult:
         """Handle task failure with fallback (Issue #315 - extracted)."""
         fallback_device = self._get_fallback_device(selected_device)
 
@@ -535,7 +535,7 @@ class AIHardwareAccelerator:
                 return self._create_success_result(task, fallback_device, fallback_result, start_time)
 
         processing_time = (time.time() - start_time) * 1000
-        return ProcessingResult(
+        return AcceleratorProcessingResult(
             task_id=task.task_id,
             success=False,
             error=str(error),
@@ -817,9 +817,9 @@ class AIHardwareAccelerator:
         top_k: int = input_data.get("top_k", _DEFAULT_SEMANTIC_SEARCH_TOP_K)
 
         try:
-            from knowledge_base_factory import get_knowledge_base
+            from knowledge_base_factory import get_knowledge_base_or_none
 
-            kb = await get_knowledge_base()
+            kb = await get_knowledge_base_or_none()
             if kb is None:
                 logger.warning("Knowledge base unavailable; returning empty semantic search result")
                 return _EMPTY

@@ -87,7 +87,7 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
         {"delete_team", "list_team_members", "update_member_role"}
     ),
     "autobot-backend/chat_workflow/session_handler.py": frozenset({"get_active_sessions_count"}),
-    "autobot-backend/circuit_breaker.py": frozenset({"reset_all_circuit_breakers"}),
+    "autobot_shared/circuit_breaker.py": frozenset({"reset_all_circuit_breakers"}),
     "autobot-backend/code_intelligence/code_review_engine.py": frozenset({"DiffFile"}),
     "autobot-backend/code_intelligence/doc_generation/models.py": frozenset({"add_base_class"}),
     "autobot-backend/code_intelligence/precommit_analyzer.py": frozenset({"add_custom_check"}),
@@ -214,7 +214,9 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
             "update_node_roles",
         }
     ),
-    "autobot-slm-backend/api/orchestration.py": frozenset({"ServiceActionResponse", "ServiceDefinitionResponse"}),
+    "autobot-slm-backend/api/orchestration.py": frozenset(
+        {"OrchestrationServiceActionResponse", "ServiceDefinitionResponse"}
+    ),
     "autobot-slm-backend/api/performance.py": frozenset(
         {"AlertRuleModel", "AlertRuleUpdateRequest", "delete_alert_rule"}
     ),
@@ -281,7 +283,7 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
     "autobot-slm-backend/user_management/schemas/mfa.py": frozenset({"MFASetupResponse"}),
     "autobot-slm-backend/user_management/services/sso_service.py": frozenset({"SSOProviderNotFoundError"}),
     "autobot_shared/logging_manager.py": frozenset(
-        {"get_audit_logger", "get_backend_logger", "get_debug_logger", "get_frontend_logger", "get_llm_logger"}
+        {"get_backend_logger", "get_debug_logger", "get_frontend_logger", "get_llm_logger"}
     ),
     "autobot_shared/monitoring/metrics/claude_api.py": frozenset({"ClaudeAPIMetricsRecorder"}),
     "autobot_shared/monitoring/metrics/frontend.py": frozenset(

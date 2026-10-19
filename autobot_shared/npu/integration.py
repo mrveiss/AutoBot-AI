@@ -901,7 +901,7 @@ class NPUTaskQueue:
             return {"success": False, "error": "NPU task timeout", "fallback": True}
 
 
-async def process_with_npu_fallback(
+async def process_with_npu_queue_fallback(
     task_type: str,
     data: Dict[str, Any],
     fallback_func: Callable[[], Awaitable[Dict[str, Any]]],

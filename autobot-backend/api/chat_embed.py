@@ -140,10 +140,10 @@ class EmbedMessageRequest(BaseModel):
 
 
 async def _get_llm_service(request: Request) -> Any:
-    from services.llm_service import LLMService
+    from services.llm_service import get_llm_service
     from utils.lazy_singleton import lazy_init_singleton
 
-    llm_service = lazy_init_singleton(request.app.state, "llm_service", LLMService)
+    llm_service = lazy_init_singleton(request.app.state, "llm_service", get_llm_service)
     if llm_service is None:
         logger.error("LLMService initialization failed for embed endpoint")
         raise HTTPException(status_code=503, detail="LLM service unavailable")

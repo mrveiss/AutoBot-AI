@@ -78,6 +78,7 @@ const links = computed<SidebarLink[]>(() => {
     // All views are company-scoped (/llc/companies/:companyId/…) so the
     // LlcCompanyLayout — and therefore this sidebar — stays mounted (#10750 B3).
     { labelKey: 'nav.llcDashboard', to: { path: `/llc/companies/${id}/dashboard` } },
+    { labelKey: 'nav.llcLedger', to: { path: `/llc/companies/${id}/ledger` } },
     { labelKey: 'nav.llcBacklog', to: { path: `/llc/companies/${id}/backlog` } },
     { labelKey: 'nav.llcBoards', to: { path: `/llc/companies/${id}/boards` } },
     { labelKey: 'nav.llcReviewInbox', to: { path: `/llc/companies/${id}/reviews` } },

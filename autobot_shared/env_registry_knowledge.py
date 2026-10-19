@@ -38,3 +38,18 @@ register_env_var(
         component="knowledge",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHROMA_REPAIR_LOCK_TIMEOUT_SECONDS",
+        type=float,
+        default=30.0,
+        description=(
+            "Total seconds to wait for the cross-process lock that guards the local ChromaDB "
+            "store repairs before giving up; on timeout the store still opens and the repairs "
+            "retry on the next open; read by utils/chromadb_store_repairs.py (#18789)."
+        ),
+        component="knowledge",
+        range=(0.1, 3600.0),
+    )
+)

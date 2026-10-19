@@ -62,7 +62,7 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["knowledge_mcp", "mcp", "langchain"])
 
 # Issue #13026: KnowledgeBase.__init__() takes no parameters (config is read
-# internally via SSOT config, same as dependencies.get_knowledge_base()) --
+# internally via SSOT config, same as dependencies.provide_knowledge_base()) --
 # the config_manager= kwarg raised TypeError on every call.
 get_knowledge_base = lazy_singleton(KnowledgeBase)
 

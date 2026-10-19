@@ -243,26 +243,12 @@ class CodeVersion:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
-class RefactoringResult:
-    """Result of a refactoring operation"""
-
-    success: bool
-    original_code: str
-    refactored_code: str
-    diff: str
-    changes: List[str]
-    validation: ValidationResult
-    tokens_used: int = 0
-    processing_time: float = 0.0
-
-
 # =============================================================================
 # Code Validation Engine
 # =============================================================================
 
 
-class CodeValidator:
+class MultiLanguageCodeValidator:
     """Validates generated code using AST parsing and static analysis"""
 
     @staticmethod
@@ -302,13 +288,13 @@ class CodeValidator:
     def _process_ast_node(node: ast.AST, functions: list, classes: list, imports: list, warnings: list) -> None:
         """Process a single AST node for validation. (Issue #315 - extracted)"""
         if isinstance(node, ast.FunctionDef):
-            func_info, func_warnings = CodeValidator._extract_function_info(node)
+            func_info, func_warnings = MultiLanguageCodeValidator._extract_function_info(node)
             functions.append(func_info)
             warnings.extend(func_warnings)
         elif isinstance(node, ast.ClassDef):
-            classes.append(CodeValidator._extract_class_info(node))
+            classes.append(MultiLanguageCodeValidator._extract_class_info(node))
         elif isinstance(node, _IMPORT_TYPES):  # Issue #380
-            imports.extend(CodeValidator._extract_imports(node))
+            imports.extend(MultiLanguageCodeValidator._extract_imports(node))
 
     @staticmethod
     def validate_python(code: str) -> ValidationResult:
@@ -329,7 +315,7 @@ class CodeValidator:
 
             # Process each node using helper (Issue #315 - reduced depth)
             for node in ast.walk(tree):
-                CodeValidator._process_ast_node(node, functions, classes, imports, warnings)
+                MultiLanguageCodeValidator._process_ast_node(node, functions, classes, imports, warnings)
 
             ast_info = {
                 "functions": functions,
@@ -570,7 +556,7 @@ class CodeGenerationEngine:
             generated_code, tokens = await self._call_llm(prompt)
 
             # Validate generated code
-            validation = CodeValidator.validate(generated_code, request.language)
+            validation = MultiLanguageCodeValidator.validate(generated_code, request.language)
 
             # Track stats
             await self._track_generation_stats("generate", request.language.value, tokens, validation.is_valid)
@@ -612,7 +598,7 @@ class CodeGenerationEngine:
             refactored_code, tokens = await self._call_llm(prompt)
 
             # Validate refactored code
-            validation = CodeValidator.validate(refactored_code, request.language)
+            validation = MultiLanguageCodeValidator.validate(refactored_code, request.language)
 
             # Generate diff
             diff = self._generate_diff(request.code, refactored_code)
@@ -876,7 +862,7 @@ async def validate_code(
 
     Issue #744: Requires admin authentication.
     """
-    validation = CodeValidator.validate(request.code, request.language)
+    validation = MultiLanguageCodeValidator.validate(request.code, request.language)
 
     return {
         "is_valid": validation.is_valid,

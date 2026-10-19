@@ -20,7 +20,7 @@ import pytest
 
 import multimodal_processor.processors.voice as voice_module
 from multimodal_processor.models import MultiModalInput
-from multimodal_processor.types import ModalityType, ProcessingIntent
+from multimodal_processor.types import ModalityType, MultimodalProcessingIntent
 
 
 class _WhisperPipe:
@@ -55,7 +55,7 @@ def wired(processor):
 
 def _audio_input(data) -> MultiModalInput:
     return MultiModalInput(
-        input_id="t", modality_type=ModalityType.AUDIO, intent=ProcessingIntent.VOICE_COMMAND, data=data
+        input_id="t", modality_type=ModalityType.AUDIO, intent=MultimodalProcessingIntent.VOICE_COMMAND, data=data
     )
 
 

@@ -53,11 +53,7 @@ _COMPAT_RE = re.compile(r"backward[- ]?compat|re-?export|\bshim\b|facade", re.IG
 #: fails `test_every_allowlist_entry_is_still_needed` -- the list shrinks, it does not rot.
 ALLOWLIST: dict[str, str] = {
     "autobot-backend/knowledge/memory_graph/__init__.py": "#12932 (decision-gated; pinned by its test)",
-    "autobot-backend/async_work/__init__.py": "#18552 (not triaged: unified async-work facade, no static importer)",
-    "autobot-backend/knowledge/connectors/auth.py": "#18552 (not triaged: re-exports of autobot_shared auth types)",
-    "autobot-backend/middleware/extension_manifest.py": "#18552 (not triaged: re-export of the plugin_sdk manifest)",
-    "autobot-backend/services/claude_agent_service.py": "#18552 (not triaged: shim over specialized_agent_service, #5429)",
-    "autobot-backend/utils/hardware_acceleration_manager.py": "#18552 (not triaged: wrapper re-export)",
+    "autobot-backend/async_work/__init__.py": "#18596 (not triaged: unified async-work facade, no static importer)",
 }
 
 

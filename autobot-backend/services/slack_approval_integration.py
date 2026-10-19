@@ -25,9 +25,9 @@ import json
 import time
 from typing import Any, Dict
 
+from autobot_shared.circuit_breaker import CircuitState
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from circuit_breaker import CircuitState
 
 logger = get_logger(__name__)
 

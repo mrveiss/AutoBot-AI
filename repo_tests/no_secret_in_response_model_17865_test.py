@@ -15,7 +15,7 @@ naive version misses and each of which hides a real route in this tree:
 
 * **inheritance** -- the field is usually declared on a parent in another
   module, which is exactly how the original defect was built.
-* **nesting** -- `LLMConfigResponse` reaches `LLMProviderConfig.api_key`
+* **nesting** -- `SlmLLMConfigResponse` reaches `LLMProviderConfig.api_key`
   through a field annotation, not through a base class.
 * **generic subscripts** -- `DataResponse[SecretCreatedData]` is an
   `ast.Subscript`, so a check reading only `ast.Name` sees nothing at all.
@@ -138,7 +138,7 @@ REACH = declare(
     # the bottom tenth of `growth`, because that is zero tolerance dressed as an allowance.
     # Re-measured by the mechanism itself, not carried across (#15928); the arithmetic is in
     # the commit message, which cannot drift from the tree it describes.
-    floor=5367,  # re-pinned mid-window: population 5212, window [5062, 5212]
+    floor=5431,  # re-pinned mid-window (train 30): population 5506, window [5356, 5506]
     growth=150,
     skips=0,
     what="backend Python modules scanned for response_model= reaching a stored credential",

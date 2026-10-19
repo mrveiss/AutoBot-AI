@@ -24,10 +24,10 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel
 
+from autobot_shared.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 from autobot_shared.url_safety import host_matches
-from circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from constants.security_constants import SecurityConstants
 from constants.threshold_constants import CircuitBreakerDefaults, TimingConstants
 from services.captcha_human_loop import get_captcha_human_loop
@@ -64,7 +64,7 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class ResearchRequest(BaseModel):
+class WebResearchRequest(BaseModel):
     query: str
     focus: str = "general"
     max_results: int = 5
@@ -79,7 +79,7 @@ class WebSearchHit(BaseModel):
     source_type: str  # "documentation", "tutorial", "forum", "official"
 
 
-class ResearchResponse(BaseModel):
+class WebResearchResponse(BaseModel):
     success: bool
     query: str
     results: List[WebSearchHit]
@@ -147,7 +147,7 @@ _TOOL_REFERENCE_DATA: Dict[str, Dict[str, Any]] = {
 # ---------------------------------------------------------------------------
 
 
-class CaptchaSolver:
+class RecaptchaServiceClient:
     """Integration with CAPTCHA solving services."""
 
     def __init__(self, config: Dict[str, Any]):
@@ -291,7 +291,7 @@ class WebResearcher:
 
         # Browser engine
         self.fingerprint = BrowserFingerprint()
-        self.captcha_solver = CaptchaSolver(self.config.get("captcha", {}))
+        self.captcha_solver = RecaptchaServiceClient(self.config.get("captcha", {}))
         self.browser: Browser | None = None
         self.context: BrowserContext | None = None
         self._domain_rate_limiter: Dict[str, float] = {}
@@ -1001,7 +1001,7 @@ class WebResearcher:
     # Research API (from ResearchAgent)
     # -------------------------------------------------------------------
 
-    async def perform_research(self, request: ResearchRequest) -> ResearchResponse:
+    async def perform_research(self, request: WebResearchRequest) -> WebResearchResponse:
         """Perform web research and return structured response."""
         start_time = time.time()
         logger.info(
@@ -1013,7 +1013,7 @@ class WebResearcher:
             search_results = await self.search_web(request.query, request.max_results)
             results = self._convert_to_research_results(search_results)
             summary = self._generate_research_summary(results, request.query)
-            return ResearchResponse(
+            return WebResearchResponse(
                 success=True,
                 query=request.query,
                 results=results,
@@ -1023,7 +1023,7 @@ class WebResearcher:
             )
         except Exception as e:
             logger.error("Research failed for '%s': %s", request.query, e)
-            return ResearchResponse(
+            return WebResearchResponse(
                 success=False,
                 query=request.query,
                 results=[],
@@ -1049,7 +1049,7 @@ class WebResearcher:
             )
         return results
 
-    async def research_specific_tools(self, request: ResearchRequest) -> Dict[str, Any]:
+    async def research_specific_tools(self, request: WebResearchRequest) -> Dict[str, Any]:
         """Research specific tools with installation info."""
         query_lower = request.query.lower()
         try:

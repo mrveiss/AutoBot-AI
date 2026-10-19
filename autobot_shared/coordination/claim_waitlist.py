@@ -47,6 +47,7 @@ from datetime import timedelta
 from typing import Any
 
 from autobot_shared.coordination.claim_company import resolve_company
+from autobot_shared.coordination.ledger_events import cap_text
 from autobot_shared.coordination.work_claims import (
     ClaimMode,
     ClaimUnavailable,
@@ -250,7 +251,7 @@ async def join(
         agent_id=agent_id,
         task_id=task_id,
         mode=mode.value if isinstance(mode, ClaimMode) else str(mode),
-        intent=intent,
+        intent=cap_text(intent),
         priority=priority,
         joined_at=joined.isoformat(),
         expires_at=expires.isoformat(),

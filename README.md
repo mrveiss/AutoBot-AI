@@ -79,7 +79,8 @@ adding fleet nodes, enrolling agents, assigning roles, and provisioning.
 git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
 cp .env.example .env
-docker compose up -d
+bash docker/generate-secrets.sh   # per-host secrets + a free network range
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d
 ```
 User UI at **http://localhost**, SLM admin at **http://localhost/slm/**.
 
@@ -126,7 +127,7 @@ stores the SLM provisions onto them.
 | Component | SLM node (min) | Platform node (min) | Platform node (rec.) |
 |-----------|----------------|---------------------|----------------------|
 | **CPU** | 2 cores | 4 cores | 8+ cores |
-| **RAM** | 1.5 GB | 8 GB | 16+ GB |
+| **RAM** | 1.5 GB (native install; the installer checks it) | 8 GB | 16+ GB |
 | **Storage** | 20 GB SSD | 20 GB SSD | 50+ GB SSD |
 | **GPU** | None (CPU-only mode) | NVIDIA GPU for faster inference |
 | **OS** | Ubuntu 20.04+ / Debian 11+ | Ubuntu 22.04 LTS |
@@ -249,7 +250,8 @@ graph TB
 Fastest way to get started. Includes all services pre-configured.
 
 ```bash
-docker compose up -d
+bash docker/generate-secrets.sh
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d
 ```
 
 ### Native Installation
@@ -258,7 +260,8 @@ For development or custom setups. See [INSTALL.md](INSTALL.md).
 ### Development Mode
 For contributing to AutoBot:
 ```bash
-docker compose -f docker-compose.dev.yml up -d
+cp docker-compose.override.example.yml docker-compose.override.yml
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d
 ```
 
 ---

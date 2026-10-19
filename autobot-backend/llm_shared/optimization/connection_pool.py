@@ -35,7 +35,7 @@ logger = get_logger(__name__)
 
 
 @dataclass
-class PoolConfig:
+class HttpPoolConfig:
     """Configuration for connection pool."""
 
     max_connections: int = 100
@@ -75,7 +75,7 @@ class ConnectionPoolManager:
         response = await client.post("/v1/chat/completions", json=payload)
     """
 
-    def __init__(self, default_config: PoolConfig = None):
+    def __init__(self, default_config: HttpPoolConfig = None):
         """
         Initialize connection pool manager.
 
@@ -85,9 +85,9 @@ class ConnectionPoolManager:
         if not HTTPX_AVAILABLE:
             logger.warning("httpx not available, connection pooling disabled")
 
-        self.default_config = default_config or PoolConfig()
+        self.default_config = default_config or HttpPoolConfig()
         self._clients: Dict[str, "httpx.AsyncClient"] = {}
-        self._configs: Dict[str, PoolConfig] = {}
+        self._configs: Dict[str, HttpPoolConfig] = {}
         self._metrics: Dict[str, PoolMetrics] = {}
         self._lock = asyncio.Lock()
 
@@ -102,7 +102,7 @@ class ConnectionPoolManager:
         provider_name: str,
         base_url: str,
         headers: Dict[str, str] = None,
-        config: PoolConfig = None,
+        config: HttpPoolConfig = None,
     ) -> "httpx.AsyncClient" | None:
         """
         Get or create an HTTP client for a provider.
@@ -131,7 +131,7 @@ class ConnectionPoolManager:
         provider_name: str,
         base_url: str,
         headers: Dict[str, str] = None,
-        config: PoolConfig = None,
+        config: HttpPoolConfig = None,
     ) -> "httpx.AsyncClient":
         """Create a new HTTP client with connection pooling."""
         cfg = config or self.default_config
@@ -264,7 +264,7 @@ _pool_lock = asyncio.Lock()
 
 
 async def get_connection_pool_manager(
-    config: PoolConfig = None,
+    config: HttpPoolConfig = None,
 ) -> ConnectionPoolManager:
     """
     Get or create the global connection pool manager.
@@ -285,7 +285,7 @@ async def get_connection_pool_manager(
 
 __all__ = [
     "ConnectionPoolManager",
-    "PoolConfig",
+    "HttpPoolConfig",
     "PoolMetrics",
     "get_connection_pool_manager",
 ]

@@ -103,7 +103,7 @@ def test_migrations_list_reaches_the_last_entry_after_seed_agents():
     """Regression for the reachability half of #14326.
 
     ``seed_agents`` sits mid-list; ``add_audit_logs_canonical_columns`` (#17225) is no longer
-    last (``add_post_sync_action_runs_table``, #17455, is). ``run_all_migrations`` breaks on the first failure, so if
+    last (``add_auth_revocation_tables``, #18663, is). ``run_all_migrations`` breaks on the first failure, so if
     ``seed_agents`` cannot import (the ``autobot_shared`` gap) nothing after
     it, including the newest migration, was ever exercised by the gate.
     """
@@ -115,8 +115,8 @@ def test_migrations_list_reaches_the_last_entry_after_seed_agents():
     names = [elt.value for elt in migrations_assign.value.elts if isinstance(elt, ast.Constant)]
 
     assert "seed_agents" in names
-    assert names[-1] == "add_post_sync_action_runs_table"
-    assert names.index("seed_agents") < names.index("add_post_sync_action_runs_table")
+    assert names[-1] == "add_auth_revocation_tables"
+    assert names.index("seed_agents") < names.index("add_auth_revocation_tables")
 
 
 # ---------------------------------------------------------------------------

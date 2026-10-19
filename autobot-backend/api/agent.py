@@ -50,7 +50,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from constants.threshold_constants import TimingConstants
-from dependencies import get_knowledge_base, provide_config_manager
+from dependencies import provide_config_manager, provide_knowledge_base
 from exceptions import InternalError, SubprocessError
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from monitoring.prometheus_metrics import get_metrics_manager
@@ -1001,7 +1001,7 @@ async def execute_orchestrated_goal(
     payload: GoalPayload,
     request: Request,
     config=Depends(provide_config_manager),
-    knowledge_base=Depends(get_knowledge_base),
+    knowledge_base=Depends(provide_knowledge_base),
     current_user: dict = Depends(get_current_user),
 ):
     """Execute goal via multi-agent orchestration with AI Stack coordination.
@@ -1123,7 +1123,7 @@ async def coordinate_multi_agent_task(
 )
 async def comprehensive_research_task(
     request_data: ResearchTaskRequest,
-    knowledge_base=Depends(get_knowledge_base),
+    knowledge_base=Depends(provide_knowledge_base),
     current_user: dict = Depends(get_current_user),
 ):
     """

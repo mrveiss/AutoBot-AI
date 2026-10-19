@@ -31,9 +31,9 @@ async def _test_kb_connection():
     """
     logger.info("\n4️⃣  Testing knowledge base connection...")
     try:
-        from knowledge_base_factory import get_knowledge_base
+        from knowledge_base_factory import get_knowledge_base_or_none
 
-        kb = await get_knowledge_base()
+        kb = await get_knowledge_base_or_none()
         if kb:
             logger.info("✅ Knowledge base connection successful")
 

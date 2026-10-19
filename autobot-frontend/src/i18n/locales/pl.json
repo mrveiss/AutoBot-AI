@@ -4818,8 +4818,8 @@
     "settings": "Terminal Settings",
     "fontSize": "Font Size",
     "theme": "Theme",
-    "dark": "Dark",
-    "light": "Light",
+    "dark": "Ciemny",
+    "light": "Jasny",
     "cursorStyle": "Cursor Style",
     "block": "Block",
     "underline": "Underline",
@@ -5091,7 +5091,6 @@
     "role": "Rola:",
     "lastLogin": "Ostatnie logowanie:",
     "preferences": "Preferencje",
-    "theme": "Motyw",
     "notifications": "Powiadomienia",
     "emailNotifications": "Powiadomienia e-mail",
     "browserNotifications": "Powiadomienia przeglądarki",
@@ -5101,7 +5100,6 @@
     "showTooltips": "Pokaż podpowiedzi",
     "enableAnimations": "Włącz animacje",
     "savePreferences": "Zapisz preferencje",
-    "appearance": "Wygląd",
     "voiceChatDisplay": "Wyświetlanie czatu głosowego",
     "fullScreen": "Pełny ekran",
     "sidePanel": "Panel boczny",
@@ -5117,9 +5115,6 @@
     "pwTooShort": "Hasło musi mieć co najmniej 8 znaków",
     "pwChanged": "Hasło zmienione pomyślnie!",
     "never": "Nigdy",
-    "themeLight": "Jasny",
-    "themeDark": "Ciemny",
-    "themeAuto": "Automatyczny",
     "tabDevices": "Tab devices"
   },
   "charts": {
@@ -5792,11 +5787,6 @@
       "postExecutionFailed": "Polecenie zostało wykonane, ale kolejny krok się nie powiódł. Wynik jest wyświetlany; niektóre aktualizacje mogą być niekompletne.",
       "enterComment": "Please enter a comment before submitting"
     },
-    "darkModeToggle": {
-      "switchToLight": "Switch to light mode",
-      "switchToDark": "Switch to dark mode",
-      "toggleDarkMode": "Toggle dark mode"
-    },
     "dataTable": {
       "sortBy": "Sort by {column}",
       "actions": "Actions",
@@ -5918,8 +5908,8 @@
       "selectTheme": "Select theme",
       "switchToLight": "Switch to light mode",
       "switchToDark": "Switch to dark mode",
-      "light": "Light",
-      "dark": "Dark"
+      "light": "Jasny",
+      "dark": "Ciemny"
     },
     "toastContainer": {
       "notifications": "Notifications",
@@ -5955,10 +5945,6 @@
       "actions": "Akcje",
       "noDataAvailable": "Brak dostępnych danych",
       "selectRow": "Zaznacz wiersz {row}"
-    },
-    "panel": {
-      "collapse": "Zwiń panel",
-      "expand": "Rozwiń panel"
     }
   },
   "views": {
@@ -7944,7 +7930,6 @@
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents",
     "agentActivity": "Aktywność agenta",
-    "switchLanguage": "Switch language",
     "openMainMenu": "Open main menu",
     "skipToContent": "Przejdź do treści głównej",
     "services": "Services",
@@ -8043,7 +8028,8 @@
       "tip": "Interfejs minimalny — ukryj funkcje zaawansowane",
       "announceMinimal": "Włączono interfejs minimalny. Funkcje zaawansowane są ukryte.",
       "announceFull": "Włączono pełny interfejs. Wyświetlane są wszystkie funkcje."
-    }
+    },
+    "llcLedger": "Rejestr agentów"
   },
   "llcCompanyStatus": {
     "showArchived": "Pokaż zarchiwizowane",
@@ -8931,6 +8917,72 @@
       "retry": "Ponów",
       "loadingItem": "Wczytywanie elementu…",
       "itemLoadFailed": "Nie udało się wczytać tego elementu"
+    },
+    "ledger": {
+      "title": "Rejestr agentów",
+      "subtitle": "Kto w tej firmie nad czym pracuje i kto czeka.",
+      "tabsAria": "Widoki rejestru",
+      "tabs": {
+        "now": "Teraz pracuje",
+        "claims": "Rezerwacje",
+        "contention": "Rywalizacja",
+        "activity": "Aktywność"
+      },
+      "col": {
+        "agent": "Agent",
+        "kind": "Rodzaj",
+        "status": "Stan",
+        "task": "Bieżące zadanie",
+        "detail": "Szczegóły",
+        "scope": "Zakres",
+        "mode": "Tryb",
+        "intent": "Zamiar",
+        "expires": "Wygasa",
+        "renewals": "Odnowienia"
+      },
+      "busy": "Zajęty",
+      "idle": "Bezczynny",
+      "peerMessages": "Oczekujące wiadomości",
+      "idleSubscribers": "Subskrypcje bezczynności",
+      "pendingFor": "{n} oczekuje na {name}",
+      "sentBy": "od {names}",
+      "waitsForIdle": "{who} czeka, aż {target} będzie bezczynny",
+      "heldBy": "Trzyma {agent}",
+      "waitlistAria": "Kolejka w kolejności",
+      "silenceMeansHold": "Prośba to nie zwolnienie: milczenie oznacza trzymanie, a nieodnowiona rezerwacja wygasa sama.",
+      "ask": "Poproś właściciela o zwolnienie",
+      "askAria": "Poproś właściciela {scope} o zwolnienie",
+      "conflicts": "Konflikty",
+      "recent": "Ostatnia aktywność",
+      "conflict": {
+        "release_refused": "Odmówiono zwolnienia",
+        "claim_expired": "Rezerwacja wygasła w trakcie trzymania",
+        "yield_unanswered": "Prośba o ustąpienie pozostała bez odpowiedzi",
+        "claim_lapsed_during_action": "Rezerwacja wygasła w trakcie działania"
+      },
+      "empty": {
+        "presence": "Żaden agent się nie zgłosił",
+        "peerMessages": "Brak oczekujących wiadomości",
+        "idleSubscribers": "Brak subskrypcji bezczynności",
+        "claims": "Brak rezerwacji",
+        "contention": "Nic nie jest przedmiotem rywalizacji",
+        "conflicts": "Brak konfliktów",
+        "activity": "Brak ostatniej aktywności"
+      },
+      "state": {
+        "loading": "Odczytywanie rejestru…",
+        "unavailableTitle": "Nie udało się odczytać rejestru",
+        "unavailableBody": "Magazyn {source} nie odpowiedział. To nie to samo co brak wpisów.",
+        "errorTitle": "Podczas ładowania tej sekcji wystąpił błąd"
+      },
+      "askState": {
+        "sending": "Wysyłanie…",
+        "sent": "Prośba wysłana — decyduje właściciel; milczenie oznacza trzymanie.",
+        "tooSoon": "Pytałeś o tę rezerwację przed chwilą; spróbuj ponownie za minutę.",
+        "notFound": "To zadanie nie trzyma już tej rezerwacji — odśwież, aby zobaczyć, kto ją trzyma.",
+        "unavailable": "Nie można połączyć się z rejestrem; nic nie wysłano.",
+        "error": "Coś poszło nie tak i nie udało się potwierdzić doręczenia. Odśwież, aby sprawdzić, czy blokada jest nadal utrzymywana."
+      }
     }
   },
   "code": {
@@ -9745,5 +9797,104 @@
       "unreachableAsOf": "Nieosiągalny – stan usług nieznany – stan z {time}"
     },
     "lastKnown": "{text} (ostatni znany)"
+  },
+  "schedule": {
+    "title": "Harmonogram",
+    "repeats": "Powtarzaj",
+    "repeat": {
+      "minutes": "Co kilka minut",
+      "hourly": "Co godzinę",
+      "daily": "Codziennie",
+      "weekly": "Co tydzień",
+      "monthly": "Co miesiąc",
+      "once": "Jednorazowo"
+    },
+    "every": "Co",
+    "minutesUnit": "minut",
+    "onlyBetween": "Tylko między",
+    "windowFrom": "Od",
+    "windowTo": "Do",
+    "and": "a",
+    "onDays": "W dni (opcjonalnie)",
+    "daysHintAny": "Brak wyboru oznacza każdy dzień.",
+    "onDaysRequired": "W dni",
+    "atMinute": "W minucie",
+    "at": "O",
+    "hour": "Godzina",
+    "minute": "Minuta",
+    "weekdaysOnly": "Tylko dni robocze",
+    "monthly": {
+      "which": "Który dzień miesiąca",
+      "day": "Dzień miesiąca",
+      "lastDay": "Ostatni dzień",
+      "nth": "Dzień tygodnia w miesiącu",
+      "onDay": "W dniu",
+      "onThe": "W"
+    },
+    "nth": {
+      "1": "pierwsze",
+      "2": "drugie",
+      "3": "trzecie",
+      "4": "czwarte",
+      "last": "ostatnie"
+    },
+    "weekday": "Dzień tygodnia",
+    "shortMonths": "Miesiące bez tego dnia uruchamiają się w ostatnim dniu miesiąca.",
+    "date": "Data",
+    "timezone": "Strefa czasowa",
+    "zone": {
+      "company": "czas firmy",
+      "usesCompany": "Używa strefy czasowej firmy."
+    },
+    "summary": {
+      "minutes": "Co {every} min",
+      "minutesWeekdays": "Co {every} min w dni robocze",
+      "minutesDays": "Co {every} min, w dni: {days}",
+      "minutesWindow": "Co {every} min między {from} a {to}",
+      "minutesWindowWeekdays": "Co {every} min między {from} a {to} w dni robocze",
+      "minutesWindowDays": "Co {every} min między {from} a {to}, w dni: {days}",
+      "hourly": "Co godzinę w minucie {minute}",
+      "daily": "Codziennie o {time}",
+      "dailyWeekdays": "Każdego dnia roboczego o {time}",
+      "weekly": "Co tydzień: {days}, o {time}",
+      "monthlyDay": "{day}. dnia każdego miesiąca o {time}",
+      "monthlyLastDay": "Ostatniego dnia każdego miesiąca o {time}",
+      "monthlyNth1": "Co miesiąc: {weekday}, wystąpienie nr 1, o {time}",
+      "monthlyNth2": "Co miesiąc: {weekday}, wystąpienie nr 2, o {time}",
+      "monthlyNth3": "Co miesiąc: {weekday}, wystąpienie nr 3, o {time}",
+      "monthlyNth4": "Co miesiąc: {weekday}, wystąpienie nr 4, o {time}",
+      "monthlyNthLast": "Co miesiąc: {weekday}, ostatnie wystąpienie, o {time}",
+      "once": "Jednorazowo dnia {date} o {time}",
+      "withZone": "{summary} ({zone})",
+      "custom": "Harmonogram niestandardowy"
+    },
+    "customNote": "Tego harmonogramu nie można pokazać za pomocą kliknięć.",
+    "editCron": "Edytuj jako cron",
+    "doneEditing": "Zakończ edycję",
+    "nextRuns": "Następne uruchomienia",
+    "noRuns": "Brak nadchodzących uruchomień.",
+    "previewLoading": "Sprawdzanie na serwerze...",
+    "previewApprox": "Przybliżone: serwer potwierdzi dokładne godziny przy zapisie.",
+    "previewUnavailable": "Dla tego harmonogramu nie można wyświetlić podglądu.",
+    "advanced": "Zaawansowane: zapisano jako",
+    "saved": {
+      "cron": "Standardowy cron",
+      "calendar": "Reguła kalendarzowa",
+      "once": "Uruchomienie jednorazowe"
+    },
+    "savedAs": "Zapisany harmonogram",
+    "savedNote": {
+      "once": "Uruchamia się raz. Nie zapisuje się cyklicznego crona."
+    },
+    "cronLabel": "Wyrażenie cron",
+    "cronHint": "Tylko standardowy cron z pięcioma polami: minuta, godzina, dzień miesiąca, miesiąc, dzień tygodnia. Selektor i to pole pozostają zsynchronizowane.",
+    "cron_extension_unsupported": "{token} nie jest standardowym cronem. Użyj selektora dla harmonogramów takich jak ostatni piątek miesiąca.",
+    "invalid_timezone": "Ta strefa czasowa nie jest rozpoznawana.",
+    "once_in_past": "Ta data i godzina już minęły.",
+    "invalid_rrule": "Ta reguła kalendarzowa jest nieprawidłowa.",
+    "invalid_cron": "Wpisz standardowy cron z pięcioma polami, na przykład 0 9 * * 1-5.",
+    "invalid_generic": "Ten harmonogram jest nieprawidłowy.",
+    "conflicting_fields": "Harmonogram zapisuje się albo jako cron, albo jako reguła kalendarzowa lub uruchomienie jednorazowe, nigdy jako oba.",
+    "gatedNote": "Ostatni dzień, dzień tygodnia w miesiącu, dni 29–31 i uruchomienia jednorazowe będą dostępne po aktualizacji harmonogramatora."
   }
 }

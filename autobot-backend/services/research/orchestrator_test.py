@@ -77,7 +77,7 @@ def _make_kb(store_fact_status: str = "success") -> AsyncMock:
 def _patch_common(kb, urls, fetch_result, claims, synthesis):
     """Patch the five seams ResearchOrchestrator delegates to."""
     return (
-        patch(f"{_MODULE}.get_knowledge_base", AsyncMock(return_value=kb)),
+        patch(f"{_MODULE}.get_knowledge_base_or_none", AsyncMock(return_value=kb)),
         patch("agent_loop.search.registry.search", AsyncMock(return_value=[_FakeSearchResult(u) for u in urls])),
         patch("web_fetch.WebFetcher.fetch", AsyncMock(return_value=fetch_result)),
         patch(f"{_MODULE}.extract_claims", AsyncMock(return_value=claims)),
@@ -104,9 +104,11 @@ class TestResearchHappyPath:
         synthesis = SynthesisResult(answer="X is Y [F1].", citations=[], confidence=0.7)
         # citations reference StoredFact ids the orchestrator itself built, so
         # set the citation to match the fact the mocked _store_claim path returns.
-        from services.research.models import Citation
+        from services.research.models import ResearchFactCitation
 
-        synthesis.citations = [Citation(fact_id="fact-1", source_url="https://a.example", source_doc_id="doc-1")]
+        synthesis.citations = [
+            ResearchFactCitation(fact_id="fact-1", source_url="https://a.example", source_doc_id="doc-1")
+        ]
         fetch_result = _FakeFetchResult(success=True, markdown="X is Y because of Z.", title="Page A")
 
         patches = _patch_common(kb, ["https://a.example"], fetch_result, [claim], synthesis)
@@ -132,7 +134,7 @@ class TestResearchBudget:
         search_mock = AsyncMock(return_value=[])
 
         with (
-            patch(f"{_MODULE}.get_knowledge_base", AsyncMock(return_value=kb)),
+            patch(f"{_MODULE}.get_knowledge_base_or_none", AsyncMock(return_value=kb)),
             patch("agent_loop.search.registry.search", search_mock),
             patch(f"{_MODULE}.synthesize_answer", AsyncMock(return_value=synthesis)),
         ):
@@ -147,7 +149,7 @@ class TestResearchFailurePaths:
 
     async def test_kb_unavailable_returns_caveat_without_fetching(self):
         """When the KB is unavailable, research() short-circuits before any fetch."""
-        with patch(f"{_MODULE}.get_knowledge_base", AsyncMock(return_value=None)):
+        with patch(f"{_MODULE}.get_knowledge_base_or_none", AsyncMock(return_value=None)):
             response = await ResearchOrchestrator(llm_service=AsyncMock()).research("q")
 
         assert "unavailable" in response.answer.lower()
@@ -237,9 +239,11 @@ class TestResearchCorroborationAndPromotion:
         )
         claim = ExtractedClaim(content="X is Y.", confidence=0.8, source_url="https://a.example", source_doc_id="doc-1")
         synthesis = SynthesisResult(answer="X is Y [F1].", citations=[], confidence=0.7)
-        from services.research.models import Citation
+        from services.research.models import ResearchFactCitation
 
-        synthesis.citations = [Citation(fact_id="fact-1", source_url="https://a.example", source_doc_id="doc-1")]
+        synthesis.citations = [
+            ResearchFactCitation(fact_id="fact-1", source_url="https://a.example", source_doc_id="doc-1")
+        ]
         fetch_result = _FakeFetchResult(success=True, markdown="X is Y because of Z.", title="Page A")
 
         patches = _patch_common(kb, ["https://a.example"], fetch_result, [claim], synthesis)
@@ -273,9 +277,11 @@ class TestResearchCorroborationAndPromotion:
         )
         claim = ExtractedClaim(content="X is Y.", confidence=0.8, source_url="https://a.example", source_doc_id="doc-1")
         synthesis = SynthesisResult(answer="X is Y [F1].", citations=[], confidence=0.7)
-        from services.research.models import Citation
+        from services.research.models import ResearchFactCitation
 
-        synthesis.citations = [Citation(fact_id="fact-1", source_url="https://a.example", source_doc_id="doc-1")]
+        synthesis.citations = [
+            ResearchFactCitation(fact_id="fact-1", source_url="https://a.example", source_doc_id="doc-1")
+        ]
         fetch_result = _FakeFetchResult(success=True, markdown="X is Y because of Z.", title="Page A")
 
         patches = _patch_common(kb, ["https://a.example"], fetch_result, [claim], synthesis)
@@ -299,9 +305,11 @@ class TestResearchCorroborationAndPromotion:
         kb.search = AsyncMock(return_value=[])  # no corroborating sources found
         claim = ExtractedClaim(content="X is Y.", confidence=0.8, source_url="https://a.example", source_doc_id="doc-1")
         synthesis = SynthesisResult(answer="X is Y [F1].", citations=[], confidence=0.7)
-        from services.research.models import Citation
+        from services.research.models import ResearchFactCitation
 
-        synthesis.citations = [Citation(fact_id="fact-1", source_url="https://a.example", source_doc_id="doc-1")]
+        synthesis.citations = [
+            ResearchFactCitation(fact_id="fact-1", source_url="https://a.example", source_doc_id="doc-1")
+        ]
         fetch_result = _FakeFetchResult(success=True, markdown="X is Y because of Z.", title="Page A")
 
         patches = _patch_common(kb, ["https://a.example"], fetch_result, [claim], synthesis)
@@ -362,7 +370,7 @@ def _round_loop_patches(kb, decompose_mock=None):
     fetch_result = _FakeFetchResult(success=True, markdown="X is Y.", title="Page A")
     synthesis = SynthesisResult(answer="no facts", citations=[], confidence=0.0)
     patches = [
-        patch(f"{_MODULE}.get_knowledge_base", AsyncMock(return_value=kb)),
+        patch(f"{_MODULE}.get_knowledge_base_or_none", AsyncMock(return_value=kb)),
         patch(
             "agent_loop.search.registry.search",
             AsyncMock(return_value=[_FakeSearchResult("https://a.example")]),

@@ -280,7 +280,7 @@
         @load-performance-findings="loadPerformanceFindings"
         @load-redis-optimizations="loadRedisOptimizations"
         @load-health-score="codeIntelGetHealthScore"
-        @load-quality-score="() => codeIntelGetQualityScore(rootPath, 'python')"
+        @load-quality-score="() => codeIntelGetQualityScore()"
         @load-analysis-history="codeIntelGetAnalysisHistory"
       />
 

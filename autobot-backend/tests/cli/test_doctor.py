@@ -9,22 +9,22 @@ Issue #7371: each repair is a discrete idempotent function with a unit test.
 
 from autobot_shared.paths import project_root
 from cli.doctor import (
-    CheckResult,
+    DoctorCheckResult,
     check_env_file,
     check_redis_schemas,
-    run_doctor,
+    run_environment_doctor,
 )
 
 
 def test_check_result_ok():
-    r = CheckResult(name="test", ok=True, message="OK")
+    r = DoctorCheckResult(name="test", ok=True, message="OK")
     assert r.ok
     assert not r.fixable
 
 
 def test_check_result_fixable():
     fixed = []
-    r = CheckResult(name="test", ok=False, message="broken", fixable=True, fix=lambda: fixed.append(1))
+    r = DoctorCheckResult(name="test", ok=False, message="broken", fixable=True, fix=lambda: fixed.append(1))
     assert r.fixable
     r.fix()
     assert fixed == [1]
@@ -102,10 +102,10 @@ def test_check_env_file_missing_var(tmp_path):
 
 def test_run_doctor_all_pass(capsys, monkeypatch):
     def fake_check():
-        return CheckResult(name="fake", ok=True, message="fake: OK")
+        return DoctorCheckResult(name="fake", ok=True, message="fake: OK")
 
     monkeypatch.setattr("cli.doctor.ALL_CHECKS", [fake_check])
-    rc = run_doctor(fix=False)
+    rc = run_environment_doctor(fix=False)
     assert rc == 0
     out = capsys.readouterr().out
     assert "All checks passed" in out
@@ -113,10 +113,10 @@ def test_run_doctor_all_pass(capsys, monkeypatch):
 
 def test_run_doctor_failure_no_fix(capsys, monkeypatch):
     def fake_check():
-        return CheckResult(name="fake", ok=False, message="fake: broken", fixable=False)
+        return DoctorCheckResult(name="fake", ok=False, message="fake: broken", fixable=False)
 
     monkeypatch.setattr("cli.doctor.ALL_CHECKS", [fake_check])
-    rc = run_doctor(fix=False)
+    rc = run_environment_doctor(fix=False)
     assert rc == 1
 
 
@@ -124,7 +124,7 @@ def test_run_doctor_fix_fixable(capsys, monkeypatch):
     fixed = []
 
     def fake_check():
-        return CheckResult(
+        return DoctorCheckResult(
             name="fake",
             ok=False,
             message="broken",
@@ -133,7 +133,7 @@ def test_run_doctor_fix_fixable(capsys, monkeypatch):
         )
 
     monkeypatch.setattr("cli.doctor.ALL_CHECKS", [fake_check])
-    rc = run_doctor(fix=True)
+    rc = run_environment_doctor(fix=True)
     assert fixed == [1]
     assert rc == 0
 
@@ -142,10 +142,10 @@ def test_run_doctor_fix_manual_items_return_1(capsys, monkeypatch):
     """--fix should still return 1 when non-fixable failures remain."""
 
     def fake_check():
-        return CheckResult(name="manual", ok=False, message="manual fix needed", fixable=False)
+        return DoctorCheckResult(name="manual", ok=False, message="manual fix needed", fixable=False)
 
     monkeypatch.setattr("cli.doctor.ALL_CHECKS", [fake_check])
-    rc = run_doctor(fix=True)
+    rc = run_environment_doctor(fix=True)
     assert rc == 1
 
 

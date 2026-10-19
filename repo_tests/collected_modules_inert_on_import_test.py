@@ -184,7 +184,7 @@ def _collectable_modules(root: Path = _REPO_ROOT) -> list[Path]:
 REACH = declare(
     "collectable-modules-inert-on-import",
     discover=_collectable_modules,
-    floor=2995,  # re-pinned mid-window: population 2922, window [2722, 2922]
+    floor=3076,  # re-pinned mid-window: population 3176, window [2976, 3176] (#18729)
     growth=200,
     skips=0,
     what="modules matching pytest's python_files patterns",

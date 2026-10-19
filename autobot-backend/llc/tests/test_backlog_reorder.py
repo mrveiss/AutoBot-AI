@@ -15,6 +15,7 @@ from llc.services.backlog import BacklogService
 
 # Import harness before any model imports to register SQLite compile shims.
 from llc.tests import _e2e_harness as harness  # noqa: F401
+from testkit.canonical_gate import unauthenticated_canonical_gate
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -265,12 +266,9 @@ class TestBacklogReorderRoute:
         route's real auth-rejection path (``if not user_data: raise HTTPException``)
         actually runs. (#11142)
         """
-        from unittest.mock import patch  # noqa: PLC0415
-
         client, patcher = self._client(install_auth=False)
         try:
-            with patch("api.user_management.dependencies.get_auth_middleware") as mock_gam:
-                mock_gam.return_value.get_user_from_request.return_value = None
+            with unauthenticated_canonical_gate():
                 company_id = str(uuid.uuid4())
                 ids = [str(uuid.uuid4())]
                 resp = client.post(

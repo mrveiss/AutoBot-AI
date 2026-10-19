@@ -14,17 +14,17 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from memory.storage.general_storage import LEGACY_UNSCOPED_OWNER, OwnerScopeError, _require_user_id
-from multimodal_processor.models import ModalityType, ProcessingIntent, ProcessingResult
+from multimodal_processor.models import ModalityType, MultimodalProcessingIntent, MultimodalResult
 from multimodal_processor.processor import MultiModalProcessor
 from multimodal_processor.types import PersistenceOutcome
 
 
 def _result(user_id=None):
-    return ProcessingResult(
+    return MultimodalResult(
         result_id="r-1",
         input_id="i-1",
         modality_type=ModalityType.TEXT,
-        intent=ProcessingIntent.DECISION_MAKING,
+        intent=MultimodalProcessingIntent.DECISION_MAKING,
         success=True,
         confidence=0.9,
         result_data={},
@@ -118,14 +118,14 @@ class TestProcessStampsTheOwner:
     @pytest.mark.asyncio
     async def test_process_stamps_the_result_from_the_input(self):
         """The stamp is what carries the owner to _store_result."""
-        from multimodal_processor.models import ModalityType, MultiModalInput, ProcessingIntent
+        from multimodal_processor.models import ModalityType, MultiModalInput, MultimodalProcessingIntent
         from multimodal_processor.processor import MultiModalProcessor
 
         proc = MultiModalProcessor()
         modal_input = MultiModalInput(
             input_id="i-1",
             modality_type=ModalityType.TEXT,
-            intent=ProcessingIntent.DECISION_MAKING,
+            intent=MultimodalProcessingIntent.DECISION_MAKING,
             data="hello",
             user_id="user-7",
         )
@@ -192,7 +192,7 @@ class TestAStorageFailureIsVisibleToTheCaller:
         modal_input = MultiModalInput(
             input_id="i-1",
             modality_type=ModalityType.TEXT,
-            intent=ProcessingIntent.DECISION_MAKING,
+            intent=MultimodalProcessingIntent.DECISION_MAKING,
             data="hello",
             user_id="user-7",
         )

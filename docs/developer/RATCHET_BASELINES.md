@@ -67,12 +67,11 @@ declares `EXCLUDED_PREFIXES` **and** pins it with
 scope and the hook's `exclude:` diverge. That pairing is what makes the exclusion
 a decision rather than an accident.
 
-`duplication-guard.yml`'s SLM scope is the same shape (#16401): it excludes
-`autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/`, the Ansible
-mirror that `ansible/tests/detect_agent_code_drift_test.py` already forces
-byte-identical to its source, so jscpd stopped counting the mandatory copy as a
-clone of the original. `duplication_guard_excludes_agent_mirror_test.py` fails
-if that ignore entry disappears or widens past the one path.
+`duplication-guard.yml`'s SLM scope once carried the same shape (#16401), an
+exclusion for the Ansible mirror of `slm/agent/`. The mirror is gone (#18548: the
+`slm_agent` role deploys `autobot-slm-backend/slm/agent/` itself), the exclusion
+with it, and `ansible/tests/slm_agent_deploys_source_tree_18548_test.py` fails if
+a copy is ever tracked under `roles/` again.
 
 ### 3. Derive the population a second way before freezing it
 
@@ -439,6 +438,24 @@ has it too, via a different mechanism: `detect-hardcoded-values.sh
 on a baseline entry that no longer matches anything in a fresh scan. Neither
 needed new work here — this section exists so the next guard author checks
 rather than assumes.
+
+## Direct Redis constructors (#18553)
+
+`repo_tests/redis_direct_constructor_18553_test.py` fails on a NEW direct Redis client
+construction (`redis.Redis(`, `redis.asyncio.Redis(`, `StrictRedis(`, `from_url(`, a Redis
+`ConnectionPool(`) outside `autobot_shared/redis*`; `repo_tests/redis_direct_constructor_baseline_18553.py`
+freezes today's sites with a verdict each (EXCEPTION + reason, or MIGRATE + slice).
+
+- **Boundary:** tracked `.py` and `.sh` under the guard's `SCAN_ROOTS`, tests excluded. Not seen: a
+  client a library builds from a URI (LangGraph checkpointer, Celery) and Python embedded in other
+  file types. Declared in the guard docstring and the baseline header, pinned by the reach floor.
+- **Matcher:** AST with the file's own `redis` imports resolved (so SQLite/Ollama pools do not match);
+  shell scripts through `tools.lint._comment_syntax`. A comment or string mentioning a constructor is not a site.
+- **Population derived a second way** (`git grep` over the same roots, sets compared): 32 files by grep, 28 by
+  the AST; the 4-file difference is files that only MENTION `redis.Redis(` in a string or docstring.
+- **Shrink:** counts are exact, so a removed site is stale until its entry is lowered; `FROZEN_TOTAL` may only
+  go down. The older `no-direct-redis` pre-commit hook (staged product `.py` only, `# noqa: redis` opt-out)
+  is kept: the guard covers what it skips (infrastructure scripts, shell, `from_url`, pools) but does not replace its commit-time check.
 
 ## Checklist for a new ratchet
 

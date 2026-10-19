@@ -45,6 +45,7 @@ at their own ``exp``; #12924's window closes as soon as they do.
 import asyncio
 import logging
 import time
+from collections.abc import Awaitable, Callable
 
 from redis.exceptions import RedisError
 
@@ -103,6 +104,28 @@ async def _epoch_store():
     return redis
 
 
+# #18663: a process may keep the epoch in its own durable store instead of Redis. The SLM
+# does (services/password_epoch_store.py): it deploys Redis, so it must not need it. The
+# rule below and its fail-closed handling are the same whichever store answers; the
+# override must keep the contract -- get raises RevocationCheckUnavailable when it cannot
+# answer, set returns None (logged) when it could not record. Default: Redis.
+_store_override: tuple[Callable[[str], Awaitable[int | None]], Callable[..., Awaitable[int | None]]] | None = None
+
+
+def use_epoch_store(
+    *, get_epoch: Callable[[str], Awaitable[int | None]], set_epoch: Callable[..., Awaitable[int | None]]
+) -> None:
+    """Route this process's epoch reads and writes to another store (#18663)."""
+    global _store_override
+    _store_override = (get_epoch, set_epoch)
+
+
+def reset_epoch_store() -> None:
+    """Back to the default (Redis) store -- for tests and teardown (#18663)."""
+    global _store_override
+    _store_override = None
+
+
 async def set_password_epoch(subject: str, *, now: int | None = None) -> int | None:
     """Mark *subject*'s password as changed now, revoking older tokens.
 
@@ -114,6 +137,8 @@ async def set_password_epoch(subject: str, *, now: int | None = None) -> int | N
         subject: The token subject (``sub`` claim) whose sessions to revoke.
         now: Override for the epoch timestamp, for tests.
     """
+    if _store_override is not None:
+        return await _store_override[1](subject, now=now)
     epoch = int(time.time()) if now is None else now
 
     redis = await get_async_redis_client()
@@ -147,6 +172,8 @@ async def get_password_epoch(subject: str) -> int | None:
         RevocationCheckUnavailable: Redis could not answer (#16411), or the
             stored marker is not an integer (#16422).
     """
+    if _store_override is not None:
+        return await _store_override[0](subject)
     redis = await _epoch_store()
     try:
         raw = await redis.get(_epoch_key(subject))

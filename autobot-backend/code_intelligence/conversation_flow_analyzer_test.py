@@ -24,17 +24,17 @@ from code_intelligence.conversation_analysis import (
     AnalysisResult,
     Bottleneck,
     BottleneckType,
-    ConversationFlow,
     ConversationFlowAnalyzer,
     ConversationIntentClassifier,
     ConversationMessage,
+    ConversationOptimizationType,
     FlowPattern,
     FlowState,
     IntentCategory,
     Optimization,
-    OptimizationType,
     ResponseClassifier,
     ResponseType,
+    SessionConversationFlow,
     analyze_conversations,
     classify_intent,
     classify_response,
@@ -400,11 +400,11 @@ class TestConversationMessage:
 
 
 class TestConversationFlow:
-    """Tests for ConversationFlow dataclass."""
+    """Tests for SessionConversationFlow dataclass."""
 
     def test_create_flow(self):
         """Test creating a conversation flow."""
-        flow = ConversationFlow(
+        flow = SessionConversationFlow(
             session_id="test_session",
             messages=[],
             final_state=FlowState.COMPLETED,
@@ -416,7 +416,7 @@ class TestConversationFlow:
 
     def test_default_values(self):
         """Test default values for optional fields."""
-        flow = ConversationFlow(session_id="test", messages=[])
+        flow = SessionConversationFlow(session_id="test", messages=[])
         assert flow.final_state == FlowState.INITIATED
         assert flow.turn_count == 0
         assert flow.error_count == 0
@@ -468,14 +468,14 @@ class TestOptimization:
     def test_create_optimization(self):
         """Test creating an optimization suggestion."""
         opt = Optimization(
-            optimization_type=OptimizationType.CACHING,
+            optimization_type=ConversationOptimizationType.CACHING,
             description="Cache common responses",
             impact="high",
             effort="medium",
             affected_patterns=["pattern_1"],
             estimated_improvement="20% latency reduction",
         )
-        assert opt.optimization_type == OptimizationType.CACHING
+        assert opt.optimization_type == ConversationOptimizationType.CACHING
         assert opt.impact == "high"
 
 
@@ -577,7 +577,7 @@ class TestConversationFlowAnalyzer:
         # With frequent patterns, should suggest caching
         if result.flow_patterns:
             opt_types = [o.optimization_type for o in result.optimizations]
-            assert OptimizationType.CACHING in opt_types
+            assert ConversationOptimizationType.CACHING in opt_types
 
     def test_health_score_calculation(self, analyzer, sample_conversation):
         """Test health score calculation."""
@@ -828,9 +828,9 @@ class TestIntegration:
         assert result.analysis_timestamp is not None
 
     def test_analysis_with_prebuilt_flows(self, analyzer):
-        """Test analysis with pre-built ConversationFlow objects."""
+        """Test analysis with pre-built SessionConversationFlow objects."""
         flows = [
-            ConversationFlow(
+            SessionConversationFlow(
                 session_id="flow_1",
                 messages=[
                     ConversationMessage(role="user", content="Hello"),
@@ -840,7 +840,7 @@ class TestIntegration:
                 successful=True,
                 intent_sequence=[IntentCategory.GREETING],
             ),
-            ConversationFlow(
+            SessionConversationFlow(
                 session_id="flow_2",
                 messages=[
                     ConversationMessage(role="user", content="Hello"),

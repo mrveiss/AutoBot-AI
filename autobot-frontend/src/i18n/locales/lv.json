@@ -4818,8 +4818,8 @@
     "settings": "Terminal Settings",
     "fontSize": "Font Size",
     "theme": "Theme",
-    "dark": "Dark",
-    "light": "Light",
+    "dark": "Tumšs",
+    "light": "Gaišs",
     "cursorStyle": "Cursor Style",
     "block": "Block",
     "underline": "Underline",
@@ -5091,7 +5091,6 @@
     "role": "Loma:",
     "lastLogin": "Pēdējā pieteikšanās:",
     "preferences": "Iestatījumi",
-    "theme": "Tēma",
     "notifications": "Paziņojumi",
     "emailNotifications": "E-pasta paziņojumi",
     "browserNotifications": "Pārlūka paziņojumi",
@@ -5101,7 +5100,6 @@
     "showTooltips": "Rādīt padomus",
     "enableAnimations": "Iespējot animācijas",
     "savePreferences": "Saglabāt iestatījumus",
-    "appearance": "Izskats",
     "voiceChatDisplay": "Balss tērzēšanas displejs",
     "fullScreen": "Pilnekrāns",
     "sidePanel": "Sānu panelis",
@@ -5117,9 +5115,6 @@
     "pwTooShort": "Parolei jābūt vismaz 8 rakstzīmēm",
     "pwChanged": "Parole veiksmīgi nomainīta!",
     "never": "Nekad",
-    "themeLight": "Gaišs",
-    "themeDark": "Tumšs",
-    "themeAuto": "Automātisks",
     "tabDevices": "Tab devices"
   },
   "charts": {
@@ -5792,11 +5787,6 @@
       "postExecutionFailed": "Komanda tika izpildīta, taču nākamais solis neizdevās. Tās izvade tiek rādīta; daži atjauninājumi var trūkt.",
       "enterComment": "Please enter a comment before submitting"
     },
-    "darkModeToggle": {
-      "switchToLight": "Switch to light mode",
-      "switchToDark": "Switch to dark mode",
-      "toggleDarkMode": "Toggle dark mode"
-    },
     "dataTable": {
       "sortBy": "Sort by {column}",
       "actions": "Actions",
@@ -5918,8 +5908,8 @@
       "selectTheme": "Select theme",
       "switchToLight": "Switch to light mode",
       "switchToDark": "Switch to dark mode",
-      "light": "Light",
-      "dark": "Dark"
+      "light": "Gaišs",
+      "dark": "Tumšs"
     },
     "toastContainer": {
       "notifications": "Notifications",
@@ -5955,10 +5945,6 @@
       "actions": "Darbības",
       "noDataAvailable": "Nav pieejamu datu",
       "selectRow": "Atlasīt rindu {row}"
-    },
-    "panel": {
-      "collapse": "Sakļaut paneli",
-      "expand": "Izvērst paneli"
     }
   },
   "views": {
@@ -7944,7 +7930,6 @@
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents",
     "agentActivity": "Aģenta aktivitāte",
-    "switchLanguage": "Switch language",
     "openMainMenu": "Open main menu",
     "skipToContent": "Pāriet uz galveno saturu",
     "services": "Services",
@@ -8043,7 +8028,8 @@
       "tip": "Minimāls interfeiss — paslēpt papildu funkcijas",
       "announceMinimal": "Minimālais interfeiss ieslēgts. Papildu funkcijas paslēptas.",
       "announceFull": "Pilnais interfeiss ieslēgts. Parādītas visas funkcijas."
-    }
+    },
+    "llcLedger": "Aģentu žurnāls"
   },
   "llcCompanyStatus": {
     "showArchived": "Rādīt arhivētos",
@@ -8931,6 +8917,72 @@
       "retry": "Mēģināt vēlreiz",
       "loadingItem": "Ielādē darba vienumu…",
       "itemLoadFailed": "Neizdevās ielādēt šo darba vienumu"
+    },
+    "ledger": {
+      "title": "Aģentu žurnāls",
+      "subtitle": "Kurš šajā uzņēmumā pie kā strādā un kurš gaida.",
+      "tabsAria": "Žurnāla skati",
+      "tabs": {
+        "now": "Pašlaik strādā",
+        "claims": "Pieprasījumi",
+        "contention": "Konkurence",
+        "activity": "Darbības"
+      },
+      "col": {
+        "agent": "Aģents",
+        "kind": "Veids",
+        "status": "Statuss",
+        "task": "Pašreizējais uzdevums",
+        "detail": "Sīkāk",
+        "scope": "Tvērums",
+        "mode": "Režīms",
+        "intent": "Nolūks",
+        "expires": "Beidzas",
+        "renewals": "Atjaunojumi"
+      },
+      "busy": "Aizņemts",
+      "idle": "Brīvs",
+      "peerMessages": "Neizlasītās ziņas",
+      "idleSubscribers": "Dīkstāves abonementi",
+      "pendingFor": "{n} gaida lietotāju {name}",
+      "sentBy": "no {names}",
+      "waitsForIdle": "{who} gaida, kamēr {target} būs dīkstāvē",
+      "heldBy": "Tur {agent}",
+      "waitlistAria": "Gaidīšanas rinda secībā",
+      "silenceMeansHold": "Lūgums nav atbrīvošana: klusēšana nozīmē turēšanu, un neatjaunots pieprasījums beidzas pats.",
+      "ask": "Lūgt turētāju atbrīvot",
+      "askAria": "Lūgt {scope} turētāju to atbrīvot",
+      "conflicts": "Konflikti",
+      "recent": "Nesenās darbības",
+      "conflict": {
+        "release_refused": "Atbrīvošana tika atteikta",
+        "claim_expired": "Pieprasījums beidzās, kamēr tika turēts",
+        "yield_unanswered": "Lūgums atbrīvot palika bez atbildes",
+        "claim_lapsed_during_action": "Pieprasījums beidzās darbības laikā"
+      },
+      "empty": {
+        "presence": "Neviens aģents nav pieteicies",
+        "peerMessages": "Nav neizlasītu ziņu",
+        "idleSubscribers": "Nav dīkstāves abonementu",
+        "claims": "Nav pieprasījumu",
+        "contention": "Nekas netiek konkurēts",
+        "conflicts": "Nav konfliktu",
+        "activity": "Nav nesenu darbību"
+      },
+      "state": {
+        "loading": "Lasa žurnālu…",
+        "unavailableTitle": "Neizdevās nolasīt žurnālu",
+        "unavailableBody": "Krātuve {source} neatbildēja. Tas nav tas pats, kas tukšs saraksts.",
+        "errorTitle": "Ielādējot šo sadaļu, radās kļūda"
+      },
+      "askState": {
+        "sending": "Sūta…",
+        "sent": "Lūgums nosūtīts — lemj turētājs; klusēšana nozīmē turēšanu.",
+        "tooSoon": "Jūs tikko jau lūdzāt par šo pieprasījumu; mēģiniet vēlreiz pēc minūtes.",
+        "notFound": "Šis uzdevums vairs netur šo pieprasījumu — atsvaidziniet, lai redzētu, kurš to tur tagad.",
+        "unavailable": "Neizdevās sasniegt žurnālu; nekas netika nosūtīts.",
+        "error": "Radās kļūda, un piegādi nevarēja apstiprināt. Atsvaidziniet, lai redzētu, vai rezervācija joprojām ir spēkā."
+      }
     }
   },
   "code": {
@@ -9745,5 +9797,104 @@
       "unreachableAsOf": "Nav sasniedzams — pakalpojumu statuss nezināms — statuss {time}"
     },
     "lastKnown": "{text} (pēdējais zināmais)"
+  },
+  "schedule": {
+    "title": "Grafiks",
+    "repeats": "Atkārtojas",
+    "repeat": {
+      "minutes": "Ik pēc dažām minūtēm",
+      "hourly": "Katru stundu",
+      "daily": "Katru dienu",
+      "weekly": "Katru nedēļu",
+      "monthly": "Katru mēnesi",
+      "once": "Vienreiz"
+    },
+    "every": "Ik pēc",
+    "minutesUnit": "minūtēm",
+    "onlyBetween": "Tikai starp",
+    "windowFrom": "No",
+    "windowTo": "Līdz",
+    "and": "un",
+    "onDays": "Dienās (nav obligāti)",
+    "daysHintAny": "Ja nekas nav izvēlēts, ir katra diena.",
+    "onDaysRequired": "Dienās",
+    "atMinute": "Minūtē",
+    "at": "Plkst.",
+    "hour": "Stunda",
+    "minute": "Minūte",
+    "weekdaysOnly": "Tikai darbdienās",
+    "monthly": {
+      "which": "Kura mēneša diena",
+      "day": "Mēneša diena",
+      "lastDay": "Pēdējā diena",
+      "nth": "Nedēļas diena mēnesī",
+      "onDay": "Dienā",
+      "onThe": "Šajā"
+    },
+    "nth": {
+      "1": "pirmajā",
+      "2": "otrajā",
+      "3": "trešajā",
+      "4": "ceturtajā",
+      "last": "pēdējā"
+    },
+    "weekday": "Nedēļas diena",
+    "shortMonths": "Mēnešos bez šīs dienas darbība notiek mēneša pēdējā dienā.",
+    "date": "Datums",
+    "timezone": "Laika josla",
+    "zone": {
+      "company": "uzņēmuma laiks",
+      "usesCompany": "Izmanto uzņēmuma laika joslu."
+    },
+    "summary": {
+      "minutes": "Ik pēc {every} minūtēm",
+      "minutesWeekdays": "Ik pēc {every} minūtēm darbdienās",
+      "minutesDays": "Ik pēc {every} minūtēm: {days}",
+      "minutesWindow": "Ik pēc {every} minūtēm no {from} līdz {to}",
+      "minutesWindowWeekdays": "Ik pēc {every} minūtēm no {from} līdz {to} darbdienās",
+      "minutesWindowDays": "Ik pēc {every} minūtēm no {from} līdz {to}: {days}",
+      "hourly": "Katru stundu {minute}. minūtē",
+      "daily": "Katru dienu plkst. {time}",
+      "dailyWeekdays": "Katru darbdienu plkst. {time}",
+      "weekly": "Katru nedēļu: {days}, plkst. {time}",
+      "monthlyDay": "Katra mēneša {day}. datumā plkst. {time}",
+      "monthlyLastDay": "Katra mēneša pēdējā dienā plkst. {time}",
+      "monthlyNth1": "Katra mēneša pirmā {weekday}, plkst. {time}",
+      "monthlyNth2": "Katra mēneša otrā {weekday}, plkst. {time}",
+      "monthlyNth3": "Katra mēneša trešā {weekday}, plkst. {time}",
+      "monthlyNth4": "Katra mēneša ceturtā {weekday}, plkst. {time}",
+      "monthlyNthLast": "Katra mēneša pēdējā {weekday}, plkst. {time}",
+      "once": "Vienreiz {date} plkst. {time}",
+      "withZone": "{summary} ({zone})",
+      "custom": "Pielāgots grafiks"
+    },
+    "customNote": "Šo grafiku nevar parādīt ar klikšķiem.",
+    "editCron": "Rediģēt kā cron",
+    "doneEditing": "Pabeigt rediģēšanu",
+    "nextRuns": "Nākamās izpildes",
+    "noRuns": "Nav gaidāmu izpilžu.",
+    "previewLoading": "Notiek pārbaude serverī...",
+    "previewApprox": "Aptuveni: serveris precīzos laikus apstiprinās saglabājot.",
+    "previewUnavailable": "Šim grafikam priekšskatījums nav pieejams.",
+    "advanced": "Papildu: saglabāts kā",
+    "saved": {
+      "cron": "Standarta cron",
+      "calendar": "Kalendāra noteikums",
+      "once": "Vienreizēja izpilde"
+    },
+    "savedAs": "Saglabātais grafiks",
+    "savedNote": {
+      "once": "Darbojas vienreiz. Atkārtots cron netiek saglabāts."
+    },
+    "cronLabel": "Cron izteiksme",
+    "cronHint": "Tikai standarta cron ar pieciem laukiem: minūte, stunda, mēneša diena, mēnesis, nedēļas diena. Atlasītājs un šis lauks paliek sinhronizēti.",
+    "cron_extension_unsupported": "{token} nav standarta cron. Izmantojiet atlasītāju tādiem grafikiem kā mēneša pēdējā piektdiena.",
+    "invalid_timezone": "Šī laika josla netiek atpazīta.",
+    "once_in_past": "Šis datums un laiks jau ir pagājis.",
+    "invalid_rrule": "Šis kalendāra noteikums nav derīgs.",
+    "invalid_cron": "Ievadiet standarta cron ar pieciem laukiem, piemēram, 0 9 * * 1-5.",
+    "invalid_generic": "Šis grafiks nav derīgs.",
+    "conflicting_fields": "Grafiks tiek saglabāts vai nu kā cron, vai kā kalendāra noteikums vai vienreizēja izpilde, nekad abi.",
+    "gatedNote": "Pēdējā diena, nedēļas diena mēnesī, 29.–31. datums un vienreizējas izpildes būs pieejamas pēc plānotāja atjaunināšanas."
   }
 }

@@ -19,19 +19,19 @@ from .detector import CrossLanguagePatternDetector
 from .extractors import PythonPatternExtractor, TypeScriptPatternExtractor
 from .models import (
     APIContractMismatch,
+    CrossLangMatch,
+    CrossLangPatternType,
     CrossLanguageAnalysis,
     CrossLanguagePattern,
     DTOMismatch,
-    PatternMatch,
-    PatternType,
     ValidationDuplication,
 )
 
 __all__ = [
     "CrossLanguagePatternDetector",
     "CrossLanguagePattern",
-    "PatternMatch",
-    "PatternType",
+    "CrossLangMatch",
+    "CrossLangPatternType",
     "CrossLanguageAnalysis",
     "DTOMismatch",
     "ValidationDuplication",

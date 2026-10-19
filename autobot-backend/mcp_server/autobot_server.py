@@ -39,6 +39,7 @@ Observability:
 """
 
 import asyncio
+import hashlib
 import json
 import secrets
 import time
@@ -47,7 +48,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from pydantic import ValidationError as PydanticValidationError
 
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from autobot_shared.ssot_constants import QueryDefaults
@@ -61,8 +64,8 @@ logger = get_logger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-_RATE_LIMIT = 50  # requests per 60-second window per token
-_WINDOW_SECONDS = 60.0
+_RATE_LIMIT = env_int_clamped("AUTOBOT_MCP_SERVER_RATE_LIMIT", 50, min_v=1, max_v=1_000_000)  # per window, per token
+_WINDOW_SECONDS = 60
 
 # Legacy scope → tool prefix (simple token format "secret:kb,memory,agents")
 _SCOPE_MAP: Dict[str, str] = {
@@ -141,24 +144,9 @@ def _stdio_bearer_token() -> str:
 # ---------------------------------------------------------------------------
 
 
-class _TokenBucket:
-    """Per-token sliding-window request counter."""
-
-    __slots__ = ("_tokens", "_window_start")
-
-    def __init__(self) -> None:
-        self._tokens = 0
-        self._window_start = time.monotonic()
-
-    def allow(self) -> bool:
-        now = time.monotonic()
-        if now - self._window_start >= _WINDOW_SECONDS:
-            self._tokens = 0
-            self._window_start = now
-        if self._tokens >= _RATE_LIMIT:
-            return False
-        self._tokens += 1
-        return True
+# One global Redis-backed count per token prefix, shared by every worker (#18087);
+# fails open when Redis is down. The key is hashed so no token material reaches Redis.
+_post_auth_limiter = RateLimiter("mcp:server", log_label="mcp:server")
 
 
 # ---------------------------------------------------------------------------
@@ -348,9 +336,6 @@ class AutoBotMCPServer:
 
     TOOLS: Dict[str, Dict[str, Any]] = _TOOLS
 
-    def __init__(self) -> None:
-        self._buckets: Dict[str, _TokenBucket] = {}
-
     # ------------------------------------------------------------------
     # Auth helpers
     # ------------------------------------------------------------------
@@ -533,10 +518,9 @@ class AutoBotMCPServer:
     # Rate limiting
     # ------------------------------------------------------------------
 
-    def _is_rate_limited(self, token_key: str) -> bool:
-        if token_key not in self._buckets:
-            self._buckets[token_key] = _TokenBucket()
-        return not self._buckets[token_key].allow()
+    async def _is_rate_limited(self, token_key: str) -> bool:
+        digest = hashlib.sha256(token_key.encode("utf-8")).hexdigest()
+        return not await _post_auth_limiter.acquire_window(digest, _RATE_LIMIT, _WINDOW_SECONDS)
 
     # ------------------------------------------------------------------
     # Public dispatch
@@ -576,16 +560,16 @@ class AutoBotMCPServer:
 
         # Bucket key is captured before _authenticate pops run_jwt out of params.
         run_jwt_preview = params.get("run_jwt") if isinstance(params, dict) else None
-        rate_key = (run_jwt_preview or auth_token or "")[:16]
+        rate_key = run_jwt_preview or auth_token or ""
 
         scopes, using_run_jwt, auth_error = await self._authenticate(params, auth_token, req_id, ip)
         if auth_error is not None:
             return auth_error
 
-        # Post-auth bucket stays keyed on the token prefix: it is only reachable
+        # Post-auth bucket is keyed on the whole token (hashed in _is_rate_limited): it is only reachable
         # by an authenticated caller, so the key space cannot be grown by an
         # anonymous attacker (#13268).
-        if self._is_rate_limited(rate_key):
+        if await self._is_rate_limited(rate_key):
             logger.warning("mcp_auth: post-auth rate limit exceeded for method=%s", method or "<none>")
             return _err(-32029, f"Rate limit exceeded ({_RATE_LIMIT} req/{int(_WINDOW_SECONDS)}s)", req_id)
 

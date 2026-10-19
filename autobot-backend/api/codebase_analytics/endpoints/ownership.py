@@ -22,7 +22,7 @@ from fastapi.responses import JSONResponse
 from autobot_shared.error_boundaries import ROUTE_DEADLINE_GRACE, ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
-from .shared import resolve_project_root, resolve_scan_root
+from .shared import resolve_git_repo_root, resolve_scan_root
 
 logger = get_logger(__name__)
 
@@ -72,7 +72,7 @@ def _get_ownership_analyzer():
 
 def _get_project_root() -> str:
     """Get project root path — delegates to shared resolver (#10730)."""
-    return resolve_project_root()
+    return resolve_git_repo_root()
 
 
 def _escapes_root(path: str, project_root: str) -> bool:

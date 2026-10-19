@@ -18,6 +18,7 @@ import asyncio
 import logging
 import os
 
+from autobot_shared.env_registry import env
 from config import settings
 from services.database import db_service
 from services.reconciler import reconciler_service
@@ -76,15 +77,32 @@ async def _heartbeat_self_managed_nodes() -> None:
 # Placement of the container-less roles is by affinity (backend->ai-stack/none here,
 # worker->browser, etc.); postgres/celery-beat map to canonical postgres/scheduler
 # roles added in #9853.
-# ip MUST match the ipv4_address in docker-compose.yml (docker DNS only returns the
-# app-tier IP, so the static value is authoritative).
-_SLM_MGMT_IP = "172.30.0.16"  # autobot-slm on autobot-mgmt (matches docker-compose.yml)
+# Addresses on autobot-mgmt are AUTOBOT_DOCKER_MGMT_PREFIX (first three octets, picked
+# per host by docker/generate-secrets.sh, #16833) + "host", which MUST match that
+# service's ipv4_address host number in docker-compose.yml (docker DNS only returns
+# the app-tier IP, so the compose address is authoritative).
+_SLM_MGMT_HOST = 16  # autobot-slm
+
+
+def mgmt_ip(host: int) -> str:
+    """The autobot-mgmt address of compose host number `host` (#16833)."""
+    prefix = env("AUTOBOT_DOCKER_MGMT_PREFIX").strip()
+    if not prefix:
+        raise RuntimeError("AUTOBOT_DOCKER_MGMT_PREFIX is unset: run docker/generate-secrets.sh (#16833)")
+    return f"{prefix}.{host}"
+
+
+def slm_mgmt_ip() -> str:
+    """The SLM manager's own autobot-mgmt address (#9761, #16833)."""
+    return mgmt_ip(_SLM_MGMT_HOST)
+
+
 _COMPOSE_NODE_SPECS: list[dict] = [
     {
         "id": "autobot-backend",
         "running": ["backend"],
         "assigned": ["ai-stack"],
-        "ip": "172.30.0.13",
+        "host": 13,
         "port": 8001,
         "protocol": "http",
         "path": "/api/health",
@@ -93,7 +111,7 @@ _COMPOSE_NODE_SPECS: list[dict] = [
         "id": "autobot-worker",
         "running": ["celery"],
         "assigned": ["browser-service"],
-        "ip": "172.30.0.14",
+        "host": 14,
         "port": None,
         "protocol": "tcp",
         "path": None,
@@ -102,7 +120,7 @@ _COMPOSE_NODE_SPECS: list[dict] = [
         "id": "autobot-celery-beat",
         "running": ["scheduler"],
         "assigned": ["autobot-llm-cpu", "autobot-llm-gpu"],
-        "ip": "172.30.0.15",
+        "host": 15,
         "port": None,
         "protocol": "tcp",
         "path": None,
@@ -111,7 +129,7 @@ _COMPOSE_NODE_SPECS: list[dict] = [
         "id": "autobot-frontend",
         "running": ["frontend"],
         "assigned": ["tts-worker"],
-        "ip": "172.30.0.17",
+        "host": 17,
         "port": 80,
         "protocol": "http",
         "path": "/",
@@ -120,7 +138,7 @@ _COMPOSE_NODE_SPECS: list[dict] = [
         "id": "autobot-postgres",
         "running": ["postgres"],
         "assigned": ["npu-worker"],
-        "ip": "172.30.0.11",
+        "host": 11,
         "port": 5432,
         "protocol": "tcp",
         "path": None,
@@ -129,7 +147,7 @@ _COMPOSE_NODE_SPECS: list[dict] = [
         "id": "autobot-redis",
         "running": ["redis"],
         "assigned": [],
-        "ip": "172.30.0.10",
+        "host": 10,
         "port": 6379,
         "protocol": "redis",
         "path": None,
@@ -138,7 +156,7 @@ _COMPOSE_NODE_SPECS: list[dict] = [
         "id": "autobot-chromadb",
         "running": ["chromadb"],
         "assigned": [],
-        "ip": "172.30.0.12",
+        "host": 12,
         "port": 8000,
         "protocol": "http",
         "path": "/api/v2/heartbeat",
@@ -221,7 +239,7 @@ async def _ensure_compose_nodes() -> None:
             all_roles = running + spec["assigned"]  # + mandatory roles parked here (yellow)
             existing = (await session.execute(select(Node).where(Node.node_id == node_id))).scalar_one_or_none()
             if existing:
-                existing.ip_address = spec["ip"]
+                existing.ip_address = mgmt_ip(spec["host"])
                 existing.roles = all_roles
                 existing.detected_roles = running
             else:
@@ -230,7 +248,7 @@ async def _ensure_compose_nodes() -> None:
                         node_id=node_id,
                         ansible_name=node_id,
                         hostname=node_id,
-                        ip_address=spec["ip"],
+                        ip_address=mgmt_ip(spec["host"]),
                         auth_method="none",
                         status=NodeStatus.PENDING.value,
                         roles=all_roles,

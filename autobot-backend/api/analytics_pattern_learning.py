@@ -29,10 +29,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from api.analytics_pattern_learning_records import MIN_FEEDBACK_FOR_CONFIDENCE, FeedbackRecord, PatternStats
 from api.schemas_analytics import (
     ActiveLearningQuery,
-    ConfidenceLevel,
     ConfidenceScore,
     FeedbackType,
     LearningPhase,
+    PatternConfidenceLevel,
     PatternDefinition,
     PatternFeedback,
     PatternLearningActiveLearningResponse,
@@ -63,11 +63,11 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 # Confidence thresholds
 CONFIDENCE_THRESHOLDS = {
-    ConfidenceLevel.VERY_LOW: 0.0,
-    ConfidenceLevel.LOW: 0.2,
-    ConfidenceLevel.MEDIUM: 0.4,
-    ConfidenceLevel.HIGH: 0.6,
-    ConfidenceLevel.VERY_HIGH: 0.8,
+    PatternConfidenceLevel.VERY_LOW: 0.0,
+    PatternConfidenceLevel.LOW: 0.2,
+    PatternConfidenceLevel.MEDIUM: 0.4,
+    PatternConfidenceLevel.HIGH: 0.6,
+    PatternConfidenceLevel.VERY_HIGH: 0.8,
 }
 
 # Feedback weight factors
@@ -423,7 +423,7 @@ class PatternLearningEngine:
             score = stats.confidence_score
 
             # Determine confidence level
-            level = ConfidenceLevel.VERY_LOW
+            level = PatternConfidenceLevel.VERY_LOW
             for lvl, threshold in sorted(CONFIDENCE_THRESHOLDS.items(), key=lambda x: x[1], reverse=True):
                 if score >= threshold:
                     level = lvl

@@ -11,7 +11,7 @@ components (backend, SLM backend, standalone scripts) share the same code.
 
 Package Structure:
 - types.py: Enums (RedisDatabase, ConnectionState) and database mapping
-- config.py: RedisConfig, RedisConfigLoader, PoolConfig
+- config.py: RedisDbConfig, RedisConfigLoader, PoolConfig
 - statistics.py: RedisStats, PoolStatistics, ManagerStats, ConnectionMetrics
 - connection_manager.py: RedisConnectionManager class
 - cache_wrapper.py: RedisCache — thin JSON-serialising wrapper (#3547)
@@ -19,7 +19,7 @@ Package Structure:
 Usage:
     from autobot_shared.redis_management import (
         RedisDatabase, ConnectionState,
-        RedisConfig, RedisConfigLoader, PoolConfig,
+        RedisDbConfig, RedisConfigLoader, PoolConfig,
         RedisStats, PoolStatistics, ManagerStats, ConnectionMetrics,
         RedisConnectionManager,
         DATABASE_MAPPING,
@@ -31,7 +31,7 @@ Usage:
 from .cache_wrapper import RedisCache
 
 # Configuration classes
-from .config import PoolConfig, RedisConfig, RedisConfigLoader
+from .config import PoolConfig, RedisConfigLoader, RedisDbConfig
 
 # Connection manager
 from .connection_manager import RedisConnectionManager
@@ -50,7 +50,7 @@ __all__ = [
     # Constants
     "DATABASE_MAPPING",
     # Configuration
-    "RedisConfig",
+    "RedisDbConfig",
     "RedisConfigLoader",
     "PoolConfig",
     # Statistics

@@ -34,7 +34,7 @@ class RoleDefinition:
 
 
 @dataclass
-class RoleStatus:
+class RoleDetection:
     """Detection status for a role."""
 
     path_exists: bool = False
@@ -91,7 +91,7 @@ class RoleDetector:
 
         logger.debug("Loaded %d role definitions", len(self.roles))
 
-    def detect_all(self) -> Dict[str, RoleStatus]:
+    def detect_all(self) -> Dict[str, RoleDetection]:
         """Detect all known roles on this system."""
         results = {}
         listening_ports = {p.port for p in get_listening_ports()}
@@ -101,9 +101,9 @@ class RoleDetector:
 
         return results
 
-    def _detect_role(self, role: RoleDefinition, listening_ports: set) -> RoleStatus:
+    def _detect_role(self, role: RoleDefinition, listening_ports: set) -> RoleDetection:
         """Detect a single role."""
-        status = RoleStatus()
+        status = RoleDetection()
 
         # Check path (service-only roles have no target_path — always pass)
         if role.target_path:

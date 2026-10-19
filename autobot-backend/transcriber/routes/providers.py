@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from autobot_shared.logging_manager import get_logger
-from transcriber.deps import authenticate, require_admin
+from transcriber.deps import authenticate, require_transcriber_admin
 from voice_processing.providers.selection import (
     get_active_asr_provider_id,
     list_available_providers,
@@ -29,23 +29,23 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["transcriber-providers"], dependencies=[Depends(authenticate)])
 
 
-class ProviderInfo(BaseModel):
+class TranscriberProviderInfo(BaseModel):
     id: str
     name: str
     configured: bool
     languages: List[str]
 
 
-class ProvidersResponse(BaseModel):
+class TranscriberProvidersResponse(BaseModel):
     selected: Optional[str]
-    providers: List[ProviderInfo]
+    providers: List[TranscriberProviderInfo]
 
 
 class SetProviderRequest(BaseModel):
     provider: Optional[str]
 
 
-@router.get("/providers", response_model=ProvidersResponse)
+@router.get("/providers", response_model=TranscriberProvidersResponse)
 async def list_providers() -> Dict[str, Any]:
     """List all cloud ASR providers and the currently active selection.
 
@@ -58,7 +58,7 @@ async def list_providers() -> Dict[str, Any]:
     }
 
 
-@router.patch("/providers", dependencies=[Depends(require_admin)])
+@router.patch("/providers", dependencies=[Depends(require_transcriber_admin)])
 async def set_provider(body: SetProviderRequest) -> Dict[str, Any]:
     """Set the active cloud ASR provider.
 

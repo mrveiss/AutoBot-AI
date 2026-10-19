@@ -143,13 +143,14 @@ Fix: use Option A (workflow_dispatch) to regenerate baselines directly on CI.
 Coverage = whatever has a `*.stories.ts`. Currently:
 
 - `auth/LoginForm`
-- `base/{BaseAlert, BaseBadge, BaseButton, BaseCard, BaseInput, BaseTable}`
+- `base/{BaseAlert, BaseButton, BaseInput, BaseTable}`
+- kit (`libs/autobot-ui`, loaded by this Storybook): `Kit/BaseBadge` (#14776), `Kit/BaseCard` (#14776, card + panel), `Kit/BaseModal`
 - `ui/{EmptyState, LoadingSpinner}`
 
 **Gaps worth filling** (touched recently, no story → no visual coverage):
 
 - `ui/Icon.vue` (added in #4805 — the icon registry)
-- `ui/ThemeToggle.vue`, `ui/DarkModeToggle.vue`
+- `ui/ThemeToggle.vue`
 - `ui/BaseModal.vue`, `ui/CommandPermissionDialog.vue`, `ui/PreferencesPanel.vue`
 - `ui/HostSelector.vue`, `ui/HostSelectionDialog.vue`
 - `ui/ToastContainer.vue`

@@ -25605,9 +25605,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify migration preserves admin authentication dependency"""
         from api import feature_flags
 
-        # Verify require_admin is used in endpoints
+        # Verify require_admin_role is used in endpoints
         status_source = inspect.getsource(feature_flags.get_feature_flags_status)
-        self.assertIn("require_admin", status_source)
+        self.assertIn("require_admin_role", status_source)
         self.assertIn("admin", status_source)
 
     def test_batch_152_migration_preserves_feature_flags_service(self):
@@ -30255,11 +30255,11 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("ModalityType.COMBINED", combine_source)
 
     def test_batch_171_migration_preserves_processing_intent(self):
-        """Verify migration preserves ProcessingIntent usage"""
+        """Verify migration preserves MultimodalProcessingIntent usage"""
         from api import multimodal
 
-        # Verify ProcessingIntent is imported
-        self.assertTrue(hasattr(multimodal, "ProcessingIntent"))
+        # Verify MultimodalProcessingIntent is imported
+        self.assertTrue(hasattr(multimodal, "MultimodalProcessingIntent"))
 
         # Verify _get_processing_intent helper exists
         self.assertTrue(hasattr(multimodal, "_get_processing_intent"))

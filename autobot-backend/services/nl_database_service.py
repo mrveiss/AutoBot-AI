@@ -519,10 +519,10 @@ class NLDatabaseService:
             Extracted SQL string
         """
         try:
-            from services.llm_service import LLMService
+            from services.llm_service import get_llm_service
 
             if self._llm is None:
-                self._llm = LLMService()
+                self._llm = get_llm_service()
 
             llm_response = await self._llm.chat([{"role": "user", "content": prompt}], llm_type=LLMType.TASK)
             response = llm_response.content

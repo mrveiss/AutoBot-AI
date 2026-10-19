@@ -8,7 +8,7 @@ Analyze AutoBot codebase for performance issues, memory leaks, and processing in
 import json
 from pathlib import Path
 
-from performance_analyzer import PerformanceAnalyzer
+from performance_analyzer import LegacyPerformanceAnalyzer
 
 from autobot_shared.async_compat import run_or_schedule
 
@@ -81,7 +81,7 @@ def _print_memory_blocking_db_issues(details: list) -> None:
 async def analyze_performance_issues():
     """Analyze codebase for performance and memory issues"""
     print("🚀 Starting performance and memory leak analysis...")  # noqa: print
-    analyzer = PerformanceAnalyzer()
+    analyzer = LegacyPerformanceAnalyzer()
     results = await analyzer.analyze_performance(root_path=".", patterns=["src/**/*.py", "backend/**/*.py"])
     _print_perf_summary(results)
     details = results["performance_details"]

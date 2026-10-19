@@ -31,6 +31,10 @@ export { default as BaseCard } from './src/components/BaseCard.vue'
 export { default as EmptyState } from './src/components/EmptyState.vue'
 
 export { default as SkipLink } from './src/components/SkipLink.vue'
+// One language picker for both apps (#18354); endonym labels live with it.
+export { default as LanguageSwitcher } from './src/components/LanguageSwitcher.vue'
+export { LOCALE_ENDONYMS, localeOptions } from './src/utils/locales'
+export type { LocaleOption } from './src/utils/locales'
 
 export { default as BaseModal } from './src/components/BaseModal.vue'
 export type { ModalSize } from './src/components/BaseModal.vue'
@@ -103,3 +107,23 @@ export type { DurationStyle } from './src/utils/duration'
 // apps' utils/debugUtils.ts re-export these rather than re-declaring them.
 export { log, createLogger } from './src/utils/logger'
 export type { LogLevel } from './src/utils/logger'
+
+// The one exponential-backoff formula for reconnects and retries (#15402).
+export { backoffDelay, RETRY_BACKOFF } from './src/utils/backoff'
+export type { BackoffOptions } from './src/utils/backoff'
+
+export { default as SchedulePicker } from './src/components/SchedulePicker.vue'
+export * from './src/schedule'
+
+// Agent-ledger answers and their section states (#18391) — one reading of the
+// shared response shapes for the Company OS and SLM ledger views.
+export {
+  loadingLedgerSection,
+  ledgerSectionFrom,
+  readLedgerSection,
+  ledgerAskOutcomeFrom,
+  sendLedgerAsk,
+} from './src/utils/ledger'
+export type { LedgerSection, LedgerSectionStatus, LedgerAskOutcome } from './src/utils/ledger'
+export { default as LedgerSectionState } from './src/components/LedgerSectionState.vue'
+export type { LedgerStateLabels } from './src/components/LedgerSectionState.vue'

@@ -1,0 +1,35 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Dispatch the generated-types autofix on a branch (#18500). A merge train runs this on
+# its train branch to learn, from one job, whether the combined tree needs an api.ts
+# patch -- instead of spending a full CI suite on the train PR. On drift the job fails
+# and uploads the `generated-types-patch` artifact, exactly as on a pull request.
+#
+# Its own workflow, not a trigger on auto-fix-generated-types.yml, and a plain checkout
+# with no `ref:`: see .github/actions/generated-types-autofix/action.yml for why.
+
+name: Dispatch Generated Types Autofix
+
+on:
+  workflow_dispatch:
+
+# One run per dispatched branch; a newer dispatch on the same branch supersedes it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  autofix-types:
+    runs-on: ubuntu-latest
+    steps:
+      # The dispatched branch itself: the default ref, no PR- or input-derived value.
+      - name: Checkout the dispatched branch
+        uses: actions/checkout@v7
+
+      - name: Regenerate the generated types and report drift
+        uses: ./.github/actions/generated-types-autofix

@@ -28,10 +28,10 @@ from autobot_shared.proxy_utils import get_client_ip
 from config import settings
 from models.schemas import (
     MfaChallengeResponse,
+    SlmAdminUserCreate,
+    SlmAdminUserResponse,
     TokenRequest,
     TokenResponse,
-    UserCreate,
-    UserResponse,
 )
 from services.auth import auth_service, get_current_user, get_slm_db, require_permission
 from services.database import get_db
@@ -159,12 +159,12 @@ async def login(
     return await auth_service.create_token_response(user)
 
 
-@router.post("/users", response_model=UserResponse)
+@router.post("/users", response_model=SlmAdminUserResponse)
 async def create_user(
-    user_data: UserCreate,
+    user_data: SlmAdminUserCreate,
     db: Annotated[AsyncSession, Depends(get_slm_db)],
     _: Annotated[dict, Depends(require_permission(Permission.ADMIN_USERS_WRITE))],
-) -> UserResponse:
+) -> SlmAdminUserResponse:
     """Create a new user (admin only)."""
     return await auth_service.create_user(db, user_data)
 
@@ -274,7 +274,7 @@ async def logout(
 ) -> dict:
     """Revoke the presented token and return IdP logout URL if applicable.
 
-    - Denylists the token's ``jti`` in Redis (HS256 tokens only).
+    - Denylists the token's ``jti`` in the SLM's PostgreSQL (HS256 tokens only, #18663).
     - Queries the user's SSO link for an ``end_session_endpoint``.
     - Returns ``{"logout_url": "<url>"}`` (url may be null when not SSO-linked).
     """

@@ -42,8 +42,15 @@ import json
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
-from pydantic import BaseModel
 
+from api.schemas_task_workspace import (
+    CheckpointRestoreRequest,
+    ExecRequest,
+    ExecResponse,
+    SnapshotRequest,
+    SnapshotResponse,
+    WorkspaceInfoResponse,
+)
 from api.ws_security import authenticate_ws_admin
 from api.ws_security import validate_ws_origin as _validate_ws_origin
 from auth_middleware import check_admin_permission
@@ -62,50 +69,6 @@ router = APIRouter(prefix="/workspace", tags=["task-workspace"])
 # unbounded data through the WebSocket, exhausting backend memory/bandwidth. The
 # cap is generous for interactive use and env-overridable.
 _WS_OUTPUT_CAP_BYTES: int = int(os.environ.get("AUTOBOT_WORKSPACE_WS_OUTPUT_CAP_MB", "25")) * 1024 * 1024
-
-
-# ---------------------------------------------------------------------------
-# Request / response models
-# ---------------------------------------------------------------------------
-
-
-class ExecRequest(BaseModel):
-    command: list[str] | str
-
-
-class SnapshotRequest(BaseModel):
-    checkpoint_name: str
-
-
-class RestoreRequest(BaseModel):
-    checkpoint_name: str
-
-
-class WorkspaceInfoResponse(BaseModel):
-    task_id: str
-    container_id: str
-    volume_name: str
-    image: str
-    created_at: float
-    last_active: float
-    checkpoint_tags: list[str]
-
-
-class ExecResponse(BaseModel):
-    success: bool
-    exit_code: int
-    stdout: str
-    stderr: str
-    execution_time: float
-    task_id: str
-    security_blocked: bool
-
-
-class SnapshotResponse(BaseModel):
-    task_id: str
-    checkpoint_name: str
-    image_tag: str
-    created_at: float
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +155,7 @@ async def snapshot_workspace(
 @router.post("/tasks/{task_id}/restore", response_model=WorkspaceInfoResponse)
 async def restore_workspace(
     task_id: str,
-    request: RestoreRequest,
+    request: CheckpointRestoreRequest,
     _admin: bool = Depends(check_admin_permission),
 ) -> WorkspaceInfoResponse:
     """Restore workspace from a named snapshot (rolls back container to that checkpoint)."""

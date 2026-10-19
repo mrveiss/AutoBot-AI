@@ -69,7 +69,7 @@ class TestResolveScanRoot:
         assert resolved == shared.get_project_root()
 
     async def test_unresolved_fallback_uses_deployed_layout_aware_root(self, tmp_path):
-        """Issue #12393: unresolved-source fallback must use resolve_project_root()
+        """Issue #12393: unresolved-source fallback must use resolve_git_repo_root()
         (git-walk-up / deployed code_source probe, #10730), not the plain
         parents[4] get_project_root() -- which resolves to /opt/autobot (not the
         analyzable repo) in the deployed standalone rsync layout."""
@@ -84,7 +84,7 @@ class TestResolveScanRoot:
                 "api.codebase_analytics.source_storage.get_default_source_id",
                 AsyncMock(return_value=None),
             ),
-            patch.object(shared, "resolve_project_root", return_value=str(deployed_root)),
+            patch.object(shared, "resolve_git_repo_root", return_value=str(deployed_root)),
             patch.object(shared, "get_project_root", return_value=wrong_root),
         ):
             resolved = await shared.resolve_scan_root(None)
@@ -295,7 +295,7 @@ class TestEnvironmentCacheScoping:
         resolve_source_root directly (pre-fix) or via resolve_scan_root
         (post-fix). Behavior differs only in two cases: source_id=None (now
         resolves the DEFAULT source), and an UNRESOLVABLE source (fallback root
-        is now get_project_root() vs the old resolve_project_root(); identical
+        is now get_project_root() vs the old resolve_git_repo_root(); identical
         in a dev checkout, differs in the deployed layout -- tracked in #12393)."""
         from api.codebase_analytics.endpoints import environment, shared
 

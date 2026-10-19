@@ -7,7 +7,7 @@ Fleet security-posture auditor (GH#11224).
 
 Recurring background job that reads the SLM node inventory and flags sensitive
 services (datastores, admin dashboards, gateways) bound to a public / wildcard
-interface rather than loopback. Findings are recorded as ``SecurityEvent`` rows
+interface rather than loopback. Findings are recorded as ``SlmSecurityEvent`` rows
 (metadata only — never secret values), so exposure regressions are surfaced
 proactively instead of noticed reactively.
 
@@ -22,7 +22,7 @@ import uuid
 from sqlalchemy import select
 
 from autobot_shared.env_utils import env_int
-from models.database import Node, SecurityEvent, SecurityEventSeverity
+from models.database import Node, SecurityEventSeverity, SlmSecurityEvent
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ def _get_session():
 # Poll interval — configurable per deployment; defaults to hourly.
 _AUDIT_INTERVAL_SECONDS: int = env_int("SLM_SECURITY_AUDIT_INTERVAL_SECONDS", 3600)
 
-# Sensitive ports → (service label, SecurityEvent severity). Datastores and
+# Sensitive ports → (service label, SlmSecurityEvent severity). Datastores and
 # message brokers carry unauthenticated-data risk (HIGH); admin/observability
 # dashboards are exposure-worthy but lower (MEDIUM). Expected-public ports
 # (80/443/22) are intentionally absent.
@@ -119,12 +119,12 @@ def _scan_node_ports(listening_ports: "list | None") -> "list[dict]":
     return findings
 
 
-def _build_security_event(node_id: str, finding: dict) -> SecurityEvent:
-    """Construct a SecurityEvent row for an exposure *finding* (metadata only)."""
+def _build_security_event(node_id: str, finding: dict) -> SlmSecurityEvent:
+    """Construct a SlmSecurityEvent row for an exposure *finding* (metadata only)."""
     port = finding["port"]
     service = finding["service"]
     address = finding["address"]
-    return SecurityEvent(
+    return SlmSecurityEvent(
         event_id=str(uuid.uuid4())[:16],
         event_type="port_exposure",
         severity=finding["severity"],
@@ -152,7 +152,7 @@ async def audit_fleet_security_posture() -> int:
 
     Deduplicates against unresolved ``port_exposure`` events per node so a
     standing exposure is not re-reported every cycle. Returns the count of newly
-    created SecurityEvent rows.
+    created SlmSecurityEvent rows.
     """
     new_events = 0
     async with _get_session() as db:
@@ -180,10 +180,10 @@ async def audit_fleet_security_posture() -> int:
 async def _open_exposure_ports(db, node_id: str) -> "set[int]":
     """Return ports already flagged by an unresolved port_exposure event for *node_id*."""
     result = await db.execute(
-        select(SecurityEvent).where(
-            SecurityEvent.event_type == "port_exposure",
-            SecurityEvent.target_node_id == node_id,
-            SecurityEvent.is_resolved.is_(False),
+        select(SlmSecurityEvent).where(
+            SlmSecurityEvent.event_type == "port_exposure",
+            SlmSecurityEvent.target_node_id == node_id,
+            SlmSecurityEvent.is_resolved.is_(False),
         )
     )
     return {e.raw_data.get("port") for e in result.scalars().all() if isinstance(e.raw_data, dict)}

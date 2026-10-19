@@ -12,7 +12,7 @@
 -->
 <template>
   <div class="company-status-control">
-    <BaseBadge :variant="badgeVariant" size="sm">
+    <BaseBadge :variant="badgeVariant" size="sm" tone="solid">
       {{ t(`llcCompanyStatus.${status}`) }}
     </BaseBadge>
 

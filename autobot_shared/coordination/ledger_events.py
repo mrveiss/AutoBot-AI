@@ -42,6 +42,15 @@ TEXT_CAP = env_int_clamped("AUTOBOT_LEDGER_TEXT_CAP", 280, min_v=32, max_v=2000)
 #: Caller-supplied free-text fields, capped at :data:`TEXT_CAP` on write.
 _FREE_TEXT_FIELDS = frozenset({"reason"})
 
+
+def cap_text(text: str) -> str:
+    """Cut caller-supplied free text to :data:`TEXT_CAP` (#18563). THE one cap: events, claim intents, yield reasons.
+
+    Ids and other non-free-text fields are never passed through here.
+    """
+    return text[:TEXT_CAP]
+
+
 #: A claim left the index because its TTL ran out while the holder never released it.
 CLAIM_EXPIRED = "claim_expired"
 #: `release_scope` was addressed at a scope another holder currently holds.
@@ -69,7 +78,7 @@ async def record_ledger_event(
     """
     if event_type not in EVENT_TYPES:
         raise ValueError(f"unknown ledger event {event_type!r}; events are {sorted(EVENT_TYPES)}")
-    capped = {k: v[:TEXT_CAP] if k in _FREE_TEXT_FIELDS and isinstance(v, str) else v for k, v in fields.items()}
+    capped = {k: cap_text(v) if k in _FREE_TEXT_FIELDS and isinstance(v, str) else v for k, v in fields.items()}
     entry = json.dumps(
         {
             "type": event_type,

@@ -32,6 +32,7 @@ from api.project import router as project_router
 from api.registry import router as registry_router
 from api.self_capabilities import router as self_capabilities_router
 from api.user_management.dependencies import get_current_user
+from testkit.canonical_gate import install_canonical_gate, no_user_middleware
 
 #: module -> (its router, a parameterless GET route on it). Prefixes are
 #: irrelevant here: the gate lives on the router, so any mount carries it.
@@ -48,11 +49,6 @@ ROUTERS = {
     "api.registry": (registry_router, "/routers"),
     "api.self_capabilities": (self_capabilities_router, "/capabilities"),
 }
-
-
-class _NoUser:
-    def get_user_from_request(self, request):
-        return None
 
 
 def _app() -> FastAPI:
@@ -78,9 +74,10 @@ class TestTheRouterIsGated:
 
     def test_a_request_whose_user_does_not_resolve_is_refused(self, module_name, monkeypatch):
         # Pinned to "nobody", not left ambient: `get_auth_middleware` is process-global
-        # and other tests stub it with a canned user. The pin lands where
-        # dependencies.py looks the name up, since it `from`-imports it.
-        monkeypatch.setattr("api.user_management.dependencies.get_auth_middleware", lambda: _NoUser())
+        # and other tests stub it with a canned user. Since #18688 dependencies.py
+        # delegates to the canonical gate, so the pin points that delegate at the
+        # REAL gate (the conftest stub answers `test-user` to everyone).
+        install_canonical_gate(monkeypatch, no_user_middleware())
         path = ROUTERS[module_name][1]
         with TestClient(_app(), raise_server_exceptions=False) as client:
             response = client.get(path)

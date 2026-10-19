@@ -125,7 +125,7 @@ class Criterion:
 
 
 @dataclass(frozen=True)
-class Citation:
+class CriterionCitation:
     """A `path:line` a verdict rests on."""
 
     path: str
@@ -238,15 +238,15 @@ def unparsed_amendment_hint(comments: Sequence[tuple[str, str]]) -> Optional[str
     )
 
 
-def parse_citations(text: str) -> list[Citation]:
+def parse_citations(text: str) -> list[CriterionCitation]:
     """Every `path:line` in *text*, in order, de-duplicated."""
     seen: set[tuple[str, int]] = set()
-    citations: list[Citation] = []
+    citations: list[CriterionCitation] = []
     for match in _CITATION.finditer(text or ""):
         key = (match.group("path"), int(match.group("line")))
         if key not in seen:
             seen.add(key)
-            citations.append(Citation(path=key[0], line=key[1]))
+            citations.append(CriterionCitation(path=key[0], line=key[1]))
     return citations
 
 
@@ -294,9 +294,9 @@ def file_reader(ref: str = "origin/main", repo_root: Path | None = None) -> Call
 
 
 def verify_citations(
-    citations: Iterable[Citation],
+    citations: Iterable[CriterionCitation],
     read: Callable[[str], Optional[str]],
-) -> tuple[list[Citation], list[str]]:
+) -> tuple[list[CriterionCitation], list[str]]:
     """Split *citations* into the real ones and a reason per rejected one.
 
     A citation is real when the file exists at the read ref, the line number is
@@ -304,7 +304,7 @@ def verify_citations(
     line number invented near the right area lands on whitespace often enough
     that accepting it would let a fabricated citation through the other two.
     """
-    verified: list[Citation] = []
+    verified: list[CriterionCitation] = []
     rejected: list[str] = []
     for citation in citations:
         content = read(citation.path)
@@ -404,7 +404,7 @@ def code_searcher(
 
 
 __all__ = [
-    "Citation",
+    "CriterionCitation",
     "Criterion",
     "criteria_after_the_section",
     "extract_criteria",
