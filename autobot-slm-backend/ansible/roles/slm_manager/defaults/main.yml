@@ -11,7 +11,7 @@
 # ==========================================================
 slm_user: autobot
 slm_group: autobot
-slm_base_dir: /opt/autobot
+slm_base_dir: "{{ autobot.base_dir }}"
 # #18281: used only when the backend role's backend_data_dir / backend_user are not in scope for this play.
 # They equal roles/backend/defaults/main.yml; tests/test_secrets_backup_18281.py pins the code default to it.
 slm_backend_data_dir_fallback: /var/lib/autobot

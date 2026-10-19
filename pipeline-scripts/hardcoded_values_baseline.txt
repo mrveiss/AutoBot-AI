@@ -971,8 +971,6 @@
 2|ssot|autobot-slm-backend/ansible/fix-backend-worker-deadlock.yml|:8443
 1|ssot|autobot-slm-backend/ansible/fix-slm-env-ports.yml|:5173
 1|ssot|autobot-slm-backend/ansible/fix-slm-env-ports.yml|:8080
-1|other|autobot-slm-backend/ansible/inventory/group_vars/aiml.yml|"/opt/autobot/scripts/optimize-models.sh
-1|other|autobot-slm-backend/ansible/inventory/group_vars/aiml.yml|"/opt/autobot/scripts/test-model-loading.py
 1|other|autobot-slm-backend/ansible/inventory/group_vars/aiml.yml|"/tmp/autobot/models
 1|other|autobot-slm-backend/ansible/inventory/group_vars/aiml.yml|"/var/lib/autobot-ai/chroma_db
 2|other|autobot-slm-backend/ansible/inventory/group_vars/aiml.yml|"/var/lib/autobot-ai/models
@@ -986,8 +984,7 @@
 1|other|autobot-slm-backend/ansible/inventory/group_vars/aiml.yml|https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
 1|other|autobot-slm-backend/ansible/inventory/group_vars/aiml.yml|https://apt.repos.intel.com/openvino/2024
 1|ssot|autobot-slm-backend/ansible/inventory/group_vars/aiml.yml|:8001
-2|other|autobot-slm-backend/ansible/inventory/group_vars/all.yml|"/opt/autobot
-2|other|autobot-slm-backend/ansible/inventory/group_vars/all.yml|"/opt/autobot/backups
+1|other|autobot-slm-backend/ansible/inventory/group_vars/all.yml|"/opt/autobot
 1|other|autobot-slm-backend/ansible/inventory/group_vars/all.yml|"/var/lib/autobot
 1|other|autobot-slm-backend/ansible/inventory/group_vars/all.yml|/home/autobot
 1|other|autobot-slm-backend/ansible/inventory/group_vars/all.yml|https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
@@ -1004,10 +1001,6 @@
 1|other|autobot-slm-backend/ansible/inventory/group_vars/browser.yml|300
 2|other|autobot-slm-backend/ansible/inventory/group_vars/browser.yml|60
 1|ssot|autobot-slm-backend/ansible/inventory/group_vars/browser.yml|:3000
-1|other|autobot-slm-backend/ansible/inventory/group_vars/database.yml|"/opt/autobot/backups/database
-1|other|autobot-slm-backend/ansible/inventory/group_vars/database.yml|"/opt/autobot/scripts/backup-database.sh
-1|other|autobot-slm-backend/ansible/inventory/group_vars/database.yml|"/opt/autobot/scripts/cleanup-model-cache.sh
-1|other|autobot-slm-backend/ansible/inventory/group_vars/database.yml|"/opt/autobot/scripts/model-manager.py
 1|other|autobot-slm-backend/ansible/inventory/group_vars/database.yml|"/tmp/autobot/models
 1|other|autobot-slm-backend/ansible/inventory/group_vars/database.yml|"/var/lib/autobot/models
 1|other|autobot-slm-backend/ansible/inventory/group_vars/database.yml|"/var/lib/autobot/models/cache
@@ -1134,7 +1127,6 @@
 1|other|autobot-slm-backend/ansible/playbooks/rotate-certs.yml|30
 1|other|autobot-slm-backend/ansible/playbooks/rotate-certs.yml|60
 2|other|autobot-slm-backend/ansible/playbooks/rotate-ssh-keys.yml|/home/autobot
-2|other|autobot-slm-backend/ansible/playbooks/setup-rbac.yml|"/opt/autobot
 1|other|autobot-slm-backend/ansible/playbooks/setup-vm-names-and-lvm.yml|300
 1|other|autobot-slm-backend/ansible/playbooks/sync-user-backend.yml|"/opt/autobot
 1|other|autobot-slm-backend/ansible/playbooks/sync-user-backend.yml|"/opt/autobot/autobot-backend/{{ item }}
@@ -1164,8 +1156,6 @@
 2|other|autobot-slm-backend/ansible/roles/_shared/tasks/clean_legacy_dir.yml|"/opt/autobot/{{ dir_name }}/data
 1|other|autobot-slm-backend/ansible/roles/_shared/tasks/clean_wrong_node_dir.yml|"/opt/autobot/{{ dir_name }}
 1|other|autobot-slm-backend/ansible/roles/access_control/defaults/main.yml|300
-1|other|autobot-slm-backend/ansible/roles/agent_config/defaults/main.yml|"/opt/autobot
-1|other|autobot-slm-backend/ansible/roles/agent_config/defaults/main.yml|"/opt/autobot/venv
 1|other|autobot-slm-backend/ansible/roles/agent_config/defaults/main.yml|"/var/lib/autobot/models
 1|other|autobot-slm-backend/ansible/roles/agent_config/tasks/nodejs.yml|https://deb.nodesource.com/setup_{{
 1|other|autobot-slm-backend/ansible/roles/agent_config/tasks/ollama.yml|https://ollama.ai/install.sh
@@ -1200,15 +1190,11 @@
 1|other|autobot-slm-backend/ansible/roles/common/tasks/main.yml|/home/autobot
 1|other|autobot-slm-backend/ansible/roles/common/tasks/main.yml|120
 1|other|autobot-slm-backend/ansible/roles/common/vars/main.yml|/home/autobot
-1|other|autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml|"/opt/autobot/backups
-1|other|autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml|"/opt/autobot/requirements.txt
-1|other|autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml|"/opt/autobot/venv
 1|other|autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml|120
 1|other|autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml|300
 2|other|autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml|60
 1|other|autobot-slm-backend/ansible/roles/dependency_patching/tasks/rollback-system.yml|300
 2|other|autobot-slm-backend/ansible/roles/dependency_patching/tasks/update-system.yml|300
-3|other|autobot-slm-backend/ansible/roles/dependency_patching/vars/main.yml|"/opt/autobot/venv
 1|ssot|autobot-slm-backend/ansible/roles/distributed_setup/defaults/main.yml|:8443
 1|other|autobot-slm-backend/ansible/roles/distributed_setup/tasks/redis_cli.yml|http://download.redis.io/releases/redis-{{
 1|other|autobot-slm-backend/ansible/roles/docker/defaults/main.yml|30
@@ -1221,7 +1207,6 @@
 1|ssot|autobot-slm-backend/ansible/roles/llm/defaults/main.yml|llama3.2:1b
 1|ssot|autobot-slm-backend/ansible/roles/llm/defaults/main.yml|qwen3.5:9b
 1|other|autobot-slm-backend/ansible/roles/llm/tasks/main.yml|https://ollama.ai/install.sh
-1|other|autobot-slm-backend/ansible/roles/monitoring/defaults/main.yml|"/opt/autobot
 1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/grafana.yml|https://apt.grafana.com
 2|other|autobot-slm-backend/ansible/roles/monitoring/tasks/grafana.yml|https://apt.grafana.com/gpg.key
 1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/node_exporter.yml|https://github.com/prometheus/node_exporter/releases/download/v{{

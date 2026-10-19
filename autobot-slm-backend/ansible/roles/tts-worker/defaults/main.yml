@@ -7,7 +7,7 @@
 tts_service_account: autobot-tts
 tts_user: autobot-tts
 tts_group: autobot-tts
-tts_install_dir: /opt/autobot/autobot-tts-worker
+tts_install_dir: "{{ autobot.base_dir }}/autobot-tts-worker"
 tts_log_dir: /var/log/autobot
 tts_models_dir: /var/lib/autobot/models/tts
 tts_voices_dir: /var/lib/autobot/voices

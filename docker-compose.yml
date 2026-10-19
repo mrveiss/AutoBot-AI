@@ -662,6 +662,8 @@ services:
       - ./docker/nginx/nginx-backend-upstream.conf:/etc/nginx/nginx-backend-upstream.conf:ro
       - ./docker/nginx/nginx-locations.conf:/etc/nginx/nginx-locations.conf:ro
       - ./docker/nginx/nginx-slm-locations.conf:/etc/nginx/nginx-slm-locations.conf:ro
+      - ./docker/nginx/nginx-tls.conf:/etc/nginx/nginx-tls.conf:ro
+      - ./docker/nginx/nginx-tls-redirect.conf:/etc/nginx/nginx-tls-redirect.conf:ro
       # TLS certificates directory (mounted read-only)
       # Generate dev certs: bash docker/certs/generate-self-signed.sh
       - ./docker/certs:/etc/nginx/certs:ro
@@ -720,10 +722,19 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      # Host port for HTTPS; change it when host port 443 is taken (#18593).
+      - "${AUTOBOT_DOCKER_SLM_HTTPS_PORT:-443}:443"
     volumes:
-      - ./docker/nginx/nginx-slm.conf:/etc/nginx/nginx.conf:ro
+      # nginx config: HTTP-only by default, like autobot-frontend.
+      # For TLS: set AUTOBOT_DOCKER_SLM_NGINX_CONF=./docker/nginx/nginx-slm-ssl.conf (#18593)
+      - ${AUTOBOT_DOCKER_SLM_NGINX_CONF:-./docker/nginx/nginx-slm.conf}:/etc/nginx/nginx.conf:ro
       - ./docker/nginx/nginx-common.conf:/etc/nginx/nginx-common.conf:ro
       - ./docker/nginx/nginx-slm-locations.conf:/etc/nginx/nginx-slm-locations.conf:ro
+      - ./docker/nginx/nginx-tls.conf:/etc/nginx/nginx-tls.conf:ro
+      - ./docker/nginx/nginx-tls-redirect.conf:/etc/nginx/nginx-tls-redirect.conf:ro
+      # TLS certificates directory (mounted read-only); generate dev certs with
+      # bash docker/certs/generate-self-signed.sh
+      - ./docker/certs:/etc/nginx/certs:ro
     depends_on:
       autobot-slm:
         condition: service_healthy

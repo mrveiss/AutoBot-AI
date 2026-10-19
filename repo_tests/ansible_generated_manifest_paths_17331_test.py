@@ -258,7 +258,7 @@ _BASE_DIR = yaml.safe_load((_ANSIBLE / "inventory" / "group_vars" / "all.yml").r
 #: What stage_shared_manifests.yml places on a node, relative to base_dir.
 _STAGED_PATHS = {f"{_BASE_DIR}/{rel}" for rel in _REWRITTEN_INCLUDES}
 _RELATIVE_INCLUDE = re.compile(r"^-[cr]\s+(\.\./\S+)", re.M)
-_VAR = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
+_VAR = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_.]*)\s*\}\}")
 #: Floor on the WORK, not the survey: manifests actually resolved, read and
 #: scanned for includes. Counting pip sites instead left the scan running on zero
 #: real manifests once every live site was staged (#17895 review). Measured: 3
@@ -325,7 +325,7 @@ def resolve_path(value: str, variables: dict[str, str]) -> str | None:
         for name in unresolved:
             if name not in variables:
                 return None
-            value = re.sub(r"\{\{\s*" + name + r"\s*\}\}", variables[name], value)
+            value = re.sub(r"\{\{\s*" + re.escape(name) + r"\s*\}\}", variables[name], value)
     return None
 
 
@@ -344,7 +344,9 @@ def unplaced_includes(manifest_on_node: str, manifest_text: str, placed: set[str
 def _role_vars(role_file: str, roles_dir: Path = _ROLES) -> dict[str, str]:
     defaults = roles_dir / role_file.split("/", 1)[0] / "defaults" / "main.yml"
     data = yaml.safe_load(defaults.read_text(encoding="utf-8")) if defaults.is_file() else {}
-    return {k: str(v) for k, v in (data or {}).items() if isinstance(v, (str, int))}
+    found = {k: str(v) for k, v in (data or {}).items() if isinstance(v, (str, int))}
+    # Role defaults derive their paths from the inventory's install root (#15632, #18880).
+    return {"autobot.base_dir": _BASE_DIR, **found}
 
 
 def check_sites(sites: list[tuple[str, str, bool]], roles_dir: Path = _ROLES) -> tuple[list[str], int]:

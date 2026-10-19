@@ -27,6 +27,8 @@ from pathlib import Path
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines, code_text
+
 _ROOT = repo_root()
 _NGINX = _ROOT / "docker" / "nginx"
 _HEAVY = {"autobot-backend", "autobot-worker", "autobot-celery-beat", "autobot-chromadb", "autobot-frontend"}
@@ -80,7 +82,8 @@ def test_the_slm_gui_is_profiled_and_pulls_in_no_platform_service() -> None:
 
 
 def test_the_slm_only_nginx_never_names_the_main_backend() -> None:
-    for conf in _closure("nginx-slm.conf"):
+    """Both SLM-only configs, plain and TLS (#18593), include nothing that names the backend."""
+    for conf in {*_closure("nginx-slm.conf"), *_closure("nginx-slm-ssl.conf")}:
         text = (_NGINX / conf).read_text(encoding="utf-8")
         assert "autobot-backend" not in text and "http://backend" not in text, conf
 
@@ -97,7 +100,12 @@ def _mounted(service: dict) -> set[str]:
 def test_each_nginx_service_mounts_every_file_its_config_includes() -> None:
     """A compose mount overrides the image copy; a missing one leaves an include stale."""
     services = _services()
-    for name, top in (("autobot-frontend", "nginx.conf"), ("autobot-slm-gui", "nginx-slm.conf")):
+    for name, top in (
+        ("autobot-frontend", "nginx.conf"),
+        ("autobot-frontend", "nginx-ssl.conf"),  # the TLS switch must find its includes too (#18593)
+        ("autobot-slm-gui", "nginx-slm.conf"),
+        ("autobot-slm-gui", "nginx-slm-ssl.conf"),
+    ):
         needed = set(_closure(top)) - {top}
         assert needed <= _mounted(services[name]), (name, sorted(needed - _mounted(services[name])))
 
@@ -108,3 +116,110 @@ def test_production_stays_the_default_dockerfile_target() -> None:
     )
     assert "slm-gui" in stages
     assert stages[-1] == "production", stages
+
+
+# --- the SLM-only GUI has a TLS option (#18593) ---
+
+
+def test_the_slm_gui_switches_to_tls_like_the_frontend() -> None:
+    gui = _services()["autobot-slm-gui"]
+    volumes = gui["volumes"]
+    assert "${AUTOBOT_DOCKER_SLM_NGINX_CONF:-./docker/nginx/nginx-slm.conf}:/etc/nginx/nginx.conf:ro" in volumes
+    assert "./docker/certs:/etc/nginx/certs:ro" in volumes, "the TLS config would find no certificate"
+    assert "80:80" in gui["ports"]
+    assert "${AUTOBOT_DOCKER_SLM_HTTPS_PORT:-443}:443" in gui["ports"], "a taken host port 443 must not block start"
+
+
+def test_tls_settings_are_defined_once() -> None:
+    """Both TLS configs take their settings and port-80 server from the shared includes."""
+    for top in ("nginx-ssl.conf", "nginx-slm-ssl.conf"):
+        closure = _closure(top)
+        assert {"nginx-tls.conf", "nginx-tls-redirect.conf"} <= set(closure), (top, closure)
+    served = {
+        c for top in ("nginx.conf", "nginx-ssl.conf", "nginx-slm.conf", "nginx-slm-ssl.conf") for c in _closure(top)
+    }
+    defining = sorted(
+        c for c in served if re.search(r"^\s*ssl_protocols\s", (_NGINX / c).read_text(encoding="utf-8"), re.M)
+    )
+    assert defining == ["nginx-tls.conf"], f"TLS settings copied outside nginx-tls.conf: {defining}"
+
+
+def test_the_tls_redirect_keeps_the_healthcheck_on_plain_http() -> None:
+    """The container healthcheck fetches http://localhost/health; a redirect to a self-signed
+    HTTPS endpoint would fail it, so /health is answered on port 80."""
+    text = (_NGINX / "nginx-tls-redirect.conf").read_text(encoding="utf-8")
+    assert re.search(r"location\s*=\s*/health\s*\{[^}]*return 200", text), text
+    assert re.search(r"location\s*/\s*\{\s*return 301 https://", text), text
+    for name in ("autobot-frontend", "autobot-slm-gui"):
+        assert "http://localhost/health" in " ".join(_services()[name]["healthcheck"]["test"]), name
+
+
+def _servers(text: str) -> list[str]:
+    """The bodies of the `server { ... }` blocks in an nginx config (brace-matched)."""
+    out, i = [], 0
+    while (m := re.search(r"\bserver\s*\{", text[i:])) is not None:
+        start = depth = i + m.end()
+        level = 1
+        while level:
+            level += {"{": 1, "}": -1}.get(text[depth], 0)
+            depth += 1
+        out.append(text[start : depth - 1])
+        i = depth
+    return out
+
+
+def tls_leaks(files: dict[str, str]) -> list[str]:
+    """TLS-only material outside a `listen 443 ssl` server (01's review, #18593)."""
+    leaks = []
+    # Comments stripped first: a comment naming HSTS, ssl_ or holding a brace is not config.
+    files = {name: code_text(text, name=name, strip_trailing=True) for name, text in files.items()}
+    redirect = files.get("nginx-tls-redirect.conf", "")
+    if re.search(r"Strict-Transport-Security|^\s*ssl_", redirect, re.M | re.I):
+        leaks.append("nginx-tls-redirect.conf carries HSTS or an ssl_ directive")
+    for name, text in files.items():
+        for body in _servers(text):
+            if "nginx-tls.conf" in body and not re.search(r"listen\s+443\s+ssl", body):
+                leaks.append(f"{name}: nginx-tls.conf included in a server without `listen 443 ssl`")
+    return leaks
+
+
+def test_tls_material_never_reaches_a_plain_http_server() -> None:
+    files = {p.name: p.read_text(encoding="utf-8") for p in (_NGINX / n for n in _served_closure())}
+    assert not tls_leaks(files)
+
+
+def _served_closure() -> set[str]:
+    return {
+        c for top in ("nginx.conf", "nginx-ssl.conf", "nginx-slm.conf", "nginx-slm-ssl.conf") for c in _closure(top)
+    }
+
+
+def test_the_tls_leak_check_sees_both_shapes() -> None:
+    redirect_bad = "server { listen 80; add_header Strict-Transport-Security $hsts always; }"
+    plain_include = "http { server { listen 80; include /etc/nginx/nginx-tls.conf; } }"
+    good = "http { server { listen 443 ssl http2; include /etc/nginx/nginx-tls.conf; } }"
+    assert tls_leaks({"nginx-tls-redirect.conf": redirect_bad}) == [
+        "nginx-tls-redirect.conf carries HSTS or an ssl_ directive"
+    ]
+    assert tls_leaks({"x.conf": plain_include}) == [
+        "x.conf: nginx-tls.conf included in a server without `listen 443 ssl`"
+    ]
+    assert tls_leaks({"x.conf": good}) == []
+    commented = (
+        "# the HTTPS server sets Strict-Transport-Security; no ssl_ here { not a block\n"
+        "server { listen 80; return 301 https://$host$request_uri; }  # nginx-tls.conf is 443-only }\n"
+    )
+    assert tls_leaks({"nginx-tls-redirect.conf": commented}) == []
+    braces = "http {\n  # a stray } in a comment\n  server { listen 80; include /etc/nginx/nginx-tls.conf; }\n}\n"
+    assert tls_leaks({"y.conf": braces}) == ["y.conf: nginx-tls.conf included in a server without `listen 443 ssl`"]
+
+
+def test_hsts_is_scheme_gated_wherever_a_location_repeats_it() -> None:
+    """Locations repeat security headers (nginx does not inherit add_header). HSTS there must be
+    the $hsts map, which is empty -- so not sent -- on plain HTTP; a literal value would leak it."""
+    common = (_NGINX / "nginx-common.conf").read_text(encoding="utf-8")
+    assert re.search(r"map\s+\$scheme\s+\$hsts\s*\{[^}]*https\s+\"max-age=[^}]*default\s+\"\"", common), common
+    for name in _served_closure():
+        for line in code_lines(_NGINX / name):
+            if "Strict-Transport-Security" in line.text:
+                assert "$hsts" in line.text, f"{name}: HSTS with a literal value: {line.text.strip()}"
