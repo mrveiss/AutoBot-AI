@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Every SLM reference to a node enum member names a member that exists.
 
-``api/nodes.py`` re-enroll used ``EventType.STATUS_CHANGED``; the member is
+``api/nodes.py`` re-enroll used ``EventType.STATUS_CHANGED`` (now ``NodeEventType``, #17312); the member is
 ``STATE_CHANGE``. Python resolves enum attributes only when the line runs, so
 the route raised ``AttributeError`` after deleting the node's credentials and
 before its commit: every re-enroll of a decommissioned node was a 500, since
@@ -26,7 +26,7 @@ from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 _ROOTS = ("autobot-slm-backend",)
 _ENUM_HOME = "autobot-slm-backend/models/database.py"
 #: The node-event enums defined in ``models/database.py`` and referenced by member across the SLM.
-_ENUMS = ("EventType", "EventSeverity")
+_ENUMS = ("NodeEventType", "EventSeverity")
 
 
 def _is_source(rel: str) -> bool:
@@ -94,7 +94,7 @@ def _members() -> dict[str, set[str]]:
 def test_the_node_enums_are_found():
     members = _members()
     assert set(members) == set(_ENUMS), sorted(members)
-    assert "STATE_CHANGE" in members["EventType"]
+    assert "STATE_CHANGE" in members["NodeEventType"]
 
 
 def test_every_referenced_node_enum_member_exists():
@@ -110,20 +110,20 @@ def test_every_referenced_node_enum_member_exists():
 
 def test_every_import_form_is_recognised_and_an_unrelated_one_is_not():
     for form in (
-        "from models.database import EventType",
-        "from models import EventType",
+        "from models.database import NodeEventType",
+        "from models import NodeEventType",
         "import models.database",
         "import models.database as db",
         "import models",
     ):
         assert imports_node_enums(f"{form}\n"), form
-    assert not imports_node_enums("from my_models.database import EventType\nimport modelsx\n")
-    members = {"EventType": {"STATE_CHANGE"}}
-    qualified = "import models.database\nx = models.database.EventType.GONE\n"
-    assert unknown_members(qualified, members) == [(2, "EventType.GONE")]
+    assert not imports_node_enums("from my_models.database import NodeEventType\nimport modelsx\n")
+    members = {"NodeEventType": {"STATE_CHANGE"}}
+    qualified = "import models.database\nx = models.database.NodeEventType.GONE\n"
+    assert unknown_members(qualified, members) == [(2, "NodeEventType.GONE")]
 
 
 def test_a_planted_missing_member_is_caught():
-    members = {"EventType": {"STATE_CHANGE"}}
-    assert unknown_members("x = EventType.STATUS_CHANGED\n", members) == [(1, "EventType.STATUS_CHANGED")]
-    assert unknown_members("x = EventType.STATE_CHANGE\n", members) == []
+    members = {"NodeEventType": {"STATE_CHANGE"}}
+    assert unknown_members("x = NodeEventType.STATUS_CHANGED\n", members) == [(1, "NodeEventType.STATUS_CHANGED")]
+    assert unknown_members("x = NodeEventType.STATE_CHANGE\n", members) == []

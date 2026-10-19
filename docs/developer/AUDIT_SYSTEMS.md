@@ -19,7 +19,7 @@ and 10), #18285 (row 11), #18286 (row 12); row 13 stays the SLM's own node-opera
 |---|---|
 | `audit.py` | The one write path (`record`, `emit`, `emit_security`/`emit_compliance`/`emit_knowledge`, `audit_record`) and read path (`query`, `query_filtered`, `query_events`, `count_since`), plus `apply_retention` and `rebuild_projection`. Every producer reaches `record`, which also feeds threat detection (#13562), writes the `audit_logs` row, then the projection. |
 | `store.py` | The system of record: Postgres `audit_logs`. Inserts rows, answers every query (one SQL statement per question), counts. Declares `system_of_record("audit_trail")`. |
-| `taxonomy.py` | `AuditEvent`, `AuditCategory`, `AuditFilter`, and the three legacy action vocabularies (`AuditAction`, `EventType`, `AuditEventType`). |
+| `taxonomy.py` | `AuditEvent`, `AuditCategory`, `AuditFilter`, and the three legacy action vocabularies (`AuditAction`, `ComplianceEventType`, `AuditEventType`). |
 | `projection.py` | The Redis projection, and the only module that writes an `audit:` key: `audit:unified` plus `audit:category:<cat>`. Rebuilt from `audit_logs` by `rebuild_projection`; nothing reads it as an answer. |
 | `retention.py` | The one retention policy table (D5). |
 | `purge.py` | The one purge path, used by the nightly task and the admin cleanup endpoint. |
@@ -44,7 +44,7 @@ trail is never reported as an empty one (#13258).
 | 4 | `security_layer.py` `SecurityLayer.audit_log` | JSONL file at `config.audit_log_file` | **Routed through #1 (D6).** One tamper mechanism; no second hash chain. A record that cannot be scheduled is counted (`autobot_audit_write_failures_total`, `NotScheduled`). | 64 call sites in 15 modules (`api/agent.py`, `auth_middleware.py`, `auth_rbac.py`, `worker_node.py`, ...). Readers `get_command_history` and `get_audit_entries` (`api/security.py`). | Table (SECURITY) | via #1 |
 | 5 | `models/workflow_audit.py` + `services/workflow_permission_service.py` | Postgres `workflow_audit_log` | Decided: record through #1 -- #18284. | 1 | None | Convention only |
 | 6 | `middleware/audit_middleware.py` | Not a store: feeds #3 | via #3 | 3 | via #1 | via #1 |
-| 7 | `services/event_log.py` | Redis `autobot:event_log` | **Retired (D2), module deleted.** `EventType` moved to `taxonomy.py`. | 0. `api/voice_bundle_admin.py` (1, the only direct writer, whose records were invisible to the admin events API) and `api/auth.py` (2) now call `emit_compliance`. | Old key expires by its 90-day TTL | n/a |
+| 7 | `services/event_log.py` | Redis `autobot:event_log` | **Retired (D2), module deleted.** `ComplianceEventType` moved to `taxonomy.py`. | 0. `api/voice_bundle_admin.py` (1, the only direct writer, whose records were invisible to the admin events API) and `api/auth.py` (2) now call `emit_compliance`. | Old key expires by its 90-day TTL | n/a |
 | 8 | `knowledge/audit_log.py` | Redis `audit:user:<id>`, `audit:fact:<id>`, `audit:org:<id>` + `setex` bodies | **Retired (D2), module deleted.** `knowledge_view.KnowledgeAuditLog` records and reads KNOWLEDGE events in #1; the double write is gone. | 0 (no production caller ever called `log_event`). Reader: `api/knowledge_audit.py` (5 endpoints). | Old keys expire by their TTL | n/a |
 | 9 | `autobot_shared/user_management/models/audit.py` (`AuditLog`) | Postgres `audit_logs` (+ `category`, `actor`, `session_id`, `resource_ref` from #17225) | **The system of record (D1).** | All through `audit_row`: `services/audit/store.py`, `rbac_middleware.py` (denial audit, #14750), `organization_service.py`, `team_service.py`, `user_service_base.py` (the one UserService both backends use since #18267). | None | Convention only |
 | 10 | `services/secrets_audit_store.py` | SQLite `secrets_audit` | Missed. Decided: record through #1 -- #18284. | 1 module | None | None |
@@ -72,7 +72,7 @@ keeps an `audit_log.json` outside the guard's roots.
 ## Behaviour changes a reviewer should know
 
 * `audit.emit(AuditEvent(...))` records the event it is given. It used to be shadowed by an
-  `EventType` bridge, so 7 producers (`services/task_claim.py`, `api/voice_bundle_user.py` x2,
+  `ComplianceEventType` bridge, so 7 producers (`services/task_claim.py`, `api/voice_bundle_user.py` x2,
   the four retention tasks) recorded a COMPLIANCE event whose action was the event's repr.
 * A producer on a thread with no running loop (a sync FastAPI handler, a worker thread) hands its
   record to the serving loop instead of dropping it.

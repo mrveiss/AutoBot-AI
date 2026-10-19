@@ -29,22 +29,22 @@
         </div>
       </h3>
       <div v-if="codebaseStats" class="stats-grid">
-        <BasePanel variant="elevated" size="sm">
+        <BaseCard scrollable variant="elevated" size="sm">
           <div class="stat-value">{{ codebaseStats.total_files || 0 }}</div>
           <div class="stat-label">{{ $t('analytics.codebase.stats.totalFiles') }}</div>
-        </BasePanel>
-        <BasePanel variant="elevated" size="sm">
+        </BaseCard>
+        <BaseCard scrollable variant="elevated" size="sm">
           <div class="stat-value">{{ codebaseStats.total_lines || 0 }}</div>
           <div class="stat-label">{{ $t('analytics.codebase.stats.linesOfCode') }}</div>
-        </BasePanel>
-        <BasePanel variant="elevated" size="sm">
+        </BaseCard>
+        <BaseCard scrollable variant="elevated" size="sm">
           <div class="stat-value">{{ codebaseStats.total_functions || 0 }}</div>
           <div class="stat-label">{{ $t('analytics.codebase.stats.functions') }}</div>
-        </BasePanel>
-        <BasePanel variant="elevated" size="sm">
+        </BaseCard>
+        <BaseCard scrollable variant="elevated" size="sm">
           <div class="stat-value">{{ codebaseStats.total_classes || 0 }}</div>
           <div class="stat-label">{{ $t('analytics.codebase.stats.classes') }}</div>
-        </BasePanel>
+        </BaseCard>
       </div>
       <EmptyState
         v-else
@@ -225,11 +225,11 @@
 </template>
 
 <script setup lang="ts">
+import { BaseCard } from '@autobot/ui'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BasePanel from '@/components/base/BasePanel.vue'
 import {
   ProblemTypesChart,
   SeverityBarChart,

@@ -27,7 +27,7 @@ from autobot_shared.ssot_config import (
 )
 from llm_shared.types import LLMType
 
-from .base_agent import DeploymentMode
+from .base_agent import AgentDeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
@@ -70,7 +70,7 @@ class LLMFailsafeAgent(StandardizedAgent):
     def __init__(
         self,
         agent_type: str | None = None,
-        deployment_mode: DeploymentMode = DeploymentMode.LOCAL,
+        deployment_mode: AgentDeploymentMode = AgentDeploymentMode.LOCAL,
     ):
         """Initialize the failsafe LLM agent (#3387: migrated to StandardizedAgent).
 

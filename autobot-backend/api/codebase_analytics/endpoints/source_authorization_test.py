@@ -247,7 +247,7 @@ class TestPatternAnalyzeBodyAuthz:
         with (
             patch.object(pa.run_pattern_analysis, "delay", delay),
             patch.object(pa, "store_latest_task_id", AsyncMock()),
-            patch("auth_middleware.get_current_user", AsyncMock(return_value=user)),
+            patch("api.codebase_analytics.endpoints.pattern_analysis.get_current_user", AsyncMock(return_value=user)),
             patch(
                 "api.codebase_analytics.source_storage.get_source",
                 AsyncMock(return_value=src),

@@ -23,7 +23,7 @@ from constants.threshold_constants import LLMDefaults
 from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service
 
-from .base_agent import DeploymentMode
+from .base_agent import AgentDeploymentMode
 from .payloads import AgentOutcome, KnowledgeQueryPayload
 from .standardized_agent import ActionHandler, StandardizedAgent
 
@@ -60,7 +60,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
 
     def __init__(self):
         """Initialize the Knowledge Retrieval Agent (#3387: migrated to StandardizedAgent)."""
-        super().__init__("knowledge_retrieval", DeploymentMode.LOCAL)
+        super().__init__("knowledge_retrieval", AgentDeploymentMode.LOCAL)
         self.llm_interface = get_llm_service()
 
         # Use explicit SSOT config - raises AgentConfigurationError if not set

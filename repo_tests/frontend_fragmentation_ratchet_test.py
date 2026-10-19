@@ -87,7 +87,7 @@ BASELINE = {
     # `.vue` components carrying their own <style> rules. Target is a small
     # number of shared stylesheets, not 381 components each with a private
     # copy of the design system.
-    "components_declaring_styles": 375,  # #14776: the local BaseBadge fork left for the kit (376 -> 375); #18240: App.vue's scoped <style> went with the header split (lowered from 379).; #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit
+    "components_declaring_styles": 373,  # #14776: the local BaseBadge fork left for the kit (376 -> 375), then the local BaseCard + BasePanel (375 -> 373); #18240: App.vue's scoped <style> went with the header split (lowered from 379).; #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit
     # Earlier #17020: Terminal.vue removed (dead, zero live callers)
     # Distinct class names declared anywhere in the frontend.
     #
@@ -99,7 +99,7 @@ BASELINE = {
     # cross-referencing sibling admin views) -- this pair is documented above
     # as measuring page SIZE, not duplication, and is interim until #15455
     # replaces them with a real duplication measure.
-    "distinct_class_names": 5585,  # #14776: local BaseBadge retired (5594 -> 5585); #17565: App.vue's hand-rolled .skip-links/.skip-link
+    "distinct_class_names": 5557,  # #14776: local BaseBadge retired (5594 -> 5585), then local BaseCard + BasePanel (5585 -> 5557); #17565: App.vue's hand-rolled .skip-links/.skip-link
     # replaced by the shared kit SkipLink (lowered from 5615). Earlier: #17020,
     # Terminal.vue removed -- pure deletion of dead code, lowered, not held.
     # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (5611 -> 5594).
@@ -107,7 +107,7 @@ BASELINE = {
     #
     # #16972/#15455: same owner-approved, one-off exception as distinct_class_names
     # directly above -- see that comment.
-    "css_rule_declarations": 9337,  # #14776: local BaseBadge retired (9354 -> 9337); #14785: density reuses the existing
+    "css_rule_declarations": 9289,  # #14776: local BaseBadge retired (9354 -> 9337), then local BaseCard + BasePanel (9337 -> 9289); #14785: density reuses the existing
     # [data-layout-density] attribute (no .density-* classes), and the dead
     # assets/main.css .sr-only rule went with that file (lowered from 9379).
     # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (9371 -> 9354).
@@ -126,7 +126,7 @@ BASELINE = {
     "date_format_approaches": 4,
     # Hardcoded `z-index: <number>` declarations, i.e. stacking order decided
     # per file rather than by a scale.
-    "hardcoded_zindex_declarations": 50,  # #18240: App.vue #mobile-nav z-index: 50 became a utility class (lowered from 51)
+    "hardcoded_zindex_declarations": 49,  # #14776: the retired BasePanel's z-index went with it (50 -> 49); #18240: App.vue #mobile-nav z-index: 50 became a utility class (lowered from 51)
 }
 
 # Families worth pinning individually, so a regression in one cannot hide
@@ -138,13 +138,13 @@ BASELINE = {
 FAMILY_BASELINE = {
     "btn": 116,
     "status": 114,
-    "header": 24,
-    "card": 67,
+    "header": 23,  # #14776: local BaseCard + BasePanel merged into the kit card (24 -> 23)
+    "card": 57,  # #14776: local BaseCard + BasePanel merged into the kit card (67 -> 57)
     "badge": 50,  # #14776: the local BaseBadge fork left for the kit (58 -> 50)
     "result": 56,
     "progress": 47,
     "stat": 38,
-    "panel": 34,
+    "panel": 23,  # #14776: local BaseCard + BasePanel merged into the kit card (34 -> 23)
     "form": 27,
     "action": 27,
     "modal": 25,

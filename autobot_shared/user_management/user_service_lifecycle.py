@@ -23,7 +23,7 @@ from typing import Any
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
-from autobot_shared.user_management.models.audit import AuditAction, AuditResourceType
+from autobot_shared.user_management.models.audit import AuditResourceType, IdentityAuditAction
 from autobot_shared.user_management.models.user import UserCore
 from autobot_shared.user_management.password_epoch import set_password_epoch
 from autobot_shared.user_management.user_service_base import UserServiceBase
@@ -75,7 +75,7 @@ class UserLifecycleMixin(UserServiceBase):
         await self.session.flush()
 
         details = await self._revoke_old_sessions(user_id, user.username, current_token)
-        await self._audit_log(AuditAction.PASSWORD_CHANGED, AuditResourceType.USER, user_id, details)
+        await self._audit_log(IdentityAuditAction.PASSWORD_CHANGED, AuditResourceType.USER, user_id, details)
         return True
 
     async def _revoke_old_sessions(self, user_id: uuid.UUID, username: str, current_token: str | None) -> dict:
@@ -94,7 +94,7 @@ class UserLifecycleMixin(UserServiceBase):
         user.is_active = active
         user.updated_at = now_utc()
         await self.session.flush()
-        action = AuditAction.USER_ACTIVATED if active else AuditAction.USER_DEACTIVATED
+        action = IdentityAuditAction.USER_ACTIVATED if active else IdentityAuditAction.USER_DEACTIVATED
         await self._audit_log(action, AuditResourceType.USER, user_id, {})
         logger.info("%s user: %s", "Activated" if active else "Deactivated", user_id)
         return True
@@ -151,6 +151,6 @@ class UserLifecycleMixin(UserServiceBase):
             user.is_active = False
         await self.session.flush()
 
-        await self._audit_log(AuditAction.USER_DELETED, AuditResourceType.USER, user_id, details)
+        await self._audit_log(IdentityAuditAction.USER_DELETED, AuditResourceType.USER, user_id, details)
         logger.info("Deleted user: %s (hard=%s, reassign_to=%s)", user_id, hard_delete, reassign_to)
         return True

@@ -750,9 +750,7 @@ class BatchStatusResponse(BaseModel):
 class BatchLoadResponse(BaseModel):
     """Response for POST /load — multi-endpoint batch execution."""
 
-    responses: Any
-    errors: Any
-    timing: Any
+    results: List[Any]
 
 
 class BatchChatInitResponse(BaseModel):
@@ -2169,14 +2167,6 @@ class APIBatchRequest(BaseModel):
     """Request multiple endpoints in one call."""
 
     requests: List[Dict]
-
-
-class APIBatchResponse(BaseModel):
-    """Combined response from multiple endpoints."""
-
-    responses: Dict
-    errors: Dict[str, str]
-    timing: Dict[str, float]
 
 
 # ---------------------------------------------------------------------------

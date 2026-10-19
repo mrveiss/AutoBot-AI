@@ -31693,7 +31693,10 @@ export interface paths {
         put?: never;
         /**
          * Batch Load
-         * @description Execute multiple API calls in parallel and return combined results.
+         * @description Run several allow-listed GETs in one call, each dispatched through the ASGI app (#18765).
+         *
+         *     Every sub-request carries the caller's own credentials, so the target route's dependencies
+         *     (including admin gates) run and its own status lands in its result slot.
          */
         post: operations["batch_load_api_batch_jobs_load_post"];
         delete?: never;
@@ -60279,12 +60282,8 @@ export interface components {
          * @description Response for POST /load — multi-endpoint batch execution.
          */
         BatchLoadResponse: {
-            /** Responses */
-            responses: unknown;
-            /** Errors */
-            errors: unknown;
-            /** Timing */
-            timing: unknown;
+            /** Results */
+            results: unknown[];
         } & {
             [key: string]: unknown;
         };

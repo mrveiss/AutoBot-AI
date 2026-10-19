@@ -26,7 +26,7 @@ from sqlalchemy.orm import selectinload
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import QueryDefaults
 from autobot_shared.time_utils import now_utc
-from autobot_shared.user_management.models.audit import AuditAction, AuditResourceType
+from autobot_shared.user_management.models.audit import AuditResourceType, IdentityAuditAction
 from autobot_shared.user_management.models.role import UserRole
 from autobot_shared.user_management.models.user import UserCore
 from autobot_shared.user_management.user_service_access import UserAccessMixin
@@ -97,7 +97,7 @@ class UserService(UserLifecycleMixin, UserAccessMixin):
             "org_id": str(effective_org_id) if effective_org_id else None,
             "is_platform_admin": is_platform_admin,
         }
-        await self._audit_log(AuditAction.USER_CREATED, AuditResourceType.USER, user.id, details)
+        await self._audit_log(IdentityAuditAction.USER_CREATED, AuditResourceType.USER, user.id, details)
 
     async def _persist_user(self, user: UserCore, role_ids: list[uuid.UUID] | None, email: str, username: str) -> None:
         """Insert the user SAVEPOINT-isolated against a race (#15772), then assign roles."""
@@ -222,7 +222,9 @@ class UserService(UserLifecycleMixin, UserAccessMixin):
         user.updated_at = now_utc()
         await self.session.flush()
         if changes:
-            await self._audit_log(AuditAction.USER_UPDATED, AuditResourceType.USER, user_id, {"changes": changes})
+            await self._audit_log(
+                IdentityAuditAction.USER_UPDATED, AuditResourceType.USER, user_id, {"changes": changes}
+            )
 
     async def update_user(
         self,

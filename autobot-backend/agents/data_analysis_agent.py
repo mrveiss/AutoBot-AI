@@ -20,7 +20,7 @@ from autobot_shared.ssot_config import (
 from constants.threshold_constants import LLMDefaults
 from services.llm_service import get_llm_service
 
-from .base_agent import AgentRequest, DeploymentMode
+from .base_agent import AgentDeploymentMode, AgentRequest
 from .base_modality_agent import BaseModalityAgent
 from .standardized_agent import ActionHandler
 
@@ -43,7 +43,7 @@ class DataAnalysisAgent(BaseModalityAgent):
     def __init__(
         self,
         agent_type: str | None = None,
-        deployment_mode: DeploymentMode = DeploymentMode.LOCAL,
+        deployment_mode: AgentDeploymentMode = AgentDeploymentMode.LOCAL,
     ):
         """Initialize the Data Analysis Agent with LLM configuration.
 

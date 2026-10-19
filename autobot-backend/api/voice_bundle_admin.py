@@ -20,7 +20,7 @@ from auth_middleware import get_current_user
 from auth_rbac import require_role
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
-from services.audit.audit import EventType, emit_compliance
+from services.audit.audit import ComplianceEventType, emit_compliance
 
 logger = get_logger(__name__)
 
@@ -165,7 +165,7 @@ async def set_user_bundle(
 
     # Audit log
     emit_compliance(
-        EventType.CONFIG_CHANGED,
+        ComplianceEventType.CONFIG_CHANGED,
         str(admin_id),
         resource_type="user_voice_bundle",
         resource_id=user_id,

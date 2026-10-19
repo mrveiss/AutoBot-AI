@@ -5945,10 +5945,6 @@
       "actions": "Acciones",
       "noDataAvailable": "No hay datos disponibles",
       "selectRow": "Seleccionar fila {row}"
-    },
-    "panel": {
-      "collapse": "Contraer panel",
-      "expand": "Expandir panel"
     }
   },
   "views": {
