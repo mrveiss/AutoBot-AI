@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterable
+from datetime import datetime
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -76,30 +77,22 @@ class EnvelopeSecretsService:
         secret_type: str,
         plaintext: bytes,
         created_by: uuid.UUID,
+        extra_data: dict | None = None,
+        expires_at: datetime | None = None,
     ) -> Secret:
-        """Seal *plaintext* for *owner_vault* and persist the secret + owner grant."""
+        """Seal *plaintext* for *owner_vault*; persist secret + owner grant (+ non-secret metadata, expiry)."""
         secret_id = uuid.uuid4()
-        sid = str(secret_id)
-        sealed, dek = seal(plaintext, secret_id=sid)
-        wrapped = wrap_dek(dek, self._kek(owner_vault.to_str()), owner_vault.to_str(), secret_id=sid)
+        sealed, dek = seal(plaintext, secret_id=str(secret_id))
+        vault = owner_vault.to_str()
+        wrapped = wrap_dek(dek, self._kek(vault), vault, secret_id=str(secret_id))
         secret = Secret(
-            id=secret_id,
-            owner_id=created_by,
-            name=name,
-            type=secret_type,
-            scope=owner_vault.kind.value,
-            owner_vault=owner_vault.to_str(),
-            sealed_value=sealed.to_dict(),
-            version=1,
-        )
+            id=secret_id, owner_id=created_by, name=name, type=secret_type, scope=owner_vault.kind.value,
+            owner_vault=vault, sealed_value=sealed.to_dict(), version=1,
+            extra_data=dict(extra_data or {}), expires_at=expires_at
+        )  # fmt: skip
         session.add(secret)
         session.add(
-            SecretGrant(
-                secret_id=secret_id,
-                grantee=owner_vault.to_str(),
-                wrapped_dek=wrapped.to_dict(),
-                created_by=created_by,
-            )
+            SecretGrant(secret_id=secret_id, grantee=vault, wrapped_dek=wrapped.to_dict(), created_by=created_by)
         )
         await session.flush()
         return secret

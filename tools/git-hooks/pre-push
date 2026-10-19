@@ -37,6 +37,19 @@ fi
 # Time-box each check; we'd rather warn than block forever.
 TEST_TIMEOUT=120
 
+# #18694: PROJECT_DIR's vitest `include` roots as an ERE over project-relative paths, read
+# from its own vitest.config.ts (the first `include: [...]`, the test include): per project,
+# not a union, so autobot-frontend's scripts/ root never selects autobot-slm-frontend's
+# scripts/*.spec.ts, which its src/-only config would not collect. An unreadable config
+# selects nothing (every spec is then named as not run) rather than guessing a root.
+# repo_tests/prepush_vitest_include_roots_18694_test.py holds it equal to the configs.
+vitest_include_roots() {
+    local roots
+    roots=$(sed -n '/include: *\[/,/\]/{p;/\]/q}' "$1/vitest.config.ts" 2>/dev/null \
+        | grep -oE "'[^'/]+/" | tr -d "'/" | sort -u | paste -sd'|' -)
+    if [ -n "$roots" ]; then echo "^(${roots})/"; else echo '^$'; fi
+}
+
 # #17451: pytest budget model, defined once. The two per-file costs are measured, not
 # guessed: K=3 s/file parallel from 117.84 s over 46 files under `-n auto`; K=6 s/file
 # serial from the 6-8 s per file seen under `-xvs`. MAX_BUDGET caps every timeout the
@@ -645,11 +658,21 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     # expand `$REPO_ROOT` inside a single-quoted `sh -c`, where that variable is
     # unset -- nothing in this file exports it -- so the selector matched nothing
     # for every input, and its absence was indistinguishable from success.
-    test_files=$(echo "$project_changed" \
+    # #18694: only paths under THIS project's vitest include roots. Every app's vitest.config.ts
+    # collects src/ (autobot-frontend also scripts/) and excludes tests/ and e2e/,
+    # so a changed Playwright spec (tests/visual/*.spec.ts) handed to `vitest run`
+    # collected nothing and blocked the push as COULD NOT RUN.
+    vitest_roots=$(vitest_include_roots "$project_dir")
+    spec_files=$(echo "$project_changed" \
       | grep -E '\.(test|spec)\.ts$' \
       | sed "s|^${project}/||" \
-      | while IFS= read -r rel; do [ -f "$project_dir/$rel" ] && echo "$rel"; done \
-      | head -10 || true)
+      | while IFS= read -r rel; do [ -f "$project_dir/$rel" ] && echo "$rel"; done || true)
+    not_vitest=$(echo "$spec_files" | grep -vE "$vitest_roots" | grep -v '^$' || true)
+    if [ -n "$not_vitest" ]; then
+      log "${project}: not vitest files (outside its vitest.config.ts include roots ${vitest_roots}), not run here:"
+      echo "$not_vitest" | sed 's/^/    /' >&2
+    fi
+    test_files=$(echo "$spec_files" | grep -E "$vitest_roots" | head -10 || true)
     # Also test corresponding __tests__/ for any composable changes
     composable_tests=$(echo "$project_changed" \
       | grep -E 'composables/.*\.ts$' \

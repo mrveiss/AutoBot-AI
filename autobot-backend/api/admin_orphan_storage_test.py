@@ -5,7 +5,7 @@
 """The orphan-storage admin routes: admin-only, every detector, no host paths, and PROPOSE-only deletion (#17038, #17039, #17315)."""
 
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -16,6 +16,7 @@ from auth_middleware import get_current_user
 from models.approval import Approval
 from services import orphan_storage
 from services.approval_gate_service import ApprovalGateService
+from testkit.canonical_gate import canonical_resolver
 
 _ADMIN = {"username": "admin", "role": "admin", "user_id": "admin-1"}
 
@@ -58,7 +59,7 @@ def test_a_non_admin_is_refused(monkeypatch):
     auth = MagicMock()
     auth.get_user_from_request.return_value = {"username": "u2", "role": "user", "user_id": "u2"}
 
-    with patch("auth_rbac.get_auth_middleware", return_value=auth):
+    with canonical_resolver("auth_rbac.resolve_human_user", auth):
         response = _client().get("/api/admin/orphan-storage")
 
     assert response.status_code in (401, 403)
@@ -97,7 +98,7 @@ def test_lists_candidates_from_every_registered_detector_with_totals(monkeypatch
     auth = MagicMock()
     auth.get_user_from_request.return_value = _ADMIN
 
-    with patch("auth_rbac.get_auth_middleware", return_value=auth):
+    with canonical_resolver("auth_rbac.resolve_human_user", auth):
         response = _client().get("/api/admin/orphan-storage")
 
     assert response.status_code == 200
@@ -122,7 +123,7 @@ def test_an_unavailable_detector_names_itself_rather_than_reading_as_success(mon
     auth = MagicMock()
     auth.get_user_from_request.return_value = _ADMIN
 
-    with patch("auth_rbac.get_auth_middleware", return_value=auth):
+    with canonical_resolver("auth_rbac.resolve_human_user", auth):
         response = _client().get("/api/admin/orphan-storage")
 
     assert response.status_code == 200
@@ -156,7 +157,7 @@ def test_a_non_admin_cannot_propose_a_deletion(monkeypatch):
     auth = MagicMock()
     auth.get_user_from_request.return_value = {"username": "u2", "role": "user", "user_id": "u2"}
 
-    with patch("auth_rbac.get_auth_middleware", return_value=auth):
+    with canonical_resolver("auth_rbac.resolve_human_user", auth):
         response = _client().post(
             "/api/admin/orphan-storage/deletion-requests",
             json={"provider": "code_source_clone", "candidate_id": "abc"},
@@ -171,7 +172,7 @@ def test_an_unknown_provider_is_refused_before_a_human_is_ever_asked(monkeypatch
     auth = MagicMock()
     auth.get_user_from_request.return_value = _ADMIN
 
-    with patch("auth_rbac.get_auth_middleware", return_value=auth):
+    with canonical_resolver("auth_rbac.resolve_human_user", auth):
         response = _client().post(
             "/api/admin/orphan-storage/deletion-requests",
             json={"provider": "not_a_provider", "candidate_id": "abc"},
@@ -196,7 +197,7 @@ def test_a_proposal_creates_a_pending_approval_and_deletes_nothing(monkeypatch):
     auth = MagicMock()
     auth.get_user_from_request.return_value = _ADMIN
 
-    with patch("auth_rbac.get_auth_middleware", return_value=auth):
+    with canonical_resolver("auth_rbac.resolve_human_user", auth):
         response = _client(session).post(
             "/api/admin/orphan-storage/deletion-requests",
             json={"provider": "code_source_clone", "candidate_id": "abc"},

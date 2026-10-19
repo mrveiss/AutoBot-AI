@@ -36,7 +36,7 @@ from typing import Callable, List
 
 from fastapi import Request
 
-from auth_middleware import get_auth_middleware
+from auth_middleware import resolve_human_user
 from autobot_shared.auth.permission_gate import PermissionGate
 from autobot_shared.auth.permissions import (  # noqa: F401 — re-exported for callers
     ADMIN_ROLES,
@@ -63,9 +63,12 @@ _get_security_layer = lazy_singleton(SecurityLayer)
 # callers keep working.
 
 
-def _request_caller(request: Request) -> dict | None:
-    """The authenticated caller of *request*, or None: the backend's caller for the shared gate."""
-    return get_auth_middleware().get_user_from_request(request)
+async def _request_caller(request: Request) -> dict | None:
+    """The authenticated caller of *request*, or None: the backend's caller for the shared gate.
+
+    The canonical resolution, so a token revoked by a password change is 401 here too (#18688).
+    """
+    return await resolve_human_user(request)
 
 
 def _wire_rbac() -> None:
@@ -133,9 +136,9 @@ def require_role(*roles: Role | str) -> Callable:
     Issue #744: RBAC role decorator for API endpoints.
     """
 
-    def dependency(request: Request) -> bool:
-        """Check role and return True or raise error."""
-        user_data = get_auth_middleware().get_user_from_request(request)
+    async def dependency(request: Request) -> bool:
+        """Check role and return True or raise error; a revoked JWT is 401 (#18688)."""
+        user_data = await resolve_human_user(request)
         if not user_data:
             raise_auth_error("AUTH_0002", "Authentication required")
 

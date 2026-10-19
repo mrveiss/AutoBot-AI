@@ -9,7 +9,7 @@
 browser_service_account: autobot-browser
 browser_user: autobot-browser
 browser_group: autobot-browser
-browser_install_dir: /opt/autobot/autobot-browser-worker
+browser_install_dir: "{{ autobot.base_dir }}/autobot-browser-worker"
 
 # VNC configuration  (#1363: opt-in, not installed by default)
 install_vnc: false

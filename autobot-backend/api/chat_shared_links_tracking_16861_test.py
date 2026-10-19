@@ -20,6 +20,7 @@ import pytest
 from fastapi import HTTPException
 
 import api.chat_shared_links as shared_links
+from testkit.canonical_gate import install_canonical_resolver
 
 
 def _link(require_login: bool = False, view_count: int = 0, last_accessed_at=None) -> types.SimpleNamespace:
@@ -48,21 +49,23 @@ class _FakeDB:
 
 def test_enforce_require_login_is_a_noop_when_not_required() -> None:
     link = _link(require_login=False)
-    shared_links._enforce_require_login(link, request=None)  # must not raise
+    asyncio.run(shared_links._enforce_require_login(link, request=None))  # must not raise
 
 
 def test_enforce_require_login_allows_an_authenticated_visitor(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(shared_links, "get_auth_middleware", lambda: _FakeAuthMiddleware({"username": "alice"}))
+    install_canonical_resolver(
+        monkeypatch, "api.chat_shared_links.resolve_human_user", _FakeAuthMiddleware({"username": "alice"})
+    )
     link = _link(require_login=True)
-    shared_links._enforce_require_login(link, request=None)  # must not raise
+    asyncio.run(shared_links._enforce_require_login(link, request=None))  # must not raise
 
 
 def test_enforce_require_login_rejects_an_anonymous_visitor(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(shared_links, "get_auth_middleware", lambda: _FakeAuthMiddleware(None))
+    install_canonical_resolver(monkeypatch, "api.chat_shared_links.resolve_human_user", _FakeAuthMiddleware(None))
     link = _link(require_login=True)
 
     with pytest.raises(HTTPException) as exc_info:
-        shared_links._enforce_require_login(link, request=None)
+        asyncio.run(shared_links._enforce_require_login(link, request=None))
 
     assert exc_info.value.status_code == 401
 

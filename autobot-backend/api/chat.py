@@ -56,7 +56,7 @@ from api.websockets import NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import utc_timestamp
-from chat_history.deduplication import _parse_timestamp
+from chat_history.deduplication import parse_message_timestamp
 from chat_history.message_schema import llm_role, message_text, message_type
 
 # Import context overflow protection (#9043)
@@ -265,7 +265,7 @@ def _process_streaming_groups(merged: List[Dict]) -> List[Dict]:
     for msg in merged:
         if _is_streaming_response(msg):
             msg_ts_str = msg.get("timestamp", "")
-            current_ts = _parse_timestamp(msg_ts_str)
+            current_ts = parse_message_timestamp(msg_ts_str)
 
             if current_ts and _should_start_new_streaming_group(current_ts, last_streaming_ts):
                 if current_group:

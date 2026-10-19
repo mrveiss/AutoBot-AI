@@ -10,7 +10,7 @@ service_user: autobot
 service_group: autobot
 
 # Project directories
-project_root: /opt/autobot
+project_root: "{{ autobot.base_dir }}"
 config_dir: /etc/autobot
 logs_dir: /var/log/autobot
 scripts_dir: "{{ project_root }}/scripts"

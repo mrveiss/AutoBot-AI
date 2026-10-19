@@ -217,7 +217,8 @@ REACH = declare(
     # train-26: population 6972 -> window [6272, 6672], completed() ~6377 (594 repo_tests/ files skipped);
     # 6344 is the middle of the legal overlap [6312, 6377].
     # train-33: population 7017 -> window [6317, 6717], completed() 6408; 6382 is the middle of [6357, 6408].
-    floor=6382,
+    # train-36: population 7045 -> window [6345, 6745], completed() 6434; 6409 is the middle of [6385, 6434].
+    floor=6409,
     growth=400,
     skips=300,
     what="tracked python files",

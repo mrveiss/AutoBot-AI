@@ -947,9 +947,9 @@ async def get_current_user(request: Request) -> Dict:
     raise_auth_error("AUTH_0002")
 
 
-def check_admin_permission(request: Request) -> bool:
+async def check_admin_permission(request: Request) -> bool:
     """
-    FastAPI dependency to check if user has admin permission.
+    FastAPI dependency to check if user has admin permission; a revoked JWT is 401 (#18688).
 
     Use as: Depends(check_admin_permission)
 
@@ -968,8 +968,7 @@ def check_admin_permission(request: Request) -> bool:
         logger.debug("Internal API key auth: granting admin access")
         return True
 
-    user_data = get_auth_middleware().get_user_from_request(request)
-
+    user_data = await resolve_human_user(request)  # #12924, #16411: a pre-password-change JWT is 401
     if not user_data:
         raise_auth_error("AUTH_0002")
 

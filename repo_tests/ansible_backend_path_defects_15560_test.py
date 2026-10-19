@@ -105,6 +105,8 @@ def _resolved_defaults(path: Path) -> dict:
     """Render a flat defaults mapping against itself until it stops changing."""
     raw = _load(path)
     context = {k: v for k, v in raw.items() if isinstance(v, (str, int, float, bool))}
+    # Role defaults derive their paths from the inventory's install root (#15632, #18880).
+    context.setdefault("autobot", _load(_ANSIBLE_ROOT / "inventory" / "group_vars" / "all.yml")["autobot"])
     env = _jinja_env()
     for _ in range(6):
         progressed = False

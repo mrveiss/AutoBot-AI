@@ -490,6 +490,32 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_DOCKER_SLM_NGINX_CONF",
+        type=str,
+        default="./docker/nginx/nginx-slm.conf",
+        description=(
+            "nginx config the SLM-only web GUI (compose profile slm) mounts. The default serves "
+            "HTTP; ./docker/nginx/nginx-slm-ssl.conf serves HTTPS with ./docker/certs (#18593)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DOCKER_SLM_HTTPS_PORT",
+        type=int,
+        default=443,
+        description=(
+            "Host port the SLM-only web GUI publishes for HTTPS (container port 443). Change it when "
+            "host port 443 is already taken; the GUI's HTTP port stays 80 (#18593)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_DOCKER_MGMT_POOL",
         type=str,
         default="10.128.0.0/9",

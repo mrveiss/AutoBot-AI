@@ -40,6 +40,8 @@ from api.collaboration import router as collaboration_router
 from api.collaboration_events import router as collaboration_events_router  # #16460
 from api.config_revisions import router as config_revisions_router  # #1404
 from api.coordination import router as coordination_router  # #15949
+from api.coordination_issue_claims import router as coordination_issue_claims_router  # #18811
+from api.coordination_issue_claims_credential import router as issue_claims_credential_router  # #18811
 from api.data_storage import router as data_storage_router
 from api.database_mcp import router as database_mcp_router
 from api.developer import router as developer_router
@@ -499,6 +501,10 @@ def _get_agent_routers() -> list:
         (agent_org_router, "/agents", ["agent-org"], "agent_org"),
         (agent_presence_router, "", ["agent-presence"], "agent_presence"),  # #16965
         (coordination_router, "/coordination", ["coordination", "agent"], "coordination"),
+        # Beside, not inside, coordination_router: they admit the issue-claims credential (#18811).
+        # Credentials first, so /issue-claims/credentials is never matched as an issue {number}.
+        (issue_claims_credential_router, "/coordination", ["coordination"], "issue_claims_credential"),
+        (coordination_issue_claims_router, "/coordination", ["coordination"], "coordination_issue_claims"),
         (files_router, "/files", ["files"], "files"),
         (developer_router, "/developer", ["developer"], "developer"),
         (memory_router, "/memory", ["memory"], "memory"),

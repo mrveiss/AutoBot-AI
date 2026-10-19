@@ -9,7 +9,7 @@
 # Backup settings
 backup_enabled: true
 backup_retention_days: 7
-backup_base_path: "/opt/autobot/backups"
+backup_base_path: "{{ autobot.base_dir }}/backups"
 
 # Update behavior
 dry_run: false
@@ -31,8 +31,8 @@ drain_enabled: true
 drain_timeout: 60  # seconds to wait for connections to drain
 
 # Python venv settings
-venv_path: "/opt/autobot/venv"
-requirements_path: "/opt/autobot/requirements.txt"
+venv_path: "{{ autobot.base_dir }}/venv"
+requirements_path: "{{ autobot.base_dir }}/requirements.txt"
 pip_extra_args: "--no-cache-dir"
 
 # Packages to update (CVE fixes from Issue #544)

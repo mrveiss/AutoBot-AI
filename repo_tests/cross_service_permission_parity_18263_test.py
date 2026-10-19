@@ -92,8 +92,12 @@ import datetime as _datetime
 import types
 import auth_middleware
 import auth_rbac as binding
+import auth_revocation
 from auth_middleware import get_auth_middleware
 middleware = get_auth_middleware()
+# Same stub as the SLM probe: the probe measures permission verdicts, not the password-change epoch,
+# which the backend gate enforces on every path since #18688 slice 3 (and fails closed without Redis).
+patch.object(auth_revocation, "is_token_revoked_by_password_change", AsyncMock(return_value=False)).start()
 
 class _Backdated(_datetime.datetime):
     # create_jwt_token stamps iat from datetime.now(); backdated for the same reason as the SLM (#18347).

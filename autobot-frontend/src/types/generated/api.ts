@@ -17764,6 +17764,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/coordination/issue-claims/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mint Credential
+         * @description Mint the caller's own issue-claims credential; the value is returned this once.
+         */
+        post: operations["mint_credential_api_coordination_issue_claims_credentials_post"];
+        /**
+         * Revoke Credential
+         * @description Revoke the presented credential in the secrets manager: every session holding it is cut off.
+         */
+        delete: operations["revoke_credential_api_coordination_issue_claims_credentials_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/coordination/issue-claims/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Who Holds
+         * @description Who holds issue *number*; ``held: false`` only after the registry was actually read.
+         */
+        get: operations["who_holds_api_coordination_issue_claims__number__get"];
+        put?: never;
+        /**
+         * Claim
+         * @description Claim or renew issue *number*; another holder is 409 naming them.
+         */
+        post: operations["claim_api_coordination_issue_claims__number__post"];
+        /**
+         * Release
+         * @description Release the caller's own claim; anyone else's is refused and stays held.
+         */
+        delete: operations["release_api_coordination_issue_claims__number__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/coordination/issue-claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List All
+         * @description Every live issue claim, install-wide.
+         */
+        get: operations["list_all_api_coordination_issue_claims_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/files/list": {
         parameters: {
             query?: never;
@@ -63832,6 +63904,35 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * ClaimsCredentialResponse
+         * @description Body of ``POST /coordination/issue-claims/credentials``: the credential, returned this once.
+         */
+        ClaimsCredentialResponse: {
+            /**
+             * Credential
+             * @description <secret_id>.<verifier>; keep it in the kernel keyring, never on disk
+             */
+            credential: string;
+            /** Secret Id */
+            secret_id: string;
+            /** Username */
+            username: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ClaimsCredentialRevokedResponse
+         * @description Body of ``DELETE /coordination/issue-claims/credentials``.
+         */
+        ClaimsCredentialRevokedResponse: {
+            /** Revoked */
+            revoked: boolean;
+            /** Secret Id */
+            secret_id: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** ClaimsResponse */
         ClaimsResponse: {
             /** Claims */
@@ -79169,6 +79270,58 @@ export interface components {
             accepted: boolean;
             /** Permission */
             permission?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * IssueClaimListResponse
+         * @description Body of ``GET /coordination/issue-claims``.
+         */
+        IssueClaimListResponse: {
+            /** Claims */
+            claims: {
+                [key: string]: unknown;
+            }[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * IssueClaimRequest
+         * @description Body of ``POST /coordination/issue-claims/{number}``.
+         */
+        IssueClaimRequest: {
+            /**
+             * Owner
+             * @description Session name; bound to the caller
+             */
+            owner: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /** Ttl S */
+            ttl_s?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * IssueClaimResponse
+         * @description One answer shape for claim, release and who; the CLI prints it as JSON.
+         */
+        IssueClaimResponse: {
+            /** Held */
+            held: boolean;
+            /** Granted */
+            granted?: boolean | null;
+            /** Released */
+            released?: boolean | null;
+            /** Holder */
+            holder?: {
+                [key: string]: unknown;
+            } | null;
+            /** Message */
+            message?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -129072,6 +129225,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mint_credential_api_coordination_issue_claims_credentials_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaimsCredentialResponse"];
+                };
+            };
+        };
+    };
+    revoke_credential_api_coordination_issue_claims_credentials_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaimsCredentialRevokedResponse"];
+                };
+            };
+        };
+    };
+    who_holds_api_coordination_issue_claims__number__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueClaimResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    claim_api_coordination_issue_claims__number__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueClaimRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueClaimResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    release_api_coordination_issue_claims__number__delete: {
+        parameters: {
+            query: {
+                owner: string;
+            };
+            header?: never;
+            path: {
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueClaimResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_all_api_coordination_issue_claims_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueClaimListResponse"];
                 };
             };
         };

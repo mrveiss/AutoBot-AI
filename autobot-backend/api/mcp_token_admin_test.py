@@ -20,6 +20,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api.mcp_token_admin import router
+from testkit.canonical_gate import canonical_resolver
 
 # ---------------------------------------------------------------------------
 # App fixture
@@ -64,9 +65,9 @@ def test_create_token_success():
     redis_mock = _make_redis_mock()
     with (
         patch("api.mcp_token_admin._get_redis", new=AsyncMock(return_value=redis_mock)),
-        patch(
-            "auth_rbac.get_auth_middleware",
-            return_value=MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
+        canonical_resolver(
+            "auth_rbac.resolve_human_user",
+            MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
         ),
     ):
         client = TestClient(app)
@@ -91,9 +92,9 @@ def test_create_token_invalid_scope():
     redis_mock = _make_redis_mock()
     with (
         patch("api.mcp_token_admin._get_redis", new=AsyncMock(return_value=redis_mock)),
-        patch(
-            "auth_rbac.get_auth_middleware",
-            return_value=MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
+        canonical_resolver(
+            "auth_rbac.resolve_human_user",
+            MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
         ),
     ):
         client = TestClient(app)
@@ -108,9 +109,9 @@ def test_create_token_empty_scopes():
     redis_mock = _make_redis_mock()
     with (
         patch("api.mcp_token_admin._get_redis", new=AsyncMock(return_value=redis_mock)),
-        patch(
-            "auth_rbac.get_auth_middleware",
-            return_value=MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
+        canonical_resolver(
+            "auth_rbac.resolve_human_user",
+            MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
         ),
     ):
         client = TestClient(app)
@@ -124,9 +125,9 @@ def test_create_token_superadmin_allowed():
     redis_mock = _make_redis_mock()
     with (
         patch("api.mcp_token_admin._get_redis", new=AsyncMock(return_value=redis_mock)),
-        patch(
-            "auth_rbac.get_auth_middleware",
-            return_value=MagicMock(get_user_from_request=MagicMock(return_value=superadmin)),
+        canonical_resolver(
+            "auth_rbac.resolve_human_user",
+            MagicMock(get_user_from_request=MagicMock(return_value=superadmin)),
         ),
     ):
         client = TestClient(app)
@@ -139,9 +140,9 @@ def test_create_token_superadmin_allowed():
 
 def test_create_token_non_admin_rejected():
     non_admin = {"user_id": "u2", "role": "user"}
-    with patch(
-        "auth_rbac.get_auth_middleware",
-        return_value=MagicMock(get_user_from_request=MagicMock(return_value=non_admin)),
+    with canonical_resolver(
+        "auth_rbac.resolve_human_user",
+        MagicMock(get_user_from_request=MagicMock(return_value=non_admin)),
     ):
         client = TestClient(app, raise_server_exceptions=False)
         resp = client.post(
@@ -162,9 +163,9 @@ def test_list_tokens_empty():
     redis_mock.smembers = AsyncMock(return_value=set())
     with (
         patch("api.mcp_token_admin._get_redis", new=AsyncMock(return_value=redis_mock)),
-        patch(
-            "auth_rbac.get_auth_middleware",
-            return_value=MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
+        canonical_resolver(
+            "auth_rbac.resolve_human_user",
+            MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
         ),
     ):
         client = TestClient(app)
@@ -203,9 +204,9 @@ def test_list_tokens_with_entries():
 
     with (
         patch("api.mcp_token_admin._get_redis", new=AsyncMock(return_value=redis_mock)),
-        patch(
-            "auth_rbac.get_auth_middleware",
-            return_value=MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
+        canonical_resolver(
+            "auth_rbac.resolve_human_user",
+            MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
         ),
     ):
         client = TestClient(app)
@@ -233,9 +234,9 @@ def test_revoke_token_success():
 
     with (
         patch("api.mcp_token_admin._get_redis", new=AsyncMock(return_value=redis_mock)),
-        patch(
-            "auth_rbac.get_auth_middleware",
-            return_value=MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
+        canonical_resolver(
+            "auth_rbac.resolve_human_user",
+            MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
         ),
     ):
         client = TestClient(app)
@@ -252,9 +253,9 @@ def test_revoke_token_not_found():
 
     with (
         patch("api.mcp_token_admin._get_redis", new=AsyncMock(return_value=redis_mock)),
-        patch(
-            "auth_rbac.get_auth_middleware",
-            return_value=MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
+        canonical_resolver(
+            "auth_rbac.resolve_human_user",
+            MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
         ),
     ):
         client = TestClient(app)
@@ -270,9 +271,9 @@ def test_revoke_token_not_found():
 def test_create_token_redis_unavailable():
     with (
         patch("api.mcp_token_admin._get_redis", new=AsyncMock(side_effect=Exception("503 test"))),
-        patch(
-            "auth_rbac.get_auth_middleware",
-            return_value=MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
+        canonical_resolver(
+            "auth_rbac.resolve_human_user",
+            MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
         ),
     ):
         client = TestClient(app, raise_server_exceptions=False)

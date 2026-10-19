@@ -9,13 +9,13 @@
 ai_service_account: autobot
 ai_user: autobot
 ai_group: autobot
-ai_install_dir: /opt/autobot/autobot-ai-stack
+ai_install_dir: "{{ autobot.base_dir }}/autobot-ai-stack"
 ai_log_dir: /var/log/autobot
 # Issue #3097: ai-stack and backend share /var/lib/autobot for data storage
 ai_data_dir: /var/lib/autobot
 
 # Co-located backend (used when ai-stack runs on the same host as autobot-backend)
-backend_install_dir: /opt/autobot/autobot-backend
+backend_install_dir: "{{ autobot.base_dir }}/autobot-backend"
 
 # Server settings
 ai_host: "0.0.0.0"

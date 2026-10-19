@@ -76,6 +76,7 @@ import repo_tests.one_session_scope_15068_test as _session_scope_guard  # noqa: 
 import repo_tests.one_ssh_restart_executor_18186_test as _ssh_restart_guard
 import repo_tests.one_static_data_copy_18556_test as _static_data_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_sync_command_runner_18180_test as _sync_runner_guard  # noqa: F401 -- registers its scope
+import repo_tests.opt_autobot_literal_ratchet_18880_test as _opt_autobot_guard  # noqa: F401 -- registers its scope
 import repo_tests.optimization_taxonomies_13049_test as _taxonomy_guard  # noqa: F401 -- registers its scope
 import repo_tests.pr_comment_upsert_12984_test as _pr_comment_guard  # noqa: F401 -- registers its scope
 import repo_tests.provider_key_env_reads_route_through_vault_18094_test as _provider_key_env_guard  # noqa: F401 -- registers its scope
@@ -282,6 +283,7 @@ _DECLARED_SCOPES = {
         "docker/",
     ),
     "backend-migrations-resume-safe-18729": ("autobot-backend/migrations/versions",),
+    "opt-autobot-literal-ratchet-18880": ("autobot-slm-backend/ansible",),
     "concept-forks-17856-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "gateway-adapter-package-scan": ("autobot-backend/services/gateway",),
     "architecture-family-definition-scan": (
