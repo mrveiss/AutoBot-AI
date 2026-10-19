@@ -9,7 +9,6 @@
     "SLMClient",
     "ServiceEndpoint",
     "User",
-    "get_current_user",
     "get_service_url"
   ]
 }

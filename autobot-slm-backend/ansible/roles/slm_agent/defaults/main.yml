@@ -24,7 +24,7 @@ slm_agent_user: autobot
 slm_agent_group: autobot
 
 # Installation directories (#1121/#1129: role-centric layout under /opt/autobot/)
-slm_agent_dir: /opt/autobot/autobot-slm-agent
+slm_agent_dir: "{{ autobot.base_dir }}/autobot-slm-agent"
 # #14278: the agent's dependencies live in their own venv. Installing them into
 # system Python with --break-system-packages fails on any node whose distro owns
 # a transitive dependency: pip may write to the system environment but cannot

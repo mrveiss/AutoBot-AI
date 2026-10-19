@@ -36,6 +36,7 @@ from chat_history import ChatHistoryManager
 from chat_workflow.conversation import ConversationHandlerMixin
 from security.session_ownership import SessionOwnershipValidator
 from services.feature_flags import EnforcementMode
+from testkit.canonical_gate import install_canonical_resolver
 
 ALICE, BOB = "alice", "bob"
 LEGACY_ID = "5f0c9a5e-1b2c-4d3e-8f90-0a1b2c3d4e5f"
@@ -94,14 +95,17 @@ class _World:
     def _wire(self, monkeypatch) -> None:
         # Identity per request: whoever ``self.caller`` names. Every module that asks the auth
         # middleware for the user is pointed here -- since #18258 the validator asks through
-        # ``security.session_posture.authenticated_user``, so missing that one namespace
-        # silently authenticated every request as the dev-mode default user.
+        # ``security.session_posture.authenticated_user``, which resolves through the REAL
+        # ``resolve_human_user`` (#18688); missing that seam silently authenticated every
+        # request as the stub's default user.
         auth = SimpleNamespace(
             enable_auth=True,
             get_user_from_request=lambda _r: {"username": self.caller, "role": "user"},
             security_layer=MagicMock(),
         )
-        for module in ("security.session_posture", "security.session_ownership", "api.chat_sessions"):
+        for resolver in ("security.session_posture", "api.chat_sessions"):
+            install_canonical_resolver(monkeypatch, f"{resolver}.resolve_human_user", auth)
+        for module in ("security.session_ownership", "api.chat_sessions"):
             monkeypatch.setattr(f"{module}.get_auth_middleware", lambda: auth)
         for target in ("utils.chat_utils", "api.chat_sessions", "api.chat"):
             monkeypatch.setattr(f"{target}.get_chat_history_manager", lambda _r: self.history)

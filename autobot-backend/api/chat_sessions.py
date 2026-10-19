@@ -41,7 +41,7 @@ from api.session_events import (
     publish_session_deleted,
     publish_session_updated,
 )
-from auth_middleware import get_auth_middleware, get_current_user
+from auth_middleware import get_auth_middleware, get_current_user, resolve_human_user
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -839,8 +839,8 @@ async def create_session(session_data: SessionCreate, request: Request):
     # so the frontend's locally-minted UUID survives the round-trip and
     # frontend/backend stay aligned. Falls back to server-mint when absent
     # (legacy callers, CLI, tests).
-    # SECURITY: Extract authenticated user and add to metadata as owner
-    user_data = get_auth_middleware().get_user_from_request(request)
+    # SECURITY: Extract authenticated user and add to metadata as owner; a revoked JWT is 401 (#18688)
+    user_data = await resolve_human_user(request)
 
     if session_data.id and validate_chat_session_id(session_data.id):
         session_id = session_data.id

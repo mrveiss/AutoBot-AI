@@ -66,6 +66,9 @@ autobot:
   version: "2.0.0"
   environment: "production"
   domain: "autobot.internal"
+  # THE install root (#15632): the folder AutoBot deploys to. Every path under it derives
+  # from `autobot.base_dir`; install.sh's AUTOBOT_BASE must equal it (#18880). Plain string:
+  # controller plays read this mapping, so it may hold no template (#15731).
   base_dir: "/opt/autobot"
   user: "autobot"
   group: "autobot"
@@ -156,11 +159,11 @@ system:
 
   # System directories
   directories:
-    - "/opt/autobot"
+    - "{{ autobot.base_dir }}"
     - "/var/log/autobot"
     - "/var/lib/autobot"
     - "/etc/autobot"
-    - "/opt/autobot/backups"
+    - "{{ autobot.base_dir }}/backups"
 
 # ==========================================
 # SECURITY CONFIGURATION
@@ -257,7 +260,7 @@ backup:
 
   # Backup storage
   storage:
-    local_path: "/opt/autobot/backups"
+    local_path: "{{ autobot.base_dir }}/backups"
     compress: true
     encryption: true
 

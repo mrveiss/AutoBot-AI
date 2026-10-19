@@ -30,14 +30,32 @@ def no_user_middleware() -> MagicMock:
     return middleware
 
 
-def install_canonical_gate(monkeypatch, middleware):
-    """Point the delegate at the real gate, seeing *middleware*. Returns the real module."""
+def install_canonical_resolver(monkeypatch, target: str, middleware):
+    """Bind *target* (a module's ``resolve_human_user``) to the REAL one, seeing *middleware*.
+
+    The real resolver applies password-change revocation to a JWT user (#18688), so a
+    test that wants it to pass hands in a user whose ``auth_method`` is not ``jwt``, or
+    patches the epoch check. Returns the real module.
+    """
     from tests.conftest import load_real_auth_middleware  # noqa: PLC0415
 
     real = load_real_auth_middleware()
     monkeypatch.setattr(real, "get_auth_middleware", lambda: middleware)
+    monkeypatch.setattr(target, real.resolve_human_user)
+    return real
+
+
+@contextmanager
+def canonical_resolver(target: str, middleware):
+    """Within the block, *target* is the REAL ``resolve_human_user``, seeing *middleware*."""
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        yield install_canonical_resolver(monkeypatch, target, middleware)
+
+
+def install_canonical_gate(monkeypatch, middleware):
+    """Point the delegate at the real gate, seeing *middleware*. Returns the real module."""
+    real = install_canonical_resolver(monkeypatch, _HUMAN_DELEGATE, middleware)
     monkeypatch.setattr(_DELEGATE, real.get_current_user)
-    monkeypatch.setattr(_HUMAN_DELEGATE, real.resolve_human_user)
     return real
 
 

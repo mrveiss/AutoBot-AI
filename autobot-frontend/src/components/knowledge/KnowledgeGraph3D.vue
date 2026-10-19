@@ -82,7 +82,18 @@ interface GraphLink {
 const props = defineProps<{
   entities: Entity[]
   edges: Relation[]
+  /**
+   * Compute the force layout before the first frame and don't animate it
+   * (#18694). For a static picture of the graph, e.g. a visual-regression story;
+   * the app leaves it off and keeps the settling animation.
+   */
+  staticLayout?: boolean
 }>()
+
+/** Ticks run up front when `staticLayout` is set; enough for the layout to settle. */
+const STATIC_LAYOUT_WARMUP_TICKS = 300
+/** Particles per link; none in a static layout, where they would keep moving between frames. */
+const LINK_PARTICLES = 1
 
 const emit = defineEmits<{
   (e: 'entity-selected', entity: Entity | null): void
@@ -162,6 +173,8 @@ function initGraph(): void {
     .width(width)
     .height(height)
     .backgroundColor(getCssVar('--bg-primary', '#0f172a'))
+    .warmupTicks(props.staticLayout ? STATIC_LAYOUT_WARMUP_TICKS : 0)
+    .cooldownTicks(props.staticLayout ? 0 : Infinity)
     .graphData(buildGraphData())
     // Nodes: colored sphere + floating sprite text label
     .nodeColor((node: object) => getNodeColor((node as GraphNode).type))
@@ -185,7 +198,7 @@ function initGraph(): void {
     .linkWidth(1)
     .linkDirectionalArrowLength(4)
     .linkDirectionalArrowRelPos(1)
-    .linkDirectionalParticles(1)
+    .linkDirectionalParticles(props.staticLayout ? 0 : LINK_PARTICLES)
     .linkDirectionalParticleSpeed(0.004)
     // Interaction
     .onNodeClick((node: object | null) => {

@@ -553,4 +553,9 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Alembic revisions, growing.",
     ),
+    "opt-autobot-literal-ratchet-18880": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Every tracked file under the ansible tree; grows with roles and playbooks.",
+    ),
 }

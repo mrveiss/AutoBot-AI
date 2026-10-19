@@ -246,4 +246,4 @@ def test_chat_streaming_groups_use_the_deduplication_timestamp_parser():
     defs = {n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
     imports = {(n.module, a.name) for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) for a in n.names}
     assert "_parse_message_timestamp" not in defs
-    assert ("chat_history.deduplication", "_parse_timestamp") in imports
+    assert ("chat_history.deduplication", "parse_message_timestamp") in imports

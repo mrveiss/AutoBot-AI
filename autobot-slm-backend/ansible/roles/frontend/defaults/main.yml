@@ -8,7 +8,7 @@ network_subnet: "{{ (lookup('env', 'NETWORK_SUBNET') | trim) or (lookup('pipe', 
 frontend_service_account: autobot-frontend  # Phase 7: migrate service to run as this account
 frontend_user: autobot
 frontend_group: autobot
-frontend_install_dir: /opt/autobot
+frontend_install_dir: "{{ autobot.base_dir }}"
 frontend_log_dir: /var/log/autobot
 
 # Deployment

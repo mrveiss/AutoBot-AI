@@ -33,7 +33,7 @@ from typing import Dict
 
 from fastapi import HTTPException, Request
 
-from auth_middleware import get_auth_middleware
+from auth_middleware import resolve_human_user
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from utils.catalog_http_exceptions import raise_internal_error
@@ -48,9 +48,9 @@ class SessionPosture(enum.Enum):
     STRICT = "strict"
 
 
-def authenticated_user(session_id: str, request: Request) -> Dict:
-    """The authenticated user from the request, or 401."""
-    user_data = get_auth_middleware().get_user_from_request(request)
+async def authenticated_user(session_id: str, request: Request) -> Dict:
+    """The authenticated user from the request, or 401 -- a revoked JWT included (#18688)."""
+    user_data = await resolve_human_user(request)
     if not user_data:
         logger.warning("Unauthenticated access attempt to session %s...", session_id[:8])
         raise HTTPException(status_code=401, detail="Authentication required to access conversations")

@@ -150,17 +150,20 @@ def test_the_tenant_context_still_refuses_a_service_principal_handed_to_it_direc
         ({"username": "alice", "role": "admin"}, True),  # control: the same role, no service marker
     ],
 )
-def test_me_derives_platform_admin_from_the_shared_predicate(monkeypatch, claims, expected):
+def test_me_derives_platform_admin_from_the_shared_predicate(claims, expected):
     import api.user_management.users as users_api  # noqa: PLC0415
+    from tests.user_management.test_users_me_18786 import _stored_user  # noqa: PLC0415
 
-    # UserResponse is stood in: /me builds it with created_at=None, which its schema
-    # refuses (a separate defect), so the flag is read off the constructor call.
-    built = {}
-    monkeypatch.setattr(users_api, "UserResponse", lambda **kwargs: built.update(kwargs))
+    uid = uuid.uuid4()
+    service = MagicMock()
+    service.get_user = AsyncMock(return_value=_stored_user(uid))
 
-    asyncio.run(users_api.get_current_user_profile(current_user=dict(claims)))
+    # The real UserResponse is built (#18786): the flag is the claims', not the stored row's.
+    response = asyncio.run(
+        users_api.get_current_user_profile(current_user={**claims, "user_id": str(uid)}, user_service=service)
+    )
 
-    assert built["is_platform_admin"] is expected
+    assert response.is_platform_admin is expected
 
 
 def test_a_human_admin_jwt_still_lists_companies(monkeypatch):

@@ -15,7 +15,7 @@ Tests for data retention policy CRUD endpoints:
 
 import uuid
 from typing import AsyncGenerator
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
@@ -27,6 +27,7 @@ from sqlalchemy.pool import StaticPool
 
 from api.admin_retention_policies import router as retention_router
 from api.user_management.dependencies import get_db_session
+from testkit.canonical_gate import canonical_resolver
 from user_management.models.base import Base
 from user_management.models.retention_policy import RetentionPolicy
 
@@ -99,11 +100,11 @@ def _patch_auth_middleware():
     """Feed the canonical require_role() gate (#12704) the injected test user.
 
     Retention endpoints use ``require_role("admin", "superadmin")``, which reads
-    the user via ``auth_rbac.get_auth_middleware()``.
+    the user via ``auth_rbac.resolve_human_user``.
     """
     mw = MagicMock()
     mw.get_user_from_request.side_effect = lambda request: _CURRENT["user"]
-    with patch("auth_rbac.get_auth_middleware", return_value=mw):
+    with canonical_resolver("auth_rbac.resolve_human_user", mw):
         yield
     _CURRENT["user"] = None
 

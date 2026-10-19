@@ -105,10 +105,10 @@ response, a log line, an issue, a PR comment — is already redacted.
 [`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:128) for SLM token revocation.
 
 **Invariants**
-- No parallel crypto path. A diff introducing its own `Fernet(...)` or `AESGCM(...)` instead
-  of calling the store is a finding regardless of whether the primitive is used correctly.
+- No parallel crypto path. A diff introducing its own `Fernet(...)` or `AESGCM(...)` instead of calling the store is a finding regardless of whether the primitive is used correctly.
 - Secrets compare with `secrets.compare_digest`, never `==`. A missing/`None` credential can never match — `verify_internal_api_key` returns `False` when either side is unset,
   and `/api/metrics/prometheus` admits only its dedicated read-only scrape token ([`prometheus_scrape_auth.py`](../../autobot-backend/monitoring/prometheus_scrape_auth.py); unset refuses every scrape; record, delivery, rotation: [`PROMETHEUS_SCRAPE_TOKEN_ROTATION.md`](PROMETHEUS_SCRAPE_TOKEN_ROTATION.md)).
+- The issue-claims client credential (#18811) is a secret in its minter's own vault, presented as `<secret_id>.<verifier>` in `X-AutoBot-Claims-Credential` and checked per request by `SecretsCoordinator.verify_bearer` (constant-time, live, owner active). A successful check is audited as `secret.access`; failed checks are rate-limited per source and audited in aggregate, one `claims_credential.check_failures` event per source per window ([`coordination_issue_claims_throttle.py`](../../autobot-backend/api/coordination_issue_claims_throttle.py)). Only `claims_principal` in [`coordination_issue_claims_credential.py`](../../autobot-backend/api/coordination_issue_claims_credential.py) reads that header, so it authenticates nothing outside `/api/coordination/issue-claims`; the CLI keeps it in the kernel user keyring only, never on disk.
 - Every `ConnectorCredentialStore` read takes `owner_id` and passes `_require_owner`; a new
   method that skips it grants cross-tenant credential read.
 - Nothing reaches a log, HTTP error body, or outward artifact without

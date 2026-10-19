@@ -21,10 +21,12 @@ which keeps the CLI, the baseline and the ratchet.
 from __future__ import annotations
 
 import ast
+import json
 import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 from autobot_shared.paths import scrubbed_git_env
 
@@ -235,3 +237,68 @@ def fork_tracked_python_files(root: Path, roots: tuple[str, ...] = FORK_ROOTS) -
 def scan_symbol_forks(root: Path, roots: tuple[str, ...] = FORK_ROOTS) -> ForkScan:
     """Enumerate and sweep ``root`` -- the one entry point both callers use."""
     return fork_find_clusters(fork_tracked_python_files(root, roots), root)
+
+
+#: The per-service exception record both the CI ratchet and the dashboard apply (#18688), relative to the root.
+FORK_EXCEPTIONS_RELPATH = "repo_tests/symbol_fork_exceptions.json"
+
+_EXCEPTION_FIELDS = ("symbol", "canonical", "sites", "reason", "issue")
+
+
+def fork_load_exceptions(path: Path) -> list[dict]:
+    """The recorded per-service exceptions at *path*; none if the record does not exist."""
+    if not path.exists():
+        return []
+    return list(json.loads(path.read_text(encoding="utf-8"))["exceptions"])
+
+
+def fork_validate_exception(entry: dict) -> list[str]:
+    """Why an exception entry is unusable: missing fields or malformed sites. The CI ratchet adds
+    its own checks on top (``tools/lint/check_symbol_forks.validate_exception``)."""
+    problems = [f"missing {f!r}" for f in _EXCEPTION_FIELDS if not entry.get(f)]
+    sites = entry.get("sites") or []
+    if not isinstance(sites, list) or not all(isinstance(x, str) for x in sites):
+        # A schema error, checked before the sites are read: an int is not iterable, a string would
+        # be judged per character, and a dict inside the list is unhashable where it is applied.
+        problems.append("'sites' must be a list of path:qualname strings")
+        sites = []
+    canonical = entry.get("canonical")
+    if canonical and not isinstance(canonical, str):
+        problems.append("'canonical' must be a path:qualname string")
+        canonical = None
+    bad = [x for x in [canonical, *sites] if x and ":" not in x]
+    problems += [f"site {x!r} is not path:qualname" for x in bad]
+    return [f"exception {entry.get('symbol', '?')!r}: {p}" for p in problems]
+
+
+def _fork_live_sites(cluster: "ForkCluster | None") -> set[str]:
+    """Binding sites as `path:qualname`; a module-level binding's qualname is its name."""
+    return {f"{d.path}:{cluster.name}" for d in cluster.definitions} if cluster else set()
+
+
+def fork_apply_exceptions(
+    clusters: "dict[str, ForkCluster]",
+    exceptions: list[dict],
+    validate: "Callable[[dict], list[str]]" = fork_validate_exception,
+):
+    """Drop clusters whose EVERY binding is canonical or a recorded exception.
+
+    Returns `(effective clusters, problems)`. A binding outside the record keeps
+    its cluster; an invalid entry or a recorded site that no longer exists is a
+    problem, so the record shrinks with the tree exactly as the baseline does.
+    """
+    effective, problems = dict(clusters), []
+    for entry in exceptions:
+        bad = validate(entry)
+        problems += bad
+        if bad:
+            continue
+        name, cluster = entry["symbol"], clusters.get(entry["symbol"])
+        recorded = {entry["canonical"], *entry["sites"]}
+        problems += [
+            f"STALE exception {name!r}: site {s!r} is not a live binding"
+            for s in sorted(recorded - _fork_live_sites(cluster))
+        ]
+        if cluster and _fork_live_sites(cluster) <= recorded:
+            effective.pop(name, None)
+    return effective, problems

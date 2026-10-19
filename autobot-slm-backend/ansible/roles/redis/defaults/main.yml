@@ -70,8 +70,8 @@ redis_health_check_delay: 5          # Seconds between retries
 
 # ChromaDB (vector database, co-located with Redis on database nodes — MVA-1319)
 chromadb_port: 8100
-chromadb_install_dir: /opt/autobot/autobot-db-stack/chromadb
-chromadb_data_dir: /opt/autobot/autobot-db-stack/chromadb/data
+chromadb_install_dir: "{{ autobot.base_dir }}/autobot-db-stack/chromadb"
+chromadb_data_dir: "{{ autobot.base_dir }}/autobot-db-stack/chromadb/data"
 # CHROMA_SERVER_AUTHN_* token auth (#12513). Empty (default) = auth disabled,
 # matching pre-#12513 behaviour. Normally adopted from the SLM-generated value in
 # slm-secrets.env (see _shared/tasks/read_chromadb_auth_token.yml); override via
