@@ -884,12 +884,12 @@ class TestJinaPooledSession:
 
         manager = get_http_client()
         sentinel_session = MagicMock(closed=False)
-
+        before = manager._active_requests  # relative: an earlier test can leave the singleton raised (#18912)
         with patch.object(manager, "get_session", new=AsyncMock(return_value=sentinel_session)):
             async with pl._get_jina_session() as session:
                 assert session is sentinel_session
-
-        assert manager._active_requests == 0, "counter must be back to 0 after the CM exits"
+                assert manager._active_requests == before + 1, "the CM must count its request"
+        assert manager._active_requests == before, "counter must return to its start after the CM exits"
 
     @pytest.mark.asyncio
     async def test_shared_session_reused_across_calls(self, _reset_jina_state):

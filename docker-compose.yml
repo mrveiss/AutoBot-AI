@@ -480,10 +480,13 @@ services:
     image: autobot/backend:latest
     container_name: autobot-celery-beat
     restart: unless-stopped
-    # NB: inherits the image ENTRYPOINT (/app/entrypoint.sh, #9759). Migrations
-    # stay skipped here because AUTOBOT_USER_MODE is deliberately NOT set for
-    # beat — do not add it, or beat and the backend would run
-    # `alembic upgrade head` concurrently (alembic takes no advisory lock).
+    # #18910: no image ENTRYPOINT. /app/entrypoint.sh always migrates since #18729, and
+    # beat used to skip it only because AUTOBOT_USER_MODE was unset. Beat has no Postgres
+    # settings, so it migrated against localhost, exited and crash-looped. The backend
+    # alone runs `alembic upgrade head`; beat must not, since alembic takes no advisory
+    # lock and two would race. With no entrypoint celery is PID 1, which the procfs
+    # healthcheck below expects.
+    entrypoint: []
     command: >
       python3.14 -m celery -A celery_app beat
       --loglevel=info
