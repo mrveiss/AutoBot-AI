@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from auth_rbac import require_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from services.audit.audit import EventType, query_events  # GH#8290 Phase 2
+from services.audit.audit import ComplianceEventType, query_events  # GH#8290 Phase 2
 
 router = APIRouter(prefix="/admin", tags=["admin", "compliance"])
 logger = get_logger(__name__)
@@ -66,5 +66,5 @@ async def list_event_logs(
         "count": len(events),
         "limit": limit,
         "offset": offset,
-        "available_event_types": [e.value for e in EventType],
+        "available_event_types": [e.value for e in ComplianceEventType],
     }

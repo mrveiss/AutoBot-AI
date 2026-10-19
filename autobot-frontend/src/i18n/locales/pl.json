@@ -5945,10 +5945,6 @@
       "actions": "Akcje",
       "noDataAvailable": "Brak dostępnych danych",
       "selectRow": "Zaznacz wiersz {row}"
-    },
-    "panel": {
-      "collapse": "Zwiń panel",
-      "expand": "Rozwiń panel"
     }
   },
   "views": {

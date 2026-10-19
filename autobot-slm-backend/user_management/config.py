@@ -74,12 +74,12 @@ def _build_url(host: str, port: str, database: str, user: str, password: str) ->
 
 
 @dataclass
-class DeploymentConfig:
+class RbacDeploymentConfig:
     """Deployment configuration for RBAC middleware."""
 
     postgres_enabled: bool = True
 
 
-def get_deployment_config() -> DeploymentConfig:
+def get_rbac_deployment_config() -> RbacDeploymentConfig:
     """Get deployment configuration. SLM always uses PostgreSQL."""
-    return DeploymentConfig(postgres_enabled=True)
+    return RbacDeploymentConfig(postgres_enabled=True)

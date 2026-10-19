@@ -24,7 +24,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
 from autobot_shared.status_enums import CommandRisk
 from config import get_config_manager
-from secure_command_executor import SecureCommandExecutor, SecurityPolicy
+from secure_command_executor import CommandSecurityPolicy, SecureCommandExecutor
 from services.audit.audit import emit_security, query_filtered
 from services.audit.taxonomy import AuditCategory, AuditFilter
 
@@ -175,9 +175,9 @@ class SecurityLayer:
     # Security Policy
     # =========================================================================
 
-    def _create_security_policy(self) -> SecurityPolicy:
+    def _create_security_policy(self) -> CommandSecurityPolicy:
         """Create security policy from configuration."""
-        policy = SecurityPolicy()
+        policy = CommandSecurityPolicy()
 
         # Load custom policies from config if available
         custom_policies = self.security_config.get("command_policies", {})

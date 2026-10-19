@@ -67,11 +67,11 @@ async def setup_distributed_execution():
 ## Enqueue tasks with priority
 
 ```python
-from utils.task_queue import TaskQueue, TaskPriority
+from utils.task_queue import RedisTaskQueue, TaskPriority
 import asyncio
 
 async def enqueue_tasks():
-    queue = TaskQueue(queue_name="autobot_tasks")
+    queue = RedisTaskQueue(queue_name="autobot_tasks")
     await queue.start()
 
     # Enqueue with different priorities
@@ -126,7 +126,7 @@ The scheduler loop moves due-tasks from `{queue}:scheduled` back to `{queue}:pen
 ## Monitor task status programmatically
 
 ```python
-async def monitor_task(queue: TaskQueue, task_id: str, poll_interval: float = 1.0):
+async def monitor_task(queue: RedisTaskQueue, task_id: str, poll_interval: float = 1.0):
     """Poll a task until it reaches a terminal state."""
     while True:
         result = await queue.get_task_result(task_id)

@@ -30,7 +30,7 @@
     <div v-if="activeTab === 'cost'" class="tab-content">
       <div class="metrics-grid">
         <!-- Total Cost Card -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="dollar-sign" /> {{ $t('analytics.advanced.totalCost30d') }}</h4>
           </template>
@@ -41,31 +41,31 @@
             <Icon :name="trendIcon" />
             {{ costTrends?.growth_rate_percent?.toFixed(1) || 0 }}% {{ $t('analytics.advanced.vsPreviousPeriod') }}
           </div>
-        </BasePanel>
+        </BaseCard>
 
         <!-- Daily Average Card -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="calendar" /> {{ $t('analytics.advanced.dailyAverage') }}</h4>
           </template>
           <div class="metric-value">
             ${{ costSummary?.avg_daily_cost?.toFixed(2) || '0.00' }}
           </div>
-        </BasePanel>
+        </BaseCard>
 
         <!-- Trend Card -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="arrow-trend-up" /> {{ $t('analytics.advanced.costTrend') }}</h4>
           </template>
           <div class="metric-value" :class="costTrend">
             {{ costTrends?.trend || 'stable' }}
           </div>
-        </BasePanel>
+        </BaseCard>
       </div>
 
       <!-- Cost by Model Table -->
-      <BasePanel variant="elevated" class="mt-4">
+      <BaseCard scrollable variant="elevated" class="mt-4">
         <template #header>
           <h4><Icon name="robot" /> {{ $t('analytics.advanced.costByModel') }}</h4>
         </template>
@@ -90,43 +90,43 @@
           </tbody>
         </table>
         <EmptyState v-else icon="chart-bar" :message="$t('analytics.advanced.noCostData')" />
-      </BasePanel>
+      </BaseCard>
     </div>
 
     <!-- Agent Performance Tab -->
     <div v-if="activeTab === 'agents'" class="tab-content">
       <div class="metrics-grid">
         <!-- Total Agents -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="users-cog" /> {{ $t('analytics.advanced.totalAgents') }}</h4>
           </template>
           <div class="metric-value large">{{ agentMetrics?.total_agents || 0 }}</div>
-        </BasePanel>
+        </BaseCard>
 
         <!-- Total Tasks -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="tasks" /> {{ $t('analytics.advanced.totalTasks') }}</h4>
           </template>
           <div class="metric-value">
             {{ formatNumber(agentMetrics?.summary?.total_tasks || 0) }}
           </div>
-        </BasePanel>
+        </BaseCard>
 
         <!-- Avg Success Rate -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="check-circle" /> {{ $t('analytics.advanced.avgSuccessRate') }}</h4>
           </template>
           <div class="metric-value success">
             {{ agentMetrics?.summary?.avg_success_rate?.toFixed(1) || 0 }}%
           </div>
-        </BasePanel>
+        </BaseCard>
       </div>
 
       <!-- Agent Performance Table -->
-      <BasePanel variant="elevated" class="mt-4">
+      <BaseCard scrollable variant="elevated" class="mt-4">
         <template #header>
           <h4><Icon name="chart-line" /> {{ $t('analytics.advanced.agentPerformance') }}</h4>
         </template>
@@ -157,10 +157,10 @@
           </tbody>
         </table>
         <EmptyState v-else icon="robot" :message="$t('analytics.advanced.noAgentData')" />
-      </BasePanel>
+      </BaseCard>
 
       <!-- Recommendations -->
-      <BasePanel variant="bordered" class="mt-4" v-if="recommendations?.recommendations?.length">
+      <BaseCard scrollable variant="bordered" class="mt-4" v-if="recommendations?.recommendations?.length">
         <template #header>
           <h4><Icon name="lightbulb" /> {{ $t('analytics.advanced.recommendations') }}</h4>
         </template>
@@ -183,55 +183,55 @@
             </ul>
           </div>
         </div>
-      </BasePanel>
+      </BaseCard>
     </div>
 
     <!-- User Behavior Tab -->
     <div v-if="activeTab === 'behavior'" class="tab-content">
       <div class="metrics-grid">
         <!-- Total Sessions -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="users" /> {{ $t('analytics.advanced.totalSessions') }}</h4>
           </template>
           <div class="metric-value large">
             {{ formatNumber(engagementMetrics?.metrics?.total_sessions || 0) }}
           </div>
-        </BasePanel>
+        </BaseCard>
 
         <!-- Page Views -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="eye" /> {{ $t('analytics.advanced.pageViews') }}</h4>
           </template>
           <div class="metric-value">
             {{ formatNumber(engagementMetrics?.metrics?.total_page_views || 0) }}
           </div>
-        </BasePanel>
+        </BaseCard>
 
         <!-- Avg Session Duration -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="clock" /> {{ $t('analytics.advanced.avgSessionDuration') }}</h4>
           </template>
           <div class="metric-value">
             {{ formatDuration(engagementMetrics?.metrics?.avg_session_duration_ms || 0, { style: 'msSeconds2dp', nullText: '0ms' }) }}
           </div>
-        </BasePanel>
+        </BaseCard>
 
         <!-- Pages Per Session -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="file-alt" /> {{ $t('analytics.advanced.pagesPerSession') }}</h4>
           </template>
           <div class="metric-value">
             {{ engagementMetrics?.metrics?.pages_per_session?.toFixed(1) || '0.0' }}
           </div>
-        </BasePanel>
+        </BaseCard>
       </div>
 
       <!-- Feature Popularity -->
-      <BasePanel variant="elevated" class="mt-4">
+      <BaseCard scrollable variant="elevated" class="mt-4">
         <template #header>
           <h4><Icon name="star" /> {{ $t('analytics.advanced.featurePopularity') }}</h4>
         </template>
@@ -262,10 +262,10 @@
           </tbody>
         </table>
         <EmptyState v-else icon="chart-bar" :message="$t('analytics.advanced.noFeatureData')" />
-      </BasePanel>
+      </BaseCard>
 
       <!-- Usage Heatmap -->
-      <BasePanel variant="bordered" class="mt-4" v-if="usageHeatmap?.peak_hours?.length">
+      <BaseCard scrollable variant="bordered" class="mt-4" v-if="usageHeatmap?.peak_hours?.length">
         <template #header>
           <h4><Icon name="bolt" /> {{ $t('analytics.advanced.peakUsageHours') }}</h4>
         </template>
@@ -280,13 +280,13 @@
             <span class="peak-events">{{ formatNumber(peak.total_events) }} {{ $t('analytics.advanced.events') }}</span>
           </div>
         </div>
-      </BasePanel>
+      </BaseCard>
     </div>
 
     <!-- Export Tab -->
     <div v-if="activeTab === 'export'" class="tab-content">
       <div class="export-grid">
-        <BasePanel
+        <BaseCard scrollable
           v-for="format in exportFormats"
           :key="format.format"
           variant="bordered"
@@ -307,7 +307,7 @@
               {{ endpoint.description }}
             </BaseButton>
           </div>
-        </BasePanel>
+        </BaseCard>
       </div>
     </div>
 
@@ -320,12 +320,12 @@
 </template>
 
 <script setup lang="ts">
+import { BaseCard } from '@autobot/ui'
 import type { IconName } from '@/components/ui/Icon.vue'
 import { formatDuration } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import BasePanel from '@/components/base/BasePanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import api from '@/services/api'
@@ -843,7 +843,7 @@ onMounted(() => {
 }
 
 .rank-3 {
-  background: var(--chart-orange, #f97316);
+  background: var(--chart-orange);
   color: var(--text-on-primary);
 }
 

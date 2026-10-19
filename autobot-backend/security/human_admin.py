@@ -10,7 +10,7 @@ Redis or deleting audit evidence is an operator action, so those routes refuse t
 before the admin gate runs; a human admin's own credentials still pass.
 """
 
-from fastapi import HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, status
 
 import auth_middleware
 from autobot_shared.node_proxy import INTERNAL_KEY_HEADER
@@ -23,3 +23,8 @@ def refuse_service_principal(request: Request) -> None:
     # Looked up on the module at call time, so it is the same check the admin gate makes.
     if auth_middleware.verify_internal_api_key(request.headers.get(INTERNAL_KEY_HEADER)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=SERVICE_PRINCIPAL_REFUSED)
+
+
+#: Human-admin-only routes: the service key is refused before the admin check (#18688).
+#: The one definition; route modules import it rather than rebuilding the pair.
+HUMAN_ADMIN_DEPENDENCIES = [Depends(refuse_service_principal), Depends(auth_middleware.check_admin_permission)]

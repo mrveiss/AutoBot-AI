@@ -37,7 +37,7 @@ def _get_default_postgres_host() -> str:
         return get_config().vm.redis
 
 
-class DeploymentMode(str, Enum):
+class UserManagementMode(str, Enum):
     """Deployment mode enumeration."""
 
     SINGLE_COMPANY = "single_company"
@@ -46,7 +46,7 @@ class DeploymentMode(str, Enum):
 
 
 @dataclass
-class FeatureFlags:
+class UserModeFeatures:
     """Feature flags based on deployment mode."""
 
     user_management: bool = False
@@ -65,8 +65,8 @@ class FeatureFlags:
 class DeploymentConfig:
     """Configuration for the current deployment mode."""
 
-    mode: DeploymentMode
-    features: FeatureFlags
+    mode: UserManagementMode
+    features: UserModeFeatures
     postgres_enabled: bool = False
     postgres_host: str = field(default_factory=_get_default_postgres_host)
     postgres_port: int = 5432
@@ -93,8 +93,8 @@ class DeploymentConfig:
 
 
 # Feature flags for each deployment mode
-MODE_FEATURES: dict[DeploymentMode, FeatureFlags] = {
-    DeploymentMode.SINGLE_COMPANY: FeatureFlags(
+MODE_FEATURES: dict[UserManagementMode, UserModeFeatures] = {
+    UserManagementMode.SINGLE_COMPANY: UserModeFeatures(
         user_management=True,
         team_management=True,
         organization_switcher=False,
@@ -106,7 +106,7 @@ MODE_FEATURES: dict[DeploymentMode, FeatureFlags] = {
         quota_management=False,
         billing=False,
     ),
-    DeploymentMode.MULTI_COMPANY: FeatureFlags(
+    UserManagementMode.MULTI_COMPANY: UserModeFeatures(
         user_management=True,
         team_management=True,
         organization_switcher=True,
@@ -118,7 +118,7 @@ MODE_FEATURES: dict[DeploymentMode, FeatureFlags] = {
         quota_management=True,
         billing=False,
     ),
-    DeploymentMode.PROVIDER: FeatureFlags(
+    UserManagementMode.PROVIDER: UserModeFeatures(
         user_management=True,
         team_management=True,
         organization_switcher=True,
@@ -155,7 +155,7 @@ def get_deployment_config() -> DeploymentConfig:
     mode_str = config.user_mode.lower()
 
     try:
-        mode = DeploymentMode(mode_str)
+        mode = UserManagementMode(mode_str)
     except ValueError:
         # AutoBot always runs full, Postgres-backed user management (#10636).
         # An unset/invalid AUTOBOT_USER_MODE defaults to single_company.
@@ -164,7 +164,7 @@ def get_deployment_config() -> DeploymentConfig:
                 "AUTOBOT_USER_MODE=%r is invalid; defaulting to single_company (full user management)",
                 mode_str,
             )
-        mode = DeploymentMode.SINGLE_COMPANY
+        mode = UserManagementMode.SINGLE_COMPANY
 
     # Get feature flags for this mode
     features = MODE_FEATURES[mode]

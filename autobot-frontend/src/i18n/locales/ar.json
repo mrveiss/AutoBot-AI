@@ -5945,10 +5945,6 @@
       "actions": "إجراءات",
       "noDataAvailable": "No data available",
       "selectRow": "Select row {row}"
-    },
-    "panel": {
-      "collapse": "Collapse panel",
-      "expand": "Expand panel"
     }
   },
   "views": {

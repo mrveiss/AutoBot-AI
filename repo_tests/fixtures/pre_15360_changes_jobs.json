@@ -936,7 +936,7 @@
   },
   "other_jobs_sha256": {
    "migration-matrix": "56f77551-31073ea2-fcbedcc1-084d04d6-dd858fed-912ec86e-7b364952-d0a5fac8",
-   "migration-tests": "9f56c43d-5e042e7c-a7fff38b-940604c9-48e82e07-30ace73b-817faaf2-8395a6fa"
+   "migration-tests": "e8afa7e8-d3449785-d179ae56-32d553e1-afd5337b-f18ceb42-f225b4f8-bbdf11fe"
   },
   "outputs": [
    "migrations"

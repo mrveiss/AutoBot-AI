@@ -71,7 +71,7 @@ _WRITE_MODES = ("a", "w", "ab", "wb", "a+", "w+")
 #: ORM rows that ARE audit records, and `audit_row`, the one constructor of an
 #: `audit_logs` row (#17225 D1). A view class whose name merely ends in
 #: "AuditLog" (KnowledgeAuditLog) is not one -- it records through the service.
-_AUDIT_ORM_CLASSES = ("WorkflowAuditLog", "AuditLog", "audit_row")
+_AUDIT_ORM_CLASSES = ("WorkflowAuditLog", "AuditLog", "SlmNodeAuditLog", "audit_row")
 _PATH_WORDS = ("path", "file", "dir", "root")
 _AUDIT_INSERT = re.compile(r"\binsert\s+into\s+\w*audit", re.IGNORECASE)
 
@@ -300,7 +300,8 @@ def test_nothing_imports_a_retired_module() -> None:
 
 #: The only modules that construct `AuditLog(...)`: the one row builder, and the SLM API, whose
 #: `AuditLog` is its own `slm_node_audit_logs` model, not this table.
-_DIRECT_ROW_CONSTRUCTORS = frozenset({_ROW_BUILDER, "autobot-slm-backend/api/security.py"})
+#: The SLM's security.py builds `SlmNodeAuditLog` (#17312 rename), a separate table, not an audit_logs row.
+_DIRECT_ROW_CONSTRUCTORS = frozenset({_ROW_BUILDER})
 
 
 def test_audit_logs_rows_have_one_constructor() -> None:

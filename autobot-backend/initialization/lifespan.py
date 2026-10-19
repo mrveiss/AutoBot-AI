@@ -1559,9 +1559,9 @@ async def _init_orchestrator(app: FastAPI) -> None:
 
 
 async def _wire_npu_task_queue() -> None:
-    """Wire NPUWorkerManager into the global TaskQueue for per-worker task tracking (#2985).
+    """Wire NPUWorkerManager into the global RedisTaskQueue for per-worker task tracking (#2985).
 
-    TaskQueue._worker_loop already calls assign_task_to_worker / release_worker_task
+    RedisTaskQueue._worker_loop already calls assign_task_to_worker / release_worker_task
     behind an ``if self.npu_worker_manager is not None:`` guard, but the attribute was
     never set to an actual instance — making all tracking code dead (#2944).  This helper
     runs during Phase 2 (non-critical) so that startup is never blocked by NPU issues.

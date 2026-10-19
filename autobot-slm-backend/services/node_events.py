@@ -11,13 +11,13 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.database import EventSeverity, EventType, NodeEvent
+from models.database import EventSeverity, NodeEvent, NodeEventType
 
 
 async def create_node_event(
     db: AsyncSession,
     node_id: str,
-    event_type: EventType,
+    event_type: NodeEventType,
     severity: EventSeverity,
     message: str,
     details: dict = None,
