@@ -199,7 +199,7 @@ def _production_files(root: Path) -> list[str]:
     return [rel for rel in tracked if _is_production(rel)]
 
 
-#: MEASURED 2026-09-14 against this tree: 2555 production files by this guard's own filter
+#: Re-measured on the train-38 tree (see the floor line); originally MEASURED 2026-09-14 at 2555 production files by this guard's own filter
 #: (2356 autobot-backend, 195 autobot_shared, 4 infra MCP) -- #16466 retired
 #: browser_tracking.py/file_tracking.py/terminal_tracking.py/knowledge/activity_types.py as
 #: dead code, dropping autobot-backend's count by 3 net of other merged growth. `growth=250`
@@ -210,7 +210,7 @@ def _production_files(root: Path) -> list[str]:
 REACH = declare(
     "kb-read-visibility-production-sweep",
     discover=_production_files,
-    floor=2661,
+    floor=2767,  # train-38: population 2892, window [2642, 2892], mid-window
     growth=250,
     skips=0,
     what="production python files",

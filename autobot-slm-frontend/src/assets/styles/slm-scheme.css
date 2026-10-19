@@ -377,6 +377,33 @@
 /* ===== Shared token names (the contract with the user frontend) =====
    Identical mapping to autobot-frontend css/themes/refined-map.css: the
    existing semantic names resolve to the Refined name of the active theme. */
+/* Table metrics the kit adapter reads (#14778), in every theme including high-contrast. */
+:root[data-app='slm'] {
+  --tbl-font-size: 13px;
+  --tbl-row-h: 44px;
+  --tbl-cell-px: 16px;
+  --tbl-cell-py: 10px;
+  --tbl-head-h: 36px;
+  --tbl-head-font: 600 11.5px/1.2 var(--font-sans);
+  --tbl-head-case: uppercase;
+  --tbl-head-ls: .05em;
+  --tbl-check-col-w: 44px;
+  --tbl-min-col: 96px;
+  --tbl-num: tabular-nums;
+}
+
+/* High-contrast table colours come from the accessibility palette (main.css, #754). */
+:root[data-app='slm'][data-theme='high-contrast'] {
+  --tbl-head-bg: var(--a11y-bg-muted);
+  --tbl-head-fg: var(--a11y-text);
+  --tbl-head-border: 1px solid var(--a11y-border);
+  --tbl-border: 1px solid var(--a11y-border);
+  --tbl-row-hover: var(--a11y-bg-muted);
+  --tbl-row-selected: var(--a11y-bg-muted);
+  --tbl-selected-edge: 3px solid var(--a11y-focus-ring);
+  --tbl-zebra-bg: var(--a11y-bg-surface);
+}
+
 :root[data-app='slm']:not([data-theme='high-contrast']) {
   --bg-primary: var(--bg);
   --bg-secondary: var(--surface);
@@ -400,6 +427,15 @@
   --table-header-bg: var(--surface2);
   --table-row-bg: var(--surface);
   --table-border: var(--border);
+  /* Table colours the kit adapter reads (#14778); same names and values as the main app. */
+  --tbl-head-bg: var(--surface2);
+  --tbl-head-fg: var(--muted);
+  --tbl-head-border: var(--bw) solid var(--border);
+  --tbl-border: var(--bw) solid var(--line);
+  --tbl-row-hover: var(--surface2);
+  --tbl-row-selected: var(--surface2);
+  --tbl-selected-edge: 3px solid var(--primary);
+  --tbl-zebra-bg: var(--surface2);
   --input-bg: var(--surface);
   --input-border: var(--border);
   --color-focus: var(--focus);

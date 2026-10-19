@@ -268,7 +268,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/markdown_reference_system.py": 707,
     "autobot-backend/mcp_server/autobot_server.py": 932,
     "autobot-backend/mcp_server/mcp_security_test.py": 812,
-    "autobot-backend/media/link/pipeline_test.py": 965,
+    "autobot-backend/media/link/pipeline_test.py": 963,
     "autobot-backend/memory/manager.py": 979,
     "autobot-backend/memory/ownership_reassign_test.py": 886,
     "autobot-backend/memory/transparency.py": 609,

@@ -2994,7 +2994,7 @@ class ToolHandlerMixin:
         Orchestrates the two halves above: capture the live DOM snapshot,
         then run the goal-directed LLM sub-extraction over it.
         """
-        from web_fetch.extractors import extract_markdown
+        from web_fetch.profile import IngestProfile, extract_page
 
         goal = (params.get("goal") or "").strip()
         if not goal:
@@ -3004,8 +3004,8 @@ class ToolHandlerMixin:
         if not html_content:
             return "extract_content: no live page content — navigate to a page first."
 
-        _title, markdown = extract_markdown(html_content)
-        return await self._answer_goal_from_markdown(markdown, url, goal)
+        text = extract_page(html_content, IngestProfile.DOCUMENT, base_url=url or "").text
+        return await self._answer_goal_from_markdown(text, url, goal)
 
     async def _execute_web_search(self, query: str, max_pages: int = 5, session_id: str = "") -> str:
         """Run a web search and return formatted results. Issue #2306.

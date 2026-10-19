@@ -24,7 +24,7 @@ const baseCards: Card[] = [
   { name: 'BaseInput', description: 'Form input component with validation and helpers', href: '?path=/docs/components-base-baseinput--docs' },
   { name: 'BaseCard', description: 'Card and panel container, variants and sizes (shared kit)', href: '?path=/docs/kit-basecard--docs' },
   { name: 'BaseBadge', description: 'Badge component for labels and status indicators (shared kit)', href: '?path=/docs/kit-basebadge--docs' },
-  { name: 'BaseTable', description: 'Data table component with sorting and filtering', href: '?path=/docs/components-base-basetable--docs' },
+  { name: 'BaseTable', description: 'Data table with sorting, selection and numeric columns (shared kit)', href: '?path=/docs/kit-basetable--docs' },
 ];
 
 const commonCards: Card[] = [
@@ -40,7 +40,6 @@ const featureCards: Card[] = [
 const uiCards: Card[] = [
   { name: 'BaseModal', description: 'Modal dialog with backdrop and slot-based body', href: '?path=/docs/components-ui-basemodal--docs' },
   { name: 'ConfirmDialog', description: 'Confirmation dialog with confirm/cancel actions', href: '?path=/docs/components-ui-confirmdialog--docs' },
-  { name: 'DataTable', description: 'Sortable, paginated data table', href: '?path=/docs/components-ui-datatable--docs' },
   { name: 'ProgressBar', description: 'Linear progress indicator with variants', href: '?path=/docs/components-ui-progressbar--docs' },
   { name: 'SkeletonLoader', description: 'Placeholder loading skeleton', href: '?path=/docs/components-ui-skeletonloader--docs' },
   { name: 'StatusBadge', description: 'Compact status indicator badge', href: '?path=/docs/components-ui-statusbadge--docs' },

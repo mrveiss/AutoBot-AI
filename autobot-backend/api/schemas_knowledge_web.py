@@ -17,6 +17,10 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from web_fetch.profile import IngestProfile
+
+_PROFILE_DESCRIPTION = "What to keep from each page (#18826): only 'document' is implemented"
+
 
 class CrawlRequest(BaseModel):
     """Request body for POST /knowledge/crawl."""
@@ -28,6 +32,7 @@ class CrawlRequest(BaseModel):
     ingest: bool = Field(default=True, description="Index crawled pages into ChromaDB")
     same_origin: bool = Field(default=True, description="Restrict crawl to same scheme+host per seed")
     render: Literal["auto", "fast", "playwright"] = Field(default="auto", description="Render mode")
+    profile: IngestProfile = Field(default=IngestProfile.DOCUMENT, description=_PROFILE_DESCRIPTION)
     # Issue #5136 Phase 4: run a scrape template on every crawled URL and merge
     # region-extracted fields into the KB document.
     scrape_template_id: Optional[str] = Field(
@@ -59,6 +64,7 @@ class ScrapeRequest(BaseModel):
     render: Literal["auto", "fast", "playwright"] = Field(default="auto", description="Render mode")
     ingest: bool = Field(default=False, description="Index scraped content into ChromaDB")
     format: Literal["markdown", "html", "json"] = Field(default="markdown", description="Response format")
+    profile: IngestProfile = Field(default=IngestProfile.DOCUMENT, description=_PROFILE_DESCRIPTION)
 
 
 class ScrapeMetadata(BaseModel):
