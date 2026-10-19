@@ -260,6 +260,10 @@ function toggleFleetService(serviceName: string): void {
   expandedFleetServices.value = next
 }
 
+function fleetServiceCount(nodeId: string): number {
+  return orchestration.fleetServices.reduce((sum, svc) => sum + svc.nodes.filter((n) => n.node_id === nodeId).length, 0)
+}
+
 function getNodeHostname(nodeId: string): string {
   const node = orchestration.fleetStore.nodeList.find((n) => n.node_id === nodeId)
   return node?.hostname ?? nodeId
@@ -2133,15 +2137,7 @@ onUnmounted(() => {
                   <ServiceStatusBadge :status="node.status" />
                 </td>
                 <td class="px-4 py-2 text-sm text-gray-600">
-                  {{
-                    orchestration.fleetServices.length > 0
-                      ? orchestration.fleetServices.reduce(
-                          (sum, svc) => sum + svc.nodes.filter((n) => n.node_id === node.node_id).length,
-                          0
-                        )
-                      : 0
-                  }}
-                  services
+                  {{ t('orchestrationView.serviceCount', fleetServiceCount(node.node_id)) }}
                 </td>
                 <td class="px-4 py-2">
                   <div class="flex flex-wrap gap-1">

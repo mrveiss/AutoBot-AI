@@ -24,6 +24,7 @@ from api.schemas_knowledge import (
     UpdateVisibilityRequest,
 )
 from auth_middleware import check_admin_permission
+from autobot_shared.api_routing.deprecated_redirects import add_deprecated_redirects
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge.search_filters import can_read_fact, fact_not_found, object_metadata
@@ -32,6 +33,20 @@ from knowledge_factory import get_or_create_knowledge_base
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["knowledge_ownership"])
+
+# #18722: the doubled paths answer 308 for one release; removal tracked in #18793.
+add_deprecated_redirects(
+    router,
+    {
+        ("POST", "/api/knowledge/facts/{fact_id}/share"): "/facts/{fact_id}/share",
+        ("DELETE", "/api/knowledge/facts/{fact_id}/share/{user_id_to_remove}"): (
+            "/facts/{fact_id}/share/{user_id_to_remove}"
+        ),
+        ("PUT", "/api/knowledge/facts/{fact_id}/visibility"): "/facts/{fact_id}/visibility",
+        ("GET", "/api/knowledge/facts/mine"): "/facts/mine",
+        ("GET", "/api/knowledge/facts/shared-with-me"): "/facts/shared-with-me",
+    },
+)
 
 
 def _get_user_from_request(request: Request) -> str | None:
@@ -85,7 +100,7 @@ async def _get_fact_with_ownership(kb, fact_id: str, user_id: str):
     return fact
 
 
-@router.post("/api/knowledge/facts/{fact_id}/share", response_model=KnowledgeShareFactResponse)
+@router.post("/facts/{fact_id}/share", response_model=KnowledgeShareFactResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="share_fact",
@@ -148,7 +163,7 @@ async def share_fact(
     }
 
 
-@router.delete("/api/knowledge/facts/{fact_id}/share/{user_id_to_remove}", response_model=KnowledgeUnshareFactResponse)
+@router.delete("/facts/{fact_id}/share/{user_id_to_remove}", response_model=KnowledgeUnshareFactResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="unshare_fact",
@@ -211,7 +226,7 @@ async def unshare_fact(
     }
 
 
-@router.put("/api/knowledge/facts/{fact_id}/visibility", response_model=KnowledgeUpdateVisibilityResponse)
+@router.put("/facts/{fact_id}/visibility", response_model=KnowledgeUpdateVisibilityResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_fact_visibility",
@@ -305,7 +320,7 @@ async def _fetch_fact_details(
     return facts
 
 
-@router.get("/api/knowledge/facts/mine", response_model=KnowledgeMyFactsResponse)
+@router.get("/facts/mine", response_model=KnowledgeMyFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_my_facts",
@@ -361,7 +376,7 @@ async def get_my_facts(
     }
 
 
-@router.get("/api/knowledge/facts/shared-with-me", response_model=KnowledgeSharedWithMeResponse)
+@router.get("/facts/shared-with-me", response_model=KnowledgeSharedWithMeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_shared_facts",

@@ -194,7 +194,7 @@ def test_the_expansion_attributes_routes_to_the_registered_router() -> None:
 #: Until then the blind spot is PINNED, so it cannot quietly grow: if a module
 #: starts composing with include_router, this fails and the next person learns
 #: the guard got blinder rather than discovering it years later.
-COMPOSING_MODULES_PIN = 17
+COMPOSING_MODULES_PIN = 18  # train 33: #18796 system.py includes system_cache_coordinator's router
 
 
 def _modules_using_include_router() -> list[str]:
