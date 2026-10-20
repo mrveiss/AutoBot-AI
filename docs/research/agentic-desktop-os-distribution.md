@@ -343,3 +343,21 @@ witness comment rather than a duplicate, per *one defect, one fix*.
 Batching note recorded on the issues themselves: #17420, #17421, #17280, #17459 and #17460 all touch
 `autobot_shared/plugin_sdk/` and `autobot-backend/plugin_manager.py` → **one agent, one PR** per the
 same-file rule. #17262 and #17465 share the update path and likely batch together.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #15030 — frontend: surface per-account quota headroom and provider lifecycle state in the provider view
+- #17219 — security(audit): three audit writers document tamper-resistance they do not implement
+- #17262 — bug(slm): the whole-machine self-update path has no disk gate and no rollback, though both exist elsewhere in the repo
+- #17280 — security(plugin-sdk): trust_tier is self-declared and no plugin artefact is ever verified — weaker integrity than we apply to model weights
+- #17420 — bug(plugins): manual plugin load passes grant_capabilities= to a loader that accepts no such argument, so the #9049 approval gate raises TypeError (closed)
+- #17421 — security(plugins): every discovered plugin is imported and enabled at boot — no opt-in gate, no persisted enable state, no integrity check
+- #17459 — security(plugin-sdk): plugin capabilities are declared and granted but never checked — CapabilityChecker.check() has no call sites, so /plugins/audit cannot be non-empty
+- #17460 — security(plugin-sdk): no namespace reservation — a community plugin can claim a core plugin's name, and only `plugin_dirs` ordering prevents the shadowing
+- #17461 — docs/feat(deploy): release channels are specified in AUTOBOT_REFERENCE.md and unimplemented — only a main/release branch pin exists
+- #17462 — bug(cli): `./autobot setup` and `./autobot repair` exec scripts that do not exist, and three unrelated paths implement start/stop/status
+- #17463 — tech-debt(approvals): three approval policies, one enforced — needs_approval() and the 'minimal' guard profile have no production caller (closed)
+- #17464 — feat(observability): a crash produces a log line and nothing else — no deduped failure-to-diagnosis trigger, and the causal engine has no caller
+- #17465 — feat(deploy): out-of-band deployment mutation is undetectable — the builtin-updater-only rule has no detector

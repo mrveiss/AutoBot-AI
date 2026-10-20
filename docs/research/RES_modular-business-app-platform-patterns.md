@@ -138,3 +138,9 @@ agent review skills.
   `dependencies` using `graphlib`.
 - (Conditional) the SLM restore path: a per-role neutralize hook, run after restore when
   the target node differs from the source.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #18502 — fix(plugins): startup loads plugins in filesystem order, so a plugin discovered before its dependency is rejected

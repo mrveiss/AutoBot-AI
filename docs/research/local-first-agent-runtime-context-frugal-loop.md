@@ -690,3 +690,15 @@ Searched phrasings are given; all returned nil on both states.
   no requester≠approver check anywhere; `api/terminal_handlers.py:1080-1088` blocking nothing at
   `STANDARD`; and the MCP bridge asking the *model* to supply `approved: true`
   (`chat_workflow/tool_handler.py:958-992`).
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #17271 — umbrella: the agent turn re-encodes, cannot be cancelled, and is unmeasured — six findings from a comparative loop audit
+- #17272 — security(integrations): PR comments and reviews are published under a real identity through no approval seam
+- #17273 — bug(chat): a disconnected client leaves the LangGraph turn running, and the LLM call has no total timeout (closed)
+- #17274 — tech-debt(knowledge): the cognifiers fork the shared JSON parser and so never got #11587's sanitization tier
+- #17277 — observability(llm): nothing detects prompt drift — a system-prompt edit changes every session silently
+- #17278 — perf(chat): the volatile memory block is prepended ahead of the stable prefix, so every turn misses the prefix cache
+- #17279 — test(eval): the harness scores drift, not task success — no loop change can be shown to help

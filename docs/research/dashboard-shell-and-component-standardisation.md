@@ -641,3 +641,18 @@ overstatement is in #14785's body, corrected there. The inventory should read
 So the harness exists, is well built, and enforces nothing today. That does not
 weaken the audit's conclusion — it strengthens it, and it is why #17571 is
 harness work before it is rule work.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #12730 — Umbrella: GUI consistency via shared, enforced primitives (actions, empty/loading states, base controls, tokens, icons) — root of #12695/#12702/#12703/#12707/#12711/#12729, both frontends
+- #14580 — chore(frontend): lint raw Tailwind palette classes in .vue templates (color-no-hex blind spot) (closed)
+- #17561 — GUI consistency: the command palette is not fed by the nav registry — 19 destinations unreachable from ⌘K (closed)
+- #17562 — GUI consistency: main-GUI tables are unstandardised — DataTable has 0 consumers, BaseTable 1, and 35 of 37 raw <table> views use neither
+- #17563 — Shared kit is missing PageHeader and an app-wide Breadcrumb — in neither #14779's nor #14780's primitive list
+- #17564 — GUI consistency: no density token scope and no part contracts, so views hand-roll spacing and reach into primitive internals
+- #17565 — a11y: no visible skip link — #main-content landmark exists but 19 nav items precede content in tab order (closed)
+- #17566 — autobot-slm-frontend is effectively untokenised: 6,213 raw palette utilities across 104 of 113 component files (92%), vs 737 var(--token) in 12
+- #17567 — Design-system enforcement: guard !important in component <style>, and switch the CSS gate from changed-files to whole-tree
+- #17571 — Design system is not declared canonical anywhere, and the canonical harness that would enforce it holds one warn-level smoke rule

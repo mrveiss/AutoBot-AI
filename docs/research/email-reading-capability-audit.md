@@ -622,3 +622,21 @@ ls autobot-backend/api/integration_*.py                               # 8 router
 grep -rn "email\|smtp\|inbox" --include="*.py" autobot-backend/llc/   # 3 comment-only hits
 grep -n "class.*Role" autobot-backend/llc/models/enums.py             # no CEO role
 ```
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #13707 — Umbrella: company mailbox for Company OS — inbound email, autonomy-gated, vault-backed
+- #13708 — security(secrets): credential redaction is name-keyed and cannot see credentials in free text — add content scanning before mail is indexed (closed)
+- #13709 — refactor(approvals): approval memory is scoped per project path — generalise the scope key for mail, browser and signup
+- #13710 — feat(integrations): Outlook mail integration has no API router — 628 built lines are unreachable
+- #13711 — feat(secrets): agents have no write path to the vault — add store_secret_for_agent with provenance
+- #13712 — feat(knowledge): no mail connector — email never reaches the knowledge base
+- #13713 — fix(integrations): orphaned Gmail service cannot run — migrate it onto the canonical connector and vault
+- #13714 — feat(gui): no mailbox view — build read/compose UI on the existing inbox pattern
+- #13715 — feat(approvals): mail has no autonomy model — wire mail risk tiers onto the terminal approval seam
+- #13716 — feat(llc): Company OS has no email — turn inbound threads into work items with verified senders
+- #13718 — feat(agents): agent cannot sign up for services — mailbox + browser + vault deposit under per-service approval
+- #13845 — canonical(enums): CommandRisk and CommandRiskLevel model the same concept with divergent tails — FORBIDDEN has no wire representation (closed)
+- #13846 — canonical(enums): SecretType and SecretRequirement duplicate the secret taxonomy — agents cannot express an OAuth requirement (closed)

@@ -430,3 +430,16 @@ child; both "do not re-propose" rulings re-confirmed).
 
 Relationships read back with `gh api repos/$REPO/issues/<parent>/sub_issues` and
 `.../issues/17801/dependencies/blocked_by` — all four edges present.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #13030 — umbrella(optimization): large-model inference on lean hardware is scaffolded but non-functional — 7 defects
+- #13031 — bug(optimization): layer streaming loads the entire checkpoint per layer, per token (#13030)
+- #13033 — bug(optimization): KV trim_to_length retains the oldest window instead of the newest (#13030)
+- #13034 — security(models): no revision pinning or weight integrity verification — 18 suppressed B615 findings (#13030)
+- #13892 — epic(document): document ingest cannot read scanned PDFs — 5 forked extractors, dormant OCR, 2 stubs
+- #17800 — bug(document): a scanned page's tables are recorded as "this document has no tables" (#13892)
+- #17801 — bug(optimization): the KV sliding window has no caller, and its tail-only policy would evict the prompt prefix (#13030)
+- #17803 — security(models): trust_remote_code defaults to true in the recommended-models table (#13034)

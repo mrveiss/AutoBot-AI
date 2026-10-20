@@ -466,3 +466,9 @@ The Redis directory ownership conflict is a **critical production issue** requir
 
 **Report Compiled**: 2025-10-05
 **Next Steps**: Proceed to Planning phase for implementation
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+None filed yet.

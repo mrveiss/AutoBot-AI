@@ -308,3 +308,19 @@ Policy-audit-trail work folds into #13588/#13592 rather than being filed separat
   provider set with no provider-level regression tests in its open repository, by explicit policy.
 - Adopting an external gateway as a runtime dependency: a second gateway process, credential store,
   and policy model is a net loss for a system that needs roughly a dozen integrations.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #13623 — Umbrella: connector, credential and egress hardening (external-implementation comparison)
+- #13624 — security(ssrf): cross-origin redirect in pinned_request_with_redirects replays the caller Authorization header (closed)
+- #13625 — security(connectors): six connectors with user-configured hosts bypass the SSRF guard — needs a deployment-gated private-network opt-in (closed)
+- #13626 — bug(oauth): a refresh response without expires_in permanently disables token refresh — connector auth dies silently (closed)
+- #13627 — bug(oauth): concurrent get_access_token both refresh — rotating-refresh-token providers lose the valid token (closed)
+- #13628 — security(secrets): connector credential owner check fails open on empty created_by; rotate() decrypts with no audit attribution (closed)
+- #13629 — feat(connectors): stored credentials carry no account identity — nobody can tell which account an agent acts as
+- #13630 — canonical(oauth): app client secret duplicated into every user credential bundle; OAuthProvider too thin for real providers
+- #13631 — feat(connectors): no declared-vs-executable capability flags — unwired features are only found by retrospective audits
+- #13632 — canonical(connectors): two connector families model one concept (knowledge/connectors vs integrations) — owner decision needed
+- #13643 — canonical(secrets): integrations/ bypasses the secrets manager entirely — credentials passed as bare values, no grant, audit, revocation or dependency edge

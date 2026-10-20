@@ -53,3 +53,18 @@ register_env_var(
         range=(0.1, 3600.0),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_RETRY_COOLDOWN_SECONDS",
+        type=int,
+        default=60,
+        description=(
+            "Seconds after a failed knowledge-base initialization during which every access "
+            "path returns None instead of retrying ChromaDB; force_refresh bypasses it; read "
+            "by knowledge_factory.py (#3094, #18122)."
+        ),
+        component="knowledge",
+        range=(1, 86400),
+    )
+)

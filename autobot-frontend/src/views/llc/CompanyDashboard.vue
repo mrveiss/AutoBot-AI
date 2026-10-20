@@ -167,10 +167,12 @@ onMounted(async () => {
   <!--
     Full-height scroll container: the shell gives dashboards a full-height content
     region (#10897). The sections are DashboardGrid widgets the user can move and
-    resize; the layout is saved per user (#18242).
+    resize; the layout is saved per user (#18242). It spans the full content width and its
+    spacing follows the viewport: --page-margin (16-32px by width), --space-section and
+    the grid's --stack step down below 1024px (#18223).
   -->
   <div class="h-full overflow-y-auto">
-    <div class="mx-auto flex min-h-full max-w-7xl flex-col gap-6 p-4">
+    <div class="flex min-h-full flex-col gap-(--space-section) p-(--page-margin)">
       <!-- Header -->
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h1 class="text-2xl font-bold text-autobot-text-primary">{{ $t('llc.dashboard.title') }}</h1>

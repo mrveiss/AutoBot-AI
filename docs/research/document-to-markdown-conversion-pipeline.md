@@ -295,3 +295,12 @@ ingestion), #16775 (KB allowlist gap).
 | `autobot-backend/utils/document_parser.py`, `autobot-backend/utils/document_extractors.py` | Consume the extended `detect_format()` result instead of trusting `file_path.suffix` alone |
 | `autobot-backend/media/document/extraction.py` (or a new `media/document/archive.py`) | Add a zip-container extractor with size/count/depth caps, following the `extraction_timeout()` pattern per member (adopt #2) |
 | `autobot-backend/api/knowledge.py:126` | `ALLOWED_EXTENSIONS` gap — needs an owner decision, not a code change from this research pass |
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #16772 — Document ingestion hardening: content verification for office formats + zip ingestion
+- #16773 — Verify ZIP-based office/ODF formats by content, not extension alone (closed)
+- #16774 — Add zip/archive recursive ingestion for KB document uploads
+- #16775 — KB upload allowlist omits already-supported office/ODF formats (closed)

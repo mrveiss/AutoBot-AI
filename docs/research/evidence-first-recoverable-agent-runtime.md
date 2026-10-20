@@ -211,3 +211,22 @@ record for conversation turns (A), with LLM context projected from A, B retired 
 #18297 (routing strategy inert, under #16524) · #18298 (GOAP unreachable) · #18299 (ACP approvals never reach client) ·
 #18300 (PLAN/ACCEPT_EDITS inert, under #13413) · #18301 (vLLM prefix-caching toggle inert) · comment on #13231 (uninstall keeps grants).
 Sightings not refiled: #17495 instance 3, #17280, #17459.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #18293 — canonical(state): every chat turn is persisted twice — chat_sessions and an undeclared transcript store, already diverged once (closed)
+- #18294 — canonical(tools): tool-effect classification is forked across four name lists that already disagree — derive all from tool_catalogue (closed)
+- #18296 — bug(agents): the Q-learning router is consulted on every request but never learns — record_outcome has no caller
+- #18297 — bug(llm): AUTOBOT_LLM_ROUTING_STRATEGY is inert — the live path bypasses get_active_router, so CostRouter and LatencyRouter are unreachable
+- #18298 — bug(orchestration): GOAP replanning can never run — build_goap_workflow_plan has no caller, so no plan ever carries is_goap_plan
+- #18299 — bug(acp): approvals in an ACP-driven turn never reach the client — request_permission has no call site
+- #18300 — security(permissions): PLAN and ACCEPT_EDITS modes are inert — PLAN promises gated writes but behaves as DEFAULT
+- #18301 — bug(llm): the vLLM prefix-caching setting is never passed to the engine — the toggle has no effect
+- #18302 — security(shell): the agent shell runs on the host unsandboxed — run each command in a fail-closed bubblewrap namespace
+- #18303 — feat(approval): the user's denial reason reaches the model as a typed result, not "Command was denied or failed"
+- #18304 — feat(agent): run-generation fencing — a cancelled or superseded run can never checkpoint, persist or commit a result
+- #18305 — feat(observability): a per-turn context manifest — ids and hashes of everything that fed the prompt, never raw text
+- #18306 — feat(delegation): briefs carry acceptance checks and the parent re-checks the child's structured result (deferred)
+- #18307 — feat(agent): harness rules learned from traces, adopted only after a paired A/B (deferred)

@@ -568,4 +568,9 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Every tracked file under the ansible tree; grows with roles and playbooks.",
     ),
+    "kb-construction-18122-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test Python under thirteen source roots, a subset of tracked Python; the test-file share drifts.",
+    ),
 }

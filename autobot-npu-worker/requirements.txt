@@ -37,7 +37,7 @@ uvicorn[standard]>=0.54.0
 # pillow carries the floor `autobot-backend/requirements.txt` states for it
 # (SECURITY UPDATE - OOB write fix); the role installed it unpinned, so a fresh
 # provision could land below that fix.
-pillow>=12.3.0
+pillow>=13.0.0
 # transformers is deliberately BARE, unlike every other manifest in this repo,
 # which states `>=5.16.1`. `optimum[openvino]` below pulls `optimum-intel`,
 # whose newest release (2.1.0) requires `transformers<5.6,>=4.51` -- so
