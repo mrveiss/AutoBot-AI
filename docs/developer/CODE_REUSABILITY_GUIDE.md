@@ -1254,7 +1254,7 @@ const createRipple = (event: TouchEvent) => {
 - **No duplicate code** - Single button component serves both desktop and mobile
 
 **Files Modified**:
-- `autobot-frontend/src/components/base/BaseButton.vue` (extended with touch features)
+- `autobot-frontend/src/components/base/BaseButton.vue` (extended with touch features) — superseded (#18849): the main app now uses the shared kit button, `import { BaseButton } from '@autobot/ui'` (`libs/autobot-ui/src/components/BaseButton.vue`); the local file is gone
 
 **TouchFriendlyButton.vue Status**: Recommend deprecation or conversion to lightweight wrapper around `<BaseButton touchOptimized>` for backward compatibility.
 

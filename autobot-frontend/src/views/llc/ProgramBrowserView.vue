@@ -104,9 +104,8 @@ import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import LlcBreadcrumb, { type BreadcrumbItem } from '@/components/llc/LlcBreadcrumb.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseButton, BaseModal } from '@autobot/ui'
 
 interface ProgramResponse {
   id: string

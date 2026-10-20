@@ -9,7 +9,7 @@
  */
 
 import { ref, onBeforeUnmount } from 'vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import { knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'

@@ -141,8 +141,7 @@ import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useCollaborationInvite } from '@/composables/collaboration/useCollaborationInvite'
-import BaseButton from '@/components/base/BaseButton.vue'
-import { BaseAlert, BaseBadge, BaseCard, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal } from '@autobot/ui'
 
 // Backend MembershipRole enum (autobot-backend/llc/models/enums.py).
 const MEMBERSHIP_ROLES = ['owner', 'admin', 'member', 'guest', 'lead'] as const

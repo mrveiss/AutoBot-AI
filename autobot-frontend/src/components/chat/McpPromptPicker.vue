@@ -148,8 +148,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useApiClient } from '@/plugins/api'
-import BaseButton from '@/components/base/BaseButton.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/ui/Icon.vue'
 import { createLogger } from '@/utils/debugUtils'

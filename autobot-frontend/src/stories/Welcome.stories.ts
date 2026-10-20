@@ -20,7 +20,7 @@ interface Card {
 }
 
 const baseCards: Card[] = [
-  { name: 'BaseButton', description: 'Interactive button component with variants and states', href: '?path=/docs/components-base-basebutton--docs' },
+  { name: 'BaseButton', description: 'Interactive button component with variants and states (shared kit)', href: '?path=/docs/kit-basebutton--docs' },
   { name: 'BaseInput', description: 'Form input component with validation and helpers', href: '?path=/docs/components-base-baseinput--docs' },
   { name: 'BaseCard', description: 'Card and panel container, variants and sizes (shared kit)', href: '?path=/docs/kit-basecard--docs' },
   { name: 'BaseBadge', description: 'Badge component for labels and status indicators (shared kit)', href: '?path=/docs/kit-basebadge--docs' },
@@ -162,7 +162,7 @@ export const Overview: Story = {
             <h3 class="text-xl font-bold mb-2">For Developers</h3>
             <p class="text-sm text-gray-700 mb-3">Component stories are located alongside component files:</p>
             <code class="block bg-white p-3 rounded text-xs text-gray-800 border border-gray-200">
-              src/components/base/BaseButton.stories.ts<br/>
+              libs/autobot-ui/src/components/BaseButton.stories.ts<br/>
               libs/autobot-ui/src/components/BaseModal.stories.ts<br/>
               libs/autobot-ui/src/components/LanguageSwitcher.stories.ts<br/>
               src/stories/IconLibrary.stories.ts<br/>

@@ -26,7 +26,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/__tests__/ChatInterface.test.ts": 760,
     "autobot-frontend/src/components/__tests__/TerminalWindow.test.ts": 627,
     "autobot-frontend/src/components/agents/HeartbeatPanel.vue": 723,
-    "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 903,
+    "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 902,  # #18849: 903 -> 902
     "autobot-frontend/src/components/analytics/CodeEvolutionTimeline.vue": 775,
     "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": 1108,
     "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1903,
@@ -46,14 +46,14 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/panels/CodebaseIntelligenceScoresPanel.vue": 1332,
     "autobot-frontend/src/components/analytics/panels/CodebaseOwnershipPanel.vue": 1035,
     "autobot-frontend/src/components/audit/AuditLogTable.vue": 758,
-    "autobot-frontend/src/components/browser/BrowserSessionManager.vue": 654,
+    "autobot-frontend/src/components/browser/BrowserSessionManager.vue": 653,  # #18849: 654 -> 653
     "autobot-frontend/src/components/charts/BaseChart.vue": 602,
     "autobot-frontend/src/components/charts/FunctionCallGraph.vue": 2165,
     "autobot-frontend/src/components/charts/ImportTreeChart.vue": 1365,
     "autobot-frontend/src/components/chat/ChatInput.vue": 1716,
     "autobot-frontend/src/components/chat/ChatInterface.vue": 1521,
-    "autobot-frontend/src/components/chat/ChatMessages.vue": 2119,
-    "autobot-frontend/src/components/chat/ChatSidebar.vue": 808,
+    "autobot-frontend/src/components/chat/ChatMessages.vue": 2118,  # #18849: 2119 -> 2118
+    "autobot-frontend/src/components/chat/ChatSidebar.vue": 807,  # #18849: 808 -> 807
     "autobot-frontend/src/components/chat/DocumentationSearchSidebar.vue": 766,
     "autobot-frontend/src/components/chat/VisionAnalysisModal.vue": 786,
     "autobot-frontend/src/components/chat/VisualBrowserPanel.vue": 632,
@@ -73,30 +73,30 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/knowledge/GraphRAGQuery.vue": 713,
     "autobot-frontend/src/components/knowledge/KBSearchResultPanel.vue": 630,
     "autobot-frontend/src/components/knowledge/KnowledgeBrowser.vue": 1785,
-    "autobot-frontend/src/components/knowledge/KnowledgeEntries.vue": 1360,
+    "autobot-frontend/src/components/knowledge/KnowledgeEntries.vue": 1359,  # #18849: 1360 -> 1359
     "autobot-frontend/src/components/knowledge/KnowledgeGraph.vue": 2073,
     "autobot-frontend/src/components/knowledge/KnowledgeHealth.vue": 925,
-    "autobot-frontend/src/components/knowledge/KnowledgePersistenceDialog.vue": 892,
+    "autobot-frontend/src/components/knowledge/KnowledgePersistenceDialog.vue": 891,  # #18819+#18849 one import (-1)
     "autobot-frontend/src/components/knowledge/KnowledgeResearchPanel.vue": 1189,
     "autobot-frontend/src/components/knowledge/KnowledgeSystemDocs.vue": 863,
     "autobot-frontend/src/components/knowledge/KnowledgeUpload.vue": 1634,
     "autobot-frontend/src/components/knowledge/KnowledgeVerificationQueue.vue": 799,
-    "autobot-frontend/src/components/knowledge/SystemKnowledgeManager.vue": 1035,
+    "autobot-frontend/src/components/knowledge/SystemKnowledgeManager.vue": 1034,  # #18849: 1035 -> 1034
     "autobot-frontend/src/components/knowledge/WebResearchPanel.vue": 779,
     "autobot-frontend/src/components/knowledge/WebResearchSettings.vue": 1028,
-    "autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue": 1627,
-    "autobot-frontend/src/components/knowledge/modals/BulkEditModal.vue": 616,
-    "autobot-frontend/src/components/knowledge/modals/CategoryEditModal.vue": 727,
+    "autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue": 1626,  # #18849: 1627 -> 1626
+    "autobot-frontend/src/components/knowledge/modals/BulkEditModal.vue": 615,  # #18849: 616 -> 615
+    "autobot-frontend/src/components/knowledge/modals/CategoryEditModal.vue": 726,  # #18849: 727 -> 726
     "autobot-frontend/src/components/llc/TemplateBrowser.vue": 806,
-    "autobot-frontend/src/components/manpage/ManPageManager.vue": 1214,
+    "autobot-frontend/src/components/manpage/ManPageManager.vue": 1213,  # #18849: 1214 -> 1213
     "autobot-frontend/src/components/security/SecretsManager.vue": 2775,
     "autobot-frontend/src/components/security/ThreatIntelligenceDashboard.vue": 838,
     "autobot-frontend/src/components/security/ThreatIntelligenceSettings.vue": 652,
     "autobot-frontend/src/components/settings/ApiKeySetupWizard.vue": 614,
     "autobot-frontend/src/components/settings/SettingsPanel.vue": 943,
-    "autobot-frontend/src/components/terminal/AdvancedStepConfirmationModal.vue": 616,
+    "autobot-frontend/src/components/terminal/AdvancedStepConfirmationModal.vue": 615,  # #18849: 616 -> 615
     "autobot-frontend/src/components/terminal/BaseXTerminal.vue": 825,
-    "autobot-frontend/src/components/terminal/TerminalModals.vue": 743,
+    "autobot-frontend/src/components/terminal/TerminalModals.vue": 742,  # #18849: 743 -> 742
     "autobot-frontend/src/components/terminal/TerminalWindow.vue": 1726,
     "autobot-frontend/src/components/ui/HostSelectionDialog.vue": 965,
     "autobot-frontend/src/components/vision/GUIAutomationControls.vue": 793,
@@ -165,8 +165,8 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/llc/GanttTimelineView.vue": 817,
     "autobot-frontend/src/views/llc/HeartbeatMonitor.vue": 807,
     "autobot-frontend/src/views/llc/OrgChart.vue": 1527,
-    "autobot-frontend/src/views/llc/ProjectBrowserView.vue": 1374,  # #18819: 1379 -> 1374
-    "autobot-frontend/src/views/llc/RolesView.vue": 1027,  # #18819 1029->1028; train-40 one kit import (-1)
+    "autobot-frontend/src/views/llc/ProjectBrowserView.vue": 1373,  # #18819 1379->1374; #18849 (-1)
+    "autobot-frontend/src/views/llc/RolesView.vue": 1026,  # #18819 1029->1027; #18849 one kit import on the merge (-1)
     "autobot-frontend/src/views/llc/RoutinesView.vue": 688,
     "autobot-frontend/src/views/llc/SprintBoardView.vue": 681,
     "autobot-frontend/src/views/llc/WorkItemDetail.vue": 1046,

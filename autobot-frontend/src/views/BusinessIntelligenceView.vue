@@ -81,7 +81,7 @@
         <div class="maintenance-section">
           <div class="section-header">
             <h3><Icon name="tools" class="section-icon" /> {{ $t('analytics.bi.predictiveMaintenance') }}</h3>
-            <BaseButton variant="outline-solid" size="sm" @click="fetchMaintenance">
+            <BaseButton variant="outline" size="sm" @click="fetchMaintenance">
               <Icon name="refresh" /> {{ $t('analytics.bi.refresh') }}
             </BaseButton>
           </div>
@@ -151,7 +151,7 @@
         <div class="optimization-section">
           <div class="section-header">
             <h3><Icon name="rocket" class="section-icon" /> {{ $t('analytics.bi.resourceOptimization') }}</h3>
-            <BaseButton variant="outline-solid" size="sm" @click="fetchOptimization">
+            <BaseButton variant="outline" size="sm" @click="fetchOptimization">
               <Icon name="refresh" /> {{ $t('analytics.bi.refresh') }}
             </BaseButton>
           </div>
@@ -214,7 +214,7 @@
         <div class="insights-section">
           <div class="section-header">
             <h3><Icon name="lightbulb" class="section-icon" /> {{ $t('analytics.bi.actionableInsights') }}</h3>
-            <BaseButton variant="outline-solid" size="sm" @click="fetchInsights">
+            <BaseButton variant="outline" size="sm" @click="fetchInsights">
               <Icon name="refresh" /> {{ $t('analytics.bi.refresh') }}
             </BaseButton>
           </div>
@@ -312,7 +312,7 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import AdvancedAnalytics from '@/components/analytics/AdvancedAnalytics.vue'
 import AgentCostPanel from '@/components/analytics/AgentCostPanel.vue'

@@ -337,9 +337,8 @@ import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import type { components } from '@/types/generated/api'
 import { createLogger } from '@/utils/debugUtils'
-import BaseButton from '@/components/base/BaseButton.vue'
 import RoleAttachmentPanel from '@/components/llc/RoleAttachmentPanel.vue'
-import { BaseAlert, BaseBadge, BaseCard, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal } from '@autobot/ui'
 import { describeApiError } from '@/composables/llc/apiErrorMessage'
 
 interface RoleRow {

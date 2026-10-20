@@ -119,7 +119,7 @@
       </BaseButton>
 
       <BaseButton
-        variant="outline-solid"
+        variant="outline"
         @click="fetchStats"
         :disabled="isLoading"
       >
@@ -185,7 +185,7 @@
 </template>
 
 <script>
-import { BaseCard } from '@autobot/ui';
+import { BaseButton, BaseCard } from '@autobot/ui';
 import { ref, onMounted, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
@@ -197,7 +197,6 @@ import { useLoadingState } from '@/composables/useLoadingState'
 import { usePollingJob } from '@/composables/usePollingJob';
 import { formatCategoryName as formatKey } from '@/utils/formatHelpers';
 import { useHostSelection } from '@/composables/useHostSelection';
-import BaseButton from '@/components/base/BaseButton.vue';
 import { createLogger } from '@/utils/debugUtils';
 
 // Create scoped logger for SystemKnowledgeManager

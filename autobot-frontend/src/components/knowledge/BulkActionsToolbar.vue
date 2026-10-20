@@ -17,7 +17,7 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 
 const { t } = useI18n()
 
@@ -153,7 +153,7 @@ function handleClickOutside(event: MouseEvent): void {
         <!-- Export Dropdown -->
         <div class="dropdown-container">
           <BaseButton
-            variant="outline-solid"
+            variant="outline"
             size="sm"
             @click="toggleExportMenu"
             class="action-btn"
@@ -183,7 +183,7 @@ function handleClickOutside(event: MouseEvent): void {
 
         <!-- Category Change -->
         <BaseButton
-          variant="outline-solid"
+          variant="outline"
           size="sm"
           @click="emit('changeCategory')"
           class="action-btn"
@@ -195,7 +195,7 @@ function handleClickOutside(event: MouseEvent): void {
         <!-- More Actions Dropdown -->
         <div class="dropdown-container">
           <BaseButton
-            variant="outline-solid"
+            variant="outline"
             size="sm"
             @click="toggleMoreMenu"
             class="action-btn"

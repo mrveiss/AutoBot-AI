@@ -222,7 +222,7 @@
 
 import Icon from '@/components/ui/Icon.vue'
 import { ref, watch } from 'vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import { getRiskSeverity, type RiskSeverity } from '@/utils/riskLevel'
 
 

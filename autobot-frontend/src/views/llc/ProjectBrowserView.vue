@@ -436,9 +436,8 @@ import { useClipboard } from '@/composables/useClipboard'
 import Icon from '@/components/ui/Icon.vue'
 import LlcBreadcrumb, { type BreadcrumbItem } from '@/components/llc/LlcBreadcrumb.vue'
 import Sparkline from '@/components/llc/Sparkline.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseButton, BaseModal } from '@autobot/ui'
 import { secretsApiClient } from '@/utils/SecretsApiClient'
 
 // GH#11271: finding proposal returned from the API.

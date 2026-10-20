@@ -130,7 +130,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatFileSize, formatDateTime } from '@/utils/formatHelpers'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useKnowledgeBackup, type BackupOptions } from '@/composables/knowledge/useKnowledgeBackup'
 

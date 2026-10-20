@@ -142,7 +142,7 @@
         <h4 class="section-title">{{ $t('knowledge.persistence.bulkActionsTitle') }}</h4>
         <div class="bulk-buttons">
           <BaseButton
-            variant="outline-solid"
+            variant="outline"
             @click="selectAll"
             class="bulk-button"
             :aria-label="$t('knowledge.persistence.selectAllAria')"
@@ -150,7 +150,7 @@
             {{ $t('knowledge.persistence.selectAll') }}
           </BaseButton>
           <BaseButton
-            variant="outline-solid"
+            variant="outline"
             @click="deselectAll"
             class="bulk-button"
             :aria-label="$t('knowledge.persistence.deselectAllAria')"
@@ -266,7 +266,6 @@
 </template>
 
 <script setup lang="ts">
-import { BaseAlert } from '@autobot/ui'
 import { ref, computed, watch, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useNotificationBus } from '@/composables/useNotificationBus';
@@ -274,7 +273,7 @@ import { useBatchSelection } from '@/composables/useBatchSelection';
 import { apiService } from '@/services/api';
 import { getApiBase } from '@/config/ssot-config';
 import { formatDateTime as formatDate } from '@/utils/formatHelpers';
-import BaseButton from '@/components/base/BaseButton.vue';
+import { BaseAlert, BaseButton } from '@autobot/ui';
 import { createLogger } from '@/utils/debugUtils';
 
 type KnowledgeDecision = 'add_to_kb' | 'keep_temporary' | 'delete';

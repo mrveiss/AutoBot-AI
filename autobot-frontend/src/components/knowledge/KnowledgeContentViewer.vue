@@ -62,7 +62,7 @@
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 import { formatDate, formatFileSize } from '@/utils/formatHelpers'
 
