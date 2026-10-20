@@ -86,7 +86,9 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import yaml
-from _scan_helpers import configure_logging, tracked_paths  # noqa: E402
+from _scan_helpers import configure_logging  # noqa: E402
+from _scan_helpers import tracked_paths  # noqa: E402
+from _scan_helpers import project_root as repo_root  # noqa: E402
 
 # Plain stdlib logging, deliberately (#1082). This runs as a bare script inside a
 # lint job, and `autobot_shared.logging_manager` would drag config loading into
@@ -114,11 +116,6 @@ PRE_COMMIT_CONFIG_REL = ".pre-commit-config.yaml"
 #: Cap on how many uncovered paths a gate failure lists before it summarises, so
 #: a hook that stops reaching thousands of files does not bury its own message.
 _MAX_LISTED = 15
-
-
-def repo_root() -> pathlib.Path:
-    """Repo root, derived from this file's location (``tools/lint/`` is two deep)."""
-    return pathlib.Path(__file__).resolve().parents[2]
 
 
 def discover_scripts(base: pathlib.Path | None = None) -> list[pathlib.Path]:

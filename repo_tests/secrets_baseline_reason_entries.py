@@ -574,3 +574,14 @@ SPECIFIC_REASONS.update(
         for loc, digest, kind, label in _SECRETS_CATEGORY_LABELS
     }
 )
+SPECIFIC_REASONS[
+    (
+        "autobot-slm-frontend/src/locales/en.json",
+        "Secret Keyword",
+        "2f4e787013273291c4660e4215db88b21423f8df",  # pragma: allowlist secret
+    )
+] = (
+    "the i18n display label `Reset Password for {username}` (the SLM user dialog title #14777 moved "
+    "into i18n), not a credential; `Password` in the key trips the Secret Keyword denylist. Plain SHA1 "
+    "of the literal label reproduces this hash."
+)

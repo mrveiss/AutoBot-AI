@@ -135,6 +135,15 @@ def _build_callback_url(request: Request) -> str:
     return f"{scheme}://{netloc}/api/auth/sso/callback"
 
 
+def _spa_url(route: str, query: str) -> str:
+    """An SLM SPA route under the SLM base (#18892); a bare path is the USER app's."""
+    return f"{settings.frontend_base_path}/{route}?{query}"
+
+
+def _sso_callback_url(query: str) -> str:
+    return _spa_url("sso-callback", query)
+
+
 async def _redirect_with_session_code(user) -> RedirectResponse:
     """Mint the session for `user`, redirect with a one-time code, never the JWT (#18394)."""
     # #18322: mint from the provisioned User record itself. A stand-in lacked
@@ -144,8 +153,8 @@ async def _redirect_with_session_code(user) -> RedirectResponse:
     try:
         code = await issue_exchange_code(token_response.model_dump())
     except ExchangeCodeUnavailableError:
-        return RedirectResponse(url="/sso-callback?error=sso_unavailable", status_code=status.HTTP_302_FOUND)
-    return RedirectResponse(url=f"/sso-callback?code={code}", status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(url=_sso_callback_url("error=sso_unavailable"), status_code=status.HTTP_302_FOUND)
+    return RedirectResponse(url=_sso_callback_url(f"code={code}"), status_code=status.HTTP_302_FOUND)
 
 
 @router.post("/exchange", response_model=TokenResponse)
@@ -320,7 +329,7 @@ async def oauth_callback(
         except Exception as audit_err:
             logger.warning("SSO audit write failed: %s", audit_err)
         return RedirectResponse(
-            url="/login?error=sso_failed",
+            url=_spa_url("login", "error=sso_failed"),
             status_code=status.HTTP_302_FOUND,
         )
 
@@ -559,6 +568,6 @@ async def saml_callback(
         except Exception as audit_err:
             logger.warning("SSO audit write failed: %s", audit_err)
         return RedirectResponse(
-            url="/login?error=sso_failed",
+            url=_spa_url("login", "error=sso_failed"),
             status_code=status.HTTP_302_FOUND,
         )

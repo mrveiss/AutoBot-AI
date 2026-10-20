@@ -343,6 +343,7 @@ def test_the_checker_needs_no_third_party_import():
         not in {
             "argparse",
             "configparser",
+            "functools",
             "logging",
             "pathlib",
             "re",

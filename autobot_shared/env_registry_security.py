@@ -382,3 +382,36 @@ register_env_var(
         component="security",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_FEATURE_FLAG_CACHE_TTL_SECONDS",
+        type=float,
+        default=5.0,
+        description=(
+            "Seconds this process serves the access-control enforcement mode and per-endpoint "
+            "overrides from memory (#18998). A write in the same process invalidates at once; "
+            "a write from another process is seen within this window. 0 disables the cache. "
+            "Clamped to 0-60."
+        ),
+        component="security",
+        range=(0, 60),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CONFIG_REGISTRY_CACHE_TTL_SECONDS",
+        type=float,
+        default=60.0,
+        description=(
+            "Seconds the config registry serves a resolved value, and the fact that "
+            "Redis holds nothing for a key, from process memory before asking Redis "
+            "again. A change written by another process is visible within this window. "
+            "Clamped to 0-3600: an hour is the longest a stale config value is tolerable "
+            "without a restart; 0 disables the cache."
+        ),
+        component="redis",
+        range=(0, 3600),
+    )
+)

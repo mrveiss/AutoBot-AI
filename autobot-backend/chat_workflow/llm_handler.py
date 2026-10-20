@@ -699,7 +699,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 conversation_history=session.conversation_history or [],
                 top_k=5,
                 score_threshold=0.3,  # Issue #1526: lowered from 0.7
-                force_retrieval=False,
+                principal=session.kb_principal(),  # #16664: retrieve as the turn's user
             )
             if knowledge_context:
                 logger.info(

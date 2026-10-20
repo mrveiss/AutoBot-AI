@@ -44,7 +44,8 @@ Usage:
         query="Redis configuration issues",
         start_entity="Conversation ABC123",
         max_depth=2,
-        max_results=5
+        max_results=5,
+        principal=kb_principal(current_user),
     )
 """
 
@@ -53,7 +54,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Set, Tuple
 
-from advanced_rag_optimizer import RAGMetrics, RankedResult
+from advanced_rag_optimizer import RankedResult
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_memory_graph.owner_scope import require_scope
 from autobot_shared.error_boundaries import error_boundary
@@ -61,70 +62,13 @@ from autobot_shared.logging_manager import get_llm_logger
 from constants.rag_graph_constants import RAG_GRAPH_TRAVERSAL_DEPTH
 from knowledge.search_components.graph_blend import blend_graph_score
 from knowledge.search_components.reranking import provenance_adjustment
+from knowledge.search_filters import KbPrincipal
+from services.graph_rag_metrics import GraphRAGMetrics
 from services.graph_rag_path import GraphPathMixin
 from services.rag_config import get_rag_config
 from services.rag_service import RAGService
 
 logger = get_llm_logger("graph_rag_service")
-
-
-@dataclass
-class GraphRAGMetrics(RAGMetrics):
-    """
-    Extended metrics for graph-RAG operations.
-
-    Inherits all standard RAG metrics and adds graph-specific tracking.
-    """
-
-    graph_traversal_time: float = 0.0
-    entities_explored: int = 0
-    relationships_traversed: int = 0
-    graph_expansion_enabled: bool = False
-    graph_results_added: int = 0
-
-    # === Issue #372: Feature Envy Reduction Methods ===
-
-    def copy_from_rag_metrics(self, rag_metrics: "RAGMetrics") -> None:
-        """Copy base metrics from RAG search (Issue #372 - reduces feature envy)."""
-        self.query_processing_time = rag_metrics.query_processing_time
-        self.retrieval_time = rag_metrics.retrieval_time
-        self.reranking_time = rag_metrics.reranking_time
-        self.documents_considered = rag_metrics.documents_considered
-        self.hybrid_search_enabled = rag_metrics.hybrid_search_enabled
-
-    def record_graph_results(self, graph_traversal_time: float, results_added: int) -> None:
-        """Record graph expansion results (Issue #372 - reduces feature envy)."""
-        self.graph_expansion_enabled = True
-        self.graph_traversal_time = graph_traversal_time
-        self.graph_results_added = results_added
-
-    def finalize(self, final_count: int, total_time: float) -> None:
-        """Finalize metrics with final counts (Issue #372 - reduces feature envy)."""
-        self.final_results_count = final_count
-        self.total_time = total_time
-
-    def get_timing_summary(self) -> str:
-        """Get timing summary string (Issue #372 - reduces feature envy)."""
-        return (
-            f"{self.total_time:.3f}s total "
-            f"(RAG: {self.retrieval_time:.3f}s, "
-            f"Graph: {self.graph_traversal_time:.3f}s)"
-        )
-
-    def to_response_dict(self) -> Dict[str, Any]:
-        """Convert metrics to API response dictionary (Issue #372 - reduces feature envy)."""
-        return {
-            "query_processing_time": self.query_processing_time,
-            "retrieval_time": self.retrieval_time,
-            "reranking_time": self.reranking_time,
-            "graph_traversal_time": self.graph_traversal_time,
-            "total_time": self.total_time,
-            "documents_considered": self.documents_considered,
-            "final_results_count": self.final_results_count,
-            "entities_explored": self.entities_explored,
-            "graph_expansion_enabled": self.graph_expansion_enabled,
-            "graph_results_added": self.graph_results_added,
-        }
 
 
 @dataclass
@@ -226,6 +170,7 @@ class GraphRAGService(GraphPathMixin):
         enable_reranking: bool = True,
         timeout: float | None = None,
         *,
+        principal: KbPrincipal,
         owner: Any,
     ) -> Tuple[List[RankedResult], GraphRAGMetrics]:
         """
@@ -238,6 +183,7 @@ class GraphRAGService(GraphPathMixin):
             max_results: Maximum number of results to return
             enable_reranking: Whether to apply cross-encoder reranking
             timeout: Optional timeout in seconds
+            principal: Who is asking, or SYSTEM_SCOPE; the KB leg returns only what it may read (#16664)
             owner: REQUIRED OwnerScope / UNSCOPED_ALL_USERS (#18825); graph entity
                 lookups and traversal only see what it may read
 
@@ -251,7 +197,9 @@ class GraphRAGService(GraphPathMixin):
         try:
             self._seen_content.clear()
             timeout = timeout or get_rag_config().graph_timeout_seconds
-            rag_results = await self._perform_initial_rag_search(query, max_results, enable_reranking, timeout, metrics)
+            rag_results = await self._perform_initial_rag_search(
+                query, max_results, enable_reranking, timeout, metrics, principal
+            )
 
             all_results = await self._extract_and_expand_graph(
                 query, rag_results, start_entity, max_depth, max_results, metrics, owner
@@ -489,6 +437,7 @@ class GraphRAGService(GraphPathMixin):
         enable_reranking: bool,
         timeout: float | None,
         metrics: GraphRAGMetrics,
+        principal: KbPrincipal,
     ) -> List[RankedResult]:
         """
         Perform initial RAG search and update metrics.
@@ -502,6 +451,7 @@ class GraphRAGService(GraphPathMixin):
             max_results=max_results * 2,  # Get more for filtering
             enable_reranking=enable_reranking,
             timeout=timeout,
+            principal=principal,
         )
 
         metrics.copy_from_rag_metrics(rag_metrics)

@@ -20,6 +20,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from testkit.fake_async_session import FakeAsyncSession
+
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_BACKEND_ROOT))
 
@@ -109,32 +111,9 @@ def _db_service_mock(query_results: List[Any], slm_node: Any | None = None) -> A
     and slm_node for the self-node lookup."""
     db_service_ref = MagicMock()
 
-    class _FakeCtx:
-        def __init__(self, nodes_for_version, self_node):
-            self._nodes_for_version = nodes_for_version
-            self._self_node = self_node
-            self._call_count = 0
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *_):
-            pass
-
-        async def execute(self, stmt):
-            self._call_count += 1
-            if self._call_count == 1:
-                # First call: version-comparison query
-                result = MagicMock()
-                result.scalars.return_value.all.return_value = self._nodes_for_version
-                return result
-            else:
-                # Second call: self-node IP lookup
-                result = MagicMock()
-                result.scalar_one_or_none.return_value = self._self_node
-                return result
-
-    ctx = _FakeCtx(query_results, slm_node)
+    # First call: version-comparison query; every later call: the self-node IP lookup.
+    self_node_rows = [] if slm_node is None else [slm_node]
+    ctx = FakeAsyncSession(results=[list(query_results), self_node_rows], default_result=self_node_rows)
     db_service_ref.session.return_value = ctx
     return db_service_ref
 

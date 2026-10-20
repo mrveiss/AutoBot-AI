@@ -11,7 +11,7 @@
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { usePagination } from '@autobot/ui'
+import { BaseModal, usePagination } from '@autobot/ui'
 import { useSlmApi } from '@/composables/useSlmApi'
 import type {
   RecentError,
@@ -514,127 +514,104 @@ onUnmounted(() => {
     </div>
 
     <!-- Error Detail Modal -->
-    <div
+    <BaseModal
       v-if="selectedError"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      @click.self="closeDetail"
+      :model-value="true"
+      :title="$t('monitoring.errorMonitor.errorDetails')"
+      width="42rem"
+      :close-label="$t('monitoring.errorMonitor.close')"
+      @close="closeDetail"
     >
-      <div
-        class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden"
-      >
-        <div
-          class="p-4 border-b border-gray-200 flex items-center justify-between"
-        >
-          <h3 class="text-lg font-semibold text-gray-900">{{ $t('monitoring.errorMonitor.errorDetails') }}</h3>
-          <button @click="closeDetail" class="text-gray-400 hover:text-gray-600" :aria-label="$t('monitoring.errorMonitor.close')">
-            <svg
-              class="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-        <div class="p-4 overflow-y-auto max-h-[60vh]">
-          <div class="space-y-4">
-            <div class="flex items-center gap-2">
-              <span
-                :class="[
-                  'px-2 py-1 text-xs font-medium rounded-sm',
-                  getStatusClass(selectedError.resolved),
-                ]"
-              >
-                {{ selectedError.resolved ? $t('monitoring.errorMonitor.resolved2') : $t('monitoring.errorMonitor.active') }}
-              </span>
-              <span
-                :class="[
-                  'text-sm font-medium',
-                  getSeverityColor(selectedError.severity),
-                ]"
-              >
-                {{ selectedError.severity }}
-              </span>
-            </div>
-
-            <div>
-              <label class="text-xs font-medium text-gray-500 uppercase"
-                >{{ $t('monitoring.errorMonitor.eventID') }}</label
-              >
-              <p class="text-sm text-gray-900 font-mono">
-                {{ selectedError.event_id }}
-              </p>
-            </div>
-
-            <div>
-              <label class="text-xs font-medium text-gray-500 uppercase"
-                >{{ $t('monitoring.errorMonitor.node') }}</label
-              >
-              <p class="text-sm text-gray-900">
-                {{ selectedError.hostname }} ({{ selectedError.node_id }})
-              </p>
-            </div>
-
-            <div>
-              <label class="text-xs font-medium text-gray-500 uppercase"
-                >{{ $t('monitoring.errorMonitor.type') }}</label
-              >
-              <p class="text-sm text-gray-900">{{ selectedError.event_type }}</p>
-            </div>
-
-            <div>
-              <label class="text-xs font-medium text-gray-500 uppercase"
-                >{{ $t('monitoring.errorMonitor.message') }}</label
-              >
-              <p class="text-sm text-gray-900">{{ selectedError.message }}</p>
-            </div>
-
-            <div>
-              <label class="text-xs font-medium text-gray-500 uppercase"
-                >{{ $t('monitoring.errorMonitor.timestamp') }}</label
-              >
-              <p class="text-sm text-gray-900">
-                {{ formatTimestamp(selectedError.timestamp) }}
-              </p>
-            </div>
-
-            <div v-if="selectedError.resolved">
-              <label class="text-xs font-medium text-gray-500 uppercase"
-                >{{ $t('monitoring.errorMonitor.resolved') }}</label
-              >
-              <p class="text-sm text-gray-900">
-                {{
-                  $t('monitoring.errorMonitor.resolvedByAt', {
-                    by: selectedError.resolved_by,
-                    at: formatTimestamp(selectedError.resolved_at || ''),
-                  })
-                }}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div class="p-4 border-t border-gray-200 flex justify-end gap-2">
-          <button
-            v-if="!selectedError.resolved"
-            @click="resolveError(selectedError.event_id)"
-            class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
+      <div class="space-y-4">
+        <div class="flex items-center gap-2">
+          <span
+            :class="[
+              'px-2 py-1 text-xs font-medium rounded-sm',
+              getStatusClass(selectedError.resolved),
+            ]"
           >
-            {{ $t('monitoring.errorMonitor.markResolved') }}
-          </button>
-          <button
-            @click="closeDetail"
-            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+            {{ selectedError.resolved ? $t('monitoring.errorMonitor.resolved2') : $t('monitoring.errorMonitor.active') }}
+          </span>
+          <span
+            :class="[
+              'text-sm font-medium',
+              getSeverityColor(selectedError.severity),
+            ]"
           >
-            {{ $t('monitoring.errorMonitor.close') }}
-          </button>
+            {{ selectedError.severity }}
+          </span>
+        </div>
+
+        <div>
+          <label class="text-xs font-medium text-gray-500 uppercase"
+            >{{ $t('monitoring.errorMonitor.eventID') }}</label
+          >
+          <p class="text-sm text-gray-900 font-mono">
+            {{ selectedError.event_id }}
+          </p>
+        </div>
+
+        <div>
+          <label class="text-xs font-medium text-gray-500 uppercase"
+            >{{ $t('monitoring.errorMonitor.node') }}</label
+          >
+          <p class="text-sm text-gray-900">
+            {{ selectedError.hostname }} ({{ selectedError.node_id }})
+          </p>
+        </div>
+
+        <div>
+          <label class="text-xs font-medium text-gray-500 uppercase"
+            >{{ $t('monitoring.errorMonitor.type') }}</label
+          >
+          <p class="text-sm text-gray-900">{{ selectedError.event_type }}</p>
+        </div>
+
+        <div>
+          <label class="text-xs font-medium text-gray-500 uppercase"
+            >{{ $t('monitoring.errorMonitor.message') }}</label
+          >
+          <p class="text-sm text-gray-900">{{ selectedError.message }}</p>
+        </div>
+
+        <div>
+          <label class="text-xs font-medium text-gray-500 uppercase"
+            >{{ $t('monitoring.errorMonitor.timestamp') }}</label
+          >
+          <p class="text-sm text-gray-900">
+            {{ formatTimestamp(selectedError.timestamp) }}
+          </p>
+        </div>
+
+        <div v-if="selectedError.resolved">
+          <label class="text-xs font-medium text-gray-500 uppercase"
+            >{{ $t('monitoring.errorMonitor.resolved') }}</label
+          >
+          <p class="text-sm text-gray-900">
+            {{
+              $t('monitoring.errorMonitor.resolvedByAt', {
+                by: selectedError.resolved_by,
+                at: formatTimestamp(selectedError.resolved_at || ''),
+              })
+            }}
+          </p>
         </div>
       </div>
-    </div>
+      <template #actions>
+        <button
+          v-if="!selectedError.resolved"
+          @click="resolveError(selectedError.event_id)"
+          class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
+        >
+          {{ $t('monitoring.errorMonitor.markResolved') }}
+        </button>
+        <button
+          @click="closeDetail"
+          class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+        >
+          {{ $t('monitoring.errorMonitor.close') }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>

@@ -22,7 +22,7 @@ const { push, adoptToken, checkAuth, loginWithLDAP } = vi.hoisted(() => ({
 /** Opaque stand-in for the token the LDAP exchange issues. */
 const ISSUED = ['issued', 'by', 'ldap'].join('-')
 
-vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
+vi.mock('vue-router', () => ({ useRouter: () => ({ push }), useRoute: () => ({ query: {} }) }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({ adoptToken, checkAuth, login: vi.fn(), mfaPending: false, loading: false, error: null }),

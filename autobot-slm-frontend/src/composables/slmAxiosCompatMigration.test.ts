@@ -181,7 +181,8 @@ describe('the 401 session teardown the private instances lacked (#13079)', () =>
     await useOrchestrationManagement().fetchServiceDefinitions()
 
     expect(sessionStorage.getItem(TOKEN_KEY)).toBeNull()
-    expect(window.location.href).toBe('/login')
+    // #18892: the base-aware login URL carries the current route back as ?redirect=
+    expect(window.location.href).toBe('/login?redirect=%2Forchestration')
   })
 
   it('does NOT clear the session on a 401 to a token-less call', async () => {

@@ -57,6 +57,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from _scan_helpers import configure_logging  # noqa: E402
+from _scan_helpers import project_root as repo_root  # noqa: E402
 
 # Plain stdlib logging (matching every other tools/lint/check_*.py in this
 # repo): this runs inside `code-quality`, which installs linters only, never
@@ -84,11 +85,6 @@ _FILTER_COMMENT_RE = re.compile(r"^\s*#")
 #: composed filter, or one inside a workflow's ``filters: |`` literal -- is a
 #: different set and must not be picked up as this one.
 _FILTER_KEY_RE = re.compile(r"^backend:\s*$")
-
-
-def repo_root() -> pathlib.Path:
-    """Repo root derived from this file, never from the caller's cwd."""
-    return pathlib.Path(__file__).resolve().parents[2]
 
 
 def _load_module(root: pathlib.Path, rel_path: str):

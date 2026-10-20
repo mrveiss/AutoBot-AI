@@ -114,7 +114,8 @@ function defaultGetImplementation(url: string) {
 }
 
 function mountView(): VueWrapper {
-  return mount(DataHygieneView, { global: { plugins: [i18n] } })
+  // BaseModal teleports to body; stub the teleport so the dialog renders inline (#14777)
+  return mount(DataHygieneView, { global: { plugins: [i18n], stubs: { teleport: true } } })
 }
 
 /** Settle the four concurrent on-mount fetches (storage, users, orphans, audit x3). */

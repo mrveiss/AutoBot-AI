@@ -263,3 +263,28 @@ def test_logical_lines_reports_the_first_physical_line_of_each_fold() -> None:
     assert joined[0] == (1, "one")
     assert joined[1][0] == 2
     assert joined[2] == (4, "four")
+
+
+# ---------------------------------------------------------------------------
+# iter_ansible_files — skip dirs are matched below root only (#18972)
+# ---------------------------------------------------------------------------
+
+
+def _touch(path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("- hosts: all\n", encoding="utf-8")
+    return path
+
+
+def test_iter_ansible_files_scans_a_root_that_itself_lives_under_a_skip_dir(tmp_path: Path) -> None:
+    root = tmp_path / ".worktrees" / "repo"
+    play = _touch(root / "ansible" / "x.yml")
+    assert list(helpers.iter_ansible_files(root, {".yml"})) == [play]
+
+
+def test_iter_ansible_files_skips_a_skip_dir_inside_root(tmp_path: Path) -> None:
+    root = tmp_path / ".worktrees" / "repo"
+    play = _touch(root / "ansible" / "x.yml")
+    for skipped in (".worktrees/other/ansible/y.yml", "node_modules/pkg/z.yml", ".venv/lib/w.yml"):
+        _touch(root / skipped)
+    assert list(helpers.iter_ansible_files(root, {".yml"})) == [play]

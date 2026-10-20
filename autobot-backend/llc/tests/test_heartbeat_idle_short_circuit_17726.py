@@ -28,6 +28,7 @@ from llc.scheduler.heartbeat_scheduler import (
     _IDLE_WAKE_TTL_SECONDS,
     LLCHeartbeatScheduler,
 )
+from testkit.fake_async_session import FakeAsyncSession
 
 _AGENT_SLUG = "ceo-acme"
 _NODE_ID = str(uuid.uuid4())
@@ -200,22 +201,6 @@ async def test_an_invalid_cron_drops_the_agent_rather_than_rescheduling_it():
 # ---------------------------------------------------------------------------
 
 
-class _RecordingSession:
-    """Captures the statements executed, and offers nothing."""
-
-    def __init__(self) -> None:
-        self.statements: list[Any] = []
-
-    async def execute(self, statement, *_a, **_k):
-        self.statements.append(statement)
-        result = MagicMock()
-        result.first.return_value = None
-        scalars = MagicMock()
-        scalars.all.return_value = []
-        result.scalars.return_value = scalars
-        return result
-
-
 @pytest.mark.asyncio
 async def test_the_emptiness_check_filters_on_the_same_rule_as_the_checkout():
     """AC: "next work" has one definition, asserted on the queries actually issued.
@@ -226,10 +211,10 @@ async def test_the_emptiness_check_filters_on_the_same_rule_as_the_checkout():
     """
     from llc.services.work_item_queue import checkout_next, has_pending_work
 
-    probe = _RecordingSession()
+    probe = FakeAsyncSession()
     await has_pending_work(probe, _NODE_ID, _COMPANY_ID)
 
-    claim = _RecordingSession()
+    claim = FakeAsyncSession()
     await checkout_next(claim, MagicMock(), _NODE_ID, _COMPANY_ID)
 
     assert len(probe.statements) == 1 and len(claim.statements) == 1
@@ -250,7 +235,7 @@ async def test_the_emptiness_check_is_bounded_to_one_row():
     """Cheap by construction, not by the backlog happening to be short."""
     from llc.services.work_item_queue import has_pending_work
 
-    probe = _RecordingSession()
+    probe = FakeAsyncSession()
     await has_pending_work(probe, _NODE_ID, _COMPANY_ID)
 
     statement = probe.statements[0]

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, BaseModal } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -239,249 +239,237 @@ function getCategoryIcon(category: string): string {
 </script>
 
 <template>
-  <div
+  <BaseModal
     v-if="visible"
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-    @click.self="$emit('close')"
+    :model-value="true"
+    :title="$t('deploymentWizard.newDeployment')"
+    width="42rem"
+    :locked="isDeploying"
+    :close-label="$t('deploymentWizard.close')"
+    @close="$emit('close')"
   >
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-      <!-- Header -->
-      <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-        <div>
-          <h3 class="text-lg font-semibold text-gray-900">{{ $t('deploymentWizard.newDeployment') }}</h3>
-          <p class="text-sm text-gray-500">{{ $t('deploymentWizard.stepValue0Of3', { value0: step }) }}</p>
-        </div>
-        <button
-          @click="$emit('close')"
-          class="text-gray-400 hover:text-gray-600 transition-colors"
-          :aria-label="$t('deploymentWizard.close')"
-        >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
+    <template #subtitle>{{ $t('deploymentWizard.stepValue0Of3', { value0: step }) }}</template>
 
-      <!-- Progress Bar -->
-      <div class="px-6 pt-4">
-        <div class="flex items-center gap-2">
+    <!-- Progress Bar -->
+    <div>
+      <div class="flex items-center gap-2">
+        <div
+          v-for="s in 3"
+          :key="s"
+          :class="[
+            'flex-1 h-2 rounded-full transition-colors',
+            s <= step ? 'bg-primary-600' : 'bg-gray-200',
+          ]"
+        />
+      </div>
+      <div class="flex justify-between mt-2 text-xs text-gray-500">
+        <span>{{ $t('deploymentWizard.selectNode') }}</span>
+        <span>{{ $t('deploymentWizard.chooseRoles') }}</span>
+        <span>{{ $t('deploymentWizard.reviewDeploy') }}</span>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="pt-4">
+      <!-- Step 1: Select Node -->
+      <div v-if="step === 1">
+        <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('deploymentWizard.selectTargetNode') }}</h4>
+
+        <!-- Manual mode toggle -->
+        <div v-if="nodes.length > 0" class="mb-4">
+          <label class="flex items-center gap-2 text-sm">
+            <input
+              v-model="manualMode"
+              type="checkbox"
+              class="rounded-sm border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <span class="text-gray-700">{{ $t('deploymentWizard.enterIPAddressManually') }}</span>
+          </label>
+        </div>
+
+        <!-- Manual IP input -->
+        <div v-if="manualMode" class="space-y-4">
+          <div>
+            <label class="label">{{ $t('deploymentWizard.hostname') }}</label>
+            <input
+              v-model="manualHostname"
+              type="text"
+              class="input"
+              :placeholder="$t('deploymentWizard.eGWebServer01')"
+            />
+          </div>
+          <div>
+            <label class="label">{{ $t('deploymentWizard.iPAddress') }}</label>
+            <input
+              v-model="manualIp"
+              type="text"
+              class="input"
+              :placeholder="$t('deploymentWizard.egIPAddress')"
+            />
+          </div>
+          <p class="text-sm text-gray-500">
+            {{ $t('deploymentWizard.theNodeWillBe') }}
+          </p>
+        </div>
+
+        <!-- Node selection -->
+        <div v-else class="space-y-2">
+          <div v-if="nodes.length === 0" class="text-center py-8 text-gray-500">
+            <p>{{ $t('deploymentWizard.noNodesRegisteredYet') }}</p>
+            <p class="text-sm mt-2">{{ $t('deploymentWizard.switchToManualMode') }}</p>
+          </div>
           <div
-            v-for="s in 3"
-            :key="s"
+            v-for="node in nodes"
+            :key="node.node_id"
+            @click="selectedNodeId = node.node_id"
             :class="[
-              'flex-1 h-2 rounded-full transition-colors',
-              s <= step ? 'bg-primary-600' : 'bg-gray-200',
+              'p-4 border rounded-lg cursor-pointer transition-all',
+              selectedNodeId === node.node_id
+                ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200'
+                : 'border-gray-200 hover:border-gray-300',
             ]"
-          />
-        </div>
-        <div class="flex justify-between mt-2 text-xs text-gray-500">
-          <span>{{ $t('deploymentWizard.selectNode') }}</span>
-          <span>{{ $t('deploymentWizard.chooseRoles') }}</span>
-          <span>{{ $t('deploymentWizard.reviewDeploy') }}</span>
-        </div>
-      </div>
-
-      <!-- Content -->
-      <div class="flex-1 overflow-y-auto px-6 py-4">
-        <!-- Step 1: Select Node -->
-        <div v-if="step === 1">
-          <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('deploymentWizard.selectTargetNode') }}</h4>
-
-          <!-- Manual mode toggle -->
-          <div v-if="nodes.length > 0" class="mb-4">
-            <label class="flex items-center gap-2 text-sm">
-              <input
-                v-model="manualMode"
-                type="checkbox"
-                class="rounded-sm border-gray-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-gray-700">{{ $t('deploymentWizard.enterIPAddressManually') }}</span>
-            </label>
-          </div>
-
-          <!-- Manual IP input -->
-          <div v-if="manualMode" class="space-y-4">
-            <div>
-              <label class="label">{{ $t('deploymentWizard.hostname') }}</label>
-              <input
-                v-model="manualHostname"
-                type="text"
-                class="input"
-                :placeholder="$t('deploymentWizard.eGWebServer01')"
-              />
-            </div>
-            <div>
-              <label class="label">{{ $t('deploymentWizard.iPAddress') }}</label>
-              <input
-                v-model="manualIp"
-                type="text"
-                class="input"
-                :placeholder="$t('deploymentWizard.egIPAddress')"
-              />
-            </div>
-            <p class="text-sm text-gray-500">
-              {{ $t('deploymentWizard.theNodeWillBe') }}
-            </p>
-          </div>
-
-          <!-- Node selection -->
-          <div v-else class="space-y-2">
-            <div v-if="nodes.length === 0" class="text-center py-8 text-gray-500">
-              <p>{{ $t('deploymentWizard.noNodesRegisteredYet') }}</p>
-              <p class="text-sm mt-2">{{ $t('deploymentWizard.switchToManualMode') }}</p>
-            </div>
-            <div
-              v-for="node in nodes"
-              :key="node.node_id"
-              @click="selectedNodeId = node.node_id"
-              :class="[
-                'p-4 border rounded-lg cursor-pointer transition-all',
-                selectedNodeId === node.node_id
-                  ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200'
-                  : 'border-gray-200 hover:border-gray-300',
-              ]"
-            >
-              <div class="flex items-center justify-between">
-                <div>
-                  <div class="font-medium text-gray-900">{{ node.hostname }}</div>
-                  <div class="text-sm text-gray-500">{{ node.ip_address }}</div>
-                </div>
-                <div class="flex items-center gap-2">
-                  <span
-                    :class="[
-                      'px-2 py-1 text-xs font-medium rounded-full',
-                      node.status === 'online'
-                        ? 'bg-green-100 text-green-800'
-                        : node.status === 'offline'
-                          ? 'bg-gray-100 text-gray-800'
-                          : 'bg-yellow-100 text-yellow-800',
-                    ]"
-                  >
-                    {{ node.status }}
-                  </span>
-                </div>
+          >
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="font-medium text-gray-900">{{ node.hostname }}</div>
+                <div class="text-sm text-gray-500">{{ node.ip_address }}</div>
               </div>
-              <div v-if="node.roles.length > 0" class="mt-2 flex flex-wrap gap-1">
+              <div class="flex items-center gap-2">
                 <span
-                  v-for="role in node.roles"
-                  :key="role"
-                  class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-sm"
+                  :class="[
+                    'px-2 py-1 text-xs font-medium rounded-full',
+                    node.status === 'online'
+                      ? 'bg-green-100 text-green-800'
+                      : node.status === 'offline'
+                        ? 'bg-gray-100 text-gray-800'
+                        : 'bg-yellow-100 text-yellow-800',
+                  ]"
                 >
-                  {{ role }}
+                  {{ node.status }}
                 </span>
               </div>
             </div>
+            <div v-if="node.roles.length > 0" class="mt-2 flex flex-wrap gap-1">
+              <span
+                v-for="role in node.roles"
+                :key="role"
+                class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-sm"
+              >
+                {{ role }}
+              </span>
+            </div>
           </div>
         </div>
+      </div>
 
-        <!-- Step 2: Select Roles -->
-        <div v-else-if="step === 2">
-          <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('deploymentWizard.selectRolesToDeploy') }}</h4>
+      <!-- Step 2: Select Roles -->
+      <div v-else-if="step === 2">
+        <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('deploymentWizard.selectRolesToDeploy') }}</h4>
 
-          <div v-if="isLoadingRoles" class="flex items-center justify-center py-8">
-            <div class="animate-spin w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full" />
-          </div>
+        <div v-if="isLoadingRoles" class="flex items-center justify-center py-8">
+          <div class="animate-spin w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full" />
+        </div>
 
-          <div v-else class="space-y-6">
-            <div v-for="(categoryRoles, category) in rolesByCategory" :key="category">
-              <div class="flex items-center gap-2 mb-3">
-                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="getCategoryIcon(category)" />
-                </svg>
-                <h5 class="text-sm font-medium text-gray-700 uppercase tracking-wide">{{ category }}</h5>
-              </div>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div
-                  v-for="role in categoryRoles"
-                  :key="role.name"
-                  @click="toggleRole(role.name)"
-                  :class="[
-                    'p-3 border rounded-lg cursor-pointer transition-all',
-                    isRoleSelected(role.name)
-                      ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200'
-                      : 'border-gray-200 hover:border-gray-300',
-                  ]"
-                >
-                  <div class="flex items-start gap-3">
-                    <div
-                      :class="[
-                        'w-5 h-5 mt-0.5 rounded-sm border-2 flex items-center justify-center transition-colors',
-                        isRoleSelected(role.name)
-                          ? 'border-primary-500 bg-primary-500'
-                          : 'border-gray-300',
-                      ]"
+        <div v-else class="space-y-6">
+          <div v-for="(categoryRoles, category) in rolesByCategory" :key="category">
+            <div class="flex items-center gap-2 mb-3">
+              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="getCategoryIcon(category)" />
+              </svg>
+              <h5 class="text-sm font-medium text-gray-700 uppercase tracking-wide">{{ category }}</h5>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div
+                v-for="role in categoryRoles"
+                :key="role.name"
+                @click="toggleRole(role.name)"
+                :class="[
+                  'p-3 border rounded-lg cursor-pointer transition-all',
+                  isRoleSelected(role.name)
+                    ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200'
+                    : 'border-gray-200 hover:border-gray-300',
+                ]"
+              >
+                <div class="flex items-start gap-3">
+                  <div
+                    :class="[
+                      'w-5 h-5 mt-0.5 rounded-sm border-2 flex items-center justify-center transition-colors',
+                      isRoleSelected(role.name)
+                        ? 'border-primary-500 bg-primary-500'
+                        : 'border-gray-300',
+                    ]"
+                  >
+                    <svg
+                      v-if="isRoleSelected(role.name)"
+                      class="w-3 h-3 text-white"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
                     >
-                      <svg
-                        v-if="isRoleSelected(role.name)"
-                        class="w-3 h-3 text-white"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fill-rule="evenodd"
-                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                          clip-rule="evenodd"
-                        />
-                      </svg>
-                    </div>
-                    <div class="flex-1">
-                      <div class="font-medium text-gray-900">{{ role.name }}</div>
-                      <div class="text-sm text-gray-500">{{ role.description }}</div>
-                      <div v-if="role.dependencies.length > 0" class="mt-1 text-xs text-gray-400">{{ $t('deploymentWizard.requiresValue0', { value0: role.dependencies.join(', ') }) }}</div>
-                    </div>
+                      <path
+                        fill-rule="evenodd"
+                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                        clip-rule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                  <div class="flex-1">
+                    <div class="font-medium text-gray-900">{{ role.name }}</div>
+                    <div class="text-sm text-gray-500">{{ role.description }}</div>
+                    <div v-if="role.dependencies.length > 0" class="mt-1 text-xs text-gray-400">{{ $t('deploymentWizard.requiresValue0', { value0: role.dependencies.join(', ') }) }}</div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-
-        <!-- Step 3: Review -->
-        <div v-else-if="step === 3">
-          <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('deploymentWizard.reviewDeployment') }}</h4>
-
-          <!-- Error Message -->
-          <BaseAlert v-if="deployError" variant="error" class="mb-4" :message="deployError" />
-
-          <div class="space-y-4">
-            <div class="p-4 bg-gray-50 rounded-lg">
-              <div class="text-sm text-gray-500 mb-1">{{ $t('deploymentWizard.targetNode') }}</div>
-              <div v-if="manualMode" class="font-medium text-gray-900">
-                {{ manualHostname }} ({{ manualIp }})
-                <span class="text-xs text-gray-500 ml-2">{{ $t('deploymentWizard.willBeRegistered') }}</span>
-              </div>
-              <div v-else-if="selectedNode" class="font-medium text-gray-900">
-                {{ selectedNode.hostname }} ({{ selectedNode.ip_address }})
-              </div>
-            </div>
-
-            <div class="p-4 bg-gray-50 rounded-lg">
-              <div class="text-sm text-gray-500 mb-2">{{ $t('deploymentWizard.rolesToDeploy') }}</div>
-              <div class="flex flex-wrap gap-2">
-                <span
-                  v-for="role in selectedRoles"
-                  :key="role"
-                  class="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm font-medium"
-                >
-                  {{ role }}
-                </span>
-              </div>
-            </div>
-
-            <BaseAlert variant="info" :title="$t('deploymentWizard.whatHappensNext')">
-              <ul class="space-y-1">
-                <li>{{ $t('deploymentWizard.1AnsiblePlaybookWill') }}</li>
-                <li>{{ $t('deploymentWizard.2SSHConnectionTo') }}</li>
-                <li>{{ $t('deploymentWizard.3RolesWillBe') }}</li>
-                <li>{{ $t('deploymentWizard.4ServicesWillBe') }}</li>
-              </ul>
-            </BaseAlert>
-          </div>
-        </div>
       </div>
 
-      <!-- Footer -->
-      <div class="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+      <!-- Step 3: Review -->
+      <div v-else-if="step === 3">
+        <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('deploymentWizard.reviewDeployment') }}</h4>
+
+        <!-- Error Message -->
+        <BaseAlert v-if="deployError" variant="error" class="mb-4" :message="deployError" />
+
+        <div class="space-y-4">
+          <div class="p-4 bg-gray-50 rounded-lg">
+            <div class="text-sm text-gray-500 mb-1">{{ $t('deploymentWizard.targetNode') }}</div>
+            <div v-if="manualMode" class="font-medium text-gray-900">
+              {{ manualHostname }} ({{ manualIp }})
+              <span class="text-xs text-gray-500 ml-2">{{ $t('deploymentWizard.willBeRegistered') }}</span>
+            </div>
+            <div v-else-if="selectedNode" class="font-medium text-gray-900">
+              {{ selectedNode.hostname }} ({{ selectedNode.ip_address }})
+            </div>
+          </div>
+
+          <div class="p-4 bg-gray-50 rounded-lg">
+            <div class="text-sm text-gray-500 mb-2">{{ $t('deploymentWizard.rolesToDeploy') }}</div>
+            <div class="flex flex-wrap gap-2">
+              <span
+                v-for="role in selectedRoles"
+                :key="role"
+                class="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm font-medium"
+              >
+                {{ role }}
+              </span>
+            </div>
+          </div>
+
+          <BaseAlert variant="info" :title="$t('deploymentWizard.whatHappensNext')">
+            <ul class="space-y-1">
+              <li>{{ $t('deploymentWizard.1AnsiblePlaybookWill') }}</li>
+              <li>{{ $t('deploymentWizard.2SSHConnectionTo') }}</li>
+              <li>{{ $t('deploymentWizard.3RolesWillBe') }}</li>
+              <li>{{ $t('deploymentWizard.4ServicesWillBe') }}</li>
+            </ul>
+          </BaseAlert>
+        </div>
+      </div>
+    </div>
+
+    <template #actions>
+      <div class="flex w-full items-center justify-between">
         <button
           v-if="step > 1"
           @click="prevStep"
@@ -523,6 +511,6 @@ function getCategoryIcon(category: string): string {
           </button>
         </div>
       </div>
-    </div>
-  </div>
+    </template>
+  </BaseModal>
 </template>

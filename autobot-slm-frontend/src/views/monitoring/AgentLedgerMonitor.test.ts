@@ -64,17 +64,28 @@ function ok(): Record<string, () => Response> {
   }
 }
 
+/**
+ * Waits until the open tab's section has answered. One flushPromises is not enough on a loaded
+ * machine: reading a Response body can settle on a later macrotask, so the section is still loading.
+ */
+async function settle(w: VueWrapper): Promise<void> {
+  await flushPromises()
+  await vi.waitFor(() => expect(w.find('[data-testid="ledger-loading"]').exists()).toBe(false))
+}
+
 /** Mounts the view and opens *tab* ("Now working" is the default tab; most cases here are about another). */
-async function mountView(tab: string | null = 'contention'): Promise<VueWrapper> {
+async function mountView(tab: string | null = 'contention', settled = true): Promise<VueWrapper> {
   wrapper = mount(AgentLedgerMonitor, { global: { plugins: [i18n] }, attachTo: document.body })
   await flushPromises()
-  if (tab) await openTab(wrapper, tab)
+  if (tab) await openTab(wrapper, tab, settled)
+  else if (settled) await settle(wrapper)
   return wrapper
 }
 
-async function openTab(w: VueWrapper, id: string): Promise<void> {
+async function openTab(w: VueWrapper, id: string, settled = true): Promise<void> {
   await w.get(`[data-testid="slm-ledger-tab-${id}"]`).trigger('click')
-  await flushPromises()
+  if (settled) await settle(w)
+  else await flushPromises()
 }
 
 beforeEach(() => {
@@ -119,7 +130,7 @@ describe('AgentLedgerMonitor', () => {
 
   it('says it is reading the ledger while a section has not answered yet', async () => {
     rawRequest.mockImplementation(() => new Promise<Response>(() => {}))
-    const w = await mountView()
+    const w = await mountView('contention', false)
     expect(w.get('[data-testid="ledger-loading"]').text()).toBe(L.state.loading)
     expect(w.find('[data-testid="ledger-empty"]').exists()).toBe(false)
     expect(w.get('[data-testid="slm-ledger-tab-contention"]').text()).toBe(L.tabs.contention)

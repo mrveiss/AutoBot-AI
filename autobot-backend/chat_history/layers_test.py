@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from autobot_memory_graph.owner_scope import OwnerScope
+from knowledge.search_filters import SYSTEM_SCOPE
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -261,9 +262,12 @@ class TestLayer3DeepSearch:
             {
                 "user_message": "search for Redis config",
                 "knowledge_service": fake_ks,
+                "principal": SYSTEM_SCOPE,
             }
         )
         assert "KNOWLEDGE CONTEXT" in result
+        # #16664: L3 retrieves as the turn's principal, taken from the build context.
+        assert fake_ks.conversation_aware_retrieve.await_args.kwargs["principal"] is SYSTEM_SCOPE
 
     @pytest.mark.asyncio
     async def test_render_swallows_knowledge_service_errors(self):

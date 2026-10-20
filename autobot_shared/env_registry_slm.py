@@ -526,3 +526,21 @@ register_env_var(
         component="slm",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_REVOCATION_RETRY_AFTER_SECONDS",
+        type=int,
+        default=5,
+        description=(
+            "Seconds in the Retry-After header of the 503 (detail "
+            "revocation_check_unavailable) both backends answer when a token's revocation "
+            "check cannot run (#18892). The token is still refused; the client keeps its "
+            "session and retries. Raising it spaces retries out during a long store "
+            "outage; lowering it recovers faster once the store is back "
+            "(autobot_shared/auth/revocation_unavailable.py). Floor 1."
+        ),
+        component="auth",
+        range=(1, 300),
+    )
+)

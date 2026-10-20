@@ -332,6 +332,40 @@ describe('authStore — canonical-client transport (#13140)', () => {
     expect(localStorage.getItem('slm_access_token')).toBeNull()
   })
 
+  describe('fetchCurrentUser keeps the session unless the server says 401 (#18892)', () => {
+    function seedSession(): void {
+      sessionStorage.setItem('slm_access_token', 'live-token')
+      localStorage.setItem('slm_access_token', 'live-token')
+    }
+
+    it.each([503, 500, 499])('keeps the session on a %i', async (status) => {
+      seedSession()
+      mockFetch.mockResolvedValueOnce(jsonResponse({ detail: 'x' }, false, status))
+      const store = useAuthStore()
+      await store.fetchCurrentUser()
+      expect(mockFetch).toHaveBeenCalledTimes(1) // no /auth/logout call
+      expect(sessionStorage.getItem('slm_access_token')).toBe('live-token')
+      expect(await store.checkAuth()).toBe(true)
+    })
+
+    it('keeps the session on a network error', async () => {
+      seedSession()
+      mockFetch.mockRejectedValueOnce(new Error('network down'))
+      const store = useAuthStore()
+      await store.fetchCurrentUser()
+      expect(sessionStorage.getItem('slm_access_token')).toBe('live-token')
+    })
+
+    it('logs out on a 401', async () => {
+      seedSession()
+      mockFetch.mockResolvedValueOnce(jsonResponse({ detail: 'expired' }, false, 401))
+      mockFetch.mockResolvedValueOnce(jsonResponse({ logout_url: null })) // /auth/logout
+      const store = useAuthStore()
+      await store.fetchCurrentUser()
+      await vi.waitFor(() => expect(sessionStorage.getItem('slm_access_token')).toBeNull())
+    })
+  })
+
   it('does not clear the session or redirect when a login is rejected 401', async () => {
     // The auth-endpoint opt-out (ApiClient.isAuthEndpoint): a 401 on
     // `/auth/login` is a bad password, not a rejected session.

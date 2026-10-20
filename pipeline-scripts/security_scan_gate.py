@@ -42,15 +42,15 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from autobot_shared.report_error import ReportError  # noqa: E402
+
 # Most severe first. "unknown" is last and is still a finding: a scanner that
 # reports no severity (pip-audit, flake8) must not be gated into invisibility.
 SEVERITIES = ("critical", "high", "medium", "low", "unknown")
 
 _FLAKE8_LINE = re.compile(r"^(?P<location>[^:]+:\d+:\d+):\s+(?P<code>[A-Z]+\d+)\s")
-
-
-class ReportError(RuntimeError):
-    """A report could not be read or understood. Never downgraded to zero."""
 
 
 @dataclass(frozen=True)

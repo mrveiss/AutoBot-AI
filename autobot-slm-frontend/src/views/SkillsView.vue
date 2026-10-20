@@ -17,6 +17,7 @@ import GovernanceModeSelector from '@/components/skills/GovernanceModeSelector.v
 import ApprovalsTab from '@/components/skills/ApprovalsTab.vue'
 import ReposTab from '@/components/skills/ReposTab.vue'
 import DraftsTab from '@/components/skills/DraftsTab.vue'
+import { BaseModal } from '@autobot/ui'
 
 const {
   skills,
@@ -456,190 +457,177 @@ function categoryIcon(category: string): string {
     </template><!-- end activeTab === 'active' -->
 
     <!-- Skill Detail Modal -->
-    <div
-      v-if="showDetail && selectedSkill"
-      class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
-      @click.self="closeDetail"
+    <BaseModal
+      v-if="selectedSkill"
+      :model-value="showDetail"
+      :title="selectedSkill?.name ?? ''"
+      width="42rem"
+      :close-label="$t('ui.modal.closeDialog')"
+      @close="closeDetail"
     >
-      <div
-        class="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-2xl
-               max-h-[80vh] overflow-y-auto"
-      >
-        <!-- Modal Header -->
-        <div class="flex items-center justify-between p-5 border-b border-gray-700">
+      <template #subtitle>
+        {{ selectedSkill?.description }}
+      </template>
+      <div class="space-y-5">
+        <!-- Info Grid -->
+        <div class="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <h2 class="text-xl font-bold">{{ selectedSkill.name }}</h2>
-            <p class="text-sm text-gray-400 mt-1">{{ selectedSkill.description }}</p>
+            <span class="text-gray-500">{{ $t('skillsView.version') }}</span>
+            <div class="text-white">{{ selectedSkill.version }}</div>
           </div>
+          <div>
+            <span class="text-gray-500">{{ $t('skillsView.author') }}</span>
+            <div class="text-white">{{ selectedSkill.author }}</div>
+          </div>
+          <div>
+            <span class="text-gray-500">{{ $t('skillsView.category') }}</span>
+            <div class="text-white">
+              {{ categoryIcon(selectedSkill.category) }} {{ selectedSkill.category }}
+            </div>
+          </div>
+          <div>
+            <span class="text-gray-500">{{ $t('skillsView.status') }}</span>
+            <div :class="statusColor(selectedSkill.status)">
+              {{ selectedSkill.status }}
+            </div>
+          </div>
+        </div>
+
+        <!-- Tools -->
+        <div>
+          <h3 class="text-sm font-semibold text-gray-300 mb-2">{{ $t('skillsView.tools') }}</h3>
+          <div class="flex flex-wrap gap-2">
+            <span
+              v-for="tool in selectedSkill.tools"
+              :key="tool"
+              class="px-2 py-1 bg-blue-900/30 border border-blue-500/30
+                     rounded text-sm text-blue-300"
+            >
+              {{ tool }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Triggers -->
+        <div v-if="selectedSkill.triggers.length">
+          <h3 class="text-sm font-semibold text-gray-300 mb-2">{{ $t('skillsView.triggers') }}</h3>
+          <div class="flex flex-wrap gap-2">
+            <span
+              v-for="trigger in selectedSkill.triggers"
+              :key="trigger"
+              class="px-2 py-1 bg-purple-900/30 border border-purple-500/30
+                     rounded text-sm text-purple-300"
+            >
+              {{ trigger }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Dependencies -->
+        <div v-if="selectedSkill.dependencies.length">
+          <h3 class="text-sm font-semibold text-gray-300 mb-2">{{ $t('skillsView.dependencies') }}</h3>
+          <div class="flex flex-wrap gap-2">
+            <span
+              v-for="dep in selectedSkill.dependencies"
+              :key="dep"
+              class="px-2 py-1 bg-amber-900/30 border border-amber-500/30
+                     rounded text-sm text-amber-300"
+            >
+              {{ dep }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Configuration -->
+        <div v-if="Object.keys(selectedSkill.config_schema).length">
+          <h3 class="text-sm font-semibold text-gray-300 mb-2">{{ $t('skillsView.configuration') }}</h3>
+          <div class="space-y-3">
+            <div
+              v-for="(schema, key) in selectedSkill.config_schema"
+              :key="key"
+              class="bg-gray-900 rounded-sm p-3"
+            >
+              <label class="block text-sm text-gray-300 mb-1">
+                {{ key }}
+                <span class="text-gray-500 ml-1">{{ schema.description }}</span>
+              </label>
+
+              <!-- Select for choices -->
+              <select
+                v-if="schema.choices"
+                v-model="configEditing[key]"
+                class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5
+                       text-white text-sm focus:outline-hidden focus:border-blue-500"
+              >
+                <option v-for="c in schema.choices" :key="c" :value="c">{{ c }}</option>
+              </select>
+
+              <!-- Toggle for bool -->
+              <button
+                v-else-if="schema.type === 'bool'"
+                @click="configEditing[key] = !configEditing[key]"
+                :class="[
+                  'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                  configEditing[key] ? 'bg-emerald-600' : 'bg-gray-600'
+                ]"
+              >
+                <span
+                  :class="[
+                    'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                    configEditing[key] ? 'translate-x-6' : 'translate-x-1'
+                  ]"
+                />
+              </button>
+
+              <!-- Number input -->
+              <input
+                v-else-if="schema.type === 'int' || schema.type === 'float'"
+                v-model.number="configEditing[key]"
+                type="number"
+                class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5
+                       text-white text-sm focus:outline-hidden focus:border-blue-500"
+              />
+
+              <!-- Text input -->
+              <input
+                v-else
+                v-model="configEditing[key]"
+                type="text"
+                class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5
+                       text-white text-sm focus:outline-hidden focus:border-blue-500"
+              />
+            </div>
+          </div>
+
           <button
-            @click="closeDetail"
-            class="text-gray-400 hover:text-white text-xl"
+            @click="saveConfig"
+            :disabled="savingConfig"
+            class="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm
+                   disabled:opacity-50 transition-colors"
           >
-            &times;
+            {{ savingConfig ? $t('skillsView.saving') : $t('skillsView.saveConfiguration') }}
           </button>
         </div>
 
-        <div class="p-5 space-y-5">
-          <!-- Info Grid -->
-          <div class="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <span class="text-gray-500">{{ $t('skillsView.version') }}</span>
-              <div class="text-white">{{ selectedSkill.version }}</div>
-            </div>
-            <div>
-              <span class="text-gray-500">{{ $t('skillsView.author') }}</span>
-              <div class="text-white">{{ selectedSkill.author }}</div>
-            </div>
-            <div>
-              <span class="text-gray-500">{{ $t('skillsView.category') }}</span>
-              <div class="text-white">
-                {{ categoryIcon(selectedSkill.category) }} {{ selectedSkill.category }}
-              </div>
-            </div>
-            <div>
-              <span class="text-gray-500">{{ $t('skillsView.status') }}</span>
-              <div :class="statusColor(selectedSkill.status)">
-                {{ selectedSkill.status }}
-              </div>
-            </div>
-          </div>
-
-          <!-- Tools -->
-          <div>
-            <h3 class="text-sm font-semibold text-gray-300 mb-2">{{ $t('skillsView.tools') }}</h3>
-            <div class="flex flex-wrap gap-2">
+        <!-- Health -->
+        <div>
+          <h3 class="text-sm font-semibold text-gray-300 mb-2">{{ $t('skillsView.health') }}</h3>
+          <div class="bg-gray-900 rounded-sm p-3 text-sm">
+            <div class="flex items-center gap-2">
               <span
-                v-for="tool in selectedSkill.tools"
-                :key="tool"
-                class="px-2 py-1 bg-blue-900/30 border border-blue-500/30
-                       rounded text-sm text-blue-300"
-              >
-                {{ tool }}
-              </span>
-            </div>
-          </div>
-
-          <!-- Triggers -->
-          <div v-if="selectedSkill.triggers.length">
-            <h3 class="text-sm font-semibold text-gray-300 mb-2">{{ $t('skillsView.triggers') }}</h3>
-            <div class="flex flex-wrap gap-2">
-              <span
-                v-for="trigger in selectedSkill.triggers"
-                :key="trigger"
-                class="px-2 py-1 bg-purple-900/30 border border-purple-500/30
-                       rounded text-sm text-purple-300"
-              >
-                {{ trigger }}
-              </span>
-            </div>
-          </div>
-
-          <!-- Dependencies -->
-          <div v-if="selectedSkill.dependencies.length">
-            <h3 class="text-sm font-semibold text-gray-300 mb-2">{{ $t('skillsView.dependencies') }}</h3>
-            <div class="flex flex-wrap gap-2">
-              <span
-                v-for="dep in selectedSkill.dependencies"
-                :key="dep"
-                class="px-2 py-1 bg-amber-900/30 border border-amber-500/30
-                       rounded text-sm text-amber-300"
-              >
-                {{ dep }}
-              </span>
-            </div>
-          </div>
-
-          <!-- Configuration -->
-          <div v-if="Object.keys(selectedSkill.config_schema).length">
-            <h3 class="text-sm font-semibold text-gray-300 mb-2">{{ $t('skillsView.configuration') }}</h3>
-            <div class="space-y-3">
-              <div
-                v-for="(schema, key) in selectedSkill.config_schema"
-                :key="key"
-                class="bg-gray-900 rounded-sm p-3"
-              >
-                <label class="block text-sm text-gray-300 mb-1">
-                  {{ key }}
-                  <span class="text-gray-500 ml-1">{{ schema.description }}</span>
-                </label>
-
-                <!-- Select for choices -->
-                <select
-                  v-if="schema.choices"
-                  v-model="configEditing[key]"
-                  class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5
-                         text-white text-sm focus:outline-hidden focus:border-blue-500"
-                >
-                  <option v-for="c in schema.choices" :key="c" :value="c">{{ c }}</option>
-                </select>
-
-                <!-- Toggle for bool -->
-                <button
-                  v-else-if="schema.type === 'bool'"
-                  @click="configEditing[key] = !configEditing[key]"
-                  :class="[
-                    'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                    configEditing[key] ? 'bg-emerald-600' : 'bg-gray-600'
-                  ]"
-                >
-                  <span
-                    :class="[
-                      'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
-                      configEditing[key] ? 'translate-x-6' : 'translate-x-1'
-                    ]"
-                  />
-                </button>
-
-                <!-- Number input -->
-                <input
-                  v-else-if="schema.type === 'int' || schema.type === 'float'"
-                  v-model.number="configEditing[key]"
-                  type="number"
-                  class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5
-                         text-white text-sm focus:outline-hidden focus:border-blue-500"
-                />
-
-                <!-- Text input -->
-                <input
-                  v-else
-                  v-model="configEditing[key]"
-                  type="text"
-                  class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5
-                         text-white text-sm focus:outline-hidden focus:border-blue-500"
-                />
-              </div>
-            </div>
-
-            <button
-              @click="saveConfig"
-              :disabled="savingConfig"
-              class="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm
-                     disabled:opacity-50 transition-colors"
-            >
-              {{ savingConfig ? $t('skillsView.saving') : $t('skillsView.saveConfiguration') }}
-            </button>
-          </div>
-
-          <!-- Health -->
-          <div>
-            <h3 class="text-sm font-semibold text-gray-300 mb-2">{{ $t('skillsView.health') }}</h3>
-            <div class="bg-gray-900 rounded-sm p-3 text-sm">
-              <div class="flex items-center gap-2">
-                <span
-                  :class="[
-                    'w-2 h-2 rounded-full',
-                    selectedSkill.health.config_valid && selectedSkill.health.dependencies_met
-                      ? 'bg-emerald-400' : 'bg-red-400'
-                  ]"
-                />
-                <span class="text-gray-300">{{ $t('skillsView.configValue0', { value0: selectedSkill.health.config_valid ? $t('skillsView.valid') : $t('skillsView.invalid') }) }}</span>
-                <span class="text-gray-500 mx-1">|</span>
-                <span class="text-gray-300">{{ $t('skillsView.depsValue0', { value0: selectedSkill.health.dependencies_met ? $t('skillsView.met') : $t('skillsView.missing') }) }}</span>
-              </div>
+                :class="[
+                  'w-2 h-2 rounded-full',
+                  selectedSkill.health.config_valid && selectedSkill.health.dependencies_met
+                    ? 'bg-emerald-400' : 'bg-red-400'
+                ]"
+              />
+              <span class="text-gray-300">{{ $t('skillsView.configValue0', { value0: selectedSkill.health.config_valid ? $t('skillsView.valid') : $t('skillsView.invalid') }) }}</span>
+              <span class="text-gray-500 mx-1">|</span>
+              <span class="text-gray-300">{{ $t('skillsView.depsValue0', { value0: selectedSkill.health.dependencies_met ? $t('skillsView.met') : $t('skillsView.missing') }) }}</span>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </BaseModal>
   </div>
 </template>

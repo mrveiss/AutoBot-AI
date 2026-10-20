@@ -43,6 +43,12 @@ class DatabaseService:
         self.session_factory = None
         self._initialized = False
 
+    def describe_failure(self, exc: BaseException) -> str:
+        """Where the connection was attempted and how it failed, never credentials (#18665)."""
+        from services.db_transaction_errors import describe_connect_failure
+
+        return describe_connect_failure(exc, settings.database_url)
+
     async def initialize(self) -> None:
         """Initialize the database connection and create tables (#786)."""
         if self._initialized:

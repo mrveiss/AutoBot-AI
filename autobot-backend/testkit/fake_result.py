@@ -55,5 +55,9 @@ class FakeResult:
     def scalars(self) -> FakeScalars:
         return FakeScalars(self._rows)
 
+    def mappings(self) -> FakeScalars:
+        """``result.mappings().first()`` / ``.all()`` / iteration, over the rows as given."""
+        return FakeScalars(self._rows)
+
     def __iter__(self) -> Iterator[Any]:
         return iter(self._rows)

@@ -31,6 +31,7 @@ import NPUWorkersTab from '@/components/fleet/NPUWorkersTab.vue'
 import RoleManagementModal from '@/components/RoleManagementModal.vue'
 import DecommissionModal from '@/components/fleet/DecommissionModal.vue'
 import InfrastructureView from '@/views/InfrastructureView.vue'
+import { BaseModal } from '@autobot/ui'
 
 const logger = createLogger('FleetOverview')
 const { t } = useI18n()
@@ -562,50 +563,30 @@ const formatLastSeen = formatRelativeTime
     />
 
     <!-- Delete Confirmation Modal (Issue #754: role=dialog) -->
-    <Teleport to="body">
-      <Transition
-        enter-active-class="transition duration-200 ease-out"
-        enter-from-class="opacity-0"
-        enter-to-class="opacity-100"
-        leave-active-class="transition duration-150 ease-in"
-        leave-from-class="opacity-100"
-        leave-to-class="opacity-0"
-      >
-        <div
-          v-if="showDeleteConfirm"
-          class="fixed inset-0 z-50 flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-dialog-title"
-          @keydown.escape="closeDeleteConfirm"
-        >
-          <div class="fixed inset-0 bg-gray-500/75" @click="closeDeleteConfirm"></div>
-          <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <div class="flex items-center gap-4 mb-4">
-              <div class="shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center" aria-hidden="true">
-                <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <div>
-                <h3 id="delete-dialog-title" class="text-lg font-semibold text-gray-900">{{ $t('fleetOverview.deleteNode') }}</h3>
-                <p class="text-sm text-gray-500">{{ $t('fleetOverview.thisActionCannotBe') }}</p>
-              </div>
-            </div>
-            <p class="text-gray-700 mb-6">
-              {{ $t('fleetOverview.areYouSureYou') }}
-              <span class="font-medium">{{ selectedNode?.hostname }}</span>{{ $t('fleetOverview.allAssociatedDataWill') }}
-            </p>
-            <div class="flex justify-end gap-3">
-              <button @click="closeDeleteConfirm" :disabled="isDeleting" class="btn btn-secondary">{{ $t('fleetOverview.cancel') }}</button>
-              <button @click="confirmDelete" :disabled="isDeleting" class="btn bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">
-                {{ isDeleting ? $t('fleetOverview.deleting') : $t('fleetOverview.deleteNode') }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <BaseModal
+      :model-value="showDeleteConfirm"
+      :title="$t('fleetOverview.deleteNode')"
+      size="sm"
+      :close-on-overlay="!isDeleting"
+      :close-on-esc="!isDeleting"
+      :show-close="!isDeleting"
+      :close-label="$t('fleetOverview.close')"
+      @close="closeDeleteConfirm"
+    >
+      <template #subtitle>
+        {{ $t('fleetOverview.thisActionCannotBe') }}
+      </template>
+      <p class="text-gray-700 mb-6">
+        {{ $t('fleetOverview.areYouSureYou') }}
+        <span class="font-medium">{{ selectedNode?.hostname }}</span>{{ $t('fleetOverview.allAssociatedDataWill') }}
+      </p>
+      <template #actions>
+        <button @click="closeDeleteConfirm" :disabled="isDeleting" class="btn btn-secondary">{{ $t('fleetOverview.cancel') }}</button>
+        <button @click="confirmDelete" :disabled="isDeleting" class="btn bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">
+          {{ isDeleting ? $t('fleetOverview.deleting') : $t('fleetOverview.deleteNode') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Role Management Modal (Issue #779) -->
     <RoleManagementModal
@@ -625,66 +606,34 @@ const formatLastSeen = formatRelativeTime
     />
 
     <!-- Connection Test Result Modal (Issue #754: role=dialog) -->
-    <Teleport to="body">
-      <Transition
-        enter-active-class="transition duration-200 ease-out"
-        enter-from-class="opacity-0"
-        enter-to-class="opacity-100"
-        leave-active-class="transition duration-150 ease-in"
-        leave-from-class="opacity-100"
-        leave-to-class="opacity-0"
-      >
-        <div
-          v-if="showConnectionTestResult"
-          class="fixed inset-0 z-50 flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          :aria-label="$t('fleetOverview.connectionTestResultAria')"
-          @keydown.escape="closeConnectionTestResult"
-        >
-          <div class="fixed inset-0 bg-gray-500/75" @click="closeConnectionTestResult"></div>
-          <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <div class="flex items-center gap-4 mb-4">
-              <div
-                class="shrink-0 w-12 h-12 rounded-full flex items-center justify-center"
-                :class="connectionTestResult?.success ? 'bg-green-100' : 'bg-red-100'"
-                aria-hidden="true"
-              >
-                <svg v-if="connectionTestResult?.success" class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                </svg>
-                <svg v-else class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </div>
-              <div>
-                <h3 class="text-lg font-semibold text-gray-900">
-                  {{ connectionTestResult?.success ? $t('fleetOverview.connectionSuccessful') : $t('fleetOverview.connectionFailed') }}
-                </h3>
-                <p class="text-sm text-gray-500">{{ selectedNode?.hostname }}</p>
-              </div>
-            </div>
-            <div v-if="connectionTestResult?.success" class="space-y-2 mb-6">
-              <div v-if="connectionTestResult.latency_ms" class="flex justify-between text-sm">
-                <span class="text-gray-500">{{ $t('fleetOverview.latency') }}</span>
-                <span class="font-medium">{{ connectionTestResult.latency_ms }}ms</span>
-              </div>
-              <div v-if="connectionTestResult.message" class="text-sm text-gray-700">
-                {{ connectionTestResult.message }}
-              </div>
-            </div>
-            <div v-else class="mb-6">
-              <p class="text-sm text-red-600" role="alert">
-                {{ connectionTestResult?.error || $t('fleetOverview.failedToConnectToNode') }}
-              </p>
-            </div>
-            <div class="flex justify-end">
-              <button @click="closeConnectionTestResult" class="btn btn-primary">{{ $t('fleetOverview.close') }}</button>
-            </div>
-          </div>
+    <BaseModal
+      :model-value="showConnectionTestResult"
+      :title="connectionTestResult?.success ? $t('fleetOverview.connectionSuccessful') : $t('fleetOverview.connectionFailed')"
+      size="sm"
+      :close-label="$t('fleetOverview.close')"
+      @close="closeConnectionTestResult"
+    >
+      <template #subtitle>
+        {{ selectedNode?.hostname }}
+      </template>
+      <div v-if="connectionTestResult?.success" class="space-y-2 mb-6">
+        <div v-if="connectionTestResult.latency_ms" class="flex justify-between text-sm">
+          <span class="text-gray-500">{{ $t('fleetOverview.latency') }}</span>
+          <span class="font-medium">{{ connectionTestResult.latency_ms }}ms</span>
         </div>
-      </Transition>
-    </Teleport>
+        <div v-if="connectionTestResult.message" class="text-sm text-gray-700">
+          {{ connectionTestResult.message }}
+        </div>
+      </div>
+      <div v-else class="mb-6">
+        <p class="text-sm text-red-600" role="alert">
+          {{ connectionTestResult?.error || $t('fleetOverview.failedToConnectToNode') }}
+        </p>
+      </div>
+      <template #actions>
+        <button @click="closeConnectionTestResult" class="btn btn-primary">{{ $t('fleetOverview.close') }}</button>
+      </template>
+    </BaseModal>
 
     <!-- Lifecycle Panel Slide-over (Issue #754: role=dialog) -->
     <Teleport to="body">
