@@ -186,7 +186,7 @@ const isFormValid = computed(() => {
     :model-value="show"
     :title="modalTitle"
     width="32rem"
-    :close-label="$t('addNodeModal.closeDialogAria')"
+    :close-label="$t('ui.modal.closeDialog')"
     @close="handleClose"
   >
     <!-- Schedule Name -->

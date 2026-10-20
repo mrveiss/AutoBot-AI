@@ -899,7 +899,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
       v-model="showChangePasswordModal"
       :title="isAdminReset ? $t('settings.admin.userManagementSettings.resetPasswordFor', { username: selectedUser?.username ?? '' }) : $t('settings.admin.userManagementSettings.changePassword')"
       size="sm"
-      :close-label="$t('addNodeModal.closeDialogAria')"
+      :close-label="$t('ui.modal.closeDialog')"
       @close="selectedUser = null; selectedUserType = 'slm'"
     >
       <PasswordChangeForm
@@ -924,7 +924,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
       v-model="showCreateUserModal"
       :title="activeTab === 'slm-admins' ? $t('settings.admin.userManagementSettings.createSLMAdministrator') : $t('settings.admin.userManagementSettings.createAutoBotUser')"
       size="sm"
-      :close-label="$t('addNodeModal.closeDialogAria')"
+      :close-label="$t('ui.modal.closeDialog')"
     >
       <div class="space-y-4">
         <div>
@@ -964,7 +964,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
       v-model="showCreateTeamModal"
       :title="$t('settings.admin.userManagementSettings.createTeam')"
       size="sm"
-      :close-label="$t('addNodeModal.closeDialogAria')"
+      :close-label="$t('ui.modal.closeDialog')"
     >
       <div class="space-y-4">
         <div>
@@ -996,7 +996,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
       v-model="showRbacModal"
       :title="$t('settings.admin.userManagementSettings.initializeRBACSystem')"
       size="sm"
-      :close-label="$t('addNodeModal.closeDialogAria')"
+      :close-label="$t('ui.modal.closeDialog')"
     >
       <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
         <div class="flex gap-3">
@@ -1043,7 +1043,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
       v-model="showCreateProviderModal"
       :title="$t('settings.admin.userManagementSettings.addSSOProvider')"
       width="32rem"
-      :close-label="$t('addNodeModal.closeDialogAria')"
+      :close-label="$t('ui.modal.closeDialog')"
     >
       <div class="space-y-4">
         <div>

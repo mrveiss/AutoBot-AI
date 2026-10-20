@@ -68,7 +68,7 @@
       v-model="showAddModal"
       :title="$t('skills.reposTab.addSkillRepository')"
       size="sm"
-      :close-label="$t('addNodeModal.closeDialogAria')"
+      :close-label="$t('ui.modal.closeDialog')"
     >
       <div class="space-y-3">
         <label class="block">

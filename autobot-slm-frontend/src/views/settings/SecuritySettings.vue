@@ -456,7 +456,7 @@ onMounted(async () => {
       :title="$t('settings.securitySettings.enableTwoFactorAuthentication1')"
       size="sm"
       locked
-      :close-label="$t('addNodeModal.closeDialogAria')"
+      :close-label="$t('ui.modal.closeDialog')"
     >
       <div class="space-y-4">
         <div class="text-sm text-gray-600">
@@ -521,7 +521,7 @@ onMounted(async () => {
       :title="$t('settings.securitySettings.backupCodes')"
       size="sm"
       locked
-      :close-label="$t('addNodeModal.closeDialogAria')"
+      :close-label="$t('ui.modal.closeDialog')"
     >
       <div class="space-y-4">
         <div
@@ -561,7 +561,7 @@ onMounted(async () => {
       :title="$t('settings.securitySettings.disableMFA')"
       size="sm"
       @close="disablePassword = ''"
-      :close-label="$t('addNodeModal.closeDialogAria')"
+      :close-label="$t('ui.modal.closeDialog')"
     >
       <div class="space-y-4">
         <p class="text-sm text-gray-600">
@@ -605,7 +605,7 @@ onMounted(async () => {
       :title="$t('settings.securitySettings.regenerateBackupCodes')"
       size="sm"
       @close="regeneratePassword = ''"
-      :close-label="$t('addNodeModal.closeDialogAria')"
+      :close-label="$t('ui.modal.closeDialog')"
     >
       <div class="space-y-4">
         <div
@@ -651,7 +651,7 @@ onMounted(async () => {
       v-model="showCreateKeyModal"
       :title="$t('settings.securitySettings.createAPIKey')"
       size="sm"
-      :close-label="$t('addNodeModal.closeDialogAria')"
+      :close-label="$t('ui.modal.closeDialog')"
     >
       <div class="space-y-4">
         <div>
@@ -741,7 +741,7 @@ onMounted(async () => {
       :title="$t('settings.securitySettings.aPIKeyCreated')"
       size="sm"
       locked
-      :close-label="$t('addNodeModal.closeDialogAria')"
+      :close-label="$t('ui.modal.closeDialog')"
     >
       <div class="space-y-4">
         <div

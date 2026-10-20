@@ -76,7 +76,7 @@ async function assignRole(): Promise<void> {
     :model-value="visible"
     :title="$t('fleet.assignNPURoleModal.assignNPUWorkerRole')"
     size="sm"
-    :close-label="$t('addNodeModal.closeDialogAria')"
+    :close-label="$t('ui.modal.closeDialog')"
     @close="close"
   >
     <template #subtitle>

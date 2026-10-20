@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, BaseModal } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -255,108 +255,95 @@ function getStatusColor(status: string): string {
 </script>
 
 <template>
-  <div
+  <!-- Locked while a playbook runs: leaving would orphan the execution (#14777). -->
+  <BaseModal
     v-if="visible"
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-    @click.self="$emit('close')"
+    :model-value="true"
+    :title="$t('infrastructureWizard.infrastructureSetupWizard')"
+    width="48rem"
+    :locked="currentExecution?.status === 'running'"
+    :close-label="$t('infrastructureWizard.close')"
+    @close="$emit('close')"
   >
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-      <!-- Header -->
-      <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-        <div>
-          <h3 class="text-lg font-semibold text-gray-900">{{ $t('infrastructureWizard.infrastructureSetupWizard') }}</h3>
-          <p class="text-sm text-gray-500">{{ $t('infrastructureWizard.stepValue0Of3', { value0: step }) }}</p>
-        </div>
-        <button
-          @click="$emit('close')"
-          class="text-gray-400 hover:text-gray-600 transition-colors"
-          :disabled="currentExecution?.status === 'running'"
-          :aria-label="$t('infrastructureWizard.close')"
-        >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+    <template #subtitle>{{ $t('infrastructureWizard.stepValue0Of3', { value0: step }) }}</template>
+
+    <!-- Progress Bar -->
+    <div>
+      <div class="flex items-center gap-2">
+        <div
+          v-for="s in 3"
+          :key="s"
+          :class="[
+            'flex-1 h-2 rounded-full transition-colors',
+            s <= step ? 'bg-primary-600' : 'bg-gray-200',
+          ]"
+        />
       </div>
-
-      <!-- Progress Bar -->
-      <div class="px-6 pt-4">
-        <div class="flex items-center gap-2">
-          <div
-            v-for="s in 3"
-            :key="s"
-            :class="[
-              'flex-1 h-2 rounded-full transition-colors',
-              s <= step ? 'bg-primary-600' : 'bg-gray-200',
-            ]"
-          />
-        </div>
-        <div class="flex justify-between mt-2 text-xs text-gray-500">
-          <span>{{ $t('infrastructureWizard.selectPlaybook') }}</span>
-          <span>{{ $t('infrastructureWizard.reviewConfigure') }}</span>
-          <span>{{ $t('infrastructureWizard.execute') }}</span>
-        </div>
+      <div class="flex justify-between mt-2 text-xs text-gray-500">
+        <span>{{ $t('infrastructureWizard.selectPlaybook') }}</span>
+        <span>{{ $t('infrastructureWizard.reviewConfigure') }}</span>
+        <span>{{ $t('infrastructureWizard.execute') }}</span>
       </div>
+    </div>
 
-      <!-- Content -->
-      <div class="flex-1 overflow-y-auto px-6 py-4">
-        <!-- Step 1: Select Playbook -->
-        <div v-if="step === 1">
-          <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('infrastructureWizard.selectInfrastructurePlaybook') }}</h4>
+    <!-- Content -->
+    <div class="pt-4">
+      <!-- Step 1: Select Playbook -->
+      <div v-if="step === 1">
+        <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('infrastructureWizard.selectInfrastructurePlaybook') }}</h4>
 
-          <div v-if="isLoadingPlaybooks" class="flex items-center justify-center py-8">
-            <div class="animate-spin w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full" />
-          </div>
+        <div v-if="isLoadingPlaybooks" class="flex items-center justify-center py-8">
+          <div class="animate-spin w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full" />
+        </div>
 
-          <div v-else class="space-y-6">
-            <div v-for="(categoryPlaybooks, category) in playbooksByCategory" :key="category">
-              <div class="flex items-center gap-2 mb-3">
-                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="getCategoryIcon(category)" />
-                </svg>
-                <h5 class="text-sm font-medium text-gray-700 uppercase tracking-wide">{{ category }}</h5>
-              </div>
-              <div class="space-y-2">
-                <div
-                  v-for="playbook in categoryPlaybooks"
-                  :key="playbook.id"
-                  @click="selectedPlaybookId = playbook.id"
-                  :class="[
-                    'p-4 border rounded-lg cursor-pointer transition-all',
-                    selectedPlaybookId === playbook.id
-                      ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200'
-                      : 'border-gray-200 hover:border-gray-300',
-                  ]"
-                >
-                  <div class="flex items-start gap-3">
+        <div v-else class="space-y-6">
+          <div v-for="(categoryPlaybooks, category) in playbooksByCategory" :key="category">
+            <div class="flex items-center gap-2 mb-3">
+              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="getCategoryIcon(category)" />
+              </svg>
+              <h5 class="text-sm font-medium text-gray-700 uppercase tracking-wide">{{ category }}</h5>
+            </div>
+            <div class="space-y-2">
+              <div
+                v-for="playbook in categoryPlaybooks"
+                :key="playbook.id"
+                @click="selectedPlaybookId = playbook.id"
+                :class="[
+                  'p-4 border rounded-lg cursor-pointer transition-all',
+                  selectedPlaybookId === playbook.id
+                    ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200'
+                    : 'border-gray-200 hover:border-gray-300',
+                ]"
+              >
+                <div class="flex items-start gap-3">
+                  <div
+                    :class="[
+                      'w-5 h-5 mt-0.5 rounded-full border-2 flex items-center justify-center transition-colors',
+                      selectedPlaybookId === playbook.id
+                        ? 'border-primary-500 bg-primary-500'
+                        : 'border-gray-300',
+                    ]"
+                  >
                     <div
-                      :class="[
-                        'w-5 h-5 mt-0.5 rounded-full border-2 flex items-center justify-center transition-colors',
-                        selectedPlaybookId === playbook.id
-                          ? 'border-primary-500 bg-primary-500'
-                          : 'border-gray-300',
-                      ]"
-                    >
-                      <div
-                        v-if="selectedPlaybookId === playbook.id"
-                        class="w-2 h-2 bg-white rounded-full"
-                      />
-                    </div>
-                    <div class="flex-1">
-                      <div class="font-medium text-gray-900">{{ playbook.name }}</div>
-                      <div class="text-sm text-gray-500 mt-1">{{ playbook.description }}</div>
-                      <div class="flex flex-wrap gap-2 mt-2">
-                        <span
-                          v-for="host in playbook.target_hosts"
-                          :key="host"
-                          class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-sm"
-                        >
-                          {{ host }}
-                        </span>
-                        <span class="px-2 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-sm">
-                          ~{{ playbook.estimated_duration }}
-                        </span>
-                      </div>
+                      v-if="selectedPlaybookId === playbook.id"
+                      class="w-2 h-2 bg-white rounded-full"
+                    />
+                  </div>
+                  <div class="flex-1">
+                    <div class="font-medium text-gray-900">{{ playbook.name }}</div>
+                    <div class="text-sm text-gray-500 mt-1">{{ playbook.description }}</div>
+                    <div class="flex flex-wrap gap-2 mt-2">
+                      <span
+                        v-for="host in playbook.target_hosts"
+                        :key="host"
+                        class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-sm"
+                      >
+                        {{ host }}
+                      </span>
+                      <span class="px-2 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-sm">
+                        ~{{ playbook.estimated_duration }}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -364,143 +351,144 @@ function getStatusColor(status: string): string {
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- Step 2: Review & Configure -->
-        <div v-else-if="step === 2 && selectedPlaybook">
-          <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('infrastructureWizard.reviewConfiguration') }}</h4>
+      <!-- Step 2: Review & Configure -->
+      <div v-else-if="step === 2 && selectedPlaybook">
+        <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('infrastructureWizard.reviewConfiguration') }}</h4>
 
-          <!-- Error Message -->
-          <BaseAlert v-if="executeError" variant="error" class="mb-4" :message="executeError" />
+        <!-- Error Message -->
+        <BaseAlert v-if="executeError" variant="error" class="mb-4" :message="executeError" />
 
-          <div class="space-y-4">
-            <!-- Playbook Summary -->
-            <div class="p-4 bg-gray-50 rounded-lg">
-              <div class="text-sm text-gray-500 mb-1">{{ $t('infrastructureWizard.selectedPlaybook') }}</div>
-              <div class="font-medium text-gray-900">{{ selectedPlaybook.name }}</div>
-              <div class="text-sm text-gray-600 mt-1">{{ selectedPlaybook.description }}</div>
+        <div class="space-y-4">
+          <!-- Playbook Summary -->
+          <div class="p-4 bg-gray-50 rounded-lg">
+            <div class="text-sm text-gray-500 mb-1">{{ $t('infrastructureWizard.selectedPlaybook') }}</div>
+            <div class="font-medium text-gray-900">{{ selectedPlaybook.name }}</div>
+            <div class="text-sm text-gray-600 mt-1">{{ selectedPlaybook.description }}</div>
+          </div>
+
+          <!-- Target Hosts -->
+          <div class="p-4 bg-gray-50 rounded-lg">
+            <div class="text-sm text-gray-500 mb-2">{{ $t('infrastructureWizard.targetHosts') }}</div>
+            <div class="flex flex-wrap gap-2">
+              <span
+                v-for="host in selectedPlaybook.target_hosts"
+                :key="host"
+                class="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm font-medium"
+              >
+                {{ host }}
+              </span>
             </div>
+          </div>
 
-            <!-- Target Hosts -->
-            <div class="p-4 bg-gray-50 rounded-lg">
-              <div class="text-sm text-gray-500 mb-2">{{ $t('infrastructureWizard.targetHosts') }}</div>
-              <div class="flex flex-wrap gap-2">
-                <span
-                  v-for="host in selectedPlaybook.target_hosts"
-                  :key="host"
-                  class="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm font-medium"
-                >
-                  {{ host }}
-                </span>
+          <!-- Default Variables -->
+          <div class="p-4 bg-gray-50 rounded-lg">
+            <div class="text-sm text-gray-500 mb-2">{{ $t('infrastructureWizard.defaultVariables') }}</div>
+            <div class="font-mono text-sm">
+              <div
+                v-for="(value, key) in selectedPlaybook.variables"
+                :key="key"
+                class="flex justify-between py-1 border-b border-gray-200 last:border-0"
+              >
+                <span class="text-gray-600">{{ key }}:</span>
+                <span class="text-gray-900">{{ value }}</span>
               </div>
             </div>
-
-            <!-- Default Variables -->
-            <div class="p-4 bg-gray-50 rounded-lg">
-              <div class="text-sm text-gray-500 mb-2">{{ $t('infrastructureWizard.defaultVariables') }}</div>
-              <div class="font-mono text-sm">
-                <div
-                  v-for="(value, key) in selectedPlaybook.variables"
-                  :key="key"
-                  class="flex justify-between py-1 border-b border-gray-200 last:border-0"
-                >
-                  <span class="text-gray-600">{{ key }}:</span>
-                  <span class="text-gray-900">{{ value }}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Warning/Confirmation -->
-            <BaseAlert
-              v-if="selectedPlaybook.requires_confirmation"
-              variant="warning"
-              :title="$t('infrastructureWizard.confirmationRequired')"
-            >
-              <p>
-                {{ $t('infrastructureWizard.thisPlaybookWillMake') }}
-              </p>
-              <label class="flex items-center gap-2 mt-3">
-                <input
-                  v-model="confirmationChecked"
-                  type="checkbox"
-                  class="rounded-sm"
-                />
-                <span>
-                  {{ $t('infrastructureWizard.iUnderstandTheChanges') }}
-                </span>
-              </label>
-            </BaseAlert>
-
-            <!-- What happens next -->
-            <BaseAlert variant="info" :title="$t('infrastructureWizard.whatHappensNext')">
-              <ul class="space-y-1">
-                <li>{{ $t('infrastructureWizard.1AnsiblePlaybookWill') }}</li>
-                <li>{{ $t('infrastructureWizard.2SSHConnectionsTo') }}</li>
-                <li>{{ $t('infrastructureWizard.3InfrastructureComponentsInstalled') }}</li>
-                <li>{{ $t('infrastructureWizard.4ServicesWillBe') }}</li>
-              </ul>
-              <p class="mt-2">{{ $t('infrastructureWizard.estimatedTimeValue0', { value0: selectedPlaybook.estimated_duration }) }}</p>
-            </BaseAlert>
-          </div>
-        </div>
-
-        <!-- Step 3: Execution -->
-        <div v-else-if="step === 3 && currentExecution">
-          <div class="flex items-center justify-between mb-4">
-            <h4 class="text-base font-medium text-gray-900">{{ $t('infrastructureWizard.executionProgress') }}</h4>
-            <span
-              :class="[
-                'px-3 py-1 rounded-full text-sm font-medium',
-                getStatusColor(currentExecution.status),
-              ]"
-            >
-              {{ currentExecution.status }}
-            </span>
           </div>
 
-          <!-- Output Console -->
-          <div class="bg-gray-900 rounded-lg p-4 font-mono text-sm h-96 overflow-y-auto">
-            <div
-              v-for="(line, index) in currentExecution.output"
-              :key="index"
-              :class="[
-                'whitespace-pre-wrap',
-                line.startsWith('[SUCCESS]') ? 'text-green-400' :
-                line.startsWith('[FAILED]') || line.startsWith('[ERROR]') ? 'text-red-400' :
-                line.startsWith('[WARNING]') ? 'text-yellow-400' :
-                line.startsWith('[INFO]') ? 'text-blue-400' :
-                line.startsWith('TASK') ? 'text-cyan-400' :
-                line.startsWith('PLAY') ? 'text-purple-400 font-bold' :
-                line.includes('changed:') ? 'text-yellow-300' :
-                line.includes('ok:') ? 'text-green-300' :
-                'text-gray-300'
-              ]"
-            >
-              {{ line }}
-            </div>
-            <div
-              v-if="currentExecution.status === 'running'"
-              class="inline-block w-2 h-4 bg-gray-300 animate-pulse ml-1"
-            />
-          </div>
-
-          <!-- Error Display -->
-          <BaseAlert v-if="currentExecution.error" variant="error" class="mt-4">
-            <strong>{{ $t('infrastructureWizard.error') }}</strong> {{ currentExecution.error }}
+          <!-- Warning/Confirmation -->
+          <BaseAlert
+            v-if="selectedPlaybook.requires_confirmation"
+            variant="warning"
+            :title="$t('infrastructureWizard.confirmationRequired')"
+          >
+            <p>
+              {{ $t('infrastructureWizard.thisPlaybookWillMake') }}
+            </p>
+            <label class="flex items-center gap-2 mt-3">
+              <input
+                v-model="confirmationChecked"
+                type="checkbox"
+                class="rounded-sm"
+              />
+              <span>
+                {{ $t('infrastructureWizard.iUnderstandTheChanges') }}
+              </span>
+            </label>
           </BaseAlert>
 
-          <!-- Completion Message -->
-          <BaseAlert
-            v-if="currentExecution.status === 'completed'"
-            variant="success"
-            class="mt-4"
-            :title="$t('infrastructureWizard.infrastructureSetupCompletedSuccessfully')"
-            :message="$t('infrastructureWizard.allTasksHaveBeen')"
-          />
+          <!-- What happens next -->
+          <BaseAlert variant="info" :title="$t('infrastructureWizard.whatHappensNext')">
+            <ul class="space-y-1">
+              <li>{{ $t('infrastructureWizard.1AnsiblePlaybookWill') }}</li>
+              <li>{{ $t('infrastructureWizard.2SSHConnectionsTo') }}</li>
+              <li>{{ $t('infrastructureWizard.3InfrastructureComponentsInstalled') }}</li>
+              <li>{{ $t('infrastructureWizard.4ServicesWillBe') }}</li>
+            </ul>
+            <p class="mt-2">{{ $t('infrastructureWizard.estimatedTimeValue0', { value0: selectedPlaybook.estimated_duration }) }}</p>
+          </BaseAlert>
         </div>
       </div>
 
-      <!-- Footer -->
-      <div class="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+      <!-- Step 3: Execution -->
+      <div v-else-if="step === 3 && currentExecution">
+        <div class="flex items-center justify-between mb-4">
+          <h4 class="text-base font-medium text-gray-900">{{ $t('infrastructureWizard.executionProgress') }}</h4>
+          <span
+            :class="[
+              'px-3 py-1 rounded-full text-sm font-medium',
+              getStatusColor(currentExecution.status),
+            ]"
+          >
+            {{ currentExecution.status }}
+          </span>
+        </div>
+
+        <!-- Output Console -->
+        <div class="bg-gray-900 rounded-lg p-4 font-mono text-sm h-96 overflow-y-auto">
+          <div
+            v-for="(line, index) in currentExecution.output"
+            :key="index"
+            :class="[
+              'whitespace-pre-wrap',
+              line.startsWith('[SUCCESS]') ? 'text-green-400' :
+              line.startsWith('[FAILED]') || line.startsWith('[ERROR]') ? 'text-red-400' :
+              line.startsWith('[WARNING]') ? 'text-yellow-400' :
+              line.startsWith('[INFO]') ? 'text-blue-400' :
+              line.startsWith('TASK') ? 'text-cyan-400' :
+              line.startsWith('PLAY') ? 'text-purple-400 font-bold' :
+              line.includes('changed:') ? 'text-yellow-300' :
+              line.includes('ok:') ? 'text-green-300' :
+              'text-gray-300'
+            ]"
+          >
+            {{ line }}
+          </div>
+          <div
+            v-if="currentExecution.status === 'running'"
+            class="inline-block w-2 h-4 bg-gray-300 animate-pulse ml-1"
+          />
+        </div>
+
+        <!-- Error Display -->
+        <BaseAlert v-if="currentExecution.error" variant="error" class="mt-4">
+          <strong>{{ $t('infrastructureWizard.error') }}</strong> {{ currentExecution.error }}
+        </BaseAlert>
+
+        <!-- Completion Message -->
+        <BaseAlert
+          v-if="currentExecution.status === 'completed'"
+          variant="success"
+          class="mt-4"
+          :title="$t('infrastructureWizard.infrastructureSetupCompletedSuccessfully')"
+          :message="$t('infrastructureWizard.allTasksHaveBeen')"
+        />
+      </div>
+    </div>
+
+    <template #actions>
+      <div class="flex w-full items-center justify-between">
         <button
           v-if="step > 1 && step < 3"
           @click="prevStep"
@@ -553,6 +541,6 @@ function getStatusColor(status: string): string {
           </button>
         </div>
       </div>
-    </div>
-  </div>
+    </template>
+  </BaseModal>
 </template>

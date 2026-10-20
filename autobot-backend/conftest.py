@@ -37,12 +37,12 @@ sys.path.insert(0, str(backend_root))
 
 
 # #16483: both moved to testkit/module_stubs.py — reusable, not conftest-specific
-# (78 call sites across this file alone), and it keeps this file under the
-# file-size ratchet without a raised ceiling every time a new module needs
-# real-loading before its dependent imports it.
+# (78 call sites across this file alone); keeps this file under the file-size
+# ratchet without a raised ceiling every time a new module needs real-loading.
 from testkit.module_stubs import make_pkg_stub as _make_pkg_stub
 from testkit.module_stubs import real_load_and_bind as _real_load_and_bind
 from testkit.provider_key_vault_state import empty_reachable_provider_key_vault  # noqa: F401 -- autouse
+from testkit.singleton_state import reset_feature_flags_singleton  # noqa: F401 -- autouse
 
 # Stub chromadb before it is imported. chromadb hangs at import time on
 # machines without a local Chroma server (it fires gRPC keep-alive probes via

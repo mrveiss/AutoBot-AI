@@ -86,7 +86,7 @@ async function handleAssign(): Promise<void> {
     :model-value="true"
     :title="isEditing ? $t('codeSourceModal.editCodeSource') : $t('codeSourceModal.assignCodeSource')"
     size="sm"
-    :close-label="$t('addNodeModal.closeDialogAria')"
+    :close-label="$t('ui.modal.closeDialog')"
     @close="emit('close')"
   >
     <div v-if="isLoading" class="text-gray-500">{{ $t('codeSourceModal.loadingNodes') }}</div>

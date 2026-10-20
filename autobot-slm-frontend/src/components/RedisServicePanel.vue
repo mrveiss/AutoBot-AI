@@ -381,7 +381,7 @@ onUnmounted(() => {
       v-model="showStopConfirm"
       :title="$t('redisServicePanel.stopRedisService')"
       size="sm"
-      :close-label="$t('addNodeModal.closeDialogAria')"
+      :close-label="$t('ui.modal.closeDialog')"
     >
       <p class="text-sm text-gray-600">
         {{ $t('redisServicePanel.stoppingRedisWillInterrupt') }}

@@ -506,7 +506,7 @@ onMounted(fetchProviders)
       v-model="showCreateForm"
       :title="$t('settings.admin.sSOSettings.value0SSOProvider', { value0: editingProvider ? $t('settings.admin.sSOSettings.edit') : $t('settings.admin.sSOSettings.create') })"
       width="48rem"
-      :close-label="$t('addNodeModal.closeDialogAria')"
+      :close-label="$t('ui.modal.closeDialog')"
       @close="closeForm"
     >
       <div class="space-y-6">

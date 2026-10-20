@@ -12,6 +12,7 @@
  */
 
 import { ref, watch } from 'vue'
+import { BaseModal } from '@autobot/ui'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -58,50 +59,33 @@ watch(
 </script>
 
 <template>
-  <teleport to="body">
-    <div v-if="serviceName" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <!-- Backdrop -->
-      <div class="absolute inset-0 bg-black/50" @click="emit('close')"></div>
-
-      <!-- Modal -->
-      <div class="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] flex flex-col">
-        <!-- Header -->
-        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-          <h3 class="text-lg font-semibold text-gray-900">{{ $t('fleet.serviceLogsModal.title', { service: serviceName }) }}</h3>
-          <button
-            @click="emit('close')"
-            class="text-gray-400 hover:text-gray-600 transition-colors"
-            :aria-label="$t('fleet.serviceLogsModal.close')"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <!-- Content -->
-        <div class="flex-1 overflow-auto p-4 bg-gray-900">
-          <div v-if="isLoading" class="flex items-center justify-center py-12 text-gray-400">
-            <svg class="w-6 h-6 animate-spin mr-2" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-            </svg>
-            {{ $t('fleet.serviceLogsModal.loading') }}
-          </div>
-          <p v-else-if="loadFailed" class="text-sm text-red-300">{{ $t('fleet.serviceLogsModal.loadFailed') }}</p>
-          <pre v-else class="text-sm text-green-400 font-mono whitespace-pre-wrap">{{ logsContent }}</pre>
-        </div>
-
-        <!-- Footer -->
-        <div class="px-4 py-3 border-t border-gray-200 flex justify-end">
-          <button
-            @click="emit('close')"
-            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-          >
-            {{ $t('fleet.serviceLogsModal.close') }}
-          </button>
-        </div>
+  <BaseModal
+    v-if="serviceName"
+    :model-value="true"
+    :title="$t('fleet.serviceLogsModal.title', { service: serviceName })"
+    width="56rem"
+    :close-label="$t('fleet.serviceLogsModal.close')"
+    @close="emit('close')"
+  >
+    <div class="overflow-auto p-4 bg-gray-900 rounded">
+      <div v-if="isLoading" class="flex items-center justify-center py-12 text-gray-400">
+        <svg class="w-6 h-6 animate-spin mr-2" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+        {{ $t('fleet.serviceLogsModal.loading') }}
       </div>
+      <p v-else-if="loadFailed" class="text-sm text-red-300">{{ $t('fleet.serviceLogsModal.loadFailed') }}</p>
+      <pre v-else class="text-sm text-green-400 font-mono whitespace-pre-wrap">{{ logsContent }}</pre>
     </div>
-  </teleport>
+
+    <template #actions>
+      <button
+        @click="emit('close')"
+        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+      >
+        {{ $t('fleet.serviceLogsModal.close') }}
+      </button>
+    </template>
+  </BaseModal>
 </template>

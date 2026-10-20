@@ -462,7 +462,7 @@ function categoryIcon(category: string): string {
       :model-value="showDetail"
       :title="selectedSkill?.name ?? ''"
       width="42rem"
-      :close-label="$t('addNodeModal.closeDialogAria')"
+      :close-label="$t('ui.modal.closeDialog')"
       @close="closeDetail"
     >
       <template #subtitle>

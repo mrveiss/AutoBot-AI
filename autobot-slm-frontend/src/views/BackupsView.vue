@@ -257,7 +257,7 @@ function getNodeHostname(nodeId: string): string {
       v-model="showCreateBackupDialog"
       :title="$t('backupsView.createBackup')"
       size="sm"
-      :close-label="$t('addNodeModal.closeDialogAria')"
+      :close-label="$t('ui.modal.closeDialog')"
     >
       <div class="space-y-4">
         <!-- Node Selection -->

@@ -326,151 +326,140 @@ async function handleDelete(): Promise<void> {
     </div>
 
     <!-- Create/Edit Rule Modal -->
-    <transition
-      enter-active-class="transition ease-out duration-200"
-      enter-from-class="opacity-0"
-      enter-to-class="opacity-100"
-      leave-active-class="transition ease-in duration-150"
-      leave-from-class="opacity-100"
-      leave-to-class="opacity-0"
+    <BaseModal
+      :model-value="showCreateModal || showEditModal"
+      :title="showEditModal ? $t('performance.alertRulesView.editAlertRule') : $t('performance.alertRulesView.createAlertRule')"
+      width="32rem"
+      :close-label="$t('ui.modal.closeDialog')"
+      @close="showCreateModal = false; showEditModal = false"
     >
-      <div
-        v-if="showCreateModal || showEditModal"
-        class="fixed inset-0 z-50 flex items-center justify-center"
+      <form
+        id="alert-rule-form"
+        @submit.prevent="showEditModal ? handleEdit() : handleCreate()"
+        class="space-y-4"
       >
-        <div
-          class="fixed inset-0 bg-black/50"
-          @click="showCreateModal = false; showEditModal = false"
-        ></div>
-        <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 p-6">
-          <h3 class="text-lg font-semibold text-gray-900 mb-4">
-            {{ showEditModal ? $t('performance.alertRulesView.editAlertRule') : $t('performance.alertRulesView.createAlertRule') }}
-          </h3>
-          <form
-            @submit.prevent="showEditModal ? handleEdit() : handleCreate()"
-            class="space-y-4"
-          >
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.name') }}</label>
-              <input
-                v-model="form.name"
-                type="text"
-                required
-                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                :placeholder="$t('performance.alertRulesView.highLatencyAlert')"
-              />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.description') }}</label>
-              <input
-                v-model="form.description"
-                type="text"
-                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                :placeholder="$t('performance.alertRulesView.optionalDescription')"
-              />
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.metricType') }}</label>
-                <select
-                  v-model="form.metric_type"
-                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                >
-                  <option v-for="opt in metricTypeOptions" :key="opt.value" :value="opt.value">
-                    {{ opt.label }}
-                  </option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.condition') }}</label>
-                <select
-                  v-model="form.condition"
-                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                >
-                  <option v-for="opt in conditionOptions" :key="opt.value" :value="opt.value">
-                    {{ opt.label }}
-                  </option>
-                </select>
-              </div>
-            </div>
-            <div class="grid grid-cols-3 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.threshold') }}</label>
-                <input
-                  v-model.number="form.threshold"
-                  type="number"
-                  step="any"
-                  required
-                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.durationS') }}</label>
-                <input
-                  v-model.number="form.duration_seconds"
-                  type="number"
-                  min="1"
-                  required
-                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.severity') }}</label>
-                <select
-                  v-model="form.severity"
-                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                >
-                  <option v-for="opt in severityOptions" :key="opt.value" :value="opt.value">
-                    {{ opt.label }}
-                  </option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.nodeIDOptional') }}</label>
-              <input
-                v-model="form.node_id"
-                type="text"
-                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                :placeholder="$t('performance.alertRulesView.leaveEmptyForAllNodes')"
-              />
-            </div>
-            <div class="flex items-center gap-2">
-              <input
-                v-model="form.enabled"
-                type="checkbox"
-                id="rule-enabled"
-                class="rounded-sm border-gray-300"
-              />
-              <label for="rule-enabled" class="text-sm text-gray-700">{{ $t('performance.alertRulesView.enabled') }}</label>
-            </div>
-            <div class="flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                @click="showCreateModal = false; showEditModal = false"
-                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                {{ $t('performance.alertRulesView.cancel') }}
-              </button>
-              <button
-                type="submit"
-                :disabled="!form.name || loading"
-                class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
-              >
-                {{ showEditModal ? $t('performance.alertRulesView.save') : $t('performance.alertRulesView.create') }}
-              </button>
-            </div>
-          </form>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.name') }}</label>
+          <input
+            v-model="form.name"
+            type="text"
+            required
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            :placeholder="$t('performance.alertRulesView.highLatencyAlert')"
+          />
         </div>
-      </div>
-    </transition>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.description') }}</label>
+          <input
+            v-model="form.description"
+            type="text"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            :placeholder="$t('performance.alertRulesView.optionalDescription')"
+          />
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.metricType') }}</label>
+            <select
+              v-model="form.metric_type"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            >
+              <option v-for="opt in metricTypeOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.condition') }}</label>
+            <select
+              v-model="form.condition"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            >
+              <option v-for="opt in conditionOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.threshold') }}</label>
+            <input
+              v-model.number="form.threshold"
+              type="number"
+              step="any"
+              required
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.durationS') }}</label>
+            <input
+              v-model.number="form.duration_seconds"
+              type="number"
+              min="1"
+              required
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.severity') }}</label>
+            <select
+              v-model="form.severity"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            >
+              <option v-for="opt in severityOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.nodeIDOptional') }}</label>
+          <input
+            v-model="form.node_id"
+            type="text"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            :placeholder="$t('performance.alertRulesView.leaveEmptyForAllNodes')"
+          />
+        </div>
+        <div class="flex items-center gap-2">
+          <input
+            v-model="form.enabled"
+            type="checkbox"
+            id="rule-enabled"
+            class="rounded-sm border-gray-300"
+          />
+          <label for="rule-enabled" class="text-sm text-gray-700">{{ $t('performance.alertRulesView.enabled') }}</label>
+        </div>
+      </form>
+      <template #actions>
+        <div class="flex justify-end gap-3">
+          <button
+            type="button"
+            @click="showCreateModal = false; showEditModal = false"
+            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            {{ $t('performance.alertRulesView.cancel') }}
+          </button>
+          <button
+            type="submit"
+            form="alert-rule-form"
+            :disabled="!form.name || loading"
+            class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
+          >
+            {{ showEditModal ? $t('performance.alertRulesView.save') : $t('performance.alertRulesView.create') }}
+          </button>
+        </div>
+      </template>
+    </BaseModal>
 
     <!-- Delete Confirmation Modal -->
     <BaseModal
       v-model="showDeleteConfirm"
       :title="$t('performance.alertRulesView.deleteAlertRule')"
       size="sm"
-      :close-label="$t('addNodeModal.closeDialogAria')"
+      :close-label="$t('ui.modal.closeDialog')"
     >
       <p class="text-sm text-gray-600">
         {{ $t('performance.alertRulesView.areYouSureYou') }}

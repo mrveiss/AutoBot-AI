@@ -534,7 +534,7 @@ onMounted(async () => {
       :title="$t('settings.admin.personalitySettings.newPersonalityProfile')"
       size="sm"
       width="20rem"
-      :close-label="$t('addNodeModal.closeDialogAria')"
+      :close-label="$t('ui.modal.closeDialog')"
     >
       <input
         v-model="newName"
@@ -566,7 +566,7 @@ onMounted(async () => {
       :model-value="!!confirmDeleteId"
       :title="$t('settings.admin.personalitySettings.deleteProfile')"
       size="sm"
-      :close-label="$t('addNodeModal.closeDialogAria')"
+      :close-label="$t('ui.modal.closeDialog')"
       @close="confirmDeleteId = null"
     >
       <p class="text-sm text-gray-600 mb-4">

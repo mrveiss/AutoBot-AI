@@ -173,8 +173,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-infrastructure/shared/ide-extensions/vscode-autobot/src/extension.ts": 741,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/background-monitor.ts": 713,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts": 957,
-    "autobot-slm-frontend/src/components/AddNodeModal.vue": 1111,  # #18819: 1192 -> 1111
-    "autobot-slm-frontend/src/components/RoleManagementModal.vue": 614,
+    "autobot-slm-frontend/src/components/AddNodeModal.vue": 1067,  # #14777 batch 2: 1111 -> 1067
     "autobot-slm-frontend/src/components/fleet/DecommissionModal.vue": 619,  # #14777: 699 -> 621; 619 (#18941 review)
     "autobot-slm-frontend/src/components/fleet/NodeLifecyclePanel.vue": 984,
     "autobot-slm-frontend/src/composables/useAutobotApi.ts": 2068,
@@ -188,7 +187,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-frontend/src/views/CodeSyncView.vue": 2069,  # #18819: 2080 -> 2069
     "autobot-slm-frontend/src/views/DeploymentsView.vue": 1623,  # #18819 + #14777: 1703 -> 1623
     "autobot-slm-frontend/src/views/FleetOverview.vue": 786,  # #18819 + #14777: 837 -> 786
-    "autobot-slm-frontend/src/views/MaintenanceView.vue": 817,  # #18819: 818 -> 817
+    "autobot-slm-frontend/src/views/MaintenanceView.vue": 794,  # #14777 batch 2: 817 -> 794
     "autobot-slm-frontend/src/views/OrchestrationView.vue": 2189,
     "autobot-slm-frontend/src/views/ReplicationView.vue": 706,  # #18819 + #14777: 731 -> 706
     "autobot-slm-frontend/src/views/SecurityView.vue": 1386,  # #18819 + #14777: 1409 -> 1386

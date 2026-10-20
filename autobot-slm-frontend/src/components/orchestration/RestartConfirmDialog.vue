@@ -38,7 +38,7 @@ const emit = defineEmits<{
     :title="title"
     size="sm"
     :locked="isProcessing"
-    :close-label="$t('addNodeModal.closeDialogAria')"
+    :close-label="$t('ui.modal.closeDialog')"
     @close="emit('cancel')"
   >
     <template #title>

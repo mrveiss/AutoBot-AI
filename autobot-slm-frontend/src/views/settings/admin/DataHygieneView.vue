@@ -474,7 +474,7 @@ onMounted(() => {
       </div>
 
       <!-- Preview modal -->
-      <BaseModal v-model="previewOpen" :title="$t('dataHygiene.storage.previewTitle')" size="md" :close-label="$t('addNodeModal.closeDialogAria')">
+      <BaseModal v-model="previewOpen" :title="$t('dataHygiene.storage.previewTitle')" size="md" :close-label="$t('ui.modal.closeDialog')">
         <p class="text-sm text-gray-600 mb-4" data-testid="storage-preview-modal">
           {{ $t('dataHygiene.storage.previewBody', { count: selectedCandidates.length }) }}
         </p>

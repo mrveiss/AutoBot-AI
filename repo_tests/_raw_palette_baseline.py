@@ -202,7 +202,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:bg-blue-100": 53,
     "slm:bg-blue-200": 4,
     "slm:bg-blue-50": 30,  # #18819: 35 -> 30, hand-rolled notices moved to the kit BaseAlert
-    "slm:bg-blue-500": 12,
+    "slm:bg-blue-500": 11,  # #14777 batch 2: 12 -> 11
     "slm:bg-blue-500/20": 1,
     "slm:bg-blue-600": 36,
     "slm:bg-blue-700": 25,
@@ -220,16 +220,16 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:bg-gray-300": 9,
     "slm:bg-gray-400": 41,
     "slm:bg-gray-400/15": 1,
-    "slm:bg-gray-50": 252,  # #14777: 254 -> 252, SLM dialogs moved onto the kit BaseModal
+    "slm:bg-gray-50": 249,  # #14777 batch 2: 252 -> 249; #14777: 254 -> 252, SLM dialogs moved onto the kit BaseModal
     "slm:bg-gray-500": 4,
     "slm:bg-gray-500/20": 4,
     "slm:bg-gray-500/50": 1,  # #14777: 2 -> 1, SLM dialogs moved onto the kit BaseModal
-    "slm:bg-gray-500/75": 4,  # #14777: 9 -> 4, SLM dialogs moved onto the kit BaseModal
-    "slm:bg-gray-600": 9,
-    "slm:bg-gray-700": 12,
+    "slm:bg-gray-500/75": 2,  # #14777 batch 2: 4 -> 2; #14777: 9 -> 4, SLM dialogs moved onto the kit BaseModal
+    "slm:bg-gray-600": 8,  # #14777 batch 2: 9 -> 8
+    "slm:bg-gray-700": 10,  # #14777 batch 2: 12 -> 10
     "slm:bg-gray-800": 22,  # #14777: 26 -> 22, SLM dialogs moved onto the kit BaseModal
     "slm:bg-gray-800/50": 1,
-    "slm:bg-gray-900": 31,
+    "slm:bg-gray-900": 30,  # #14777 batch 2: 31 -> 30
     "slm:bg-gray-950": 1,
     "slm:bg-green-100": 62,  # #18819 + #14777: 64 -> 62, kit BaseAlert notices and BaseModal dialogs
     "slm:bg-green-200": 4,
@@ -268,7 +268,6 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:bg-red-600": 18,
     "slm:bg-red-700": 12,
     "slm:bg-red-800": 1,
-    "slm:bg-red-900": 1,
     "slm:bg-red-900/30": 1,
     "slm:bg-slate-900": 2,
     "slm:bg-teal-100": 1,
@@ -293,13 +292,13 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:border-cyan-500/30": 2,
     "slm:border-emerald-500/30": 2,
     "slm:border-gray-100": 55,
-    "slm:border-gray-200": 322,  # #14777: 348 -> 322, SLM dialogs moved onto the kit BaseModal
+    "slm:border-gray-200": 313,  # #14777 batch 2: 322 -> 313
     "slm:border-gray-300": 347,
     "slm:border-gray-50": 4,
     "slm:border-gray-500": 2,
     "slm:border-gray-500/30": 4,
     "slm:border-gray-600": 14,
-    "slm:border-gray-700": 29,  # #14777: 34 -> 29, SLM dialogs moved onto the kit BaseModal
+    "slm:border-gray-700": 26,  # #14777 batch 2: 27 -> 26
     "slm:border-gray-700/50": 1,
     "slm:border-gray-800": 5,
     "slm:border-green-100": 1,
@@ -320,7 +319,6 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:border-red-300": 10,
     "slm:border-red-500": 2,
     "slm:border-red-500/30": 3,
-    "slm:border-red-700": 1,
     "slm:border-yellow-200": 13,  # #18819: 14 -> 13, hand-rolled notices moved to the kit BaseAlert
     "slm:border-yellow-300": 3,  # #18819: 4 -> 3, hand-rolled notices moved to the kit BaseAlert
     "slm:border-yellow-500": 2,
@@ -353,13 +351,13 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:text-emerald-400": 2,
     "slm:text-gray-100": 12,  # #14777: 14 -> 12, SLM dialogs moved onto the kit BaseModal
     "slm:text-gray-200": 6,
-    "slm:text-gray-300": 51,
-    "slm:text-gray-400": 227,  # #18819 + #14777: 240 -> 227, kit BaseAlert notices and BaseModal dialogs
-    "slm:text-gray-500": 879,  # #18819 + #14777: 885 -> 879, kit BaseAlert notices and BaseModal dialogs
-    "slm:text-gray-600": 274,  # #18819 + #14777: 286 -> 274, kit BaseAlert notices and BaseModal dialogs
+    "slm:text-gray-300": 50,  # #14777 batch 2: 51 -> 50
+    "slm:text-gray-400": 217,  # #14777 batch 2: 220 -> 217
+    "slm:text-gray-500": 877,  # #14777 batch 2: 879 -> 877
+    "slm:text-gray-600": 268,  # #14777 batch 2: 274 -> 268
     "slm:text-gray-700": 431,
     "slm:text-gray-800": 41,  # #14777: 43 -> 41, SLM dialogs moved onto the kit BaseModal
-    "slm:text-gray-900": 450,  # #14777: 486 -> 450, SLM dialogs moved onto the kit BaseModal
+    "slm:text-gray-900": 442,  # #14777 batch 2: 450 -> 442
     "slm:text-green-300": 4,
     "slm:text-green-400": 4,
     "slm:text-green-500": 5,  # #18819: 6 -> 5, hand-rolled notices moved to the kit BaseAlert
@@ -379,7 +377,6 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:text-purple-700": 8,
     "slm:text-purple-800": 4,
     "slm:text-purple-900": 1,
-    "slm:text-red-200": 1,
     "slm:text-red-300": 4,
     "slm:text-red-400": 4,
     "slm:text-red-500": 12,  # #18819: 23 -> 12, hand-rolled notices moved to the kit BaseAlert
@@ -398,4 +395,4 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
 }
 
 #: Frozen total, asserted separately so a hand edit of one number cannot pass.
-TOTAL_OCCURRENCES = 6252  # train 43: #14777 (-119) on #18242 (-17); #18819: 6756 -> 6388
+TOTAL_OCCURRENCES = 6200  # #14777 batch 2 SLM dialogs on kit BaseModal: 6252 -> 6200

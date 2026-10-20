@@ -181,3 +181,26 @@ describe('RolesView transport', () => {
     expect(sessionStorage.getItem(TOKEN_KEY)).toBe('still-valid')
   })
 })
+
+describe('RolesView migrate target nodes (#19002 review)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('reads GET /nodes as NodeListResponse and offers each node as a target', async () => {
+    // fails if fetchNodes treats the { nodes, total } envelope as the list again
+    const node = { node_id: 'node-a', ip_address: 'addr-a', status: 'online', roles: [] }
+    const health = { health: 'healthy', required_down: [], optional_down: [], detail: '' }
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      const u = String(url)
+      return jsonResponse(u.endsWith('/nodes') ? { nodes: [node], total: 1 } : u.endsWith('/fleet-health') ? health : [])
+    }))
+    const wrapper = mount(RolesView, { global: { plugins: [i18n], stubs: { Teleport: true } } })
+    await flushPromises()
+    Object.assign(wrapper.vm as unknown as Record<string, unknown>, { showMigrateDialog: true })
+    await flushPromises()
+    const options = wrapper.findAll('.aui-dialog select option').map((o) => o.attributes('value'))
+    expect(options).toEqual(['', 'node-a'])
+    wrapper.unmount()
+  })
+})
