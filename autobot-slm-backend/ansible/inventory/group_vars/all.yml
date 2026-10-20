@@ -217,6 +217,12 @@ logging:
 # MONITORING CONFIGURATION
 # ==========================================
 
+# Addresses the monitoring services bind to / are reached at (#18556). Declared here,
+# not in roles/monitoring/defaults, because the slm_agent role renders the monitoring
+# role's node_exporter.service.j2 as well and role defaults are not shared across roles.
+monitoring_listen_address: "0.0.0.0"
+monitoring_local_host: "localhost"
+
 monitoring:
   enabled: true
 

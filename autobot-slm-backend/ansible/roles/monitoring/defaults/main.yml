@@ -16,10 +16,9 @@ monitoring_install_node_exporter: true
 # node that hosts alert routing.
 monitoring_install_alertmanager: false
 
-# Addresses the monitoring services bind to / are reached at (#18556). One
-# declaration each; templates and health checks read these, never a literal.
-monitoring_listen_address: "0.0.0.0"
-monitoring_local_host: "localhost"
+# monitoring_listen_address / monitoring_local_host are declared ONCE in
+# inventory/group_vars/all.yml: the slm_agent role renders this role's
+# node_exporter.service.j2 too, and a role default is not in scope there.
 
 # Prometheus settings. prometheus_version is the ONE Prometheus version: CI reads
 # it from this line to pin promtool (.github/workflows/ci.yml, #18556).

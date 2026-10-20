@@ -41,6 +41,11 @@ def _defaults() -> dict:
     return yaml.safe_load((_ROLE / "defaults/main.yml").read_text(encoding="utf-8"))
 
 
+def _shared_vars() -> dict:
+    """``inventory/group_vars/all.yml``: the one home of the monitoring address vars."""
+    return yaml.safe_load((_ROLE.parents[1] / "inventory/group_vars/all.yml").read_text(encoding="utf-8"))
+
+
 def _decide(exists: bool, stdout: str = "", stderr: str = "", version: str = "0.26.0") -> bool:
     (task,) = [t for t in _tasks("release_binary.yml") if "ansible.builtin.set_fact" in t]
     expr = task["ansible.builtin.set_fact"]["release_install_needed"]
@@ -88,7 +93,7 @@ def test_alertmanager_binds_loopback_independent_of_monitoring_local_host() -> N
     # Contrast: an operator pointing the scrape-target name at a routable address
     # changes nothing about the bind, because the default does not reference it.
     env = jinja2.Environment(undefined=jinja2.StrictUndefined)
-    for local_host in (defaults["monitoring_local_host"], "192.0.2.10"):
+    for local_host in (_shared_vars()["monitoring_local_host"], "192.0.2.10"):
         assert env.from_string(bind).render(monitoring_local_host=local_host) == bind
     unit = (_ROLE / "templates/alertmanager.service.j2").read_text(encoding="utf-8")
     assert "--web.listen-address={{ alertmanager_listen_address }}:" in unit

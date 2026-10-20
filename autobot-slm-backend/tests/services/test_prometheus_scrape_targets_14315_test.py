@@ -47,8 +47,10 @@ _ANSIBLE = Path(__file__).resolve().parents[2] / "ansible"
 _ROLE = _ANSIBLE / "roles" / "monitoring"
 _TEMPLATE = _ROLE / "templates" / "prometheus.yml.j2"
 _TASK_DIR = _ROLE / "tasks"
-#: Role defaults the template reads (e.g. ``monitoring_local_host``, #18556), taken from the role itself.
-_LOCAL_HOST = yaml.safe_load((_ROLE / "defaults" / "main.yml").read_text(encoding="utf-8"))["monitoring_local_host"]
+#: Shared var the template reads (``monitoring_local_host``, #18556), from its one home in group_vars/all.
+_LOCAL_HOST = yaml.safe_load((_ANSIBLE / "inventory" / "group_vars" / "all.yml").read_text(encoding="utf-8"))[
+    "monitoring_local_host"
+]
 
 _TOPOLOGY_FACT = "_backend_metrics_on_loopback"
 
