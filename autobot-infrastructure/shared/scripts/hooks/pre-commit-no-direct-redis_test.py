@@ -54,20 +54,59 @@ def _init_repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
+_BAD = "import redis\nr = redis.Redis()\n"
+
+
+def _stage(repo: Path, rel: str, text: str) -> None:
+    (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+    (repo / rel).write_text(text, encoding="utf-8")
+    _git(repo, "add", rel)
+
+
+def _run_hook(repo: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
+
+
 def test_blocks_direct_redis_instantiation(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
-    (repo / "bad.py").write_text("r = redis.Redis()\n", encoding="utf-8")
-    _git(repo, "add", "bad.py")
-    result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
+    _stage(repo, "scripts/bad.py", _BAD)
+    result = _run_hook(repo)
     assert result.returncode != 0, result.stdout + result.stderr
-    assert "redis.Redis()" in result.stdout
+    assert "NEW scripts/bad.py" in result.stdout
+
+
+def test_blocks_the_constructors_the_old_regex_missed(tmp_path: Path) -> None:
+    """#18553: `from_url` and a pool were invisible to the regex hook, and `autobot-infrastructure/` was skipped."""
+    repo = _init_repo(tmp_path)
+    _stage(repo, "autobot-infrastructure/x/probe.py", "import redis\nc = redis.from_url('u')\n")
+    result = _run_hook(repo)
+    assert result.returncode != 0, result.stdout + result.stderr
+
+
+def test_noqa_redis_is_no_longer_an_opt_out(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _stage(repo, "scripts/bad.py", "import redis\nr = redis.Redis()  # noqa: redis\n")
+    assert _run_hook(repo).returncode != 0
+
+
+def test_a_shell_script_embedding_a_constructor_is_read(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _stage(repo, "scripts/probe.sh", "python3 -c 'import redis; redis.Redis()'\n")
+    assert _run_hook(repo).returncode != 0
+
+
+def test_a_mention_in_a_docstring_or_a_test_file_is_not_a_site(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _stage(repo, "scripts/doc.py", '"""redis.Redis() is forbidden."""\n')
+    _stage(repo, "scripts/a_test.py", _BAD)
+    result = _run_hook(repo)
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_allows_clean_file(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
-    (repo / "ok.py").write_text("x = 1\n", encoding="utf-8")
-    _git(repo, "add", "ok.py")
-    result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
+    _stage(repo, "scripts/ok.py", "x = 1\n")
+    result = _run_hook(repo)
     assert result.returncode == 0, result.stdout + result.stderr
 
 
@@ -78,10 +117,9 @@ class TestFailsClosedOnGitFailure:
 
     def test_a_git_failure_does_not_report_clean(self, tmp_path: Path) -> None:
         repo = _init_repo(tmp_path)
-        (repo / "bad.py").write_text("r = redis.Redis()\n", encoding="utf-8")
-        _git(repo, "add", "bad.py")
+        _stage(repo, "scripts/bad.py", _BAD)
         # Corrupt the index so git errors rather than returning an empty answer.
         (repo / ".git" / "index").write_text("garbage", encoding="utf-8")
 
-        result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
+        result = _run_hook(repo)
         assert result.returncode != 0, "a git failure was indistinguishable from 'no violation'"

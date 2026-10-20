@@ -61,7 +61,7 @@ def _api_sources(root: Path) -> list[str]:
 REACH = declare(
     "chat-history-async-calls-awaited",
     discover=_api_sources,
-    floor=413,
+    floor=430,  # re-pinned mid-window (train 45): population 450, window [410, 450]
     growth=40,
     what="non-test python modules",
     roots=_ROOTS,

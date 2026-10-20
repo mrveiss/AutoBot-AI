@@ -21,6 +21,7 @@ from fastapi import HTTPException
 
 import api.chat_shared_links as shared_links
 from testkit.canonical_gate import install_canonical_resolver
+from testkit.fake_async_session import FakeAsyncSession
 
 
 def _link(require_login: bool = False, view_count: int = 0, last_accessed_at=None) -> types.SimpleNamespace:
@@ -37,14 +38,6 @@ class _FakeAuthMiddleware:
 
     def get_user_from_request(self, request) -> dict | None:
         return self._user
-
-
-class _FakeDB:
-    def __init__(self) -> None:
-        self.committed = False
-
-    async def commit(self) -> None:
-        self.committed = True
 
 
 def test_enforce_require_login_is_a_noop_when_not_required() -> None:
@@ -72,7 +65,7 @@ def test_enforce_require_login_rejects_an_anonymous_visitor(monkeypatch: pytest.
 
 def test_record_access_increments_view_count_and_stamps_last_accessed() -> None:
     link = _link(view_count=3, last_accessed_at=None)
-    db = _FakeDB()
+    db = FakeAsyncSession()
 
     asyncio.run(shared_links._record_access(link, db))
 
@@ -83,7 +76,7 @@ def test_record_access_increments_view_count_and_stamps_last_accessed() -> None:
 
 def test_record_access_is_cumulative_across_repeated_visits() -> None:
     link = _link(view_count=0)
-    db = _FakeDB()
+    db = FakeAsyncSession()
 
     asyncio.run(shared_links._record_access(link, db))
     asyncio.run(shared_links._record_access(link, db))

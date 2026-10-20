@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Tuple
 from advanced_rag_optimizer import RankedResult
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.ssot_config import config
+from knowledge.serving import servable
 from security.content_firewall import inspect_rag_context
 from services.rag_service import RAGService
 
@@ -266,13 +267,11 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
         """
         # Issue #382: metrics unused; Issue #556: pass categories
         results, _ = await self.rag_service.advanced_search(
-            query=query,
-            max_results=top_k,
-            enable_reranking=True,
-            categories=categories,
+            query=query, max_results=top_k, enable_reranking=True, categories=categories
         )
 
-        filtered_results = self._filter_by_score(results, score_threshold)
+        # #18820: the serving predicate's final check -- RAG caches and fallbacks bypass the store.
+        filtered_results = self._filter_by_score(servable(results), score_threshold)
         context_string = self.format_knowledge_context(filtered_results)
         citations = self.format_citations(filtered_results)
 

@@ -206,7 +206,7 @@ REACH = declare(
     # the bottom tenth of `growth`, because that is zero tolerance dressed as an allowance.
     # Re-measured by the mechanism itself, not carried across (#15928); the arithmetic is in
     # the commit message, which cannot drift from the tree it describes.
-    floor=3236,  # re-pinned mid-window: population 3261, window [3211, 3261]
+    floor=3257,  # re-pinned mid-window (train 45): population 3282, window [3232, 3282]
     what="Python modules swept for claim-or-lock primitives",
     growth=50,
     # Scope as data (#17844). Five trees, including `scripts/` and `pipeline-scripts/` that no

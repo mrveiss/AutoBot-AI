@@ -63,7 +63,6 @@ python:
   - 'autobot-monitoring/grafana/provisioning/datasources/prometheus.yml'
   - 'autobot-backend/config/llm_models.yaml'
   - 'autobot-infrastructure/shared/config/permission_rules.yaml'
-  - 'autobot-infrastructure/shared/config/llm_models.yaml'
   # The guard scans the whole repo by basename (pathspec *<name>), so an unallowed copy can
   # land anywhere: one glob per guarded basename, not just the listed trees.
   - '**/error_messages.yaml'

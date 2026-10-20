@@ -49,10 +49,12 @@ from knowledge.search_components.basic_vector_search import BasicVectorSearchMix
 from knowledge.search_components.helpers import (
     build_search_result,
     decode_redis_hash,
+    extract_search_params,
     matches_category,
     score_fact_by_terms,
 )
 from knowledge.search_components.hybrid_search import HybridSearcher
+from knowledge.serving import servable_response
 
 # Issue #3828: canonical vector search engine — SearchMixin.search() delegates here.
 from models.task_context import SearchContext
@@ -213,7 +215,23 @@ class SearchMixin(BasicVectorSearchMixin):
             return []
         return await self._execute_vector_search(sanitized, top_k, filters=filters)
 
-    async def search(  # noqa: PLR0913
+    async def search(self, *args: Any, include_unservable: bool = False, **kwargs: Any) -> Any:
+        """The one KB read every caller goes through: dispatch, then the serving predicate (#18820).
+
+        ``knowledge.serving`` decides which facts may reach chat grounding or LLM context. It is
+        applied here, once, to whatever any mode returned -- basic (a list), enhanced and advanced
+        (a response dict, including its clusters) -- so no caller has to remember a ``where`` clause
+        for it. ``include_unservable=True`` is the explicit opt-out for a reader whose job is to
+        see rejected, expired or not-yet-valid facts; it is never a default. Arguments are those of
+        :meth:`_dispatch_search`.
+
+        A response dict is filtered after its mode paginated, so a page can come back shorter than
+        ``limit`` when a hit was withheld; ``total_count`` is reduced to match.
+        """
+        response = await self._dispatch_search(*args, **kwargs)
+        return response if include_unservable else servable_response(response)
+
+    async def _dispatch_search(  # noqa: PLR0913
         self,
         query: str,
         top_k: int = 10,
@@ -483,7 +501,7 @@ class SearchMixin(BasicVectorSearchMixin):
         if mode == "keyword":
             return await self._keyword_search(processed_query, fetch_limit, category)
         elif mode == "semantic":
-            return await self.search(
+            return await self._dispatch_search(
                 processed_query,
                 top_k=fetch_limit,
                 filters=base_filters,
@@ -715,28 +733,7 @@ class SearchMixin(BasicVectorSearchMixin):
 
     def _extract_search_params(self, ctx: SearchContext) -> Dict[str, Any]:
         """Extract search parameters from context (Issue #398: extracted)."""
-        return {
-            "query": ctx.query_params.query,
-            "limit": ctx.query_params.limit,
-            "offset": ctx.query_params.offset,
-            "tags": ctx.query_params.tags,
-            "tags_match_any": ctx.query_params.tags_match_any,
-            "exclude_terms": ctx.query_params.exclude_terms,
-            "require_terms": ctx.query_params.require_terms,
-            "category": ctx.filters.category,
-            "created_after": ctx.filters.created_after,
-            "created_before": ctx.filters.created_before,
-            "exclude_sources": ctx.filters.exclude_sources,
-            "verified_only": ctx.filters.verified_only,
-            "mode": ctx.options.mode,
-            "enable_reranking": ctx.options.enable_reranking,
-            "min_score": ctx.options.min_score,
-            "enable_query_expansion": ctx.options.enable_query_expansion,
-            "enable_relevance_scoring": ctx.options.enable_relevance_scoring,
-            "enable_clustering": ctx.options.enable_clustering,
-            "track_analytics": ctx.options.track_analytics,
-            "session_id": ctx.session_id,
-        }
+        return extract_search_params(ctx)
 
     async def _execute_multi_query_search(
         self,

@@ -58,19 +58,40 @@ def _match_field(actual: Any, expected: Any) -> bool:
             return actual != expected["$ne"]
         if "$eq" in expected:
             return actual == expected["$eq"]
+        if "$nin" in expected:  # #18820: the serving clause once several trust states are withheld
+            return actual not in expected["$nin"]
         return False  # unsupported operator -> fail-safe: no match
     return actual == expected
 
 
-def _match_where(meta: Metadata | None, where: Where | None) -> bool:
-    """Minimal ``where`` filter: equality plus ``$ne``/``$eq`` on top-level keys.
+def _check_where(where: Where | None) -> None:
+    """Reject the ``$and``-with-siblings shape ChromaDB rejects, before any record is read.
 
-    Full ChromaDB where syntax (``$and``, ``$or``, ``$in`` ...) is out of
-    scope for the in-memory fake — tests that need it should use ChromaDB
+    ChromaDB's ``validate_where`` raises ``ValueError("Expected where to have exactly one operator,
+    got ...")`` for ``{"$and": [...], "category": "docs"}``. Matching it here instead of evaluating
+    ``$and`` alone keeps the fake from serving a query the real store refuses — even on an empty
+    collection, where no record would ever reach ``_match_where``.
+    """
+    if not where or "$and" not in where:
+        return
+    if len(where) != 1:
+        raise ValueError(f"Expected where to have exactly one operator, got {where}")
+    for clause in where["$and"]:
+        _check_where(clause)
+
+
+def _match_where(meta: Metadata | None, where: Where | None) -> bool:
+    """Minimal ``where`` filter: equality plus ``$ne``/``$eq``/``$nin`` on top-level keys, and ``$and``.
+
+    ``$and`` (#18820) is here because the shared grounding filter is an ``$and`` of the
+    quarantine and serving clauses. The rest of ChromaDB's where syntax (``$or``, ``$in`` ...)
+    is out of scope for the in-memory fake — tests that need it should use ChromaDB
     directly or extend this helper.
     """
     if not where:
         return True
+    if "$and" in where:
+        return all(_match_where(meta, clause) for clause in where["$and"])
     for key, expected in where.items():
         actual = meta.get(key) if meta is not None else None
         if not _match_field(actual, expected):
@@ -196,6 +217,7 @@ class InMemoryCollection(BaseCollection):
         offset: int | None = None,
         include: Sequence[str] | None = None,
     ) -> Dict[str, Any]:
+        _check_where(where)
         include = list(include) if include is not None else ["documents", "metadatas"]
         candidate_ids: List[str] = list(ids) if ids is not None else list(self._documents.keys())
         filtered = [
@@ -234,6 +256,7 @@ class InMemoryCollection(BaseCollection):
                 "InMemoryCollection requires query_embeddings; text-only " "queries need a real embedding backend"
             )
         include = list(include) if include is not None else ["documents", "metadatas", "distances"]
+        _check_where(where)
 
         candidate_ids = [_id for _id in self._documents.keys() if _match_where(self._metadatas.get(_id), where)]
 
@@ -277,6 +300,7 @@ class InMemoryCollection(BaseCollection):
     ) -> None:
         if ids is None and where is None:
             raise ValueError("delete requires ids or where")
+        _check_where(where)
         target = list(ids) if ids is not None else list(self._documents.keys())
         for _id in target:
             if _id not in self._documents:

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Every fact route hides a fact's existence from a non-reader and denies on non-object metadata (#18220)."""
 
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -24,7 +25,16 @@ def _kb(raw):
     kb = MagicMock()
     kb.ownership_manager = KnowledgeOwnership(redis_client=object())
     kb.redis.return_value.hget = AsyncMock(return_value=raw)
+    kb.get_fact = MagicMock(return_value=None if raw is None else {"fact_id": "f1", "metadata": _decode(raw)})
     return kb
+
+
+def _decode(raw):
+    """What the KB's synchronous ``get_fact`` hands back for a stored metadata value."""
+    try:
+        return json.loads(raw)
+    except ValueError:
+        return raw
 
 
 def _share_req():
@@ -87,7 +97,7 @@ async def test_non_object_metadata_is_the_404_never_a_500(route, raw):
     assert (err.status_code, err.detail) == (404, "Fact not found")
 
 
-# --- admin-only ownership routes: an admin passes the read check on non-object metadata ---
+# --- admin routes (share/unshare on the canonical route, visibility on the ownership one): an admin passes the read check on non-object metadata ---
 
 
 def _own_kb(metadata):
@@ -107,12 +117,13 @@ def _own_request():
 
 
 async def _own_call(name, kb):
+    if name in ("share", "unshare"):  # canonical collaboration routes since #18795
+        with patch.object(collab, "get_or_create_knowledge_base", AsyncMock(return_value=kb)):
+            if name == "share":
+                return await collab.share_knowledge("f1", _share_req(), MagicMock(), ADMIN)
+            return await collab.unshare_knowledge("f1", "u2", MagicMock(), ADMIN, entity_type="user")
     request = _own_request()
     with patch.object(own, "get_or_create_knowledge_base", AsyncMock(return_value=kb)):
-        if name == "share":
-            return await own.share_fact("f1", SimpleNamespace(user_ids=["u2"]), request, ADMIN)
-        if name == "unshare":
-            return await own.unshare_fact("f1", "u2", request, ADMIN)
         return await own.update_fact_visibility("f1", SimpleNamespace(visibility="private"), request, ADMIN)
 
 

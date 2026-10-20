@@ -38,14 +38,32 @@ def _yaml(path: Path) -> dict:
     return (yaml.safe_load(path.read_text(encoding="utf-8")) or {}) if path.is_file() else {}
 
 
+#: Keys whose value is a nested task list (#18951): a template inside them is still a task.
+_NESTED_TASK_KEYS = ("block", "rescue", "always")
+
+
+def _walk_tasks(tasks: list | None):
+    """Every task in *tasks*, descending into block/rescue/always at any depth."""
+    for task in tasks or []:
+        if not isinstance(task, dict):
+            continue
+        yield task
+        for key in _NESTED_TASK_KEYS:
+            yield from _walk_tasks(task.get(key))
+
+
+def _template_src(task: dict) -> str:
+    spec = task.get("ansible.builtin.template") or task.get("template")
+    return str(spec.get("src", "")) if isinstance(spec, dict) else ""
+
+
 def _cross_role_templates() -> list[tuple[str, str, Path]]:
     """(borrowing role, task file, borrowed template path) for every cross-role template task."""
     found = []
     for task_file in sorted(_ROLES.glob("*/tasks/*.yml")):
         role = task_file.parent.parent.name
-        for task in yaml.safe_load(task_file.read_text(encoding="utf-8")) or []:
-            spec = (task or {}).get("ansible.builtin.template") or (task or {}).get("template")
-            match = _CROSS_ROLE_SRC.match(str((spec or {}).get("src", "")))
+        for task in _walk_tasks(yaml.safe_load(task_file.read_text(encoding="utf-8"))):
+            match = _CROSS_ROLE_SRC.match(_template_src(task))
             if match and match["role"] != role:
                 found.append((role, task_file.name, _ROLES / match["role"] / "templates" / match["name"]))
     return found
@@ -85,3 +103,13 @@ def test_contrast_a_variable_only_the_owning_role_declares_is_caught(tmp_path: P
     template.write_text("--listen={{ owner_only_var }}:{{ node_exporter_port }}", encoding="utf-8")
     assert _undeclared(template, {"node_exporter_port": 9100}) == {"owner_only_var"}
     assert _undeclared(template, {"node_exporter_port": 9100, "owner_only_var": "0.0.0.0"}) == set()
+
+
+def test_contrast_a_template_nested_in_block_rescue_always_is_found() -> None:
+    """#18951: templates inside block/rescue/always are tasks too and must be walked."""
+    src = "../../monitoring/templates/x.j2"
+    tasks = [
+        {"name": "outer", "block": [{"template": {"src": src}}], "rescue": [{"block": [{"template": {"src": src}}]}]},
+        {"always": [{"ansible.builtin.template": {"src": src}}]},
+    ]
+    assert [_template_src(t) for t in _walk_tasks(tasks) if _template_src(t)] == [src, src, src]

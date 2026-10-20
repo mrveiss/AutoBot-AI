@@ -9,6 +9,9 @@ fails the guard; a site that leaves the tree makes its entry stale and fails unt
 lowered or removed; `FROZEN_TOTAL` is the sum and may only go down. Never raise it to admit a
 construction -- use `autobot_shared.redis_client.get_redis_client` / `get_async_redis_client`.
 
+The matcher and the path rules live in `tools/lint/check_no_direct_redis.py`, shared by the guard, the
+`no-direct-redis` pre-commit hook and the CI step: one matcher, this one baseline.
+
 BOUNDARY: python and shell source under the guard's `SCAN_ROOTS`, tests and `autobot_shared/redis*`
 (the canonical engine) excluded. Frozen 2026-10-16 on origin/main d050455c7e; the population was
 derived a second way (`git grep` over the same roots) and the file sets differ only by the four
@@ -43,12 +46,6 @@ BASELINE: dict[str, tuple[int, str, str]] = {
     # --- product code -------------------------------------------------------------------------
     "autobot-backend/utils/distributed_service_discovery.py": (1, EXCEPTION, _PROBE),
     "autobot-backend/utils/service_discovery.py": (1, EXCEPTION, _PROBE),
-    "autobot-backend/utils/operation_timeout_integration.py": (
-        1,
-        MIGRATE,
-        "#18553 slice 3, held: db 9 is `temp` but redis.asyncio.from_url returns bytes (decode_responses=False) "
-        "while the canonical client decodes, so checkpoint_manager's keys()/hget() results would change type",
-    ),
     # --- worker, infrastructure, shell --------------------------------------------------------
     "autobot-npu-worker/resources/windows-npu-worker/app/utils/redis_client.py": (
         2,
@@ -102,4 +99,4 @@ BASELINE: dict[str, tuple[int, str, str]] = {
 }
 
 #: Sum of the site counts above. It may only go DOWN.
-FROZEN_TOTAL = 39
+FROZEN_TOTAL = 38

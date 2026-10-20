@@ -791,17 +791,19 @@ repos:
         # where it lives, rather than inferring that the frontend was checked.
         description: "Blocks commits with functions >65 lines, warns for 51-65 lines"
 
-  # No direct redis.Redis() in production code (Issue #1086)
+  # No new direct Redis client (Issue #1086, #18553): ONE matcher (tools/lint/check_no_direct_redis.py)
+  # and ONE baseline (repo_tests/redis_direct_constructor_baseline_18553.py), the same pair the
+  # whole-tree ratchet runs. Reads .py and .sh; `# noqa: redis` is retired.
   - repo: local
     hooks:
       - id: no-direct-redis
-        name: 'No Direct Redis Connections in Production Code (Issue #1086)'
+        name: 'No New Direct Redis Clients (Issue #1086, #18553)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-direct-redis
         language: script
-        types: [python]
+        types_or: [python, shell]
         pass_filenames: false
         stages: [pre-commit]
-        description: "Blocks commits with direct redis.Redis() — use get_redis_client() instead"
+        description: "Blocks a direct Redis client outside the baseline — use get_redis_client() instead"
 
   # No new module-level singletons in agent/runtime paths (GH#6630)
   - repo: local

@@ -33,6 +33,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from knowledge.ownership import VisibilityLevel
 from knowledge.search_filters import (
+    authorize_fact_write,
     can_read_fact,
     extract_user_context_from_request,
     fact_not_found,
@@ -166,13 +167,14 @@ def _build_access_response(fact_id: str, metadata: Dict, user_id: str) -> Dict:
     }
 
 
-async def _verify_fact_ownership(fact_id: str, kb, current_user, action_label: str) -> Dict:
-    """Fetch metadata and assert the caller is the owner. Ref: #1088, #18220."""
-    metadata = await _fetch_fact_metadata(fact_id, kb.redis())
-    await require_fact_owner(
-        kb.ownership_manager, fact_id, metadata, current_user, f"Only the owner can {action_label} knowledge"
-    )
-    return metadata
+async def _authorize_share_write(fact_id: str, kb, current_user) -> Dict:
+    """Metadata of a fact the caller may share/unshare: its owner or an admin (#18795).
+
+    404 when the caller cannot read the fact, 403 for a reader who may not write it.
+    """
+    fact = await authorize_fact_write(kb, fact_id, current_user)
+    metadata = fact.get("metadata")  # a non-object was already warned about by authorize_fact_write
+    return metadata if isinstance(metadata, dict) else {}
 
 
 async def _unshare_fact_by_entity(
@@ -368,8 +370,8 @@ async def share_knowledge(
         Updated fact metadata
 
     Raises:
-        403: If user is not the owner
-        404: If fact not found
+        403: If the caller can read the fact but is neither its owner nor an admin
+        404: If the fact is absent or the caller cannot read it
     """
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
     if kb is None or not kb.ownership_manager:
@@ -377,7 +379,7 @@ async def share_knowledge(
 
     try:
         user_id, _, _ = extract_user_context_from_request(current_user)
-        metadata = await _verify_fact_ownership(fact_id, kb, current_user, "share")
+        metadata = await _authorize_share_write(fact_id, kb, current_user)
 
         updated_metadata = await kb.ownership_manager.share_fact(
             fact_id=fact_id,
@@ -436,8 +438,8 @@ async def unshare_knowledge(
         Updated fact metadata
 
     Raises:
-        403: If user is not the owner
-        404: If fact not found
+        403: If the caller can read the fact but is neither its owner nor an admin
+        404: If the fact is absent or the caller cannot read it
     """
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
     if kb is None or not kb.ownership_manager:
@@ -445,7 +447,7 @@ async def unshare_knowledge(
 
     try:
         user_id, _, _ = extract_user_context_from_request(current_user)
-        metadata = await _verify_fact_ownership(fact_id, kb, current_user, "unshare")
+        metadata = await _authorize_share_write(fact_id, kb, current_user)
 
         updated_metadata = await _unshare_fact_by_entity(
             fact_id, entity_id, entity_type, metadata, kb.ownership_manager

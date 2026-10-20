@@ -72,7 +72,7 @@ def _test_files(root: Path = REPO) -> list[Path]:
 REACH = declare(
     "blanket-skip-test-module-sweep",
     discover=_test_files,
-    floor=3091,  # train 28: population 3191 -> window [2991, 3191]; pinned mid-window (#15928)
+    floor=3175,  # re-pinned mid-window (train 47): population 3275, window [3075, 3275]
     growth=200,
     skips=0,
     what="test modules",

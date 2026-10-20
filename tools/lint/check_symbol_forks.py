@@ -122,9 +122,12 @@ def __getattr__(name: str):
 #: Floor on files successfully PARSED — not on files listed, and never on
 #: findings. "0 new clusters" is meaningless if the sweep collapsed, and a
 #: findings-based floor cannot tell a clean tree from a broken enumeration.
-#: git lists ~5,279 python files; ~2,826 survive `in_population` and are
-#: parsed. 2,000 sits under that and well over any plausible collapse.
-MIN_FILES_PARSED = 2000
+#: Measured 2026-10-20 (#18559) over the ten FORK_ROOTS: git lists 6,401 python
+#: files and 3,396 survive `in_population` and are parsed. The three original
+#: roots alone parse 3,031, so 3,200 sits MID-window: under the full reach and
+#: above the narrowed one, which means dropping the seven roots added in #18559
+#: fails this floor instead of passing it on the old roots alone.
+MIN_FILES_PARSED = 3200
 
 BASELINE = _REPO_ROOT / "repo_tests" / "symbol_fork_baseline.json"
 EXCEPTIONS = _REPO_ROOT / "repo_tests" / "symbol_fork_exceptions.json"

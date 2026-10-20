@@ -25,6 +25,8 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
+from testkit.fake_async_session import FakeAsyncSession
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _real_auth_import import load_real_auth  # noqa: E402
 from _real_orm_import import import_modules_with_real_orm  # noqa: E402
@@ -47,25 +49,11 @@ _ACTIONS = ("start", "stop", "restart")
 _ADMIN = {"admin": True, "role": "admin", "sub": "root"}
 
 
-class _Result:
-    def __init__(self, rows):
-        self._rows = rows
-
-    def scalars(self):
-        return SimpleNamespace(all=lambda: self._rows)
-
-
-class _FakeDb:
+def _fake_db(name: str) -> FakeAsyncSession:
     """Holds a service row for ANY name, so only validation can stop a hostile one."""
-
-    def __init__(self, name: str):
-        self._answers = [[SimpleNamespace(service_name=name, node_id="n1")], [SimpleNamespace(node_id="n1")]]
-
-    async def execute(self, _query):
-        return _Result(self._answers.pop(0))
-
-    async def commit(self):
-        return None
+    return FakeAsyncSession(
+        results=[[SimpleNamespace(service_name=name, node_id="n1")], [SimpleNamespace(node_id="n1")]]
+    )
 
 
 @pytest.fixture
@@ -83,7 +71,7 @@ async def env(monkeypatch):
     async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
 
         async def post(name: str, action: str):
-            app.dependency_overrides[_orchestration_api.get_db] = lambda: _FakeDb(name)
+            app.dependency_overrides[_orchestration_api.get_db] = lambda: _fake_db(name)
             # import_modules_with_real_orm restores sys.modules, so the handler's call-time
             # ``from api import services`` must find the instance imported above, not re-import it.
             with (
@@ -125,7 +113,7 @@ async def test_the_route_awaits_the_services_implementation_with_the_same_argume
     canonical.assert_awaited_once()
     name, db, principal = canonical.await_args.args
     assert (name, principal) == ("redis.service", _ADMIN)
-    assert isinstance(db, _FakeDb)
+    assert isinstance(db, FakeAsyncSession)
     assert response.json()["node_id"] == "fleet"
 
 
