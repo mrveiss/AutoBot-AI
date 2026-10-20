@@ -447,7 +447,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/api/stateful.py": 685,
     "autobot-slm-backend/api/tls.py": 994,
     "autobot-slm-backend/api/updates.py": 1107,
-    "autobot-slm-backend/main.py": 780,  # #16375: secret seeding consolidated into services/generated_system_secrets.py
+    "autobot-slm-backend/main.py": 778,  # #18672: admin password sync moved into services/admin_password_sync.py
     "autobot-slm-backend/models/database.py": 1140,
     "autobot-slm-backend/models/schemas.py": 2145,
     "autobot-slm-backend/monitoring/business_intelligence_dashboard.py": 1159,

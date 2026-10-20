@@ -13,11 +13,13 @@
 import { ref, onMounted } from 'vue'
 import { BaseAlert, BrandMark } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { safeRedirectTarget } from '@/utils/loginRedirect'
 import type { ActiveProviderResponse, useSsoApi } from '@/composables/useSsoApi'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const { t } = useI18n()
 
@@ -32,17 +34,22 @@ const ssoLoading = ref(false)
 const ssoError = ref<string | null>(null)
 const mfaCode = ref('')
 
+// #18892: return to the page that sent the operator here (same-app paths only).
+function goAfterLogin(): void {
+  router.push(safeRedirectTarget(route.query.redirect))
+}
+
 async function handleLogin(): Promise<void> {
   const success = await authStore.login(username.value, password.value)
   if (success) {
-    router.push('/')
+    goAfterLogin()
   }
 }
 
 async function handleMFAVerify(): Promise<void> {
   const success = await authStore.completeMFALogin(mfaCode.value)
   if (success) {
-    router.push('/')
+    goAfterLogin()
   }
 }
 
@@ -60,7 +67,7 @@ async function handleSSOLogin(provider: ActiveProviderResponse): Promise<void> {
       const response = await ssoApi.loginWithLDAP(provider.id, username.value, password.value)
       authStore.adoptToken(response.access_token)
       await authStore.checkAuth()
-      router.push('/')
+      goAfterLogin()
     } else {
       const response = await ssoApi.initiateSSOLogin(provider.id)
       window.location.href = response.redirect_url

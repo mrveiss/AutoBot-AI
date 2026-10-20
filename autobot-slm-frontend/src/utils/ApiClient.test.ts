@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { SlmApiClient } from './ApiClient'
+import { SlmApiClient, parseRetryAfterMs } from './ApiClient'
 
 const TOKEN_KEY = 'slm_access_token'
 const USER_KEY = 'slm_user'
@@ -46,6 +46,7 @@ describe('SlmApiClient', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.unstubAllEnvs() // here, not in a test body: a failed assertion would leak BASE_URL
     Object.defineProperty(window, 'location', {
       configurable: true,
       writable: true,
@@ -130,7 +131,106 @@ describe('SlmApiClient', () => {
     expect(sessionStorage.getItem(TOKEN_KEY)).toBeNull()
     expect(sessionStorage.getItem(USER_KEY)).toBeNull()
     expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
-    expect(window.location.href).toBe('/login')
+    expect(window.location.href).toBe(`/login?redirect=${encodeURIComponent('/fleet')}`)
+  })
+
+  it('redirects to the base-aware login with the current route as redirect (#18892)', async () => {
+    vi.stubEnv('BASE_URL', '/slm/')
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      writable: true,
+      value: { pathname: '/slm/updates/summary', search: '?tab=system', hash: '', href: '' } as unknown as Location,
+    })
+    sessionStorage.setItem(TOKEN_KEY, 'expired-jwt')
+    fetchMock.mockResolvedValue(jsonResponse({ detail: 'unauthorized' }, 401))
+    const client = new SlmApiClient()
+
+    await expect(client.get('/nodes', { maxRetries: 1 })).rejects.toThrow('HTTP 401')
+
+    expect(window.location.href).toBe(
+      `/slm/login?redirect=${encodeURIComponent('/updates/summary?tab=system')}`
+    )
+  })
+
+  it('does not redirect again when already on the base-aware login page (#18892)', async () => {
+    vi.stubEnv('BASE_URL', '/slm/')
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      writable: true,
+      value: { pathname: '/slm/login', search: '', hash: '', href: '' } as unknown as Location,
+    })
+    sessionStorage.setItem(TOKEN_KEY, 'expired-jwt')
+    fetchMock.mockResolvedValue(jsonResponse({ detail: 'unauthorized' }, 401))
+    const client = new SlmApiClient()
+
+    await expect(client.get('/nodes', { maxRetries: 1 })).rejects.toThrow('HTTP 401')
+
+    expect(window.location.href).toBe('')
+  })
+
+  it('keeps the session and does not redirect on 503, surfacing a retryable error (#18892)', async () => {
+    sessionStorage.setItem(TOKEN_KEY, 'live-jwt')
+    fetchMock.mockImplementation(async () =>
+      jsonResponse({ detail: 'revocation_check_unavailable' }, 503)
+    )
+    const client = new SlmApiClient()
+
+    await expect(client.get('/nodes', { maxRetries: 2 })).rejects.toThrow(
+      'HTTP 503: revocation_check_unavailable'
+    )
+
+    expect(fetchMock).toHaveBeenCalledTimes(2) // 5xx is retried, unlike 4xx
+    expect(sessionStorage.getItem(TOKEN_KEY)).toBe('live-jwt')
+    expect(window.location.href).toBe('')
+  })
+
+  describe('503 Retry-After (#18892)', () => {
+    function unavailable(headers: Record<string, string> = {}): Response {
+      return new Response(JSON.stringify({ detail: 'revocation_check_unavailable' }), {
+        status: 503,
+        headers: { 'content-type': 'application/json', ...headers },
+      })
+    }
+
+    // Measured on the fake clock, never by spying on setTimeout: a spy installed over the
+    // fake timer outlives useRealTimers() and leaves later tests' timers that never fire.
+    async function fetchesAfter(headers: Record<string, string>, elapsedMs: number): Promise<number> {
+      vi.useFakeTimers()
+      try {
+        fetchMock.mockImplementationOnce(async () => unavailable(headers))
+        fetchMock.mockImplementationOnce(async () => jsonResponse({ ok: true }))
+        const pending = new SlmApiClient().get('/nodes', { maxRetries: 2 })
+        await vi.advanceTimersByTimeAsync(elapsedMs)
+        const calls = fetchMock.mock.calls.length
+        await vi.advanceTimersByTimeAsync(10_000)
+        await pending
+        return calls
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+
+    it('waits at least Retry-After seconds before retrying', async () => {
+      expect(await fetchesAfter({ 'retry-after': '3' }, 2_999)).toBe(1)
+    })
+
+    it('retries once Retry-After has elapsed', async () => {
+      expect(await fetchesAfter({ 'retry-after': '3' }, 3_001)).toBe(2)
+    })
+
+    it('uses plain backoff when Retry-After is missing', async () => {
+      expect(await fetchesAfter({}, 2_999)).toBe(2)
+    })
+
+    it('uses plain backoff when Retry-After is garbage', async () => {
+      expect(await fetchesAfter({ 'retry-after': 'soon-ish' }, 2_999)).toBe(2)
+    })
+
+    it('parses an HTTP-date Retry-After as a floor', () => {
+      const now = Date.parse('2026-10-20T10:00:00Z')
+      expect(parseRetryAfterMs('Tue, 20 Oct 2026 10:00:04 GMT', now)).toBe(4000)
+      expect(parseRetryAfterMs(null, now)).toBe(0)
+    })
   })
 
   it('does NOT clear session on a token-less 401', async () => {

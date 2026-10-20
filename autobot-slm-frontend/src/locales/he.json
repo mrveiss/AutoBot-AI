@@ -2672,7 +2672,8 @@
         "userPreferences": "User Preferences",
         "username": "שם משתמש",
         "usersWhoAccessAutoBot": "Users who access AutoBot chat, workflows, and tools",
-        "usersWhoManageThe": "Users who manage the AutoBot fleet via the SLM admin dashboard"
+        "usersWhoManageThe": "Users who manage the AutoBot fleet via the SLM admin dashboard",
+        "resetPasswordFor": "Reset Password for {username}"
       }
     },
     "backendSettings": {

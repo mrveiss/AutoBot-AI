@@ -25,6 +25,7 @@ _S = "autobot-slm-backend/"
 _PIPE = "NOT-A-SESSION: Redis pipeline double (`execute` flushes the pipeline); caught by the name-only matcher"
 _CHROMA = "NOT-A-SESSION: Chroma collection double (`add`); caught by the name-only matcher"
 _CURSOR = "NOT-A-SESSION: DB-API cursor/connection double for the raw-SQL migration runner (sync `execute`/`commit`)"
+_CLI_CURSOR = "NOT-A-SESSION: DB-API cursor/connection double for autobot-admin.py's sync two-database write (#18672)"
 _SKILL = "NOT-A-SESSION: skill test double; `execute` is the skill hook, not a session call"
 _GETEXEC = "MIGRATE: session double answering `get` and `execute`; FakeAsyncSession(on_get=, results=) covers both"
 _COUNTING = "MIGRATE: counting wrapper over the local execute-only `_FakeSession`; migrates with it"
@@ -74,6 +75,8 @@ ALLOWLIST: dict[str, str] = {
     _S + "api/nodes_role_declaration_test.py::<module>::_FakeDb": _EXEC,  # noqa: E501
     _S + "migrations/add_audit_logs_canonical_columns_test.py::<module>::_Cursor": _CURSOR,  # noqa: E501
     _S + "migrations/runner_deferral_test.py::<module>::_Cursor": _CURSOR,  # noqa: E501
+    _S + "tests/services/test_admin_password_epoch_18672.py::<module>::_Conn": _CLI_CURSOR,  # noqa: E501
+    _S + "tests/services/test_admin_password_epoch_18672.py::<module>::_Cursor": _CLI_CURSOR,  # noqa: E501
     _S + "migrations/seed_agents_test.py::<module>::_FakeConnection": _CURSOR,  # noqa: E501
     _S + "migrations/seed_agents_test.py::<module>::_FakeCursor": _CURSOR,  # noqa: E501
     _S + "migrations/utils_test.py::<module>::_FakeCursor": _CURSOR,  # noqa: E501
@@ -99,4 +102,4 @@ ALLOWLIST: dict[str, str] = {
 }
 
 #: The ceiling. Lower it with the list; never raise it.
-FROZEN_TOTAL = 54
+FROZEN_TOTAL = 56

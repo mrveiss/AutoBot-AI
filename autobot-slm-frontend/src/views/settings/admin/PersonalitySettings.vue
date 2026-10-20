@@ -15,7 +15,6 @@
  */
 
 import { ref, reactive, onMounted, computed } from 'vue'
-import { BaseAlert } from '@autobot/ui'
 import slmApiClient from '@/utils/ApiClient'
 import {
   usePersonality,
@@ -23,6 +22,7 @@ import {
   type PersonalityProfile,
   type ProfileCreate,
 } from '@/composables/usePersonality'
+import { BaseAlert, BaseModal } from '@autobot/ui'
 
 const {
   profiles,
@@ -528,68 +528,63 @@ onMounted(async () => {
     <!-- ================================================================
          New Profile Dialog
     ================================================================ -->
-    <Teleport to="body">
-      <div
-        v-if="showNewDialog"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-        @click.self="showNewDialog = false"
-      >
-        <div class="bg-white rounded-xl shadow-xl p-6 w-80">
-          <h3 class="text-sm font-semibold text-gray-800 mb-3">{{ $t('settings.admin.personalitySettings.newPersonalityProfile') }}</h3>
-          <input
-            v-model="newName"
-            type="text"
-            :placeholder="$t('settings.admin.personalitySettings.profileName')"
-            autofocus
-            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-400 mb-4"
-            @keydown.enter="handleNewProfile"
-          />
-          <div class="flex justify-end gap-2">
-            <button
-              type="button"
-              class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 rounded-sm border border-gray-200"
-              @click="showNewDialog = false"
-            >{{ $t('settings.admin.personalitySettings.cancel') }}</button>
-            <button
-              type="button"
-              :disabled="!newName.trim()"
-              class="px-4 py-1.5 text-sm rounded-sm bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40"
-              @click="handleNewProfile"
-            >{{ $t('settings.admin.personalitySettings.create') }}</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <BaseModal
+      :close-on-esc="!saving"
+      v-model="showNewDialog"
+      :title="$t('settings.admin.personalitySettings.newPersonalityProfile')"
+      size="sm"
+      width="20rem"
+      :close-label="$t('addNodeModal.closeDialogAria')"
+    >
+      <input
+        v-model="newName"
+        type="text"
+        :placeholder="$t('settings.admin.personalitySettings.profileName')"
+        autofocus
+        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-400 mb-4"
+        @keydown.enter="handleNewProfile"
+      />
+      <template #actions>
+        <button
+          type="button"
+          class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 rounded-sm border border-gray-200"
+          @click="showNewDialog = false"
+        >{{ $t('settings.admin.personalitySettings.cancel') }}</button>
+        <button
+          type="button"
+          :disabled="!newName.trim()"
+          class="px-4 py-1.5 text-sm rounded-sm bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40"
+          @click="handleNewProfile"
+        >{{ $t('settings.admin.personalitySettings.create') }}</button>
+      </template>
+    </BaseModal>
 
     <!-- ================================================================
          Delete Confirm Dialog
     ================================================================ -->
-    <Teleport to="body">
-      <div
-        v-if="confirmDeleteId"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-        @click.self="confirmDeleteId = null"
-      >
-        <div class="bg-white rounded-xl shadow-xl p-6 w-80">
-          <h3 class="text-sm font-semibold text-gray-800 mb-2">{{ $t('settings.admin.personalitySettings.deleteProfile') }}</h3>
-          <p class="text-sm text-gray-600 mb-4">
-            {{ $t('settings.admin.personalitySettings.thisActionCannotBe') }}
-          </p>
-          <div class="flex justify-end gap-2">
-            <button
-              type="button"
-              class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 rounded-sm border border-gray-200"
-              @click="confirmDeleteId = null"
-            >{{ $t('settings.admin.personalitySettings.cancel') }}</button>
-            <button
-              type="button"
-              class="px-4 py-1.5 text-sm rounded-sm bg-red-600 text-white hover:bg-red-700"
-              @click="handleDelete"
-            >{{ $t('settings.admin.personalitySettings.delete') }}</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <BaseModal
+      :model-value="!!confirmDeleteId"
+      :title="$t('settings.admin.personalitySettings.deleteProfile')"
+      size="sm"
+      :close-label="$t('addNodeModal.closeDialogAria')"
+      @close="confirmDeleteId = null"
+    >
+      <p class="text-sm text-gray-600 mb-4">
+        {{ $t('settings.admin.personalitySettings.thisActionCannotBe') }}
+      </p>
+      <template #actions>
+        <button
+          type="button"
+          class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 rounded-sm border border-gray-200"
+          @click="confirmDeleteId = null"
+        >{{ $t('settings.admin.personalitySettings.cancel') }}</button>
+        <button
+          type="button"
+          class="px-4 py-1.5 text-sm rounded-sm bg-red-600 text-white hover:bg-red-700"
+          @click="handleDelete"
+        >{{ $t('settings.admin.personalitySettings.delete') }}</button>
+      </template>
+    </BaseModal>
 
   </div>
 </template>

@@ -88,6 +88,14 @@ class RevocationCheckUnavailable(ConnectionError):
     """
 
 
+class MalformedTokenClaims(ValueError):
+    """The token's own ``iat`` cannot be read: a bad CREDENTIAL, not an unavailable store (#18892).
+
+    Retrying can never fix it, so callers answer 401 (invalid token) -- never the
+    retryable 503 that :class:`RevocationCheckUnavailable` maps to.
+    """
+
+
 def _epoch_key(subject: str) -> str:
     """Redis key holding the password-change epoch for *subject*."""
     return f"{PASSWORD_EPOCH_PREFIX}{subject}"
@@ -197,8 +205,9 @@ async def is_token_revoked_by_password_change(claims: dict) -> bool:
 
     Raises:
         RevocationCheckUnavailable: Redis could not answer (#16411), or the
-            marker or the token's ``iat`` is not an integer (#16422). The token
-            may be revoked, so every caller must deny it.
+            marker is not an integer (#16422). The token may be revoked, so
+            every caller must deny it (503, #18892).
+        MalformedTokenClaims: the token's ``iat`` is not an integer; deny with 401.
     """
     subject = claims.get("sub")
     if not subject:
@@ -213,8 +222,9 @@ async def is_token_revoked_by_password_change(claims: dict) -> bool:
         issued_at = int(issued_at)
     except (TypeError, ValueError) as exc:
         # An unreadable iat cannot be placed against any epoch, so the token is
-        # denied whether or not its subject has a marker (#16422).
-        raise RevocationCheckUnavailable("token iat is not an integer") from exc
+        # denied whether or not its subject has a marker (#16422). It is checked
+        # before any store lookup, and is a 401 (#18892), not a store outage.
+        raise MalformedTokenClaims("token iat is not an integer") from exc
 
     epoch = await get_password_epoch(str(subject))
     if epoch is None:

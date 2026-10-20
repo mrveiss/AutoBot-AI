@@ -13,6 +13,7 @@ import { onMounted, ref, computed } from 'vue'
 import { useExternalAgents } from '@/composables/useExternalAgents'
 import type { ExternalAgent, ExternalAgentCreate, ExternalAgentUpdate } from '@/types/slm'
 import { formatDateTime } from '@/composables/useTimezone'
+import { BaseModal } from '@autobot/ui'
 
 const registry = useExternalAgents()
 
@@ -316,16 +317,14 @@ onMounted(() => {
     </div>
 
     <!-- Register / Edit Modal -->
-    <div
-      v-if="showModal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-      @click.self="closeModal"
+    <BaseModal
+      :close-on-esc="!isSaving"
+      v-model="showModal"
+      :title="modalMode === 'create' ? $t('externalAgentsView.registerExternalAgent') : $t('externalAgentsView.editAgent')"
+      width="32rem"
+      :close-label="$t('externalAgentsView.close')"
     >
-      <div class="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-lg p-6 space-y-4">
-        <h2 class="text-lg font-semibold text-gray-100">
-          {{ modalMode === 'create' ? $t('externalAgentsView.registerExternalAgent') : $t('externalAgentsView.editAgent') }}
-        </h2>
-
+      <div class="space-y-4">
         <div class="space-y-3">
           <div>
             <label class="block text-xs text-gray-400 mb-1">{{ $t('externalAgentsView.name1') }}</label>
@@ -390,39 +389,39 @@ onMounted(() => {
         >
           {{ saveError }}
         </div>
-
-        <div class="flex justify-end gap-3 pt-2">
-          <button
-            class="px-4 py-2 text-sm text-gray-300 hover:text-gray-100 transition-colors"
-            @click="closeModal"
-          >
-            {{ $t('externalAgentsView.cancel') }}
-          </button>
-          <button
-            class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-            :disabled="isSaving || !form.name || !form.base_url"
-            @click="saveAgent"
-          >
-            {{ isSaving ? $t('externalAgentsView.saving') : modalMode === 'create' ? $t('externalAgentsView.register') : $t('externalAgentsView.save') }}
-          </button>
-        </div>
       </div>
-    </div>
+      <template #actions>
+        <button
+          class="px-4 py-2 text-sm text-gray-300 hover:text-gray-100 transition-colors"
+          @click="closeModal"
+        >
+          {{ $t('externalAgentsView.cancel') }}
+        </button>
+        <button
+          class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+          :disabled="isSaving || !form.name || !form.base_url"
+          @click="saveAgent"
+        >
+          {{ isSaving ? $t('externalAgentsView.saving') : modalMode === 'create' ? $t('externalAgentsView.register') : $t('externalAgentsView.save') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Detail Panel -->
-    <div
-      v-if="showDetail"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-      @click.self="closeDetail"
+    <BaseModal
+      v-model="showDetail"
+      :title="detailAgent?.name ?? ''"
+      width="42rem"
+      :close-label="$t('externalAgentsView.close')"
+      @close="closeDetail"
     >
-      <div class="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-2xl p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+      <div class="space-y-4">
         <div v-if="isLoadingDetail" class="text-gray-400 text-sm text-center py-8">
           {{ $t('externalAgentsView.loading') }}
         </div>
         <template v-else-if="detailAgent">
           <div class="flex items-start justify-between">
             <div>
-              <h2 class="text-lg font-semibold text-gray-100">{{ detailAgent.name }}</h2>
               <p class="text-xs text-gray-400 font-mono mt-0.5">{{ detailAgent.base_url }}</p>
             </div>
             <span :class="['text-sm font-medium', statusClass(detailAgent)]">
@@ -471,14 +470,13 @@ onMounted(() => {
             <pre class="bg-gray-900 rounded-lg p-3 text-xs text-gray-300 overflow-x-auto max-h-64">{{ detailCardJson }}</pre>
           </div>
         </template>
-
-        <div class="flex justify-end pt-2">
-          <button
-            class="px-4 py-2 text-sm text-gray-300 hover:text-gray-100 transition-colors"
-            @click="closeDetail"
-          >{{ $t('externalAgentsView.close') }}</button>
-        </div>
       </div>
-    </div>
+      <template #actions>
+        <button
+          class="px-4 py-2 text-sm text-gray-300 hover:text-gray-100 transition-colors"
+          @click="closeDetail"
+        >{{ $t('externalAgentsView.close') }}</button>
+      </template>
+    </BaseModal>
   </div>
 </template>

@@ -165,8 +165,15 @@ export const useAuthStore = defineStore('auth', () => {
       // from localStorage does not depend on the ref having been hydrated first.
       const response = await slmApiClient.rawRequest('/auth/me')
 
+      if (response.status === 401) {
+        // The only response that means the session is dead (#18892).
+        logout()
+        return
+      }
       if (!response.ok) {
-        throw new Error('Failed to fetch user')
+        // 503 (revocation store unavailable), other 5xx: keep the session.
+        logger.warn('Could not fetch current user; keeping session', response.status)
+        return
       }
 
       const data = await response.json()
@@ -175,8 +182,9 @@ export const useAuthStore = defineStore('auth', () => {
         isAdmin: data.is_admin,
       }
       writeSlmUser(JSON.stringify(user.value))
-    } catch {
-      logout()
+    } catch (e) {
+      // Network error / timeout / 499: the session was not rejected (#18892).
+      logger.warn('Could not fetch current user; keeping session', e)
     }
   }
 
@@ -264,7 +272,8 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       await fetchCurrentUser()
-      return !!user.value
+      // A 401 logs out (token cleared); a transient failure keeps the token.
+      return !!user.value || !!token.value
     } catch {
       return false
     }

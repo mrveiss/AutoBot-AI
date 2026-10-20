@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { BaseAlert } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -15,6 +14,7 @@ import { ref, onMounted } from 'vue'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
 import { formatDateTime } from '@/composables/useTimezone'
 import type { AlertRule } from '@/composables/usePerformanceMonitoring'
+import { BaseAlert, BaseModal } from '@autobot/ui'
 
 const {
   alertRules,
@@ -466,39 +466,31 @@ async function handleDelete(): Promise<void> {
     </transition>
 
     <!-- Delete Confirmation Modal -->
-    <transition
-      enter-active-class="transition ease-out duration-200"
-      enter-from-class="opacity-0"
-      enter-to-class="opacity-100"
-      leave-active-class="transition ease-in duration-150"
-      leave-from-class="opacity-100"
-      leave-to-class="opacity-0"
+    <BaseModal
+      v-model="showDeleteConfirm"
+      :title="$t('performance.alertRulesView.deleteAlertRule')"
+      size="sm"
+      :close-label="$t('addNodeModal.closeDialogAria')"
     >
-      <div v-if="showDeleteConfirm" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="fixed inset-0 bg-black/50" @click="showDeleteConfirm = false"></div>
-        <div class="relative bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">{{ $t('performance.alertRulesView.deleteAlertRule') }}</h3>
-          <p class="text-sm text-gray-600 mb-4">
-            {{ $t('performance.alertRulesView.areYouSureYou') }}
-            <span class="font-medium">"{{ deleteTarget?.name }}"</span>{{ $t('performance.alertRulesView.thisActionCannotBe') }}
-          </p>
-          <div class="flex justify-end gap-3">
-            <button
-              @click="showDeleteConfirm = false"
-              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              {{ $t('performance.alertRulesView.cancel') }}
-            </button>
-            <button
-              @click="handleDelete"
-              :disabled="loading"
-              class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
-            >
-              {{ $t('performance.alertRulesView.delete') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </transition>
+      <p class="text-sm text-gray-600">
+        {{ $t('performance.alertRulesView.areYouSureYou') }}
+        <span class="font-medium">"{{ deleteTarget?.name }}"</span>{{ $t('performance.alertRulesView.thisActionCannotBe') }}
+      </p>
+      <template #actions>
+        <button
+          @click="showDeleteConfirm = false"
+          class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+        >
+          {{ $t('performance.alertRulesView.cancel') }}
+        </button>
+        <button
+          @click="handleDelete"
+          :disabled="loading"
+          class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
+        >
+          {{ $t('performance.alertRulesView.delete') }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>

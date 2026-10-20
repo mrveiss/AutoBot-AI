@@ -3,7 +3,6 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert } from '@autobot/ui'
 /**
  * NPUWorkersSettings - NPU Worker Management
  *
@@ -15,6 +14,7 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAutobotApi, type NPUWorker } from '@/composables/useAutobotApi'
 import { createLogger } from '@/utils/debugUtils'
+import { BaseAlert, BaseModal } from '@autobot/ui'
 
 const logger = createLogger('NPUWorkersSettings')
 
@@ -560,165 +560,162 @@ onUnmounted(() => {
     </div>
 
     <!-- Add/Edit Worker Modal -->
-    <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center">
-      <div class="absolute inset-0 bg-black/50" @click="closeModal"></div>
-      <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">
-          {{ editingWorker ? $t('settings.admin.nPUWorkersSettings.editWorker') : $t('settings.admin.nPUWorkersSettings.pairNewWorker') }}
-        </h3>
+    <BaseModal
+      :close-on-esc="!saving"
+      v-model="showModal"
+      :title="editingWorker ? $t('settings.admin.nPUWorkersSettings.editWorker') : $t('settings.admin.nPUWorkersSettings.pairNewWorker')"
+      size="sm"
+      :close-label="$t('settings.admin.nPUWorkersSettings.close')"
+      @close="closeModal"
+    >
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.nPUWorkersSettings.workerName') }}</label>
+          <input
+            v-model="workerForm.name"
+            type="text"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            :placeholder="$t('settings.admin.nPUWorkersSettings.eGNPUWorkerVM2')"
+          />
+        </div>
 
-        <div class="space-y-4">
+        <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.nPUWorkersSettings.workerName') }}</label>
-            <input
-              v-model="workerForm.name"
-              type="text"
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.nPUWorkersSettings.platform') }}</label>
+            <select
+              v-model="workerForm.platform"
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-              :placeholder="$t('settings.admin.nPUWorkersSettings.eGNPUWorkerVM2')"
-            />
+            >
+              <option value="linux">{{ $t('settings.admin.nPUWorkersSettings.linux') }}</option>
+              <option value="windows">{{ $t('settings.admin.nPUWorkersSettings.windows') }}</option>
+              <option value="macos">{{ $t('settings.admin.nPUWorkersSettings.macOS') }}</option>
+            </select>
           </div>
-
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.nPUWorkersSettings.platform') }}</label>
-              <select
-                v-model="workerForm.platform"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="linux">{{ $t('settings.admin.nPUWorkersSettings.linux') }}</option>
-                <option value="windows">{{ $t('settings.admin.nPUWorkersSettings.windows') }}</option>
-                <option value="macos">{{ $t('settings.admin.nPUWorkersSettings.macOS') }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.nPUWorkersSettings.port') }}</label>
-              <input
-                v-model.number="workerForm.port"
-                type="number"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                placeholder="8081"
-              />
-            </div>
-          </div>
-
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.nPUWorkersSettings.iPAddress') }}</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.nPUWorkersSettings.port') }}</label>
             <input
-              v-model="workerForm.ip_address"
-              type="text"
+              v-model.number="workerForm.port"
+              type="number"
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-              placeholder="10.0.0.22"
+              placeholder="8081"
             />
           </div>
         </div>
 
-        <div class="flex justify-end gap-3 mt-6">
-          <button
-            @click="closeModal"
-            class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-          >
-            {{ $t('settings.admin.nPUWorkersSettings.cancel') }}
-          </button>
-          <button
-            @click="saveWorker"
-            :disabled="saving"
-            class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
-          >
-            <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            {{ editingWorker ? $t('settings.admin.nPUWorkersSettings.update') : $t('settings.admin.nPUWorkersSettings.pairWorker') }}
-          </button>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.nPUWorkersSettings.iPAddress') }}</label>
+          <input
+            v-model="workerForm.ip_address"
+            type="text"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            placeholder="10.0.0.22"
+          />
         </div>
       </div>
-    </div>
+      <template #actions>
+        <button
+          @click="closeModal"
+          class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+        >
+          {{ $t('settings.admin.nPUWorkersSettings.cancel') }}
+        </button>
+        <button
+          @click="saveWorker"
+          :disabled="saving"
+          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+        >
+          <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          {{ editingWorker ? $t('settings.admin.nPUWorkersSettings.update') : $t('settings.admin.nPUWorkersSettings.pairWorker') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Delete Confirmation -->
-    <div v-if="deleteTarget" class="fixed inset-0 z-50 flex items-center justify-center">
-      <div class="absolute inset-0 bg-black/50" @click="deleteTarget = null"></div>
-      <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.nPUWorkersSettings.removeWorker') }}</h3>
-        <p class="text-gray-600 mb-6">
-          {{ $t('settings.admin.nPUWorkersSettings.areYouSureYou') }} <strong>{{ deleteTarget.hostname }}</strong>{{ $t('settings.admin.nPUWorkersSettings.thisActionCannotBe') }}
-        </p>
-        <div class="flex justify-end gap-3">
-          <button
-            @click="deleteTarget = null"
-            class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-          >
-            {{ $t('settings.admin.nPUWorkersSettings.cancel') }}
-          </button>
-          <button
-            @click="deleteWorker"
-            :disabled="saving"
-            class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 flex items-center gap-2"
-          >
-            <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            {{ $t('settings.admin.nPUWorkersSettings.remove') }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <BaseModal
+      :close-on-esc="!saving"
+      v-if="deleteTarget"
+      :model-value="true"
+      :title="$t('settings.admin.nPUWorkersSettings.removeWorker')"
+      size="sm"
+      :close-label="$t('settings.admin.nPUWorkersSettings.close')"
+      @close="deleteTarget = null"
+    >
+      <p class="text-gray-600 mb-6">
+        {{ $t('settings.admin.nPUWorkersSettings.areYouSureYou') }} <strong>{{ deleteTarget.hostname }}</strong>{{ $t('settings.admin.nPUWorkersSettings.thisActionCannotBe') }}
+      </p>
+      <template #actions>
+        <button
+          @click="deleteTarget = null"
+          class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+        >
+          {{ $t('settings.admin.nPUWorkersSettings.cancel') }}
+        </button>
+        <button
+          @click="deleteWorker"
+          :disabled="saving"
+          class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 flex items-center gap-2"
+        >
+          <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          {{ $t('settings.admin.nPUWorkersSettings.remove') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Metrics Modal -->
-    <div v-if="showMetrics && selectedWorkerMetrics" class="fixed inset-0 z-50 flex items-center justify-center">
-      <div class="absolute inset-0 bg-black/50" @click="showMetrics = false"></div>
-      <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-semibold text-gray-900">{{ $t('settings.admin.nPUWorkersSettings.hostnameMetrics', { hostname: selectedWorkerMetrics.hostname }) }}</h3>
-          <button @click="showMetrics = false" class="text-gray-400 hover:text-gray-600" :aria-label="$t('settings.admin.nPUWorkersSettings.close')">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div class="space-y-4">
-          <div class="grid grid-cols-2 gap-4">
-            <div class="p-4 bg-gray-50 rounded-lg">
-              <p class="text-sm text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.currentLoad') }}</p>
-              <p class="text-xl font-semibold text-gray-900">{{ selectedWorkerMetrics.current_load }}%</p>
-            </div>
-            <div class="p-4 bg-gray-50 rounded-lg">
-              <p class="text-sm text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.status') }}</p>
-              <p class="text-xl font-semibold" :class="selectedWorkerMetrics.status === 'online' ? 'text-green-600' : 'text-gray-600'">
-                {{ selectedWorkerMetrics.status }}
-              </p>
-            </div>
-          </div>
-
+    <BaseModal
+      v-if="selectedWorkerMetrics"
+      :model-value="showMetrics"
+      :title="$t('settings.admin.nPUWorkersSettings.hostnameMetrics', { hostname: selectedWorkerMetrics?.hostname })"
+      size="md"
+      :close-label="$t('settings.admin.nPUWorkersSettings.close')"
+      @close="showMetrics = false"
+    >
+      <div class="space-y-4">
+        <div class="grid grid-cols-2 gap-4">
           <div class="p-4 bg-gray-50 rounded-lg">
-            <p class="text-sm text-gray-500 mb-2">{{ $t('settings.admin.nPUWorkersSettings.capabilities') }}</p>
-            <div class="flex flex-wrap gap-2">
-              <span
-                v-for="cap in selectedWorkerMetrics.capabilities"
-                :key="cap"
-                class="px-2 py-1 bg-white border border-gray-200 rounded-sm text-sm"
-              >
-                {{ cap }}
-              </span>
-            </div>
+            <p class="text-sm text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.currentLoad') }}</p>
+            <p class="text-xl font-semibold text-gray-900">{{ selectedWorkerMetrics.current_load }}%</p>
           </div>
-
           <div class="p-4 bg-gray-50 rounded-lg">
-            <p class="text-sm text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.lastHeartbeat') }}</p>
-            <p class="font-medium text-gray-900">{{ selectedWorkerMetrics.last_heartbeat || $t('settings.admin.nPUWorkersSettings.never') }}</p>
+            <p class="text-sm text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.status') }}</p>
+            <p class="text-xl font-semibold" :class="selectedWorkerMetrics.status === 'online' ? 'text-green-600' : 'text-gray-600'">
+              {{ selectedWorkerMetrics.status }}
+            </p>
           </div>
         </div>
 
-        <div class="mt-6 flex justify-end">
-          <button
-            @click="showMetrics = false"
-            class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-          >
-            {{ $t('settings.admin.nPUWorkersSettings.close') }}
-          </button>
+        <div class="p-4 bg-gray-50 rounded-lg">
+          <p class="text-sm text-gray-500 mb-2">{{ $t('settings.admin.nPUWorkersSettings.capabilities') }}</p>
+          <div class="flex flex-wrap gap-2">
+            <span
+              v-for="cap in selectedWorkerMetrics.capabilities"
+              :key="cap"
+              class="px-2 py-1 bg-white border border-gray-200 rounded-sm text-sm"
+            >
+              {{ cap }}
+            </span>
+          </div>
+        </div>
+
+        <div class="p-4 bg-gray-50 rounded-lg">
+          <p class="text-sm text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.lastHeartbeat') }}</p>
+          <p class="font-medium text-gray-900">{{ selectedWorkerMetrics.last_heartbeat || $t('settings.admin.nPUWorkersSettings.never') }}</p>
         </div>
       </div>
-    </div>
+      <template #actions>
+        <button
+          @click="showMetrics = false"
+          class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+        >
+          {{ $t('settings.admin.nPUWorkersSettings.close') }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>

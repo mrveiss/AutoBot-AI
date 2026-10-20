@@ -43,8 +43,10 @@ from autobot_shared.auth.jwt_core import _peek_alg, decode_jwt_or_none, encode_j
 from autobot_shared.auth.permission_evaluator import evaluate_permission
 from autobot_shared.auth.permission_gate import PermissionGate
 from autobot_shared.auth.permissions import Permission
+from autobot_shared.auth.revocation_unavailable import revocation_unavailable_error
 from autobot_shared.time_utils import now_utc
 from autobot_shared.user_management.password_epoch import (
+    MalformedTokenClaims,
     is_token_revoked_by_password_change,
 )
 from config import settings
@@ -61,6 +63,9 @@ try:  # redis-py exceptions do NOT inherit builtin ConnectionError/OSError
 except ImportError:  # pragma: no cover - redis is a hard dep in deployments
     _RedisError = ConnectionError  # type: ignore[assignment,misc]
 
+# Stdlib logging, deliberately: the auth test harness (tests/api/test_auth_logout.py) loads
+# this module with the config stack mocked, where logging_manager.get_logger raises (see
+# autobot_shared/user_management/password_epoch.py).
 logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
@@ -138,8 +143,8 @@ class AuthService:
         Returns the normalized claims dict, or ``None`` when the token is
         absent, malformed, expired, or actually revoked.
 
-        Raises ``HTTPException`` (401, matching ``get_current_user``'s normal
-        invalid-token response) when a revocation check itself cannot run --
+        Raises ``HTTPException`` (503 ``revocation_check_unavailable`` + ``Retry-After``,
+        #18892; a 401 would make clients log a valid session out) when a revocation check itself cannot run --
         the HS256 jti denylist or the password-epoch check -- because its store
         (the SLM's PostgreSQL since #18663) could not answer. Fail CLOSED (#16387): the caller must not treat "could not
         check" as "not revoked".
@@ -171,11 +176,7 @@ class AuthService:
                         "decode_token_async: jti denylist check failed (%s); denying token",
                         exc.__class__.__name__,
                     )
-                    raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail="Invalid or expired token",
-                        headers={"WWW-Authenticate": "Bearer"},
-                    ) from exc
+                    raise revocation_unavailable_error() from exc
                 if revoked:
                     logger.warning("decode_token_async: HS256 token with jti=%r is revoked", jti)
                     return None
@@ -185,6 +186,10 @@ class AuthService:
             # with the old password". The epoch check does that in one lookup.
             try:
                 password_revoked = await is_token_revoked_by_password_change(claims)
+            except MalformedTokenClaims:
+                # #18892: an unreadable iat is a bad credential, not a store outage -- 401, never 503.
+                logger.warning("decode_token_async: token iat is malformed; rejecting token")
+                return None
             except _REVOCATION_CHECK_FAILURES as exc:
                 # #16387: same fail-closed reasoning as the jti check above --
                 # a token this check cannot clear is denied, not honoured.
@@ -192,11 +197,7 @@ class AuthService:
                     "decode_token_async: password-epoch check failed (%s); denying token",
                     exc.__class__.__name__,
                 )
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid or expired token",
-                    headers={"WWW-Authenticate": "Bearer"},
-                ) from exc
+                raise revocation_unavailable_error() from exc
             if password_revoked:
                 return None
 

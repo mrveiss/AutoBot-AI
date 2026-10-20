@@ -77,7 +77,7 @@ response, a log line, an issue, a PR comment — is already redacted.
 [`autobot_shared/field_encryption.py`](../../autobot_shared/field_encryption.py) `encrypt_field`/`decrypt_field` for single columns ·
 [`credential_store.py`](../../autobot-backend/knowledge/connectors/credential_store.py) `ConnectorCredentialStore` (:211) for connector/OAuth creds, ownership via `_require_owner` (:642) ·
 [`autobot_shared/auth/internal_api_key.py`](../../autobot_shared/auth/internal_api_key.py) `verify_internal_api_key` (:17) for service-to-service (re-exported by `auth_middleware.py` and the SLM `services/auth.py`) ·
-[`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:128) for SLM token revocation.
+[`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:133) for SLM token revocation.
 
 **Invariants**
 - No parallel crypto path. A diff introducing its own `Fernet(...)` or `AESGCM(...)` instead of calling the store is a finding regardless of whether the primitive is used correctly.
@@ -94,7 +94,7 @@ response, a log line, an issue, a PR comment — is already redacted.
   finding even when production overrides it via env var.
 - SLM token revocation fails CLOSED (#16387, owner decision): when the HS256 jti-denylist check
   (`is_jti_revoked` (:113) in [`token_denylist.py`](../../autobot-slm-backend/services/token_denylist.py)) or the password-epoch check can't run because its store (the SLM's own PostgreSQL since #18663) errored,
-  `decode_token_async` denies the token (401) instead of reading "could not check" as "not revoked" — a Redis outage takes SLM login down, including the backend admin path reached through the proxy (#16374).
+  `decode_token_async` refuses the token (503 `revocation_check_unavailable`, with `Retry-After`; #18892 — 401 stays for an invalid or revoked token) instead of reading "could not check" as "not revoked" — a Redis outage takes SLM login down, including the backend admin path reached through the proxy (#16374).
 - The RS256 authority-token path fails CLOSED the same way (#16412): [`rs256_denylist.py`](../../autobot-slm-backend/services/rs256_denylist.py)
   `is_rs256_jti_revoked` (:89) raises on a Redis error rather than reporting "not revoked"; its caller
   [`jwks_verifier.py`](../../autobot-slm-backend/services/jwks_verifier.py) `verify_authority_token` (:218) denies the token (401) at both call sites; the write side stays best-effort.
