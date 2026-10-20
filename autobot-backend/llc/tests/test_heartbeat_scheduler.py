@@ -33,6 +33,7 @@ from llc.scheduler.heartbeat_scheduler import (
     _ingest_adapter_usage,
     _next_fire,
 )
+from testkit.fake_async_session import FakeAsyncSession
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -40,6 +41,14 @@ from llc.scheduler.heartbeat_scheduler import (
 
 
 _COMPANY_UUID = uuid.UUID("11111111-1111-1111-1111-111111111111")
+
+
+def _compiled_params(stmt) -> dict:
+    """The bound parameters of *stmt*, or ``{}`` for a statement that will not compile."""
+    try:
+        return dict(stmt.compile().params)
+    except Exception:
+        return {}
 
 
 def _make_agent(**kwargs):
@@ -612,37 +621,19 @@ class TestRunAdapterSkipped:
         agent = _make_agent(adapter_type="claude_code")
         run_id = uuid.uuid4()
 
-        sql_text: list = []
-        params: list = []
-
-        class _Session:
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *exc):
-                return False
-
-            async def execute(self, stmt, *args, **kwargs):
-                sql_text.append(str(stmt))
-                try:
-                    params.append(dict(stmt.compile().params))
-                except Exception:
-                    params.append({})
-                result = MagicMock()
-                result.scalar_one_or_none.return_value = 0
-                return result
-
-            async def commit(self):
-                return None
+        session = FakeAsyncSession()
 
         with (
-            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: _Session()),
+            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: session),
             patch(
                 f"{_HBS}._dispatch_adapter",
                 new=AsyncMock(side_effect=HeartbeatDispatchSkipped("agent-1", "CLI absent")),
             ),
         ):
             await scheduler._run_adapter(agent, run_id, {})
+
+        sql_text = [str(stmt) for stmt in session.statements]
+        params = [_compiled_params(stmt) for stmt in session.statements]
 
         # No phantom health: the last_heartbeat_at bump is never issued.
         assert not any("agent_org_nodes" in s for s in sql_text)
@@ -1015,25 +1006,11 @@ class TestQuotaExhausted:
         scheduler = LLCHeartbeatScheduler()
         agent = _make_agent(adapter_type="claude_code_subscription")
         run_id = uuid.uuid4()
-        executed: list = []
-
-        class _Session:
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *exc):
-                return False
-
-            async def execute(self, stmt, *a, **k):
-                executed.append(str(stmt))
-                return MagicMock()
-
-            async def commit(self):
-                return None
+        session = FakeAsyncSession()
 
         mock_pause = AsyncMock()
         with (
-            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: _Session()),
+            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: session),
             patch(f"{_HBS}.ControlsService.pause_agent", new=mock_pause),
         ):
             await scheduler._handle_quota_exhausted(
@@ -1041,6 +1018,7 @@ class TestQuotaExhausted:
             )
 
         # Run was updated (status write) and the agent was system-paused.
+        executed = [str(stmt) for stmt in session.statements]
         assert any("UPDATE" in s or "llc_heartbeat_runs" in s for s in executed)
         mock_pause.assert_awaited_once()
         kwargs = mock_pause.await_args.kwargs
@@ -1051,22 +1029,11 @@ class TestQuotaExhausted:
         agent = _make_agent(adapter_type="claude_code_subscription", company_id=None)
         run_id = uuid.uuid4()
 
-        class _Session:
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *exc):
-                return False
-
-            async def execute(self, stmt, *a, **k):
-                return MagicMock()
-
-            async def commit(self):
-                return None
+        session = FakeAsyncSession()
 
         mock_pause = AsyncMock()
         with (
-            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: _Session()),
+            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: session),
             patch(f"{_HBS}.ControlsService.pause_agent", new=mock_pause),
         ):
             await scheduler._handle_quota_exhausted(

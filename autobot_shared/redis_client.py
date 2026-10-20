@@ -194,7 +194,7 @@ def _get_connection_manager() -> RedisConnectionManager:
 
 
 def get_redis_client(
-    async_client: bool = False, database: RedisDatabase | str = "main"
+    async_client: bool = False, database: RedisDatabase | str = "main", decode_responses: bool | None = None
 ) -> redis.Redis | async_redis.Redis | None:
     """
     Get a Redis client instance with circuit breaker and health monitoring.
@@ -222,6 +222,7 @@ def get_redis_client(
                              Default: False
         database (str): Named database for logical separation. Use self-documenting
                         names instead of DB numbers. Default: "main"
+        decode_responses (bool | None): None keeps the YAML setting; False gives bytes (#18553).
 
     Returns:
         Union[redis.Redis, async_redis.Redis, None]:
@@ -255,11 +256,8 @@ def get_redis_client(
         not at class definition time.
     """
     if async_client:
-        # Return coroutine for async client
-        return _get_connection_manager().get_async_client(database)
-    else:
-        # Return sync client directly
-        return _get_connection_manager().get_sync_client(database)
+        return _get_connection_manager().get_async_client(database, decode_responses)
+    return _get_connection_manager().get_sync_client(database, decode_responses)
 
 
 # =============================================================================
@@ -293,7 +291,7 @@ def get_main_redis(**kwargs) -> redis.Redis | None:
 
 
 async def get_async_redis_client(
-    database: RedisDatabase | str = "main",
+    database: RedisDatabase | str = "main", decode_responses: bool | None = None
 ) -> async_redis.Redis | None:
     """Return an async Redis client for *database*, properly awaited.
 
@@ -315,11 +313,13 @@ async def get_async_redis_client(
         # New, safe pattern (await is built-in; impossible to forget):
         client = await get_async_redis_client(database="main")
 
+    ``decode_responses=None`` keeps the YAML setting; ``False`` returns a bytes client (#18553, #14187).
+
     Returns:
         redis.asyncio.Redis instance on success, or None if Redis is disabled
         or the circuit breaker is open.
     """
-    return await _get_connection_manager().get_async_client(database)
+    return await _get_connection_manager().get_async_client(database, decode_responses)
 
 
 # =============================================================================

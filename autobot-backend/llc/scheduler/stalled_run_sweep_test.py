@@ -18,6 +18,7 @@ import pytest
 from sqlalchemy.dialects import postgresql
 
 from llc.models.enums import LLCRunStatus
+from testkit.fake_async_session import FakeAsyncSession
 
 
 @pytest.fixture
@@ -144,42 +145,11 @@ class _Run:
         self.error = None
 
 
-class _Result:
-    def __init__(self, rows):
-        self._rows = rows
-
-    def scalars(self):
-        return self
-
-    def all(self):
-        return self._rows
-
-
-class _Session:
+def _session(rows, lease_rows=None):
     """First execute() answers the candidate query; later ones answer the lease
     lookup #16818 added. Kept as two queues rather than one so a test can hand the
     sweep runs without also handing them back as leases."""
-
-    def __init__(self, rows, lease_rows=None):
-        self._rows = rows
-        self._lease_rows = lease_rows or []
-        self._calls = 0
-        self.committed = False
-        self.statement = None
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *_exc):
-        return False
-
-    async def execute(self, statement):
-        self.statement = statement
-        self._calls += 1
-        return _Result(self._rows if self._calls == 1 else self._lease_rows)
-
-    async def commit(self):
-        self.committed = True
+    return FakeAsyncSession(results=[rows], default_result=lease_rows or [])
 
 
 @pytest.mark.asyncio
@@ -191,7 +161,7 @@ async def test_the_sweep_writes_stalled_and_closes_the_run_out(sweep, monkeypatc
     changing the write back to TIMEOUT fails this and nothing else.
     """
     row = _Run()
-    session = _Session([row])
+    session = _session([row])
     monkeypatch.setattr(sweep, "get_async_session_factory", lambda: (lambda: session))
 
     stalled = await sweep._async_sweep()
@@ -210,7 +180,7 @@ async def test_a_sweep_with_nothing_to_do_reports_zero_rather_than_silence(sweep
     The count is the return value, and it is logged unconditionally -- so zero is a
     measurement here, not an absence of one.
     """
-    session = _Session([])
+    session = _session([])
     monkeypatch.setattr(sweep, "get_async_session_factory", lambda: (lambda: session))
 
     assert await sweep._async_sweep() == 0
@@ -236,7 +206,7 @@ async def test_a_stalled_run_hands_its_workspace_back(sweep, monkeypatch):
     removing the `release_for_run` call fails this and nothing else in this file.
     """
     run, lease = _Run(), _Lease()
-    session = _Session([run], lease_rows=[lease])
+    session = _session([run], lease_rows=[lease])
     monkeypatch.setattr(sweep, "get_async_session_factory", lambda: (lambda: session))
 
     assert await sweep._async_sweep() == 1
@@ -251,7 +221,7 @@ async def test_the_release_reason_says_the_run_stalled_not_that_the_lease_expire
     investigate; a lease that expired is a holder that walked away. The audit trail
     has to tell them apart, which a shared reason string would prevent."""
     run, lease = _Run(), _Lease()
-    session = _Session([run], lease_rows=[lease])
+    session = _session([run], lease_rows=[lease])
     monkeypatch.setattr(sweep, "get_async_session_factory", lambda: (lambda: session))
 
     await sweep._async_sweep()

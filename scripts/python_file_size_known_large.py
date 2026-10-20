@@ -105,7 +105,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/knowledge_collections.py": 726,
     "autobot-backend/api/knowledge_connectors.py": 929,
     "autobot-backend/api/knowledge_maintenance.py": 1970,
-    "autobot-backend/api/knowledge_mcp.py": 1455,
+    "autobot-backend/api/knowledge_mcp.py": 1454,
     "autobot-backend/api/knowledge_population.py": 1425,
     "autobot-backend/api/knowledge_search.py": 819,  # #16665: analytics endpoints moved out
     "autobot-backend/api/knowledge_search_aggregator.py": 951,  # #16665: doc-search moved out
@@ -130,7 +130,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_analytics.py": 3533,
     "autobot-backend/api/schemas_chat.py": 702,
     "autobot-backend/api/schemas_code.py": 3265,
-    "autobot-backend/api/schemas_knowledge.py": 5133,
+    "autobot-backend/api/schemas_knowledge.py": 5127,
     "autobot-backend/api/schemas_system.py": 4362,  # #13051: SecretModel ownership fields
     "autobot-backend/api/schemas_workflows.py": 2907,
     "autobot-backend/api/secrets.py": 1179,  # #16444 review: except HTTPException, ValueError handlers
@@ -232,7 +232,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/knowledge/ownership.py": 757,
     "autobot-backend/knowledge/pipeline/cognifiers/cognifiers_test.py": 806,
     "autobot-backend/knowledge/rag_benchmarks.py": 1607,
-    "autobot-backend/knowledge/search.py": 1050,
+    "autobot-backend/knowledge/search.py": 1047,
     "autobot-backend/knowledge/search_components/retrieval_learner.py": 734,
     "autobot-backend/knowledge/search_quality.py": 931,
     "autobot-backend/knowledge/search_quality_test.py": 667,
@@ -251,7 +251,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/services/work_item_service.py": 1100,
     "autobot-backend/llc/tests/conftest.py": 832,
     "autobot-backend/llc/tests/test_autobot_agent_adapter.py": 663,
-    "autobot-backend/llc/tests/test_heartbeat_scheduler.py": 1075,
+    "autobot-backend/llc/tests/test_heartbeat_scheduler.py": 1042,
     "autobot-backend/llc/tests/test_replay.py": 605,
     "autobot-backend/llc/tests/test_review_gate.py": 632,
     "autobot-backend/llc/tests/test_role_assignments.py": 728,
@@ -278,7 +278,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/monitoring/alertmanager_webhook_test.py": 782,
     "autobot-backend/multimodal_processor/multimodal_integration_test.py": 633,
     "autobot-backend/multimodal_processor/processor.py": 774,
-    "autobot-backend/npu_semantic_search.py": 1531,
+    "autobot-backend/npu_semantic_search.py": 1527,
     # 984 -> 978 (#14039): the single-use _build_slm_ssl_context wrapper was
     # inlined onto autobot_shared.tls.get_internal_tls_context, its only body.
     "autobot-backend/orchestration/dag_executor.py": 978,
@@ -338,7 +338,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/knowledge/autonomous_loop.py": 798,
     "autobot-backend/services/knowledge/code_indexer.py": 1179,
     "autobot-backend/services/knowledge/doc_indexer.py": 1263,
-    "autobot-backend/services/knowledge/service.py": 851,
+    "autobot-backend/services/knowledge/service.py": 850,
     "autobot-backend/services/knowledge/test_autonomous_loop.py": 708,
     "autobot-backend/services/knowledge/test_doc_indexer.py": 1466,
     "autobot-backend/services/knowledge/test_kb_synthesizer.py": 802,
@@ -459,7 +459,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/services/reconciler.py": 2219,
     # Not legacy debt: created after this guard existed (#14465/#14548). Tracked
     # as a live violation, not #5060 backlog -- see #14630.
-    "autobot-slm-backend/services/reconciler_remediation_tracker_expiry_14465_test.py": 843,
+    "autobot-slm-backend/services/reconciler_remediation_tracker_expiry_14465_test.py": 783,
     "autobot-slm-backend/services/replication.py": 826,
     "autobot-slm-backend/services/role_registry.py": 713,
     "autobot-slm-backend/services/service_orchestrator.py": 915,
@@ -484,7 +484,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/plugin_sdk/plugin_sdk_test.py": 941,
     "autobot_shared/rate_limiter_test.py": 618,
     "autobot_shared/redis_client.py": 679,
-    "autobot_shared/redis_management/connection_manager.py": 1514,
+    "autobot_shared/redis_management/connection_manager.py": 1425,
     "autobot_shared/security/ssrf_guard_test.py": 633,
     "autobot_shared/ssot_config.py": 3260,  # #16375: AUTOBOT_PROMETHEUS_SCRAPE_TOKEN
     "autobot_shared/ssot_config_test.py": 782,

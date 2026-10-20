@@ -9290,64 +9290,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/facts/{fact_id}/share": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Share Fact
-         * @description Share a fact with additional users (Issue #688).
-         *
-         *     Args:
-         *         fact_id: Fact ID to share
-         *         request_body: Share request with user_ids
-         *         request: FastAPI request
-         *         _: Admin permission check (required)
-         *
-         *     Returns:
-         *         Success response with updated sharing info
-         */
-        post: operations["share_fact_api_knowledge_base_facts__fact_id__share_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/facts/{fact_id}/share/{user_id_to_remove}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Unshare Fact
-         * @description Remove user from fact sharing list (Issue #688).
-         *
-         *     Args:
-         *         fact_id: Fact ID to unshare
-         *         user_id_to_remove: User ID to remove from sharing
-         *         request: FastAPI request
-         *         _: Admin permission check (required)
-         *
-         *     Returns:
-         *         Success response with updated sharing info
-         */
-        delete: operations["unshare_fact_api_knowledge_base_facts__fact_id__share__user_id_to_remove__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/knowledge_base/facts/{fact_id}/visibility": {
         parameters: {
             query?: never;
@@ -9552,8 +9494,8 @@ export interface paths {
          *         Updated fact metadata
          *
          *     Raises:
-         *         403: If user is not the owner
-         *         404: If fact not found
+         *         403: If the caller can read the fact but is neither its owner nor an admin
+         *         404: If the fact is absent or the caller cannot read it
          */
         post: operations["share_knowledge_api_knowledge_collaboration_facts__fact_id__share_post"];
         delete?: never;
@@ -9587,8 +9529,8 @@ export interface paths {
          *         Updated fact metadata
          *
          *     Raises:
-         *         403: If user is not the owner
-         *         404: If fact not found
+         *         403: If the caller can read the fact but is neither its owner nor an admin
+         *         404: If the fact is absent or the caller cannot read it
          */
         delete: operations["unshare_knowledge_api_knowledge_collaboration_facts__fact_id__share__entity_id__delete"];
         options?: never;
@@ -81455,22 +81397,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * KnowledgeShareFactResponse
-         * @description Response for POST /api/knowledge_base/facts/{fact_id}/share.
-         */
-        KnowledgeShareFactResponse: {
-            /** Success */
-            success: boolean;
-            /** Fact Id */
-            fact_id: string;
-            /** Shared With */
-            shared_with: unknown[];
-            /** Visibility */
-            visibility?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * KnowledgeShareResponse
          * @description Response for POST /knowledge/collaboration/facts/{id}/share.
          */
@@ -81907,22 +81833,6 @@ export interface components {
             };
             /** Message */
             message?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * KnowledgeUnshareFactResponse
-         * @description Response for DELETE /api/knowledge_base/facts/{fact_id}/share/{user_id_to_remove}.
-         */
-        KnowledgeUnshareFactResponse: {
-            /** Success */
-            success: boolean;
-            /** Fact Id */
-            fact_id: string;
-            /** Shared With */
-            shared_with: unknown[];
-            /** Visibility */
-            visibility?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -97354,19 +97264,6 @@ export interface components {
         ShareBody: {
             /** Grantee */
             grantee: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * ShareFactRequest
-         * @description Request model for sharing a fact with users (Issue #688).
-         */
-        ShareFactRequest: {
-            /**
-             * User Ids
-             * @description List of user IDs to share with
-             */
-            user_ids: string[];
         } & {
             [key: string]: unknown;
         };
@@ -118476,73 +118373,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskStatusResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    share_fact_api_knowledge_base_facts__fact_id__share_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                fact_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ShareFactRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KnowledgeShareFactResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    unshare_fact_api_knowledge_base_facts__fact_id__share__user_id_to_remove__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                fact_id: string;
-                user_id_to_remove: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KnowledgeUnshareFactResponse"];
                 };
             };
             /** @description Validation Error */
@@ -142307,6 +142137,7 @@ export interface operations {
             query?: {
                 async_client?: boolean;
                 database?: components["schemas"]["RedisDatabase"] | string;
+                decode_responses?: boolean | null;
             };
             header?: never;
             path?: never;
@@ -142465,6 +142296,7 @@ export interface operations {
                 conversation_id?: string | null;
                 async_client?: boolean;
                 database?: components["schemas"]["RedisDatabase"] | string;
+                decode_responses?: boolean | null;
             };
             header?: never;
             path?: never;
@@ -142497,6 +142329,7 @@ export interface operations {
             query?: {
                 async_client?: boolean;
                 database?: components["schemas"]["RedisDatabase"] | string;
+                decode_responses?: boolean | null;
             };
             header?: never;
             path?: never;
@@ -142533,6 +142366,7 @@ export interface operations {
             query?: {
                 async_client?: boolean;
                 database?: components["schemas"]["RedisDatabase"] | string;
+                decode_responses?: boolean | null;
             };
             header?: never;
             path: {
@@ -142567,6 +142401,7 @@ export interface operations {
             query?: {
                 async_client?: boolean;
                 database?: components["schemas"]["RedisDatabase"] | string;
+                decode_responses?: boolean | null;
             };
             header?: never;
             path: {
@@ -142602,6 +142437,7 @@ export interface operations {
                 session_id: string;
                 async_client?: boolean;
                 database?: components["schemas"]["RedisDatabase"] | string;
+                decode_responses?: boolean | null;
             };
             header?: never;
             path?: never;
@@ -142638,6 +142474,7 @@ export interface operations {
             query?: {
                 async_client?: boolean;
                 database?: components["schemas"]["RedisDatabase"] | string;
+                decode_responses?: boolean | null;
             };
             header?: never;
             path: {
@@ -142785,6 +142622,7 @@ export interface operations {
             query?: {
                 async_client?: boolean;
                 database?: components["schemas"]["RedisDatabase"] | string;
+                decode_responses?: boolean | null;
             };
             header?: never;
             path: {
@@ -142823,6 +142661,7 @@ export interface operations {
             query?: {
                 async_client?: boolean;
                 database?: components["schemas"]["RedisDatabase"] | string;
+                decode_responses?: boolean | null;
             };
             header?: never;
             path: {
@@ -142857,6 +142696,7 @@ export interface operations {
             query?: {
                 async_client?: boolean;
                 database?: components["schemas"]["RedisDatabase"] | string;
+                decode_responses?: boolean | null;
             };
             header?: never;
             path: {

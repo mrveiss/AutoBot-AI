@@ -19,6 +19,7 @@ from knowledge.connectors.credential_store import _refresh_lock_key
 from models.approval import Approval, ApprovalComment
 from services import approval_execution, oauth_bundle_strip, oauth_bundle_strip_action
 from services.approval_gate_service import ApprovalGateService
+from testkit.fake_approval_session import ApprovalClaimSession
 
 pytestmark = pytest.mark.asyncio
 
@@ -304,7 +305,7 @@ async def test_an_interruption_halfway_still_writes_the_trail_for_the_partial_ru
 ):
     svc = _svc(**{"s-third": json.dumps(_LEGACY)})
     monkeypatch.setattr("services.secrets_service.get_secrets_service", lambda: svc)
-    audited, session = [], _FakeSession()
+    audited, session = [], ApprovalClaimSession()
 
     async def _audit(op, **kw):
         audited.append(kw)
@@ -335,45 +336,6 @@ async def test_digest_covers_every_field_but_the_app_credentials():
     assert oauth_bundle_strip.token_digest({**base, "scope": "other"}) != digest
 
 
-class _FakeSession:
-    def __init__(self):
-        self.added, self.approval = [], None
-
-    def add(self, obj):
-        if getattr(obj, "id", None) is None:
-            obj.id = uuid.uuid4()
-        if isinstance(obj, Approval):
-            self.approval = obj
-        self.added.append(obj)
-
-    async def flush(self):
-        return None
-
-    async def commit(self):
-        return None
-
-    async def refresh(self, obj, *, attribute_names=None):
-        return None
-
-    async def execute(self, _stmt):
-        approval = self.approval
-        if getattr(_stmt, "is_update", False):
-            # the atomic claim is one UPDATE ... RETURNING: apply its SET values to the row
-            params = _stmt.compile().params
-            for column in ("status", "decided_by_user", "decided_at"):
-                setattr(approval, column, params[column])
-
-        class _R:
-            def scalar_one_or_none(self):
-                return approval
-
-            def first(self):
-                # the atomic claim's UPDATE ... RETURNING id: a row means this caller won
-                return (approval.id,)
-
-        return _R()
-
-
 async def _noop():
     return None
 
@@ -389,7 +351,7 @@ async def test_propose_then_approve_runs_the_strip_and_audits(configured, backup
 
     monkeypatch.setattr(oauth_bundle_strip_action, "audit_log", _audit)
     oauth_bundle_strip_action.register_strip_action()
-    session = _FakeSession()
+    session = ApprovalClaimSession()
 
     resp = await proposer.propose_oauth_bundle_strip(
         OAuthBundleStripRequest(backup_reference="snap-1"), current_user={"username": "agent"}, session=session
@@ -409,7 +371,7 @@ async def test_propose_then_approve_runs_the_strip_and_audits(configured, backup
 async def test_execution_refuses_without_a_backup_reference(configured):
     approval = Approval(context={"action": oauth_bundle_strip_action.ACTION}, id=uuid.uuid4())
     with pytest.raises(ValueError, match="backup_reference"):
-        await oauth_bundle_strip_action.execute_oauth_bundle_strip(approval, _FakeSession())
+        await oauth_bundle_strip_action.execute_oauth_bundle_strip(approval, ApprovalClaimSession())
 
 
 def test_action_is_registered_with_its_proposer():
@@ -423,7 +385,7 @@ async def test_unverifiable_backup_refuses_execution_records_why_and_touches_not
     """Fail closed (#18281): a non-empty reference is not a backup."""
     svc = _svc()
     monkeypatch.setattr("services.secrets_service.get_secrets_service", lambda: svc)
-    audited, session = [], _FakeSession()
+    audited, session = [], ApprovalClaimSession()
 
     async def _audit(op, **kw):
         audited.append(kw)
@@ -450,7 +412,7 @@ async def test_the_same_request_runs_once_the_seam_verifies(configured, backup_v
 
     monkeypatch.setattr(oauth_bundle_strip_action, "audit_log", _audit)
     approval = Approval(context={"backup_reference": "snap-looks-real"}, id=uuid.uuid4(), decided_by_user="human")
-    await oauth_bundle_strip_action.execute_oauth_bundle_strip(approval, _FakeSession())
+    await oauth_bundle_strip_action.execute_oauth_bundle_strip(approval, ApprovalClaimSession())
     assert svc.writes == ["s-legacy"]
 
 

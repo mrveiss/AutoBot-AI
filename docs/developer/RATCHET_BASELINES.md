@@ -443,7 +443,7 @@ rather than assumes.
 
 `repo_tests/redis_direct_constructor_18553_test.py` fails on a NEW direct Redis client
 construction (`redis.Redis(`, `redis.asyncio.Redis(`, `StrictRedis(`, `from_url(`, a Redis
-`ConnectionPool(`) outside `autobot_shared/redis*`; `repo_tests/redis_direct_constructor_baseline_18553.py`
+`ConnectionPool(`, `Sentinel(`, `RedisCluster(`, `from_pool(`) outside `autobot_shared/redis*`; `repo_tests/redis_direct_constructor_baseline_18553.py`
 freezes today's sites with a verdict each (EXCEPTION + reason, or MIGRATE + slice).
 
 - **Boundary:** tracked `.py` and `.sh` under the guard's `SCAN_ROOTS`, tests excluded. Not seen: a
@@ -454,8 +454,12 @@ freezes today's sites with a verdict each (EXCEPTION + reason, or MIGRATE + slic
 - **Population derived a second way** (`git grep` over the same roots, sets compared): 32 files by grep, 28 by
   the AST; the 4-file difference is files that only MENTION `redis.Redis(` in a string or docstring.
 - **Shrink:** counts are exact, so a removed site is stale until its entry is lowered; `FROZEN_TOTAL` may only
-  go down. The older `no-direct-redis` pre-commit hook (staged product `.py` only, `# noqa: redis` opt-out)
-  is kept: the guard covers what it skips (infrastructure scripts, shell, `from_url`, pools) but does not replace its commit-time check.
+  go down.
+- **One matcher, one baseline:** the matcher lives in `tools/lint/check_no_direct_redis.py`. This guard, the
+  `no-direct-redis` pre-commit hook and the code-quality CI step all run it against the same baseline (the
+  hook and the step on the changed files only). The earlier regex hook and its `# noqa: redis` opt-out are
+  retired; a site is frozen here with a reason or it fails. The CI wrapper hands hooks `.py` (not `.sh`),
+  so a shell-only change is caught at commit time and by this tree guard.
 
 ## Recorded exceptions to a shrink-only ratchet: the symbol-fork record (#18688)
 

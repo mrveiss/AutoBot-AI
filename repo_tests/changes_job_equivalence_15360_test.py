@@ -170,7 +170,6 @@ ALLOWED_ADDITIONS = {
             "autobot-monitoring/grafana/provisioning/datasources/prometheus.yml",
             "autobot-backend/config/llm_models.yaml",
             "autobot-infrastructure/shared/config/permission_rules.yaml",
-            "autobot-infrastructure/shared/config/llm_models.yaml",
             "**/error_messages.yaml",
             "**/prometheus.yml",
             "**/permission_rules.yaml",

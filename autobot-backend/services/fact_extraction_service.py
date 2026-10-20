@@ -706,7 +706,7 @@ class FactExtractionService:
             fact_type: Filter by fact type
             temporal_type: Filter by temporal type
             min_confidence: Minimum confidence threshold
-            active_only: Only return active facts
+            active_only: Stored is_active flag only: invalidation bookkeeping, not a serving decision (#18820)
             limit: Maximum number of facts to return
 
         Returns:

@@ -325,8 +325,12 @@ jobs:
         # one from copying the pattern forward.
         bash pipeline-scripts/check-pre-commit-hook-pr.sh --python tools/lint/check_no_live_install_sys_path_default.py --ext py
 
-    - name: Block direct redis client regressions (#1086, #6785)
-      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-direct-redis
+    - name: Block direct redis client regressions (#1086, #6785, #18553)
+      # The hook runs tools/lint/check_no_direct_redis.py against the frozen baseline: the same
+      # matcher and baseline as repo_tests/redis_direct_constructor_18553_test.py (one guard).
+      # --ext py,sh: the matcher reads .sh too; the wrapper's default pathspec has no .sh, so a
+      # shell-only change would otherwise never reach it.
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-direct-redis --ext py,sh
 
     - name: Block print/console regressions (#1082, #6785)
       # --changed-lines-only (#14051, same treatment #13950 gave the

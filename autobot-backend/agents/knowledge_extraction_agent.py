@@ -24,6 +24,7 @@ from autobot_shared.ssot_config import (
     get_agent_provider_explicit,
 )
 from config.manager import get_config_manager as _get_config_manager
+from knowledge.serving import is_servable
 from llm_shared.types import LLMType
 from models.atomic_fact import AtomicFact, FactExtractionResult, FactType, TemporalType
 from services.llm_service import get_llm_service
@@ -749,9 +750,8 @@ Return the results as a JSON array of facts. Example format:
             Filtered list of facts
         """
         filtered_facts = facts
-
         if active_only:
-            filtered_facts = [f for f in filtered_facts if f.is_active]
+            filtered_facts = [f for f in filtered_facts if is_servable(f)]  # one serving predicate (#18820)
 
         if fact_types:
             filtered_facts = [f for f in filtered_facts if f.fact_type in fact_types]

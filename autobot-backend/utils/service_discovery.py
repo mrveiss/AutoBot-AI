@@ -481,7 +481,7 @@ class ServiceDiscovery:
                 import redis.asyncio as redis
 
                 # Direct instantiation for health check (intentional exception to canonical pattern)
-                client = redis.Redis(  # noqa: redis
+                client = redis.Redis(
                     host=service.host,
                     port=service.port,
                     socket_timeout=service.timeout,

@@ -6,7 +6,6 @@
 
 import uuid
 from datetime import timedelta
-from types import SimpleNamespace
 
 import pytest
 
@@ -15,6 +14,7 @@ from models.approval import Approval, ApprovalSource
 from services import approval_execution
 from services.approval_gate_service import ApprovalGateService
 from services.approval_record_fields import payload_hash_of, record_fields
+from testkit.fake_async_session import FakeAsyncSession
 
 pytestmark = pytest.mark.asyncio
 
@@ -41,26 +41,9 @@ def _isolated(monkeypatch):
     monkeypatch.setattr(ApprovalGateService, "_notify", _noop)
 
 
-class _Session:
-    def __init__(self, existing=None):
-        self.added, self.existing, self.commits = [], existing, 0
-
-    def add(self, obj):
-        if getattr(obj, "id", None) is None:
-            obj.id = uuid.uuid4()
-        self.added.append(obj)
-
-    async def flush(self):
-        return None
-
-    async def commit(self):
-        self.commits += 1
-
-    async def refresh(self, obj, *, attribute_names=None):
-        return None
-
-    async def execute(self, stmt):
-        return SimpleNamespace(scalar_one_or_none=lambda: self.existing)
+def _session(existing=None):
+    """Mints uuid ids like the database would; every query answers *existing* (or nothing)."""
+    return FakeAsyncSession(assign_ids=uuid.uuid4, default_result=[] if existing is None else [existing])
 
 
 class TestRecordFields:
@@ -131,7 +114,7 @@ class TestRecordFields:
 
 class TestCreateApproval:
     async def test_create_persists_the_record_columns(self):
-        session = _Session()
+        session = _session()
         svc = ApprovalGateService(session)
         approval = await svc.create_approval(
             title="t",
@@ -145,12 +128,12 @@ class TestCreateApproval:
         assert approval.payload_hash == payload_hash_of({"k": 1})
 
     async def test_create_without_the_new_fields_is_unchanged(self):
-        approval = await ApprovalGateService(_Session()).create_approval(title="t", approval_type="workflow_gate")
+        approval = await ApprovalGateService(_session()).create_approval(title="t", approval_type="workflow_gate")
         assert (approval.source, approval.risk_tier, approval.payload_hash, approval.resume_ref) == (None,) * 4
 
     async def test_create_refuses_a_resume_ref_nothing_can_resume(self):
         with pytest.raises(ValueError):
-            await ApprovalGateService(_Session()).create_approval(
+            await ApprovalGateService(_session()).create_approval(
                 title="t",
                 approval_type="workflow_gate",
                 source="agent_tool",

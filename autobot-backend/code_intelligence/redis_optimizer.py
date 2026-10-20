@@ -793,7 +793,7 @@ class RedisOptimizer:
                     file_path=file_path,
                     line_start=line_number,
                     line_end=line_number,
-                    description="Direct redis.Redis() instantiation - violates canonical pattern",  # noqa: redis
+                    description="Direct redis.Redis() instantiation - violates canonical pattern",
                     suggestion=(
                         "Use get_redis_client() from autobot_shared.redis_client." " Provides pooling and monitoring."
                     ),
