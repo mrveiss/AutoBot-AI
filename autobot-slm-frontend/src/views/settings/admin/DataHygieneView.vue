@@ -35,6 +35,7 @@
  */
 
 import { computed, onMounted, ref } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import {
   autobotApiErrorMessage,
@@ -368,9 +369,7 @@ onMounted(() => {
       </div>
       <p class="text-sm text-gray-500 mb-4">{{ $t('dataHygiene.storage.subtitle') }}</p>
 
-      <div v-if="storageError" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" role="alert">
-        {{ storageError }}
-      </div>
+      <BaseAlert v-if="storageError" variant="error" class="mb-4" :message="storageError" />
       <div
         v-for="status in unavailableProviders"
         :key="status.provider"
@@ -523,9 +522,7 @@ onMounted(() => {
       </div>
       <p class="text-sm text-gray-500 mb-4">{{ $t('dataHygiene.resources.subtitle') }}</p>
 
-      <div v-if="orphansError" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" role="alert">
-        {{ orphansError }}
-      </div>
+      <BaseAlert v-if="orphansError" variant="error" class="mb-4" :message="orphansError" />
 
       <div class="flex items-end gap-3 mb-4">
         <div>

@@ -134,8 +134,8 @@ describe('NotificationsSettings', () => {
     const wrapper = mountPanel()
     await flushPromises()
 
-    expect(wrapper.find('.bg-red-50').exists()).toBe(true)
-    expect(wrapper.find('.bg-red-50').text()).toContain('401')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+    expect(wrapper.find('[role="alert"]').text()).toContain('401')
     // …and the dead session is cleared rather than left in place.
     expect(sessionStorage.getItem(TOKEN_KEY)).toBeNull()
     expect(sessionStorage.getItem(USER_KEY)).toBeNull()
@@ -174,6 +174,6 @@ describe('NotificationsSettings', () => {
     await flushPromises()
 
     expect(wrapper.find('.bg-green-50').exists()).toBe(false)
-    expect(wrapper.find('.bg-red-50').text()).toContain('Failed to save setting(s)')
+    expect(wrapper.find('[role="alert"]').text()).toContain('Failed to save setting(s)')
   })
 })

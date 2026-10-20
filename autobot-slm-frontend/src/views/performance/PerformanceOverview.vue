@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -99,12 +100,7 @@ function formatDate(dateStr: string): string {
 <template>
   <div class="p-6">
     <!-- Error Banner -->
-    <div
-      v-if="error"
-      class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
-    >
-      {{ error }}
-    </div>
+    <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
 
     <!-- Refresh Bar -->
     <div class="flex items-center justify-between mb-6">

@@ -4,6 +4,7 @@
 // Author: mrveiss
 
 import { ref, onMounted } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import { useApiClient } from '@/plugins/api'
 import { useLiveEvents } from '@/composables/useLiveEvents'
 import { createLogger } from '@/utils/debugUtils'
@@ -252,10 +253,11 @@ onMounted(async () => {
       </div>
 
       <template v-else>
-        <div v-if="error" class="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">
-          {{ error }}
-          <button class="ml-4 underline" @click="fetchDashboardData">{{ $t('llc.dashboard.retry') }}</button>
-        </div>
+        <BaseAlert v-if="error" variant="error" :message="error">
+          <template #actions>
+            <button class="underline" @click="fetchDashboardData">{{ $t('llc.dashboard.retry') }}</button>
+          </template>
+        </BaseAlert>
 
         <div v-if="isLoading" class="text-center py-12 text-autobot-text-muted">{{ $t('llc.dashboard.loading') }}</div>
 

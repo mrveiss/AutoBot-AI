@@ -25,6 +25,7 @@
  */
 
 import { ref, computed, type DeepReadonly } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import { formatDateTime } from '@/composables/useTimezone'
 import {
   useCodeSync,
@@ -113,9 +114,7 @@ function formatChecked(value: string | undefined): string {
       </button>
     </div>
 
-    <div v-if="codeSync.fullTreeDriftError.value" class="px-4 py-2 bg-red-50 border-b border-red-100 text-sm text-red-700">
-      {{ codeSync.fullTreeDriftError.value }}
-    </div>
+    <BaseAlert v-if="codeSync.fullTreeDriftError.value" variant="error" size="compact" :message="codeSync.fullTreeDriftError.value" />
 
     <div v-if="report" class="px-4 py-3" data-testid="full-tree-drift-report">
       <div class="flex items-center gap-3 mb-3 text-sm text-gray-500">

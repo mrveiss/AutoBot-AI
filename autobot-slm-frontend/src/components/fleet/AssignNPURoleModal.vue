@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 /**
  * AssignNPURoleModal - Modal for assigning NPU Worker role to nodes
  *
@@ -92,9 +93,7 @@ async function assignRole(): Promise<void> {
         <!-- Content -->
         <div class="p-6 space-y-4">
           <!-- Error Message -->
-          <div v-if="error" class="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-            {{ error }}
-          </div>
+          <BaseAlert v-if="error" variant="error" :message="error" />
 
           <!-- Node Selection -->
           <div>

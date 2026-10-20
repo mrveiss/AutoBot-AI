@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -364,10 +365,12 @@ onMounted(() => {
     </div>
 
     <!-- Fleet health detail (degraded/critical) -->
-    <div v-if="fleetHealth && fleetHealth.health !== 'healthy'" class="mb-4 p-3 rounded-lg border text-sm"
-      :class="fleetHealth.health === 'critical' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'">
-      {{ fleetHealth.detail }}
-    </div>
+    <BaseAlert
+      v-if="fleetHealth && fleetHealth.health !== 'healthy'"
+      :variant="fleetHealth.health === 'critical' ? 'error' : 'warning'"
+      class="mb-4"
+      :message="fleetHealth.detail"
+    />
 
     <!-- Node Status Summary -->
     <div class="grid grid-cols-4 gap-4 mb-6">
@@ -390,10 +393,7 @@ onMounted(() => {
     </div>
 
     <!-- Alerts -->
-    <div v-if="errorMessage" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-      {{ errorMessage }}
-      <button @click="errorMessage = null" class="ml-2 underline">{{ $t('rolesView.dismiss') }}</button>
-    </div>
+    <BaseAlert v-if="errorMessage" variant="error" class="mb-4" :message="errorMessage" dismissible :dismiss-label="$t('rolesView.dismiss')" @dismiss="errorMessage = null" />
     <div v-if="successMessage" class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
       {{ successMessage }}
     </div>

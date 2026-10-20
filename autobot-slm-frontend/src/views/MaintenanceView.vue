@@ -4,6 +4,7 @@
 // Author: mrveiss
 
 import { ref, computed, onMounted } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import { useRoute } from 'vue-router'
 import { useFleetStore } from '@/stores/fleet'
 import { useSlmApi } from '@/composables/useSlmApi'
@@ -687,9 +688,7 @@ function getNodeName(nodeId: string | null): string {
             </div>
 
             <!-- Error Alert -->
-            <div v-if="formError" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-              <p class="text-sm text-red-600">{{ formError }}</p>
-            </div>
+            <BaseAlert v-if="formError" variant="error" class="mb-4" :message="formError" />
 
             <form @submit.prevent="submitMaintenanceWindow" class="space-y-4">
               <!-- Node Selection -->

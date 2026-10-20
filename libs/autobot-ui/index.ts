@@ -26,6 +26,10 @@ export type { ButtonVariant, ButtonSize } from './src/components/BaseButton.vue'
 export { default as BaseBadge } from './src/components/BaseBadge.vue'
 export type { BadgeVariant, BadgeSize } from './src/components/BaseBadge.vue'
 
+// The one inline alert/banner for both apps (#18819).
+export { default as BaseAlert } from './src/components/BaseAlert.vue'
+export type { AlertVariant, AlertSize, BaseAlertProps } from './src/components/BaseAlert.vue'
+
 export { default as BaseCard } from './src/components/BaseCard.vue'
 
 // The one data table (#14778) -- retires the main app's BaseTable and DataTable forks.

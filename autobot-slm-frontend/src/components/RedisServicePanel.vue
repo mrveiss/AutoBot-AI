@@ -17,6 +17,7 @@
  */
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import { formatBytes } from '@/utils/formatHelpers'
 import i18n from '@/i18n'
 import { createLogger } from '@/utils/debugUtils'
@@ -263,14 +264,15 @@ onUnmounted(() => {
         </svg>
       </button>
     </div>
-    <div v-if="errorMessage" class="px-4 py-2 bg-red-50 border-b border-red-100 text-sm text-red-700 flex items-center justify-between">
-      <span>{{ errorMessage }}</span>
-      <button @click="errorMessage = null" class="text-red-500 hover:text-red-700" :aria-label="$t('redisServicePanel.dismiss')">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
+    <BaseAlert
+      v-if="errorMessage"
+      variant="error"
+      size="compact"
+      :message="errorMessage"
+      dismissible
+      :dismiss-label="$t('redisServicePanel.dismiss')"
+      @dismiss="errorMessage = null"
+    />
 
     <!-- Metrics grid -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-px bg-gray-100 border-b border-gray-200">

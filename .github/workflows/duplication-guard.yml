@@ -101,7 +101,10 @@ jobs:
       # 2831 pin, exact, so it stays.
       # 11707 -> 11231 (#16324): 476 lines of slack, the figure main run
       # 39021692374 (base feae6de152) measured with this workflow's own gate.
-      MAX_DUP_LINES: '11231'
+      # 11231 -> 11197 (#18819): measured on the #18819 branch with this workflow's flags
+      # and jscpd 5.0.6 (654 clones, 4464 files); the main GUI's ErrorBanner and
+      # ui/BaseAlert are retired into the kit's BaseAlert.
+      MAX_DUP_LINES: '11197'
       # #13044: the three trees this guard used to skip get their OWN pin rather
       # than being folded into the one above. When first scanned they carried
       # 2.4x the duplication ratio of the gated trees, and averaging would hide
@@ -126,7 +129,10 @@ jobs:
       # 2831 -> 2617 (#16324): 214 lines of slack, measured by the same main run
       # 39021692374 (base feae6de152); most of the fall is the retired agent
       # mirror (#18548) and the one playwright-server.js (#18549).
-      SLM_MAX_DUP_LINES: '2617'
+      # 2617 -> 1964 (#18819): measured on the #18819 branch at its final head, same
+      # flags (105 clones, 918 files); every hand-rolled SLM error banner is now the
+      # kit's BaseAlert.
+      SLM_MAX_DUP_LINES: '1964'
       JSCPD_VERSION: '5.0.6'
     steps:
       - uses: actions/checkout@v7

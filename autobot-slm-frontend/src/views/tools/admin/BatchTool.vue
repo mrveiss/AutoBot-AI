@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('BatchTool')
@@ -355,9 +356,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Error Message -->
-    <div v-if="error && backendAvailable" class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-      {{ error }}
-    </div>
+    <BaseAlert v-if="error && backendAvailable" variant="error" class="mb-6" :message="error" />
 
     <!-- Jobs List -->
     <div v-if="loading && !jobs.length" class="text-center py-12">
@@ -454,9 +453,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Error Message -->
-        <div v-if="job.error" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <p class="text-sm text-red-700">{{ job.error }}</p>
-        </div>
+        <BaseAlert v-if="job.error" variant="error" class="mt-4" :message="job.error" />
       </div>
     </div>
 

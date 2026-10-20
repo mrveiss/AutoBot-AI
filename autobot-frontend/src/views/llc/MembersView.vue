@@ -29,7 +29,7 @@
     <p v-if="!companyId" class="members-state">{{ t('llcMembers.noCompany') }}</p>
 
     <template v-else>
-      <ErrorBanner v-if="errorMessage" :message="errorMessage" class="members-error" />
+      <BaseAlert variant="error" v-if="errorMessage" :message="errorMessage" class="members-error" dismissible :dismiss-label="t('common.dismiss')" />
 
       <p v-if="isLoading" class="members-state">{{ t('llcMembers.loading') }}</p>
 
@@ -80,7 +80,7 @@
       :title="t('llcMembers.addModalTitle')"
       size="md"
     >
-      <ErrorBanner v-if="addError" :message="addError" class="members-error" />
+      <BaseAlert variant="error" v-if="addError" :message="addError" class="members-error" dismissible :dismiss-label="t('common.dismiss')" />
 
       <div class="members-form">
         <div class="members-field">
@@ -142,8 +142,7 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useCollaborationInvite } from '@/composables/collaboration/useCollaborationInvite'
 import BaseButton from '@/components/base/BaseButton.vue'
-import { BaseBadge, BaseCard, BaseModal } from '@autobot/ui'
-import ErrorBanner from '@/components/base/ErrorBanner.vue'
+import { BaseAlert, BaseBadge, BaseCard, BaseModal } from '@autobot/ui'
 
 // Backend MembershipRole enum (autobot-backend/llc/models/enums.py).
 const MEMBERSHIP_ROLES = ['owner', 'admin', 'member', 'guest', 'lead'] as const

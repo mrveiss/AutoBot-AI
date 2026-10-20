@@ -2408,6 +2408,8 @@ const createRipple = (event: TouchEvent) => {
 
 **New Component**: BaseAlert.vue (`autobot-frontend/src/components/ui/BaseAlert.vue`)
 
+> **Superseded (#18819):** this component, and `components/base/ErrorBanner.vue`, are consolidated into the shared kit's `BaseAlert` (`libs/autobot-ui/src/components/BaseAlert.vue`, `import { BaseAlert } from '@autobot/ui'`), used by both apps. The local files are gone.
+
 **Features**:
 - 5 variants: success, info, warning, error, critical
 - Icon support with Heroicons (CheckCircleIcon, InformationCircleIcon, ExclamationTriangleIcon, XCircleIcon)

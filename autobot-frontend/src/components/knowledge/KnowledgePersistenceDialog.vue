@@ -16,7 +16,7 @@
       </div>
 
       <!-- Load Error -->
-      <BaseAlert v-if="loadError" variant="error" :message="loadError" dismissible @dismiss="loadError = null" class="dialog-load-error" />
+      <BaseAlert v-if="loadError" variant="error" :message="loadError" dismissible :dismiss-label="t('ui.alert.dismissAlert')" @dismiss="loadError = null" class="dialog-load-error" />
 
       <!-- Chat Context Info -->
       <div v-if="chatContext" class="context-info">
@@ -223,7 +223,7 @@
         v-if="submitError"
         variant="error"
         :message="submitError"
-        dismissible
+        dismissible :dismiss-label="t('ui.alert.dismissAlert')"
         @dismiss="submitError = null"
       />
 
@@ -266,6 +266,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 import { ref, computed, watch, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useNotificationBus } from '@/composables/useNotificationBus';
@@ -274,7 +275,6 @@ import { apiService } from '@/services/api';
 import { getApiBase } from '@/config/ssot-config';
 import { formatDateTime as formatDate } from '@/utils/formatHelpers';
 import BaseButton from '@/components/base/BaseButton.vue';
-import BaseAlert from '@/components/ui/BaseAlert.vue';
 import { createLogger } from '@/utils/debugUtils';
 
 type KnowledgeDecision = 'add_to_kb' | 'keep_temporary' | 'delete';

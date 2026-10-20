@@ -11,6 +11,7 @@
 
 import { ref, computed, onMounted, watch } from 'vue'
 import { SshTerminal } from '@autobot/terminal'
+import { BaseAlert } from '@autobot/ui'
 import { getSlmApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { useAuthStore } from '@/stores/auth'
@@ -169,9 +170,7 @@ function onError(message: string) {
         </button>
       </div>
 
-      <div v-if="connectionError" class="m-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-        {{ connectionError }}
-      </div>
+      <BaseAlert v-if="connectionError" variant="error" class="m-3" :message="connectionError" />
 
       <div class="flex-1 overflow-hidden">
         <SshTerminal

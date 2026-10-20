@@ -19,6 +19,7 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import { useAutobotApi, type BudgetPolicy } from '@/composables/useAutobotApi'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -140,13 +141,7 @@ onMounted(() => {
     </div>
 
     <!-- Error display -->
-    <div
-      v-if="error"
-      class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg"
-      role="alert"
-    >
-      <p class="text-sm font-semibold text-red-700">{{ error }}</p>
-    </div>
+    <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
 
     <!-- Summary -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">

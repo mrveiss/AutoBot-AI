@@ -15,6 +15,7 @@
  */
 
 import { ref, reactive, onMounted, computed } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import slmApiClient from '@/utils/ApiClient'
 import {
   usePersonality,
@@ -299,9 +300,7 @@ onMounted(async () => {
     <div class="flex-1 overflow-y-auto bg-gray-50 px-6 py-6">
 
       <!-- Error / success banners -->
-      <div v-if="error" class="mb-4 px-4 py-3 rounded-sm bg-red-50 border border-red-200 text-sm text-red-700">
-        {{ error }}
-      </div>
+      <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
       <div v-if="successMsg" class="mb-4 px-4 py-3 rounded-sm bg-green-50 border border-green-200 text-sm text-green-700">
         {{ successMsg }}
       </div>
