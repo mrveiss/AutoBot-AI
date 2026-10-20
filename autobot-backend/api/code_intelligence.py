@@ -265,7 +265,7 @@ REDIS_OPTIMIZATION_TYPES = {
     "connection_per_request": {
         "name": "Connection Per Request",
         "category": "connection",
-        "description": "Direct redis.Redis() instantiation - should use pool",  # noqa: redis
+        "description": "Direct redis.Redis() instantiation - should use pool",
         "recommendation": "Use get_redis_client() from autobot_shared.redis_client",
     },
     "blocking_in_async": {

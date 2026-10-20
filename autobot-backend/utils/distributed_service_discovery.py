@@ -340,7 +340,7 @@ class DistributedServiceDiscovery(AsyncInitializable):
 
             # Direct instantiation for health check (intentional exception to canonical pattern)
             # Immediate connection test (no retries)
-            client = redis.Redis(  # noqa: redis
+            client = redis.Redis(
                 host=endpoint.host,
                 port=endpoint.port,
                 socket_connect_timeout=0.1,  # 100ms max

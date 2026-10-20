@@ -461,9 +461,8 @@ async def mcp_search_knowledge_base(
     try:
         kb = get_knowledge_base()
 
-        # Perform the search
-        # Issue #13009: exclude quarantined research facts (#12622) when the
-        # caller doesn't request a specific filter of their own.
+        # Issue #13009: exclude quarantined research facts (#12622) when the caller doesn't
+        # request a filter of their own. #18820: KB.search withholds rejected and invalid facts itself.
         results = await kb.search(
             query=request.query,
             top_k=request.top_k,

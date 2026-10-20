@@ -37,6 +37,7 @@ from knowledge.search_filters import (
     extract_user_context_from_request,
     filter_search_results_by_permission,
 )
+from knowledge.serving import servable_response
 from knowledge.vector_search_engine import VectorSearchResult, get_vector_search_engine
 from knowledge_factory import get_or_create_knowledge_base
 from type_defs.common import Metadata
@@ -156,8 +157,7 @@ async def _execute_kb_search(
     dispatch (NPU > GPU > CPU).  Falls back to the per-implementation KB
     search methods only when the engine raises.
 
-    Issue #398: original KB-dispatch logic preserved as fallback.
-
+    Issue #398: KB-dispatch fallback. #18820: the engine leg bypasses KB.search, so it gets the serving check here.
     #16665: results are filtered to what *user_id* may see before returning,
     an explicit admin read (is_admin) sees every fact.
     """
@@ -191,7 +191,7 @@ async def _execute_kb_search(
             results = await kb_to_use.search(query=query, similarity_top_k=search_limit, mode=mode)
 
     return await filter_search_results_by_permission(
-        results,
+        servable_response(results),
         user_id=user_id,
         user_org_id=user_org_id,
         user_group_ids=user_group_ids,

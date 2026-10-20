@@ -104,6 +104,7 @@ class TestExecuteKbSearch:
         Web-research facts are tagged metadata.collection="research" until
         Phase 1's promotion gate reviews them; general chat search must never
         surface them, so every call passes the quarantine exclusion filter.
+        #18820: the same filter carries the serving predicate's trust clause.
         """
         mock_kb = MagicMock()
         mock_kb.search = AsyncMock(return_value=[])
@@ -114,7 +115,7 @@ class TestExecuteKbSearch:
         mock_kb.search.assert_awaited_once_with(
             query="what is autobot",
             top_k=5,
-            filters={"collection": {"$ne": "research"}},
+            filters={"$and": [{"collection": {"$ne": "research"}}, {"verification_status": {"$ne": "rejected"}}]},
         )
 
     async def test_multiple_results_mapped_correctly(self, workflow):
