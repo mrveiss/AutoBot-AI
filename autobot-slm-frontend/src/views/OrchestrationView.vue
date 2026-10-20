@@ -30,6 +30,7 @@
  */
 
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import { useRoute, useRouter } from 'vue-router'
 import { readSlmToken } from '@/utils/authStorage'
 import { useOrchestrationManagement } from '@/composables/useOrchestrationManagement'
@@ -1055,23 +1056,22 @@ onUnmounted(() => {
     </div>
 
     <!-- ERROR DISPLAY -->
-    <div v-if="orchestration.error" class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-      <div class="flex items-start gap-3">
-        <svg class="w-5 h-5 text-red-600 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
-        </svg>
-        <div class="flex-1">
-          <h3 class="text-sm font-medium text-red-800">{{ $t('orchestrationView.errorLoadingData') }}</h3>
-          <p class="mt-1 text-sm text-red-700">{{ orchestration.error }}</p>
-          <button
-            @click="refresh"
-            class="mt-2 text-sm text-red-600 hover:text-red-800 underline"
-          >
-            {{ $t('orchestrationView.retry') }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <BaseAlert
+      v-if="orchestration.error"
+      variant="error"
+      class="mb-4"
+      :title="$t('orchestrationView.errorLoadingData')"
+      :message="orchestration.error"
+    >
+      <template #actions>
+        <button
+          @click="refresh"
+          class="text-sm underline"
+        >
+          {{ $t('orchestrationView.retry') }}
+        </button>
+      </template>
+    </BaseAlert>
 
     <!-- LOADING STATE -->
     <div v-if="orchestration.loading && !orchestration.fleetServices?.length" class="mb-4 p-8 bg-blue-50 border border-blue-200 rounded-lg text-center">

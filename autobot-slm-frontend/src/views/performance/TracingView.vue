@@ -13,7 +13,7 @@
 
 import { ref, onMounted, watch } from 'vue'
 import { formatDuration } from '@/utils/formatHelpers'
-import { usePagination } from '@autobot/ui'
+import { BaseAlert, usePagination } from '@autobot/ui'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
 import { formatDateTime } from '@/composables/useTimezone'
 import type {
@@ -219,12 +219,7 @@ onMounted(() => {
 <template>
   <div class="p-6">
     <!-- Error Banner -->
-    <div
-      v-if="error"
-      class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
-    >
-      {{ error }}
-    </div>
+    <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
 
     <!-- Filter Bar -->
     <div class="flex flex-wrap items-center gap-3 mb-4">

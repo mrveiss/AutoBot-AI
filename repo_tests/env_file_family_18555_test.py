@@ -130,3 +130,93 @@ def test_a_host_with_a_port_and_a_url_without_a_scheme_are_caught() -> None:
 
 def test_the_canonical_docker_file_exists() -> None:
     assert Path(_ROOT / _CANONICAL_DOCKER_ENV).is_file()
+
+
+# --- one base plus overlays (owner decision 2026-10-19, #18555 AC1) ---
+
+_BASE = ".env.base"
+_OVERLAYS = (".env.localhost", ".env.native-vm", ".env.network", ".env.network-template")
+_ASSIGNMENT = re.compile(r"^([A-Z][A-Z0-9_]*)=(.*)$")
+
+
+def _pairs(text: str) -> dict[str, str]:
+    return {m[1]: m[2] for line in text.splitlines() if (m := _ASSIGNMENT.match(line.strip()))}
+
+
+def redundant_overlay_keys(base: str, overlays: dict[str, str]) -> list[str]:
+    """`<overlay>: KEY` for every key an overlay sets to exactly the base value."""
+    shared = _pairs(base)
+    return sorted(
+        f"{name}: {k}" for name, text in overlays.items() for k, v in _pairs(text).items() if shared.get(k) == v
+    )
+
+
+def test_overlays_hold_only_what_differs_from_the_base() -> None:
+    files = _env_files()
+    assert _BASE in files and set(_OVERLAYS) <= set(files), sorted(files)
+    assert _pairs(files[_BASE]), ".env.base sets no key"
+    redundant = redundant_overlay_keys(files[_BASE], {n: files[n] for n in _OVERLAYS})
+    assert not redundant, f"an overlay repeats a base key with the same value -- delete it there: {redundant}"
+
+
+#: Root env files that are not native overlays, each for a stated reason.
+_NOT_OVERLAYS = {
+    _BASE: "the base the overlays build on",
+    ".env.example": "the annotated reference for a native install -- every option, not an environment",
+}
+
+
+def unknown_native_env_files(paths: list[str]) -> list[str]:
+    """Root .env.<env> files that are neither a known overlay nor a stated exception."""
+    return sorted(p for p in paths if "/" not in p and p not in _NOT_OVERLAYS and p not in _OVERLAYS)
+
+
+def test_every_native_env_file_is_a_known_overlay() -> None:
+    """A new root .env.<env> must join the family deliberately, not drift beside it. The paths come
+    from REACH.examined (`_env_files`), so the env-file-family-18555-scan floor covers this sweep."""
+    files = list(_env_files())
+    assert set(_OVERLAYS) <= set(files)
+    assert not unknown_native_env_files(files)
+
+
+def test_the_overlay_check_catches_a_stray_env_file() -> None:
+    assert unknown_native_env_files([".env.base", ".env.localhost", ".env.staging", "docker/.env.docker"]) == [
+        ".env.staging"
+    ]
+
+
+def test_the_redundancy_check_sees_a_repeat_and_allows_an_override() -> None:
+    base = "AUTOBOT_BACKEND_PORT=8001\nAUTOBOT_REDIS_HOST=\n"
+    overlays = {".env.x": "AUTOBOT_BACKEND_PORT=8001\nAUTOBOT_REDIS_HOST=127.0.0.1\n"}
+    assert redundant_overlay_keys(base, overlays) == [".env.x: AUTOBOT_BACKEND_PORT"]
+
+
+def _script(name: str):
+    import importlib.util
+
+    path = _ROOT / "autobot-infrastructure" / "shared" / "scripts" / name
+    spec = importlib.util.spec_from_file_location(name.replace("-", "_").removesuffix(".py"), path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_validator_checks_base_plus_overlay(tmp_path: Path) -> None:
+    """27's review: validate-env-files.py read each overlay alone and reported the base keys missing."""
+    validator = _script("validate-env-files.py")
+    (tmp_path / ".env.base").write_text("AUTOBOT_BACKEND_PORT=8001\nAUTOBOT_REDIS_HOST=\n", encoding="utf-8")
+    (tmp_path / ".env.localhost").write_text("AUTOBOT_REDIS_HOST=127.0.0.1\n", encoding="utf-8")
+    assert validator.effective_env_vars(tmp_path / ".env.localhost") == {
+        "AUTOBOT_BACKEND_PORT": "8001",
+        "AUTOBOT_REDIS_HOST": "127.0.0.1",
+    }
+    (tmp_path / ".env").write_text("X=1\n", encoding="utf-8")
+    assert validator.effective_env_vars(tmp_path / ".env") == {"X": "1"}, "a non-overlay file took the base"
+
+
+def test_the_generator_writes_overlay_only_output() -> None:
+    """27's review: a regenerated overlay must not repeat the base and trip the guard."""
+    generator = _script("generate-env-files.py")
+    base = "AUTOBOT_BACKEND_PORT=8001\nREDIS_PORT=6379\n"
+    content = "# header\nAUTOBOT_BACKEND_PORT=8001\nREDIS_PORT=6380\nAUTOBOT_X=1\n"
+    assert generator.strip_base_keys(content, base) == "# header\nREDIS_PORT=6380\nAUTOBOT_X=1\n"

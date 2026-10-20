@@ -12,7 +12,10 @@ render-mode override, max_depth / respect_robots / same_origin propagation.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 from pydantic import ValidationError
+
+from web_fetch.profile import IngestProfile
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -46,6 +49,42 @@ def test_crawl_request_defaults() -> None:
     assert req.ingest is True
     assert req.same_origin is True
     assert req.render == "auto"
+    assert req.profile is IngestProfile.DOCUMENT
+
+
+def test_crawl_request_unknown_profile_rejected() -> None:
+    """#18826: an unknown profile is a validation error, never treated as document."""
+    from api.knowledge_crawl import CrawlRequest
+
+    with pytest.raises(ValidationError):
+        CrawlRequest(seeds=["https://example.com"], profile="markdown")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("profile", ["media", "page_copy"])
+async def test_crawl_endpoint_unimplemented_profile_is_501_before_crawling(profile) -> None:
+    """#18826: a listed but unimplemented profile refuses with 501 and fetches nothing."""
+    from api.knowledge_crawl import CrawlRequest, crawl_url_endpoint
+
+    req = CrawlRequest(seeds=["https://example.com"], profile=profile, ingest=False)
+    with patch("api.knowledge_crawl.WebCrawlerConnector") as MockConnector:
+        with pytest.raises(HTTPException) as exc_info:
+            await crawl_url_endpoint(req)
+    assert exc_info.value.status_code == 501
+    assert exc_info.value.detail["error_code"] == "profile_not_implemented"
+    MockConnector.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_crawl_endpoint_passes_the_profile_to_the_connector_config() -> None:
+    """#18826: the request's profile reaches the connector's config as well as crawl()."""
+    from api.knowledge_crawl import CrawlRequest, crawl_url_endpoint
+
+    req = CrawlRequest(seeds=["https://example.com"], ingest=False)
+    with patch("api.knowledge_crawl.WebCrawlerConnector") as MockConnector:
+        MockConnector.return_value.crawl = AsyncMock(return_value=[])
+        await crawl_url_endpoint(req)
+    assert MockConnector.call_args.args[0].config["profile"] == "document"
 
 
 def test_crawl_request_seeds_required() -> None:
@@ -169,6 +208,7 @@ async def test_crawl_endpoint_honours_max_depth() -> None:
         respect_robots=True,
         ingest=False,
         same_origin=True,
+        profile=IngestProfile.DOCUMENT,
     )
 
 
@@ -214,6 +254,7 @@ async def test_crawl_endpoint_respect_robots_false() -> None:
         respect_robots=False,
         ingest=False,
         same_origin=True,
+        profile=IngestProfile.DOCUMENT,
     )
 
 

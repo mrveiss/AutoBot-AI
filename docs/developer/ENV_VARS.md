@@ -28,7 +28,8 @@ The tracked env files are templates. The installer and the Ansible roles write t
 |---|---|
 | `docker/.env.docker` | Docker Compose, through `--env-file docker/.env.docker`. This is the **only** Docker env file. |
 | `.env.example` | The full annotated reference for a native install. |
-| `.env.localhost`, `.env.native-vm`, `.env.network`, `.env.network-template` | Per-environment overlays, read by the `autobot-infrastructure/shared/scripts` tooling. |
+| `.env.base` | The keys every native environment shares, written once. Always loaded first. |
+| `.env.localhost`, `.env.native-vm`, `.env.network`, `.env.network-template` | Per-environment overlays on `.env.base`: each holds only what differs. Load the base, then one overlay (`cat .env.base .env.localhost > .env`, or `source` both in that order). |
 
 Host keys use one format in every file:
 
@@ -38,8 +39,9 @@ Host keys use one format in every file:
 - `OLLAMA_HOST` is Ollama's own variable. Its upstream format is `host[:port]`, and it is the only exception.
 
 `repo_tests/env_file_family_18555_test.py` enforces both rules over every tracked env file. It fails when
-a host key breaks the format, when two files disagree on a key's format, or when a second Docker env file
-appears.
+a host key breaks the format, when two files disagree on a key's format, when a second Docker env file
+appears, when an overlay repeats a `.env.base` key with the same value, or when a root `.env.<env>` file
+appears outside the known overlays.
 
 <!-- BEGIN_AUTOGEN_ENV_DOCS -->
 | Name | Component | Type | Default | Description |
@@ -164,6 +166,9 @@ appears.
 | `AUTOBOT_HEALTH_POLL_INTERVAL` | slm | float | `2.0` | Delay, in seconds, between health-probe attempts after a component restart. Raising it polls less often (lower overhead, slower detection); lowering it detects a healthy service sooner at the cost of more probe traffic (autobot-slm-backend/api/code_sync.py, #11378). |
 | `AUTOBOT_HEALTH_POLL_TIMEOUT` | slm | float | `180.0` | Total seconds to wait for a component to report healthy after a restart that recreated its venv, covering first-run py3.14 bytecode compilation of the whole dependency tree (#11413). Lowering it risks a false #11377 rollback of a slow-but-healthy cold start; raising it waits longer before giving up on a genuinely stuck restart (autobot-slm-backend/api/code_sync.py, #11378). |
 | `AUTOBOT_HEALTH_POLL_TIMEOUT_FAST` | slm | float | `60.0` | Total seconds to wait for a component to report healthy after a restart that reused its existing venv (warm interpreter, no cold-start compilation). Lowering it detects a stuck restart sooner; raising it tolerates a slower warm restart before the wait ends (autobot-slm-backend/api/code_sync.py, #11458). |
+| `AUTOBOT_HTML_EXTRACT_MAX_BYTES` | knowledge | int | `10485760` | Largest HTML input, in UTF-8 bytes, the one HTML extractor parses; a longer page is truncated at a character and tag boundary and yields its leading content (media/document/html_extraction.py, #18826). Range: 65536–268435456. |
+| `AUTOBOT_HTML_STYLE_MAX_CHARS` | knowledge | int | `4096` | Longest inline style attribute, in characters, the HTML extractor parses for hiding rules; a longer one is treated as hiding its element (fail closed) (media/document/inline_style.py, #18826). Range: 256–65536. |
+| `AUTOBOT_HTML_TITLE_MAX_CHARS` | knowledge | int | `300` | Longest page title, in characters, the HTML extractor keeps from `og:title` or `<title>` (media/document/html_extraction.py, #18826). Range: 40–4096. |
 | `AUTOBOT_IDEMPOTENCY_CLAIM_ATTEMPTS` | backend | int | `3` | How many times an idempotency claim re-runs its atomic SET NX after the record it lost to turns out to have expired. Reporting 'unseen' at that point would let every loser of the race create (autobot_shared/idempotency.py, #15778). |
 | `AUTOBOT_IDEMPOTENCY_CLAIM_TTL_SECONDS` | backend | int | `300` | How long an in-flight idempotency claim is held before another caller may retry it. A request that dies between claiming and completing would otherwise wedge the key for the full replay TTL (autobot_shared/idempotency.py, #15778). |
 | `AUTOBOT_IDEMPOTENCY_TTL_SECONDS` | backend | int | `86400` | How long a completed creation stays replayable for its Idempotency-Key. Long enough to outlive any retry an agent or proxy makes, short enough that the keyspace stays bounded (autobot_shared/idempotency.py, #15778). |
@@ -365,6 +370,7 @@ appears.
 | `AUTOBOT_SYNC_UNSHALLOW_TIMEOUT_S` | slm | float | `600.0` | Timeout, in seconds, for `git fetch --unshallow` on the builtin updater's `code_source` checkout when it is still a shallow clone (from initial provisioning). Downloads the ENTIRE history the shallow fetch skipped, so it gets a much longer bound than AUTOBOT_SYNC_GIT_TIMEOUT_S -- minutes, not seconds, on a monorepo-sized checkout (autobot-slm-backend/services/git_subprocess.py:ensure_full_history, #16310). |
 | `AUTOBOT_TEE_RETENTION_HOURS` | tools | int | `168` | Hours an oversized tool-output tee file is kept on disk before being pruned (#14142). Raising it keeps oversized captured output available longer for later inspection; lowering it prunes it sooner, saving disk (services/tool_output_filter.py). |
 | `AUTOBOT_TERMINAL_SESSION_TTL_SECONDS` | terminal | int | `86400` | TTL for terminal:session_config:* Redis keys — the cross-worker terminal session registry (services/terminal_session_store.py, #14961). A session config outlives the connection it was created for (the WebSocket may attach on a different uvicorn worker, or reconnect after one), so this is deliberately generous: 24h matches the sibling chat:session:* cache TTL (chat_history/cache.py) rather than the lifetime of any single PTY process. Range: 60–604800. |
+| `AUTOBOT_THREAT_INTEL_CACHE_TTL` | security | int | `7200` | Seconds a threat-intelligence verdict (VirusTotal/URLVoid) stays cached in-process (#18888). Measured on a monotonic clock, so a wall-clock step cannot extend it. Clamped to 1-604800. |
 | `AUTOBOT_TLS_CA_PATH` | tls | str | *(none)* | Path to the CA certificate file for TLS verification. |
 | `AUTOBOT_TLS_CERT_DIR` | tls | str | `'/etc/autobot/certs'` | Directory containing TLS certificate and key files. |
 | `AUTOBOT_TLS_CERT_PATH` | tls | str | *(none)* | Path to the TLS client/server certificate file. |

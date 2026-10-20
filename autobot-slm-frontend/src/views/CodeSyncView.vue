@@ -12,6 +12,7 @@
  */
 
 import { ref, watch, onMounted, onUnmounted, computed, type DeepReadonly } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import {
   useCodeSync,
   isSelfUpdateReconnecting,
@@ -1083,12 +1084,12 @@ onUnmounted(() => {
         </template>
 
         <!-- Failure reason -->
-        <div
+        <BaseAlert
           v-if="updateAllJob.status === 'failed' && updateAllJob.failure_reason"
-          class="mt-3 bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-700"
-        >
-          {{ updateAllJob.failure_reason }}
-        </div>
+          variant="error"
+          class="mt-3"
+          :message="updateAllJob.failure_reason"
+        />
 
         <!-- Partial: fleet stage skipped one or more non-operational nodes
              (#11511). The backend reports this as its own terminal status, so
@@ -1498,33 +1499,27 @@ onUnmounted(() => {
           the paths; this offers the documented override so the operator is not
           stuck — the builtin updater is the only sanctioned path.
         -->
-        <div
+        <BaseAlert
           v-if="resolveDriftBlocked"
-          class="bg-red-50 border border-red-200 rounded-lg p-3 mb-3"
+          variant="error"
+          class="mb-3"
+          :title="$t('codeSyncView.resolveWouldDelete')"
         >
-          <div class="flex items-start gap-3">
-            <svg class="w-5 h-5 text-red-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <div>
-              <div class="font-medium text-red-900 text-sm">{{ $t('codeSyncView.resolveWouldDelete') }}</div>
-              <div class="text-sm text-red-700">{{ $t('codeSyncView.resolveWouldDeleteExplainer') }}</div>
-              <ul
-                v-if="blockedDeletions.length"
-                class="mt-2 text-xs font-mono text-red-800 space-y-0.5 max-h-40 overflow-y-auto"
-              >
-                <li v-for="path in blockedDeletions" :key="path">{{ path }}</li>
-              </ul>
-              <button
-                @click="handleResolveDrift(true)"
-                :disabled="isResolvingDrift"
-                class="mt-2 text-sm font-medium text-red-800 underline hover:text-red-900"
-              >
-                {{ $t('codeSyncView.resyncAndDeleteAnyway') }}
-              </button>
-            </div>
-          </div>
-        </div>
+          <p>{{ $t('codeSyncView.resolveWouldDeleteExplainer') }}</p>
+          <ul
+            v-if="blockedDeletions.length"
+            class="mt-2 text-xs font-mono space-y-0.5 max-h-40 overflow-y-auto"
+          >
+            <li v-for="path in blockedDeletions" :key="path">{{ path }}</li>
+          </ul>
+          <button
+            @click="handleResolveDrift(true)"
+            :disabled="isResolvingDrift"
+            class="mt-2 text-sm font-medium underline"
+          >
+            {{ $t('codeSyncView.resyncAndDeleteAnyway') }}
+          </button>
+        </BaseAlert>
 
         <!-- #11303: Lost contact banner — component's own service restart drops the connection -->
         <div
@@ -1618,23 +1613,15 @@ onUnmounted(() => {
     </div>
 
     <!-- Error Display -->
-    <div
+    <BaseAlert
       v-if="codeSync.error.value"
-      class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-center justify-between"
-    >
-      <div class="flex items-center gap-3">
-        <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <span class="text-red-700">{{ codeSync.error.value }}</span>
-      </div>
-      <button
-        @click="codeSync.clearError()"
-        class="text-red-600 hover:text-red-800 font-medium text-sm"
-      >
-        {{ $t('codeSyncView.dismiss') }}
-      </button>
-    </div>
+      variant="error"
+      class="mb-6"
+      :message="codeSync.error.value"
+      dismissible
+      :dismiss-label="$t('codeSyncView.dismiss')"
+      @dismiss="codeSync.clearError()"
+    />
 
     <!-- Success Display -->
     <div
@@ -1724,14 +1711,16 @@ onUnmounted(() => {
           }}</span>
         </div>
         <!-- #13157: the reason the backend recorded (code_sync.py:402) -->
-        <div
+        <BaseAlert
           v-if="fleetSyncJob.failure_reason"
           data-testid="fleet-job-failure-reason"
-          class="mt-2 bg-red-50 border border-red-200 rounded-md p-2 text-sm text-red-700"
+          variant="error"
+          size="compact"
+          class="mt-2"
         >
           <span class="font-medium">{{ $t('codeSyncView.fleetJobFailureReason') }}</span>
           {{ fleetSyncJob.failure_reason }}
-        </div>
+        </BaseAlert>
         <!-- Per-node outcome; `message` carries the ansible fatal on failure -->
         <ul v-if="fleetSyncJob.nodes.length > 0" class="mt-2 space-y-1">
           <li

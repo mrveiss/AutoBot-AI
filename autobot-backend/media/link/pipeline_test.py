@@ -75,13 +75,12 @@ class TestLinkPipelineHtmlParsing:
         return BeautifulSoup(html, "html.parser")
 
     def test_extract_title_from_title_tag(self):
-        soup = self._soup("<html><head><title>My Title</title></head></html>")
-        assert self.pipe._extract_title(soup) == "My Title"
+        html = "<html><head><title>My Title</title></head></html>"
+        assert self.pipe._parse_html(html, "https://test.com/", "text/html", {})["title"] == "My Title"
 
     def test_extract_title_prefers_og(self):
         html = '<html><head><meta property="og:title" content="OG Title"><title>Regular</title></head></html>'
-        soup = self._soup(html)
-        assert self.pipe._extract_title(soup) == "OG Title"
+        assert self.pipe._parse_html(html, "https://test.com/", "text/html", {})["title"] == "OG Title"
 
     def test_extract_description_meta(self):
         html = '<html><head><meta name="description" content="Meta desc"></head></html>'
@@ -99,8 +98,7 @@ class TestLinkPipelineHtmlParsing:
         assert self.pipe._extract_description(soup) == "OG desc"
 
     def test_extract_main_text_removes_boilerplate(self):
-        soup = self._soup(SAMPLE_HTML)
-        text = self.pipe._extract_main_text(soup)
+        text = self.pipe._extract_document(SAMPLE_HTML, "https://test.com/page").text
         assert "Main content" in text
         assert "Navigation junk" not in text
         assert "Footer junk" not in text

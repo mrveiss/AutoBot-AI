@@ -105,7 +105,7 @@ import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { formatDateTime } from '@/utils/formatHelpers'
 import { useFailedVectorizationJobs } from '@/composables/knowledge/useFailedVectorizationJobs'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 
 const { t } = useI18n()
 const { confirm } = useConfirmDialog()

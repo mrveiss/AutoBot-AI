@@ -45,7 +45,7 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 
 interface Props {
   hasSelection: boolean

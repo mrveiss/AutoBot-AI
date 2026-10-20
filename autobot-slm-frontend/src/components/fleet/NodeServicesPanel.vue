@@ -17,6 +17,7 @@
  */
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { createLogger } from '@/utils/debugUtils'
@@ -350,14 +351,15 @@ onUnmounted(() => {
     </div>
 
     <!-- Error Banner -->
-    <div v-if="errorMessage" class="px-4 py-2 bg-red-50 border-b border-red-100 text-sm text-red-700 flex items-center justify-between">
-      <span>{{ errorMessage }}</span>
-      <button @click="errorMessage = null" class="text-red-500 hover:text-red-700" :aria-label="$t('fleet.nodeServicesPanel.dismissError')">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
+    <BaseAlert
+      v-if="errorMessage"
+      variant="error"
+      size="compact"
+      :message="errorMessage"
+      dismissible
+      :dismiss-label="$t('fleet.nodeServicesPanel.dismissError')"
+      @dismiss="errorMessage = null"
+    />
 
     <!-- Filter Bar -->
     <div class="flex items-center gap-4 px-4 py-2 bg-gray-50 border-b border-gray-200">
@@ -486,10 +488,8 @@ onUnmounted(() => {
                   @click="toggleErrorDetail(service.service_name)"
                   class="text-red-600 hover:text-red-800 underline"
                 >{{ $t('fleet.nodeServicesPanel.value0ErrorContext', { value0: expandedErrors.has(service.service_name) ? $t('fleet.nodeServicesPanel.hide') : $t('fleet.nodeServicesPanel.show') }) }}</button>
-                <pre
-                  v-if="expandedErrors.has(service.service_name)"
-                  class="mt-1 p-2 bg-red-50 border border-red-200 rounded-sm text-red-700 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto"
-                >{{ service.extra_data.error_message }}</pre>
+                <BaseAlert v-if="expandedErrors.has(service.service_name)" variant="error" size="compact" class="mt-1">
+                  <p class="font-mono whitespace-pre-wrap max-h-32 overflow-y-auto">{{ service.extra_data.error_message }}</p></BaseAlert>
               </div>
             </td>
 

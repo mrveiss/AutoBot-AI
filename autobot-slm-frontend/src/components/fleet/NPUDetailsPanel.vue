@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 /**
  * NPUDetailsPanel - Slide-out panel for NPU node details
  *
@@ -181,9 +182,7 @@ onMounted(async () => {
         <!-- Content -->
         <div class="flex-1 overflow-y-auto p-6 space-y-6">
           <!-- Messages -->
-          <div v-if="error" class="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-            {{ error }}
-          </div>
+          <BaseAlert v-if="error" variant="error" :message="error" />
           <div v-if="success" class="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
             {{ success }}
           </div>
@@ -406,10 +405,12 @@ onMounted(async () => {
           </div>
 
           <!-- Detection Error -->
-          <div v-if="npuStatus?.detectionError" class="bg-red-50 rounded-lg p-4">
-            <h3 class="text-sm font-medium text-red-700 mb-2">{{ $t('fleet.nPUDetailsPanel.detectionError') }}</h3>
-            <p class="text-sm text-red-600">{{ npuStatus.detectionError }}</p>
-          </div>
+          <BaseAlert
+            v-if="npuStatus?.detectionError"
+            variant="error"
+            :title="$t('fleet.nPUDetailsPanel.detectionError')"
+            :message="npuStatus.detectionError"
+          />
         </div>
 
         <!-- Footer Actions -->

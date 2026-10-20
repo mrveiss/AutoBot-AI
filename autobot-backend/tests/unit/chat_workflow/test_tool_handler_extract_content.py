@@ -231,3 +231,30 @@ async def test_dispatch_extract_content_firewall_blocked() -> None:
     outputs = [m for m in messages if getattr(m, "type", "") == "command_output"]
     assert outputs
     assert "blocked by content firewall" in outputs[0].content
+
+
+@pytest.mark.asyncio
+async def test_exec_extract_content_reads_the_page_through_the_one_extractor() -> None:
+    """#18826: the live DOM goes through extract_page with the document profile; its text reaches the LLM."""
+    from chat_workflow.tool_handler import ToolHandlerMixin
+    from web_fetch import profile as profile_module
+
+    mixin = ToolHandlerMixin.__new__(ToolHandlerMixin)
+    url = "https://shop.example.com/checkout"
+    vm_response = {
+        "success": True,
+        "action": "evaluate",
+        "result": {"result": {"url": url, "title": "Checkout", "html": _LIVE_HTML}, "page_state": {}},
+    }
+    spy = MagicMock(wraps=profile_module.extract_page)
+
+    with (
+        patch("api.browser_mcp.send_to_browser_vm", new_callable=AsyncMock, return_value=vm_response),
+        patch("web_fetch.profile.extract_page", spy),
+        patch("llm_shared.structured_ops.extract", new_callable=AsyncMock, return_value={"answer": "x"}) as llm,
+    ):
+        await mixin._exec_extract_content({"goal": "the order number"}, session_id="sess-1")
+
+    spy.assert_called_once_with(_LIVE_HTML, profile_module.IngestProfile.DOCUMENT, base_url=url)
+    llm_input = llm.await_args.args[0]
+    assert "Order #A1B2C3" in llm_input and "<p>" not in llm_input

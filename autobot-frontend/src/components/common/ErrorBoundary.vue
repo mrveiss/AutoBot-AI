@@ -54,7 +54,7 @@
 import { ref, computed, onErrorCaptured, inject, type ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 
 const { t } = useI18n()
 const logger = createLogger('ErrorBoundary')

@@ -42,7 +42,7 @@
           </BaseButton>
 
           <BaseButton
-            variant="outline-solid"
+            variant="outline"
             @click="goHome"
           >
             <Icon name="home" />
@@ -62,10 +62,9 @@
 </template>
 
 <script setup lang="ts">
-import { RETRY_BACKOFF, backoffDelay } from '@autobot/ui'
+import { RETRY_BACKOFF, backoffDelay, BaseButton } from '@autobot/ui'
 import { ref, computed, inject } from 'vue'
 import { useRouter } from 'vue-router'
-import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { isChunkLoadError, isCssChunkLoadError } from '@/utils/chunkLoadError'
 import Icon from '@/components/ui/Icon.vue'

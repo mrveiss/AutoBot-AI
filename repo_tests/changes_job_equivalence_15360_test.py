@@ -181,6 +181,9 @@ ALLOWED_ADDITIONS = {
             f"{WORKFLOWS}/dispatch-generated-types.yml",
             # #18555: env_file_family_18555_test.py reads every tracked env file.
             "**/.env*",
+            # #18555: root-level env files; `**/` alone does not match the root.
+            ".env*",
+            "autobot-slm-frontend/package.json",
             "**/*.env",
             # #18653: uninstall_covers_role_packages_18653_test.py reads .python-version.
             ".python-version",

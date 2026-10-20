@@ -117,7 +117,7 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useKnowledgeOrphans } from '@/composables/knowledge/useKnowledgeOrphans'
 

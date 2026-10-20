@@ -369,3 +369,16 @@ register_env_var(
         component="security",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_THREAT_INTEL_CACHE_TTL",
+        type=int,
+        default=7200,
+        description=(
+            "Seconds a threat-intelligence verdict (VirusTotal/URLVoid) stays cached in-process "
+            "(#18888). Measured on a monotonic clock, so a wall-clock step cannot extend it. Clamped to 1-604800."
+        ),
+        component="security",
+    )
+)

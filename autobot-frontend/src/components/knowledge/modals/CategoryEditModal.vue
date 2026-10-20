@@ -17,8 +17,7 @@ import Icon from '@/components/ui/Icon.vue'
 import type { IconName } from '@/components/ui/Icon.vue'
 import { asIconName } from '@/utils/iconMappings'
 import { ref, computed, watch } from 'vue'
-import { BaseModal } from '@autobot/ui'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
 import { useLoadingState } from '@/composables/useLoadingState'
@@ -295,7 +294,7 @@ function selectIcon(icon: string): void {
         </div>
         <div class="delete-actions">
           <BaseButton
-            variant="outline-solid"
+            variant="outline"
             @click="cancelDelete"
             :disabled="isLoading"
           >
@@ -415,7 +414,7 @@ function selectIcon(icon: string): void {
           </div>
           <div class="right-actions">
             <BaseButton
-              variant="outline-solid"
+              variant="outline"
               @click="closeModal"
               :disabled="isLoading"
             >

@@ -92,14 +92,15 @@ echo -e "${BLUE}==========================================${NC}"
 echo ""
 
 # Load native configuration
-if [ -f ".env.native-vm" ]; then
+if [ -f ".env.base" ] && [ -f ".env.native-vm" ]; then
     echo -e "${YELLOW}📁 Loading native VM configuration...${NC}"
     set -a
-    source ".env.native-vm"
+    source ".env.base"       # shared keys (#18555)
+    source ".env.native-vm"  # this environment's overlay
     set +a
     echo -e "${GREEN}✅ Configuration loaded${NC}"
 else
-    echo -e "${RED}❌ Native VM configuration not found (.env.native-vm)${NC}"
+    echo -e "${RED}❌ Native VM configuration not found (.env.base + .env.native-vm)${NC}"
     exit 1
 fi
 

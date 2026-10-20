@@ -58,10 +58,10 @@ class TestWebCrawlerConnectorAcceptance(ConnectorAcceptanceTest):
             "web_fetch.WebFetcher.fetch",
             new=AsyncMock(return_value=mock_result),
         )
-        # Patch fetch_raw_html for the crawl path
+        # Patch fetch_raw_page for the crawl path
         patcher_raw = patch(
-            "web_fetch.WebFetcher.fetch_raw_html",
-            new=AsyncMock(return_value=("<html><body>Test</body></html>", 200)),
+            "web_fetch.WebFetcher.fetch_raw_page",
+            new=AsyncMock(return_value=("<html><body>Test</body></html>", 200, "text/html")),
         )
         # Patch KB ingestion
         patcher_kb = patch(

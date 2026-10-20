@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 /**
  * NPUWorkersTab - NPU Workers management as a Fleet tab
  *
@@ -227,9 +228,7 @@ watch(() => fleetStore.nodeList, () => {
     </div>
 
     <!-- Error Message -->
-    <div v-if="error" class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-      {{ error }}
-    </div>
+    <BaseAlert v-if="error" variant="error" class="mb-6" :message="error" />
 
     <!-- Tab Content -->
 

@@ -14,6 +14,7 @@
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import type { SLMNode, NPUWorkerMetrics } from '@/types/slm'
 import { useFleetStore } from '@/stores/fleet'
@@ -214,7 +215,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Error Banner -->
-    <div v-if="error" class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{{ error }}</div>
+    <BaseAlert v-if="error" variant="error" class="mb-6" :message="error" />
 
     <!-- Empty State -->
     <div v-if="npuNodes.length === 0 && !loading" class="bg-white rounded-lg shadow-xs border border-gray-200 p-12 text-center">

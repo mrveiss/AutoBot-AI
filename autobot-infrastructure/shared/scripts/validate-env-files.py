@@ -220,6 +220,22 @@ def check_legacy_compatibility(env_vars: Dict[str, str]) -> List[str]:
     return warnings
 
 
+#: Native overlays on .env.base (#18555): each holds only what differs from the base.
+NATIVE_OVERLAYS = {".env.localhost", ".env.native-vm", ".env.network", ".env.network-template"}
+
+
+def effective_env_vars(file_path: Path) -> Dict[str, str]:
+    """What a loader actually sees: .env.base first, then the overlay on top (#18555).
+
+    A native overlay validated alone would report every shared key as missing.
+    """
+    env_vars: Dict[str, str] = {}
+    if file_path.name in NATIVE_OVERLAYS:
+        env_vars.update(parse_env_file(file_path.parent / ".env.base"))
+    env_vars.update(parse_env_file(file_path))
+    return env_vars
+
+
 def validate_environment_file(file_path: Path, env_type: str, config: Dict[str, Any]) -> Dict[str, List[str]]:
     """Validate a single environment file"""
     results = {"errors": [], "warnings": []}
@@ -228,7 +244,7 @@ def validate_environment_file(file_path: Path, env_type: str, config: Dict[str, 
         results["errors"].append(f"Environment file does not exist: {file_path}")
         return results
 
-    env_vars = parse_env_file(file_path)
+    env_vars = effective_env_vars(file_path)
 
     # Run all validations
     results["errors"].extend(validate_required_variables(env_vars, env_type))

@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 /**
  * LoadBalancingView - NPU Worker Load Balancing Visualization
  *
@@ -288,12 +289,7 @@ onBeforeUnmount(() => {
     </Transition>
 
     <!-- Error Banner -->
-    <div
-      v-if="error"
-      class="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
-    >
-      {{ error }}
-    </div>
+    <BaseAlert v-if="error" variant="error" :message="error" />
 
     <!-- ============================================================ -->
     <!-- Strategy Configuration                                        -->

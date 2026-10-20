@@ -4949,18 +4949,6 @@
       "cancel": "Cancel",
       "commandToExecute": "Command to Execute"
     },
-    "dataTable": {
-      "noDataAvailable": "No data available",
-      "noItemsToDisplay": "No items to display",
-      "actions": "Actions",
-      "pageOf": "Page {current} of {total}",
-      "sortBy": "Sort by {column}",
-      "pagination": "Table pagination",
-      "previousPage": "Previous page",
-      "nextPage": "Next page",
-      "dataTable": "Data table",
-      "loading": "Loading data..."
-    },
     "systemStatus": {
       "lastCheck": "Last Check:",
       "errorDetails": "Error Details:",

@@ -42,19 +42,11 @@
             </div>
 
             <!-- Replace Mode Warning -->
-            <div v-if="isReplaceMode" class="mx-6 mt-4 p-3 bg-yellow-100 border border-yellow-300 rounded-lg" role="alert">
-              <div class="flex items-start gap-3">
-                <svg class="h-5 w-5 text-yellow-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <div>
-                  <p class="text-sm font-medium text-yellow-800">{{ $t('addNodeModal.youAreReplacingAn') }}</p>
-                  <p class="text-sm text-yellow-700 mt-1">
-                    {{ $t('addNodeModal.node') }} <span class="font-medium">{{ existingNode?.hostname }}</span> {{ $t('addNodeModal.willBeRemovedAnd') }}
-                  </p>
-                </div>
-              </div>
-            </div>
+            <BaseAlert v-if="isReplaceMode" variant="warning" class="mx-6 mt-4" :title="$t('addNodeModal.youAreReplacingAn')">
+              <p>
+                {{ $t('addNodeModal.node') }} <span class="font-medium">{{ existingNode?.hostname }}</span> {{ $t('addNodeModal.willBeRemovedAnd') }}
+              </p>
+            </BaseAlert>
 
             <!-- Form Content -->
             <div class="px-6 py-4 max-h-[70vh] overflow-y-auto">
@@ -446,32 +438,11 @@
                   <!-- Edit Mode Options -->
                   <div v-if="isEditMode" class="space-y-3">
                     <!-- Info: PKI auth - no password ever needed -->
-                    <div v-if="formData.auth_method === 'pki'" class="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg" role="status">
-                      <svg class="h-5 w-5 text-blue-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                      </svg>
-                      <p class="text-sm text-blue-700">
-                        {{ $t('addNodeModal.usingSSHKeyAuthentication') }}
-                      </p>
-                    </div>
+                    <BaseAlert v-if="formData.auth_method === 'pki'" variant="info" :message="$t('addNodeModal.usingSSHKeyAuthentication')" />
                     <!-- Info: Password auth - credentials optional for basic edits -->
-                    <div v-else-if="!needsCredentialsForEdit" class="flex items-start gap-3 p-3 bg-green-50 border border-green-200 rounded-lg" role="status">
-                      <svg class="h-5 w-5 text-green-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <p class="text-sm text-green-700">
-                        {{ $t('addNodeModal.passwordNotRequiredFor') }}
-                      </p>
-                    </div>
+                    <BaseAlert v-else-if="!needsCredentialsForEdit" variant="success" :message="$t('addNodeModal.passwordNotRequiredFor')" />
                     <!-- Info: Password auth with SSH ops - password required -->
-                    <div v-else class="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg" role="alert">
-                      <svg class="h-5 w-5 text-amber-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                      <p class="text-sm text-amber-700">
-                        {{ $t('addNodeModal.passwordRequiredForSelected') }}
-                      </p>
-                    </div>
+                    <BaseAlert v-else variant="warning" :message="$t('addNodeModal.passwordRequiredForSelected')" />
 
                     <label class="flex items-start gap-3 cursor-pointer">
                       <input
@@ -503,14 +474,7 @@
                   </div>
 
                   <!-- PKI Migration Notice -->
-                  <div v-if="isEditMode && formData.auth_method === 'password' && formData.ssh_password" class="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg" role="status">
-                    <svg class="h-5 w-5 text-blue-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <p class="text-sm text-blue-700">
-                      {{ $t('addNodeModal.passwordWillBeUsed') }}
-                    </p>
-                  </div>
+                  <BaseAlert v-if="isEditMode && formData.auth_method === 'password' && formData.ssh_password" variant="info" :message="$t('addNodeModal.passwordWillBeUsed')" />
                 </fieldset>
 
                 <!-- Replace Confirmation (for replace mode) -->
@@ -533,64 +497,18 @@
                 </div>
 
                 <!-- Connection Test Result -->
-                <div v-if="testResult" :class="[
-                  'flex items-start gap-3 p-3 rounded-lg border',
-                  testResult.success
-                    ? 'bg-green-50 border-green-200'
-                    : 'bg-red-50 border-red-200'
-                ]" :role="testResult.success ? 'status' : 'alert'">
-                  <svg
-                    :class="[
-                      'h-5 w-5 mt-0.5 shrink-0',
-                      testResult.success ? 'text-green-600' : 'text-red-600'
-                    ]"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    aria-hidden="true"
-                  >
-                    <path
-                      v-if="testResult.success"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                    <path
-                      v-else
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  <div>
-                    <p :class="['font-medium text-sm', testResult.success ? 'text-green-800' : 'text-red-800']">
-                      {{ testResult.success ? $t('addNodeModal.connectionSuccessful') : $t('addNodeModal.connectionFailed') }}
-                    </p>
-                    <p :class="['text-sm', testResult.success ? 'text-green-700' : 'text-red-700']">
-                      {{ testResult.message }}
-                    </p>
-                  </div>
-                </div>
+                <BaseAlert
+                  v-if="testResult"
+                  :variant="testResult.success ? 'success' : 'error'"
+                  :title="testResult.success ? $t('addNodeModal.connectionSuccessful') : $t('addNodeModal.connectionFailed')"
+                  :message="testResult.message"
+                />
 
                 <!-- Error Message -->
-                <div
-                  v-if="error"
-                  class="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
-                  role="alert"
-                >
-                  {{ error }}
-                </div>
+                <BaseAlert v-if="error" variant="error" :message="error" />
 
                 <!-- Success Message -->
-                <div
-                  v-if="success"
-                  class="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm"
-                  role="status"
-                >
-                  {{ success }}
-                </div>
+                <BaseAlert v-if="success" variant="success" :message="success" />
               </form>
             </div>
 
@@ -653,6 +571,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss

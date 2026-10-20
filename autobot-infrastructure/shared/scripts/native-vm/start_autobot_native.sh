@@ -146,8 +146,8 @@ check_prerequisites() {
     fi
 
     # Check native configuration
-    if [ ! -f ".env.native-vm" ]; then
-        echo -e "${RED}❌ Native VM configuration not found: .env.native-vm${NC}"
+    if [ ! -f ".env.base" ] || [ ! -f ".env.native-vm" ]; then
+        echo -e "${RED}❌ Native VM configuration not found: .env.base + .env.native-vm (#18555)${NC}"
         echo "Please run the deployment script first."
         exit 1
     fi
@@ -261,7 +261,8 @@ start_wsl_backend() {
 
     # Load native VM configuration
     set -a
-    source ".env.native-vm"
+    source ".env.base"       # shared keys (#18555)
+    source ".env.native-vm"  # this environment's overlay
     set +a
 
     # Start backend

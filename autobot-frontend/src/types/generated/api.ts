@@ -67510,6 +67510,11 @@ export interface components {
              */
             render: "auto" | "fast" | "playwright";
             /**
+             * @description What to keep from each page (#18826): only 'document' is implemented
+             * @default document
+             */
+            profile: components["schemas"]["IngestProfile"];
+            /**
              * Scrape Template Id
              * @description UUID of a ScrapeTemplate to apply to every crawled page
              */
@@ -79046,6 +79051,12 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * IngestProfile
+         * @description What an HTML ingest keeps from a page.
+         * @enum {string}
+         */
+        IngestProfile: "document" | "media" | "page_copy";
         /** IngestRequest */
         IngestRequest: {
             /** Tokens In */
@@ -94982,6 +94993,11 @@ export interface components {
              * @enum {string}
              */
             format: "markdown" | "html" | "json";
+            /**
+             * @description What to keep from each page (#18826): only 'document' is implemented
+             * @default document
+             */
+            profile: components["schemas"]["IngestProfile"];
         } & {
             [key: string]: unknown;
         };

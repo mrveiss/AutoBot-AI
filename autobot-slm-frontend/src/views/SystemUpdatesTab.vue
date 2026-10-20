@@ -12,6 +12,7 @@
  */
 
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import { useFleetStore } from '@/stores/fleet'
 import { formatDateTime } from '@/composables/useTimezone'
 import {
@@ -309,19 +310,15 @@ onUnmounted(() => {
     </div>
 
     <!-- Alerts -->
-    <div
+    <BaseAlert
       v-if="systemUpdates.error.value"
-      class="mb-4 p-3 bg-red-50 border border-red-200
-             rounded-lg text-red-700 text-sm"
-    >
-      {{ systemUpdates.error.value }}
-      <button
-        @click="systemUpdates.clearError()"
-        class="ml-2 underline"
-      >
-        {{ $t('systemUpdatesTab.dismiss') }}
-      </button>
-    </div>
+      variant="error"
+      class="mb-4"
+      :message="systemUpdates.error.value"
+      dismissible
+      :dismiss-label="$t('systemUpdatesTab.dismiss')"
+      @dismiss="systemUpdates.clearError()"
+    />
     <div
       v-if="successMessage"
       class="mb-4 p-3 bg-green-50 border border-green-200

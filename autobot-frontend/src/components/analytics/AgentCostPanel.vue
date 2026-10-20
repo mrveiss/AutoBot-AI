@@ -7,7 +7,7 @@
   <div class="agent-cost-panel">
     <div class="section-header">
       <h3><Icon name="robot" /> {{ $t('analytics.bi.agentCosts.title') }}</h3>
-      <BaseButton variant="outline-solid" size="sm" @click="fetchAgentCosts">
+      <BaseButton variant="outline" size="sm" @click="fetchAgentCosts">
         <Icon name="refresh" /> {{ $t('analytics.bi.refresh') }}
       </BaseButton>
     </div>
@@ -146,7 +146,7 @@
 
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import api from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'

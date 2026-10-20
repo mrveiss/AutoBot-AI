@@ -1254,7 +1254,7 @@ const createRipple = (event: TouchEvent) => {
 - **No duplicate code** - Single button component serves both desktop and mobile
 
 **Files Modified**:
-- `autobot-frontend/src/components/base/BaseButton.vue` (extended with touch features)
+- `autobot-frontend/src/components/base/BaseButton.vue` (extended with touch features) — superseded (#18849): the main app now uses the shared kit button, `import { BaseButton } from '@autobot/ui'` (`libs/autobot-ui/src/components/BaseButton.vue`); the local file is gone
 
 **TouchFriendlyButton.vue Status**: Recommend deprecation or conversion to lightweight wrapper around `<BaseButton touchOptimized>` for backward compatibility.
 
@@ -2407,6 +2407,8 @@ const createRipple = (event: TouchEvent) => {
 **Goal**: Create reusable BaseAlert component to consolidate inline alert patterns and migrate first component.
 
 **New Component**: BaseAlert.vue (`autobot-frontend/src/components/ui/BaseAlert.vue`)
+
+> **Superseded (#18819):** this component, and `components/base/ErrorBanner.vue`, are consolidated into the shared kit's `BaseAlert` (`libs/autobot-ui/src/components/BaseAlert.vue`, `import { BaseAlert } from '@autobot/ui'`), used by both apps. The local files are gone.
 
 **Features**:
 - 5 variants: success, info, warning, error, critical

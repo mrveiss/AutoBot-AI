@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -296,9 +297,7 @@ onMounted(() => {
 
     <template v-else>
       <!-- Messages -->
-      <div v-if="error" class="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-        {{ error }}
-      </div>
+      <BaseAlert v-if="error" variant="error" :message="error" />
       <div v-if="success" class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
         {{ success }}
       </div>
@@ -439,12 +438,9 @@ onMounted(() => {
         </div>
 
         <!-- Sync result -->
-        <div
+        <BaseAlert
           v-if="syncResult"
-          :class="syncResult.success
-            ? 'bg-green-50 border-green-200 text-green-800'
-            : 'bg-red-50 border-red-200 text-red-800'"
-          class="border rounded-lg p-4 text-sm"
+          :variant="syncResult.success ? 'success' : 'error'"
         >
           <div class="font-medium mb-1">{{ $t('settings.generalSettings.value0Value1NodePlural', { value0: syncResult.success ? $t('settings.generalSettings.syncComplete') : $t('settings.generalSettings.syncFailed'), value1: syncResult.node_count, plural: syncResult.node_count !== 1 ? 's' : '' }) }}</div>
           <div class="text-xs opacity-80">{{ syncResult.message }}</div>
@@ -452,7 +448,7 @@ onMounted(() => {
             <summary class="cursor-pointer text-xs font-medium">{{ $t('settings.generalSettings.ansibleOutput') }}</summary>
             <pre class="mt-2 text-xs whitespace-pre-wrap font-mono opacity-80">{{ syncResult.output }}</pre>
           </details>
-        </div>
+        </BaseAlert>
       </div>
       <!-- Setup Wizard Card -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">

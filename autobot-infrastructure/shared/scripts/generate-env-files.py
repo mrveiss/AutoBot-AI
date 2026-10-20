@@ -569,6 +569,27 @@ def generate_docker_production_env(config):
     return "\n".join(content)
 
 
+#: Native overlays on .env.base (#18555): written holding only what differs from the base.
+NATIVE_OVERLAYS = {".env.localhost", ".env.native-vm", ".env.network"}
+
+
+def strip_base_keys(content: str, base_text: str) -> str:
+    """Drop every KEY=value line that repeats .env.base exactly, so a generated overlay passes the
+    base/overlay guard (repo_tests/env_file_family_18555_test.py)."""
+    base = {}
+    for line in base_text.splitlines():
+        key, sep, value = line.strip().partition("=")
+        if sep and not key.startswith("#"):
+            base[key] = value
+    kept = []
+    for line in content.splitlines():
+        key, sep, value = line.strip().partition("=")
+        if sep and not key.startswith("#") and base.get(key) == value:
+            continue
+        kept.append(line)
+    return "\n".join(kept) + "\n"
+
+
 def main():
     """Main function to generate all environment files"""
     print("AutoBot Environment File Generator")
@@ -605,6 +626,9 @@ def main():
 
             # Generate content
             content = generator_func(config)
+            base_path = full_path.parent / ".env.base"
+            if file_path in NATIVE_OVERLAYS and base_path.exists():
+                content = strip_base_keys(content, base_path.read_text(encoding="utf-8"))
 
             # Write file
             with open(full_path, "w", encoding="utf-8") as f:

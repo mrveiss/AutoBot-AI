@@ -10,6 +10,7 @@
  */
 
 import { ref, computed } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import config, { getBackendUrl, getGrafanaUrl, getPrometheusUrl, getSlmApiBase } from '@/config/ssot-config'
 import slmApiClient from '@/utils/ApiClient'
 
@@ -84,23 +85,11 @@ function copyToClipboard(text: string): void {
         </button>
       </div>
 
-      <div
+      <BaseAlert
         v-if="connectionStatus !== 'unknown'"
-        :class="[
-          'p-4 rounded-lg flex items-center gap-3',
-          connectionStatus === 'connected' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-        ]"
-      >
-        <div
-          :class="[
-            'w-3 h-3 rounded-full',
-            connectionStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'
-          ]"
-        ></div>
-        <span :class="connectionStatus === 'connected' ? 'text-green-700' : 'text-red-700'">
-          {{ connectionMessage }}
-        </span>
-      </div>
+        :variant="connectionStatus === 'connected' ? 'success' : 'error'"
+        :message="connectionMessage"
+      />
     </div>
 
     <!-- API Endpoints -->
