@@ -58,15 +58,9 @@ _ALLOWED: dict[str, frozenset[str]] = {
             "autobot-infrastructure/shared/config/permission_rules.yaml",
         }
     ),
-    # Same shape: Docker overwrites the backend registry with the 94-line infrastructure file,
-    # which has different keys. Owned by #18884; both stay until it decides, and the list
-    # shrinks there.
-    "llm_models.yaml": frozenset(
-        {
-            "autobot-backend/config/llm_models.yaml",
-            "autobot-infrastructure/shared/config/llm_models.yaml",
-        }
-    ),
+    # #18884: the Docker image ships the backend registry; the infrastructure copy (a different,
+    # loader-incompatible file that overwrote it) is removed.
+    "llm_models.yaml": frozenset({"autobot-backend/config/llm_models.yaml"}),
 }
 #: Roots that hold an allowed file today: the reach claim (every one must be populated).
 _ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot-infrastructure", "autobot-monitoring")
@@ -149,6 +143,7 @@ def test_contrast_a_readded_copy_at_any_other_path_fails(name: str) -> None:
         "autobot-infrastructure/shared/docker/monitoring/prometheus.yml",
         "autobot-infrastructure/shared/config/grafana/provisioning/datasources/prometheus.yml",
         "autobot-infrastructure/shared/config/error_messages.yaml",
+        "autobot-infrastructure/shared/config/llm_models.yaml",
     ],
 )
 def test_contrast_each_removed_fork_fails_if_it_returns(removed_fork: str) -> None:

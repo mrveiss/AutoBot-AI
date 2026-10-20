@@ -137,8 +137,8 @@ COPY autobot_shared/ /app/autobot_shared/
 # Copy backend source
 COPY autobot-backend/ /app/autobot-backend/
 
-# Copy shared config files (llm_models, permission_rules) into backend config dir
-COPY autobot-infrastructure/shared/config/llm_models.yaml /app/autobot-backend/config/llm_models.yaml
+# llm_models.yaml ships from the COPY autobot-backend/ above: one registry, same as native (#18884).
+# Copy the Docker-only permission ruleset (#17852) into the backend config dir
 COPY autobot-infrastructure/shared/config/permission_rules.yaml /app/autobot-backend/config/permission_rules.yaml
 
 # Copy entrypoint script (runs migrations before app start, #9759)

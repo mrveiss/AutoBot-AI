@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Literal
 
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 
+from api.schemas_knowledge_share import ShareKnowledgeRequest  # noqa: F401 -- re-export (#18795)
 from autobot_memory_graph.core import (
     ENTITY_TYPES,
     RELATION_TYPE_ALIASES,
@@ -643,7 +644,7 @@ class KnowledgeAutoApplySuggestionsResponse(BaseModel):
 
 
 class KnowledgeShareFactResponse(BaseModel):
-    """Response for POST /api/knowledge_base/facts/{fact_id}/share."""
+    """Response for the deprecated POST /api/knowledge_base/facts/{fact_id}/share (308 shim, #18795; removal #18793)."""
 
     success: bool
     fact_id: str
@@ -652,7 +653,7 @@ class KnowledgeShareFactResponse(BaseModel):
 
 
 class KnowledgeUnshareFactResponse(BaseModel):
-    """Response for DELETE /api/knowledge_base/facts/{fact_id}/share/{user_id_to_remove}."""
+    """Response for the deprecated DELETE .../facts/{fact_id}/share/{user_id_to_remove} (308 shim, #18795; #18793)."""
 
     success: bool
     fact_id: str
@@ -3020,7 +3021,7 @@ class UpdateFactRequest(BaseModel):
 
 
 class ShareFactRequest(BaseModel):
-    """Request model for sharing a fact with users (Issue #688)."""
+    """Deprecated (#688): the limits moved to ``ShareKnowledgeRequest`` (#18795); removal tracked in #18793."""
 
     user_ids: List[str] = Field(
         ...,
@@ -3042,7 +3043,7 @@ class ShareFactRequest(BaseModel):
 
 
 class UnshareFactRequest(BaseModel):
-    """Request model for removing users from fact sharing (Issue #688)."""
+    """Deprecated (#688): unshare is a path param on the collaboration route (#18795); removal in #18793."""
 
     user_ids: List[str] = Field(
         ...,
@@ -4443,13 +4444,6 @@ class KnowledgeScopeFilter(BaseModel):
     scope: VisibilityLevel | None = Field(default=None, description="Visibility level to filter by")
     organization_id: str | None = Field(default=None, description="Organization ID filter")
     group_ids: List[str] | None = Field(default=None, description="Group IDs to filter by")
-
-
-class ShareKnowledgeRequest(BaseModel):
-    """Request to share knowledge with users or groups."""
-
-    user_ids: List[str] | None = Field(default=None, description="User IDs to share with")
-    group_ids: List[str] | None = Field(default=None, description="Group IDs to share with")
 
 
 class UpdatePermissionsRequest(BaseModel):
