@@ -25,6 +25,8 @@ from fastapi import Depends, FastAPI, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.testclient import TestClient
 
+from testkit.fake_async_session import FakeAsyncSession
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 _orm = importlib.import_module("_real_orm_import")  # a sibling helper, not on the package path
 SLM_ROOT = _orm.SLM_ROOT
@@ -214,16 +216,9 @@ async def _requires_bearer(credentials: HTTPAuthorizationCredentials = Depends(_
     return {"sub": "tester"}
 
 
-class _Db:
-    def __init__(self, scalars):
-        self._queue = list(scalars)
-
-    async def execute(self, _statement):
-        value = self._queue.pop(0)
-        return SimpleNamespace(
-            scalar_one_or_none=lambda: value,
-            scalars=lambda: SimpleNamespace(all=lambda: value),
-        )
+def _db(scalars) -> FakeAsyncSession:
+    """One queued answer per execute(), in order; an execute beyond the queue raises."""
+    return FakeAsyncSession(results=list(scalars), strict=True)
 
 
 def _client(db) -> TestClient:
@@ -257,16 +252,16 @@ _ROW = SimpleNamespace(
 
 
 def test_get_returns_the_recorded_rows():
-    body = _client(_Db([[_ROW, _ROW]])).get("/api/code-sync/post-sync-runs/run1", headers=_SIGNED_IN).json()
+    body = _client(_db([[_ROW, _ROW]])).get("/api/code-sync/post-sync-runs/run1", headers=_SIGNED_IN).json()
     assert body["run_id"] == "run1" and [a["label"] for a in body["actions"]] == ["Restart a", "Restart a"]
 
 
 def test_get_gives_404_for_an_unknown_run():
-    assert _client(_Db([[]])).get("/api/code-sync/post-sync-runs/nope", headers=_SIGNED_IN).status_code == 404
+    assert _client(_db([[]])).get("/api/code-sync/post-sync-runs/nope", headers=_SIGNED_IN).status_code == 404
 
 
 def test_node_sync_gives_404_for_an_unknown_node():
-    assert _client(_Db([None])).post("/api/nodes/ghost/sync", headers=_SIGNED_IN).status_code == 404
+    assert _client(_db([None])).post("/api/nodes/ghost/sync", headers=_SIGNED_IN).status_code == 404
 
 
 @pytest.mark.parametrize(
@@ -274,7 +269,7 @@ def test_node_sync_gives_404_for_an_unknown_node():
     [("post", "/api/nodes/n1/sync"), ("get", "/api/code-sync/post-sync-runs/run1")],
 )
 def test_an_anonymous_request_is_refused(method, path):
-    response = getattr(_client(_Db([])), method)(path)
+    response = getattr(_client(_db([])), method)(path)
     assert response.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
 
 

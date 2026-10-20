@@ -179,6 +179,8 @@ def test_fake_result_reads() -> None:
     assert FakeResult([]).scalar() is None and FakeResult([]).first() is None
     assert FakeResult([1, 2]).first() == 1 and FakeResult([1, 2]).scalars().all() == [1, 2]
     assert list(FakeResult([1, 2])) == [1, 2]
+    assert FakeResult([{"a": 1}]).mappings().first() == {"a": 1} and FakeResult([]).mappings().first() is None
+    assert FakeResult([1, 2]).mappings().all() == [1, 2] and list(FakeResult([1, 2]).mappings()) == [1, 2]
     with pytest.raises(NoResultFound):
         FakeResult([]).scalar_one()
     with pytest.raises(MultipleResultsFound):
@@ -446,3 +448,17 @@ async def test_outer_pending_work_survives_a_savepoint_rollback() -> None:
             raise RuntimeError("savepoint body fails")
     assert await s.get(model, 1) is a
     assert await s.get(model, 2) is None
+
+
+@pytest.mark.asyncio
+async def test_awaiting_begin_nested_starts_a_savepoint_like_a_real_session() -> None:
+    """``tx = await session.begin_nested()`` is valid SQLAlchemy; the fake must accept it too (#18955)."""
+    model = type("M", (), {})
+    a = model()
+    a.id = 4
+    s = FakeAsyncSession()
+    tx = await s.begin_nested()
+    s.add(a)
+    await tx.rollback()
+    assert await s.get(model, 4) is None
+    assert s.rollbacks == 1

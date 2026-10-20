@@ -33,6 +33,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_workflow import limits
 from chat_workflow.approval_binding import ai_line_calls_shown, bind_decision
+from chat_workflow.checkpointer_connection import describe_connection, describe_error, get_checkpointer_connection
 
 try:
     from langgraph.checkpoint.redis.aio import AsyncRedisSaver
@@ -66,7 +67,6 @@ _LOOP_WARNING_MSG: str = (
 )
 
 # Redis connection for checkpointer
-_REDIS_URI = None  # Set lazily from SSOT config
 _checkpointer = None
 _compiled_graph = None
 
@@ -1561,7 +1561,7 @@ def build_chat_graph() -> StateGraph:
 
 async def get_redis_checkpointer() -> "AsyncRedisSaver":  # type: ignore[return]
     """Get or create the Redis checkpointer for graph persistence."""
-    global _checkpointer, _REDIS_URI
+    global _checkpointer
 
     if not _REDIS_CHECKPOINTER_AVAILABLE:
         raise RuntimeError(
@@ -1572,25 +1572,15 @@ async def get_redis_checkpointer() -> "AsyncRedisSaver":  # type: ignore[return]
     if _checkpointer is not None:
         return _checkpointer
 
-    # Get Redis URI and checkpoint TTL from SSOT config.
     # Issue #3231: default raised to 30 days (43200 min) to prevent silent
     # checkpoint expiry during human-in-the-loop pauses.
     ttl_minutes = 43200  # Default: 30 days
     try:
-        from autobot_shared.ssot_config import config as ssot
-
-        redis_host = ssot.vm.redis
-        redis_port = ssot.port.redis
-        _REDIS_URI = f"redis://{redis_host}:{redis_port}"
-        ttl_minutes = ssot.redis.checkpoint_ttl_minutes
+        ttl_minutes = _ssot_config.redis.checkpoint_ttl_minutes
     except Exception:
-        redis_host = _ssot_config.redis_host
-        redis_port = _ssot_config.port.redis
-        _REDIS_URI = f"redis://{redis_host}:{redis_port}"
-        logger.warning(
-            "SSOT config unavailable, using fallback Redis URI: %s",
-            _REDIS_URI,
-        )
+        logger.warning("SSOT checkpoint TTL unavailable, using default %s min", ttl_minutes)
+    # #18953: URL (ACL creds, rediss://, db) and TLS kwargs come from the SSOT builder.
+    redis_uri, connection_args = get_checkpointer_connection()
 
     # Issue #1481: TTL config for checkpoint auto-expiration
     ttl_config = None
@@ -1601,14 +1591,15 @@ async def get_redis_checkpointer() -> "AsyncRedisSaver":  # type: ignore[return]
         }
 
     # Issue #1433: from_conn_string() is an async generator, use direct init
-    _checkpointer = AsyncRedisSaver(redis_url=_REDIS_URI, ttl=ttl_config)
-    await _checkpointer.asetup()
+    saver = AsyncRedisSaver(redis_url=redis_uri, ttl=ttl_config, connection_args=connection_args or None)
+    await saver.asetup()
+    _checkpointer = saver  # publish only once setup succeeded
     logger.info(
         "LangGraph Redis checkpointer initialized: %s (TTL: %s min)",
-        _REDIS_URI,
+        describe_connection(redis_uri),
         ttl_minutes if ttl_minutes > 0 else "disabled",
     )
-    return _checkpointer
+    return saver
 
 
 async def delete_thread_checkpoints(thread_id: str) -> None:
@@ -1625,7 +1616,7 @@ async def delete_thread_checkpoints(thread_id: str) -> None:
         await checkpointer.adelete_thread(thread_id)
         logger.info("Cleared LangGraph checkpoints for thread: %s", thread_id)
     except Exception as exc:
-        logger.warning("Failed to clear checkpoints for thread %s: %s", thread_id, exc)
+        logger.warning("Failed to clear checkpoints for thread %s: %s", thread_id, describe_error(exc))
 
 
 async def get_compiled_graph(manager):

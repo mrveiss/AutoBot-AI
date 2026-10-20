@@ -255,7 +255,7 @@
 - name: "Backend | Keep the deployed Prometheus scrape token (#16375)"
   ansible.builtin.include_tasks: ../../../_shared/tasks/keep_prometheus_scrape_token.yml
   vars:
-    scrape_token_env_files: ["/etc/autobot/autobot-backend.env", "{{ backend_code_dir | default(backend_install_dir) }}/.env"]
+    scrape_token_env_files: ["{{ autobot_backend_env_file }}", "{{ backend_code_dir | default(backend_install_dir) }}/.env"]
   tags: ['backend', 'config']
 
 # #16627 (P1b of #13568): the backend authenticates to Redis as `default` with the
@@ -494,13 +494,13 @@
   - name: "Backend | Keep the deployed embedding model (#15502)"
     ansible.builtin.include_tasks: ../../../_shared/tasks/read_deployed_embedding_model.yml
     vars:
-      deployed_embedding_env_files: ["/etc/autobot/autobot-backend.env", "{{ backend_code_dir | default(backend_install_dir) }}/.env"]
+      deployed_embedding_env_files: ["{{ autobot_backend_env_file }}", "{{ backend_code_dir | default(backend_install_dir) }}/.env"]
     tags: ['backend', 'config']
 
   - name: "Backend | Deploy /etc/autobot/autobot-backend.env"
     ansible.builtin.template:
       src: backend.env.j2
-      dest: /etc/autobot/autobot-backend.env
+      dest: "{{ autobot_backend_env_file }}"
       mode: "0640"
       owner: root
       group: "{{ backend_service_account }}"

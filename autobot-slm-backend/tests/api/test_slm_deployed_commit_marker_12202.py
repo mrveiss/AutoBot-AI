@@ -37,6 +37,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from testkit.fake_async_session import FakeAsyncSession
+
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_BACKEND_ROOT))
 
@@ -98,19 +100,7 @@ def _db_service_mock(slm_node: Any) -> Any:
     """db_service mock whose session().execute() returns slm_node for the IP lookup."""
     db_service_ref = MagicMock()
 
-    class _FakeCtx:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *_):
-            pass
-
-        async def execute(self, stmt):
-            result = MagicMock()
-            result.scalar_one_or_none.return_value = slm_node
-            return result
-
-    db_service_ref.session.return_value = _FakeCtx()
+    db_service_ref.session.return_value = FakeAsyncSession(default_result=[] if slm_node is None else [slm_node])
     return db_service_ref
 
 
@@ -127,7 +117,7 @@ class TestGetSlmDeployedCommit:
         """
         install_dir = tmp_path / "autobot-slm-backend"
         install_dir.mkdir()
-        (install_dir / ".deployed_commit").write_text("installedsha0000\n", encoding="utf-8")
+        await asyncio.to_thread((install_dir / ".deployed_commit").write_text, "installedsha0000\n", encoding="utf-8")
 
         with (
             patch("api.code_sync.get_live_dir", return_value=str(install_dir)) as get_dir_mock,
@@ -152,7 +142,7 @@ class TestGetSlmDeployedCommit:
     async def test_marker_empty_returns_none(self, tmp_path):
         install_dir = tmp_path / "autobot-slm-backend"
         install_dir.mkdir()
-        (install_dir / ".deployed_commit").write_text("   \n", encoding="utf-8")
+        await asyncio.to_thread((install_dir / ".deployed_commit").write_text, "   \n", encoding="utf-8")
 
         with patch("api.code_sync.get_live_dir", return_value=str(install_dir)):
             result = await _get_slm_deployed_commit()

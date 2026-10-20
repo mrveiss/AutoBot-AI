@@ -1044,7 +1044,7 @@
       ansible.builtin.shell:
         cmd: >-
           grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.*'
-          /etc/autobot/autobot-backend.env 2>/dev/null || true
+          {{ autobot_backend_env_file | quote }} 2>/dev/null || true
       register: existing_internal_api_key
       become: true
       when: "'backend' in group_names"
@@ -2209,6 +2209,63 @@
     - name: "[PLAY 2b] Database Node Update Complete"
       ansible.builtin.debug:
         msg: "{{ inventory_hostname }} updated"
+
+# =============================================================================
+# PLAY 2c: Re-render the monitoring config (#18994)
+# =============================================================================
+# Plays 1/2/2b deploy component code and role-owned files, but nothing here ever
+# applied the `monitoring` role, which owns /etc/prometheus/prometheus.yml and the
+# #16375 scrape-token file. The backend gates /api/metrics/prometheus on that token
+# (backend.env, refreshed by Play 1/2 through roles/backend), so a host updated only
+# through this playbook kept its install-time prometheus.yml: no `bearer_token_file`
+# on the autobot-backend job (every scrape 401) and none of the jobs the template
+# gained since. The merge was green, code_source carried the template, and the host
+# never received it -- the #12959 failure shape, for monitoring.
+#
+# `hosts: monitoring_vm` is the group a node's `monitoring` / `slm-monitoring` role
+# token maps to (services/inventory_builder.py), so a host without the role is not
+# touched, and `--limit` still bounds the play to the machine being updated.
+#
+# Config tasks only (`tasks_from: prometheus_config.yml`), as deploy-slm-manager.yml
+# does for #14337: Prometheus is already installed, and the role's install half would
+# restart it for no reason. Placed AFTER Plays 1/2 so the topology decision there
+# observes the backend unit and vhost this very update just (re)wrote.
+#
+# Token safety is the task file's own: the SLM delivers `prometheus_scrape_token` as
+# an extra var (services/playbook_executor.py -> fetch_deploy_secrets); when that
+# fetch degrades the shared keep-task adopts the value already in the backend env file,
+# and if neither exists an already-present token file is left alone, so an empty run
+# never takes a working scrape down. The value is never printed (no_log) nor rendered
+# into prometheus.yml, which names the file only.
+- name: "Play 2c - Update Monitoring Config"
+  hosts: monitoring_vm
+  gather_facts: false
+  tags: [monitoring, prometheus]
+
+  tasks:
+    - name: "[PLAY 2c] Monitoring | Keep the deployed Prometheus scrape token (#16375, #18994)"
+      # `apply.tags`: a `--tags monitoring` run selects the include but would not pass the tag
+      # to the included tasks, finishing without rendering anything.
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/keep_prometheus_scrape_token.yml
+        apply:
+          tags: [monitoring, prometheus]
+      vars:
+        scrape_token_env_files: ["{{ autobot_backend_env_file }}"]
+
+    # `apply: {become: true}`, not a bare `become` -- ansible rejects the whole
+    # playbook for the latter on include_role (#12886).
+    - name: "[PLAY 2c] Monitoring | Render prometheus.yml and the scrape-token file (#18994)"
+      ansible.builtin.include_role:
+        name: monitoring
+        tasks_from: prometheus_config
+        apply:
+          become: true
+          tags: [monitoring, prometheus]
+
+    # Same reasoning as Play 2b: a queued handler is discarded if a later play aborts.
+    - name: "[PLAY 2c] Monitoring | Apply a pending Prometheus restart (#18994)"
+      ansible.builtin.meta: flush_handlers
 
 # =============================================================================
 # PLAY 3: Verify + Cleanup

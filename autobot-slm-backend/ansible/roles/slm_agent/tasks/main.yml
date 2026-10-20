@@ -309,7 +309,7 @@
 - name: "SLM Agent | Read AUTOBOT_INTERNAL_API_KEY from node secrets (fallback when var unset) (#11480)"
   ansible.builtin.shell: >-
     set -o pipefail;
-    for f in /etc/autobot/slm-secrets.env /etc/autobot/autobot-backend.env; do
+    for f in /etc/autobot/slm-secrets.env {{ autobot_backend_env_file | quote }}; do
       if [ -r "$f" ]; then
         v=$(grep -m1 '^AUTOBOT_INTERNAL_API_KEY=' "$f" | cut -d= -f2-);
         if [ -n "$v" ]; then printf '%s' "$v"; exit 0; fi;
