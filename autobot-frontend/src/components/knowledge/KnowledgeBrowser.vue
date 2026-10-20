@@ -48,7 +48,7 @@
 
       <!-- Refresh vectorization status button (Issue #162) -->
       <BaseButton
-        variant="outline-solid"
+        variant="outline"
         size="sm"
         :loading="isRefreshingStatus"
         :disabled="isRefreshingStatus"
@@ -258,7 +258,7 @@ import KnowledgeSearchResults from './KnowledgeSearchResults.vue'
 import KnowledgeDocumentsBranch from './KnowledgeDocumentsBranch.vue'
 import AIDocumentEditor from '@/components/documents/AIDocumentEditor.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import KnowledgeMainCategories from './KnowledgeMainCategories.vue'
 import CategoryEditModal from './modals/CategoryEditModal.vue'
 import type { Category } from './modals/CategoryEditModal.vue'

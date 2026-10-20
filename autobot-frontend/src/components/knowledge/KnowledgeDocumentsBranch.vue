@@ -139,13 +139,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
-import BaseButton from '@/components/base/BaseButton.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useAIDocument } from '@/composables/useAIDocument'
 import { useTranscriberApi } from '@/composables/transcriber/useTranscriberApi'
 import type { Project } from '@/composables/transcriber/useTranscriberApi'
 import { createLogger } from '@/utils/debugUtils'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 
 const PAGE_SIZE = 50
 

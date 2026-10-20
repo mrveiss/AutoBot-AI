@@ -17,6 +17,7 @@
  */
 
 import { ref, onMounted, onUnmounted } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import {
   useAutobotApi,
   type LLMFallbackChain,
@@ -113,13 +114,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Error display -->
-    <div
-      v-if="error"
-      class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg"
-      role="alert"
-    >
-      <p class="text-sm font-semibold text-red-700">{{ error }}</p>
-    </div>
+    <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
 
     <!-- Configured Fallback Chains Section -->
     <div class="mb-8">

@@ -401,6 +401,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 /**
  * Knowledge Upload Component (Issue #747)
  *
@@ -430,7 +431,6 @@ import {
 import { useUploadProgress } from '@/composables/useUploadProgress'
 import { useExpansion } from '@/composables/useExpansion'
 import { useTransientError } from '@/composables/useTransientError'
-import BaseAlert from '@/components/ui/BaseAlert.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('KnowledgeUpload')

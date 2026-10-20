@@ -4,6 +4,7 @@
 
 <script setup lang="ts">
 import { createLogger } from '@/utils/debugUtils'
+import { BaseAlert } from '@autobot/ui'
 
 const logger = createLogger('MCPTool')
 /**
@@ -408,9 +409,7 @@ onUnmounted(() => {
             </code>
           </div>
 
-          <div v-if="bridge.error" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-sm">
-            <p class="text-xs text-red-700">{{ bridge.error }}</p>
-          </div>
+          <BaseAlert v-if="bridge.error" variant="error" class="mt-4" :message="bridge.error" />
         </div>
       </div>
     </div>
@@ -526,9 +525,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div v-if="check.error" class="mt-3 p-2 bg-red-50 border border-red-200 rounded-sm">
-            <p class="text-xs text-red-700">{{ check.error }}</p>
-          </div>
+          <BaseAlert v-if="check.error" variant="error" size="compact" class="mt-3" :message="check.error" />
         </div>
       </div>
     </div>

@@ -77,7 +77,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 
 const props = defineProps<{
   /**

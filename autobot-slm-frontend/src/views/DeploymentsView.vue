@@ -10,6 +10,7 @@
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
@@ -615,47 +616,14 @@ function getNodeHostname(nodeId: string): string {
         v-if="rollbackNotification.show"
         class="fixed top-4 right-4 z-50 max-w-md"
       >
-        <div
-          :class="[
-            'rounded-lg shadow-lg p-4 flex items-start gap-3',
-            rollbackNotification.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-          ]"
-        >
-          <div :class="['shrink-0 w-8 h-8 rounded-full flex items-center justify-center',
-            rollbackNotification.success ? 'bg-green-100' : 'bg-red-100'
-          ]">
-            <svg
-              class="w-5 h-5"
-              :class="rollbackNotification.success ? 'text-green-600' : 'text-red-600'"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
-              />
-            </svg>
-          </div>
-          <div class="flex-1">
-            <h4 :class="['font-medium', rollbackNotification.success ? 'text-green-800' : 'text-red-800']">
-              {{ rollbackNotification.success ? $t('deploymentsView.rollbackCompleted') : $t('deploymentsView.rollbackFailed') }}
-            </h4>
-            <p :class="['text-sm', rollbackNotification.success ? 'text-green-600' : 'text-red-600']">
-              {{ rollbackNotification.message }}
-            </p>
-          </div>
-          <button
-            @click="rollbackNotification.show = false"
-            class="text-gray-400 hover:text-gray-600"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+        <BaseAlert
+          :variant="rollbackNotification.success ? 'success' : 'error'"
+          :title="rollbackNotification.success ? $t('deploymentsView.rollbackCompleted') : $t('deploymentsView.rollbackFailed')"
+          :message="rollbackNotification.message"
+          dismissible
+          :dismiss-label="$t('deploymentsView.close')"
+          @dismiss="rollbackNotification.show = false"
+        />
       </div>
     </Transition>
 
@@ -1546,9 +1514,9 @@ function getNodeHostname(nodeId: string): string {
 
               <div v-if="selectedDeployment.error" class="mb-6">
                 <p class="text-sm text-gray-500 mb-2">{{ $t('deploymentsView.error') }}</p>
-                <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <p class="text-sm text-red-800 font-mono whitespace-pre-wrap">{{ selectedDeployment.error }}</p>
-                </div>
+                <BaseAlert variant="error">
+                  <p class="text-sm font-mono whitespace-pre-wrap">{{ selectedDeployment.error }}</p>
+                </BaseAlert>
               </div>
 
               <div v-if="selectedDeployment.playbook_output">
@@ -1648,9 +1616,9 @@ function getNodeHostname(nodeId: string): string {
               <!-- Error -->
               <div v-if="selectedBgDeployment.error" class="mb-6">
                 <p class="text-sm text-gray-500 mb-2">{{ $t('deploymentsView.error') }}</p>
-                <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <p class="text-sm text-red-800 font-mono whitespace-pre-wrap">{{ selectedBgDeployment.error }}</p>
-                </div>
+                <BaseAlert variant="error">
+                  <p class="text-sm font-mono whitespace-pre-wrap">{{ selectedBgDeployment.error }}</p>
+                </BaseAlert>
               </div>
 
               <!-- Configuration -->

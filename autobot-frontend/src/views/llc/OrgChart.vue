@@ -55,7 +55,7 @@ import {
   toolFilterCounts,
 } from '@/composables/llc/orgCanvasFilters'
 import { describeApiError } from '@/composables/llc/apiErrorMessage'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 
 const logger = createLogger('OrgChart')
 const api = useApiClient()

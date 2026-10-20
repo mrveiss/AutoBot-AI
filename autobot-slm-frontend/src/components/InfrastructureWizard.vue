@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -369,12 +370,7 @@ function getStatusColor(status: string): string {
           <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('infrastructureWizard.reviewConfiguration') }}</h4>
 
           <!-- Error Message -->
-          <div
-            v-if="executeError"
-            class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
-          >
-            {{ executeError }}
-          </div>
+          <BaseAlert v-if="executeError" variant="error" class="mb-4" :message="executeError" />
 
           <div class="space-y-4">
             <!-- Playbook Summary -->
@@ -414,51 +410,36 @@ function getStatusColor(status: string): string {
             </div>
 
             <!-- Warning/Confirmation -->
-            <div
+            <BaseAlert
               v-if="selectedPlaybook.requires_confirmation"
-              class="p-4 bg-amber-50 border border-amber-200 rounded-lg"
+              variant="warning"
+              :title="$t('infrastructureWizard.confirmationRequired')"
             >
-              <div class="flex items-start gap-3">
-                <svg class="w-5 h-5 text-amber-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <div class="flex-1">
-                  <p class="font-medium text-amber-800">{{ $t('infrastructureWizard.confirmationRequired') }}</p>
-                  <p class="text-sm text-amber-700 mt-1">
-                    {{ $t('infrastructureWizard.thisPlaybookWillMake') }}
-                  </p>
-                  <label class="flex items-center gap-2 mt-3">
-                    <input
-                      v-model="confirmationChecked"
-                      type="checkbox"
-                      class="rounded-sm border-amber-300 text-amber-600 focus:ring-amber-500"
-                    />
-                    <span class="text-sm text-amber-800">
-                      {{ $t('infrastructureWizard.iUnderstandTheChanges') }}
-                    </span>
-                  </label>
-                </div>
-              </div>
-            </div>
+              <p>
+                {{ $t('infrastructureWizard.thisPlaybookWillMake') }}
+              </p>
+              <label class="flex items-center gap-2 mt-3">
+                <input
+                  v-model="confirmationChecked"
+                  type="checkbox"
+                  class="rounded-sm"
+                />
+                <span>
+                  {{ $t('infrastructureWizard.iUnderstandTheChanges') }}
+                </span>
+              </label>
+            </BaseAlert>
 
             <!-- What happens next -->
-            <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <div class="flex items-start gap-3">
-                <svg class="w-5 h-5 text-blue-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div class="text-sm text-blue-700">
-                  <p class="font-medium">{{ $t('infrastructureWizard.whatHappensNext') }}</p>
-                  <ul class="mt-1 space-y-1 text-blue-600">
-                    <li>{{ $t('infrastructureWizard.1AnsiblePlaybookWill') }}</li>
-                    <li>{{ $t('infrastructureWizard.2SSHConnectionsTo') }}</li>
-                    <li>{{ $t('infrastructureWizard.3InfrastructureComponentsInstalled') }}</li>
-                    <li>{{ $t('infrastructureWizard.4ServicesWillBe') }}</li>
-                  </ul>
-                  <p class="mt-2 text-blue-500">{{ $t('infrastructureWizard.estimatedTimeValue0', { value0: selectedPlaybook.estimated_duration }) }}</p>
-                </div>
-              </div>
-            </div>
+            <BaseAlert variant="info" :title="$t('infrastructureWizard.whatHappensNext')">
+              <ul class="space-y-1">
+                <li>{{ $t('infrastructureWizard.1AnsiblePlaybookWill') }}</li>
+                <li>{{ $t('infrastructureWizard.2SSHConnectionsTo') }}</li>
+                <li>{{ $t('infrastructureWizard.3InfrastructureComponentsInstalled') }}</li>
+                <li>{{ $t('infrastructureWizard.4ServicesWillBe') }}</li>
+              </ul>
+              <p class="mt-2">{{ $t('infrastructureWizard.estimatedTimeValue0', { value0: selectedPlaybook.estimated_duration }) }}</p>
+            </BaseAlert>
           </div>
         </div>
 
@@ -503,30 +484,18 @@ function getStatusColor(status: string): string {
           </div>
 
           <!-- Error Display -->
-          <div
-            v-if="currentExecution.error"
-            class="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
-          >
+          <BaseAlert v-if="currentExecution.error" variant="error" class="mt-4">
             <strong>{{ $t('infrastructureWizard.error') }}</strong> {{ currentExecution.error }}
-          </div>
+          </BaseAlert>
 
           <!-- Completion Message -->
-          <div
+          <BaseAlert
             v-if="currentExecution.status === 'completed'"
-            class="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg"
-          >
-            <div class="flex items-center gap-3">
-              <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <p class="font-medium text-green-800">{{ $t('infrastructureWizard.infrastructureSetupCompletedSuccessfully') }}</p>
-                <p class="text-sm text-green-600 mt-1">
-                  {{ $t('infrastructureWizard.allTasksHaveBeen') }}
-                </p>
-              </div>
-            </div>
-          </div>
+            variant="success"
+            class="mt-4"
+            :title="$t('infrastructureWizard.infrastructureSetupCompletedSuccessfully')"
+            :message="$t('infrastructureWizard.allTasksHaveBeen')"
+          />
         </div>
       </div>
 

@@ -99,7 +99,6 @@ TYPE_NAME_ALLOWLIST = {
 # retired by the slice named in the Refined UI step-3 plan, and the entry is
 # then removed here (a stale entry fails the hook). Never add to this dict.
 KIT_FORK_GRANDFATHER = {
-    "BaseButton": "autobot-frontend/src/components/base/BaseButton.vue",
     "EmptyState": "autobot-frontend/src/components/ui/EmptyState.vue",
 }
 KIT_COMPONENTS_DIR = "libs/autobot-ui/src/components"

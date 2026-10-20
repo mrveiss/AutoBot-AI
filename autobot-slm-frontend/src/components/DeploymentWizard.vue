@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -440,12 +441,7 @@ function getCategoryIcon(category: string): string {
           <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('deploymentWizard.reviewDeployment') }}</h4>
 
           <!-- Error Message -->
-          <div
-            v-if="deployError"
-            class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
-          >
-            {{ deployError }}
-          </div>
+          <BaseAlert v-if="deployError" variant="error" class="mb-4" :message="deployError" />
 
           <div class="space-y-4">
             <div class="p-4 bg-gray-50 rounded-lg">
@@ -472,22 +468,14 @@ function getCategoryIcon(category: string): string {
               </div>
             </div>
 
-            <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <div class="flex items-start gap-3">
-                <svg class="w-5 h-5 text-blue-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div class="text-sm text-blue-700">
-                  <p class="font-medium">{{ $t('deploymentWizard.whatHappensNext') }}</p>
-                  <ul class="mt-1 space-y-1 text-blue-600">
-                    <li>{{ $t('deploymentWizard.1AnsiblePlaybookWill') }}</li>
-                    <li>{{ $t('deploymentWizard.2SSHConnectionTo') }}</li>
-                    <li>{{ $t('deploymentWizard.3RolesWillBe') }}</li>
-                    <li>{{ $t('deploymentWizard.4ServicesWillBe') }}</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
+            <BaseAlert variant="info" :title="$t('deploymentWizard.whatHappensNext')">
+              <ul class="space-y-1">
+                <li>{{ $t('deploymentWizard.1AnsiblePlaybookWill') }}</li>
+                <li>{{ $t('deploymentWizard.2SSHConnectionTo') }}</li>
+                <li>{{ $t('deploymentWizard.3RolesWillBe') }}</li>
+                <li>{{ $t('deploymentWizard.4ServicesWillBe') }}</li>
+              </ul>
+            </BaseAlert>
           </div>
         </div>
       </div>

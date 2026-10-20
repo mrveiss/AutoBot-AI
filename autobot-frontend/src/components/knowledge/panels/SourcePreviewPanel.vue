@@ -20,7 +20,7 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('SourcePreviewPanel')
@@ -246,7 +246,7 @@ onUnmounted(() => {
           <!-- Panel Footer -->
           <footer class="panel-footer">
             <BaseButton
-              variant="outline-solid"
+              variant="outline"
               size="sm"
               :class="{ success: copySuccess }"
               @click="copyContent"

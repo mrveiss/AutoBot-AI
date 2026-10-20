@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { formatUptime } from '@/utils/formatHelpers'
 
@@ -253,9 +254,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Error Message -->
-    <div v-if="error" class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-      {{ error }}
-    </div>
+    <BaseAlert v-if="error" variant="error" class="mb-6" :message="error" />
 
     <!-- Stats Grid -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">

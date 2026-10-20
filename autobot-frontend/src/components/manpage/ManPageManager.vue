@@ -7,7 +7,7 @@
         <h3><Icon name="desktop" /> {{ $t('manpage.manager.title') }}</h3>
         <BaseButton
           size="sm"
-          variant="outline-solid"
+          variant="outline"
           @click="refreshMachineProfile"
           :disabled="loading?.profile"
         >
@@ -64,7 +64,7 @@
         <h3><Icon name="chart-bar" /> {{ $t('manpage.manager.integrationStatus') }}</h3>
         <BaseButton
           size="sm"
-          variant="outline-solid"
+          variant="outline"
           @click="refreshIntegrationStatus"
           :disabled="loading?.status"
         >
@@ -180,7 +180,7 @@
           <h3><Icon name="tasks" /> {{ $t('manpage.manager.progressTitle') }}</h3>
           <BaseButton
             size="sm"
-            variant="outline-solid"
+            variant="outline"
             @click="showProgressTracking = false"
           >
             <Icon name="times" />
@@ -316,7 +316,7 @@
 </template>
 
 <script>
-import { BaseCard } from '@autobot/ui'
+import { BaseButton, BaseCard } from '@autobot/ui'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
@@ -329,7 +329,6 @@ import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 import { formatDate } from '@/utils/formatHelpers'
 import { useLoadingState } from '@/composables/useLoadingState'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
 import Icon from '@/components/ui/Icon.vue'
 
 export default {

@@ -13,8 +13,7 @@
 
 import Icon from '@/components/ui/Icon.vue'
 import { computed, ref, watch } from 'vue'
-import { BaseModal } from '@autobot/ui'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -308,7 +307,7 @@ function resetEdit(): void {
 
     <template #actions>
       <BaseButton
-        variant="outline-solid"
+        variant="outline"
         @click="handleTakeControl"
       >
         <Icon name="hand-paper" />
@@ -317,7 +316,7 @@ function resetEdit(): void {
 
       <BaseButton
         v-if="remainingStepsCount > 0"
-        variant="outline-solid"
+        variant="outline"
         @click="handleExecuteAll"
       >
         <Icon name="forward" />
@@ -381,14 +380,14 @@ function resetEdit(): void {
 
 .progress-bar {
   height: 0.375rem;
-  background: var(--bg-tertiary, #374151);
+  background: var(--bg-tertiary);
   border-radius: var(--radius-full);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: var(--color-info, #3b82f6);
+  background: var(--color-info);
   border-radius: var(--radius-full);
   transition: width var(--duration-300) var(--ease-out);
 }
@@ -410,7 +409,7 @@ function resetEdit(): void {
 
 /* Command Preview */
 .command-preview {
-  background: var(--bg-terminal, #1a1b26);
+  background: var(--terminal-chrome-bg);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md, 0.375rem);
   overflow: hidden;
@@ -421,7 +420,7 @@ function resetEdit(): void {
   align-items: center;
   gap: var(--spacing-2, 0.5rem);
   padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
-  background: var(--bg-tertiary, #374151);
+  background: var(--bg-tertiary);
   font-size: var(--text-xs);
   font-weight: var(--font-medium, 500);
   color: var(--text-secondary);
@@ -434,7 +433,7 @@ function resetEdit(): void {
   padding: var(--spacing-3, 0.75rem);
   font-family: var(--font-mono, monospace);
   font-size: var(--text-sm);
-  color: var(--color-success, #10b981);
+  color: var(--color-success);
   word-break: break-all;
   white-space: pre-wrap;
 }
@@ -446,7 +445,7 @@ function resetEdit(): void {
   gap: var(--spacing-1);
   padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--color-warning-bg, rgba(245, 158, 11, 0.15));
-  color: var(--color-warning, #f59e0b);
+  color: var(--color-warning);
   border-radius: var(--radius-full);
   font-size: 0.6875rem;
   font-weight: var(--font-medium, 500);
@@ -475,7 +474,7 @@ function resetEdit(): void {
 
 .edit-trigger:hover {
   color: var(--text-primary);
-  border-color: var(--color-info, #3b82f6);
+  border-color: var(--color-info);
 }
 
 /* Inline Edit Panel */
@@ -499,7 +498,7 @@ function resetEdit(): void {
   font-family: var(--font-mono, monospace);
   font-size: var(--text-sm);
   color: var(--text-primary);
-  background: var(--bg-terminal, #1a1b26);
+  background: var(--terminal-chrome-bg);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm, 0.25rem);
   padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
@@ -510,7 +509,7 @@ function resetEdit(): void {
 
 .edit-textarea:focus {
   outline: none;
-  border-color: var(--color-info, #3b82f6);
+  border-color: var(--color-info);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
 }
 .edit-textarea:focus-visible {
@@ -523,7 +522,7 @@ function resetEdit(): void {
   align-items: center;
   gap: var(--spacing-1, 0.25rem);
   font-size: 0.8125rem;
-  color: var(--color-error, #ef4444);
+  color: var(--color-error);
   margin: var(--spacing-0);
 }
 
@@ -560,7 +559,7 @@ function resetEdit(): void {
 .edit-action-reset {
   background: transparent;
   border-color: var(--border-default);
-  color: var(--color-warning, #f59e0b);
+  color: var(--color-warning);
 }
 
 .edit-action-reset:hover {
@@ -568,12 +567,12 @@ function resetEdit(): void {
 }
 
 .edit-action-save {
-  background: var(--color-info, #3b82f6);
-  color: #fff;
+  background: var(--color-info);
+  color: var(--text-on-primary);
 }
 
 .edit-action-save:hover {
-  background: var(--color-info-dark, #2563eb);
+  background: var(--color-info-dark);
 }
 
 /* Action Guide */

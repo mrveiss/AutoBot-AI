@@ -5787,18 +5787,6 @@
       "postExecutionFailed": "O comando foi executado, mas uma etapa posterior falhou. A saída é exibida; algumas atualizações podem estar faltando.",
       "enterComment": "Please enter a comment before submitting"
     },
-    "dataTable": {
-      "sortBy": "Sort by {column}",
-      "actions": "Actions",
-      "noDataAvailable": "No data available",
-      "noItemsToDisplay": "No items to display",
-      "pageOf": "Page {current} of {total}",
-      "pagination": "Table pagination",
-      "previousPage": "Previous page",
-      "nextPage": "Next page",
-      "dataTable": "Data table",
-      "loading": "Loading data..."
-    },
     "hostSelection": {
       "title": "Select Host",
       "defaultPurpose": "Select a host for this operation",

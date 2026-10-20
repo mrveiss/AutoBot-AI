@@ -5787,18 +5787,6 @@
       "postExecutionFailed": "La commande s'est exécutée, mais une étape ultérieure a échoué. Sa sortie est affichée ; certaines mises à jour peuvent manquer.",
       "enterComment": "Please enter a comment before submitting"
     },
-    "dataTable": {
-      "sortBy": "Sort by {column}",
-      "actions": "Actions",
-      "noDataAvailable": "No data available",
-      "noItemsToDisplay": "No items to display",
-      "pageOf": "Page {current} of {total}",
-      "pagination": "Table pagination",
-      "previousPage": "Previous page",
-      "nextPage": "Next page",
-      "dataTable": "Data table",
-      "loading": "Loading data..."
-    },
     "hostSelection": {
       "title": "Select Host",
       "defaultPurpose": "Select a host for this operation",

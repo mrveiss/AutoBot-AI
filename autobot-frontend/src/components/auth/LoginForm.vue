@@ -88,7 +88,7 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
-import { BrandMark } from '@autobot/ui'
+import { BaseAlert, BrandMark } from '@autobot/ui'
 import type { Role } from '@/types/_generated/workflow'
 import { DEFAULT_ROLE } from '@/constants/roles'
 import { useI18n } from 'vue-i18n'
@@ -100,7 +100,6 @@ const logger = createLogger('LoginForm')
 import { useUserStore, type UserProfile } from '@/stores/useUserStore'
 import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
-import BaseAlert from '@/components/ui/BaseAlert.vue'
 import { useLoadingState } from '@/composables/useLoadingState'
 
 interface LoginUser {

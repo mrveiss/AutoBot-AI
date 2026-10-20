@@ -111,7 +111,7 @@ import { ref, nextTick } from 'vue'
 import { formatDateTime } from '@/utils/formatHelpers'
 import { getFileIconName } from '@/utils/iconMappings'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 
 // #9724: aligned with FileBrowserItem (useFileBrowser) — is_dir is optional
 // in the backend payload.

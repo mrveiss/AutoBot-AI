@@ -1,6 +1,7 @@
 <!-- Copyright 2025-2026 mrveiss -->
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 
@@ -63,9 +64,7 @@ onMounted(load)
       <h2 class="text-lg font-semibold text-gray-900 mb-2">{{ $t('settings.disposalPolicySettings.projectDisposalPolicy') }}</h2>
       <p class="text-sm text-gray-500 mb-6">{{ $t('settings.disposalPolicySettings.controlsHowCompanyOSProjectsAre') }}</p>
 
-      <div v-if="error" class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-        {{ error }}
-      </div>
+      <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
       <div v-if="saved" class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">{{ $t('settings.disposalPolicySettings.policySavedSuccessfully') }}</div>
 
       <div class="space-y-6">

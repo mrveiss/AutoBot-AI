@@ -78,7 +78,6 @@ adding fleet nodes, enrolling agents, assigning roles, and provisioning.
 ```bash
 git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
-cp .env.example .env
 bash docker/generate-secrets.sh   # per-host secrets + a free network range
 docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d
 ```
@@ -315,7 +314,11 @@ workers) — lives at **http://localhost/slm/**.
 
 ## Configuration
 
-All configuration uses environment variables in `.env`. See `.env.example` for all options.
+Configuration is environment variables, read from these files (#18555):
+
+- **Native install:** the installer writes each service's env file under `/etc/autobot/`; `.env.example` documents every option.
+- **Docker:** `docker/.env.docker` plus the generated `docker/.env.secrets`, passed with `--env-file` (compose reads no root `.env` then).
+- **Development tooling:** `.env.base` (shared keys) and one overlay, `.env.localhost`, `.env.native-vm` or `.env.network`, loaded in that order.
 
 Key settings:
 - `AUTOBOT_DEPLOYMENT_MODE` — `hybrid` or `distributed`

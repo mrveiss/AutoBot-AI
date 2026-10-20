@@ -33,7 +33,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-frontend/src/components/__tests__/ChatInterface.test.ts": 760,
     "autobot-frontend/src/components/__tests__/TerminalWindow.test.ts": 627,
     "autobot-frontend/src/components/agents/HeartbeatPanel.vue": 723,
-    "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 903,
+    "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 902,  # #18849: 903 -> 902
     "autobot-frontend/src/components/analytics/CodeEvolutionTimeline.vue": 775,
     "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": 1108,
     "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1903,
@@ -53,14 +53,14 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/panels/CodebaseIntelligenceScoresPanel.vue": 1332,
     "autobot-frontend/src/components/analytics/panels/CodebaseOwnershipPanel.vue": 1035,
     "autobot-frontend/src/components/audit/AuditLogTable.vue": 758,
-    "autobot-frontend/src/components/browser/BrowserSessionManager.vue": 654,
+    "autobot-frontend/src/components/browser/BrowserSessionManager.vue": 653,  # #18849: 654 -> 653
     "autobot-frontend/src/components/charts/BaseChart.vue": 602,
     "autobot-frontend/src/components/charts/FunctionCallGraph.vue": 2165,
     "autobot-frontend/src/components/charts/ImportTreeChart.vue": 1365,
     "autobot-frontend/src/components/chat/ChatInput.vue": 1716,
     "autobot-frontend/src/components/chat/ChatInterface.vue": 1521,
-    "autobot-frontend/src/components/chat/ChatMessages.vue": 2119,
-    "autobot-frontend/src/components/chat/ChatSidebar.vue": 808,
+    "autobot-frontend/src/components/chat/ChatMessages.vue": 2118,  # #18849: 2119 -> 2118
+    "autobot-frontend/src/components/chat/ChatSidebar.vue": 807,  # #18849: 808 -> 807
     "autobot-frontend/src/components/chat/DocumentationSearchSidebar.vue": 766,
     "autobot-frontend/src/components/chat/VisionAnalysisModal.vue": 786,
     "autobot-frontend/src/components/chat/VisualBrowserPanel.vue": 632,
@@ -80,30 +80,30 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-frontend/src/components/knowledge/GraphRAGQuery.vue": 713,
     "autobot-frontend/src/components/knowledge/KBSearchResultPanel.vue": 630,
     "autobot-frontend/src/components/knowledge/KnowledgeBrowser.vue": 1785,
-    "autobot-frontend/src/components/knowledge/KnowledgeEntries.vue": 1360,
+    "autobot-frontend/src/components/knowledge/KnowledgeEntries.vue": 1359,  # #18849: 1360 -> 1359
     "autobot-frontend/src/components/knowledge/KnowledgeGraph.vue": 2073,
     "autobot-frontend/src/components/knowledge/KnowledgeHealth.vue": 925,
-    "autobot-frontend/src/components/knowledge/KnowledgePersistenceDialog.vue": 892,
+    "autobot-frontend/src/components/knowledge/KnowledgePersistenceDialog.vue": 891,  # #18819+#18849 one import (-1)
     "autobot-frontend/src/components/knowledge/KnowledgeResearchPanel.vue": 1189,
     "autobot-frontend/src/components/knowledge/KnowledgeSystemDocs.vue": 863,
     "autobot-frontend/src/components/knowledge/KnowledgeUpload.vue": 1634,
     "autobot-frontend/src/components/knowledge/KnowledgeVerificationQueue.vue": 799,
-    "autobot-frontend/src/components/knowledge/SystemKnowledgeManager.vue": 1035,
+    "autobot-frontend/src/components/knowledge/SystemKnowledgeManager.vue": 1034,  # #18849: 1035 -> 1034
     "autobot-frontend/src/components/knowledge/WebResearchPanel.vue": 779,
     "autobot-frontend/src/components/knowledge/WebResearchSettings.vue": 1028,
-    "autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue": 1627,
-    "autobot-frontend/src/components/knowledge/modals/BulkEditModal.vue": 616,
-    "autobot-frontend/src/components/knowledge/modals/CategoryEditModal.vue": 727,
+    "autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue": 1626,  # #18849: 1627 -> 1626
+    "autobot-frontend/src/components/knowledge/modals/BulkEditModal.vue": 615,  # #18849: 616 -> 615
+    "autobot-frontend/src/components/knowledge/modals/CategoryEditModal.vue": 726,  # #18849: 727 -> 726
     "autobot-frontend/src/components/llc/TemplateBrowser.vue": 806,
-    "autobot-frontend/src/components/manpage/ManPageManager.vue": 1214,
+    "autobot-frontend/src/components/manpage/ManPageManager.vue": 1213,  # #18849: 1214 -> 1213
     "autobot-frontend/src/components/security/SecretsManager.vue": 2775,
     "autobot-frontend/src/components/security/ThreatIntelligenceDashboard.vue": 838,
     "autobot-frontend/src/components/security/ThreatIntelligenceSettings.vue": 652,
     "autobot-frontend/src/components/settings/ApiKeySetupWizard.vue": 614,
     "autobot-frontend/src/components/settings/SettingsPanel.vue": 943,
-    "autobot-frontend/src/components/terminal/AdvancedStepConfirmationModal.vue": 616,
+    "autobot-frontend/src/components/terminal/AdvancedStepConfirmationModal.vue": 615,  # #18849: 616 -> 615
     "autobot-frontend/src/components/terminal/BaseXTerminal.vue": 825,
-    "autobot-frontend/src/components/terminal/TerminalModals.vue": 743,
+    "autobot-frontend/src/components/terminal/TerminalModals.vue": 742,  # #18849: 743 -> 742
     "autobot-frontend/src/components/terminal/TerminalWindow.vue": 1726,
     "autobot-frontend/src/components/ui/HostSelectionDialog.vue": 965,
     "autobot-frontend/src/components/vision/GUIAutomationControls.vue": 793,
@@ -172,15 +172,15 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-frontend/src/views/llc/GanttTimelineView.vue": 817,
     "autobot-frontend/src/views/llc/HeartbeatMonitor.vue": 807,
     "autobot-frontend/src/views/llc/OrgChart.vue": 1527,
-    "autobot-frontend/src/views/llc/ProjectBrowserView.vue": 1379,
-    "autobot-frontend/src/views/llc/RolesView.vue": 1028,
+    "autobot-frontend/src/views/llc/ProjectBrowserView.vue": 1373,  # #18819 1379->1374; #18849 (-1)
+    "autobot-frontend/src/views/llc/RolesView.vue": 1026,  # #18819 1029->1027; #18849 one kit import on the merge (-1)
     "autobot-frontend/src/views/llc/RoutinesView.vue": 688,
     "autobot-frontend/src/views/llc/SprintBoardView.vue": 681,
     "autobot-frontend/src/views/llc/WorkItemDetail.vue": 1046,
     "autobot-infrastructure/shared/ide-extensions/vscode-autobot/src/extension.ts": 741,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/background-monitor.ts": 713,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts": 957,
-    "autobot-slm-frontend/src/components/AddNodeModal.vue": 1192,
+    "autobot-slm-frontend/src/components/AddNodeModal.vue": 1111,  # #18819: 1192 -> 1111
     "autobot-slm-frontend/src/components/RoleManagementModal.vue": 614,
     "autobot-slm-frontend/src/components/fleet/DecommissionModal.vue": 699,
     "autobot-slm-frontend/src/components/fleet/NodeLifecyclePanel.vue": 984,
@@ -192,22 +192,22 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-frontend/src/stores/fleet.ts": 994,
     "autobot-slm-frontend/src/types/slm.ts": 838,
     "autobot-slm-frontend/src/views/AgentsView.vue": 737,
-    "autobot-slm-frontend/src/views/CodeSyncView.vue": 2080,
-    "autobot-slm-frontend/src/views/DeploymentsView.vue": 1703,
+    "autobot-slm-frontend/src/views/CodeSyncView.vue": 2069,  # #18819: 2080 -> 2069
+    "autobot-slm-frontend/src/views/DeploymentsView.vue": 1671,  # #18819: 1703 -> 1671
     "autobot-slm-frontend/src/views/FleetOverview.vue": 837,
-    "autobot-slm-frontend/src/views/MaintenanceView.vue": 818,
+    "autobot-slm-frontend/src/views/MaintenanceView.vue": 817,  # #18819: 818 -> 817
     "autobot-slm-frontend/src/views/OrchestrationView.vue": 2189,
-    "autobot-slm-frontend/src/views/ReplicationView.vue": 731,
+    "autobot-slm-frontend/src/views/ReplicationView.vue": 730,  # #18819: 731 -> 730
     "autobot-slm-frontend/src/views/SecurityView.vue": 1409,
     "autobot-slm-frontend/src/views/SetupWizardView.vue": 1834,
     "autobot-slm-frontend/src/views/SkillsView.vue": 645,
-    "autobot-slm-frontend/src/views/SystemUpdatesTab.vue": 638,
+    "autobot-slm-frontend/src/views/SystemUpdatesTab.vue": 635,  # #18819: 638 -> 635
     "autobot-slm-frontend/src/views/monitoring/ErrorMonitor.vue": 640,
     "autobot-slm-frontend/src/views/monitoring/LogViewer.vue": 602,
-    "autobot-slm-frontend/src/views/settings/SecuritySettings.vue": 807,
-    "autobot-slm-frontend/src/views/settings/admin/DataHygieneView.vue": 669,
-    "autobot-slm-frontend/src/views/settings/admin/LogForwardingSettings.vue": 736,
-    "autobot-slm-frontend/src/views/settings/admin/NPUWorkersSettings.vue": 733,
-    "autobot-slm-frontend/src/views/settings/admin/SSOSettings.vue": 869,
-    "autobot-slm-frontend/src/views/settings/admin/UserManagementSettings.vue": 1099,
+    "autobot-slm-frontend/src/views/settings/SecuritySettings.vue": 796,  # #18819: 807 -> 796
+    "autobot-slm-frontend/src/views/settings/admin/DataHygieneView.vue": 666,  # #18819: 669 -> 666
+    "autobot-slm-frontend/src/views/settings/admin/LogForwardingSettings.vue": 727,  # #18819: 736 -> 727
+    "autobot-slm-frontend/src/views/settings/admin/NPUWorkersSettings.vue": 724,  # #18819: 733 -> 724
+    "autobot-slm-frontend/src/views/settings/admin/SSOSettings.vue": 835,  # #18819: 869 -> 835
+    "autobot-slm-frontend/src/views/settings/admin/UserManagementSettings.vue": 1090,  # #18819: 1099 -> 1090
 }

@@ -442,7 +442,7 @@
                 <span>{{ $t('chat.approval.approve') }}</span>
               </BaseButton>
               <BaseButton
-                variant="outline-solid"
+                variant="outline"
                 size="sm"
                 @click="promptForComment((message.metadata as any).terminal_session_id as string)"
                 :disabled="processingApproval || showCommentInput"
@@ -579,8 +579,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import SkeletonLoader from '@/components/ui/SkeletonLoader.vue'
 import StableLoadingState from '@/components/ui/StableLoadingState.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import OverseerPlanMessage from '@/components/chat/OverseerPlanMessage.vue'
 import OverseerStepMessage from '@/components/chat/OverseerStepMessage.vue'
 import CitationsDisplay from '@/components/chat/CitationsDisplay.vue'

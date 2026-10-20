@@ -10,6 +10,7 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
@@ -697,9 +698,7 @@ function getNodeHostname(nodeId: string): string {
               <!-- Error -->
               <div v-if="selectedReplication.error" class="mb-6">
                 <p class="text-sm text-gray-500 mb-2">{{ $t('replicationView.error') }}</p>
-                <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <p class="text-sm text-red-800 font-mono whitespace-pre-wrap">{{ selectedReplication.error }}</p>
-                </div>
+                <BaseAlert variant="error"><p class="text-sm font-mono whitespace-pre-wrap">{{ selectedReplication.error }}</p></BaseAlert>
               </div>
             </div>
 

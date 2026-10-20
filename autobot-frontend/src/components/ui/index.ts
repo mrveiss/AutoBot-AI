@@ -11,10 +11,8 @@
  * Issue #4534: Options API components without TypeScript stubs
  */
 
-export { default as BaseAlert } from './BaseAlert.vue'
 export { BaseModal } from '@autobot/ui'
 export { default as CommandPermissionDialog } from './CommandPermissionDialog.vue'
-export { default as DataTable } from './DataTable.vue'
 export { default as EmptyState } from './EmptyState.vue'
 export { default as HostSelectionDialog } from './HostSelectionDialog.vue'
 export { default as HostSelector } from './HostSelector.vue'
