@@ -23,6 +23,9 @@ export type { GetPath, JsonOf, GetResponse } from './src/types/contract'
 export { default as BaseButton } from './src/components/BaseButton.vue'
 export type { ButtonVariant, ButtonSize } from './src/components/BaseButton.vue'
 
+export { default as BaseInput } from './src/components/BaseInput.vue'
+export type { InputSize, InputType } from './src/components/BaseInput.vue'
+
 export { default as BaseBadge } from './src/components/BaseBadge.vue'
 export type { BadgeVariant, BadgeSize } from './src/components/BaseBadge.vue'
 

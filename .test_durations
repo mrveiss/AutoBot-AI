@@ -41614,7 +41614,6 @@
     "repo_tests/shell_lib_sources_resolve_test.py::test_each_failure_block_actually_stops_or_says_why_it_does_not[autobot-infrastructure/shared/scripts/hooks/pre-commit-warn-untracked:54]": 0.0018414279999205974,
     "repo_tests/shell_lib_sources_resolve_test.py::test_each_failure_block_actually_stops_or_says_why_it_does_not[autobot-infrastructure/shared/scripts/hooks/pre-commit-worktree-branch-guard:30]": 0.0016805049999675248,
     "repo_tests/shell_lib_sources_resolve_test.py::test_each_failure_block_actually_stops_or_says_why_it_does_not[autobot-infrastructure/shared/scripts/infrastructure/deploy_browser_vnc_services.sh:11]": 0.001650379000011526,
-    "repo_tests/shell_lib_sources_resolve_test.py::test_each_failure_block_actually_stops_or_says_why_it_does_not[autobot-infrastructure/shared/scripts/install-prometheus-stack.sh:21]": 0.0017069840000658587,
     "repo_tests/shell_lib_sources_resolve_test.py::test_each_failure_block_actually_stops_or_says_why_it_does_not[autobot-infrastructure/shared/scripts/install-slm.sh:26]": 0.0017356089998656898,
     "repo_tests/shell_lib_sources_resolve_test.py::test_each_failure_block_actually_stops_or_says_why_it_does_not[autobot-infrastructure/shared/scripts/logging/collect-application-logs.sh:10]": 0.0016658330000609567,
     "repo_tests/shell_lib_sources_resolve_test.py::test_each_failure_block_actually_stops_or_says_why_it_does_not[autobot-infrastructure/shared/scripts/logging/collect-service-logs.sh:10]": 0.0016271340000457712,

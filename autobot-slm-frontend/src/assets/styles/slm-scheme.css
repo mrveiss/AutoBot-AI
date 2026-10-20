@@ -392,6 +392,14 @@
   --tbl-num: tabular-nums;
 }
 
+/* Input metrics the kit adapter reads (#14778), in every theme including high-contrast. */
+:root[data-app='slm'] {
+  --input-height-sm: 32px;
+  --input-height-md: 40px;
+  --input-height-lg: 48px;
+  --input-padding-x: var(--spacing-3);
+}
+
 /* High-contrast table colours come from the accessibility palette (main.css, #754). */
 :root[data-app='slm'][data-theme='high-contrast'] {
   --tbl-head-bg: var(--a11y-bg-muted);
@@ -402,6 +410,8 @@
   --tbl-row-selected: var(--a11y-bg-muted);
   --tbl-selected-edge: 3px solid var(--a11y-focus-ring);
   --tbl-zebra-bg: var(--a11y-bg-surface);
+  --input-bg: var(--a11y-bg-surface);
+  --input-border: var(--a11y-border);
 }
 
 :root[data-app='slm']:not([data-theme='high-contrast']) {

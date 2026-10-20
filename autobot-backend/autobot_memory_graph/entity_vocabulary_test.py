@@ -47,6 +47,7 @@ import pytest
 from api.schemas_knowledge import _VALID_ENTITY_TYPES, EntityCreateRequest
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_memory_graph.core import ENTITY_TYPES
+from autobot_memory_graph.owner_scope import OwnerScope
 from autobot_memory_graph.semantic_search import (
     _ENTITY_TYPE_PATTERNS,
     MemoryGraphQueryProcessor,
@@ -108,6 +109,7 @@ class TestCreateEntityStoresTheType:
             entity_type=entity_type,
             name="Quarterly plan",
             observations=["ingested from an upload"],
+            owner=OwnerScope.for_user("user-a"),
         )
 
         json_ops.set.assert_awaited_once()
@@ -121,7 +123,9 @@ class TestCreateEntityStoresTheType:
         """A write that lands under no readable key is not a write."""
         graph, json_ops = _graph()
 
-        entity = await graph.create_entity(entity_type=entity_type, name="X", observations=["o"])
+        entity = await graph.create_entity(
+            entity_type=entity_type, name="X", observations=["o"], owner=OwnerScope.for_user("user-a")
+        )
 
         assert json_ops.set.await_args.args[0] == f"memory:entity:{entity['id']}"
 
@@ -134,14 +138,18 @@ class TestUndeclaredTypesAreStillRejected:
         graph, _ = _graph()
 
         with pytest.raises(ValueError):
-            await graph.create_entity(entity_type=entity_type, name="X", observations=["o"])
+            await graph.create_entity(
+                entity_type=entity_type, name="X", observations=["o"], owner=OwnerScope.for_user("user-a")
+            )
 
     @pytest.mark.parametrize("entity_type", UNDECLARED_TYPES)
     async def test_nothing_is_written_for_a_rejected_type(self, entity_type: str) -> None:
         graph, json_ops = _graph()
 
         with pytest.raises(ValueError):
-            await graph.create_entity(entity_type=entity_type, name="X", observations=["o"])
+            await graph.create_entity(
+                entity_type=entity_type, name="X", observations=["o"], owner=OwnerScope.for_user("user-a")
+            )
 
         json_ops.set.assert_not_awaited()
 
@@ -155,7 +163,9 @@ class TestUndeclaredTypesAreStillRejected:
         graph, _ = _graph()
 
         with pytest.raises(ValueError) as exc_info:
-            await graph.create_entity(entity_type="ARTIFACT", name="X", observations=["o"])
+            await graph.create_entity(
+                entity_type="ARTIFACT", name="X", observations=["o"], owner=OwnerScope.for_user("user-a")
+            )
 
         assert not isinstance(exc_info.value, RuntimeError)
 
@@ -165,7 +175,9 @@ class TestUndeclaredTypesAreStillRejected:
         graph, _ = _graph()
 
         with pytest.raises(ValueError) as exc_info:
-            await graph.create_entity(entity_type="ARTIFACT", name="X", observations=["o"])
+            await graph.create_entity(
+                entity_type="ARTIFACT", name="X", observations=["o"], owner=OwnerScope.for_user("user-a")
+            )
 
         assert "ARTIFACT" in str(exc_info.value)
 
@@ -174,7 +186,9 @@ class TestUndeclaredTypesAreStillRejected:
         graph, json_ops = _graph()
 
         with pytest.raises(ValueError):
-            await graph.create_entity(entity_type="DOCUMENT", name="   ", observations=["o"])
+            await graph.create_entity(
+                entity_type="DOCUMENT", name="   ", observations=["o"], owner=OwnerScope.for_user("user-a")
+            )
 
         json_ops.set.assert_not_awaited()
 

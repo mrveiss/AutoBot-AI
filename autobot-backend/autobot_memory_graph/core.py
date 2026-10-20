@@ -402,6 +402,10 @@ class AutoBotMemoryGraphCore:
         # ensure_indexes performs its own per-index existence check and swallows
         # creation errors with a warning, so initialization is never blocked.
         await ensure_indexes(self.redis_client)
+        # #18825: the owner TAG fields; FT.CREATE above is skipped on an existing index.
+        from .owner_index import ensure_owner_fields
+
+        await ensure_owner_fields(self.redis_client)
 
     async def _check_index_exists(self, index_name: str) -> bool:
         """
