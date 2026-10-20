@@ -46,7 +46,7 @@ _MONITORING = repo_root() / "autobot-monitoring"
 _DEPLOYED_RULE_GLOB = "alerts-*.yml"
 _TEST_SUITE_GLOB = "*.promtool-test.yml"
 
-# PATH first, then the location install-prometheus-stack.sh uses, overridable so
+# PATH first, then the monitoring role's prometheus_install_dir, overridable so
 # no machine-specific absolute path is baked into a repo test.
 _PROMTOOL = shutil.which("promtool") or os.environ.get("AUTOBOT_PROMTOOL", "/opt/prometheus/promtool")
 _HAVE_PROMTOOL = Path(_PROMTOOL).is_file()
@@ -69,7 +69,7 @@ def _require_promtool() -> None:
         return
     message = (
         f"promtool not found at {_PROMTOOL} — Prometheus rule BEHAVIOUR is unverified. "
-        "Install via autobot-infrastructure/shared/scripts/install-prometheus-stack.sh"
+        "Install via the Ansible monitoring role (autobot-slm-backend/ansible/roles/monitoring)"
     )
     if _PROMTOOL_REQUIRED:
         pytest.fail(

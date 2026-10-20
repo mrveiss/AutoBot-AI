@@ -79,8 +79,11 @@ class MemoryProvider(ABC):
         """
 
     @abstractmethod
-    async def get_entity(self, entity_id: str) -> Dict[str, Any] | None:
-        """Get a specific entity by ID."""
+    async def get_entity(self, entity_id: str, *, owner: Any = None) -> Dict[str, Any] | None:
+        """Get a specific entity by ID, as ``owner`` (an OwnerScope, #18825).
+
+        Providers whose store records ownership must refuse (return None) when ``owner`` is omitted.
+        """
 
     @abstractmethod
     async def update_entity(self, entity_id: str, updates: Dict[str, Any]) -> None:

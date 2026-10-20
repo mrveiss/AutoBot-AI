@@ -49,6 +49,23 @@ async def resolve_memory_graph() -> Any | None:
         return None
 
 
+def resolve_owner_scope(session: Any) -> Any | None:
+    """OwnerScope of the session's authenticated principal, or None (#18825).
+
+    ``None`` makes L2 skip the memory graph rather than read unscoped.
+    """
+    from autobot_memory_graph.owner_scope import OwnerScope, OwnerScopeRequired
+
+    metadata = getattr(session, "metadata", None) or {}
+    user_id = str(metadata.get("user_id") or "")
+    if not user_id:
+        return None
+    try:
+        return OwnerScope.for_user(user_id, metadata.get("org_id") or None)  # same key graph_owner.py stamps
+    except OwnerScopeRequired:
+        return None
+
+
 async def resolve_goal_ancestry(session_id: str) -> list | None:
     """Return the root-first goal ancestry chain for a session, or None (#13687).
 
@@ -176,3 +193,55 @@ async def _query_goal_ancestry(work_item_id: str, company_id: str | None) -> lis
 
 
 __all__ = ["resolve_goal_ancestry", "resolve_memory_graph"]
+
+
+async def build_tiered_context(session: Any, message: str, model_name: str) -> str:
+    """Render the tiered L0-L4 context for one turn (moved out of ``llm_handler`` in #18825).
+
+    #13686: the memory graph was read off an object that never had it, so L2 returned "" on
+    every turn. #13687/#13704: the goal ancestry comes from the *server-side* session binding,
+    never the request body, and both hops are company-scoped. #18825: L2 reads the graph only
+    within the turn principal's scope. Every resolver degrades to None rather than failing the
+    turn.
+    """
+    from chat_history.layers import TieredContextBuilder
+
+    return await TieredContextBuilder().build(
+        user_message=message,
+        model_name=model_name,
+        session_id=session.session_id,
+        memory_graph=await resolve_memory_graph(),
+        owner=resolve_owner_scope(session),
+        # #13742: deliberately NOT self.knowledge_service. The RAG path retrieves for every
+        # use_knowledge turn via the same conversation_aware_retrieve L3 would call, then applies
+        # budget_grounded_context for trimming and citation rebinding (#3770/#10837). Handing L3
+        # the service here bought a second identical vector search and the same chunks twice in
+        # the prompt -- with the copy inside the tiered block escaping that budgeting entirely.
+        # L3 keeps its retrieval path for callers that have no separate RAG stage; at this call
+        # site the main path owns retrieval, so L3 correctly stays silent.
+        knowledge_service=None,
+        goal_ancestry=await resolve_goal_ancestry(session.session_id),
+    )
+
+
+async def prepend_memory_context(system_prompt: str, session: Any, message: str, model_name: str) -> str:
+    """Prepend the memory context to the system prompt; any failure leaves it unchanged.
+
+    When ``TIERED_CONTEXT_ENABLED`` the TieredContextBuilder owns all context prepending
+    (L0 identity + L1 essential story + L2/L3 on-demand); otherwise the pre-existing
+    unconditional EssentialStory path is used. Moved out of ``llm_handler`` in #18825.
+    """
+    try:
+        from chat_history.layers import TIERED_CONTEXT_ENABLED
+
+        if TIERED_CONTEXT_ENABLED:
+            prefix = await build_tiered_context(session, message, model_name)
+        else:
+            # Issue #3787: legacy always-loaded compact memory summary.
+            from memory.essential_story import EssentialStoryGenerator
+
+            prefix = await EssentialStoryGenerator().generate(model_name=model_name)
+        return prefix + "\n\n" + system_prompt if prefix else system_prompt
+    except Exception as ctx_exc:
+        logger.warning("Context injection failed: %s", ctx_exc)
+        return system_prompt

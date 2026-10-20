@@ -8,15 +8,22 @@ User preferences API endpoints.
 Provides:
 - GET /api/users/me/preferences - Retrieve user preferences
 - PATCH /api/users/me/preferences - Update user preferences
+- GET/PUT/DELETE /api/users/me/dashboard-layouts/{page} - Per-user dashboard layout (#18242)
 """
 
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from redis.exceptions import RedisError
 
 from api.schemas_common import DataResponse
+from api.schemas_users_dashboard_layouts import (
+    DASHBOARD_PAGES,
+    MAX_LAYOUT_BYTES,
+    DashboardLayout,
+    DashboardLayoutData,
+)
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -239,3 +246,89 @@ async def update_user_preferences(
         ),
         message="User preferences updated successfully",
     )
+
+
+# --- Dashboard layouts (#18242): one JSON document per user and page ---
+
+
+def _layout_key(user_id: str, page: str) -> str:
+    return f"user:{user_id}:dashboard_layout:{page}"
+
+
+def _require_user_and_page(current_user: Dict, page: str) -> str:
+    user_id = current_user.get("user_id") or current_user.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User ID not found in token")
+    if page not in DASHBOARD_PAGES:
+        raise HTTPException(status_code=404, detail="Unknown dashboard page")
+    return user_id
+
+
+def _reject_duplicate_ids(layout: DashboardLayout) -> None:
+    dash_ids = [d.id for d in layout.dashboards]
+    if len(dash_ids) != len(set(dash_ids)):
+        raise HTTPException(status_code=422, detail="Duplicate dashboard id")
+    for dash in layout.dashboards:
+        widget_ids = [w.id for w in dash.widgets]
+        if len(widget_ids) != len(set(widget_ids)):
+            raise HTTPException(status_code=422, detail="Duplicate widget id in dashboard")
+
+
+async def _layout_store():
+    """The Redis client that holds layouts; 503 when Redis is disabled or its breaker is open."""
+    client = await get_async_redis_client(database=RedisDatabase.MAIN)
+    if client is None:
+        logger.warning("Dashboard layout store unavailable: no Redis client")
+        raise HTTPException(status_code=503, detail="Dashboard layout storage unavailable")
+    return client
+
+
+def _layout_response(page: str, layout: DashboardLayout, message: str) -> DataResponse[DashboardLayoutData]:
+    return DataResponse(success=True, data=DashboardLayoutData(page=page, layout=layout), message=message)
+
+
+@router.get("/me/dashboard-layouts/{page}", response_model=DataResponse[DashboardLayoutData])
+@with_error_handling()
+async def get_dashboard_layout(
+    page: str, request: Request, current_user: Dict = Depends(get_current_user)
+) -> DataResponse[DashboardLayoutData]:
+    """Return the caller's stored layout for ``page``; no dashboards when none is stored."""
+    user_id = _require_user_and_page(current_user, page)
+    redis_client = await _layout_store()
+    raw = await redis_client.get(_layout_key(user_id, page))
+    if raw is None:
+        return _layout_response(page, DashboardLayout(), "No stored layout; defaults apply")
+    try:
+        layout = DashboardLayout.model_validate_json(raw)
+    except ValidationError:
+        logger.warning("Stored dashboard layout for %s/%s is invalid; defaults apply", user_id, page)
+        return _layout_response(page, DashboardLayout(), "Stored layout was invalid; defaults apply")
+    return _layout_response(page, layout, "Dashboard layout retrieved")
+
+
+@router.put("/me/dashboard-layouts/{page}", response_model=DataResponse[DashboardLayoutData])
+@with_error_handling()
+async def put_dashboard_layout(
+    page: str, layout: DashboardLayout, request: Request, current_user: Dict = Depends(get_current_user)
+) -> DataResponse[DashboardLayoutData]:
+    """Replace the caller's layout for ``page``."""
+    user_id = _require_user_and_page(current_user, page)
+    _reject_duplicate_ids(layout)
+    payload = layout.model_dump_json()
+    if len(payload.encode("utf-8")) > MAX_LAYOUT_BYTES:
+        raise HTTPException(status_code=413, detail="Dashboard layout too large")
+    redis_client = await _layout_store()
+    await redis_client.set(_layout_key(user_id, page), payload)
+    return _layout_response(page, layout, "Dashboard layout saved")
+
+
+@router.delete("/me/dashboard-layouts/{page}", response_model=DataResponse[DashboardLayoutData])
+@with_error_handling()
+async def reset_dashboard_layout(
+    page: str, request: Request, current_user: Dict = Depends(get_current_user)
+) -> DataResponse[DashboardLayoutData]:
+    """Drop the caller's stored layout for ``page`` so the defaults apply again."""
+    user_id = _require_user_and_page(current_user, page)
+    redis_client = await _layout_store()
+    await redis_client.delete(_layout_key(user_id, page))
+    return _layout_response(page, DashboardLayout(), "Dashboard layout reset to defaults")

@@ -104,9 +104,13 @@ jobs:
       - name: Sign image with cosign (key-based)
         env:
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           IMAGE_REF: ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.service }}@${{ steps.build.outputs.digest }}
         run: |
-          echo "${{ secrets.COSIGN_PRIVATE_KEY }}" | base64 -d > /tmp/cosign.key
+          set -euo pipefail
+          # The key reaches the shell through env, never the script text, and is gone however the step ends.
+          trap 'rm -f /tmp/cosign.key' EXIT
+          (umask 077 && printf '%s' "$COSIGN_PRIVATE_KEY" | base64 -d > /tmp/cosign.key)
           cosign sign --yes --key /tmp/cosign.key "$IMAGE_REF"
           rm -f /tmp/cosign.key
 

@@ -83,7 +83,7 @@ class MilvusMemoryProvider:
             logger.error(f"Error searching Milvus: {e}")
             return []
 
-    async def get_entity(self, entity_id: str) -> Dict[str, Any] | None:
+    async def get_entity(self, entity_id: str, *, owner: Any = None) -> Dict[str, Any] | None:
         if not self.client:
             return None
         try:

@@ -89,6 +89,14 @@
   --aui-space-5: var(--spacing-5);
   --aui-space-6: var(--spacing-6);
 
+  /* ---- Form controls (BaseInput) ------------------------------------- */
+  --aui-input-bg: var(--input-bg);
+  --aui-input-border: var(--input-border);
+  --aui-input-height-sm: var(--input-height-sm);
+  --aui-input-height-md: var(--input-height-md);
+  --aui-input-height-lg: var(--input-height-lg);
+  --aui-input-padding-x: var(--input-padding-x);
+
   /* ---- Z-index ------------------------------------------------------- */
   --aui-z-dropdown: var(--z-dropdown);
   --aui-z-modal: var(--z-modal);

@@ -371,6 +371,18 @@ These components already exist and should be used:
 - `BaseButton.vue` - Base button component
 - `TouchFriendlyButton.vue` - Touch-optimized button
 
+#### Form controls
+- `BaseInput` - **Moved to the shared kit** (#14778): `import { BaseInput } from '@autobot/ui'`
+  (`libs/autobot-ui/src/components/BaseInput.vue`). The main app's local copy is deleted. Props:
+  `modelValue`, `type`, `label`, `placeholder`, `helperText`, `error`, `size`, `disabled`,
+  `readonly`, `required`, `clearable`, `clearLabel`, `id`, `autocomplete`; events
+  `update:modelValue`/`clear`; exposed `focus()`/`blur()`; slots `prefix`/`suffix`. `class`,
+  `style` and `data-*` attrs land on the wrapper; every other attr (`aria-label`,
+  `aria-labelledby`, `name`, `maxlength`, listeners) lands on the native `<input>` -- a field
+  with no visible `label` must pass `aria-label` or `aria-labelledby`. Label, helper and
+  clear-button text come from the app (no i18n in the kit). Styled by the `--aui-input-*`
+  tokens, mapped in `libs/autobot-ui/src/tokens/adapter.css`.
+
 #### Progress
 - `ProgressBar.vue` - Progress bar component
 - `MessageStatus.vue` - Message status indicator

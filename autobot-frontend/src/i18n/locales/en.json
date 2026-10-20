@@ -6157,8 +6157,6 @@
       "createNewDashboard": "Create new dashboard",
       "availableWidgets": "Available Widgets",
       "configure": "Configure",
-      "expand": "Expand",
-      "shrink": "Shrink",
       "remove": "Remove",
       "noWidgets": "No Widgets Added",
       "noWidgetsHint": "Click \"Edit Layout\" to add widgets to your dashboard",
@@ -6195,7 +6193,19 @@
       "widgetAgents": "Agent Activity",
       "widgetAgentsDesc": "Real-time agent activity monitoring",
       "widgetArchitecture": "System Architecture",
-      "widgetArchitectureDesc": "Interactive system architecture diagram"
+      "widgetArchitectureDesc": "Interactive system architecture diagram",
+      "saveFailed": "Could not save the dashboard layout. Your changes are kept on this page.",
+      "dashboardLimit": "A page holds at most {max} dashboards.",
+      "widgetLimit": "A dashboard holds at most {max} widgets. Remove one before adding another.",
+      "resetLayout": "Reset layout",
+      "resetLayoutConfirm": "Reset this page to the default layout? Your saved layout is removed.",
+      "widgetSystemMonitor": "System Monitor",
+      "widgetCpuHeatmap": "CPU Heatmap",
+      "mainDashboard": "Main Dashboard",
+      "loadFailed": "Could not load your saved dashboard layout. Editing is off so it cannot be overwritten.",
+      "retryLoad": "Retry loading",
+      "newDashboard": "New Dashboard",
+      "resetFailed": "Could not reset the layout. Your saved layout is unchanged."
     },
     "devSpeedup": {
       "title": "Developer Speedup",
@@ -9884,5 +9894,21 @@
     "invalid_generic": "This schedule is not valid.",
     "conflicting_fields": "A schedule is saved either as cron or as a calendar rule or one-off run, never both.",
     "gatedNote": "Last day, weekday of the month, days 29 to 31 and one-off runs become available once the scheduler is updated."
+  },
+  "dashboardGrid": {
+    "movableWidget": "movable widget",
+    "widgetLabel": "{name} widget",
+    "keyboardHelp": "Press Space or Enter to pick up a widget. Arrow keys move it, Shift with Left or Right changes its width, Shift with Up or Down changes its height. Space or Enter drops it, Escape cancels.",
+    "narrower": "Make narrower",
+    "wider": "Make wider",
+    "shorter": "Make shorter",
+    "taller": "Make taller",
+    "announce": {
+      "grabbed": "Picked up {name}. Position {position} of {total}.",
+      "dropped": "Dropped {name} at position {position} of {total}.",
+      "cancelled": "Move cancelled. {name} is back at position {position} of {total}.",
+      "moved": "{name} moved to position {position} of {total}.",
+      "resized": "{name} is now {span} of 12 columns wide and {height} pixels tall."
+    }
   }
 }

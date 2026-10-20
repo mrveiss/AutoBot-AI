@@ -18,7 +18,7 @@ heuristic auto-selection is Phase 3.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Tuple
+from typing import TYPE_CHECKING, Any, List, Tuple
 
 from autobot_shared.logging_manager import get_llm_logger
 
@@ -93,13 +93,16 @@ async def _run_kag(
     query: str,
     graph_rag_service: "GraphRAGService",
     model: str | None,
+    owner: Any,
 ) -> "Tuple[str, RAGMetrics]":
     """Run the KAG strategy and adapt to the (context, RAGMetrics) contract.
 
     Returns the graph-augmented context plus a RAGMetrics carrying
     strategy='kag' and graph_results_added from GraphRAGMetrics.
+
+    ``owner`` is required (#18825): the graph expansion only sees what the caller may read.
     """
-    results, graph_metrics = await graph_rag_service.graph_aware_search(query=query)
+    results, graph_metrics = await graph_rag_service.graph_aware_search(query=query, owner=owner)
     context = _build_kag_context(results)
     graph_metrics.strategy = "kag"  # type: ignore[attr-defined]
     # graph_results_added already populated by GraphRAGMetrics; mirror defensively.
@@ -121,6 +124,7 @@ async def get_context(
     collection: str | None = None,
     model: str | None = None,
     collection_mode: str | None = None,
+    owner: Any = None,
 ) -> "Tuple[str, RAGMetrics]":
     """Route the query to the selected strategy and return (context, metrics).
 
@@ -134,6 +138,9 @@ async def get_context(
         collection: Optional collection identifier (for logging).
         model: Active model name (used by CAGService for budget calc).
         collection_mode: Per-collection setting from DB/metadata.
+        owner: OwnerScope of the caller (#18825). Needed by the kag strategy, whose graph expansion
+            is owner-scoped; a kag request without it raises OwnerScopeRequired rather than reading
+            unscoped. rag/cag do not touch the memory graph.
 
     Returns:
         (context, metrics) with metrics.strategy reflecting the strategy used.
@@ -156,7 +163,7 @@ async def get_context(
         if graph_rag_service is None:
             logger.warning("KAG selected but no GraphRAGService provided — using rag")
         else:
-            return await _run_kag(query=query, graph_rag_service=graph_rag_service, model=model)
+            return await _run_kag(query=query, graph_rag_service=graph_rag_service, model=model, owner=owner)
 
     # RAG path (default, kag/cag-disabled fallback, unknown mode fallback)
     context, metrics = await rag_service.get_optimized_context(query=query)

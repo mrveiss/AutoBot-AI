@@ -17,6 +17,7 @@ import time
 import pytest
 
 from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_memory_graph.owner_scope import OwnerScope
 
 BINARY = shutil.which("redis-stack-server")
 pytestmark = pytest.mark.skipif(BINARY is None, reason="redis-stack-server not installed")
@@ -61,7 +62,9 @@ async def test_concurrent_upserts_against_real_redis_create_one_entity(server):
     graph.redis_client = client
     graph.knowledge_base = None
 
-    results = await asyncio.gather(*[graph.get_or_create_entity("TASK", "Redis", ["a"]) for _ in range(8)])
+    results = await asyncio.gather(
+        *[graph.get_or_create_entity("TASK", "Redis", ["a"], owner=OwnerScope.for_user("user-a")) for _ in range(8)]
+    )
 
     keys = [k async for k in client.scan_iter(match="memory:entity:*")]
     assert len(keys) == 1

@@ -11,28 +11,34 @@
         <p class="header-description">{{ $t('views.customDashboard.subtitle') }}</p>
       </div>
       <div class="header-actions">
-        <button @click="toggleEditMode" class="action-btn" :class="{ active: isEditMode }">
+        <button v-if="loadError" @click="retryLoad" class="action-btn">
+          <Icon name="redo" />
+          {{ $t('views.customDashboard.retryLoad') }}
+        </button>
+        <button v-else @click="toggleEditMode" class="action-btn" :class="{ active: isEditMode }" :disabled="!loaded">
           <Icon :name="isEditMode ? 'check' : 'edit'" />
           {{ isEditMode ? $t('views.customDashboard.done') : $t('views.customDashboard.editLayout') }}
         </button>
         <button @click="addWidget" class="action-btn" v-if="isEditMode">
-          <Icon name="plus" />
-          {{ $t('views.customDashboard.addWidget') }}
+          <Icon name="plus" /> {{ $t('views.customDashboard.addWidget') }}
+        </button>
+        <button v-if="isEditMode" @click="resetLayout" class="action-btn">
+          <Icon name="undo" /> {{ $t('views.customDashboard.resetLayout') }}
         </button>
         <button
           @click="saveDashboard"
           class="action-btn"
           :class="{ primary: isDirty }"
-          :disabled="!isDirty"
+          :disabled="!isDirty || !loaded"
           :aria-label="isDirty ? $t('views.customDashboard.save') : $t('views.customDashboard.saved')"
         >
           <Icon name="save" />
           {{ isDirty ? $t('views.customDashboard.save') : $t('views.customDashboard.saved') }}
         </button>
         <div class="dashboard-selector">
-          <select v-model="currentDashboardId" @change="loadDashboard">
+          <select v-model="currentDashboardId" @change="loadDashboard(false)">
             <option v-for="dash in availableDashboards" :key="dash.id" :value="dash.id">
-              {{ dash.name }}
+              {{ tr(dash.name) }}
             </option>
           </select>
           <button @click="createNewDashboard" class="icon-btn" :title="$t('views.customDashboard.createNewDashboard')" :aria-label="$t('views.customDashboard.createNewDashboard')">
@@ -62,54 +68,32 @@
     </transition>
 
     <!-- Dashboard Grid -->
-    <div
-      class="dashboard-grid"
-      :class="{ 'edit-mode': isEditMode }"
-      @dragover.prevent="handleDragOver"
-      @drop="handleDrop"
-    >
-      <div
-        v-for="widget in widgets"
-        :key="widget.id"
-        class="widget-container"
-        :class="{ 'is-dragging': draggingWidgetId === widget.id }"
-        :style="getWidgetStyle(widget)"
-        :draggable="isEditMode"
-        @dragstart="handleWidgetDragStart($event, widget)"
-        @dragend="handleDragEnd"
-      >
-        <!-- Widget Header -->
-        <div class="widget-header">
-          <h3>
-            <Icon :name="getWidgetIcon(widget.type)" />
-            {{ widget.title }}
-          </h3>
-          <div class="widget-actions" v-if="isEditMode">
-            <button @click="configureWidget(widget)" :title="$t('views.customDashboard.configure')" :aria-label="$t('views.customDashboard.configure')">
-              <Icon name="cog" />
-            </button>
-            <button @click="resizeWidget(widget, 'expand')" :title="$t('views.customDashboard.expand')" :aria-label="$t('views.customDashboard.expand')">
-              <Icon name="expand-alt" />
-            </button>
-            <button @click="resizeWidget(widget, 'shrink')" :title="$t('views.customDashboard.shrink')" :aria-label="$t('views.customDashboard.shrink')">
-              <Icon name="compress-alt" />
-            </button>
-            <button @click="removeWidget(widget.id)" class="remove-btn" :title="$t('views.customDashboard.remove')" :aria-label="$t('views.customDashboard.remove')">
-              <Icon name="times" />
-            </button>
+    <div class="dashboard-body" @dragover.prevent="handleDragOver" @drop="handleDrop">
+      <DashboardGrid v-model:widgets="widgets" :label-of="(w) => tr(w.title) || w.type" :editing="isEditMode" @update:widgets="isDirty = true">
+        <template #widget="{ widget }">
+          <div class="widget-header">
+            <h3>
+              <Icon :name="getWidgetIcon(widget.type)" />
+              {{ tr(widget.title) }}
+            </h3>
+            <div class="widget-actions" v-if="isEditMode">
+              <button @click="configureWidget(widget)" :title="$t('views.customDashboard.configure')" :aria-label="$t('views.customDashboard.configure')">
+                <Icon name="cog" />
+              </button>
+              <button @click="removeWidget(widget.id)" class="remove-btn" :title="$t('views.customDashboard.remove')" :aria-label="$t('views.customDashboard.remove')">
+                <Icon name="times" />
+              </button>
+            </div>
           </div>
-        </div>
-
-        <!-- Widget Content -->
-        <div class="widget-content">
-          <component
-            :is="getWidgetComponent(widget.type)"
-            v-bind="widget.props"
-            :key="`${widget.id}-${widget.refreshKey}`"
-          />
-        </div>
-
-      </div>
+          <div class="widget-content">
+            <component
+              :is="getWidgetComponent(widget.type)"
+              v-bind="renderProps(widget)"
+              :key="`${widget.id}-${widget.refreshKey}`"
+            />
+          </div>
+        </template>
+      </DashboardGrid>
 
       <!-- Empty State -->
       <div v-if="widgets.length === 0" class="empty-dashboard">
@@ -139,15 +123,15 @@
       <div class="modal-body" v-if="configWidget">
           <div class="form-group">
             <label>{{ $t('views.customDashboard.widgetTitle') }}</label>
-            <input v-model="configWidget.title" type="text" />
+            <input v-model="configWidget.title" type="text" :maxlength="MAX_TEXT" />
           </div>
           <div class="form-group">
             <label>{{ $t('views.customDashboard.refreshInterval') }}</label>
-            <input v-model.number="configWidget.refreshInterval" type="number" min="5" />
+            <input v-model.number="configWidget.refreshInterval" type="number" min="5" :max="REFRESH_INTERVAL_MAX" />
           </div>
-          <div class="form-group" v-if="hasHeightConfig(configWidget.type)">
+          <div class="form-group" v-if="hasHeightProp(configWidget.type)">
             <label>{{ $t('views.customDashboard.heightPx') }}</label>
-            <input v-model.number="configWidget.props.height" type="number" min="200" />
+            <input v-model.number="configWidget.height" type="number" :min="HEIGHT_MIN" :max="HEIGHT_MAX" />
           </div>
           <!-- Type-specific config options -->
           <div v-if="configWidget.type === 'heatmap'" class="form-group">
@@ -188,7 +172,7 @@
       <div class="modal-body">
           <div class="form-group">
             <label>{{ $t('views.customDashboard.dashboardName') }}</label>
-            <input v-model="newDashboardName" type="text" :placeholder="$t('views.customDashboard.myDashboard')" />
+            <input v-model="newDashboardName" type="text" :maxlength="MAX_TEXT" :placeholder="$t('views.customDashboard.myDashboard')" />
           </div>
           <div class="form-group">
             <label>{{ $t('views.customDashboard.template') }}</label>
@@ -245,11 +229,16 @@
 
 import { ref, computed, onMounted, shallowRef, markRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useToast } from '@/composables/useToast'
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { BaseModal } from '@autobot/ui'
+import DashboardGrid from '@/components/dashboard/DashboardGrid.vue'
+import { useDashboardLayout } from '@/composables/dashboard/useDashboardLayout'
+import { i18nRef, displayText, fitText, HEIGHT_MAX, HEIGHT_MIN, MAX_DASHBOARDS, MAX_TEXT, MAX_WIDGETS, REFRESH_INTERVAL_MAX, type Dashboard, type DashboardLayout, type DashboardWidget } from '@/composables/dashboard/dashboardLayoutModel'
+import { applyConfig, configDraft, hasHeightProp, renderProps } from '@/composables/dashboard/widgetConfig'
+import { defaultHomeLayout, templateWidgets, WIDGET_DEFINITIONS, type WidgetDefinitionSpec } from '@/composables/dashboard/defaultDashboards'
 
 // Import visualization components
 import ResourceHeatmap from '@/components/visualizations/ResourceHeatmap.vue'
@@ -258,43 +247,19 @@ import AgentActivityVisualization from '@/components/visualizations/AgentActivit
 import SystemArchitectureDiagram from '@/components/visualizations/SystemArchitectureDiagram.vue'
 
 const { t } = useI18n()
-const logger = createLogger('CustomDashboard')
+const tr = (s: string) => displayText(s, t)
 const { showToast } = useToast()
+const { confirm } = useConfirmDialog()
+const { layout, loaded, loadError, load, save, reset } = useDashboardLayout('home', defaultHomeLayout)
 
 // ============================================================================
 // Types
 // ============================================================================
 
-interface Widget {
-  id: string
-  type: string
-  title: string
-  x: number
-  y: number
-  width: number
-  height: number
-  props: Record<string, unknown>
-  refreshInterval?: number
-  refreshKey?: number
-}
+// refreshKey is local and never persisted (stripped on save).
+type Widget = DashboardWidget & { refreshKey?: number }
 
-interface WidgetDefinition {
-  type: string
-  name: string
-  icon: IconName
-  description: string
-  defaultWidth: number
-  defaultHeight: number
-  defaultProps: Record<string, unknown>
-}
-
-interface Dashboard {
-  id: string
-  name: string
-  widgets: Widget[]
-  createdAt: number
-  updatedAt: number
-}
+type WidgetDefinition = WidgetDefinitionSpec & { name: string; description: string }
 
 // ============================================================================
 // State
@@ -303,9 +268,12 @@ interface Dashboard {
 const isEditMode = ref(false)
 const isDirty = ref(false)
 const widgets = ref<Widget[]>([])
-const currentDashboardId = ref('default')
-const availableDashboards = ref<Dashboard[]>([])
-const draggingWidgetId = ref<string | null>(null)
+const availableDashboards = computed(() => layout.value.dashboards)
+const currentDashboardId = computed({
+  get: () => layout.value.activeId ?? '',
+  // Fold the old dashboard's unsaved widgets in before activeId moves, so a switch never drops them.
+  set: (id: string) => { layout.value = { ...(isDirty.value ? nextLayout() : layout.value), activeId: id } },
+})
 const showConfigModal = ref(false)
 const showNewDashboardModal = ref(false)
 const showAddWidgetModal = ref(false)
@@ -321,45 +289,10 @@ const componentRegistry = shallowRef<Record<string, unknown>>({
   architecture: markRaw(SystemArchitectureDiagram)
 })
 
-// Available widget definitions (computed for i18n reactivity)
-const availableWidgetDefs = computed<WidgetDefinition[]>(() => [
-  {
-    type: 'heatmap',
-    name: t('views.customDashboard.widgetHeatmap'),
-    icon: 'th-large',
-    description: t('views.customDashboard.widgetHeatmapDesc'),
-    defaultWidth: 2,
-    defaultHeight: 300,
-    defaultProps: { height: 300, metric: 'cpu' }
-  },
-  {
-    type: 'workflow',
-    name: t('views.customDashboard.widgetWorkflow'),
-    icon: 'project-diagram',
-    description: t('views.customDashboard.widgetWorkflowDesc'),
-    defaultWidth: 2,
-    defaultHeight: 400,
-    defaultProps: { height: 400 }
-  },
-  {
-    type: 'agents',
-    name: t('views.customDashboard.widgetAgents'),
-    icon: 'robot',
-    description: t('views.customDashboard.widgetAgentsDesc'),
-    defaultWidth: 2,
-    defaultHeight: 400,
-    defaultProps: { height: 400 }
-  },
-  {
-    type: 'architecture',
-    name: t('views.customDashboard.widgetArchitecture'),
-    icon: 'sitemap',
-    description: t('views.customDashboard.widgetArchitectureDesc'),
-    defaultWidth: 3,
-    defaultHeight: 500,
-    defaultProps: { height: 500 }
-  },
-])
+// Available widget definitions; names and descriptions translate at render.
+const availableWidgetDefs = computed<WidgetDefinition[]>(() =>
+  WIDGET_DEFINITIONS.map((d) => ({ ...d, name: t(d.nameKey), description: t(d.descriptionKey) })),
+)
 
 // ============================================================================
 // Computed
@@ -367,94 +300,53 @@ const availableWidgetDefs = computed<WidgetDefinition[]>(() => [
 
 const dashboardTitle = computed(() => {
   const dash = availableDashboards.value.find(d => d.id === currentDashboardId.value)
-  return dash?.name || t('views.customDashboard.defaultTitle')
+  return dash?.name ? tr(dash.name) : t('views.customDashboard.defaultTitle')
 })
 
 // ============================================================================
 // Methods - Dashboard Management
 // ============================================================================
 
-function loadDashboards() {
-  // Load from localStorage
-  const stored = localStorage.getItem('autobot_dashboards')
-  if (stored) {
-    try {
-      availableDashboards.value = JSON.parse(stored)
-    } catch (e) {
-      logger.error('Failed to parse stored dashboards:', e)
-      createDefaultDashboard()
-    }
-  } else {
-    createDefaultDashboard()
-  }
-}
-
-function createDefaultDashboard() {
-  const defaultDashboard: Dashboard = {
-    id: 'default',
-    name: 'Main Dashboard',
-    widgets: [
-      {
-        id: 'widget-1',
-        type: 'system',
-        title: 'System Monitor',
-        x: 0,
-        y: 0,
-        width: 1,
-        height: 350,
-        props: {}
-      },
-      {
-        id: 'widget-2',
-        type: 'heatmap',
-        title: 'Resource Heatmap',
-        x: 1,
-        y: 0,
-        width: 2,
-        height: 300,
-        props: { height: 300 }
-      },
-      {
-        id: 'widget-3',
-        type: 'agents',
-        title: 'Agent Activity',
-        x: 0,
-        y: 1,
-        width: 2,
-        height: 400,
-        props: { height: 400 }
-      }
-    ],
-    createdAt: Date.now(),
-    updatedAt: Date.now()
-  }
-
-  availableDashboards.value = [defaultDashboard]
-  saveDashboardsToStorage()
-}
-
-function loadDashboard() {
+/** `clean = false` on a switch: unsaved work is still unsaved, so Save stays enabled. */
+function loadDashboard(clean = true) {
   const dashboard = availableDashboards.value.find(d => d.id === currentDashboardId.value)
-  if (dashboard) {
-    widgets.value = [...dashboard.widgets]
-  }
-  isDirty.value = false
+  if (dashboard) widgets.value = dashboard.widgets.map(w => ({ ...w, props: { ...w.props } }))
+  if (clean) isDirty.value = false
 }
 
-function saveDashboard() {
-  const dashboardIndex = availableDashboards.value.findIndex(d => d.id === currentDashboardId.value)
-  if (dashboardIndex !== -1) {
-    availableDashboards.value[dashboardIndex].widgets = [...widgets.value]
-    availableDashboards.value[dashboardIndex].updatedAt = Date.now()
-    saveDashboardsToStorage()
+function nextLayout(): DashboardLayout {
+  const widgetsToSave = widgets.value.map(({ refreshKey: _rk, ...w }) => w)
+  return {
+    ...layout.value,
+    dashboards: layout.value.dashboards.map(d =>
+      d.id === currentDashboardId.value ? { ...d, widgets: widgetsToSave, updatedAt: Date.now() } : d
+    ),
+  }
+}
+
+async function saveDashboard() {
+  if (await save(nextLayout())) {
     isDirty.value = false
+    isEditMode.value = false
     showToast(t('views.customDashboard.dashboardSaved'), 'success')
+  } else {
+    showToast(t('views.customDashboard.saveFailed'), 'error')
   }
-  isEditMode.value = false
 }
 
-function saveDashboardsToStorage() {
-  localStorage.setItem('autobot_dashboards', JSON.stringify(availableDashboards.value))
+async function resetLayout() {
+  const ok = await confirm({
+    title: t('views.customDashboard.resetLayout'),
+    message: t('views.customDashboard.resetLayoutConfirm'),
+  })
+  if (!ok) return
+  try {
+    await reset()
+  } catch {
+    showToast(t('views.customDashboard.resetFailed'), 'error')
+    return
+  }
+  loadDashboard() // widgets and layout both come from the same defaults() value
 }
 
 function createNewDashboard() {
@@ -464,38 +356,20 @@ function createNewDashboard() {
 }
 
 function confirmCreateDashboard() {
+  if (layout.value.dashboards.length >= MAX_DASHBOARDS) { showToast(t('views.customDashboard.dashboardLimit', { max: MAX_DASHBOARDS }), 'error'); return }
   const id = `dashboard-${Date.now()}`
-  let templateWidgets: Widget[] = []
-
-  // Apply template
-  if (newDashboardTemplate.value === 'monitoring') {
-    templateWidgets = [
-      { id: 'w1', type: 'system', title: 'System Monitor', x: 0, y: 0, width: 1, height: 350, props: {} },
-      { id: 'w2', type: 'heatmap', title: 'CPU Heatmap', x: 1, y: 0, width: 2, height: 300, props: { height: 300, metric: 'cpu' } }
-    ]
-  } else if (newDashboardTemplate.value === 'agents') {
-    templateWidgets = [
-      { id: 'w1', type: 'agents', title: 'Agent Activity', x: 0, y: 0, width: 3, height: 450, props: { height: 450 } }
-    ]
-  } else if (newDashboardTemplate.value === 'workflows') {
-    templateWidgets = [
-      { id: 'w1', type: 'workflow', title: 'Workflow View', x: 0, y: 0, width: 3, height: 500, props: { height: 500 } }
-    ]
-  }
-
   const newDashboard: Dashboard = {
     id,
-    name: newDashboardName.value || 'New Dashboard',
-    widgets: templateWidgets,
+    name: fitText(newDashboardName.value) || i18nRef('views.customDashboard.newDashboard'),
+    widgets: templateWidgets(newDashboardTemplate.value),
     createdAt: Date.now(),
     updatedAt: Date.now()
   }
 
-  availableDashboards.value.push(newDashboard)
-  saveDashboardsToStorage()
-  currentDashboardId.value = id
+  layout.value = { ...layout.value, dashboards: [...layout.value.dashboards, newDashboard] }
+  currentDashboardId.value = id // through the setter, so the old dashboard's unsaved edits are kept
   loadDashboard()
-  isDirty.value = false
+  isDirty.value = true // not on the server yet: Save stays enabled until it is
   showNewDashboardModal.value = false
 }
 
@@ -504,7 +378,19 @@ function confirmCreateDashboard() {
 // ============================================================================
 
 function toggleEditMode() {
+  // Editing the defaults shown after a failed load would overwrite the real saved layout.
+  if (!loaded.value) return
   isEditMode.value = !isEditMode.value
+}
+
+async function loadLayout() {
+  await load()
+  if (loadError.value) showToast(t('views.customDashboard.loadFailed'), 'error')
+  loadDashboard()
+}
+
+function retryLoad() {
+  void loadLayout()
 }
 
 function addWidget() {
@@ -512,18 +398,13 @@ function addWidget() {
 }
 
 function confirmAddWidget(widgetDef: WidgetDefinition) {
+  if (widgets.value.length >= MAX_WIDGETS) { showToast(t('views.customDashboard.widgetLimit', { max: MAX_WIDGETS }), 'error'); return }
   const newWidget: Widget = {
-    // #17020: the same millisecond-resolution id collision fixed in
-    // `useCanvasStore.addCell` this commit. Two widgets added in one tick
-    // shared an id, and the layout, removal and `:key` all address a widget by
-    // it. Fixed with the class rather than left for whichever PR next trips
-    // over it.
+    // #17020: a random id, so two widgets added in one tick never share layout, removal and :key.
     id: `widget-${crypto.randomUUID()}`,
     type: widgetDef.type,
-    title: widgetDef.name,
-    x: 0,
-    y: widgets.value.length,
-    width: widgetDef.defaultWidth,
+    title: i18nRef(widgetDef.nameKey),
+    span: widgetDef.defaultSpan,
     height: widgetDef.defaultHeight,
     props: { ...widgetDef.defaultProps },
     refreshKey: 0
@@ -540,7 +421,7 @@ function removeWidget(widgetId: string) {
 }
 
 function configureWidget(widget: Widget) {
-  configWidget.value = { ...widget }
+  configWidget.value = configDraft(widget, tr)
   showConfigModal.value = true
 }
 
@@ -549,23 +430,12 @@ function saveWidgetConfig() {
 
   const index = widgets.value.findIndex(w => w.id === configWidget.value!.id)
   if (index !== -1) {
-    widgets.value[index] = { ...configWidget.value, refreshKey: (widgets.value[index].refreshKey || 0) + 1 }
+    const original = widgets.value[index]
+    widgets.value[index] = { ...applyConfig(original, configWidget.value, tr), refreshKey: (original.refreshKey || 0) + 1 }
     isDirty.value = true
   }
   showConfigModal.value = false
   configWidget.value = null
-}
-
-function resizeWidget(widget: Widget, action: 'expand' | 'shrink') {
-  const index = widgets.value.findIndex(w => w.id === widget.id)
-  if (index === -1) return
-
-  if (action === 'expand') {
-    widgets.value[index].width = Math.min(3, widgets.value[index].width + 1)
-  } else {
-    widgets.value[index].width = Math.max(1, widgets.value[index].width - 1)
-  }
-  isDirty.value = true
 }
 
 function getWidgetComponent(type: string) {
@@ -575,17 +445,6 @@ function getWidgetComponent(type: string) {
 function getWidgetIcon(type: string): IconName {
   const def = availableWidgetDefs.value.find(w => w.type === type)
   return def?.icon || 'puzzle-piece'
-}
-
-function getWidgetStyle(widget: Widget) {
-  return {
-    gridColumn: `span ${widget.width}`,
-    minHeight: `${widget.height}px`
-  }
-}
-
-function hasHeightConfig(type: string): boolean {
-  return ['heatmap', 'workflow', 'agents', 'architecture'].includes(type)
 }
 
 // ============================================================================
@@ -599,41 +458,16 @@ function handleDragStart(event: DragEvent, widgetDef: WidgetDefinition) {
   }
 }
 
-function handleWidgetDragStart(event: DragEvent, widget: Widget) {
-  draggingWidgetId.value = widget.id
-  if (event.dataTransfer) {
-    event.dataTransfer.setData('widget-id', widget.id)
-    event.dataTransfer.effectAllowed = 'move'
-  }
-}
-
 function handleDragOver(event: DragEvent) {
   event.preventDefault()
 }
 
 function handleDrop(event: DragEvent) {
   event.preventDefault()
-
   const widgetType = event.dataTransfer?.getData('widget-type')
-  const widgetId = event.dataTransfer?.getData('widget-id')
-
-  if (widgetType) {
-    // Adding new widget from palette
-    const widgetDef = availableWidgetDefs.value.find(w => w.type === widgetType)
-    if (widgetDef) {
-      confirmAddWidget(widgetDef)
-    }
-  } else if (widgetId) {
-    // Reordering existing widget
-    // Could implement position swapping here
-    logger.debug('Widget dropped:', widgetId)
-  }
-
-  draggingWidgetId.value = null
-}
-
-function handleDragEnd() {
-  draggingWidgetId.value = null
+  if (!widgetType) return // not a palette drag (grid reordering is handled by DashboardGrid)
+  const widgetDef = availableWidgetDefs.value.find(w => w.type === widgetType)
+  if (widgetDef) confirmAddWidget(widgetDef)
 }
 
 // ============================================================================
@@ -652,9 +486,8 @@ const { start: startDashboardPolling, stop: stopDashboardPolling } = usePollingJ
 // Lifecycle
 // ============================================================================
 
-onMounted(() => {
-  loadDashboards()
-  loadDashboard()
+onMounted(async () => {
+  await loadLayout()
   startDashboardPolling('')
 })
 
@@ -827,60 +660,11 @@ defineExpose({ stopDashboardPolling })
   color: var(--color-primary);
 }
 
-/* Dashboard Grid */
-.dashboard-grid {
+/* Dashboard Grid (grid and widget chrome owned by DashboardGrid) */
+.dashboard-body {
   flex: 1;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--spacing-6);
   padding: var(--spacing-6) var(--spacing-8);
   overflow-y: auto;
-}
-
-.dashboard-grid.edit-mode {
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 49px,
-    var(--border-default) 49px,
-    var(--border-default) 50px
-  ),
-  repeating-linear-gradient(
-    90deg,
-    transparent,
-    transparent 49px,
-    var(--border-default) 49px,
-    var(--border-default) 50px
-  );
-  background-size: 50px 50px;
-}
-
-/* Widget Container */
-.widget-container {
-  background: var(--bg-secondary);
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--border-default);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  transition: all var(--duration-200);
-}
-
-.widget-container:hover {
-  border-color: var(--border-strong);
-}
-
-.widget-container.is-dragging {
-  opacity: 0.5;
-  border-color: var(--color-primary);
-}
-
-.edit-mode .widget-container {
-  cursor: grab;
-}
-
-.edit-mode .widget-container:active {
-  cursor: grabbing;
 }
 
 .widget-header {
@@ -941,7 +725,6 @@ defineExpose({ stopDashboardPolling })
 
 /* Empty Dashboard */
 .empty-dashboard {
-  grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1076,12 +859,6 @@ defineExpose({ stopDashboardPolling })
 }
 
 /* Responsive */
-@media (max-width: 1024px) {
-  .dashboard-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
 @media (max-width: 768px) {
   .dashboard-header {
     flex-direction: column;
@@ -1094,13 +871,8 @@ defineExpose({ stopDashboardPolling })
     justify-content: center;
   }
 
-  .dashboard-grid {
-    grid-template-columns: 1fr;
+  .dashboard-body {
     padding: var(--spacing-4);
-  }
-
-  .widget-container {
-    grid-column: span 1 !important;
   }
 }
 </style>

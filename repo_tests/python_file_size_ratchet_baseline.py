@@ -33,7 +33,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/agents/agent_orchestration/routing.py": 681,
     "autobot-backend/agents/browser/captcha_solver.py": 663,
     "autobot-backend/agents/development_speedup_agent.py": 831,
-    "autobot-backend/agents/graph_entity_extractor.py": 818,
+    "autobot-backend/agents/graph_entity_extractor.py": 790,
     "autobot-backend/agents/kb_librarian/librarian.py": 726,
     "autobot-backend/agents/knowledge_extraction_agent.py": 766,
     "autobot-backend/agents/knowledge_manager.py": 1131,
@@ -82,7 +82,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/browser_mcp.py": 1323,
     "autobot-backend/api/cache_management.py": 779,
     "autobot-backend/api/chat.py": 2690,  # #18316: delete delegates to the canonical path
-    "autobot-backend/api/chat_sessions.py": 1938,  # #18293: legacy transcripts only ever proposed
+    "autobot-backend/api/chat_sessions.py": 1860,  # #18293: legacy transcripts only ever proposed
     "autobot-backend/api/code_intelligence.py": 2151,
     "autobot-backend/api/code_search.py": 828,
     "autobot-backend/api/codebase_analytics/analyzers.py": 1684,
@@ -122,7 +122,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/log_forwarding.py": 777,
     "autobot-backend/api/logs.py": 1027,
     "autobot-backend/api/mcp_registry.py": 1173,
-    "autobot-backend/api/memory.py": 1573,
+    "autobot-backend/api/memory.py": 1514,
     "autobot-backend/api/monitoring.py": 1316,
     "autobot-backend/api/multimodal.py": 833,
     "autobot-backend/api/natural_language_search.py": 1256,
@@ -138,7 +138,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/schemas_knowledge.py": 5133,
     "autobot-backend/api/schemas_system.py": 4362,  # #13051: SecretModel ownership fields
     "autobot-backend/api/schemas_workflows.py": 2907,
-    "autobot-backend/api/secrets.py": 1182,  # #16444 review: except HTTPException, ValueError handlers
+    "autobot-backend/api/secrets.py": 1179,  # #16444 review: except HTTPException, ValueError handlers
     "autobot-backend/api/security_assessment.py": 913,
     "autobot-backend/api/settings.py": 881,
     "autobot-backend/api/system.py": 1011,
@@ -150,16 +150,15 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/websockets.py": 1120,  # #16457: accepts routed through websocket_subprotocol.accept_websocket
     "autobot-backend/api/workflow.py": 1027,
     "autobot-backend/auth_middleware.py": 1075,  # #16457: bearer parsing moved to websocket_subprotocol.py
-    "autobot-backend/autobot_memory_graph/property_graph.py": 630,
-    "autobot-backend/autobot_memory_graph/relations.py": 641,
+    "autobot-backend/autobot_memory_graph/property_graph.py": 629,
     "autobot-backend/autobot_memory_graph/semantic_search.py": 706,
     "autobot-backend/benchmarks/benchmark_belief_state.py": 725,
     "autobot-backend/chat_history/context_overflow.py": 845,
-    "autobot-backend/chat_history/session.py": 939,
+    "autobot-backend/chat_history/session.py": 923,
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1680,
-    "autobot-backend/chat_workflow/llm_handler.py": 1343,
-    "autobot-backend/chat_workflow/manager.py": 3887,  # #17273: graph turn lifecycle moved to turn_control
+    "autobot-backend/chat_workflow/llm_handler.py": 1301,
+    "autobot-backend/chat_workflow/manager.py": 3886,  # #17273: graph turn lifecycle moved to turn_control
     "autobot-backend/chat_workflow/tool_handler.py": 3697,  # #11542 dispatch merge + #14068 mirror
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
@@ -271,7 +270,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/llm_shared/provider_auth.py": 653,
     "autobot-backend/llm_shared/tests/test_provider_auth.py": 1187,
     "autobot-backend/markdown_reference_system.py": 707,
-    "autobot-backend/mcp_server/autobot_server.py": 932,
+    "autobot-backend/mcp_server/autobot_server.py": 790,
     "autobot-backend/mcp_server/mcp_security_test.py": 812,
     "autobot-backend/media/link/pipeline_test.py": 963,
     "autobot-backend/memory/manager.py": 979,
@@ -339,7 +338,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/services/execution/docker_backend.py": 604,
     "autobot-backend/services/fact_extraction_service.py": 870,
     "autobot-backend/services/fast_document_scanner.py": 653,
-    "autobot-backend/services/graph_rag_service.py": 734,
+    "autobot-backend/services/graph_rag_service.py": 697,
     "autobot-backend/services/graph_rag_service_test.py": 895,
     "autobot-backend/services/knowledge/autonomous_loop.py": 798,
     "autobot-backend/services/knowledge/code_indexer.py": 1179,
@@ -357,7 +356,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/services/rag_service.py": 1303,
     "autobot-backend/services/redis_service_manager_test.py": 839,
     "autobot-backend/services/secrets_service.py": 688,
-    "autobot-backend/services/security_memory_integration.py": 1033,
+    "autobot-backend/services/security_memory_integration.py": 1031,
     "autobot-backend/services/security_tool_parsers.py": 865,
     "autobot-backend/services/security_workflow_manager.py": 1306,
     "autobot-backend/services/skill_management/skill_distillation_scheduler.py": 717,
@@ -384,7 +383,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/tests/integration/test_causal_framework_integration.py": 1145,
     "autobot-backend/tests/integration/test_mobile_pairing.py": 828,
     "autobot-backend/tests/knowledge/search_components/retrieval_learner_test.py": 794,
-    "autobot-backend/tests/memory_graph/test_property_graph.py": 679,
+    "autobot-backend/tests/memory_graph/test_property_graph.py": 677,
     "autobot-backend/tests/middleware/test_service_auth_enforcement.py": 602,
     "autobot-backend/tests/orchestration/test_causal_error_recovery.py": 746,
     "autobot-backend/tests/orchestration/test_execution_strategies.py": 603,

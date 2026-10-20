@@ -154,7 +154,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-frontend/src/views/AdvancedControlView.vue": 1103,
     "autobot-frontend/src/views/BudgetPolicies.vue": 940,
     "autobot-frontend/src/views/BusinessIntelligenceView.vue": 988,
-    "autobot-frontend/src/views/CustomDashboard.vue": 1106,
+    "autobot-frontend/src/views/CustomDashboard.vue": 878,  # #18242: 1106 -> 884; train-42 review: -5, then -1
     "autobot-frontend/src/views/DevSpeedupView.vue": 658,
     "autobot-frontend/src/views/ErrorMonitoringView.vue": 872,
     "autobot-frontend/src/views/EvolutionView.vue": 781,
@@ -172,7 +172,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-frontend/src/views/llc/GanttTimelineView.vue": 817,
     "autobot-frontend/src/views/llc/HeartbeatMonitor.vue": 807,
     "autobot-frontend/src/views/llc/OrgChart.vue": 1527,
-    "autobot-frontend/src/views/llc/ProjectBrowserView.vue": 1373,  # #18819 1379->1374; #18849 (-1)
+    "autobot-frontend/src/views/llc/ProjectBrowserView.vue": 1372,  # #18819 1379->1374; #18849 -1; #14778 BaseInput -1
     "autobot-frontend/src/views/llc/RolesView.vue": 1026,  # #18819 1029->1027; #18849 one kit import on the merge (-1)
     "autobot-frontend/src/views/llc/RoutinesView.vue": 688,
     "autobot-frontend/src/views/llc/SprintBoardView.vue": 681,

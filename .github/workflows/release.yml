@@ -213,6 +213,42 @@ jobs:
           # a direct bot push is rejected by release's required status checks.
           git push origin "refs/tags/${VERSION}"
 
+      # #18666: the documented one-liner ran an unpinned `main` install.sh as root with no
+      # integrity check. Each release publishes a copy whose DEFAULT_BRANCH is this release's tag
+      # (so it installs exactly that release), its SHA256, and a cosign signature made with the
+      # same key image-sign.yml uses; INSTALL.md shows how to verify all three before running.
+      - name: Build the release's pinned installer (#18666)
+        if: steps.check.outputs.release_needed == 'true'
+        env:
+          VERSION: ${{ steps.check.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          sed "s/^readonly DEFAULT_BRANCH=\"main\"$/readonly DEFAULT_BRANCH=\"${VERSION}\"/" install.sh > dist/install.sh
+          grep -qx "readonly DEFAULT_BRANCH=\"${VERSION}\"" dist/install.sh \
+            || { echo "::error::install.sh's DEFAULT_BRANCH line changed; the release pin did not apply"; exit 1; }
+          (cd dist && sha256sum install.sh > install.sh.sha256)
+
+      - name: Install cosign
+        if: steps.check.outputs.release_needed == 'true'
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+
+      - name: Sign the pinned installer (key-based, #18666)
+        if: steps.check.outputs.release_needed == 'true'
+        env:
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          # The key reaches the shell through env, never the script text, and is gone however the step ends.
+          trap 'rm -f /tmp/cosign.key' EXIT
+          (umask 077 && printf '%s' "$COSIGN_PRIVATE_KEY" | base64 -d > /tmp/cosign.key)
+          cosign sign-blob --yes --key /tmp/cosign.key --output-signature dist/install.sh.sig dist/install.sh
+          rm -f /tmp/cosign.key
+          # Self-check: what a user runs from INSTALL.md must pass here first.
+          cosign verify-blob --key cosign.pub --signature dist/install.sh.sig dist/install.sh
+          (cd dist && sha256sum -c install.sh.sha256)
+
       - name: Create GitHub Release
         if: steps.check.outputs.release_needed == 'true'
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3
@@ -231,6 +267,11 @@ jobs:
           # version instead — prerelease only for `-rc`/`-beta` suffixes.
           prerelease: true
           generate_release_notes: false
+          # #18666: the pinned installer, its checksum and its signature.
+          files: |
+            dist/install.sh
+            dist/install.sh.sha256
+            dist/install.sh.sig
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

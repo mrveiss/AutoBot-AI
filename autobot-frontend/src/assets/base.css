@@ -194,16 +194,16 @@ button:disabled {
 
 /* GH#12711: buttons had a disabled treatment but form controls did not, so a
  * `<input type="checkbox" disabled>` rendered identically to an active one —
- * users could not tell what was interactive. BaseInput already handles its own
- * disabled state (.container-disabled); this covers the raw controls used
+ * users could not tell what was interactive. The kit BaseInput already handles its own
+ * disabled state (.aui-input__control--disabled); this covers the raw controls used
  * directly across the app. Mirrors the button treatment so disabled reads the
  * same everywhere. */
-/* :not(.base-input) matters — BaseInput's container already applies
+/* :not(.aui-input__field) matters — the kit BaseInput control already applies
  * opacity 0.6 when disabled, and stacking 0.5 on the inner input would
  * compound to 0.3 and render it nearly invisible. */
-input:not(.base-input):disabled,
-textarea:not(.base-input):disabled,
-select:not(.base-input):disabled,
+input:not(.aui-input__field):disabled,
+textarea:not(.aui-input__field):disabled,
+select:not(.aui-input__field):disabled,
 input[type='checkbox']:disabled,
 input[type='radio']:disabled {
   opacity: 0.5;
@@ -211,10 +211,10 @@ input[type='radio']:disabled {
 }
 
 /* A disabled control's label must dim with it, or the row still reads as active. */
-input:not(.base-input):disabled + label,
+input:not(.aui-input__field):disabled + label,
 input[type='checkbox']:disabled + span,
 input[type='radio']:disabled + span,
-label:has(> input:not(.base-input):disabled) {
+label:has(> input:not(.aui-input__field):disabled) {
   opacity: 0.5;
   cursor: not-allowed;
 }

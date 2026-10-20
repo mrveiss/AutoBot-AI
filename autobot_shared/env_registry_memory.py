@@ -164,3 +164,16 @@ env_registry.register_env_var(
         component="knowledge",
     )
 )
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_MEMORY_GRAPH_SCAN_KEY_BUDGET",
+        type=int,
+        default=20000,
+        description=(
+            "Most memory:entity:* keys one scan-fallback call (_fallback_search, get_entities_as_of) may "
+            "examine before it stops and returns what it found, logging a warning (autobot_memory_graph/queries.py)."
+        ),
+        component="memory_graph",
+    )
+)

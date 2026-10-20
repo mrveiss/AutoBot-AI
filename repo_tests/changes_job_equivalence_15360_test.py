@@ -167,6 +167,14 @@ ALLOWED_ADDITIONS = {
             "autobot-backend/config/permission_rules.yaml",
             "autobot-backend/static/error_messages.yaml",
             "autobot-monitoring/prometheus.yml",
+            "autobot-monitoring/grafana/provisioning/datasources/prometheus.yml",
+            "autobot-backend/config/llm_models.yaml",
+            "autobot-infrastructure/shared/config/permission_rules.yaml",
+            "autobot-infrastructure/shared/config/llm_models.yaml",
+            "**/error_messages.yaml",
+            "**/prometheus.yml",
+            "**/permission_rules.yaml",
+            "**/llm_models.yaml",
             # #18549: one_playwright_server_18549_test.py reads the canonical server and its store.
             "autobot-browser-worker/playwright-server.js",
             "autobot-browser-worker/session-store.js",
@@ -189,6 +197,8 @@ ALLOWED_ADDITIONS = {
             ".python-version",
             # #18729: docker_admin_seed_18729_test.py reads every Docker entrypoint.
             "docker/*/*entrypoint*.sh",
+            # #18666: install_release_signed_18666_test.py compares release.yml's cosign pin with this one.
+            f"{WORKFLOWS}/image-sign.yml",
         ]
     },
     # frontend_path_filter_mirror_test pins frontend-test.yml's on.push.paths to this file, so the

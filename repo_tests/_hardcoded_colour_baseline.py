@@ -129,7 +129,6 @@ IMPORTANT_DECLARATIONS: dict[str, int] = {
     "components/ui/ProgressBar.vue": 2,
     "components/visualizations/ServiceMessageTimeline.vue": 1,
     "views/AdminUsersView.vue": 1,
-    "views/CustomDashboard.vue": 1,
     # The control plane (#17567). Prefixed so its paths cannot collide with the
     # user frontend's. Keyed like the rest; no per-file reason is claimed.
     "slm:components/agents/OrgChartTab.vue": 1,
@@ -138,4 +137,4 @@ IMPORTANT_DECLARATIONS: dict[str, int] = {
 }
 
 #: Frozen total, asserted separately.
-TOTAL_IMPORTANT = 62
+TOTAL_IMPORTANT = 61  # #18242: 62 -> 61, CustomDashboard moved onto the shared DashboardGrid

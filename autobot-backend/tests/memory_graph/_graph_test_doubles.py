@@ -15,8 +15,13 @@ hash/set/sorted-set operations PropertyGraph actually issues.
 
 from typing import Dict, List
 
+from autobot_memory_graph.owner_scope import OwnerScope, entity_visible, require_scope
 from autobot_memory_graph.property_graph import PropertyGraph
 from autobot_memory_graph.property_graph_mixin import PropertyGraphMixin
+
+#: Owner id stamped on the harness entities (#18825); the wiring test's tenant uses the same id.
+HARNESS_OWNER_ID = "11111111-1111-1111-1111-111111111111"
+HARNESS_OWNER = OwnerScope.for_user(HARNESS_OWNER_ID)  # what the harness entities are stamped with
 
 
 class FakeRedis:
@@ -151,16 +156,28 @@ class MixinHarness(PropertyGraphMixin):
     entity_lookup_error: Exception | None = None
     ping_error: Exception | None = None
 
-    async def get_entity(self, entity_id=None, entity_name=None, include_relations=False):
+    async def get_entity(self, entity_id=None, entity_name=None, include_relations=False, owner=None):
         if self.entity_lookup_error is not None:
             return None  # mirrors the real swallow-and-return-None behaviour
-        return self._entities.get(entity_name)
+        if entity_name is not None:
+            require_scope(owner)  # #18825: a name lookup without a scope fails closed, like the real one
+        entity = self._entities.get(entity_name)
+        return entity if entity is None or entity_visible(entity, owner) else None
 
     @property
     def redis_client(self):
         harness = self
 
+        class _Json:
+            async def get(self, key):
+                """``memory:entity:<id>`` -> the stored document (used by the owner-scoped hop check)."""
+                node_id = key.rsplit(":", 1)[-1]
+                return next((e for e in harness._entities.values() if e["id"] == node_id), None)
+
         class _Redis:
+            def json(self):
+                return _Json()
+
             async def ping(self):
                 if harness.ping_error is not None:
                     raise harness.ping_error
@@ -173,9 +190,9 @@ async def make_harness() -> MixinHarness:
     """Graph with 'Redis Config' -CAUSED-> 'Incident 7', plus an unlinked 'Orphan'."""
     graph = make_graph()
     entities = {
-        "Redis Config": {"id": "e1", "name": "Redis Config", "type": "decision"},
-        "Incident 7": {"id": "e2", "name": "Incident 7", "type": "incident"},
-        "Orphan": {"id": "e3", "name": "Orphan", "type": "note"},
+        "Redis Config": {"id": "e1", "name": "Redis Config", "type": "decision", "owner_user_id": HARNESS_OWNER_ID},
+        "Incident 7": {"id": "e2", "name": "Incident 7", "type": "incident", "owner_user_id": HARNESS_OWNER_ID},
+        "Orphan": {"id": "e3", "name": "Orphan", "type": "note", "owner_user_id": HARNESS_OWNER_ID},
     }
     for ent in entities.values():
         await graph.add_node(ent["id"], {"name": ent["name"], "type": ent["type"]})

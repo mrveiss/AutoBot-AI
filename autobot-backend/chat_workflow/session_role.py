@@ -93,6 +93,18 @@ def apply_auth_role(context: "dict | None", role: Optional[str], scope: "dict | 
     return merged
 
 
+def stamp_verified_identity(metadata: dict, context: "dict | None") -> None:
+    """Record the AUTHENTICATED principal on session *metadata*, replacing whatever a prior turn left (#18825).
+
+    ``metadata["user_id"]`` / ``["org_id"]`` bound the memory-graph owner scope (L2 context, trajectory reads), so
+    they come from the verified keys ``apply_auth_role`` overlaid -- never the request's own ``user_id`` /
+    ``org_id``. A turn with no verified principal (or no context) writes ``""``: the scope fails closed rather
+    than inheriting the previous turn's identity.
+    """
+    metadata["user_id"] = (context or {}).get(VERIFIED_USER_KEY) or ""
+    metadata["org_id"] = (context or {}).get(VERIFIED_COMPANY_KEY) or ""
+
+
 def resolve_auth_role(context: "dict | None") -> str:
     """Read the authenticated role a trusted producer overlaid, else the default.
 

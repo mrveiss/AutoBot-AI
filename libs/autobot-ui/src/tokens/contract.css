@@ -90,6 +90,14 @@
   --aui-space-5: 1.25rem;
   --aui-space-6: 1.5rem;
 
+  /* ---- Form controls (BaseInput) ------------------------------------- */
+  --aui-input-bg: #ffffff;
+  --aui-input-border: #cbd5e1;
+  --aui-input-height-sm: 32px;
+  --aui-input-height-md: 40px;
+  --aui-input-height-lg: 48px;
+  --aui-input-padding-x: 0.75rem;
+
   /* ---- Layering ------------------------------------------------------ */
   --aui-z-dropdown: 100;
   --aui-z-modal: 1000;
