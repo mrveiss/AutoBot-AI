@@ -531,3 +531,33 @@ state instead of the endpoint's. The sites are frozen in `repo_tests/redis_direc
 **Revisit when:** the canonical layer grows an endpoint-probe entry point; delete these constructors then.
 
 **Grep check:** `grep -n "redis.Redis(" autobot-backend/utils/distributed_service_discovery.py autobot-backend/utils/service_discovery.py` — if empty, this exception is obsolete.
+
+---
+
+## Memory graph vs knowledge-base visibility — two models on purpose
+
+**Files:** `autobot-backend/autobot_memory_graph/owner_scope.py`, `autobot-backend/knowledge/search_filters.py`
+**Issue:** #18825
+
+**Reason:** the two stores answer different questions with the same words, so one predicate would be wrong for one of them.
+
+| Word | Memory graph (`owner_scope.py`) | Knowledge base (`search_filters.py`) |
+|---|---|---|
+| owner | `owner_user_id`; a read sees only its own entities | `owner_id`; one input among several to `check_access` |
+| org | the owner's own entities inside an org context (org narrows, never grants) | `organization` visibility grants every member of the org, whoever owns the fact |
+| shared | `__shared__` owner: readable by every signed-in user | `shared` visibility: readable only by the users named in the fact's share list |
+| system | `__system__` owner: readable by NO scoped read, only `UNSCOPED_ALL_USERS` | `system` visibility: readable by every signed-in user |
+| admin | no bypass | explicit read APIs may pass `is_admin`; chat grounding never does |
+| group / access level | not modelled | `group` membership and `access_level` grant reads |
+
+The graph is a RediSearch TAG filter plus a pure-Python predicate over two stamped fields. The KB decision needs
+ownership-manager lookups (share lists, group membership). Sharing the predicate would either give graph entities a share list
+and groups they do not have, or flip `system` in one store. Sharing only the constants would hide that `shared` and `system`
+mean opposite things in the two places, so the graph names stay `__shared__` / `__system__` (reserved owner ids that no real
+user id can take) and the KB's stay lower-case visibility values.
+
+**Revisit when:** the graph gains sharing between users or groups; then reuse the KB's `check_access` rather than growing
+a third model in `owner_scope.py`.
+
+**Grep check:** `grep -n "OWNER_USER_FIELD\|SHARED_OWNER_ID" autobot-backend/autobot_memory_graph/owner_scope.py` -- if
+`owner_scope.py` ever imports from `knowledge/search_filters.py`, this exception is obsolete.

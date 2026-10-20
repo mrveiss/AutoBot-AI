@@ -32,6 +32,7 @@ from typing import Any, Dict, List
 from autobot_shared.logging_manager import get_logger
 
 from .core import AutoBotMemoryGraphCore
+from .owner_scope import UNSCOPED_ALL_USERS, OwnerScope, entity_visible, require_scope
 from .property_graph import PropertyGraph
 
 logger = get_logger(__name__)
@@ -61,6 +62,19 @@ def _serialize_hop(hop: Dict[str, Any]) -> Dict[str, Any]:
         "from": edge.get("from"),
         "to": edge.get("to"),
         "node": _endpoint_summary(node),
+    }
+
+
+def _path_query(
+    from_entity: str, to_entity: str, relation: str | None, max_depth: int, direction: str
+) -> Dict[str, Any]:
+    """The echo of the caller's request carried on every path result."""
+    return {
+        "from_entity": from_entity,
+        "to_entity": to_entity,
+        "relation": relation,
+        "max_depth": max_depth,
+        "direction": direction,
     }
 
 
@@ -131,6 +145,8 @@ class PropertyGraphMixin:
         observations: List[str] | None = None,
         metadata: Dict[str, Any] | None = None,
         tags: List[str] | None = None,
+        *,
+        owner: OwnerScope,
     ) -> Dict[str, Any]:
         """Create entity in the standard store AND mirror into PropertyGraph."""
         entity = await super().create_entity(  # type: ignore[misc]
@@ -139,6 +155,7 @@ class PropertyGraphMixin:
             observations=observations,
             metadata=metadata,
             tags=tags,
+            owner=owner,
         )
         if entity:
             node_props: Dict[str, Any] = {
@@ -193,8 +210,13 @@ class PropertyGraphMixin:
                         edge_props[k] = v
             try:
                 # Resolve IDs via existing entity lookup
-                from_entity_data = await self.get_entity(entity_name=from_entity)  # type: ignore[attr-defined]
-                to_entity_data = await self.get_entity(entity_name=to_entity)  # type: ignore[attr-defined]
+                # Mirror of a write that already resolved these names globally (#18825 scopes reads).
+                from_entity_data = await self.get_entity(  # type: ignore[attr-defined]
+                    entity_name=from_entity, owner=UNSCOPED_ALL_USERS
+                )
+                to_entity_data = await self.get_entity(  # type: ignore[attr-defined]
+                    entity_name=to_entity, owner=UNSCOPED_ALL_USERS
+                )
                 if from_entity_data and to_entity_data:
                     await self.graph.add_edge(
                         from_entity_data["id"],
@@ -229,52 +251,53 @@ class PropertyGraphMixin:
         relation: str | None = None,
         max_depth: int = 6,
         direction: str = "both",
+        *,
+        owner: Any,
     ) -> Dict[str, Any]:
-        """Return the shortest relationship path between two named entities.
+        """Shortest relationship path between two named entities, within ``owner``'s scope.
 
-        This is the name-addressed entry point to ``PropertyGraph.shortest_path``
-        — callers hold entity *names*, the property graph is keyed by entity
-        *ids*, and #13474 wired the two together so the traversal has a
-        production caller (the Graph-RAG ``/path`` endpoint and the
-        ``memory.path`` MCP tool both land here, so the resolution and
-        serialisation live in exactly one place).
-
-        Args:
-            from_entity: Source entity name.
-            to_entity: Target entity name.
-            relation: Restrict traversal to this relation type; None = all.
-            max_depth: Maximum path length to search.
-            direction: ``"outgoing"``, ``"incoming"``, or ``"both"`` (default —
-                connection questions are usually undirected).
-
-        Returns:
-            Dict with ``found``, ``reason``, ``missing_entities``,
-            ``from_entity``, ``to_entity``, ``hops``, ``path`` and ``query``.
-            Redis failures propagate: a traversal that could not run must not be
-            reported as "no path".
+        Name-addressed entry point to ``PropertyGraph.shortest_path`` (#13474), shared by the
+        Graph-RAG ``/path`` endpoint and the ``memory.path`` MCP tool. ``owner`` is REQUIRED
+        (#18825): both endpoints resolve within it and every hop it may not read is dropped.
+        Returns ``found``, ``reason``, ``missing_entities``, ``from_entity``, ``to_entity``,
+        ``hops``, ``path``, ``query``. Redis failures propagate: not-run is never "no path".
         """
+        require_scope(owner)
+        query = _path_query(from_entity, to_entity, relation, max_depth, direction)
         from_node, to_node = await asyncio.gather(
-            self.get_entity(entity_name=from_entity),  # type: ignore[attr-defined]
-            self.get_entity(entity_name=to_entity),  # type: ignore[attr-defined]
+            self.get_entity(entity_name=from_entity, owner=owner),  # type: ignore[attr-defined]
+            self.get_entity(entity_name=to_entity, owner=owner),  # type: ignore[attr-defined]
         )
-        query = {
-            "from_entity": from_entity,
-            "to_entity": to_entity,
-            "relation": relation,
-            "max_depth": max_depth,
-            "direction": direction,
-        }
         missing = [name for name, node in ((from_entity, from_node), (to_entity, to_node)) if node is None]
         if missing:
-            # get_entity swallows infrastructure errors and returns None, so a
-            # bare None cannot be trusted to mean "no such entity" — during a
-            # Redis outage it means "we could not look". Telling the user their
-            # name is wrong when the store was unreachable is a false negative
-            # dressed as an answer, so confirm the store is up before saying it.
-            await self._assert_store_reachable()
-            logger.info("find_path: unresolved entity names %s", missing)
-            return _path_result(from_node, to_node, None, missing, query)
+            return await self._unresolved_path(from_node, to_node, missing, query)
+        return await self._path_between(from_node, to_node, query, owner)
 
+    async def _unresolved_path(
+        self: AutoBotMemoryGraphCore,
+        from_node: Dict[str, Any] | None,
+        to_node: Dict[str, Any] | None,
+        missing: List[str],
+        query: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """The result for names that did not resolve, once the store is confirmed reachable."""
+        # get_entity swallows infrastructure errors and returns None, so a
+        # bare None cannot be trusted to mean "no such entity" — during a
+        # Redis outage it means "we could not look". Telling the user their
+        # name is wrong when the store was unreachable is a false negative
+        # dressed as an answer, so confirm the store is up before saying it.
+        await self._assert_store_reachable()
+        logger.info("find_path: unresolved entity names %s", missing)
+        return _path_result(from_node, to_node, None, missing, query)
+
+    async def _path_between(
+        self: AutoBotMemoryGraphCore,
+        from_node: Dict[str, Any],
+        to_node: Dict[str, Any],
+        query: Dict[str, Any],
+        owner: Any,
+    ) -> Dict[str, Any]:
+        """Shortest path between two resolved endpoints, dropping hops ``owner`` may not read."""
         # An entity can exist in the main store yet have no property-graph node:
         # create_entity mirrors into the graph best-effort, and anything created
         # before the mirror existed was never mirrored at all. Reporting that as
@@ -287,11 +310,21 @@ class PropertyGraphMixin:
         raw_path = await self.graph.shortest_path(
             from_node["id"],
             to_node["id"],
-            relation=relation,
-            max_depth=max_depth,
-            direction=direction,
+            relation=query["relation"],
+            max_depth=query["max_depth"],
+            direction=query["direction"],
+            hop_allowed=self._hop_reader(owner),
         )
         return _path_result(from_node, to_node, raw_path, [], query)
+
+    def _hop_reader(self: AutoBotMemoryGraphCore, owner: Any):
+        """Predicate for ``shortest_path``: may ``owner`` read the entity behind this node id? #18825."""
+
+        async def allowed(node_id: str) -> bool:
+            entity = await self.redis_client.json().get(f"memory:entity:{node_id}")
+            return entity_visible(entity, owner)
+
+        return allowed
 
     async def _assert_store_reachable(self: AutoBotMemoryGraphCore) -> None:
         """Raise if the entity store is unreachable. #13474.

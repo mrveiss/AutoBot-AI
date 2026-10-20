@@ -1,6 +1,6 @@
 # Threat Model — Trust Boundaries by Subsystem
 
-Read this **before** the `secreview` checklist when a diff touches one of these five
+Read this **before** the `secreview` checklist when a diff touches one of these six
 subsystems. It exists so a review states the invariant a change breaks instead of
 re-deriving the trust model from the implementation.
 
@@ -18,20 +18,11 @@ known base · `resolve_within_sandbox` (:288) the file-management sandbox ·
 `require_path_string` (:240) type gate before `Path()` / `os.makedirs`.
 
 **Invariants**
-- `validate_path` is never called without an explicit `allowed_roots`. The default
-  `_DEFAULT_ALLOWED_ROOTS` (:33) is `("/opt/autobot",)` — no `/tmp` (#15238): world-writable and
-  shared, so a default including it let an unprivileged local process plant a file for any
-  fallback-taking handler to read back. Prefer `PROJECT_ALLOWED_ROOTS` (:40) —
-  `str(project_root())` — over the default for a request-supplied path scoped to this project.
-- Decode before resolve: `_canonicalize` (:64) runs `_MAX_DECODE_ROUNDS` unquote passes plus
-  NFKC. `realpath` decodes nothing, so a denylist on the raw string is always wrong.
-- Containment is the **sole** authority — `relative_to`, both sides realpath'd. Pre-resolution
-  refusals (absolute, `..`, drive qualifier) are defence in depth only; replacing it is a smell (#15786).
-- The validated string is the string used. Validating `user_path` then opening something
-  rebuilt from the original input is a finding.
-- `resolve_within_sandbox` forbids **any** `..`, `~`, leading `/`, or `SANDBOX_INVALID_PATH_CHARACTERS` (:45)
-  — in-bounds or not. `''`, `'/'`, `'//'` legitimately address the sandbox root and return it unchanged
-  (#11823); a diff that makes them raise again breaks root listing.
+- `validate_path` is never called without an explicit `allowed_roots`. The default `_DEFAULT_ALLOWED_ROOTS` (:33) is `("/opt/autobot",)` — no `/tmp` (#15238): world-writable and shared, so a default including it let an unprivileged local process plant a file for any fallback-taking handler to read back. Prefer `PROJECT_ALLOWED_ROOTS` (:40) — `str(project_root())` — over the default for a request-supplied path scoped to this project.
+- Decode before resolve: `_canonicalize` (:64) runs `_MAX_DECODE_ROUNDS` unquote passes plus NFKC. `realpath` decodes nothing, so a denylist on the raw string is always wrong.
+- Containment is the **sole** authority — `relative_to`, both sides realpath'd. Pre-resolution refusals (absolute, `..`, drive qualifier) are defence in depth only; replacing it is a smell (#15786).
+- The validated string is the string used. Validating `user_path` then opening something rebuilt from the original input is a finding.
+- `resolve_within_sandbox` forbids **any** `..`, `~`, leading `/`, or `SANDBOX_INVALID_PATH_CHARACTERS` (:45) — in-bounds or not. `''`, `'/'`, `'//'` legitimately address the sandbox root and return it unchanged (#11823); a diff that makes them raise again breaks root listing.
 - Upload **filenames** are their own gate: [`autobot-backend/security/upload_filename_policy.py`](../../autobot-backend/security/upload_filename_policy.py) `is_safe_file` (:111) — a bare name only (no `/`, no `\\`), one allow-list, a deny-list by name; every upload route imports it, and a route-local copy is a finding (the conversation copy accepted `a/b.txt` until #18704).
 
 **Known bypass shapes:** double percent-encoding (`%252e%252e`), Unicode confusables (`﹒﹒`, `‥`), null byte via encoding,
@@ -48,25 +39,13 @@ endpoint.
 Two postures, one validator (#14016): the contract is the docstring of [`security/session_posture.py`](../../autobot-backend/security/session_posture.py). A failed durable owner lookup denies under both and claims nothing: "unknown" is never "unowned" (#14033).
 
 **Invariants**
-- Redis keys are `chat:session:{session_id}` — **not** namespaced by user. Key
-  construction is never an ownership check; the metadata comparison is.
-- Owner identity is `metadata.owner` = **username**, never a user id. A diff comparing
-  against `user_id` is comparing the wrong field.
-- Redis is a TTL cache; the session file's `metadata.owner` is the record of truth. An absent Redis record means
-  "not cached", never "unowned" — [`session_ownership.py`](../../autobot-backend/security/session_ownership.py) `_owner_when_cache_is_empty` (:509) asks disk first and rehydrates **for the real owner, never for the caller** (#14018).
-- Undetermined enforcement policy degrades, in
-  [`security/enforcement_mode.py`](../../autobot-backend/security/enforcement_mode.py), to
-  `DEGRADED_ENFORCEMENT_MODE` (:53) and never to `disabled`: checks still run and violations
-  are still recorded (#14010). A new `except` that returns `"disabled"` is a fail-open.
-- A resolution that degraded stays marked `degraded` (:73), so a `log_only` decision record says
-  which of the two `log_only` states produced it (#15159). It marks the record only — `log_only` is
-  allow-and-audit in both, deliberately. A degraded route reporting the chosen `reason` is a finding.
-- Only two legitimate fast-path bypasses exist, in
-  [`security/session_ownership.py`](../../autobot-backend/security/session_ownership.py) —
-  `_resolve_fast_paths` (:459): global auth disabled, and enforcement explicitly `disabled`.
-  A third one added in a diff is a finding.
-- Creating over an existing session id is a 409, identical for "owned by someone else" and
-  "no recorded owner" — a 403 on the first would confirm who owns it (#14012).
+- Redis keys are `chat:session:{session_id}` — **not** namespaced by user. Key construction is never an ownership check; the metadata comparison is.
+- Owner identity is `metadata.owner` = **username**, never a user id. A diff comparing against `user_id` is comparing the wrong field.
+- Redis is a TTL cache; the session file's `metadata.owner` is the record of truth. An absent Redis record means "not cached", never "unowned" — [`session_ownership.py`](../../autobot-backend/security/session_ownership.py) `_owner_when_cache_is_empty` (:509) asks disk first and rehydrates **for the real owner, never for the caller** (#14018).
+- Undetermined enforcement policy degrades, in [`security/enforcement_mode.py`](../../autobot-backend/security/enforcement_mode.py), to `DEGRADED_ENFORCEMENT_MODE` (:53) and never to `disabled`: checks still run and violations are still recorded (#14010). A new `except` that returns `"disabled"` is a fail-open.
+- A resolution that degraded stays marked `degraded` (:73), so a `log_only` decision record says which of the two `log_only` states produced it (#15159). It marks the record only — `log_only` is allow-and-audit in both, deliberately. A degraded route reporting the chosen `reason` is a finding.
+- Only two legitimate fast-path bypasses exist, in [`security/session_ownership.py`](../../autobot-backend/security/session_ownership.py) — `_resolve_fast_paths` (:459): global auth disabled, and enforcement explicitly `disabled`. A third one added in a diff is a finding.
+- Creating over an existing session id is a 409, identical for "owned by someone else" and "no recorded owner" — a 403 on the first would confirm who owns it (#14012).
 
 ## 3. Plugin loading
 
@@ -83,15 +62,11 @@ Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-back
 
 **Invariants**
 - A plugin route without `Depends(check_admin_permission)` is remote code execution. This is the single highest-severity shape in this subsystem — check it first.
-- Extraction goes through `archive_safety`; [`plugin_install.py`](../../autobot-backend/plugin_install.py) only
-  re-exports `_validate_zip_metadata` and `_safe_extract`. A local `zf.extractall` reintroduces zip-slip and symlink escape.
-- Names match `_NAME_PATTERN` (:36) before any filesystem touch; the target is claimed by `_claim_install_target` (:126)
-  via `mkdir(exist_ok=False)`, which — with the per-name `_install_locks` — is what makes the collision check TOCTOU-free.
-- Git installs: scheme restricted to http(s), `--` before the URL, `protocol.file.allow=never`, no submodule recursion,
-  ref matched against `_GIT_REF_PATTERN` (:39), rejecting a leading `-` or `..`. Dropping any one is a finding on its own.
+- Extraction goes through `archive_safety`; [`plugin_install.py`](../../autobot-backend/plugin_install.py) only re-exports `_validate_zip_metadata` and `_safe_extract`. A local `zf.extractall` reintroduces zip-slip and symlink escape.
+- Names match `_NAME_PATTERN` (:36) before any filesystem touch; the target is claimed by `_claim_install_target` (:126) via `mkdir(exist_ok=False)`, which — with the per-name `_install_locks` — is what makes the collision check TOCTOU-free.
+- Git installs: scheme restricted to http(s), `--` before the URL, `protocol.file.allow=never`, no submodule recursion, ref matched against `_GIT_REF_PATTERN` (:39), rejecting a leading `-` or `..`. Dropping any one is a finding on its own.
 - `PluginRegistry._plugins` and `HookRegistry` are process-wide singletons that do not dedupe — a load path re-initialising a live plugin double-registers its callbacks (#14000).
-- A credential resolver is injected only into a plugin whose resolved directory lies under a trusted built-in root ([`credential_binding.py`](../../autobot_shared/plugin_sdk/credential_binding.py) `bound_resolver`), never by `manifest.name` alone, since a self-declared name lets any installed plugin claim it (#18094); `plugin_install.py` refuses a community install that takes a built-in name.
-  Both plugin hosts (startup `PluginManager`, API `PluginLoader`) take their search and trust lists from [`plugin_paths.py`](../../autobot-backend/plugin_paths.py); the CWD-relative dev fallback is searched but never trusted. The resolver narrows the sanctioned path and is not isolation: an in-process plugin can still read `os.environ` and module state.
+- A credential resolver is injected only into a plugin whose resolved directory lies under a trusted built-in root ([`credential_binding.py`](../../autobot_shared/plugin_sdk/credential_binding.py) `bound_resolver`), never by `manifest.name` alone, since a self-declared name lets any installed plugin claim it (#18094); `plugin_install.py` refuses a community install that takes a built-in name. Both plugin hosts (startup `PluginManager`, API `PluginLoader`) take their search and trust lists from [`plugin_paths.py`](../../autobot-backend/plugin_paths.py); the CWD-relative dev fallback is searched but never trusted. The resolver narrows the sanctioned path and is not isolation: an in-process plugin can still read `os.environ` and module state.
 
 ## 4. Secrets & credentials
 
@@ -145,6 +120,15 @@ refused `1008` before any RFB byte. Full reasoning is in that function's docstri
   ruling one call site at a time. Consequence: `superadmin`'s entry is empty, so it is refused —
   fix that in `ROLE_PERMISSIONS`, not in the gate. `desktop_ws_role_gate_17054_test.py` asserts
   both the table's answer and the socket's.
+
+## 6. Memory graph / Graph-RAG ownership
+
+**Boundary:** one authenticated user vs. *another user's* memory-graph entities and relations; a scope-less read looks like a working feature (#18825).
+**Canonical enforcement:** [`owner_scope.py`](../../autobot-backend/autobot_memory_graph/owner_scope.py) `OwnerScope` (:72) is a REQUIRED argument of every graph read; `require_scope` (:138) fails closed; `entity_visible` (:157) / `redis_owner_clause` (:174) are the one rule; `from_tenant` (:104) builds it from the principal, never a request body.
+
+**Invariants**
+- A relation needs BOTH ends readable: [`queries.py`](../../autobot-backend/autobot_memory_graph/queries.py) `_readable_relation_ends` (:263) drops the edge, or its id and type leak.
+- No admin bypass (`is_platform_admin` ignored); cross-user reads are `UNSCOPED_ALL_USERS`, system callers only. Ownerless entities are invisible, never rewritten (#17038).
 
 ## Cross-cutting
 

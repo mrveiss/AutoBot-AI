@@ -26,7 +26,10 @@ from agents.graph_entity_extractor import (
     RelationCandidate,
 )
 from autobot_memory_graph.core import RELATION_TYPES
+from autobot_memory_graph.owner_scope import OwnerScope
 from models.atomic_fact import AtomicFact, FactType, TemporalType
+
+_OWNER = OwnerScope.for_user("user-a")  # #18825: extraction is stamped with the requesting principal
 
 # ============================================================================
 # Fixtures
@@ -76,7 +79,7 @@ def mock_memory_graph():
     graph.initialized = True
 
     # Mock create_entity
-    async def mock_create_entity(entity_type, name, observations, metadata, tags):
+    async def mock_create_entity(entity_type, name, observations, metadata, tags, owner):
         return {
             "id": f"entity-{hash(name)}",
             "type": entity_type,
@@ -145,10 +148,7 @@ async def test_extract_and_populate_basic(entity_extractor, mock_extraction_agen
         {"role": "assistant", "content": "Fixed by increasing timeout to 30s"},
     ]
 
-    result = await entity_extractor.extract_and_populate(
-        conversation_id="test-123",
-        messages=messages,
-    )
+    result = await entity_extractor.extract_and_populate(conversation_id="test-123", messages=messages, owner=_OWNER)
 
     # Verify extraction agent was called (composition)
     mock_extraction_agent.extract_facts_from_text.assert_called_once()
@@ -172,10 +172,7 @@ async def test_extract_and_populate_with_relationships(entity_extractor, mock_me
         {"role": "assistant", "content": "Fixed timeout, added caching feature"},
     ]
 
-    result = await entity_extractor.extract_and_populate(
-        conversation_id="test-456",
-        messages=messages,
-    )
+    result = await entity_extractor.extract_and_populate(conversation_id="test-456", messages=messages, owner=_OWNER)
 
     # Verify relationships were created
     if result.entities_created > 1:
@@ -185,10 +182,7 @@ async def test_extract_and_populate_with_relationships(entity_extractor, mock_me
 @pytest.mark.asyncio
 async def test_extract_and_populate_empty_messages(entity_extractor):
     """Test handling of empty message list."""
-    result = await entity_extractor.extract_and_populate(
-        conversation_id="test-empty",
-        messages=[],
-    )
+    result = await entity_extractor.extract_and_populate(conversation_id="test-empty", messages=[], owner=_OWNER)
 
     # Should return early with no entities
     assert result.entities_created == 0
@@ -217,8 +211,7 @@ async def test_extract_and_populate_confidence_threshold(entity_extractor, mock_
     messages = [{"role": "user", "content": "test"}]
 
     result = await entity_extractor.extract_and_populate(
-        conversation_id="test-threshold",
-        messages=messages,
+        conversation_id="test-threshold", messages=messages, owner=_OWNER
     )
 
     # Should filter out low-confidence facts
@@ -552,10 +545,7 @@ async def test_extract_and_populate_handles_extraction_error(entity_extractor, m
 
     messages = [{"role": "user", "content": "test"}]
 
-    result = await entity_extractor.extract_and_populate(
-        conversation_id="test-error",
-        messages=messages,
-    )
+    result = await entity_extractor.extract_and_populate(conversation_id="test-error", messages=messages, owner=_OWNER)
 
     # Verify graceful error handling
     assert len(result.errors) > 0
@@ -593,7 +583,7 @@ async def test_create_entities_handles_graph_error(entity_extractor, mock_memory
         ),
     ]
 
-    created = await entity_extractor._create_entities_in_graph(candidates)
+    created = await entity_extractor._create_entities_in_graph(candidates, _OWNER)
 
     # Verify partial success (good entity created, error entity skipped)
     assert len(created) == 1

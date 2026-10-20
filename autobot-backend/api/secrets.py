@@ -932,17 +932,14 @@ async def get_secret(
                         owner_id=secret.get("chat_id") or "system",
                         scope="session" if secret.get("scope") == "chat" else "user",
                         session_id=chat_id,
+                        org_id=(_user or {}).get("org_id") or None,
                         metadata={
                             "secret_id": secret_id[:8] + "...",
                             "accessed_via": "api",
                             "original_scope": secret.get("scope"),
                         },
                     )
-                    logger.debug(
-                        "[Issue #608] Created secret entity for %s... in session %s",
-                        secret_id[:8],
-                        chat_id,
-                    )
+                    logger.debug("[Issue #608] Created secret entity for %s... in session %s", secret_id[:8], chat_id)
                 except Exception as graph_err:
                     logger.warning("[Issue #608] Failed to create secret entity: %s", graph_err)
 

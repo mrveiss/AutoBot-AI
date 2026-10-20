@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.knowledge_rag_loop import router as _loop_router
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_memory_graph.owner_scope import OwnerScope, OwnerScopeRequired
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge.schemas.rag import (
@@ -563,6 +564,10 @@ async def retrieval_context(
     from services.retrieval_dispatcher import get_context
 
     cag_service = CAGService(rag_service)
+    try:
+        owner = OwnerScope.from_auth_user(current_user)  # #18825: KAG's graph expansion is owner-scoped
+    except OwnerScopeRequired:
+        raise HTTPException(status_code=403, detail="Authenticated user required")
     # GraphRAGService is initialized in the app lifespan; absent → kag falls back to rag.
     graph_rag_service = getattr(http_request.app.state, "graph_rag_service", None)
     context, metrics = await get_context(
@@ -573,6 +578,7 @@ async def retrieval_context(
         mode=request.mode,
         collection=request.collection_id,
         model=request.model,
+        owner=owner,
     )
     strategy = getattr(metrics, "strategy", "rag")
     return {
