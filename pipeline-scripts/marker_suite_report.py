@@ -51,6 +51,10 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from autobot_shared.report_error import ReportError  # noqa: E402
+
 # The names pytest writes on <testsuite>. Kept as a constant so a pytest change
 # that renames one surfaces as a parse failure rather than a silent zero.
 _REQUIRED_ATTRS = ("tests", "failures", "errors", "skipped")
@@ -81,10 +85,6 @@ class Counts:
             errors=self.errors + other.errors,
             skipped=self.skipped + other.skipped,
         )
-
-
-class ReportError(RuntimeError):
-    """A report could not be read or understood. Never downgraded to zero."""
 
 
 def parse_report(path: Path) -> Counts:

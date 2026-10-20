@@ -12,11 +12,9 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
-import {
-  useRoles,
-  type DecommissionPreflight,
-} from '@/composables/useRoles'
+import { useRoles, type DecommissionPreflight } from '@/composables/useRoles'
 import { createLogger } from '@/utils/debugUtils'
+import { BaseModal } from '@autobot/ui'
 
 const logger = createLogger('DecommissionModal')
 
@@ -112,301 +110,223 @@ function handleMigrateClick() {
 </script>
 
 <template>
-  <div
-    class="modal-overlay"
-    @click.self="emit('close')"
-    @keydown.escape="emit('close')"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="decommission-title"
+  <BaseModal
+    :model-value="true"
+    :title="$t('fleet.decommissionModal.decommissionNodeHostname', { hostname: node.hostname })"
+    size="md"
+    :locked="state === 'running'"
+    :close-label="$t('fleet.decommissionModal.closeDecommissionModal')"
+    @close="state === 'complete' ? emit('decommissioned') : emit('close')"
   >
-    <div class="modal-content">
-      <!-- Header -->
-      <div class="modal-header">
-        <span class="header-icon" aria-hidden="true">&#9888;</span>
-        <h3 id="decommission-title">{{ $t('fleet.decommissionModal.decommissionNodeHostname', { hostname: node.hostname }) }}</h3>
-        <button
-          class="close-btn"
-          @click="emit('close')"
-          :aria-label="$t('fleet.decommissionModal.closeDecommissionModal')"
-        >
-          <span aria-hidden="true">{{ $t('fleet.decommissionModal.times') }}</span>
-        </button>
-      </div>
-
-      <!-- Body -->
-      <div class="modal-body">
-        <!-- Loading -->
-        <div v-if="state === 'loading'" class="loading" role="status">
-          <span class="spinner" aria-hidden="true"></span>
-          {{ $t('fleet.decommissionModal.checkingRoleDependencies') }}
-        </div>
-
-        <!-- Preflight results (blocked or ready) -->
-        <template
-          v-if="state === 'blocked' || state === 'ready'"
-        >
-          <!-- Warning banner -->
-          <div class="warning-banner">
-            <p class="warning-text">
-              {{ $t('fleet.decommissionModal.thisWillPermanentlyRemove') }}
-            </p>
-            <p class="warning-ip">
-              {{ $t('fleet.decommissionModal.iP') }} <code>{{ node.ip_address }}</code>
-            </p>
-          </div>
-
-          <!-- Must migrate (red) -->
-          <div
-            v-if="
-              preflight &&
-              preflight.must_migrate.length > 0
-            "
-            class="role-section role-section--danger"
-          >
-            <h4 class="section-title section-title--danger">
-              {{ $t('fleet.decommissionModal.mustMigrateFirst') }}
-            </h4>
-            <div
-              v-for="role in preflight.must_migrate"
-              :key="role.role_name"
-              class="role-row"
-            >
-              <div class="role-info">
-                <span class="role-name">
-                  {{ role.display_name || role.role_name }}
-                </span>
-                <span class="role-reason">
-                  {{ role.reason }}
-                </span>
-              </div>
-              <button
-                class="btn btn-sm btn-migrate"
-                :title="$t('fleet.decommissionModal.closeThisModalAndUseRole')"
-                @click="handleMigrateClick"
-              >
-                {{ $t('fleet.decommissionModal.migrate') }}
-              </button>
-            </div>
-          </div>
-
-          <!-- Should migrate (yellow) -->
-          <div
-            v-if="
-              preflight &&
-              preflight.should_migrate.length > 0
-            "
-            class="role-section role-section--warning"
-          >
-            <h4
-              class="section-title section-title--warning"
-            >
-              {{ $t('fleet.decommissionModal.recommendedToMigrate') }}
-            </h4>
-            <div
-              v-for="role in preflight.should_migrate"
-              :key="role.role_name"
-              class="role-row"
-            >
-              <div class="role-info">
-                <span class="role-name">
-                  {{ role.display_name || role.role_name }}
-                </span>
-                <span class="role-reason">
-                  {{ role.reason }}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Safe to remove (green) -->
-          <div
-            v-if="
-              preflight &&
-              preflight.safe_to_remove.length > 0
-            "
-            class="role-section role-section--safe"
-          >
-            <h4 class="section-title section-title--safe">
-              {{ $t('fleet.decommissionModal.safeToRemove') }}
-            </h4>
-            <div
-              v-for="role in preflight.safe_to_remove"
-              :key="role.role_name"
-              class="role-row"
-            >
-              <div class="role-info">
-                <span class="role-name">
-                  {{ role.display_name || role.role_name }}
-                </span>
-                <span class="role-reason">
-                  {{ role.reason }}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Options -->
-          <div class="options-section">
-            <label class="checkbox-label">
-              <input
-                type="checkbox"
-                v-model="backupEnabled"
-              />
-              {{ $t('fleet.decommissionModal.backupDataBeforeRemoval') }}
-            </label>
-          </div>
-
-          <!-- Confirm input -->
-          <div class="confirm-section">
-            <label
-              for="confirm-node-id"
-              class="confirm-label"
-            >
-              {{ $t('fleet.decommissionModal.type') }}
-              <code>{{ node.node_id }}</code>
-              {{ $t('fleet.decommissionModal.toConfirm') }}
-            </label>
-            <input
-              id="confirm-node-id"
-              v-model="confirmInput"
-              type="text"
-              class="confirm-input"
-              :placeholder="node.node_id"
-              autocomplete="off"
-            />
-          </div>
-        </template>
-
-        <!-- Running -->
-        <div
-          v-if="state === 'running'"
-          class="status-block"
-          role="status"
-        >
-          <span class="spinner" aria-hidden="true"></span>{{ $t('fleet.decommissionModal.decommissioningNode') }}</div>
-
-        <!-- Complete -->
-        <div
-          v-if="state === 'complete'"
-          class="status-block status-block--success"
-          role="status"
-        >{{ $t('fleet.decommissionModal.nodeDecommissionedSuccessfully') }}</div>
-
-        <!-- Failed -->
-        <div
-          v-if="state === 'failed'"
-          class="status-block status-block--error"
-          role="alert"
-        >
-          {{ errorMessage }}
-        </div>
-
-        <!-- Ansible log output -->
-        <div
-          v-if="ansibleOutput && (state === 'complete' || state === 'failed')"
-          class="log-section"
-        >
-          <button
-            class="log-toggle"
-            @click="($event.target as HTMLElement)?.closest('.log-section')?.classList.toggle('log-expanded')"
-          >{{ $t('fleet.decommissionModal.showAnsibleLog') }}</button>
-          <pre class="log-output">{{ ansibleOutput }}</pre>
-        </div>
-      </div>
-
-      <!-- Footer -->
-      <div class="modal-footer">
-        <template v-if="state === 'complete'">
-          <button
-            class="btn btn-primary"
-            @click="emit('decommissioned')"
-          >{{ $t('fleet.decommissionModal.close') }}</button>
-        </template>
-        <template v-else-if="state !== 'running'">
-          <button
-            class="btn btn-cancel"
-            @click="emit('close')"
-          >{{ $t('fleet.decommissionModal.cancel') }}</button>
-          <button
-            class="btn btn-error"
-            :disabled="!canDecommission"
-            @click="handleDecommission"
-          >{{ $t('fleet.decommissionModal.decommission') }}</button>
-        </template>
-      </div>
+    <template #title>
+      <span class="header-icon" aria-hidden="true">&#9888;</span>
+      {{ $t('fleet.decommissionModal.decommissionNodeHostname', { hostname: node.hostname }) }}
+    </template>
+    <!-- Loading -->
+    <div v-if="state === 'loading'" class="loading" role="status">
+      <span class="spinner" aria-hidden="true"></span>
+      {{ $t('fleet.decommissionModal.checkingRoleDependencies') }}
     </div>
-  </div>
+
+    <!-- Preflight results (blocked or ready) -->
+    <template
+      v-if="state === 'blocked' || state === 'ready'"
+    >
+      <!-- Warning banner -->
+      <div class="warning-banner">
+        <p class="warning-text">
+          {{ $t('fleet.decommissionModal.thisWillPermanentlyRemove') }}
+        </p>
+        <p class="warning-ip">
+          {{ $t('fleet.decommissionModal.iP') }} <code>{{ node.ip_address }}</code>
+        </p>
+      </div>
+
+      <!-- Must migrate (red) -->
+      <div
+        v-if="
+          preflight &&
+          preflight.must_migrate.length > 0
+        "
+        class="role-section role-section--danger"
+      >
+        <h4 class="section-title section-title--danger">
+          {{ $t('fleet.decommissionModal.mustMigrateFirst') }}
+        </h4>
+        <div
+          v-for="role in preflight.must_migrate"
+          :key="role.role_name"
+          class="role-row"
+        >
+          <div class="role-info">
+            <span class="role-name">
+              {{ role.display_name || role.role_name }}
+            </span>
+            <span class="role-reason">
+              {{ role.reason }}
+            </span>
+          </div>
+          <button
+            class="btn btn-sm btn-migrate"
+            :title="$t('fleet.decommissionModal.closeThisModalAndUseRole')"
+            @click="handleMigrateClick"
+          >
+            {{ $t('fleet.decommissionModal.migrate') }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Should migrate (yellow) -->
+      <div
+        v-if="
+          preflight &&
+          preflight.should_migrate.length > 0
+        "
+        class="role-section role-section--warning"
+      >
+        <h4
+          class="section-title section-title--warning"
+        >
+          {{ $t('fleet.decommissionModal.recommendedToMigrate') }}
+        </h4>
+        <div
+          v-for="role in preflight.should_migrate"
+          :key="role.role_name"
+          class="role-row"
+        >
+          <div class="role-info">
+            <span class="role-name">
+              {{ role.display_name || role.role_name }}
+            </span>
+            <span class="role-reason">
+              {{ role.reason }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Safe to remove (green) -->
+      <div
+        v-if="
+          preflight &&
+          preflight.safe_to_remove.length > 0
+        "
+        class="role-section role-section--safe"
+      >
+        <h4 class="section-title section-title--safe">
+          {{ $t('fleet.decommissionModal.safeToRemove') }}
+        </h4>
+        <div
+          v-for="role in preflight.safe_to_remove"
+          :key="role.role_name"
+          class="role-row"
+        >
+          <div class="role-info">
+            <span class="role-name">
+              {{ role.display_name || role.role_name }}
+            </span>
+            <span class="role-reason">
+              {{ role.reason }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Options -->
+      <div class="options-section">
+        <label class="checkbox-label">
+          <input
+            type="checkbox"
+            v-model="backupEnabled"
+          />
+          {{ $t('fleet.decommissionModal.backupDataBeforeRemoval') }}
+        </label>
+      </div>
+
+      <!-- Confirm input -->
+      <div class="confirm-section">
+        <label
+          for="confirm-node-id"
+          class="confirm-label"
+        >
+          {{ $t('fleet.decommissionModal.type') }}
+          <code>{{ node.node_id }}</code>
+          {{ $t('fleet.decommissionModal.toConfirm') }}
+        </label>
+        <input
+          id="confirm-node-id"
+          v-model="confirmInput"
+          type="text"
+          class="confirm-input"
+          :placeholder="node.node_id"
+          autocomplete="off"
+        />
+      </div>
+    </template>
+
+    <!-- Running -->
+    <div
+      v-if="state === 'running'"
+      class="status-block"
+      role="status"
+    >
+      <span class="spinner" aria-hidden="true"></span>{{ $t('fleet.decommissionModal.decommissioningNode') }}</div>
+
+    <!-- Complete -->
+    <div
+      v-if="state === 'complete'"
+      class="status-block status-block--success"
+      role="status"
+    >{{ $t('fleet.decommissionModal.nodeDecommissionedSuccessfully') }}</div>
+
+    <!-- Failed -->
+    <div
+      v-if="state === 'failed'"
+      class="status-block status-block--error"
+      role="alert"
+    >
+      {{ errorMessage }}
+    </div>
+
+    <!-- Ansible log output -->
+    <div
+      v-if="ansibleOutput && (state === 'complete' || state === 'failed')"
+      class="log-section"
+    >
+      <button
+        class="log-toggle"
+        @click="($event.target as HTMLElement)?.closest('.log-section')?.classList.toggle('log-expanded')"
+      >{{ $t('fleet.decommissionModal.showAnsibleLog') }}</button>
+      <pre class="log-output">{{ ansibleOutput }}</pre>
+    </div>
+    <template v-if="state !== 'running'" #actions>
+      <template v-if="state === 'complete'">
+        <button
+          class="btn btn-primary"
+          @click="emit('decommissioned')"
+        >{{ $t('fleet.decommissionModal.close') }}</button>
+      </template>
+      <template v-else>
+        <button
+          class="btn btn-cancel"
+          @click="emit('close')"
+        >{{ $t('fleet.decommissionModal.cancel') }}</button>
+        <button
+          class="btn btn-error"
+          :disabled="!canDecommission"
+          @click="handleDecommission"
+        >{{ $t('fleet.decommissionModal.decommission') }}</button>
+      </template>
+    </template>
+  </BaseModal>
 </template>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
-
-.modal-content {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border-radius: var(--radius-lg);
-  width: 540px;
-  max-width: 90vw;
-  max-height: 80vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  padding: var(--spacing-4) var(--spacing-5);
-  border-bottom: 1px solid var(--border-color);
-}
-
 .header-icon {
   font-size: var(--text-xl);
   color: var(--color-warning);
   margin-right: 10px;
   flex-shrink: 0;
-}
-
-.modal-header h3 {
-  margin: 0;
-  flex: 1;
-  font-size: var(--text-base);
-  color: var(--text-primary);
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: var(--text-2xl);
-  cursor: pointer;
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-.modal-body {
-  padding: var(--spacing-5);
-  overflow-y: auto;
-  flex: 1;
-}
-
-.modal-footer {
-  padding: var(--spacing-4) var(--spacing-5);
-  border-top: 1px solid var(--border-color);
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-3);
 }
 
 /* Loading */

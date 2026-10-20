@@ -8,12 +8,13 @@
  *
  * Allows viewing and managing roles for a node.
  *
- * Issue #754: Added role="dialog", aria-modal, aria-labelledby,
- * keyboard escape handling, accessible labels on buttons,
- * scope attributes on table headers, role="status" on sync message.
+ * Issue #754: accessible labels on buttons, scope attributes on table headers,
+ * role="status" on sync message. The dialog shell (role, focus trap, Escape) is
+ * the kit BaseModal (#14777).
  */
 
 import { ref, computed, onMounted } from 'vue'
+import { BaseModal } from '@autobot/ui'
 import { useRoles, type NodeRolesInfo } from '@/composables/useRoles'
 import { formatDateTime } from '@/composables/useTimezone'
 
@@ -140,240 +141,181 @@ function formatDate(dateStr: string | null): string {
 </script>
 
 <template>
-  <div
-    class="modal-overlay"
-    @click.self="emit('close')"
-    @keydown.escape="emit('close')"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="role-mgmt-title"
+  <BaseModal
+    :model-value="true"
+    :title="$t('roleManagementModal.roleManagement')"
+    width="600px"
+    :close-label="$t('roleManagementModal.closeRoleManagement')"
+    @close="emit('close')"
   >
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 id="role-mgmt-title">{{ $t('roleManagementModal.roleManagement') }}</h3>
-        <span class="hostname">{{ hostname }}</span>
-        <button class="close-btn" @click="emit('close')" :aria-label="$t('roleManagementModal.closeRoleManagement')">
-          <span aria-hidden="true">{{ $t('roleManagementModal.times') }}</span>
-        </button>
-      </div>
+    <template #subtitle>{{ hostname }}</template>
 
-      <div v-if="isLoading" class="loading" role="status">
-        {{ $t('roleManagementModal.loadingRoleInformation') }}
-      </div>
+    <div v-if="isLoading" class="loading" role="status">
+      {{ $t('roleManagementModal.loadingRoleInformation') }}
+    </div>
 
-      <div v-else class="modal-body">
-        <!-- Detected Roles Section -->
-        <section class="section" :aria-label="$t('roleManagementModal.autoDetectedRoles2')">
-          <h4>{{ $t('roleManagementModal.autoDetectedRoles') }}</h4>
-          <div v-if="detectedRolesList.length === 0" class="empty-message">
-            {{ $t('roleManagementModal.noRolesAutoDetected') }}
+    <div v-else>
+      <!-- Detected Roles Section -->
+      <section class="section" :aria-label="$t('roleManagementModal.autoDetectedRoles2')">
+        <h4>{{ $t('roleManagementModal.autoDetectedRoles') }}</h4>
+        <div v-if="detectedRolesList.length === 0" class="empty-message">
+          {{ $t('roleManagementModal.noRolesAutoDetected') }}
+        </div>
+        <div v-else class="role-list">
+          <div
+            v-for="roleName in detectedRolesList"
+            :key="roleName"
+            class="role-item detected"
+          >
+            <span class="role-name">{{ roleName }}</span>
+            <span class="role-badge auto">{{ $t('roleManagementModal.auto') }}</span>
           </div>
-          <div v-else class="role-list">
-            <div
-              v-for="roleName in detectedRolesList"
-              :key="roleName"
-              class="role-item detected"
+        </div>
+      </section>
+
+      <!-- All Role Statuses -->
+      <section class="section" :aria-label="$t('roleManagementModal.roleStatusTable')">
+        <h4>{{ $t('roleManagementModal.roleStatus') }}</h4>
+        <table class="role-table" v-if="allNodeRoles.length > 0">
+          <thead>
+            <tr>
+              <th scope="col">{{ $t('roleManagementModal.role') }}</th>
+              <th scope="col">{{ $t('roleManagementModal.status') }}</th>
+              <th scope="col">{{ $t('roleManagementModal.version') }}</th>
+              <th scope="col">{{ $t('roleManagementModal.lastSynced') }}</th>
+              <th scope="col">{{ $t('roleManagementModal.actions') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="role in allNodeRoles" :key="role.role_name">
+              <td>
+                {{ role.role_name }}
+                <span v-if="role.assignment_type === 'manual'" class="role-badge manual">{{ $t('roleManagementModal.manual') }}</span>
+              </td>
+              <td>
+                <span :class="['status', getStatusClass(role.status)]">
+                  {{ role.status }}
+                </span>
+              </td>
+              <td>{{ role.current_version?.slice(0, 12) || '-' }}</td>
+              <td>{{ formatDate(role.last_synced_at) }}</td>
+              <td class="actions">
+                <button
+                  class="btn btn-sm btn-primary"
+                  :disabled="isSyncing"
+                  @click="handleSyncRole(role.role_name)"
+                  :aria-label="$t('roleManagementModal.syncRoleAria', { roleName: role.role_name })"
+                >
+                  {{ $t('roleManagementModal.sync') }}
+                </button>
+                <button
+                  v-if="role.assignment_type === 'manual'"
+                  class="btn btn-sm btn-error"
+                  :disabled="isSaving || isRemoving"
+                  @click="handleRemoveRole(role.role_name)"
+                  :aria-label="$t('roleManagementModal.removeRoleAria', { roleName: role.role_name })"
+                >
+                  {{ $t('roleManagementModal.remove') }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-else class="empty-message">
+          {{ $t('roleManagementModal.noRolesAssignedTo') }}
+        </div>
+      </section>
+
+      <!-- Assign Role Section -->
+      <section class="section" :aria-label="$t('roleManagementModal.assignRole')">
+        <h4>{{ $t('roleManagementModal.assignRoleManually') }}</h4>
+        <div class="assign-form">
+          <label for="role-select" class="sr-only">{{ $t('roleManagementModal.selectARoleTo') }}</label>
+          <select id="role-select" v-model="selectedRole" class="role-select">
+            <option value="">{{ $t('roleManagementModal.selectARole') }}</option>
+            <option
+              v-for="role in availableRoles"
+              :key="role.name"
+              :value="role.name"
             >
-              <span class="role-name">{{ roleName }}</span>
-              <span class="role-badge auto">{{ $t('roleManagementModal.auto') }}</span>
-            </div>
-          </div>
-        </section>
+              {{ role.display_name || role.name }}
+            </option>
+          </select>
+          <button
+            class="btn btn-primary"
+            :disabled="!selectedRole || isSaving"
+            @click="handleAssignRole"
+          >
+            {{ $t('roleManagementModal.assign') }}
+          </button>
+        </div>
+      </section>
 
-        <!-- All Role Statuses -->
-        <section class="section" :aria-label="$t('roleManagementModal.roleStatusTable')">
-          <h4>{{ $t('roleManagementModal.roleStatus') }}</h4>
-          <table class="role-table" v-if="allNodeRoles.length > 0">
-            <thead>
-              <tr>
-                <th scope="col">{{ $t('roleManagementModal.role') }}</th>
-                <th scope="col">{{ $t('roleManagementModal.status') }}</th>
-                <th scope="col">{{ $t('roleManagementModal.version') }}</th>
-                <th scope="col">{{ $t('roleManagementModal.lastSynced') }}</th>
-                <th scope="col">{{ $t('roleManagementModal.actions') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="role in allNodeRoles" :key="role.role_name">
-                <td>
-                  {{ role.role_name }}
-                  <span v-if="role.assignment_type === 'manual'" class="role-badge manual">{{ $t('roleManagementModal.manual') }}</span>
-                </td>
-                <td>
-                  <span :class="['status', getStatusClass(role.status)]">
-                    {{ role.status }}
-                  </span>
-                </td>
-                <td>{{ role.current_version?.slice(0, 12) || '-' }}</td>
-                <td>{{ formatDate(role.last_synced_at) }}</td>
-                <td class="actions">
-                  <button
-                    class="btn btn-sm btn-primary"
-                    :disabled="isSyncing"
-                    @click="handleSyncRole(role.role_name)"
-                    :aria-label="$t('roleManagementModal.syncRoleAria', { roleName: role.role_name })"
-                  >
-                    {{ $t('roleManagementModal.sync') }}
-                  </button>
-                  <button
-                    v-if="role.assignment_type === 'manual'"
-                    class="btn btn-sm btn-error"
-                    :disabled="isSaving || isRemoving"
-                    @click="handleRemoveRole(role.role_name)"
-                    :aria-label="$t('roleManagementModal.removeRoleAria', { roleName: role.role_name })"
-                  >
-                    {{ $t('roleManagementModal.remove') }}
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <div v-else class="empty-message">
-            {{ $t('roleManagementModal.noRolesAssignedTo') }}
-          </div>
-        </section>
+      <!-- Listening Ports -->
+      <section class="section" v-if="nodeRoles?.listening_ports?.length" :aria-label="$t('roleManagementModal.listeningPorts2')">
+        <h4>{{ $t('roleManagementModal.listeningPorts') }}</h4>
+        <div class="port-list">
+          <span
+            v-for="port in nodeRoles.listening_ports"
+            :key="port.port"
+            class="port-badge"
+          >
+            {{ port.port }}
+            <span v-if="port.process" class="port-process">({{ port.process }})</span>
+          </span>
+        </div>
+      </section>
 
-        <!-- Assign Role Section -->
-        <section class="section" :aria-label="$t('roleManagementModal.assignRole')">
-          <h4>{{ $t('roleManagementModal.assignRoleManually') }}</h4>
-          <div class="assign-form">
-            <label for="role-select" class="sr-only">{{ $t('roleManagementModal.selectARoleTo') }}</label>
-            <select id="role-select" v-model="selectedRole" class="role-select">
-              <option value="">{{ $t('roleManagementModal.selectARole') }}</option>
-              <option
-                v-for="role in availableRoles"
-                :key="role.name"
-                :value="role.name"
-              >
-                {{ role.display_name || role.name }}
-              </option>
-            </select>
+      <!-- Remove Confirmation Dialog (Issue #1041) -->
+      <div v-if="showRemoveConfirm" class="confirm-overlay">
+        <div class="confirm-dialog" role="alertdialog" aria-labelledby="confirm-title">
+          <h4 id="confirm-title">{{ $t('roleManagementModal.removeValue0', { value0: roleToRemove }) }}</h4>
+          <p v-if="isDataBearingRole" class="confirm-warning">
+            {{ $t('roleManagementModal.thisRoleMayContain') }}
+          </p>
+          <p v-else class="confirm-text">
+            {{ $t('roleManagementModal.thisWillStopAnd') }}
+          </p>
+          <div class="confirm-actions">
             <button
-              class="btn btn-primary"
-              :disabled="!selectedRole || isSaving"
-              @click="handleAssignRole"
+              v-if="isDataBearingRole"
+              class="btn btn-sm btn-primary"
+              @click="confirmRemove(true)"
             >
-              {{ $t('roleManagementModal.assign') }}
+              {{ $t('roleManagementModal.backupAmpRemove') }}
+            </button>
+            <button
+              class="btn btn-sm btn-error"
+              @click="confirmRemove(false)"
+            >
+              {{ isDataBearingRole ? $t('roleManagementModal.removeWithoutBackup') : $t('roleManagementModal.remove') }}
+            </button>
+            <button class="btn btn-sm btn-secondary" @click="cancelRemove">
+              {{ $t('roleManagementModal.cancel') }}
             </button>
           </div>
-        </section>
-
-        <!-- Listening Ports -->
-        <section class="section" v-if="nodeRoles?.listening_ports?.length" :aria-label="$t('roleManagementModal.listeningPorts2')">
-          <h4>{{ $t('roleManagementModal.listeningPorts') }}</h4>
-          <div class="port-list">
-            <span
-              v-for="port in nodeRoles.listening_ports"
-              :key="port.port"
-              class="port-badge"
-            >
-              {{ port.port }}
-              <span v-if="port.process" class="port-process">({{ port.process }})</span>
-            </span>
-          </div>
-        </section>
-
-        <!-- Remove Confirmation Dialog (Issue #1041) -->
-        <div v-if="showRemoveConfirm" class="confirm-overlay">
-          <div class="confirm-dialog" role="alertdialog" aria-labelledby="confirm-title">
-            <h4 id="confirm-title">{{ $t('roleManagementModal.removeValue0', { value0: roleToRemove }) }}</h4>
-            <p v-if="isDataBearingRole" class="confirm-warning">
-              {{ $t('roleManagementModal.thisRoleMayContain') }}
-            </p>
-            <p v-else class="confirm-text">
-              {{ $t('roleManagementModal.thisWillStopAnd') }}
-            </p>
-            <div class="confirm-actions">
-              <button
-                v-if="isDataBearingRole"
-                class="btn btn-sm btn-primary"
-                @click="confirmRemove(true)"
-              >
-                {{ $t('roleManagementModal.backupAmpRemove') }}
-              </button>
-              <button
-                class="btn btn-sm btn-error"
-                @click="confirmRemove(false)"
-              >
-                {{ isDataBearingRole ? $t('roleManagementModal.removeWithoutBackup') : $t('roleManagementModal.remove') }}
-              </button>
-              <button class="btn btn-sm btn-secondary" @click="cancelRemove">
-                {{ $t('roleManagementModal.cancel') }}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Sync / Status Message -->
-        <div v-if="syncMessage" class="sync-message" role="status">
-          {{ syncMessage }}
         </div>
       </div>
 
-      <div class="modal-footer">
-        <button class="btn btn-secondary" @click="emit('close')">{{ $t('roleManagementModal.close') }}</button>
+      <!-- Sync / Status Message -->
+      <div v-if="syncMessage" class="sync-message" role="status">
+        {{ syncMessage }}
       </div>
     </div>
-  </div>
+
+    <template #actions>
+      <button class="btn btn-secondary" @click="emit('close')">{{ $t('roleManagementModal.close') }}</button>
+    </template>
+  </BaseModal>
 </template>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
 
-.modal-content {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border-radius: var(--radius-lg);
-  width: 600px;
-  max-width: 90vw;
-  max-height: 80vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
 
-.modal-header {
-  display: flex;
-  align-items: center;
-  padding: var(--spacing-4) var(--spacing-5);
-  border-bottom: 1px solid var(--border-color);
-}
 
-.modal-header h3 {
-  margin: 0;
-  flex: 1;
-  color: var(--text-primary);
-}
 
-.hostname {
-  color: var(--text-muted);
-  margin-right: var(--spacing-4);
-}
 
-.close-btn {
-  background: none;
-  border: none;
-  font-size: var(--text-2xl);
-  cursor: pointer;
-  color: var(--text-muted);
-}
 
-.modal-body {
-  padding: var(--spacing-5);
-  overflow-y: auto;
-  flex: 1;
-}
 
 .loading {
   padding: var(--spacing-10);
@@ -525,13 +467,6 @@ function formatDate(dateStr: string | null): string {
   color: var(--info-color);
 }
 
-.modal-footer {
-  padding: var(--spacing-4) var(--spacing-5);
-  border-top: 1px solid var(--border-color);
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-3);
-}
 
 .btn {
   padding: var(--spacing-2) var(--spacing-4);

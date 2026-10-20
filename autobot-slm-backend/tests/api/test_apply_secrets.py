@@ -33,6 +33,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from testkit.fake_async_session import FakeAsyncSession
+
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -151,22 +153,9 @@ _secrets_mod = _load_secrets_module()
 _FAKE_USER = {"username": "tester", "is_admin": True}
 
 
-class _FakeResult:
-    def __init__(self, rows):
-        self._rows = rows
-
-    def all(self):
-        return self._rows
-
-
-class _FakeDB:
-    """Stand-in AsyncSession exposing only .execute(...).all() (#11719)."""
-
-    def __init__(self, rows):
-        self._rows = rows
-
-    async def execute(self, *_args, **_kwargs):
-        return _FakeResult(self._rows)
+def _fake_db(rows) -> FakeAsyncSession:
+    """Stand-in AsyncSession whose every execute(...) answers `.all()` with *rows* (#11719)."""
+    return FakeAsyncSession(default_result=list(rows))
 
 
 class _FakeExecutor:
@@ -222,20 +211,20 @@ def test_secret_to_dependent_roles_maps_hf_token_to_tts_worker():
 
 
 def test_find_node_ids_for_roles_matches_only_relevant_nodes():
-    db = _FakeDB([("node-1", ["tts-worker", "redis"]), ("node-2", ["backend"])])
+    db = _fake_db([("node-1", ["tts-worker", "redis"]), ("node-2", ["backend"])])
     result = _run(_secrets_mod._find_node_ids_for_roles(db, ["tts-worker"]))
     assert result == ["node-1"]
 
 
 def test_find_node_ids_for_roles_no_matches():
-    db = _FakeDB([("node-2", ["backend"])])
+    db = _fake_db([("node-2", ["backend"])])
     result = _run(_secrets_mod._find_node_ids_for_roles(db, ["tts-worker"]))
     assert result == []
 
 
 def test_find_node_ids_for_roles_handles_null_roles():
     """A node with roles=None (never assigned) must not crash the filter."""
-    db = _FakeDB([("node-3", None)])
+    db = _fake_db([("node-3", None)])
     result = _run(_secrets_mod._find_node_ids_for_roles(db, ["tts-worker"]))
     assert result == []
 
@@ -261,7 +250,7 @@ def test_get_dependent_roles_mapping_returns_mapping():
 
 def test_apply_secret_unknown_key_raises_422():
     payload = _secrets_mod.ApplySecretsRequest(key="not_a_real_secret")
-    db = _FakeDB([])
+    db = _fake_db([])
     with pytest.raises(_secrets_mod.HTTPException) as exc_info:
         _run(_secrets_mod.apply_secret(payload, db, _FAKE_USER))
     assert exc_info.value.status_code == 422
@@ -269,7 +258,7 @@ def test_apply_secret_unknown_key_raises_422():
 
 def test_apply_secret_no_dependent_nodes_raises_404():
     payload = _secrets_mod.ApplySecretsRequest(key="hf_token")
-    db = _FakeDB([("node-2", ["backend"])])  # no node runs tts-worker
+    db = _fake_db([("node-2", ["backend"])])  # no node runs tts-worker
     with pytest.raises(_secrets_mod.HTTPException) as exc_info:
         _run(_secrets_mod.apply_secret(payload, db, _FAKE_USER))
     assert exc_info.value.status_code == 404
@@ -277,7 +266,7 @@ def test_apply_secret_no_dependent_nodes_raises_404():
 
 def test_apply_secret_success_runs_playbook_limited_to_matching_nodes():
     payload = _secrets_mod.ApplySecretsRequest(key="hf_token")
-    db = _FakeDB([("node-1", ["tts-worker"]), ("node-2", ["backend"])])
+    db = _fake_db([("node-1", ["tts-worker"]), ("node-2", ["backend"])])
 
     result = _run(_secrets_mod.apply_secret(payload, db, _FAKE_USER))
 
@@ -295,7 +284,7 @@ def test_apply_secret_success_runs_playbook_limited_to_matching_nodes():
 def test_apply_secret_playbook_failure_propagates_success_false():
     _FakeExecutor.result = {"success": False, "output": "boom", "returncode": 1}
     payload = _secrets_mod.ApplySecretsRequest(key="hf_token")
-    db = _FakeDB([("node-1", ["tts-worker"])])
+    db = _fake_db([("node-1", ["tts-worker"])])
 
     result = _run(_secrets_mod.apply_secret(payload, db, _FAKE_USER))
 

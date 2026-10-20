@@ -24,6 +24,7 @@ from autobot_shared.time_utils import now_utc
 from models.secret import Secret
 from models.secret_dependency import SecretDependency
 from services.audit.taxonomy import AuditAction
+from testkit.fake_async_session import FakeAsyncSession
 from tests.coordination._issue_claims_harness import BASE, CREDENTIALS, mint, secret_id_of, with_credential
 from tests.security._credential_harness import CALLER
 
@@ -189,18 +190,20 @@ def test_revoking_needs_the_credential_itself_not_a_login(harness):
     assert _claim(harness, with_credential(credential)).status_code == 200
 
 
-class _DialectSession:
-    """Records the statements a mint issues, on a bind reporting dialect *name*."""
+class _DialectSession(FakeAsyncSession):
+    """Records the statements (and bound params) a mint issues, on a bind reporting dialect *name*."""
 
     def __init__(self, name: str):
+        super().__init__()
         self.bind = type("Bind", (), {"dialect": type("Dialect", (), {"name": name})()})()
         self.executed: list[tuple[str, dict]] = []
 
     def get_bind(self):
         return self.bind
 
-    async def execute(self, statement, params=None):
+    async def execute(self, statement, params=None, **kwargs):
         self.executed.append((str(statement), params or {}))
+        return await super().execute(statement, params, **kwargs)
 
 
 def test_postgres_mints_take_a_per_user_transaction_lock():

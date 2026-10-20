@@ -19,6 +19,10 @@ from fastapi import HTTPException
 from redis.exceptions import RedisError
 
 import auth_revocation
+from autobot_shared.auth.revocation_unavailable import (
+    REVOCATION_RETRY_AFTER_SECONDS,
+    REVOCATION_UNAVAILABLE_DETAIL,
+)
 
 _REDIS = "autobot_shared.user_management.password_epoch.get_async_redis_client"
 _JWT_USER = {"username": "alice", "sub": "alice", "iat": 1, "auth_method": "jwt", "role": "user"}
@@ -50,8 +54,10 @@ async def test_a_redis_error_denies_the_token(get_current_user, error):
         with pytest.raises(HTTPException) as denied:
             await get_current_user(_REQUEST)
 
-    assert denied.value.status_code == 401
-    assert denied.value.headers == {"WWW-Authenticate": "Bearer"}
+    # #18892: "could not check" is a retryable 503, not a 401 that logs a valid session out.
+    assert denied.value.status_code == 503
+    assert denied.value.detail == REVOCATION_UNAVAILABLE_DETAIL
+    assert denied.value.headers == {"Retry-After": str(max(1, REVOCATION_RETRY_AFTER_SECONDS))}
 
 
 @pytest.mark.asyncio
@@ -60,12 +66,12 @@ async def test_no_redis_client_denies_the_token(get_current_user):
         with pytest.raises(HTTPException) as denied:
             await get_current_user(_REQUEST)
 
-    assert denied.value.status_code == 401
+    assert denied.value.status_code == 503
 
 
 @pytest.mark.asyncio
 async def test_a_healthy_redis_admits_a_token_with_no_password_change(get_current_user):
-    """The control: the 401s above come from the failed check, not from the harness."""
+    """The control: the 503s above come from the failed check, not from the harness."""
     with patch(_REDIS, _redis_answering(value=None)):
         user = await get_current_user(_REQUEST)
 
@@ -108,12 +114,12 @@ async def test_the_denial_names_the_check_and_error_type_never_the_token(get_cur
 
 @pytest.mark.asyncio
 async def test_a_corrupt_epoch_marker_denies_the_token(get_current_user):
-    """#16422: a marker the check cannot read denies, like a store that cannot answer."""
+    """#16422: a marker the check cannot read denies, like a store that cannot answer (503, #18892)."""
     with patch(_REDIS, _redis_answering(value="not-a-number")):
         with pytest.raises(HTTPException) as denied:
             await get_current_user(_REQUEST)
 
-    assert denied.value.status_code == 401
+    assert denied.value.status_code == 503
 
 
 @pytest.mark.asyncio

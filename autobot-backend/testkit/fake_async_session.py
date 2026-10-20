@@ -63,6 +63,10 @@ class _FakeTransaction:
         self._done = False
         self._marks: tuple = (0, 0, 0, 0)
 
+    def __await__(self):
+        """``await session.begin_nested()`` starts the transaction too, as on a real AsyncSession."""
+        return self.__aenter__().__await__()
+
     async def __aenter__(self) -> "_FakeTransaction":
         if self._nested:
             # A real Session.begin_nested() flushes pending state before the SAVEPOINT, so outer

@@ -15,6 +15,7 @@ from __future__ import annotations
 import pytest
 
 from advanced_rag_optimizer import RAGMetrics, RankedResult
+from knowledge.search_filters import SYSTEM_SCOPE
 from services.chat_knowledge_service import ChatKnowledgeService
 
 # mock_rag_service: services/conftest.py
@@ -50,7 +51,9 @@ async def test_chat_grounding_cites_only_servable_facts(mock_rag_service) -> Non
     mock_rag_service.advanced_search.return_value = (list(_RESULTS), RAGMetrics())
     service = ChatKnowledgeService(mock_rag_service)
 
-    context, citations = await service.retrieve_relevant_knowledge(query="q", top_k=10, score_threshold=0.0)
+    context, citations = await service.retrieve_relevant_knowledge(
+        query="q", top_k=10, score_threshold=0.0, principal=SYSTEM_SCOPE
+    )
 
     # unverified and pending_review are served until #18077 decides otherwise.
     assert [c["id"] for c in citations] == ["verified", "future-valid-to", "unverified", "pending"]

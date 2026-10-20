@@ -197,7 +197,7 @@ async def _startup_database() -> None:
         await db_service.initialize()
         logger.info("Database initialized")
     except Exception as e:
-        logger.error("Database initialization failed: %s", e, exc_info=True)
+        logger.error("Database initialization failed: %s (%s)", db_service.describe_failure(e), e, exc_info=True)
         raise
 
 
@@ -488,7 +488,7 @@ async def _ensure_admin_user():
     import secrets
 
     from autobot_shared.user_management.user_service_errors import DuplicateUserError
-    from services.auth import auth_service
+    from services.admin_password_sync import sync_admin_password_at_startup
     from user_management.database import get_slm_session
     from user_management.services import TenantContext, UserService
 
@@ -501,10 +501,8 @@ async def _ensure_admin_user():
         existing = await user_service.get_user_by_username("admin")
 
         if existing:
-            if env_password:
-                existing.password_hash = auth_service.hash_password(env_password)
-                await db.flush()
-                logger.info("Admin password synced from SLM_ADMIN_PASSWORD")
+            if env_password:  # rehash + revoke older sessions only on a real change; an epoch outage logs, never aborts
+                await sync_admin_password_at_startup(db, existing, env_password)
             return
 
         password = env_password

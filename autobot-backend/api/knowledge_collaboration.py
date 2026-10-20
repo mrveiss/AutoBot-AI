@@ -13,6 +13,7 @@ Issue #679: Hierarchical knowledge access control system supporting:
 - Shared knowledge (explicit sharing)
 """
 
+import asyncio
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -31,6 +32,7 @@ from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
+from knowledge.acl_epoch import bump_acl_epoch
 from knowledge.ownership import VisibilityLevel
 from knowledge.search_filters import (
     authorize_fact_write,
@@ -454,6 +456,9 @@ async def unshare_knowledge(
         )
 
         await _write_fact_metadata(kb, fact_id, updated_metadata)
+        # #16664: unshare_fact bumped before the write; a search in between cached the old
+        # metadata under the revoked principal's new-epoch key, so orphan it again now.
+        await asyncio.to_thread(bump_acl_epoch, kb.ownership_manager.redis_client)
 
         logger.info("Unshared fact %s from %s %s", fact_id, entity_type, entity_id)
 

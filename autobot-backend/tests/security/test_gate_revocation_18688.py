@@ -127,8 +127,10 @@ def test_a_fresh_jwt_passes(monkeypatch, path):
 
 
 def test_an_epoch_store_that_cannot_answer_denies_the_admin_gate(monkeypatch):
-    """Revocation-store failure follows get_current_user's policy: fail closed, 401 (#16411)."""
+    """Revocation-store failure follows get_current_user's policy: fail closed with a 503 the client
+    retries, not a 401 that ends the session (#16411, #18892)."""
     import auth_revocation  # noqa: PLC0415
+    from autobot_shared.auth.revocation_unavailable import REVOCATION_UNAVAILABLE_DETAIL  # noqa: PLC0415
     from autobot_shared.user_management.password_epoch import RevocationCheckUnavailable  # noqa: PLC0415
 
     call = _admin_gate(monkeypatch)
@@ -138,8 +140,9 @@ def test_an_epoch_store_that_cannot_answer_denies_the_admin_gate(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         _resolve(call(_request()))
 
-    assert exc.value.status_code == 401
-    assert exc.value.detail == "Token could not be verified. Please sign in again."
+    assert exc.value.status_code == 503
+    assert exc.value.detail == REVOCATION_UNAVAILABLE_DETAIL
+    assert int(exc.value.headers["Retry-After"]) >= 1
 
 
 def test_the_internal_key_still_passes_the_admin_gate_without_an_epoch_lookup(monkeypatch):

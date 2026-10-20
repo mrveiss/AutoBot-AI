@@ -151,7 +151,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_history/context_overflow.py": 845,
     "autobot-backend/chat_history/session.py": 923,
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
-    "autobot-backend/chat_workflow/graph.py": 1680,
+    "autobot-backend/chat_workflow/graph.py": 1643,  # train 50: #18993 on main's 1652
     "autobot-backend/chat_workflow/llm_handler.py": 1301,
     "autobot-backend/chat_workflow/manager.py": 3886,  # #17273: graph turn lifecycle moved to turn_control
     "autobot-backend/chat_workflow/tool_handler.py": 3697,  # #11542 dispatch merge + #14068 mirror
@@ -323,7 +323,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/autoresearch/store_chromadb_test.py": 664,
     "autobot-backend/services/captcha_human_loop.py": 631,
     "autobot-backend/services/causal_inference_engine.py": 756,
-    "autobot-backend/services/chat_knowledge_service_test.py": 775,
+    "autobot-backend/services/chat_knowledge_service_test.py": 773,
     "autobot-backend/services/claim_verifier.py": 792,
     "autobot-backend/services/codebase_indexing_service.py": 1010,
     "autobot-backend/services/command_approval_manager.py": 649,
@@ -333,12 +333,12 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/execution/docker_backend.py": 604,
     "autobot-backend/services/fact_extraction_service.py": 870,
     "autobot-backend/services/fast_document_scanner.py": 653,
-    "autobot-backend/services/graph_rag_service.py": 697,
-    "autobot-backend/services/graph_rag_service_test.py": 895,
+    "autobot-backend/services/graph_rag_service.py": 647,
+    "autobot-backend/services/graph_rag_service_test.py": 890,
     "autobot-backend/services/knowledge/autonomous_loop.py": 798,
     "autobot-backend/services/knowledge/code_indexer.py": 1179,
     "autobot-backend/services/knowledge/doc_indexer.py": 1263,
-    "autobot-backend/services/knowledge/service.py": 850,
+    "autobot-backend/services/knowledge/service.py": 849,  # train 48: #18935 merged onto #18945
     "autobot-backend/services/knowledge/test_autonomous_loop.py": 708,
     "autobot-backend/services/knowledge/test_doc_indexer.py": 1466,
     "autobot-backend/services/knowledge/test_kb_synthesizer.py": 802,
@@ -348,7 +348,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/nl_database_service.py": 775,
     "autobot-backend/services/notification_service.py": 634,
     "autobot-backend/services/npu_worker_manager.py": 1419,
-    "autobot-backend/services/rag_service.py": 1303,
+    "autobot-backend/services/rag_service.py": 1176,
     "autobot-backend/services/redis_service_manager_test.py": 839,
     "autobot-backend/services/secrets_service.py": 688,
     "autobot-backend/services/security_memory_integration.py": 1031,
@@ -383,7 +383,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/tests/orchestration/test_causal_error_recovery.py": 746,
     "autobot-backend/tests/orchestration/test_execution_strategies.py": 603,
     "autobot-backend/tests/services/notification_service_test.py": 714,
-    "autobot-backend/tests/services/rag_service_events_test.py": 1099,
+    "autobot-backend/tests/services/rag_service_events_test.py": 1084,
     "autobot-backend/tests/services/test_causal_inference_engine.py": 807,
     "autobot-backend/tests/services/test_claim_classifier.py": 689,
     "autobot-backend/tests/services/test_claim_verifier.py": 1053,
@@ -442,7 +442,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/api/stateful.py": 685,
     "autobot-slm-backend/api/tls.py": 994,
     "autobot-slm-backend/api/updates.py": 1107,
-    "autobot-slm-backend/main.py": 780,  # #16375: secret seeding consolidated into services/generated_system_secrets.py
+    "autobot-slm-backend/main.py": 778,  # #18672: admin password sync moved into services/admin_password_sync.py
     "autobot-slm-backend/models/database.py": 1140,
     "autobot-slm-backend/models/schemas.py": 2145,
     "autobot-slm-backend/monitoring/business_intelligence_dashboard.py": 1159,

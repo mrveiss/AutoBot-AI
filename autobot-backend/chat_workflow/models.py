@@ -469,3 +469,13 @@ class WorkflowSession:
     message_count: int = 0
     metadata: Dict[str, Any] = field(default_factory=dict)
     conversation_history: List[Dict[str, str]] = field(default_factory=list)  # Track conversation context
+
+    def kb_principal(self):
+        """The principal chat grounding reads the KB as (#16664).
+
+        Built from the stamped ``metadata["user_id"]`` / ``["org_id"]``. A turn with no user id
+        reads as ``SYSTEM_SCOPE`` -- non-private facts only -- never as an unscoped read.
+        """
+        from knowledge.search_filters import principal_for_identity
+
+        return principal_for_identity(self.metadata.get("user_id"), self.metadata.get("org_id"))

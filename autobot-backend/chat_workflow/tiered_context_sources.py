@@ -212,6 +212,7 @@ async def build_tiered_context(session: Any, message: str, model_name: str) -> s
         session_id=session.session_id,
         memory_graph=await resolve_memory_graph(),
         owner=resolve_owner_scope(session),
+        principal=session.kb_principal(),  # #16664: L3 retrieves as the turn's user (SYSTEM_SCOPE if none)
         # #13742: deliberately NOT self.knowledge_service. The RAG path retrieves for every
         # use_knowledge turn via the same conversation_aware_retrieve L3 would call, then applies
         # budget_grounded_context for trimming and citation rebinding (#3770/#10837). Handing L3

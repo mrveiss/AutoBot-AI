@@ -20,6 +20,8 @@ from pathlib import Path
 
 import pytest
 
+from testkit.fake_async_session import FakeAsyncSession
+
 _slm_root = Path(__file__).parent.parent.parent
 if str(_slm_root) not in sys.path:
     sys.path.insert(0, str(_slm_root))
@@ -139,29 +141,6 @@ class TestBuildSecurityEvent:
         assert "secret" not in (ev.description or "").lower()
 
 
-class _FakeResult:
-    def __init__(self, rows):
-        self._rows = rows
-
-    def scalars(self):
-        return self
-
-    def all(self):
-        return self._rows
-
-
-class _FakeSession:
-    def __init__(self, nodes):
-        self._nodes = nodes
-        self.added = []
-
-    async def execute(self, _stmt):
-        return _FakeResult(self._nodes)
-
-    def add(self, obj):
-        self.added.append(obj)
-
-
 class _FakeSessionCtx:
     def __init__(self, session):
         self._session = session
@@ -186,7 +165,7 @@ class TestAuditFleet:
             _Node("node-a", [{"port": 6379, "address": "0.0.0.0"}, {"port": 5432, "address": "0.0.0.0"}]),
             _Node("node-b", [{"port": 6379, "address": "127.0.0.1"}]),  # loopback → nothing
         ]
-        session = _FakeSession(nodes)
+        session = FakeAsyncSession(default_result=nodes)
         monkeypatch.setattr(spa, "SlmSecurityEvent", _RecordingEvent)
         monkeypatch.setattr(spa, "_get_session", lambda: _FakeSessionCtx(session))
 

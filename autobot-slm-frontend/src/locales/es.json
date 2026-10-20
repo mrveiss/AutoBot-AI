@@ -1863,7 +1863,6 @@
     "syncRoleAria": "Sync {roleName}",
     "thisRoleMayContain": "This role may contain data. You can back it up before removal.",
     "thisWillStopAnd": "This will stop and remove the service from the node.",
-    "times": "×",
     "version": "Version"
   },
   "rolesView": {
@@ -2672,7 +2671,8 @@
         "userPreferences": "User Preferences",
         "username": "Username",
         "usersWhoAccessAutoBot": "Users who access AutoBot chat, workflows, and tools",
-        "usersWhoManageThe": "Users who manage the AutoBot fleet via the SLM admin dashboard"
+        "usersWhoManageThe": "Users who manage the AutoBot fleet via the SLM admin dashboard",
+        "resetPasswordFor": "Reset Password for {username}"
       }
     },
     "backendSettings": {
@@ -3581,5 +3581,10 @@
     "subtitle": "Preview unreferenced storage, repair unreachable resources, and review the audit trail — every deletion is proposed through the approval queue, never applied directly.",
     "tabName": "Data Hygiene",
     "title": "Data Hygiene"
+  },
+  "ui": {
+    "modal": {
+      "closeDialog": "Cerrar diálogo"
+    }
   }
 }

@@ -217,6 +217,11 @@ logging:
 # MONITORING CONFIGURATION
 # ==========================================
 
+# The backend's systemd EnvironmentFile (#16375 scrape token lives here). One declaration,
+# shared by the backend role and the updater's monitoring play (#18994); override per host
+# if the backend env file lives elsewhere.
+autobot_backend_env_file: "/etc/autobot/autobot-backend.env"
+
 # Addresses the monitoring services bind to / are reached at (#18556). Declared here,
 # not in roles/monitoring/defaults, because the slm_agent role renders the monitoring
 # role's node_exporter.service.j2 as well and role defaults are not shared across roles.
