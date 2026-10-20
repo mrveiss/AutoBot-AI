@@ -197,6 +197,8 @@ ALLOWED_ADDITIONS = {
             ".python-version",
             # #18729: docker_admin_seed_18729_test.py reads every Docker entrypoint.
             "docker/*/*entrypoint*.sh",
+            # #18666: install_release_signed_18666_test.py compares release.yml's cosign pin with this one.
+            f"{WORKFLOWS}/image-sign.yml",
         ]
     },
     # frontend_path_filter_mirror_test pins frontend-test.yml's on.push.paths to this file, so the

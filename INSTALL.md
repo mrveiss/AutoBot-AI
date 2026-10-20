@@ -53,6 +53,45 @@ sudo ./install.sh
 
 The installer takes 10-20 minutes depending on network speed and hardware.
 
+The `main` one-liner runs the newest installer, unpinned and unverified. For a production host,
+install a release instead and verify it first.
+
+### Verified, pinned install (recommended)
+
+Each release publishes three files next to its notes (#18666):
+- `install.sh`, pinned to that release: it installs exactly that tag;
+- `install.sh.sha256`, its checksum;
+- `install.sh.sig`, a cosign signature made with the key in this repository's `cosign.pub`.
+
+Releases made before this change do not carry them. Verify, then run:
+
+```bash
+TAG=v0.0.0   # the release you want, from https://github.com/mrveiss/AutoBot-AI/releases
+BASE="https://github.com/mrveiss/AutoBot-AI/releases/download/${TAG}"
+curl -fsSLO "${BASE}/install.sh"
+curl -fsSLO "${BASE}/install.sh.sha256"
+curl -fsSLO "${BASE}/install.sh.sig"
+curl -fsSL -o cosign.pub "https://raw.githubusercontent.com/mrveiss/AutoBot-AI/${TAG}/cosign.pub"
+sha256sum -c install.sh.sha256 \
+  && cosign verify-blob --key cosign.pub --signature install.sh.sig install.sh \
+  && sudo bash install.sh
+```
+
+The `&&` chain is the point: if a download is missing, the checksum differs or the signature does
+not verify, `install.sh` never runs.
+
+Keep the `cosign.pub` you trust and compare it with later downloads: a signature only proves the
+script matches the key, so the key is the thing to check once.
+
+Pinned but unverified, as a one-liner next to the `main` one:
+
+```bash
+curl -fsSL "https://github.com/mrveiss/AutoBot-AI/releases/download/${TAG}/install.sh" | sudo bash
+```
+
+**Offline or air-gapped installs are out of scope for now.** Phase 3 clones the repository from
+GitHub, and the roles install packages from your distribution's and vendors' mirrors.
+
 ---
 
 ## Installer Phases

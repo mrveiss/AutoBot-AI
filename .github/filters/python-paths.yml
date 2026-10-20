@@ -272,6 +272,8 @@ python:
   - '.github/workflows/no-commit-trailers.yml'
   - '.github/workflows/pr-issue-validation.yml'
   - '.github/workflows/release.yml'
+  # #18666: install_release_signed_18666_test.py checks release.yml's cosign pin against image-sign.yml.
+  - '.github/workflows/image-sign.yml'
   # #15495: `by_path_loaded_modules_are_package_free_test.py` derives its targets
   # from this workflow's `spec_from_file_location` calls. Without an entry here,
   # adding a fourth by-path load is exactly the change that skips the guard
