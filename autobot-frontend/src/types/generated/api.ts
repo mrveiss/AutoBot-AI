@@ -3800,6 +3800,34 @@ export interface paths {
         patch: operations["update_user_preferences_api_users_me_preferences_patch"];
         trace?: never;
     };
+    "/api/users/me/dashboard-layouts/{page}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Dashboard Layout
+         * @description Return the caller's stored layout for ``page``; no dashboards when none is stored.
+         */
+        get: operations["get_dashboard_layout_api_users_me_dashboard_layouts__page__get"];
+        /**
+         * Put Dashboard Layout
+         * @description Replace the caller's layout for ``page``.
+         */
+        put: operations["put_dashboard_layout_api_users_me_dashboard_layouts__page__put"];
+        post?: never;
+        /**
+         * Reset Dashboard Layout
+         * @description Drop the caller's stored layout for ``page`` so the defaults apply again.
+         */
+        delete: operations["reset_dashboard_layout_api_users_me_dashboard_layouts__page__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/devices/pair-qr": {
         parameters: {
             query?: never;
@@ -68185,6 +68213,30 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * Dashboard
+         * @description A named dashboard; widget list order is the visual order.
+         */
+        Dashboard: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Widgets */
+            widgets?: components["schemas"]["DashboardWidget"][];
+            /**
+             * Createdat
+             * @default 0
+             */
+            createdAt: number;
+            /**
+             * Updatedat
+             * @default 0
+             */
+            updatedAt: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * DashboardGenerateRequest
          * @description Request body for validation dashboard generation.
          */
@@ -68204,6 +68256,64 @@ export interface components {
              * @default 30
              */
             refresh_interval: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DashboardLayout
+         * @description Every dashboard the user keeps on one page; no dashboards means 'use defaults'.
+         */
+        DashboardLayout: {
+            /** Dashboards */
+            dashboards?: components["schemas"]["Dashboard"][];
+            /** Activeid */
+            activeId?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DashboardLayoutData
+         * @description Data payload for the dashboard layout endpoints.
+         */
+        DashboardLayoutData: {
+            /** Page */
+            page: string;
+            layout: components["schemas"]["DashboardLayout"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DashboardWidget
+         * @description One widget: its kind, label, config and place on the 12-column grid.
+         */
+        DashboardWidget: {
+            /** Id */
+            id: string;
+            /** Type */
+            type: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Span
+             * @default 6
+             * @enum {integer}
+             */
+            span: 4 | 6 | 8 | 12;
+            /**
+             * Height
+             * @description Widget height in px
+             * @default 320
+             */
+            height: number;
+            /** Props */
+            props?: {
+                [key: string]: unknown;
+            };
+            /** Refreshinterval */
+            refreshInterval?: number | null;
         } & {
             [key: string]: unknown;
         };
@@ -69869,6 +69979,21 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["ConvFileSearchData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DataResponse[DashboardLayoutData] */
+        DataResponse_DashboardLayoutData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["DashboardLayoutData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -111704,6 +111829,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_UserPreferencesData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dashboard_layout_api_users_me_dashboard_layouts__page__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_DashboardLayoutData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_dashboard_layout_api_users_me_dashboard_layouts__page__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardLayout"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_DashboardLayoutData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_dashboard_layout_api_users_me_dashboard_layouts__page__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_DashboardLayoutData_"];
                 };
             };
             /** @description Validation Error */

@@ -349,25 +349,33 @@ jobs:
     # against 0.15 and could never fire. Every Python test passed, because they
     # asserted substrings of the expr strings. The promtool suite catches it.
     #
-    # Version pinned to match install-prometheus-stack.sh, so CI validates rules
-    # with the same binary the hosts run.
+    # Version: read from the monitoring role's prometheus_version, the one
+    # declaration of the Prometheus version (#18556), so CI and hosts cannot drift.
     # Cached: the tarball is ~95.7 MB and this job runs 12 shards, so an
     # uncached download is ~1.15 GB per run of which ~1.05 GB is waste — the
     # promtool tests collect into exactly one shard. Not gated on the shard
     # number: which shard they land in is a function of .test_durations and
     # moves silently.
+    - name: Resolve the Prometheus version from the monitoring role (#18556)
+      id: promver
+      run: |
+        set -euo pipefail
+        V=$(sed -nE 's/^prometheus_version:[[:space:]]*"?([0-9][0-9.]*)"?.*/\1/p' autobot-slm-backend/ansible/roles/monitoring/defaults/main.yml)
+        test -n "$V"
+        echo "version=$V" >> "$GITHUB_OUTPUT"
+
     - name: Cache promtool
       id: promtool-cache
       uses: actions/cache@v6
       with:
         path: /usr/local/bin/promtool
-        key: promtool-${{ runner.os }}-2.47.0
+        key: promtool-${{ runner.os }}-${{ steps.promver.outputs.version }}
 
     - name: Install promtool (Prometheus rule validation, #13927)
       if: steps.promtool-cache.outputs.cache-hit != 'true'
       run: |
         set -euo pipefail
-        PROM_VERSION=2.47.0
+        PROM_VERSION="${{ steps.promver.outputs.version }}"
         TARBALL="prometheus-${PROM_VERSION}.linux-amd64"
         # --retry: this step sits in front of the entire Python suite. One
         # transient CDN 5xx would redden python-shard -> python-suite ->

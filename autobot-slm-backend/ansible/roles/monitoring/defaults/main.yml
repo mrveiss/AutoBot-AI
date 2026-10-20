@@ -10,8 +10,19 @@
 monitoring_install_prometheus: true
 monitoring_install_grafana: true
 monitoring_install_node_exporter: true
+# #18556: Alertmanager was installed only by the retired
+# autobot-infrastructure/shared/scripts/install-prometheus-stack.sh. Off by
+# default so a host that never ran that script is unchanged; set true on the
+# node that hosts alert routing.
+monitoring_install_alertmanager: false
 
-# Prometheus settings
+# Addresses the monitoring services bind to / are reached at (#18556). One
+# declaration each; templates and health checks read these, never a literal.
+monitoring_listen_address: "0.0.0.0"
+monitoring_local_host: "localhost"
+
+# Prometheus settings. prometheus_version is the ONE Prometheus version: CI reads
+# it from this line to pin promtool (.github/workflows/ci.yml, #18556).
 prometheus_version: "2.48.0"
 prometheus_port: 9090
 prometheus_retention_time: "15d"
@@ -19,12 +30,52 @@ prometheus_retention_size: "10GB"
 prometheus_scrape_interval: "15s"
 prometheus_evaluation_interval: "15s"
 
+# Alertmanager settings (#18556, ported from install-prometheus-stack.sh)
+alertmanager_version: "0.26.0"
+alertmanager_port: 9093
+# Host the release tarball is fetched from; a var so an air-gapped fleet can
+# point it at an internal mirror without editing the task.
+alertmanager_release_host: "github.com"
+alertmanager_user: "alertmanager"
+alertmanager_group: "alertmanager"
+# Install dirs derive from the one install root (#18880): the parent of
+# autobot.base_dir, so the path on a default host is unchanged. /etc and /var
+# below are FHS service locations (docs/developer/ARCHITECTURE_EXCEPTIONS.md).
+alertmanager_install_dir: "{{ autobot.base_dir | dirname }}/alertmanager"
+# Downloaded into the install dir (created before the fetch), removed after extract.
+alertmanager_archive: "{{ alertmanager_install_dir }}/alertmanager-{{ alertmanager_version }}.tar.gz"
+# Loopback only, and its own value: the sole consumer is the co-located Prometheus
+# (prometheus.yml.j2 targets this address). The API can create/delete silences and has
+# no auth, so it never follows monitoring_local_host (a scrape-target name an operator
+# may point at a routable address) nor monitoring_listen_address, and has no firewall rule.
+alertmanager_listen_address: "127.0.0.1"
+alertmanager_config_dir: "/etc/alertmanager"
+alertmanager_data_dir: "/var/lib/alertmanager"
+# #18556: what the role creates where a host may run its own Alertmanager. Each path absent
+# before the role ran is recorded as created_path= in the install record (install.sh's
+# INSTALL_RECORD), and scripts/uninstall.sh (RECORDED_PATHS) removes only recorded ones.
+alertmanager_owned_paths:
+  - "{{ alertmanager_install_dir }}"
+  - "{{ alertmanager_config_dir }}"
+  - "{{ alertmanager_data_dir }}"
+  - /etc/systemd/system/alertmanager.service
+autobot_install_record: /etc/autobot/install-record
+# The routing config and the rule file live once in the repo (the backend's
+# webhook tests read the same alertmanager.yml); copied from the repo clone,
+# as the alert rules are, never duplicated into the role.
+alertmanager_config_src: "{{ code_source_dir }}/autobot-infrastructure/shared/config/prometheus/alertmanager.yml"
+alertmanager_rules_src: "{{ code_source_dir }}/autobot-infrastructure/shared/config/prometheus/alertmanager_rules.yml"
+alertmanager_health_check_retries: 12
+alertmanager_health_check_delay: 5
+
 # Grafana settings
 grafana_version: "10.2.0"
 grafana_port: 3000
 grafana_admin_user: "admin"
 grafana_admin_password: "admin"  # Should be overridden in production
 grafana_allow_anonymous: true  # Required for iframe embedding in SLM frontend
+grafana_health_check_retries: 12
+grafana_health_check_delay: 5
 
 # Node exporter settings
 node_exporter_version: "1.7.0"
@@ -37,7 +88,7 @@ grafana_user: "grafana"
 grafana_group: "grafana"
 
 # Installation directories
-prometheus_install_dir: "/opt/prometheus"
+prometheus_install_dir: "{{ autobot.base_dir | dirname }}/prometheus"
 prometheus_config_dir: "/etc/prometheus"
 # #16375: the file Prometheus reads its backend scrape credential from
 # (`bearer_token_file`). Written by this role from `prometheus_scrape_token`,

@@ -142,6 +142,7 @@ def test_every_deployed_systemd_unit_is_removed_or_kept() -> None:
     assert len(resolved) >= 25, f"read {len(resolved)} deployed units -- the scan is broken"
     unit_dir = "/etc/systemd/system/"
     exact = {unit_dir + u for u in _array("UNITS") + _array("KEPT_UNITS")} | set(_array("UNIT_DROPINS"))
+    exact |= set(_array("RECORDED_PATHS"))  # removed only when the install record lists them (#18556)
     globs = [unit_dir + g for g in _array("UNIT_GLOBS")]
     missed = sorted(d for d in resolved | open_ if not _covered(d, exact, globs))
     assert not missed, f"roles deploy units scripts/uninstall.sh neither removes nor keeps: {missed}"

@@ -56,7 +56,8 @@ def _source_population(root):
 REACH = declare(
     "backoff-formula-scan",
     discover=_source_population,
-    floor=994,
+    # #18242: population 1132 -> window [982, 1132]; 994 sat in the bottom band, re-pinned mid-window.
+    floor=1057,
     what="frontend and kit source",
     roots=_ROOTS,
     growth=150,

@@ -24,7 +24,7 @@ vi.mock('vue-router', () => ({
   RouterLink: { template: '<a><slot /></a>' },
 }))
 vi.mock('@autobot/ui', async (importOriginal) => ({
-  // the real kit exports (BaseAlert, BaseButton) stay; only BaseModal is stubbed
+  // the real kit exports (BaseAlert, BaseButton, BaseInput) stay; only BaseModal is stubbed
   ...(await importOriginal<typeof import('@autobot/ui')>()),
   BaseModal: {
     name: 'BaseModal',

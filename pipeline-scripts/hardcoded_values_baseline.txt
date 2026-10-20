@@ -712,8 +712,6 @@
 1|other|autobot-infrastructure/shared/config/npu_workers.example.yaml|300
 1|other|autobot-infrastructure/shared/config/npu_workers.example.yaml|60
 10|ssot|autobot-infrastructure/shared/config/prometheus/alertmanager.yml|:8001
-2|ssot|autobot-infrastructure/shared/config/prometheus/prometheus.yml|:8001
-1|ssot|autobot-infrastructure/shared/config/prometheus/prometheus.yml|:9090
 2|other|autobot-infrastructure/shared/config/rollback.yml|120
 1|other|autobot-infrastructure/shared/config/rollback.yml|30
 1|other|autobot-infrastructure/shared/config/rollback.yml|300
@@ -788,14 +786,6 @@
 1|other|autobot-infrastructure/shared/scripts/install-bare-metal.sh|https://github.com/mrveiss/AutoBot-AI
 1|other|autobot-infrastructure/shared/scripts/install-bare-metal.sh|https://github.com/mrveiss/AutoBot-AI.git
 1|other|autobot-infrastructure/shared/scripts/install-bare-metal.sh|https://ollama.com/install.sh
-1|other|autobot-infrastructure/shared/scripts/install-prometheus-stack.sh|https://apt.grafana.com
-1|other|autobot-infrastructure/shared/scripts/install-prometheus-stack.sh|https://apt.grafana.com/gpg.key
-1|other|autobot-infrastructure/shared/scripts/install-prometheus-stack.sh|https://github.com/prometheus/alertmanager/releases/download/v0.26.0/alertmanager-0.26.0.linux-amd64.tar.gz
-1|other|autobot-infrastructure/shared/scripts/install-prometheus-stack.sh|https://github.com/prometheus/prometheus/releases/download/v2.47.0/prometheus-2.47.0.linux-amd64.tar.gz
-1|other|autobot-infrastructure/shared/scripts/install-prometheus-stack.sh|https://prometheus.io/docs/alerting/alertmanager/
-1|other|autobot-infrastructure/shared/scripts/install-prometheus-stack.sh|https://prometheus.io/docs/introduction/overview/
-4|ssot|autobot-infrastructure/shared/scripts/install-prometheus-stack.sh|:3000
-4|ssot|autobot-infrastructure/shared/scripts/install-prometheus-stack.sh|:9090
 1|other|autobot-infrastructure/shared/scripts/install-slm.sh|/home/autobot
 2|other|autobot-infrastructure/shared/scripts/install-slm.sh|Group=autobot
 2|other|autobot-infrastructure/shared/scripts/install-slm.sh|User=autobot

@@ -269,7 +269,7 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
     "one-static-data-copy-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
-        "Watched-basename files are a subset of tracked files under five roots; same-named unrelated files drift.",
+        "Guarded-basename files are a subset of all tracked files (whole repo); same-named unrelated files drift.",
     ),
     "redis-direct-constructor-scan": (
         ABSOLUTE,

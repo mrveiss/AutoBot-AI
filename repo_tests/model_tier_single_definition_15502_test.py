@@ -373,7 +373,8 @@ REACH_FRONTEND = declare(
     "frontend-model-literal-scan",
     discover=_frontend_population,
     # Mid-window, from REACH_FRONTEND.window(); the arithmetic is on the PR, not here.
-    floor=1080,
+    # #18242: population 1171 -> window [1071, 1171]; 1080 sat in the bottom band, re-pinned mid-window.
+    floor=1121,
     what="frontend ts and vue source",
     roots=(_FRONTEND_SRC,),
     growth=100,
