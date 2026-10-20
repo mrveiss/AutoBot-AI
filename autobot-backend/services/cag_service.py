@@ -24,6 +24,7 @@ from autobot_shared.logging_manager import get_llm_logger
 
 if TYPE_CHECKING:
     from advanced_rag_optimizer import RAGMetrics
+    from knowledge.search_filters import KbPrincipal
     from services.rag_service import RAGService
 
 logger = get_llm_logger("cag_service")
@@ -112,8 +113,12 @@ class CAGService:
         query: str,
         collection: str | None = None,
         model: str | None = None,
+        *,
+        principal: KbPrincipal,
     ) -> "Tuple[str, RAGMetrics]":
         """Return (context, metrics) with strategy='cag' or fall back to RAG.
+
+        ``principal`` is who is asking (#16664): the candidate ranking returns only what it may read.
 
         Steps:
         1. Rank candidates via RAGService.advanced_search.
@@ -127,7 +132,7 @@ class CAGService:
         config = self._rag.config
         t_start = time.monotonic()
 
-        results, search_metrics = await self._rag.advanced_search(query=query)
+        results, search_metrics = await self._rag.advanced_search(query=query, principal=principal)
         candidates = _unique_source_paths(results)
 
         if not candidates:

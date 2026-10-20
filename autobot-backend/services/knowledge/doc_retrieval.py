@@ -105,6 +105,37 @@ class DocumentationRetrievalMixin:
             logger.warning("[Doc Search] Raw retrieval failed: %s", e)
             return []
 
+    @staticmethod
+    def _label_doc_sources(doc_results: List[Dict[str, Any]], citations: List[Dict]) -> str:
+        """Label raw doc chunks ``[Source N]``, continuing the KB numbering; append their citations.
+
+        Issue #1261, #10658: the citation indices stay contiguous so the frontend can resolve
+        them. Returns the "AUTOBOT DOCUMENTATION CONTEXT" block. A move out of
+        ``conversation_aware_retrieve`` (to keep service.py under its ceiling), not a behaviour change.
+        """
+        kb_count = len(citations)
+        doc_lines: List[str] = []
+        for offset, result in enumerate(doc_results, 1):
+            source_n = kb_count + offset
+            content = result.get("content", "").strip()
+            doc_lines.append(f"[Source {source_n}] {content}")
+            citations.append(
+                {
+                    "id": f"doc_{offset}",
+                    "content": content,
+                    "score": result.get("score", 0.0),
+                    "source": result.get("file_path", ""),
+                    "title": result.get("section", ""),
+                    "rank": source_n,
+                    "metadata": {
+                        "doc_type": result.get("doc_type", "documentation"),
+                        "section": result.get("section", ""),
+                        "subsection": result.get("subsection", ""),
+                    },
+                }
+            )
+        return "AUTOBOT DOCUMENTATION CONTEXT:\n" + "\n".join(doc_lines)
+
     def _search_and_format_documentation(
         self,
         query: str,

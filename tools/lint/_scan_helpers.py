@@ -46,10 +46,11 @@ import re
 import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 import sys
 from pathlib import Path
-from typing import Iterable, List, Sequence, Tuple
+from typing import Collection, Iterable, List, Sequence, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from autobot_shared.paths import project_root  # noqa: E402,F401  # re-export for lint hooks (#18954)
 from autobot_shared.paths import scrubbed_git_env  # noqa: E402
 
 # Plain stdlib logging, deliberately (#1082): these helpers run inside bare
@@ -412,6 +413,25 @@ def resolve_base(explicit: str | None = None) -> str | None:
     if os.environ.get("PRE_COMMIT") == "1":
         return os.environ.get("PRE_COMMIT_FROM_REF") or None
     return None
+
+
+#: Directory names the Ansible-file walks never descend into: VCS, caches, vendored
+#: or per-checkout trees. Named once so the two ansible lint walks cannot disagree.
+ANSIBLE_SKIP_DIRS = frozenset({".git", "__pycache__", "node_modules", ".worktrees", "venv", ".venv"})
+
+
+def iter_ansible_files(root: Path, suffixes: Collection[str]) -> Iterable[Path]:
+    """Yield files under *root* whose suffix is in *suffixes*, skipping vendored/cached dirs.
+
+    Only the parts BELOW *root* are matched: a checkout that itself lives under
+    ``.worktrees`` would otherwise skip every file and report a clean scan (#18972).
+    """
+    for path in root.rglob("*"):
+        if not path.is_file() or path.suffix not in suffixes:
+            continue
+        if any(part in ANSIBLE_SKIP_DIRS for part in path.relative_to(root).parts):
+            continue
+        yield path
 
 
 def configure_logging(target: logging.Logger) -> None:

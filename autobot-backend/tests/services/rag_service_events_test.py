@@ -25,6 +25,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from knowledge.search_filters import SYSTEM_SCOPE
 from tests.fixtures import make_async_redis, write_text_async
 
 
@@ -567,7 +568,7 @@ class TestRetrievedVsRankedIdsSeparation:
                 new_callable=AsyncMock,
             ),
         ):
-            await svc.advanced_search(query="test")
+            await svc.advanced_search(query="test", principal=SYSTEM_SCOPE)
 
         _, kwargs = mock_emit.call_args
         assert kwargs["ranked_ids"] == ["chunk_b", "chunk_a", "chunk_c"]
@@ -619,7 +620,7 @@ class TestRetrievedVsRankedIdsSeparation:
                 new_callable=AsyncMock,
             ),
         ):
-            await svc.advanced_search(query="test")
+            await svc.advanced_search(query="test", principal=SYSTEM_SCOPE)
 
         _, kwargs = mock_emit.call_args
         assert kwargs["retrieved_ids"] == ["chunk_a", "chunk_b", "chunk_c"]
@@ -671,7 +672,7 @@ class TestRetrievedVsRankedIdsSeparation:
                 new_callable=AsyncMock,
             ),
         ):
-            await svc.advanced_search(query="test")
+            await svc.advanced_search(query="test", principal=SYSTEM_SCOPE)
 
         _, kwargs = mock_emit.call_args
         assert kwargs["retrieved_ids"] != kwargs["ranked_ids"]
@@ -723,7 +724,7 @@ class TestRetrievedVsRankedIdsSeparation:
                 new_callable=AsyncMock,
             ),
         ):
-            await svc.advanced_search(query="test")
+            await svc.advanced_search(query="test", principal=SYSTEM_SCOPE)
 
         _, kwargs = mock_emit.call_args
         assert kwargs["retrieved_ids"] == kwargs["ranked_ids"] == ["chunk_a", "chunk_b"]
@@ -772,7 +773,7 @@ class TestRetrievedVsRankedIdsSeparation:
                 new_callable=AsyncMock,
             ) as mock_store,
         ):
-            await svc.advanced_search(query="test")
+            await svc.advanced_search(query="test", principal=SYSTEM_SCOPE)
 
         _, kwargs = mock_store.call_args
         assert kwargs["retrieved_ids"] == ["chunk_a", "chunk_b"]
@@ -1010,23 +1011,31 @@ class TestFallbackBasicSearchFiltersStaleChunks:
         return svc
 
     def _make_kb_result(self, source: str, score: float = 0.8):
-        return {"content": f"content from {source}", "metadata": {"source": source}, "score": score}
+        # visibility: system -- the SYSTEM_SCOPE principal these tests search as reads non-private facts only
+        return {
+            "content": f"content from {source}",
+            "metadata": {"source": source, "visibility": "system"},
+            "score": score,
+        }
+
+    def _service_over(self, *sources: str):
+        """A service whose knowledge base returns one system-visible fact per source."""
+        svc = self._make_service()
+        svc.kb_adapter = AsyncMock()
+        svc.kb_adapter.search = AsyncMock(return_value=[self._make_kb_result(src) for src in sources])
+        return svc
 
     @pytest.mark.asyncio
     async def test_filter_stale_chunks_is_called_on_fallback_path(self):
         """_filter_stale_chunks is awaited once during _fallback_basic_search."""
-        svc = self._make_service()
-
-        mock_kb_adapter = AsyncMock()
-        mock_kb_adapter.search = AsyncMock(return_value=[self._make_kb_result("docs/a.md")])
-        svc.kb_adapter = mock_kb_adapter
+        svc = self._service_over("docs/a.md")
 
         with patch(
             "services.rag_service.RAGService._filter_stale_chunks",
             new_callable=AsyncMock,
             return_value=[],
         ) as mock_filter:
-            await svc._fallback_basic_search(query="test query", max_results=5)
+            await svc._fallback_basic_search(query="test query", max_results=5, principal=SYSTEM_SCOPE)
 
         mock_filter.assert_awaited_once()
 
@@ -1036,18 +1045,10 @@ class TestFallbackBasicSearchFiltersStaleChunks:
         cache_file = tmp_path / ".doc_index_hashes.json"
         await write_text_async(cache_file, '{"docs/present.md": "abc"}')
 
-        svc = self._make_service()
-        mock_kb_adapter = AsyncMock()
-        mock_kb_adapter.search = AsyncMock(
-            return_value=[
-                self._make_kb_result("docs/present.md"),
-                self._make_kb_result("docs/removed.md"),
-            ]
-        )
-        svc.kb_adapter = mock_kb_adapter
+        svc = self._service_over("docs/present.md", "docs/removed.md")
 
         with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
-            results, metrics = await svc._fallback_basic_search(query="test", max_results=10)
+            results, metrics = await svc._fallback_basic_search(query="test", max_results=10, principal=SYSTEM_SCOPE)
 
         source_paths = [r.source_path for r in results]
         assert "docs/present.md" in source_paths
@@ -1059,18 +1060,10 @@ class TestFallbackBasicSearchFiltersStaleChunks:
         cache_file = tmp_path / ".doc_index_hashes.json"
         await write_text_async(cache_file, '{"docs/guide.md": "hash1", "docs/ref.md": "hash2"}')
 
-        svc = self._make_service()
-        mock_kb_adapter = AsyncMock()
-        mock_kb_adapter.search = AsyncMock(
-            return_value=[
-                self._make_kb_result("docs/guide.md"),
-                self._make_kb_result("docs/ref.md"),
-            ]
-        )
-        svc.kb_adapter = mock_kb_adapter
+        svc = self._service_over("docs/guide.md", "docs/ref.md")
 
         with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
-            results, metrics = await svc._fallback_basic_search(query="test", max_results=10)
+            results, metrics = await svc._fallback_basic_search(query="test", max_results=10, principal=SYSTEM_SCOPE)
 
         assert len(results) == 2
         assert metrics.final_results_count == 2
@@ -1082,18 +1075,10 @@ class TestFallbackBasicSearchFiltersStaleChunks:
         # Only one of two source paths is present in the cache
         await write_text_async(cache_file, '{"docs/kept.md": "hash"}')
 
-        svc = self._make_service()
-        mock_kb_adapter = AsyncMock()
-        mock_kb_adapter.search = AsyncMock(
-            return_value=[
-                self._make_kb_result("docs/kept.md"),
-                self._make_kb_result("docs/gone.md"),
-            ]
-        )
-        svc.kb_adapter = mock_kb_adapter
+        svc = self._service_over("docs/kept.md", "docs/gone.md")
 
         with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
-            results, metrics = await svc._fallback_basic_search(query="test", max_results=10)
+            results, metrics = await svc._fallback_basic_search(query="test", max_results=10, principal=SYSTEM_SCOPE)
 
         assert len(results) == 1
         assert metrics.final_results_count == 1

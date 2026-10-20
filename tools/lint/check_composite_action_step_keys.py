@@ -59,6 +59,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from _scan_helpers import configure_logging  # noqa: E402
+from _scan_helpers import project_root as repo_root  # noqa: E402
 
 # Plain stdlib logging (matching the other tools/lint/check_*.py modules in
 # this repo): runs inside `code-quality`, which installs linters only.
@@ -93,11 +94,6 @@ _STEP_START_RE = re.compile(r"^ {4}- ")
 _INLINE_KEY_RE = re.compile(r"^ {4}- ([A-Za-z][A-Za-z0-9_-]*):")
 _CONT_KEY_RE = re.compile(r"^ {6}([A-Za-z][A-Za-z0-9_-]*):")
 _RUNS_STEPS_RE = re.compile(r"^runs:\s*$")
-
-
-def repo_root() -> pathlib.Path:
-    """Repo root derived from this file, never from the caller's cwd."""
-    return pathlib.Path(__file__).resolve().parents[2]
 
 
 def action_files(root: pathlib.Path | None = None) -> list[pathlib.Path]:

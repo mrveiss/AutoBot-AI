@@ -37,6 +37,7 @@ from knowledge.schemas.rag import (
 from knowledge.search_filters import (
     extract_user_context_from_request,
     filter_search_results_by_permission,
+    kb_principal,
 )
 from knowledge_factory import get_or_create_knowledge_base
 from services.rag_config import get_rag_config, update_rag_config
@@ -175,12 +176,13 @@ async def advanced_search(
         request.enable_reranking,
     )
 
-    # Perform advanced search
+    # Perform advanced search; the service filters every leg for the caller (#16664)
     results, metrics = await rag_service.advanced_search(
         query=request.query,
         max_results=request.max_results,
         enable_reranking=request.enable_reranking,
         timeout=request.timeout,
+        principal=kb_principal(current_user),
     )
 
     # Build response (Issue #620: uses helpers)
@@ -578,6 +580,7 @@ async def retrieval_context(
         mode=request.mode,
         collection=request.collection_id,
         model=request.model,
+        principal=kb_principal(current_user),
         owner=owner,
     )
     strategy = getattr(metrics, "strategy", "rag")

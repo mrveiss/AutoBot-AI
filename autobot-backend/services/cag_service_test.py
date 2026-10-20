@@ -24,6 +24,7 @@ import pytest
 pytest.importorskip("advanced_rag_optimizer")
 
 from advanced_rag_optimizer import RAGMetrics, RankedResult
+from knowledge.search_filters import SYSTEM_SCOPE
 from services.cag_service import CAGService, _assemble_context, _unique_source_paths
 from services.rag_config import RAGConfig
 from tests.fixtures import write_text_async
@@ -111,11 +112,12 @@ async def test_cag_assembles_docs_under_budget(tmp_path: Path):
     cag = CAGService(rag)
 
     with patch("context_window_manager.ContextWindowManager.get_adaptive_context_length", return_value=8192):
-        context, metrics = await cag.get_full_context(query="test query", model="llama3")
+        context, metrics = await cag.get_full_context(query="test query", model="llama3", principal=SYSTEM_SCOPE)
 
     assert "full document content" in context
     assert getattr(metrics, "strategy", None) == "cag"
     assert getattr(metrics, "documents_loaded", 0) == 1
+    rag.advanced_search.assert_awaited_once_with(query="test query", principal=SYSTEM_SCOPE)  # #16664
 
 
 async def test_cag_falls_back_when_budget_zero(tmp_path: Path):
@@ -129,7 +131,7 @@ async def test_cag_falls_back_when_budget_zero(tmp_path: Path):
     cag = CAGService(rag)
 
     with patch("context_window_manager.ContextWindowManager.get_adaptive_context_length", return_value=8192):
-        context, metrics = await cag.get_full_context(query="test query")
+        context, metrics = await cag.get_full_context(query="test query", principal=SYSTEM_SCOPE)
 
     assert context == "fallback-context"
     assert getattr(metrics, "strategy", None) == "rag"
@@ -142,7 +144,7 @@ async def test_cag_falls_back_when_no_source_paths():
     cag = CAGService(rag)
 
     with patch("context_window_manager.ContextWindowManager.get_adaptive_context_length", return_value=8192):
-        context, metrics = await cag.get_full_context(query="test query")
+        context, metrics = await cag.get_full_context(query="test query", principal=SYSTEM_SCOPE)
 
     assert context == "fallback-context"
     assert getattr(metrics, "strategy", None) == "rag"
@@ -154,7 +156,7 @@ async def test_cag_falls_back_when_no_results():
     cag = CAGService(rag)
 
     with patch("context_window_manager.ContextWindowManager.get_adaptive_context_length", return_value=8192):
-        context, metrics = await cag.get_full_context(query="test query")
+        context, metrics = await cag.get_full_context(query="test query", principal=SYSTEM_SCOPE)
 
     assert context == "fallback-context"
     assert getattr(metrics, "strategy", None) == "rag"
@@ -166,7 +168,7 @@ async def test_cag_falls_back_when_file_unreadable():
     cag = CAGService(rag)
 
     with patch("context_window_manager.ContextWindowManager.get_adaptive_context_length", return_value=8192):
-        context, metrics = await cag.get_full_context(query="test query")
+        context, metrics = await cag.get_full_context(query="test query", principal=SYSTEM_SCOPE)
 
     assert context == "fallback-context"
     assert getattr(metrics, "strategy", None) == "rag"
@@ -186,6 +188,6 @@ async def test_cag_respects_max_documents(tmp_path: Path):
     cag = CAGService(rag)
 
     with patch("context_window_manager.ContextWindowManager.get_adaptive_context_length", return_value=131072):
-        context, metrics = await cag.get_full_context(query="test")
+        context, metrics = await cag.get_full_context(query="test", principal=SYSTEM_SCOPE)
 
     assert getattr(metrics, "documents_loaded", 0) <= 2

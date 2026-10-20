@@ -104,6 +104,10 @@ FILTER_HELPERS = frozenset(
         "can_write_fact",  # owner-or-admin: a strict subset of who can_read_fact allows (#18184)
         "filter_accessible_facts",
         "get_all_accessible_facts",
+        # #16664: the principal-aware wrappers over filter_search_results_by_permission /
+        # filter_non_private_results (SYSTEM_SCOPE); RAG legs call them, never a second filter.
+        "filter_for_principal",
+        "filter_ranked",
     }
 )
 
@@ -172,7 +176,14 @@ MIN_READS_FOUND = 40
 #: classified NOT_USER_FACING rather than filtered -- see _WATCH_RECONCILE in the
 #: allowlist for why a visibility filter would make a reconciliation delete *wrong*,
 #: not safer.
-UNFILTERED_READ_CEILING = 94
+#: Then 94 -> 87 (#16664 slice 1): ``advanced_search`` takes a required ``principal`` and filters every
+#: leg itself. The detector was deliberately widened in two places -- an ``advanced_search(...)`` call
+#: with a ``principal=`` keyword counts as filtered (agentic_search x2, cag_service, graph_rag_service,
+#: knowledge/service.py), and ``filter_for_principal`` / ``filter_ranked`` are filter helpers (RAGService's
+#: optimizer and fallback legs). That removes 7 entries -- a measured shrink, not new debt. The new
+#: population was derived a second way (an independent AST pass over the 94 recorded keys) and the sets
+#: compared: the symmetric difference is exactly those 7 keys. See RATCHET_BASELINES.md section 3-5.
+UNFILTERED_READ_CEILING = 87
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ", "ADMIN_ONLY: ")
 _NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
@@ -269,6 +280,20 @@ def _is_kb_read(call: ast.Call) -> bool:
     )
 
 
+def _is_principal_scoped_rag_call(call: ast.Call) -> bool:
+    """An ``advanced_search(...)`` passing ``principal=``: RAGService filters every leg for it (#16664).
+
+    A call-level rule, unlike FILTER_HELPERS' function-level one: the caller does no filtering of its
+    own, the service it calls does. It reads the keyword, not its value, so ``principal=None`` is
+    seen as scoped -- the service raises on it before any read (``require_kb_principal``).
+    """
+    return (
+        isinstance(call.func, ast.Attribute)
+        and call.func.attr in RAG_METHODS
+        and any(kw.arg == "principal" for kw in call.keywords)
+    )
+
+
 def _is_kb_handle(receiver: str) -> bool:
     return "." in receiver and receiver.endswith(KB_HANDLE_SUFFIXES)
 
@@ -316,7 +341,7 @@ def kb_reads(source: str, rel: str = "") -> list[tuple[str, int, bool]]:
                 filtered = any(_called_name(c) in FILTER_HELPERS for c in ast.walk(child) if isinstance(c, ast.Call))
                 aliases = _handle_aliases(child)
                 reads.extend(
-                    (name, c.lineno, filtered)
+                    (name, c.lineno, filtered or _is_principal_scoped_rag_call(c))
                     for c in _own_calls(child)
                     if _is_kb_read(c) or _is_raw_kb_read(c, rel, aliases)
                 )
@@ -435,6 +460,23 @@ def test_a_method_read_is_keyed_by_class_and_method():
 def test_a_nested_function_owns_its_read():
     source = "def outer(kb):\n    async def inner():\n        return await kb.get_all_facts()\n    return inner\n"
     assert kb_reads(source) == [("outer.inner", 3, False)]
+
+
+def test_an_advanced_search_with_a_principal_keyword_is_filtered_and_without_one_is_not():
+    """Contrast pair for the #16664 call-level rule: only the ``principal=`` keyword scopes the call."""
+    scoped = "async def r(rag_service, p):\n    return await rag_service.advanced_search('q', principal=p)\n"
+    bare = "async def r(rag_service, p):\n    return await rag_service.advanced_search('q', p)\n"
+    assert kb_reads(scoped) == [("r", 2, True)]
+    assert kb_reads(bare) == [("r", 2, False)]
+
+
+def test_a_leg_that_filters_through_the_principal_helpers_is_marked_filtered():
+    source = (
+        "async def leg(self, p):\n"
+        "    rows = await self.kb_adapter.search('q')\n"
+        "    return await filter_ranked(rows, p, self._ownership_manager())\n"
+    )
+    assert kb_reads(source) == [("leg", 2, True)]
 
 
 def test_rag_reads_count_and_unrelated_search_calls_do_not():

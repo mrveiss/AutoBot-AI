@@ -1215,6 +1215,7 @@ async def perform_knowledge_search(state: ChatState, config: RunnableConfig) -> 
 
     # Respect the agentic search feature flag from RAGConfig
     try:
+        from chat_workflow.agentic_rag_hooks import emit_after_rag_results, notify_kb_search
         from knowledge.search_components.agentic_search import (
             AgenticSearchConfig,
             knowledge_search_tool,
@@ -1255,46 +1256,17 @@ async def perform_knowledge_search(state: ChatState, config: RunnableConfig) -> 
             rag_service=rag_service,
             context=None,
             config=agentic_cfg,
+            principal=(await manager.get_or_create_session(state["session_id"])).kb_principal(),  # #16664
         )
 
-        # Issue #4263: Emit AFTER_RAG_RESULTS hook after RAG returns results
-        from chat_workflow.session_handler import _emit_after_rag_results
-
-        try:
-            # Convert context_str back to results format for extensions
-            # Results format: list of dicts with content/metadata
-            results = [{"content": context_str}] if context_str else []
-            results = await _emit_after_rag_results(
-                results,
-                user_query,
-                state.get("session_id"),
-                {},
-            )
-            # Reconstruct context_str from filtered results
-            context_str = "\n\n".join([r.get("content", "") for r in results if r.get("content")])
-        except Exception as hook_exc:  # noqa: BLE001
-            logger.debug("AFTER_RAG_RESULTS hook failed (non-fatal): %s", hook_exc)
+        context_str = await emit_after_rag_results(context_str, user_query, state.get("session_id"))
 
         # Track the original query; refined queries are recorded inside the tool
         queries_used: List[str] = [state["user_message"]]
 
-        logger.info(
-            "Agentic search complete: context_len=%d",
-            len(context_str),
-        )
+        logger.info("Agentic search complete: context_len=%d", len(context_str))
 
-        # Issue #3278: notify plugins after knowledge base search.
-        try:
-            from autobot_shared.plugin_sdk import Hook, HookRegistry
-
-            await HookRegistry().call_hook(
-                Hook.ON_KB_SEARCH.value,
-                session_id=state.get("session_id"),
-                query=state["user_message"],
-                context_length=len(context_str),
-            )
-        except Exception as _hook_exc:  # noqa: BLE001
-            logger.debug("Plugin hook ON_KB_SEARCH failed (non-fatal): %s", _hook_exc)
+        await notify_kb_search(state.get("session_id"), state["user_message"], len(context_str))
 
         return {
             "agentic_context": context_str,

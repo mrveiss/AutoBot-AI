@@ -39,6 +39,7 @@ ALLOWLIST: dict[str, str] = {
     _B + "chat_history/context_overflow_token_keys_test.py::<module>::_FakePipeline": _PIPE,  # noqa: E501
     _B
     + "code_intelligence/bug_predictor_source_scoping_test.py::<module>::_FakeChromaCollection": _CHROMA,  # noqa: E501
+    _B + "tests/fixtures/rag_cache_fakes.py::<module>::FakeCollection": _CHROMA,  # noqa: E501
     _B
     + "code_intelligence/pattern_analysis/clear_patterns_source_scoping_test.py::<module>::_FakeChromaCollection": _CHROMA,  # noqa: E501
     _B
@@ -102,4 +103,4 @@ ALLOWLIST: dict[str, str] = {
 }
 
 #: The ceiling. Lower it with the list; never raise it.
-FROZEN_TOTAL = 56
+FROZEN_TOTAL = 57

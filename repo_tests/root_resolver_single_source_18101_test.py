@@ -48,20 +48,7 @@ _BARE_SCRIPT = (
 
 #: path -> why a depth-based resolver may remain. Every value must be non-empty.
 EXEMPT: dict[str, str] = {
-    "tools/lint/check_ci_system_package_provisioning.py": _BARE_SCRIPT,
-    "tools/lint/check_code_quality_guard_reach.py": _BARE_SCRIPT,
-    "tools/lint/check_composite_action_step_keys.py": _BARE_SCRIPT,
-    "tools/lint/check_docs_no_fleet_addressing.py": _BARE_SCRIPT,
     "tools/lint/check_extension_import_boundaries.py": _BARE_SCRIPT,
-    "tools/lint/check_no_shell_placeholder_paths.py": _BARE_SCRIPT,
-    "tools/lint/check_requirements_ci_drift.py": _BARE_SCRIPT,
-    "tools/lint/check_requirements_pin_parity.py": _BARE_SCRIPT,
-    "tools/lint/check_undefined_names.py": _BARE_SCRIPT,
-    "tools/lint/check_bandit_exclude_anchoring.py": "deferred, not exempt in principle: owned by queued branch issue-14896-lint-harness (#18101)",
-    "tools/lint/check_flake8_exclude_anchoring.py": "deferred, not exempt in principle: owned by queued branch issue-14896-lint-harness (#18101)",
-    "scripts/check_frontend_file_size.py": "deferred, not exempt in principle: owned by queued branch issue-17377-one-engine (#18101)",
-    "scripts/check_python_file_size.py": "deferred, not exempt in principle: owned by queued branch issue-17377-one-engine (#18101)",
-    "scripts/check_shell_file_size.py": "deferred, not exempt in principle: owned by queued branch issue-17377-one-engine (#18101)",
     "autobot-backend/api/codebase_analytics/endpoints/shared.py": "deferred, not exempt in principle: owned by queued branch issue-18067-duplicate-tooling (#18101); also carries the #10730 deployed-layout probe",
 }
 

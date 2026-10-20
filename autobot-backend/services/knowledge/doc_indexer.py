@@ -40,6 +40,7 @@ if TYPE_CHECKING:
 from autobot_shared.ssot_config import get_ollama_url
 from constants.path_constants import PATH
 from constants.threshold_constants import CategoryDefaults
+from knowledge.platform_docs import PLATFORM_DOCS_GRANT, PLATFORM_DOCS_GRANT_VERSION
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from services.knowledge.doc_index_orphans import chunk_base_id, reindex_file
 from services.knowledge.doc_taxonomy import category_of
@@ -381,7 +382,7 @@ HASH_CACHE_FILE = shared_cache_path("autobot-doc-index", ".doc_index_hashes.json
 
 
 def _compute_file_hash(file_path: str) -> str:
-    """Compute SHA-256 hash of file content.
+    """Compute SHA-256 hash of the grant version plus file content.
 
     Resolves symlinks so the hash reflects the target file's content (#4382).
     Returns empty string on PermissionError, OSError, or RuntimeError (e.g.
@@ -391,7 +392,7 @@ def _compute_file_hash(file_path: str) -> str:
     try:
         resolved = str(Path(file_path).resolve())
         with open(resolved, "rb") as f:
-            return hashlib.sha256(f.read()).hexdigest()
+            return hashlib.sha256(PLATFORM_DOCS_GRANT_VERSION + f.read()).hexdigest()  # #16664
     except (PermissionError, OSError, RuntimeError) as e:
         logger.warning("Cannot hash %s: %s", file_path, e)
         return ""
@@ -869,6 +870,7 @@ class DocIndexerService:
 
         metadata: Dict[str, Any] = {
             "source": "autobot_documentation",
+            **PLATFORM_DOCS_GRANT,  # #16664: stamped at write so reads need no special case
             "doc_type": chunk["doc_type"],
             "category": chunk["category"],
             "priority": priority_map.get(tier, "low"),
@@ -1183,8 +1185,6 @@ class DocIndexerService:
         Returns an empty list if not initialised, collection is empty, or on
         any error — callers always receive a safe (possibly empty) list.
         """
-        import asyncio
-
         from advanced_rag_optimizer import RankedResult
 
         if not self._initialized or self._collection is None or self._embed_model is None:

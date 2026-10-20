@@ -31,12 +31,17 @@ Exit:
 
 from __future__ import annotations
 
+import functools
 import re
 import sys
 from pathlib import Path
 from typing import Iterable, List, Tuple
 
 import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _scan_helpers import iter_ansible_files as _iter_ansible_files  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -82,16 +87,7 @@ ALLOWLIST = frozenset(
 )
 
 
-def iter_ansible_files(root: Path) -> Iterable[Path]:
-    skip_dirs = {".git", "__pycache__", "node_modules", ".worktrees", "venv", ".venv"}
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        if path.suffix not in {".yml", ".yaml"}:
-            continue
-        if any(part in skip_dirs for part in path.parts):
-            continue
-        yield path
+iter_ansible_files = functools.partial(_iter_ansible_files, suffixes=frozenset({".yml", ".yaml"}))
 
 
 def _iter_scalar_nodes(node: "yaml.Node") -> Iterable["yaml.ScalarNode"]:

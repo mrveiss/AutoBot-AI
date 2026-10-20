@@ -23,6 +23,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from advanced_rag_optimizer import RAGMetrics
+from knowledge.search_filters import SYSTEM_SCOPE
 from services.chat_knowledge_service import ChatKnowledgeService
 from services.chat_knowledge_service_test import _kb
 
@@ -33,7 +34,12 @@ async def test_conversation_aware_retrieve_firewalls_the_context(mock_rag_servic
     injection payload in the top hit is blocked, dropping the context and its
     citations rather than answering from poisoned context."""
     service = ChatKnowledgeService(mock_rag_service)
-    kwargs = dict(query="What is the default Redis port configuration?", conversation_history=[], force_retrieval=False)
+    kwargs = dict(
+        query="What is the default Redis port configuration?",
+        conversation_history=[],
+        force_retrieval=False,
+        principal=SYSTEM_SCOPE,
+    )
 
     mock_rag_service.advanced_search.return_value = (sample_search_results, RAGMetrics())
     context, _citations, _intent, _enhanced = await service.conversation_aware_retrieve(**kwargs)
@@ -55,7 +61,7 @@ async def test_smart_retrieve_knowledge_firewalls_the_context(mock_rag_service, 
     """#16771 AC5: smart_retrieve_knowledge is a second RAG entry point that shared
     no inspection point with conversation_aware_retrieve until this fix."""
     service = ChatKnowledgeService(mock_rag_service)
-    kwargs = dict(query="How do I configure Redis?", force_retrieval=False)
+    kwargs = dict(query="How do I configure Redis?", force_retrieval=False, principal=SYSTEM_SCOPE)
 
     mock_rag_service.advanced_search.return_value = (sample_search_results, RAGMetrics())
     context, _citations, _intent = await service.smart_retrieve_knowledge(**kwargs)
@@ -77,7 +83,7 @@ async def test_retrieve_combined_knowledge_firewalls_the_context(mock_rag_servic
     same gap. enable_doc_search=False isolates this to the RAG side -- doc search
     integration is documentation_search's own concern, not this fix's."""
     service = ChatKnowledgeService(mock_rag_service, enable_doc_search=False)
-    kwargs = dict(query="How do I configure Redis?")
+    kwargs = dict(query="How do I configure Redis?", principal=SYSTEM_SCOPE)
 
     mock_rag_service.advanced_search.return_value = (sample_search_results, RAGMetrics())
     context, _rag_citations, _doc_results = await service.retrieve_combined_knowledge(**kwargs)
@@ -119,7 +125,10 @@ async def test_conversation_aware_retrieve_quarantine_scrubs_citation_content(
     )
     with patch("services.knowledge.rag_firewall.inspect_rag_context", AsyncMock(return_value=quarantine_verdict)):
         context, citations, _intent, _enhanced = await service.conversation_aware_retrieve(
-            query="What is the default Redis port configuration?", conversation_history=[], force_retrieval=False
+            query="What is the default Redis port configuration?",
+            conversation_history=[],
+            force_retrieval=False,
+            principal=SYSTEM_SCOPE,
         )
 
     assert context == "[SANITIZED] the flagged text was stripped [/SANITIZED]"
@@ -154,7 +163,10 @@ async def test_conversation_aware_retrieve_escalate_clears_context_and_citations
     )
     with patch("services.knowledge.rag_firewall.inspect_rag_context", AsyncMock(return_value=escalate_verdict)):
         context, citations, _intent, _enhanced = await service.conversation_aware_retrieve(
-            query="What is the default Redis port configuration?", conversation_history=[], force_retrieval=False
+            query="What is the default Redis port configuration?",
+            conversation_history=[],
+            force_retrieval=False,
+            principal=SYSTEM_SCOPE,
         )
 
     assert context == ""
@@ -186,7 +198,7 @@ async def test_smart_retrieve_knowledge_quarantine_scrubs_citation_content(
     )
     with patch("services.knowledge.rag_firewall.inspect_rag_context", AsyncMock(return_value=quarantine_verdict)):
         context, citations, _intent = await service.smart_retrieve_knowledge(
-            query="How do I configure Redis?", force_retrieval=False
+            query="How do I configure Redis?", force_retrieval=False, principal=SYSTEM_SCOPE
         )
 
     assert context == "[SANITIZED] the flagged text was stripped [/SANITIZED]"
@@ -220,7 +232,7 @@ async def test_retrieve_combined_knowledge_quarantine_scrubs_citation_content(
     )
     with patch("services.knowledge.rag_firewall.inspect_rag_context", AsyncMock(return_value=quarantine_verdict)):
         context, rag_citations, doc_results = await service.retrieve_combined_knowledge(
-            query="How do I configure Redis?"
+            query="How do I configure Redis?", principal=SYSTEM_SCOPE
         )
 
     assert context == "[SANITIZED] the flagged text was stripped [/SANITIZED]"
