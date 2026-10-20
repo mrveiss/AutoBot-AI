@@ -276,6 +276,11 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test .py/.sh under the scan roots is a subset of tracked files; the test-file share drifts.",
     ),
+    "hand-rolled-async-session-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Test-file .py under the two backend roots is a subset of tracked files; the non-test share drifts.",
+    ),
     "hand-rolled-circuit-breaker-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

@@ -318,6 +318,10 @@ _DECLARED_SCOPES = {
         "autobot-infrastructure",
         "autobot-monitoring",
     ),
+    "hand-rolled-async-session-scan": (
+        "autobot-backend",
+        "autobot-slm-backend",
+    ),
     "hand-rolled-circuit-breaker-scan": (
         "autobot-backend",
         "autobot-slm-backend",

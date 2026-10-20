@@ -38,6 +38,8 @@ pytest.importorskip("fastapi")
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from testkit.fake_async_session import FakeAsyncSession  # noqa: E402
+
 _BACKEND = Path(__file__).resolve().parents[2]
 _PATH = "/settings/admin/llm"
 _SECRET_FIELDS = ("api_key", "api_key_vault_id", "api_key_ref")
@@ -69,26 +71,23 @@ class _Select:
         return self
 
 
-class _Db:
+class _Db(FakeAsyncSession):
+    """A FakeAsyncSession over a dict of settings rows; queries are answered from the live dict."""
+
     def __init__(self, rows: dict[str, str]):
         self._rows = {k: _Setting(k, v) for k, v in rows.items()}
+        super().__init__(default_result=self._answer)
 
     def stored(self) -> dict:
         return {p["name"]: p for p in json.loads(self._rows["llm_providers"].value)}
 
-    async def execute(self, statement: _Select):
+    def _answer(self, statement: _Select) -> list:
         kind, arg = statement.condition
-        hits = [r for k, r in self._rows.items() if (k == arg if kind == "eq" else k.startswith(arg))]
-        return SimpleNamespace(
-            scalars=lambda: SimpleNamespace(all=lambda: hits),
-            scalar_one_or_none=lambda: hits[0] if hits else None,
-        )
+        return [r for k, r in self._rows.items() if (k == arg if kind == "eq" else k.startswith(arg))]
 
-    def add(self, row: _Setting) -> None:
+    def add(self, row: _Setting, _warn: bool = True) -> None:
         self._rows[row.key] = row
-
-    async def commit(self) -> None:
-        return None
+        super().add(row, _warn)
 
 
 def _module(monkeypatch, name: str, **attrs) -> types.ModuleType:

@@ -31,7 +31,18 @@ from typing import Callable
 from autobot_shared.paths import scrubbed_git_env
 
 #: Top-level directories of AutoBot's own tree that the ratchet counts.
-FORK_ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
+FORK_ROOTS = (
+    "autobot-backend",
+    "autobot-slm-backend",
+    "autobot_shared",
+    "autobot-npu-worker",
+    "autobot-tts-worker",
+    "autobot-browser-worker",
+    "autobot-infrastructure",
+    "scripts",
+    "tools",
+    "pipeline-scripts",
+)
 
 #: Directory parts that take a file out of the population entirely.
 FORK_EXCLUDED_PARTS = frozenset({"__pycache__", "node_modules", "venv", ".venv", "migrations", "alembic"})

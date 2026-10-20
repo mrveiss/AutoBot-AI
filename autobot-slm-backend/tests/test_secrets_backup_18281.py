@@ -22,6 +22,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from testkit.fake_async_session import FakeAsyncSession
+
 pytestmark = pytest.mark.asyncio
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -69,16 +71,9 @@ class _Row:
         self.completed_at = None
 
 
-class _DB:
-    def __init__(self, row):
-        self.row = row
-        self.commits = 0
-
-    async def execute(self, _q):
-        return SimpleNamespace(scalar_one_or_none=lambda: self.row)
-
-    async def commit(self):
-        self.commits += 1
+def _db(row) -> FakeAsyncSession:
+    """Every query answers *row* (or nothing)."""
+    return FakeAsyncSession(default_result=[] if row is None else [row])
 
 
 def _node(roles):
@@ -131,7 +126,7 @@ def service(mods, monkeypatch):
 async def test_success_uses_online_backup_and_never_names_key_material(mods, service):
     _, sb = mods
     row, node = _Row(), _node(["backend"])
-    ok, message = await sb.execute_secrets_backup(service, _DB(row), "bk1", node)
+    ok, message = await sb.execute_secrets_backup(service, _db(row), "bk1", node)
     assert ok, message
     remote = "\n".join(service.remote.remote_commands())
     assert ".backup(" in remote and "sqlite3" in remote and "secrets.db" in remote
@@ -146,7 +141,7 @@ async def test_success_uses_online_backup_and_never_names_key_material(mods, ser
 async def test_success_records_checksum_status_and_completed_at(mods, service):
     _, sb = mods
     row = _Row()
-    ok, _ = await sb.execute_secrets_backup(service, _DB(row), "bk1", _node(["backend"]))
+    ok, _ = await sb.execute_secrets_backup(service, _db(row), "bk1", _node(["backend"]))
     assert ok
     assert row.status == "completed"
     assert row.checksum == hashlib.sha256(PAYLOAD).hexdigest()
@@ -157,7 +152,7 @@ async def test_success_records_checksum_status_and_completed_at(mods, service):
 
 async def test_the_staged_snapshot_is_removed_from_the_node(mods, service):
     _, sb = mods
-    await sb.execute_secrets_backup(service, _DB(_Row()), "bk1", _node(["backend"]))
+    await sb.execute_secrets_backup(service, _db(_Row()), "bk1", _node(["backend"]))
     commands = service.remote.remote_commands()
     assert "mktemp -d -p /tmp slm-secrets-XXXXXX" in commands[0] and commands[0].startswith("umask 077 && ")
     assert commands[-1] == f"rm -rf -- {STAGING}"
@@ -166,7 +161,7 @@ async def test_the_staged_snapshot_is_removed_from_the_node(mods, service):
 async def test_the_remote_command_quotes_every_interpolated_path(mods, service, monkeypatch):
     _, sb = mods
     monkeypatch.setattr(sb, "BACKEND_DATA_DIR", "/var/lib/odd dir; touch pwned")
-    await sb.execute_secrets_backup(service, _DB(_Row()), "bk1", _node(["main"]))
+    await sb.execute_secrets_backup(service, _db(_Row()), "bk1", _node(["main"]))
     snapshot = service.remote.remote_commands()[1]
     assert "'/var/lib/odd dir; touch pwned/secrets.db'" in snapshot
 
@@ -175,7 +170,7 @@ async def test_the_remote_command_quotes_every_interpolated_path(mods, service, 
 async def test_refuses_without_a_backend_node(mods, service, roles):
     _, sb = mods
     row = _Row()
-    ok, message = await sb.execute_secrets_backup(service, _DB(row), "bk1", _node(roles))
+    ok, message = await sb.execute_secrets_backup(service, _db(row), "bk1", _node(roles))
     assert not ok and "no registered backend node" in message
     assert row.status == "failed" and "no registered backend node" in row.error
     assert service.remote.calls == []
@@ -185,7 +180,7 @@ async def test_a_failed_snapshot_fails_the_row_and_still_cleans_up(mods, service
     _, sb = mods
     service.remote.fail_snapshot = True
     row = _Row()
-    ok, message = await sb.execute_secrets_backup(service, _DB(row), "bk1", _node(["backend"]))
+    ok, message = await sb.execute_secrets_backup(service, _db(row), "bk1", _node(["backend"]))
     assert not ok and row.status == "failed" and "snapshot failed" in message
     assert service.remote.remote_commands()[-1] == f"rm -rf -- {STAGING}"
 
@@ -194,13 +189,13 @@ async def test_a_copy_whose_checksum_differs_is_not_recorded_as_completed(mods, 
     _, sb = mods
     service.remote.corrupt_copy = True
     row = _Row()
-    ok, _ = await sb.execute_secrets_backup(service, _DB(row), "bk1", _node(["backend"]))
+    ok, _ = await sb.execute_secrets_backup(service, _db(row), "bk1", _node(["backend"]))
     assert not ok and row.status == "failed" and row.checksum is None
 
 
 async def test_a_missing_row_is_reported_not_raised(mods, service):
     _, sb = mods
-    ok, message = await sb.execute_secrets_backup(service, _DB(None), "nope", _node(["backend"]))
+    ok, message = await sb.execute_secrets_backup(service, _db(None), "nope", _node(["backend"]))
     assert (ok, message) == (False, "Backup not found")
 
 
@@ -233,7 +228,7 @@ async def test_the_snapshot_runs_as_the_service_user_via_non_interactive_sudo(mo
     _, sb = mods
     monkeypatch.setattr(sb, "SERVICE_USER", "svc-user")
     row, node = _Row(), _node(["backend"])
-    assert (await sb.execute_secrets_backup(service, _DB(row), "bk1", node))[0]
+    assert (await sb.execute_secrets_backup(service, _db(row), "bk1", node))[0]
     snapshot = service.remote.remote_commands()[1]
     assert "sudo -n -u svc-user python3 -c " in snapshot
     assert snapshot.rstrip().endswith(f"> {STAGING}/snapshot.db")
@@ -243,7 +238,7 @@ async def test_no_sudo_when_the_ssh_user_is_the_service_user(mods, service):
     _, sb = mods
     node = _node(["backend"])
     node.ssh_user = sb.SERVICE_USER
-    await sb.execute_secrets_backup(service, _DB(_Row()), "bk1", node)
+    await sb.execute_secrets_backup(service, _db(_Row()), "bk1", node)
     assert "sudo" not in service.remote.remote_commands()[1]
 
 
@@ -254,7 +249,7 @@ def _stored_files(tmp_path):
 async def test_a_checksum_mismatch_leaves_no_file_in_storage(mods, service, tmp_path):
     _, sb = mods
     service.remote.corrupt_copy = True
-    ok, _ = await sb.execute_secrets_backup(service, _DB(_Row()), "bk1", _node(["backend"]))
+    ok, _ = await sb.execute_secrets_backup(service, _db(_Row()), "bk1", _node(["backend"]))
     assert not ok and _stored_files(tmp_path) == []
 
 
@@ -262,7 +257,7 @@ async def test_a_failed_scp_leaves_no_file_in_storage(mods, service, tmp_path):
     _, sb = mods
     service.remote.fail_scp = True
     row = _Row()
-    ok, _ = await sb.execute_secrets_backup(service, _DB(row), "bk1", _node(["backend"]))
+    ok, _ = await sb.execute_secrets_backup(service, _db(row), "bk1", _node(["backend"]))
     assert not ok and row.status == "failed" and _stored_files(tmp_path) == []
 
 
@@ -270,7 +265,7 @@ async def test_a_staging_failure_fails_the_row_without_touching_the_store(mods, 
     _, sb = mods
     service.remote.fail_mktemp = True
     row = _Row()
-    ok, message = await sb.execute_secrets_backup(service, _DB(row), "bk1", _node(["backend"]))
+    ok, message = await sb.execute_secrets_backup(service, _db(row), "bk1", _node(["backend"]))
     assert not ok and "staging directory" in message and row.status == "failed"
     assert not any("python3" in c for c in service.remote.remote_commands())
 
@@ -296,7 +291,7 @@ async def test_an_invalid_service_user_refuses_before_any_ssh(mods, service, mon
     _, sb = mods
     monkeypatch.setattr(sb, "SERVICE_USER", "-n")
     row = _Row()
-    ok, message = await sb.execute_secrets_backup(service, _DB(row), "bk1", _node(["backend"]))
+    ok, message = await sb.execute_secrets_backup(service, _db(row), "bk1", _node(["backend"]))
     assert not ok and "not a valid account name" in message and row.status == "failed"
     assert service.remote.calls == []
 
@@ -306,7 +301,7 @@ async def test_the_row_and_logs_never_carry_the_remote_location(mods, service, c
     service.remote.fail_scp = True
     row = _Row()
     with caplog.at_level("DEBUG"):
-        await sb.execute_secrets_backup(service, _DB(row), "bk1", _node(["backend"]))
+        await sb.execute_secrets_backup(service, _db(row), "bk1", _node(["backend"]))
     assert row.error == "Secrets backup failed: scp failed"
     for leaked in ("192.0.2.10", "alice@", "/var/lib/autobot"):
         assert leaked not in row.error and leaked not in caplog.text
@@ -322,29 +317,14 @@ async def test_the_scp_child_runs_under_a_private_umask(mods, service):
         return await inner(cmd, timeout, stdin)
 
     service._run_command = spy
-    await sb.execute_secrets_backup(service, _DB(_Row()), "bk1", _node(["backend"]))
+    await sb.execute_secrets_backup(service, _db(_Row()), "bk1", _node(["backend"]))
     wrapped = [c for c in seen if c[0] == "/bin/sh"]
     assert len(wrapped) == 1 and wrapped[0][4].endswith("scp")
 
 
-class _RetentionDB:
+def _retention_db(row, node, old) -> FakeAsyncSession:
     """Serves _run_backup's three reads in order: the backup row, its node, then the completed rows."""
-
-    def __init__(self, row, node, old):
-        self.answers = [[row], [node], old]
-        self.deleted = []
-
-    async def execute(self, _q):
-        rows = self.answers.pop(0)
-        return SimpleNamespace(
-            scalar_one_or_none=lambda: rows[0] if rows else None, scalars=lambda: SimpleNamespace(all=lambda: rows)
-        )
-
-    async def delete(self, obj):
-        self.deleted.append(obj)
-
-    async def commit(self):
-        return None
+    return FakeAsyncSession(results=[[row], [node], old])
 
 
 class _Session:
@@ -411,7 +391,7 @@ async def _run_through_stateful(mods, monkeypatch, tmp_path, service_type, kind)
 
     svc.execute_redis_backup = ran
     monkeypatch.setitem(sys.modules, "services.backup", SimpleNamespace(backup_service=svc))
-    db = _RetentionDB(row, _node(["backend"]), old)
+    db = _retention_db(row, _node(["backend"]), old)
     session = SimpleNamespace(session=lambda: _Session(db))
     monkeypatch.setitem(sys.modules, "services.database", SimpleNamespace(db_service=session))
     monkeypatch.setattr(backup.settings, "backup_retention_count", 10, raising=False)

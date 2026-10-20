@@ -183,7 +183,19 @@ def _independent_population() -> set[str]:
     # originally caught were hidden by a hand-written `<root>/**/*.py`
     # pathspec — an enumeration bug. That class is no longer covered here. It
     # is covered by the detector no longer hand-writing a pathspec at all.
-    listed = tracked_paths(_REPO_ROOT, "autobot-backend", "autobot-slm-backend", "autobot_shared")
+    listed = tracked_paths(
+        _REPO_ROOT,
+        "autobot-backend",
+        "autobot-slm-backend",
+        "autobot_shared",
+        "autobot-npu-worker",
+        "autobot-tts-worker",
+        "autobot-browser-worker",
+        "autobot-infrastructure",
+        "scripts",
+        "tools",
+        "pipeline-scripts",
+    )
     out = [rel for rel in listed if rel.endswith(".py")]
 
     seen: dict[str, set[str]] = defaultdict(set)

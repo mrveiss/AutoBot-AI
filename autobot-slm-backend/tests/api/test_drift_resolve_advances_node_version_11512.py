@@ -46,6 +46,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
+from testkit.fake_async_session import FakeAsyncSession
+
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 for _p in (str(_BACKEND_ROOT), str(_BACKEND_ROOT.parent)):
     if _p not in sys.path:
@@ -166,25 +168,8 @@ def _make_db_service_mock(row):
     """db_service mock whose session().execute() always resolves to *row*."""
     db_service_mock = MagicMock()
 
-    class _FakeSession:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *_):
-            pass
-
-        async def execute(self, _stmt):
-            result = MagicMock()
-            result.scalar_one_or_none.return_value = row
-            return result
-
-        async def commit(self):
-            pass
-
-        def add(self, _obj):
-            pass
-
-    db_service_mock.session.return_value = _FakeSession()
+    session = FakeAsyncSession(default_result=[] if row is None else [row])
+    db_service_mock.session.return_value = session
     return db_service_mock
 
 

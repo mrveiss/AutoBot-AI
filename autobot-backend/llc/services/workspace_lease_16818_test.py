@@ -19,6 +19,8 @@ from sqlalchemy.dialects import postgresql
 from llc.models.workspace_lease import LLCWorkspaceLease
 from llc.services import workspace_disposal as disposal
 from llc.services import workspace_lease as svc
+from testkit.fake_async_session import FakeAsyncSession
+from testkit.fake_result import FakeResult
 
 NOW = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
 COMPANY = uuid.uuid4()
@@ -42,44 +44,16 @@ def _lease(**kw) -> LLCWorkspaceLease:
     return LLCWorkspaceLease(**base)
 
 
-class _Result:
-    def __init__(self, rows):
-        self._rows = rows
-
-    def scalars(self):
-        return self
-
-    def all(self):
-        return self._rows
-
-    def first(self):
-        return self._rows[0] if self._rows else None
+class _Result(FakeResult):
+    """``scalar_one`` of an empty queue entry is 0 (a count), not ``NoResultFound``."""
 
     def scalar_one(self):
         return self._rows[0] if self._rows else 0
 
 
-class _Session:
+def _session(*results):
     """Returns queued results in call order, and records what it was asked."""
-
-    def __init__(self, *results):
-        self._queue = list(results)
-        self.added = []
-        self.flushed = False
-        self.statements = []
-
-    async def execute(self, statement):
-        self.statements.append(statement)
-        return _Result(self._queue.pop(0) if self._queue else [])
-
-    def add(self, obj):
-        self.added.append(obj)
-
-    async def flush(self):
-        self.flushed = True
-
-    async def commit(self):
-        pass
+    return FakeAsyncSession(results=[_Result(r) for r in results], default_result=_Result([]))
 
 
 # ---------------------------------------------------------------------------
@@ -123,7 +97,7 @@ async def test_a_live_lease_is_not_reclaimed_even_if_the_query_hands_one_over():
     """
     live = _lease(expires_at=NOW + timedelta(hours=3))
     expired = _lease(path="/w/old", expires_at=NOW - timedelta(minutes=1))
-    session = _Session([live, expired])
+    session = _session([live, expired])
 
     reclaimed = await svc.reclaim_expired(session, now=NOW)
 
@@ -134,7 +108,7 @@ async def test_a_live_lease_is_not_reclaimed_even_if_the_query_hands_one_over():
 @pytest.mark.asyncio
 async def test_an_expired_lease_is_reclaimed_with_a_reason_not_just_a_timestamp():
     expired = _lease(expires_at=NOW - timedelta(hours=2))
-    session = _Session([expired])
+    session = _session([expired])
 
     reclaimed = await svc.reclaim_expired(session, now=NOW)
 
@@ -163,7 +137,7 @@ def test_release_is_idempotent_and_keeps_the_first_reason():
 async def test_release_for_run_releases_every_lease_that_run_held():
     """#16817's sweep calls this. A run holding two workspaces must hand back both."""
     one, two = _lease(path="/w/a"), _lease(path="/w/b")
-    session = _Session([one, two])
+    session = _session([one, two])
 
     released = await svc.release_for_run(session, uuid.uuid4(), "run stalled", now=NOW)
 
@@ -187,7 +161,7 @@ async def test_acquire_reclaims_expired_leases_before_counting_capacity(monkeypa
     monkeypatch.setattr(svc, "WORKSPACE_CAP", 1)
     expired = _lease(path="/w/old", expires_at=NOW - timedelta(hours=2))
     # reclaim -> the expired lease; lease_for_path -> none; live count -> 0 after reclaim
-    session = _Session([expired], [], [0])
+    session = _session([expired], [], [0])
 
     lease = await svc.acquire_lease(
         session, company_id=COMPANY, path="/w/new", owner="session-b", purpose="issue #2", now=NOW
@@ -201,7 +175,7 @@ async def test_acquire_reclaims_expired_leases_before_counting_capacity(monkeypa
 @pytest.mark.asyncio
 async def test_acquire_refuses_a_path_that_carries_a_live_lease():
     held = _lease(path="/w/busy", owner="session-a")
-    session = _Session([], [held])
+    session = _session([], [held])
 
     with pytest.raises(svc.WorkspaceLeaseHeld) as exc:
         await svc.acquire_lease(session, company_id=COMPANY, path="/w/busy", owner="session-b", purpose="p", now=NOW)
@@ -216,7 +190,7 @@ async def test_a_full_fleet_of_live_leases_is_a_different_error_from_a_busy_path
     2026-09-16 they were indistinguishable and the cap's message sent people to the
     wrong remedy."""
     monkeypatch.setattr(svc, "WORKSPACE_CAP", 2)
-    session = _Session([], [], [2])
+    session = _session([], [], [2])
 
     with pytest.raises(svc.WorkspaceCapacityExhausted):
         await svc.acquire_lease(session, company_id=COMPANY, path="/w/new", owner="session-b", purpose="p", now=NOW)
@@ -227,7 +201,7 @@ async def test_a_full_fleet_of_live_leases_is_a_different_error_from_a_busy_path
 async def test_a_released_lease_does_not_block_reacquiring_its_path():
     """Migration 097's reason, asserted at the service. `lease_for_path` must ignore
     released rows, or a directory becomes unusable the moment it is handed back once."""
-    session = _Session([], [], [0])
+    session = _session([], [], [0])
 
     lease = await svc.acquire_lease(
         session, company_id=COMPANY, path="/w/reused", owner="session-c", purpose="p", now=NOW
