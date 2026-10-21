@@ -255,10 +255,19 @@ def get_chat_history_manager(request: Request):
         >>> manager = get_chat_history_manager(request)
         >>> # Use manager for chat operations...
     """
+    return chat_history_manager_for(request.app.state)
+
+
+def chat_history_manager_for(app_state: Any):
+    """The app-wide ChatHistoryManager, for callers that hold the app, not a request.
+
+    Background ingest (the Telegram poller, #19010) has no Request; this is the
+    body of ``get_chat_history_manager`` so both resolve the same singleton.
+    """
     from chat_history import ChatHistoryManager
     from utils.lazy_singleton import lazy_init_singleton
 
-    return lazy_init_singleton(request.app.state, "chat_history_manager", ChatHistoryManager)
+    return lazy_init_singleton(app_state, "chat_history_manager", ChatHistoryManager)
 
 
 # =============================================================================

@@ -205,7 +205,7 @@ async def advanced_search(
 
     # Optionally include optimized context
     if request.return_context:
-        context, _ = await rag_service.get_optimized_context(query=request.query)
+        context, _ = await rag_service.get_optimized_context(query=request.query, principal=kb_principal(current_user))
         response["context"] = context
         response["context_length"] = len(context)
 

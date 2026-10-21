@@ -11,8 +11,6 @@ Generates standardized .env files from complete.yaml configuration
 import sys
 from pathlib import Path
 
-import yaml
-
 # autobot_shared is the repo-root package; this script runs standalone from
 # autobot-infrastructure/shared/scripts.
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -21,17 +19,15 @@ if str(_REPO_ROOT) not in sys.path:
 
 from autobot_shared.ssot_config import TimeoutConfig  # noqa: E402
 
+# Sibling helper module: the importing script may have been loaded by file path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from env_files_config import load_config  # noqa: E402
+
 #: Frontend API timeout in ms, from the SSOT field default (#17856 row 6).
 #: complete.yaml's http.standard is seconds as a float, and appending "000" to
 #: it wrote "30.0000" -- a 30 ms timeout.
 API_TIMEOUT_MS = TimeoutConfig.model_fields["api"].default
-
-
-def load_config():
-    """Load the complete.yaml configuration"""
-    config_path = Path(__file__).parent.parent / "config" / "complete.yaml"
-    with open(config_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
 
 
 def resolve_template_value(value, config):

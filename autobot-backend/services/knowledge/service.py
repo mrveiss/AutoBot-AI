@@ -734,7 +734,7 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
         # Issue #1261, #10658: Search indexed documentation (autobot_docs) and
         # label each chunk as [Source N] continuing from KB source numbering so
         # citation indices are contiguous and the frontend can resolve them.
-        doc_results = self._retrieve_raw_doc_results(query)
+        doc_results = await self._retrieve_raw_doc_results(query, principal=principal)
         if doc_results:
             doc_block = self._label_doc_sources(doc_results, citations)
             context_string = doc_block + "\n\n" + context_string if context_string else doc_block

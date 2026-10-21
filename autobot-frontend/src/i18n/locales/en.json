@@ -972,6 +972,28 @@
       "empty": "No additional themes are deployed.",
       "info": "Administrators install and deploy themes in the SLM console.",
       "slmLink": "SLM › Settings › Themes ↗"
+    },
+    "telegramPanel": {
+      "title": "Telegram Bot",
+      "statusConfigured": "Bot configured and active",
+      "statusNotConfigured": "Bot not configured",
+      "tokenLabel": "Bot Token",
+      "tokenHint": "Create a bot via @BotFather on Telegram and paste the token here.",
+      "tokenAria": "Telegram bot token",
+      "showToken": "Show token",
+      "hideToken": "Hide token",
+      "modeLabel": "How messages arrive",
+      "modeWebhook": "Webhook — Telegram calls a public HTTPS URL",
+      "modePolling": "Polling — AutoBot fetches messages; no public URL needed",
+      "modePollingHint": "Use polling on local or LAN-only installs. Any registered webhook is removed.",
+      "webhookLabel": "Webhook URL",
+      "webhookHint": "Public HTTPS URL where Telegram will deliver updates. AutoBot registers /api/telegram/webhook at this base URL.",
+      "webhookAria": "Webhook base URL",
+      "activeWebhook": "Active webhook: {url}",
+      "activePolling": "Polling for messages",
+      "saveFailed": "Failed to save configuration",
+      "saving": "Saving…",
+      "save": "Save & Verify"
     }
   },
   "voice": {

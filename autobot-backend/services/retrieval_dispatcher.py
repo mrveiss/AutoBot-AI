@@ -142,8 +142,8 @@ async def get_context(
         collection: Optional collection identifier (for logging).
         model: Active model name (used by CAGService for budget calc).
         collection_mode: Per-collection setting from DB/metadata.
-        principal: Who is asking, or SYSTEM_SCOPE (#16664). Scopes the cag and kag searches; the rag strategy's
-            get_optimized_context is not yet scoped (slice 2 of #16664).
+        principal: Who is asking, or SYSTEM_SCOPE (#16664). Scopes every strategy: the cag and kag searches and the
+            rag strategy's get_optimized_context (#18944).
         owner: OwnerScope of the caller (#18825). Needed by the kag strategy, whose graph expansion
             is owner-scoped; a kag request without it raises OwnerScopeRequired rather than reading
             unscoped. rag/cag do not touch the memory graph.
@@ -174,6 +174,6 @@ async def get_context(
             )
 
     # RAG path (default, kag/cag-disabled fallback, unknown mode fallback)
-    context, metrics = await rag_service.get_optimized_context(query=query)
+    context, metrics = await rag_service.get_optimized_context(query=query, principal=principal)
     metrics.strategy = "rag"
     return context, metrics

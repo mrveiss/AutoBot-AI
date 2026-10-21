@@ -135,6 +135,7 @@ async def test_cag_falls_back_when_budget_zero(tmp_path: Path):
 
     assert context == "fallback-context"
     assert getattr(metrics, "strategy", None) == "rag"
+    rag.get_optimized_context.assert_awaited_once_with(query="test query", principal=SYSTEM_SCOPE)  # #18944
 
 
 async def test_cag_falls_back_when_no_source_paths():

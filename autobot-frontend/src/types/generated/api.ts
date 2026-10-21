@@ -2149,7 +2149,9 @@ export interface paths {
          *
          *     Security: Verifies the X-Telegram-Bot-Api-Secret-Token header matches the
          *     stored secret, enforced by the ``verify_telegram_secret`` route dependency
-         *     so authentication runs before the request body is parsed.
+         *     so authentication runs before the request body is parsed. While the ingest
+         *     mode is polling the route answers 409 (``reject_webhook_in_polling_mode``),
+         *     so the webhook and the poller are never both live.
          *
          *     Args:
          *         request: FastAPI request (for header access)
@@ -2185,7 +2187,7 @@ export interface paths {
         put?: never;
         /**
          * Configure Telegram Bot
-         * @description Configure Telegram bot token and webhook.
+         * @description Configure Telegram bot token and ingest mode (webhook or polling, #19010).
          *
          *     Requires admin permission.
          *
@@ -100285,6 +100287,13 @@ export interface components {
              * @description Webhook URL (optional)
              */
             webhook_url?: string | null;
+            /**
+             * Ingest Mode
+             * @description How updates arrive: a public webhook, or outbound getUpdates polling (#19010)
+             * @default webhook
+             * @enum {string}
+             */
+            ingest_mode: "webhook" | "polling";
         } & {
             [key: string]: unknown;
         };
@@ -100299,6 +100308,8 @@ export interface components {
             message: string;
             /** Webhook Url */
             webhook_url?: string | null;
+            /** Ingest Mode */
+            ingest_mode?: ("webhook" | "polling") | null;
         } & {
             [key: string]: unknown;
         };

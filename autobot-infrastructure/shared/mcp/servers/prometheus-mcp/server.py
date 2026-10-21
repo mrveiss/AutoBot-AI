@@ -10,7 +10,10 @@ Provides agents with access to Prometheus metrics data
 
 import asyncio
 import os
+import sys
 from datetime import datetime, timedelta, timezone
+from functools import partial
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -21,6 +24,15 @@ from mcp.types import Resource, TextContent, Tool
 
 # Prometheus configuration - uses SSOT env var with fallback (#639)
 PROMETHEUS_URL = os.getenv("AUTOBOT_PROMETHEUS_URL", "http://10.0.0.4:9090")
+
+# The instant query is the canonical client's (#18964); `autobot_shared` is the repo-root package.
+_REPO_ROOT = Path(__file__).resolve().parents[5]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.monitoring.prometheus_query import query_instant  # noqa: E402
+
+_query_instant = partial(query_instant, base_url=PROMETHEUS_URL)
 
 app = Server("prometheus-mcp")
 
@@ -145,25 +157,6 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
 
-async def prometheus_query(query: str) -> Optional[Dict]:
-    """Execute instant Prometheus query."""
-    try:
-        async with aiohttp.ClientSession() as session:
-            params = {"query": query}
-            async with session.get(f"{PROMETHEUS_URL}/api/v1/query", params=params, timeout=10) as response:
-                if response.status != 200:
-                    return None
-
-                data = await response.json()
-                if data.get("status") != "success":
-                    return None
-
-                return data.get("data", {})
-
-    except Exception:
-        return None
-
-
 async def prometheus_query_range(query: str, start: datetime, end: datetime, step: str) -> Optional[Dict]:
     """Execute range Prometheus query."""
     try:
@@ -190,7 +183,7 @@ async def prometheus_query_range(query: str, start: datetime, end: datetime, ste
 
 async def query_metric(query: str) -> List[TextContent]:
     """Query current metric value."""
-    data = await prometheus_query(query)
+    data = await _query_instant(query)
 
     if not data or not data.get("result"):
         return [TextContent(type="text", text=f"No data found for query: {query}")]
@@ -258,9 +251,9 @@ async def get_system_metrics() -> List[TextContent]:
     """Get system metrics for all machines."""
 
     # Query all VMs
-    load_data = await prometheus_query("node_load1")
-    cpu_data = await prometheus_query("100 - (avg by (instance) (rate(node_cpu_seconds_total{mode='idle'}[5m])) * 100)")
-    memory_data = await prometheus_query("(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100")
+    load_data = await _query_instant("node_load1")
+    cpu_data = await _query_instant("100 - (avg by (instance) (rate(node_cpu_seconds_total{mode='idle'}[5m])) * 100)")
+    memory_data = await _query_instant("(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100")
 
     if not load_data or not load_data.get("result"):
         return [
@@ -309,7 +302,7 @@ async def get_service_health() -> List[TextContent]:
     """Get AutoBot service health status."""
 
     # Query service status
-    backend_up = await prometheus_query('up{job="autobot-backend"}')
+    backend_up = await _query_instant('up{job="autobot-backend"}')
 
     output = "Service Health Status\n" + "=" * 50 + "\n\n"
 
@@ -322,7 +315,7 @@ async def get_service_health() -> List[TextContent]:
         output += "AutoBot Backend: No data\n"
 
     # Query node exporters
-    node_up = await prometheus_query('up{job="node"}')
+    node_up = await _query_instant('up{job="node"}')
     if node_up and node_up.get("result"):
         output += "\nNode Exporters:\n"
         for result in node_up["result"]:
@@ -338,15 +331,15 @@ async def get_vm_metrics(vm_ip: str) -> List[TextContent]:
 
     # Query metrics for this VM
     instance_filter = f'instance=~"{vm_ip}:.*"'
-    load = await prometheus_query(f"node_load1{{{instance_filter}}}")
-    cpu = await prometheus_query(
+    load = await _query_instant(f"node_load1{{{instance_filter}}}")
+    cpu = await _query_instant(
         f"100 - (avg by (instance) " f'(rate(node_cpu_seconds_total{{mode="idle",{instance_filter}}}[5m])) * 100)'
     )
-    memory = await prometheus_query(
+    memory = await _query_instant(
         f"(1 - (node_memory_MemAvailable_bytes{{{instance_filter}}} / "
         f"node_memory_MemTotal_bytes{{{instance_filter}}})) * 100"
     )
-    disk = await prometheus_query(
+    disk = await _query_instant(
         f'(1 - (node_filesystem_avail_bytes{{{instance_filter},fstype!="tmpfs"}} / '
         f'node_filesystem_size_bytes{{{instance_filter},fstype!="tmpfs"}})) * 100'
     )

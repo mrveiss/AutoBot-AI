@@ -3788,10 +3788,8 @@ class GPUConfigUpdateRequest(BaseModel):
 # startup.py schemas
 # ---------------------------------------------------------------------------
 
-from enum import Enum as _StartupEnum
 
-
-class StartupPhase(str, _StartupEnum):
+class StartupPhase(str, Enum):
     """Lifecycle phase the backend reports during boot."""
 
     INITIALIZING = "initializing"
@@ -4244,21 +4242,6 @@ class TelegramWebhookUpdate(BaseModel):
     channel_post: Optional[Dict[str, Any]] = None
     edited_channel_post: Optional[Dict[str, Any]] = None
     callback_query: Optional[Dict[str, Any]] = None
-
-
-class TelegramBotConfigRequest(BaseModel):
-    """Request to configure Telegram bot."""
-
-    bot_token: str = Field(..., description="Telegram Bot API token")
-    webhook_url: Optional[str] = Field(None, description="Webhook URL (optional)")
-
-
-class TelegramBotConfigResponse(BaseModel):
-    """Response for Telegram bot configuration."""
-
-    status: str
-    message: str
-    webhook_url: Optional[str] = None
 
 
 class WhatsAppConfigRequest(BaseModel):

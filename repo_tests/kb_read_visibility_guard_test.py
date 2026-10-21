@@ -183,7 +183,12 @@ MIN_READS_FOUND = 40
 #: optimizer and fallback legs). That removes 7 entries -- a measured shrink, not new debt. The new
 #: population was derived a second way (an independent AST pass over the 94 recorded keys) and the sets
 #: compared: the symmetric difference is exactly those 7 keys. See RATCHET_BASELINES.md section 3-5.
-UNFILTERED_READ_CEILING = 87
+#: Then 87 -> 86 (#18944, #16664 slice 2): ``advanced_knowledge_search`` took a required ``principal`` and now
+#: reads through ``search_visible`` (``filter_ranked``), so it is no longer an unfiltered ``optimizer.advanced_search``.
+#: No detector change. The optimizer's context path moved to ``rag_optimizer_context.py`` and the synthesis and
+#: lessons legs to ``services/rag_derived_context.py``; neither holds a detected read. The live set was compared
+#: before and after over every changed file: the only difference is that one key.
+UNFILTERED_READ_CEILING = 86
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ", "ADMIN_ONLY: ")
 _NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)

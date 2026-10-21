@@ -78,7 +78,6 @@ BASELINE: dict[str, tuple[int, str, str]] = {
     f"{_SCRIPTS}/analysis/analyze_redis_db0.py": (1, MIGRATE, _SCRIPT_B),
     f"{_SCRIPTS}/analysis/check_all_redis_dbs.py": (1, MIGRATE, _SCRIPT_B),
     f"{_SCRIPTS}/analysis/check_redis_db.py": (1, MIGRATE, _SCRIPT_B),
-    f"{_SCRIPTS}/fix_kb_dimensions.py": (2, MIGRATE, _SCRIPT_B),
     f"{_SCRIPTS}/migrate_redis_databases.py": (1, MIGRATE, _SCRIPT_B),
     f"{_SCRIPTS}/utilities/init_memory_graph_redis.py": (1, MIGRATE, _SCRIPT_B),
     f"{_SCRIPTS}/migrations/migrate_category_indexes.py": (
@@ -99,4 +98,4 @@ BASELINE: dict[str, tuple[int, str, str]] = {
 }
 
 #: Sum of the site counts above. It may only go DOWN.
-FROZEN_TOTAL = 38
+FROZEN_TOTAL = 36

@@ -69,29 +69,12 @@ from deployment_registry import (  # noqa: E402
     ServiceStatus,
     DeploymentMode,
     ServiceHealth,
-    ServiceRegistry,
+    get_service_registry,
 )
-
-
-
-
 
 
 # Port env aliases + defaults mirror autobot_shared/ssot_config.py;
 # health paths mirror autobot_shared/ssot_constants.py.
-
-
-
-
-_registry: Optional[ServiceRegistry] = None
-
-
-def get_service_registry(config_file: Optional[str] = None) -> ServiceRegistry:
-    """Get the process-wide ServiceRegistry instance."""
-    global _registry
-    if _registry is None:
-        _registry = ServiceRegistry(config_file)
-    return _registry
 
 
 # --- end standalone replacements (#11761) -----------------------------------

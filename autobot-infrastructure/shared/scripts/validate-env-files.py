@@ -9,17 +9,14 @@ Validates consistency between environment files and complete.yaml
 """
 
 import re
+import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
-import yaml
+# Sibling helper module: the importing script may have been loaded by file path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-
-def load_config():
-    """Load the complete.yaml configuration"""
-    config_path = Path(__file__).parent.parent / "config" / "complete.yaml"
-    with open(config_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+from env_files_config import load_config  # noqa: E402
 
 
 def parse_env_file(file_path: Path) -> Dict[str, str]:

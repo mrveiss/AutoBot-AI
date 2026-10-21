@@ -164,3 +164,26 @@ control panel**. Every item below improves an existing AutoBot feature. Audits r
 - `autobot-slm-backend/slm/agent/health_collector.py` (+ ansible copy) — check-type registry.
 - `autobot-slm-backend/ansible/roles/access_control/` — missing logrotate template.
 - `autobot-slm-frontend/src/views/SystemUpdatesTab.vue`, `views/monitoring/LogViewer.vue` — reboot badge, security-only action.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #18478 — bug(config): rollback writes a revision row but never restores the live config
+- #18479 — security(config): any logged-in user can roll back config, and rollback ignores the path's entity
+- #18480 — bug(audit): default retention 0 issues EXPIRE key 0, deleting each day's audit set on write
+- #18481 — bug(ansible): access_control audit logging templates a logrotate file that does not exist
+- #18482 — bug(config): config YAML is truncated before the file lock is taken
+- #18483 — bug(slm): alert rules are stored and edited but never evaluated, and Prometheus alerts go nowhere
+- #18484 — feat(audit): link config-change audit entries to their revision diff, with rollback from the log
+- #18485 — feat(audit): executed commands land in three side sinks instead of the audit log
+- #18486 — feat(audit): admin annotations on audit entries
+- #18487 — refactor(slm-agent): one module per health-check type instead of fixed collector methods
+- #18488 — feat(slm): OS update modes, security-only apply, schedules honouring UpdatePolicy, auto-update conflict detection
+- #18489 — feat(slm): show reboot-required per node, since the playbook already detects it
+- #18490 — feat(slm): hold/unhold OS packages so upgrade-all skips pinned packages
+- #18491 — feat(logs): server-side log search including rotated .gz files, with context lines
+- #18492 — security(slm): the node journal route reads any systemd unit, not just services the SLM manages
+- #18493 — feat(config): optimistic concurrency on settings writes, so a stale write gets 409 instead of last-writer-wins
+- #18494 — Umbrella: server-admin patterns for existing logs, monitoring, updates and config
+- #18498 — feat(slm): SLM settings writes overwrite in place with no change history

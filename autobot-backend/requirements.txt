@@ -146,7 +146,7 @@ aiohttp>=3.14.5         # Async HTTP client - SECURITY UPDATE
 httpx>=0.28.1           # Issue #4412: hub registry fetches (async HTTP)
 pywebpush>=2.5.0        # VAPID/RFC8291 browser push delivery (GH#4459)
 beautifulsoup4>=4.15.0  # HTML parsing for link pipeline
-Pillow>=12.3.0          # Image processing - SECURITY UPDATE (OOB write fix)
+Pillow>=13.0.0          # Image processing - SECURITY UPDATE (8 GHSA fixed only in 13.0.0)
 # OCR binding (#13885). MUST stay paired with the tesseract-ocr / libtesseract-dev
 # system packages installed by ansible (roles/backend/tasks/main.yml). Without this
 # line the binary ships on every host and no Python caller can reach it: /api/vision/ocr,

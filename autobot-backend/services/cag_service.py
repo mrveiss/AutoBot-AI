@@ -137,7 +137,7 @@ class CAGService:
 
         if not candidates:
             logger.debug("CAG: no source paths in results — falling back to RAG")
-            return await self._fallback(query, search_metrics)
+            return await self._fallback(query, search_metrics, principal)
 
         budget = self._budget(model, config)
         cwm = ContextWindowManager()
@@ -165,7 +165,7 @@ class CAGService:
 
         if not loaded:
             logger.info("CAG: no documents fit within budget %d — falling back to RAG", budget)
-            return await self._fallback(query, search_metrics)
+            return await self._fallback(query, search_metrics, principal)
 
         context = _assemble_context(loaded)
         elapsed = time.monotonic() - t_start
@@ -196,9 +196,11 @@ class CAGService:
         )
         return context, metrics
 
-    async def _fallback(self, query: str, prior_metrics: "RAGMetrics") -> "Tuple[str, RAGMetrics]":
-        """Delegate to RAGService.get_optimized_context and tag metrics."""
-        context, metrics = await self._rag.get_optimized_context(query=query)
+    async def _fallback(
+        self, query: str, prior_metrics: "RAGMetrics", principal: KbPrincipal
+    ) -> "Tuple[str, RAGMetrics]":
+        """Delegate to RAGService.get_optimized_context for *principal* and tag metrics (#18944)."""
+        context, metrics = await self._rag.get_optimized_context(query=query, principal=principal)
         metrics.strategy = "rag"
         logger.debug("CAG fell back to RAG for query %r", query)
         return context, metrics

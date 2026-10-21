@@ -59,6 +59,10 @@ _CONSUMERS = tuple(
 )
 
 
+#: What a consumer may import: the class, or the shared process-wide accessor that builds it (#18964).
+_SHARED_REGISTRY_NAMES = frozenset({"ServiceRegistry", "get_service_registry"})
+
+
 def _defines_registry(source: str) -> bool:
     """True when `source` declares a class named ServiceRegistry at any depth."""
     return any(
@@ -67,11 +71,11 @@ def _defines_registry(source: str) -> bool:
 
 
 def _imports_shared_registry(source: str) -> bool:
-    """True when `source` takes ServiceRegistry from the sibling deployment_registry."""
+    """True when `source` takes the registry, or its one accessor (#18964), from the sibling deployment_registry."""
     return any(
         isinstance(node, ast.ImportFrom)
         and node.module == "deployment_registry"
-        and any(alias.name == "ServiceRegistry" for alias in node.names)
+        and any(alias.name in _SHARED_REGISTRY_NAMES for alias in node.names)
         for node in ast.walk(ast.parse(source))
     )
 
@@ -89,7 +93,7 @@ def _definers() -> tuple[tuple[str, ...], int]:
         if not rel.endswith(".py"):
             continue
         source = _read(rel)
-        if "ServiceRegistry" not in source:
+        if not any(name in source for name in _SHARED_REGISTRY_NAMES):
             continue
         parsed += 1
         if _defines_registry(source):
@@ -111,7 +115,7 @@ def test_the_matcher_tells_a_definition_from_a_mention(label: str, source: str, 
 
 
 def test_the_scan_is_not_vacuous() -> None:
-    """Every consumer mentions the class, so a scan parsing fewer has looked elsewhere."""
+    """Every consumer mentions the class or its accessor, so a scan parsing fewer has looked elsewhere."""
     _, parsed = _definers()
     assert parsed >= len(_CONSUMERS) + 1, f"parsed {parsed} files mentioning ServiceRegistry"
 
@@ -128,7 +132,7 @@ def test_the_infrastructure_tree_has_one_service_registry() -> None:
 def test_each_former_copy_imports_the_shared_registry(rel: str) -> None:
     assert _imports_shared_registry(
         _read(rel)
-    ), f"#18132: {rel} no longer imports ServiceRegistry from deployment_registry"
+    ), f"#18132: {rel} no longer imports ServiceRegistry or get_service_registry from deployment_registry"
 
 
 def test_service_status_is_the_canonical_health_enum() -> None:

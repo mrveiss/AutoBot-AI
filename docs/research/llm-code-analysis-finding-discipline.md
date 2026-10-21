@@ -191,3 +191,14 @@ grep for `sarif|partialFingerprints`, which found nothing. Also unread: `.semgre
 | `.claude/skills/bugfix/SKILL.md`, `implement` plugin skill | Ordered security-fix gates with withhold (A6) |
 | `docs/developer/CLAUDE_REVIEW.md` | Point to the closure states and the schema; no duplicate rule text (A1, A3) |
 | `.github/workflows/security.yml`, `ai-security-review.yml` | Bandit SARIF upload; fingerprinted LLM findings (A7) |
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #18330 — Umbrella: review finding discipline — closure states, coverage, diff-scope, instance sweeps, fix gates, fingerprints
+- #18331 — feat(skills): secreview output contract — closure states, coverage section, counterevidence and confidence fields
+- #18332 — feat(skills): secreview diff-scope triggers (newly-reachable sink, helper weakened in place, removed control) and repo-wide family sweeps
+- #18333 — feat(skills): bugfix — ordered security-fix gates (reproduction re-run, independent bypass review, withhold on failure)
+- #18334 — ci(security): upload bandit results as SARIF so they enter code scanning (after #15334)
+- #18335 — ci(security): LLM review findings have no stable fingerprint — re-raised every run, dismissals cannot stick

@@ -748,3 +748,12 @@ model" would need that field added, under the doctrine's additive-and-optional r
 absent evidence), **#17496** (work products carry no attribution; unregistered concept; unwired
 lease), **#17497** (`in` as an allow-list admits prototype keys from a WebSocket payload).
 Recorded as prior witnesses, not refiled: #17307 (closed), #16842/#16771, #17092, #13935/#13228.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #17494 — security(approvals): a negated refusal reads as APPROVE — parse_decision inverts "do not approve"
+- #17495 — bug(completion): four sites assert success when the evidence is absent or explicitly negative
+- #17496 — bug(llc): work products carry no attribution, are unregistered in store_authority, and the workspace lease has no caller
+- #17497 — bug(slm-frontend): 'in' as an allow-list check admits Object.prototype keys from a WebSocket payload

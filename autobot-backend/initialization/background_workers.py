@@ -100,6 +100,23 @@ async def start_background_workers(app: FastAPI) -> None:
     wire_llm_service(app)
     await start_doc_sync_queue_worker(app)
     await start_vector_reconciler(app)
+    await start_telegram_poller(app)
 
 
-__all__ = ["start_background_workers", "start_doc_sync_queue_worker", "start_vector_reconciler", "wire_llm_service"]
+async def start_telegram_poller(app: FastAPI) -> None:
+    """Start the Telegram polling ingest (#19010); it idles unless polling mode is selected."""
+    try:
+        from services import telegram_polling
+
+        await telegram_polling.start_polling(app)
+    except Exception:
+        logger.exception("Telegram poller NOT started; polling ingest mode will receive nothing")
+
+
+__all__ = [
+    "start_background_workers",
+    "start_doc_sync_queue_worker",
+    "start_telegram_poller",
+    "start_vector_reconciler",
+    "wire_llm_service",
+]

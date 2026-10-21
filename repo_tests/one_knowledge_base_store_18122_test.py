@@ -283,7 +283,11 @@ def _writes_projection(node: ast.AST) -> bool:
     )
 
 
+#: Fixture shape for the matchers below; the real-module structural checks (creator hands
+#: to `_accept_new_kb`, only the publisher assigns the instance, in-place initialize under
+#: the lock) live in `one_knowledge_base_creator_shape_18122_test.py` (#18122 S1).
 _CREATORS = ("_create_new_knowledge_base", "get_knowledge_base_async")
+_REAL_CREATORS = ("_accept_new_kb",)
 
 #: The real shape: both creators delegate, only the helper writes the global.
 _GOOD_SOURCE = """
@@ -421,7 +425,7 @@ def test_both_creation_paths_publish_through_one_helper() -> None:
     """
     source = (repo_root() / "autobot-backend" / "knowledge_factory.py").read_text(encoding="utf-8")
     callers, assigners, projectors = _publication_report(source)
-    for creator in _CREATORS:
+    for creator in _REAL_CREATORS:
         assert creator in callers, f"{creator} is gone -- re-point this guard"
         assert "_publish_knowledge_base" in callers[creator], (
             f"#18122/#18130: {creator} no longer publishes through _publish_knowledge_base, "
@@ -462,7 +466,8 @@ def _stmt_index(func: ast.AST, predicate) -> int:
 
 
 def _reads_cooldown(node: ast.AST) -> bool:
-    return isinstance(node, ast.Name) and node.id == "KB_RETRY_COOLDOWN_SECONDS"
+    # S1 of #18122 moved the constant read into `_cooldown_remaining`; the gate is its call.
+    return isinstance(node, ast.Name) and node.id in {"KB_RETRY_COOLDOWN_SECONDS", "_cooldown_remaining"}
 
 
 def _calls_peek(node: ast.AST) -> bool:
@@ -482,11 +487,11 @@ def test_adoption_is_not_gated_behind_the_retry_cooldown() -> None:
         (
             n
             for n in ast.walk(tree)
-            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == "get_or_create_knowledge_base"
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == "_create_under_lock"
         ),
         None,
     )
-    assert func is not None, "get_or_create_knowledge_base is gone -- re-point this guard"
+    assert func is not None, "_create_under_lock is gone -- re-point this guard"
 
     adopt_at = _stmt_index(func, _calls_peek)
     cooldown_at = _stmt_index(func, _reads_cooldown)
@@ -499,16 +504,19 @@ def test_adoption_is_not_gated_behind_the_retry_cooldown() -> None:
     )
 
 
-def test_the_statement_order_probe_has_a_contrast_pair() -> None:
-    """The probe must fail on the broken order, or it proves nothing about the good one."""
-    broken = ast.parse(
+@pytest.mark.parametrize("gate", ["elapsed < KB_RETRY_COOLDOWN_SECONDS", "_cooldown_remaining() > 0"])
+def test_the_statement_order_probe_has_a_contrast_pair(gate: str) -> None:
+    """The probe must fail on the broken order, or it proves nothing about the good one.
+
+    Both spellings of the gate are covered: the constant and the `_cooldown_remaining()` call.
+    """
+    head = (
         "async def get_or_create_knowledge_base(app):\n"
         '    """Mentions KB_RETRY_COOLDOWN_SECONDS in the docstring, as the real one does."""\n'
-        "    if _last_kb_init_failure > 0.0:\n"
-        "        if elapsed < KB_RETRY_COOLDOWN_SECONDS:\n"
-        "            return None\n"
-        "    adopted = peek_knowledge_base()\n"
-        "    return adopted\n"
+    )
+    broken = ast.parse(
+        head + f"    if _last_kb_init_failure > 0.0:\n        if {gate}:\n            return None\n"
+        "    adopted = peek_knowledge_base()\n    return adopted\n"
     )
     func = broken.body[0]
     assert _stmt_index(func, _reads_cooldown) < _stmt_index(
@@ -516,13 +524,8 @@ def test_the_statement_order_probe_has_a_contrast_pair() -> None:
     ), "control: this fixture IS the broken order and the probe must see it that way"
 
     fixed = ast.parse(
-        "async def get_or_create_knowledge_base(app):\n"
-        '    """Mentions KB_RETRY_COOLDOWN_SECONDS in the docstring, as the real one does."""\n'
-        "    adopted = peek_knowledge_base()\n"
-        "    if adopted is not None:\n"
-        "        return adopted\n"
-        "    if elapsed < KB_RETRY_COOLDOWN_SECONDS:\n"
-        "        return None\n"
+        head + "    adopted = peek_knowledge_base()\n    if adopted is not None:\n        return adopted\n"
+        f"    if {gate}:\n        return None\n"
     )
     func = fixed.body[0]
     assert _stmt_index(func, _calls_peek) < _stmt_index(func, _reads_cooldown)

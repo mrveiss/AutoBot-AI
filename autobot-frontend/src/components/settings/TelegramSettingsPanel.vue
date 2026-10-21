@@ -11,7 +11,7 @@ TelegramSettingsPanel.vue - Telegram Bot Configuration (MVA-2074)
     <div class="panel-header">
       <h3 class="panel-title">
         <Icon name="paper-plane" />
-        Telegram Bot
+        {{ t('settings.telegramPanel.title') }}
       </h3>
     </div>
 
@@ -27,11 +27,9 @@ TelegramSettingsPanel.vue - Telegram Bot Configuration (MVA-2074)
       <fieldset class="preference-section">
         <legend class="preference-label">
           <Icon name="key" />
-          Bot Token
+          {{ t('settings.telegramPanel.tokenLabel') }}
         </legend>
-        <p class="preference-hint">
-          Create a bot via <strong>@BotFather</strong> on Telegram and paste the token here.
-        </p>
+        <p class="preference-hint">{{ t('settings.telegramPanel.tokenHint') }}</p>
         <div class="token-row">
           <input
             v-model="botToken"
@@ -39,37 +37,62 @@ TelegramSettingsPanel.vue - Telegram Bot Configuration (MVA-2074)
             class="token-input"
             placeholder="123456789:ABCdefGhi..."
             autocomplete="off"
-            aria-label="Telegram bot token"
+            :aria-label="t('settings.telegramPanel.tokenAria')"
           />
-          <button type="button" class="icon-btn" :aria-label="showToken ? 'Hide token' : 'Show token'" @click="showToken = !showToken">
+          <button
+            type="button"
+            class="icon-btn"
+            :aria-label="t(showToken ? 'settings.telegramPanel.hideToken' : 'settings.telegramPanel.showToken')"
+            @click="showToken = !showToken"
+          >
             <Icon :name="showToken ? 'eye-slash' : 'eye'" />
           </button>
         </div>
       </fieldset>
 
-      <!-- Webhook URL field -->
+      <!-- Ingest mode (#19010) -->
       <fieldset class="preference-section">
         <legend class="preference-label">
-          <Icon name="globe" />
-          Webhook URL
+          <Icon name="exchange-alt" />
+          {{ t('settings.telegramPanel.modeLabel') }}
         </legend>
-        <p class="preference-hint">
-          Public HTTPS URL where Telegram will deliver updates.
-          AutoBot registers <code>/api/telegram/webhook</code> at this base URL.
+        <label class="flex items-center gap-(--spacing-sm) py-(--spacing-xs) text-autobot-text-primary">
+          <input v-model="ingestMode" type="radio" value="webhook" />
+          {{ t('settings.telegramPanel.modeWebhook') }}
+        </label>
+        <label class="flex items-center gap-(--spacing-sm) py-(--spacing-xs) text-autobot-text-primary">
+          <input v-model="ingestMode" type="radio" value="polling" />
+          {{ t('settings.telegramPanel.modePolling') }}
+        </label>
+        <p v-if="ingestMode === 'polling'" class="preference-hint">
+          {{ t('settings.telegramPanel.modePollingHint') }}
         </p>
+      </fieldset>
+
+      <!-- Webhook URL field -->
+      <fieldset v-if="ingestMode === 'webhook'" class="preference-section">
+        <legend class="preference-label">
+          <Icon name="globe" />
+          {{ t('settings.telegramPanel.webhookLabel') }}
+        </legend>
+        <p class="preference-hint">{{ t('settings.telegramPanel.webhookHint') }}</p>
         <input
           v-model="webhookUrl"
           type="url"
           class="token-input"
           placeholder="https://your-autobot.example.com"
-          aria-label="Webhook base URL"
+          :aria-label="t('settings.telegramPanel.webhookAria')"
         />
       </fieldset>
 
-      <!-- Current webhook info -->
-      <div v-if="currentWebhookUrl" class="info-box">
+      <!-- Current ingest info -->
+      <div v-if="configured && activeMode === 'polling'" class="info-box">
         <Icon name="info-circle" />
-        <span>Active webhook: <code>{{ currentWebhookUrl }}</code></span>
+        <span>{{ t('settings.telegramPanel.activePolling') }}</span>
+      </div>
+      <div v-else-if="currentWebhookUrl" class="info-box">
+        <Icon name="info-circle" />
+        <span>{{ t('settings.telegramPanel.activeWebhook', { url: currentWebhookUrl }) }}</span>
       </div>
 
       <!-- Error message -->
@@ -87,7 +110,7 @@ TelegramSettingsPanel.vue - Telegram Bot Configuration (MVA-2074)
           @click="save"
         >
           <Icon :name="saving ? 'spinner' : 'save'" :class="{ 'fa-spin': saving }" />
-          {{ saving ? 'Saving…' : 'Save & Verify' }}
+          {{ t(saving ? 'settings.telegramPanel.saving' : 'settings.telegramPanel.save') }}
         </button>
       </div>
 
@@ -97,15 +120,27 @@ TelegramSettingsPanel.vue - Telegram Bot Configuration (MVA-2074)
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import Icon from '@/components/ui/Icon.vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 
+type IngestMode = 'webhook' | 'polling'
+
+interface TelegramConfig {
+  status: string
+  webhook_url: string | null
+  ingest_mode?: IngestMode | null
+}
+
 const logger = createLogger('TelegramSettingsPanel')
 const api = useApiClient()
+const { t } = useI18n()
 
 const botToken = ref('')
 const webhookUrl = ref('')
+const ingestMode = ref<IngestMode>('webhook')
+const activeMode = ref<IngestMode>('webhook')
 const currentWebhookUrl = ref<string | null>(null)
 const showToken = ref(false)
 const saving = ref(false)
@@ -117,16 +152,16 @@ const statusClass = computed(() =>
 )
 const statusIcon = computed(() => (configured.value ? 'check-circle' : 'times-circle'))
 const statusText = computed(() =>
-  configured.value ? 'Bot configured and active' : 'Bot not configured'
+  t(configured.value ? 'settings.telegramPanel.statusConfigured' : 'settings.telegramPanel.statusNotConfigured')
 )
 
 async function loadConfig(): Promise<void> {
   try {
-    const data = await api.get<{ status: string; webhook_url: string | null }>(
-      '/api/telegram/config'
-    )
+    const data = await api.get<TelegramConfig>('/api/telegram/config')
     configured.value = data.status === 'configured'
     currentWebhookUrl.value = data.webhook_url ?? null
+    activeMode.value = data.ingest_mode ?? 'webhook'
+    ingestMode.value = activeMode.value
     if (data.webhook_url) {
       webhookUrl.value = new URL(data.webhook_url).origin
     }
@@ -140,23 +175,22 @@ async function save(): Promise<void> {
   saving.value = true
   errorMessage.value = null
   try {
-    const payload: { bot_token: string; webhook_url?: string } = {
+    const payload: { bot_token: string; webhook_url?: string; ingest_mode: IngestMode } = {
       bot_token: botToken.value,
+      ingest_mode: ingestMode.value,
     }
-    if (webhookUrl.value) {
+    if (ingestMode.value === 'webhook' && webhookUrl.value) {
       const base = webhookUrl.value.replace(/\/$/, '')
       payload.webhook_url = `${base}/api/telegram/webhook`
     }
-    const data = await api.post<{ status: string; webhook_url: string | null }>(
-      '/api/telegram/config',
-      payload
-    )
+    const data = await api.post<TelegramConfig>('/api/telegram/config', payload)
     configured.value = data.status === 'success'
     currentWebhookUrl.value = data.webhook_url ?? null
+    activeMode.value = data.ingest_mode ?? ingestMode.value
     botToken.value = ''
     logger.info('Telegram bot configured successfully')
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Failed to save configuration'
+    const msg = err instanceof Error ? err.message : t('settings.telegramPanel.saveFailed')
     errorMessage.value = msg
     logger.error('Failed to configure Telegram bot', err)
   } finally {
