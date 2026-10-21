@@ -74,6 +74,7 @@ from api.user_management.dependencies import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
+from security.upload_filename_policy import require_safe_upload
 
 # Import existing components
 
@@ -181,6 +182,7 @@ async def upload_file_to_chat(
 ):
     """Upload a file and associate it with a chat"""
     try:
+        require_safe_upload(file.filename)  # #19088: type gate before anything is stored
         manager = await get_chat_knowledge_manager_instance(request)
 
         # Save uploaded file (#1721)

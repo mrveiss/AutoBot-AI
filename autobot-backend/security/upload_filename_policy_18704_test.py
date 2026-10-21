@@ -10,6 +10,7 @@ refused it, and its deny-list lacked ``httpd.conf`` / ``nginx.conf``.
 import pytest
 
 from api import conversation_files, files
+from autobot_shared.security import upload_filename_policy as shared_policy
 from security import upload_filename_policy
 
 VALIDATORS = [conversation_files.is_safe_file, files.is_safe_file]
@@ -73,7 +74,7 @@ def test_the_lists_are_frozen_and_disjoint():
 
 def test_a_deny_listed_type_wins_over_the_allow_list(monkeypatch):
     widened = upload_filename_policy.ALLOWED_EXTENSIONS | {".exe"}
-    monkeypatch.setattr(upload_filename_policy, "ALLOWED_EXTENSIONS", widened)
+    monkeypatch.setattr(shared_policy, "ALLOWED_EXTENSIONS", widened)  # the rules live in autobot_shared (#19088)
     assert upload_filename_policy.is_safe_file("tool.exe") is False
 
 

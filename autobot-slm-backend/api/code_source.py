@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from api._code_source_paths import _confined_repo_path, _similar_path_parent
+from autobot_shared.security.upload_filename_policy import TARBALL_EXTENSIONS, is_safe_file
 from autobot_shared.time_utils import utc_timestamp
 from models.database import (
     CodeStatus,
@@ -683,11 +684,8 @@ async def upload_package(
     Issue #1088: Refactored with _extract_package_to_cache and
     _mark_role_nodes_outdated helpers.
     """
-    if not package.filename or not package.filename.endswith((".tar.gz", ".tgz")):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Package must be a .tar.gz or .tgz file",
-        )
+    if not is_safe_file(package.filename or "", TARBALL_EXTENSIONS):  # #19088
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Package must be a .tar.gz or .tgz file")
 
     data = await package.read()
     cache_path = await _extract_package_to_cache(data, role_name, commit_hash)

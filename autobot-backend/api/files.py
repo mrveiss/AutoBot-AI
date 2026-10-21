@@ -562,11 +562,11 @@ async def upload_file(
     # Store user data in request state for audit logging
     request.state.user = user_data
 
-    # Read file content
+    if not is_safe_file(file.filename or ""):  # #19088: name/type gate before the body is read
+        raise HTTPException(status_code=400, detail="File type not allowed")
     content = await file.read()
 
-    # Validate file (Issue #281: uses helper)
-    _validate_upload_file(file, content)
+    _validate_upload_file(file, content)  # Issue #281
 
     # Validate and resolve target directory
     target_dir = validate_and_resolve_path(path)

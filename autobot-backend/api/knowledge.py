@@ -121,6 +121,7 @@ from knowledge.upload_rejections import no_text_rejection as _no_text_rejection
 # NOTE: Tag-related models moved to knowledge_tags.py
 # NOTE: Search models (SearchRequest) defined in schemas_knowledge.py (#10666 B1)
 from knowledge_factory import get_or_create_knowledge_base
+from security.upload_filename_policy import is_safe_file, require_safe_upload
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
 from services.knowledge.stats_service import fetch_kb_core_stats  # Issue #11554 canonical stats
 from utils.path_validation import contains_path_traversal
@@ -819,6 +820,22 @@ def _sanitize_html_content(html_content: str) -> tuple:
     return plain_text, extractor.title
 
 
+def require_safe_kb_name(filename: str) -> None:
+    """The one KB upload-name gate: the canonical policy, with the KB's own stable rejection codes (#19088)."""
+    import os
+
+    if is_safe_file(filename, ALLOWED_EXTENSIONS):
+        return
+    if os.path.splitext(filename.lower())[1] not in ALLOWED_EXTENSIONS:
+        allowed = sorted(ALLOWED_EXTENSIONS)
+        raise UploadRejection(
+            UploadRejectionCode.UNSUPPORTED_TYPE,
+            f"File type not allowed. Allowed: {', '.join(allowed)}",
+            allowed=allowed,
+        )
+    raise UploadRejection(UploadRejectionCode.INVALID_FILENAME, "Invalid filename")
+
+
 def _validate_file_upload(filename: str, file_size: int) -> None:
     """
     Validate file upload for security (Issue #549 Code Review: Security fix).
@@ -830,7 +847,6 @@ def _validate_file_upload(filename: str, file_size: int) -> None:
     Raises:
         HTTPException: If validation fails
     """
-    import os
 
     # Check file size
     if file_size > MAX_FILE_SIZE_BYTES:
@@ -840,19 +856,7 @@ def _validate_file_upload(filename: str, file_size: int) -> None:
             max_mb=MAX_FILE_SIZE_MB,
         )
 
-    # Check extension
-    ext = os.path.splitext(filename.lower())[1]
-    if ext not in ALLOWED_EXTENSIONS:
-        allowed = sorted(ALLOWED_EXTENSIONS)
-        raise UploadRejection(
-            UploadRejectionCode.UNSUPPORTED_TYPE,
-            f"File type not allowed. Allowed: {', '.join(allowed)}",
-            allowed=allowed,
-        )
-
-    # Check for path traversal
-    if contains_path_traversal(filename):
-        raise UploadRejection(UploadRejectionCode.INVALID_FILENAME, "Invalid filename")
+    require_safe_kb_name(filename)
 
 
 @router.post("/facts", response_model=AddFactResponse)
@@ -1183,7 +1187,6 @@ async def upload_file_to_knowledge(
     Supports: .txt, .md, .pdf, .docx, .json, .csv, .html files
     Issue #744: Requires admin authentication.
     """
-    import os
 
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb_to_use is None:
@@ -1199,8 +1202,8 @@ async def upload_file_to_knowledge(
     if not file or not hasattr(file, "read"):
         raise UploadRejection(UploadRejectionCode.FILE_REQUIRED, "File is required")
 
-    # Get filename and sanitize (Issue #549 Code Review: Security)
-    filename = os.path.basename(getattr(file, "filename", "unknown"))
+    filename = getattr(file, "filename", None) or ""
+    require_safe_kb_name(filename)  # #19088: name and type gate BEFORE the body is read
     file_content = await file.read()
 
     # Validate file upload BEFORE processing (Issue #549 Code Review: Security)
@@ -1426,16 +1429,8 @@ async def upload_audio_file(
     if not file or not hasattr(file, "read"):
         raise HTTPException(status_code=400, detail="Audio file is required")
 
-    filename = _os.path.basename(getattr(file, "filename", "audio.mp3"))
-    if contains_path_traversal(filename):
-        raise HTTPException(status_code=400, detail="Invalid filename")
-
+    filename = require_safe_upload(getattr(file, "filename", None), _AUDIO_ALLOWED_EXTS)  # #19088: before the read
     ext = _os.path.splitext(filename.lower())[1]
-    if ext not in _AUDIO_ALLOWED_EXTS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported audio format. Allowed: {', '.join(sorted(_AUDIO_ALLOWED_EXTS))}",
-        )
 
     file_bytes = await file.read()
     if len(file_bytes) > _AUDIO_MAX_BYTES:
