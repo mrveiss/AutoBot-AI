@@ -291,7 +291,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:border-emerald-500/30": 2,
     "slm:border-gray-100": 55,
     "slm:border-gray-200": 309,  # #14780 BaseDrawer: 313 -> 309
-    "slm:border-gray-300": 347,
+    "slm:border-gray-300": 344,  # #18734: 347 -> 344
     "slm:border-gray-50": 4,
     "slm:border-gray-500": 2,
     "slm:border-gray-500/30": 4,
@@ -353,7 +353,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:text-gray-400": 214,  # #14780 BaseDrawer: 217 -> 214
     "slm:text-gray-500": 874,  # #14780 BaseDrawer: 877 -> 874
     "slm:text-gray-600": 265,  # #14780 BaseDrawer: 268 -> 265
-    "slm:text-gray-700": 431,
+    "slm:text-gray-700": 428,  # #18734: 431 -> 428
     "slm:text-gray-800": 41,  # #14777: 43 -> 41, SLM dialogs moved onto the kit BaseModal
     "slm:text-gray-900": 439,  # #14780 BaseDrawer: 442 -> 439
     "slm:text-green-300": 4,
@@ -393,4 +393,4 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
 }
 
 #: Frozen total, asserted separately so a hand edit of one number cannot pass.
-TOTAL_OCCURRENCES = 6180  # #14780 BaseDrawer: 6200 -> 6180
+TOTAL_OCCURRENCES = 6174  # #18734: 6180 -> 6174
