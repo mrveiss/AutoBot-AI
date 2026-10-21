@@ -12,7 +12,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 from autobot_shared.ssot_config import CLASSIFICATION_MODEL, DEFAULT_LLM_MODEL, TRIVIAL_MODEL
 from config.registry import ConfigRegistry
@@ -280,7 +280,22 @@ class TierMetrics:
         }
 
 
+def disabled_route(config: TierConfig) -> Tuple[str, ComplexityResult]:
+    """Selection every strategy returns while tiered routing is disabled.
+
+    The complex-tier model, unscored and unrecorded, so a disabled config
+    behaves the same whichever routing strategy is configured (#18297).
+    """
+    return config.models.complex, ComplexityResult(
+        score=0.0,
+        factors={},
+        tier="complex",
+        reasoning="Tiered routing disabled",
+    )
+
+
 __all__ = [
+    "disabled_route",
     "TierConfig",
     "TierModels",
     "TierLogging",

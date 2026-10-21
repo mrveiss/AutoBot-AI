@@ -320,6 +320,23 @@ const getFocusables = (root: Element) =>
     )
   )
 
+describe('BaseModal attribute forwarding', () => {
+  it('forwards consumer attributes to the dialog element, not the Teleport root', () => {
+    const wrapper = mount(BaseModal, {
+      props: { modelValue: true, title: 'Dialog title' },
+      slots: DEFAULT_SLOTS,
+      attrs: { 'data-testid': 'confirm-dialog', class: 'consumer' },
+      global: { stubs: { Teleport: true, Transition: false } },
+      attachTo: document.body,
+    })
+    const dialog = wrapper.find('[role="dialog"]')
+    expect(dialog.attributes('data-testid')).toBe('confirm-dialog')
+    expect(dialog.classes()).toContain('consumer')
+    expect(wrapper.findAll('[data-testid="confirm-dialog"]')).toHaveLength(1)
+    wrapper.unmount()
+  })
+})
+
 describe('BaseModal focus trap (#5016)', () => {
   beforeEach(() => {
     document.body.replaceChildren()

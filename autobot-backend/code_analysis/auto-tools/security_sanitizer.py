@@ -32,7 +32,6 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = get_logger(__name__)
 
 # Issue #380: Module-level constant for HTML extensions (performance optimization)
-_HTML_EXTENSIONS = (".html", ".htm")
 
 # Issue #12660: auto-tools/ has no __init__.py (hyphenated dir name isn't a
 # valid package identifier) — add this directory to sys.path so the shared
@@ -118,6 +117,36 @@ class SecurityFixAgent(SecurityFixToolBase):
                 "helper_needed": None,
             },
         }
+
+    _CSP_HEADER = (
+        '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; '
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:;\">"
+    )
+    _META_TAGS_BLOCK = (
+        "\n"
+        '<meta name="referrer" content="strict-origin-when-cross-origin">\n'
+        '<meta http-equiv="X-Content-Type-Options" content="nosniff">\n'
+        '<meta http-equiv="X-Frame-Options" content="SAMEORIGIN">\n'
+        '<meta http-equiv="X-XSS-Protection" content="1; mode=block">'
+        "\n"
+    )
+    _DOM_HELPER_BLOCK = (
+        "\n<script>\n(function(){'use strict';\n"
+        "window.sanitizeHTML=function(h){if(typeof h!=='string')return'';"
+        "var t=document.createElement('div');t.textContent=h;return t.innerHTML;};\n"
+        "})();\n</script>"
+        "\n"
+    )
+
+    def _csp_header(self) -> str:
+        return self._CSP_HEADER
+
+    def _meta_tags_block(self) -> str:
+        return self._META_TAGS_BLOCK
+
+    def _dom_helper_block(self) -> str:
+        return self._DOM_HELPER_BLOCK
 
     def scan_for_vulnerabilities(self, content: str, file_path: str) -> List[Dict[str, Any]]:
         """Scan content for XSS vulnerabilities."""
@@ -261,93 +290,6 @@ class SecurityFixAgent(SecurityFixToolBase):
 
         return "\n".join([helpers[helper] for helper in helpers_needed if helper in helpers])
 
-    def validate_html_structure(self, content: str) -> bool:
-        """HTML structure validation — checks tags are balanced. (#10666 B6: folded from deep sanitizer module)"""
-        try:
-            has_doctype = "<!DOCTYPE" in content.upper()
-            has_html_tag = "<html" in content.lower()
-            has_head_tag = "<head" in content.lower()
-            script_opens = content.count("<script")
-            script_closes = content.count("</script>")
-            return has_doctype and has_html_tag and has_head_tag and script_opens == script_closes
-        except Exception:
-            return False
-
-    # =========================================================================
-    # Enhanced context-aware analysis (#10666 B6: folded from deep sanitizer module)
-    # =========================================================================
-
-    def analyze_context_safety(self, match: str, pattern_name: str) -> bool:
-        """Analyze if a potential vulnerability is actually safe in context."""
-        pattern_info = self.xss_patterns.get(pattern_name, {})
-        safe_contexts = pattern_info.get("context_safe", []) if isinstance(pattern_info, dict) else []
-        for safe_context in safe_contexts:
-            if safe_context in match:
-                return True
-        if self.is_minified_library_code(match):
-            return True
-        if any(framework in match for framework in ["React", "Vue", "Angular", "__webpack"]):
-            return True
-        return False
-
-    def is_minified_library_code(self, code: str) -> bool:
-        """Detect if code appears to be from a minified library."""
-        indicators = [
-            len(code) > 200,
-            re.search(r"[a-zA-Z]\.[a-zA-Z]\.[a-zA-Z]", code),
-            code.count(",") > 10 and "\n" not in code,
-            any(lib in code.lower() for lib in ["react", "vue", "angular", "jquery", "lodash"]),
-        ]
-        return sum(bool(i) for i in indicators) >= 2
-
-    def inject_security_headers(self, content: str) -> Tuple[str, List[str]]:
-        """Inject CSP headers and security meta tags into HTML head."""
-        enhancements: List[str] = []
-        head_match = re.search(r"<head[^>]*>(.*?)</head>", content, re.DOTALL | re.IGNORECASE)
-        if not head_match:
-            return content, enhancements
-        head_content = head_match.group(1)
-        head_start = head_match.start(1)
-        head_end = head_match.end(1)
-        csp_header = (
-            '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; '
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:;\">"
-        )
-        if not re.search(r"Content-Security-Policy", head_content, re.IGNORECASE):
-            content = content[:head_start] + "\n" + csp_header + "\n" + head_content + content[head_end:]
-            enhancements.append("Content Security Policy (CSP) injected")
-        if not re.search(r"X-Content-Type-Options", head_content, re.IGNORECASE):
-            security_tags = (
-                "\n"
-                '<meta name="referrer" content="strict-origin-when-cross-origin">\n'
-                '<meta http-equiv="X-Content-Type-Options" content="nosniff">\n'
-                '<meta http-equiv="X-Frame-Options" content="SAMEORIGIN">\n'
-                '<meta http-equiv="X-XSS-Protection" content="1; mode=block">'
-            )
-            pos = content.find("</head>")
-            if pos != -1:
-                content = content[:pos] + security_tags + "\n" + content[pos:]
-                enhancements.append("Security meta tags injected")
-        return content, enhancements
-
-    def inject_dom_sanitization(self, content: str) -> Tuple[str, List[str]]:
-        """Inject DOM sanitization helper script."""
-        enhancements: List[str] = []
-        injection_point = content.find("</head>")
-        if injection_point == -1:
-            injection_point = content.find("<script")
-        if injection_point != -1:
-            dom_helper = (
-                "\n<script>\n(function(){'use strict';\n"
-                "window.sanitizeHTML=function(h){if(typeof h!=='string')return'';"
-                "var t=document.createElement('div');t.textContent=h;return t.innerHTML;};\n"
-                "})();\n</script>"
-            )
-            content = content[:injection_point] + dom_helper + "\n" + content[injection_point:]
-            enhancements.append("DOM sanitization helpers injected")
-        return content, enhancements
-
     @staticmethod
     def _log_vulnerability_details(vulnerabilities: List[Dict[str, Any]]) -> None:
         """Log each vulnerability with severity icon and location.
@@ -439,22 +381,6 @@ class SecurityFixAgent(SecurityFixToolBase):
                 "status": "error",
                 "error": "File processing failed",
             }
-
-    def scan_directory(self, directory: str) -> List[str]:
-        """Scan directory for HTML files to fix."""
-        html_files = []
-
-        try:
-            for root, dirs, files in os.walk(directory):
-                for file in files:
-                    if file.lower().endswith(_HTML_EXTENSIONS):
-                        file_path = os.path.join(root, file)
-                        html_files.append(file_path)
-
-        except Exception as e:
-            logger.error("Error scanning directory %s: %s", directory, e)
-
-        return html_files
 
     def _compute_report_stats(self, results: List[Dict[str, Any]]) -> Dict[str, int]:
         """

@@ -179,20 +179,35 @@ async def _create_under_lock(app: "FastAPI | None" = None, force_refresh: bool =
         remaining = 0.0 if force_refresh else _cooldown_remaining()
         if remaining > 0.0:
             logger.warning("KB init cooldown active — skipping retry (%ds remaining)", int(remaining))
-            # INTERIM contract (owner D2): None, not an error. #18122 S2 makes
-            # knowledge/_composed.get_knowledge_base a facade that raises RuntimeError on
-            # None, which is how the error reaches the llc/memory/mcp callers.
+            # Contract (owner D2): None, not an error here. knowledge/_composed.
+            # get_knowledge_base raises RuntimeError on None, which is how the error
+            # reaches the llc/memory/mcp callers.
             return None
         return await _create_new_knowledge_base(app)
 
 
 async def _ready_app_state_kb(app: "FastAPI"):
-    """Return the app-state instance if ready, initializing it in place if not (Issue #315)."""
+    """Return the app-state instance if it is the singleton and ready (Issue #315, #18122).
+
+    ``app.state`` is a projection of the singleton, so it is served only while it IS the
+    singleton. After an app-free ``reset_knowledge_base()`` (global None) an initialized
+    projection is stale and falls through to the creation path, which republishes through
+    the single writer. An uninitialized one is initialized in place only when it is the
+    singleton or none exists yet (the bootstrap case); against a different live singleton
+    it is dropped in favour of adopting that one.
+    """
     kb = getattr(app.state, "knowledge_base", None)
     if kb is None:
         return None
+    singleton = _knowledge_base_instance
+    if singleton is not None and kb is not singleton:
+        logger.info("App-state knowledge base is not the singleton; adopting the singleton")
+        return None
     _log_kb_state(kb)
     if _is_kb_initialized(kb):
+        if kb is not singleton:
+            logger.info("App-state knowledge base outlived a reset; rebuilding from the singleton path")
+            return None
         logger.info("Using existing initialized knowledge base from app state")
         return kb
     return await _try_initialize_existing_kb(kb, app)
@@ -256,3 +271,15 @@ async def get_knowledge_base_async() -> "KnowledgeBase" | None:  # noqa: F821
     except Exception as e:
         logger.error("❌ Failed to create knowledge base singleton: %s", e)
         return None
+
+
+def reset_knowledge_base(app: "FastAPI | None" = None) -> None:
+    """Clear the singleton through the publisher; the next access creates anew (#18122).
+
+    Synchronous and lock-free like the old ``_composed`` reset (Issue #613): it only
+    rebinds the global. Given an ``app`` it clears the ``app.state`` projection too, so
+    ``get_or_create_knowledge_base(app)`` cannot keep serving the instance the app-free
+    path just dropped. The retry cooldown is left as it was.
+    """
+    _publish_knowledge_base(None, app)
+    logger.info("KnowledgeBase singleton instance reset")

@@ -470,7 +470,7 @@ _INFRA_ROLES = [
         ),
         "required": True,
         "degraded_without": [],
-        "ansible_playbook": "deploy-slm-agent.yml",
+        "ansible_playbook": "playbooks/deploy-slm-agent.yml",
     },
 ]
 

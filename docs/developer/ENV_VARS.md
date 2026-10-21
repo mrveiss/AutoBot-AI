@@ -429,7 +429,7 @@ appears outside the known overlays.
 | `NPU_WORKER_PORT` | npu | int | `8081` | Port the NPU worker listens on (worker) and that `autobot doctor` probes. AUTOBOT_NPU_WORKER_PORT is the ssot alias and wins in doctor; this bare name is still honoured so existing deployments keep working. |
 | `OPENAI_API_KEY` | image_generation | str | *(none)* | OpenAI image API key for the image-generation plugin. Environment fallback only: credentials belong in the secrets service. |
 | `SLM_ENCRYPTION_KEY` | slm | str | `""` | Key for SLM data-at-rest encryption. Empty and unset are equivalent (not configured). |
-| `SLM_NODE_ID` | slm | str | `'00-SLM-Manager'` | Node id. The SLM backend uses it as the manager's own registry id (default shown). slm/agent/agent.py accepts --node-id; slm-agent-standalone.py reads only SLM_NODE_ID. Both refuse to start without one. |
+| `SLM_NODE_ID` | slm | str | `'00-SLM-Manager'` | Node id. The SLM backend uses it as the manager's own registry id (default shown). slm/agent/agent.py accepts --node-id. The agent refuses to start without one. |
 | `SLM_SECRET_KEY` | slm | str | `""` | SLM JWT signing secret. Empty and unset are equivalent (both mean not configured). |
 | `SLM_USERS_DATABASE_URL` | slm | str | *(none)* | SQLAlchemy DSN of the SLM admin-users database. Unset falls back to the slm_users database on the colocated PostgreSQL. |
 | `STABILITY_API_KEY` | image_generation | str | *(none)* | Stability AI API key for the image-generation plugin. Environment fallback only: credentials belong in the secrets service. |

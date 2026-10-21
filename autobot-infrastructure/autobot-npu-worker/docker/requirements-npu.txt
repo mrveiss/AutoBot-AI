@@ -2,9 +2,9 @@
 # Optimized for Intel NPU acceleration
 
 # Core Framework
-fastapi>=0.143.0
+fastapi>=0.143.3
 uvicorn[standard]>=0.54.0
-pydantic>=2.14.0
+pydantic>=2.14.1
 
 # Intel OpenVINO for NPU acceleration
 # #14453: openvino-dev dropped -- it is a deprecated meta-package frozen at
@@ -22,7 +22,7 @@ tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a f
                           # ai-stack + npu-worker installs have failed to resolve ever since.
                           # scripts/tokenizers_transformers_range_test.py now fails on a floor
                           # that excludes 0.23.0.
-transformers>=5.19.0  # 5.17.x declares huggingface-hub<2.0, so with the hub floor below a 5.17
+transformers>=5.20.1  # 5.17.x declares huggingface-hub<2.0, so with the hub floor below a 5.17
                       # floor is one pip can never install; 5.18.0 is the first to admit hub<3.0.
 # Held below 2.0 (#17847, re-asserted after #18045). MEASURED on PyPI: the latest
 # `sentence-transformers` (6.1.0) and `tokenizers` (0.23.2) BOTH declare

@@ -45,6 +45,7 @@ from llm_shared import get_provider_registry
 from llm_shared.model_fallback_coordinator import get_fallback_coordinator
 from llm_shared.models import LLMRequest
 from llm_shared.provider_degradation import AllCredentialsNeedReauthError
+from llm_shared.tiered_routing.registry import get_active_router
 from llm_shared.tiered_routing.tier_router import get_tiered_router
 from services.llm_api_key_service import LLMApiKeyRecord, get_llm_api_key_service
 from services.llm_cost_tracker import get_cost_tracker
@@ -63,8 +64,8 @@ router = APIRouter(tags=["openai-compat"])
 # Reserved model names for server-side tiered routing (#6592)
 # ---------------------------------------------------------------------------
 # Callers may pass these instead of a concrete model name to opt into
-# AutoBot's tiered routing.  "auto" uses TieredModelRouter complexity scoring;
-# "auto-fast" forces the simple tier; "auto-quality" forces the complex tier.
+# AutoBot's tiered routing. "auto" uses the configured strategy; "auto-fast"
+# forces the simple tier; "auto-quality" forces the complex tier.
 _AUTO_MODEL_NAMES = frozenset({"auto", "auto-fast", "auto-quality"})
 
 # ---------------------------------------------------------------------------
@@ -184,15 +185,38 @@ async def _select_provider_or_503(registry, llm_request: LLMRequest):
 
 
 async def _resolve_auto_model(model: str, messages: list) -> str:
-    """Resolve an auto-* model alias to a concrete model name via TieredModelRouter."""
-    router = get_tiered_router()
+    """Resolve an auto-* alias using the configured strategy or forced tier."""
     if model == "auto-fast":
-        return router.get_model_for_tier("simple")
+        return get_tiered_router().get_model_for_tier("simple")
     if model == "auto-quality":
-        return router.get_model_for_tier("complex")
-    # "auto" — complexity-scored routing
-    selected, _ = router.route(messages, requested_model=model)
+        return get_tiered_router().get_model_for_tier("complex")
+    # "auto" — the strategy selected by backend.llm.routing_strategy (#18297).
+    selected, _ = get_active_router().route(messages, requested_model=model)
     return selected
+
+
+async def _resolve_requested_model(body: ChatCompletionRequest) -> str | None:
+    """Map the requested model to a concrete name; None means provider default."""
+    if body.model in _AUTO_MODEL_NAMES:
+        messages_raw = [{"role": m.role, "content": m.content} for m in body.messages]
+        return await _resolve_auto_model(body.model, messages_raw)
+    if body.model == "autobot-default":
+        return None  # set from the provider name once one is selected
+    return body.model
+
+
+def _response_model_or_502(resolved_model: str | None, provider) -> str:
+    """Echo the concrete model name, falling back to the provider name.
+
+    A routed response with no model identity is malformed and cannot be
+    priced or represented accurately in the OpenAI response.
+    """
+    if resolved_model is not None:
+        return resolved_model
+    provider_name = getattr(provider, "provider_name", None)
+    if not provider_name:
+        raise HTTPException(status_code=502, detail="Unable to resolve response model")
+    return provider_name
 
 
 def _build_llm_request(body: ChatCompletionRequest, resolved_model: str | None = None) -> LLMRequest:
@@ -420,6 +444,42 @@ async def _completion_json_response(
     )
 
 
+def _streaming_response(
+    body: ChatCompletionRequest,
+    provider,
+    llm_request: LLMRequest,
+    completion_id: str,
+    resolved_model: str,
+    api_key_record: LLMApiKeyRecord | None,
+) -> StreamingResponse:
+    """Build the SSE response for a streaming chat completion."""
+    include_usage = bool(body.stream_options and body.stream_options.include_usage)
+    prompt_text = "\n".join(m.content for m in body.messages)
+    # For streaming, cost cannot be determined accurately until stream completes
+    # (token counts are not known upfront). Per acceptance criteria, header is
+    # absent when cost cannot be determined. Non-streaming path includes the header.
+    stream_headers: Dict[str, str] = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+    if body.model in _AUTO_MODEL_NAMES:
+        stream_headers["x-llm-routed-from"] = body.model
+    return StreamingResponse(
+        _stream_generator(
+            provider,
+            llm_request,
+            completion_id,
+            resolved_model,
+            include_usage=include_usage,
+            prompt_text=prompt_text,
+            api_key_record=api_key_record,
+        ),
+        media_type="text/event-stream",
+        headers=stream_headers,
+    )
+
+
 @router.post("/chat/completions", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -442,54 +502,20 @@ async def chat_completions(
     await _enforce_virtual_key(api_key_record, body.model)  # model whitelist + budget (#6590)
 
     # Resolve auto-* model aliases to concrete model names via tiered routing (#6592)
-    if body.model in _AUTO_MODEL_NAMES:
-        messages_raw = [{"role": m.role, "content": m.content} for m in body.messages]
-        resolved_model = await _resolve_auto_model(body.model, messages_raw)
-    elif body.model == "autobot-default":
-        resolved_model = None  # will be set from provider name below
-    else:
-        resolved_model = body.model
+    resolved_model = await _resolve_requested_model(body)
 
     registry = get_provider_registry()
     llm_request = _build_llm_request(body, resolved_model=resolved_model)
 
     provider = await _select_provider_or_503(registry, llm_request)
-
-    # Fix 3: validate stream_completion is an async generator function (#5132)
     if not inspect.isasyncgenfunction(provider.stream_completion):
         raise ValueError(f"Provider {provider.provider_name!r} stream_completion must be an async generator function")
 
     completion_id = _make_completion_id()
-    # Echo the concrete model name; fall back to provider name for autobot-default
-    if resolved_model is None:
-        resolved_model = provider.provider_name
+    resolved_model = _response_model_or_502(resolved_model, provider)
 
     if body.stream:
-        include_usage = bool(body.stream_options and body.stream_options.include_usage)
-        prompt_text = "\n".join(m.content for m in body.messages)
-        # For streaming, cost cannot be determined accurately until stream completes
-        # (token counts are not known upfront). Per acceptance criteria, header is
-        # absent when cost cannot be determined. Non-streaming path includes the header.
-        stream_headers: Dict[str, str] = {
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        }
-        if body.model in _AUTO_MODEL_NAMES:
-            stream_headers["x-llm-routed-from"] = body.model
-        return StreamingResponse(
-            _stream_generator(
-                provider,
-                llm_request,
-                completion_id,
-                resolved_model,
-                include_usage=include_usage,
-                prompt_text=prompt_text,
-                api_key_record=api_key_record,
-            ),
-            media_type="text/event-stream",
-            headers=stream_headers,
-        )
+        return _streaming_response(body, provider, llm_request, completion_id, resolved_model, api_key_record)
 
     # Non-streaming path — use fallback coordinator for quota-triggered model switch
     llm_response = await get_fallback_coordinator().execute_with_fallback(llm_request, registry)

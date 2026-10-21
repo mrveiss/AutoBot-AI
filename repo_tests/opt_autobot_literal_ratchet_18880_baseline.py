@@ -10,6 +10,8 @@ that names the deploy folder is documentation, not configuration. Excluded: the 
 Frozen 2026-10-19: 309 occurrences in 72 files. Cross-derived once at freeze time by an
 independent grep that dropped `#` comment lines: the same 72-file set. Each entry only goes DOWN;
 #18881 (playbooks) and #18882 (roles, templates, inventory, tests) take it to empty.
+
+Retired by #19040: upgrade-backend-agent.yml (2) and fix-slm-agent-node-id.yml (4), so 303 in 70 files.
 """
 
 BASELINE: dict[str, int] = {
@@ -42,7 +44,6 @@ BASELINE: dict[str, int] = {
     "autobot-slm-backend/ansible/playbooks/fix-backend-environment.yml": 1,
     "autobot-slm-backend/ansible/playbooks/fix-backend-symlink.yml": 2,
     "autobot-slm-backend/ansible/playbooks/fix-node-ownership.yml": 4,
-    "autobot-slm-backend/ansible/playbooks/fix-slm-agent-node-id.yml": 4,
     "autobot-slm-backend/ansible/playbooks/pre-deployment-validation.yml": 6,
     "autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml": 1,
     "autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml": 3,
@@ -83,6 +84,5 @@ BASELINE: dict[str, int] = {
     "autobot-slm-backend/ansible/tests/check_venv_producers.py": 1,
     "autobot-slm-backend/ansible/tests/fixtures/defect_15822/clean_wrong_node_dir.yml": 1,
     "autobot-slm-backend/ansible/tests/playbooks/test_wrong_node_cleanup_effect.yml": 6,
-    "autobot-slm-backend/ansible/upgrade-backend-agent.yml": 2,
     "autobot-slm-backend/ansible/utils/backup.sh": 1,
 }

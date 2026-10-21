@@ -42,6 +42,8 @@ const tabs: { key: SubTab; label: string }[] = [
 const loading = ref(false)
 const error = ref<string | null>(null)
 const selectedNpuNode = ref<SLMNode | null>(null)
+// The panel stays mounted once shown, so closing animates it out and returns focus (#14780).
+const detailsOpen = ref(false)
 const showAssignModal = ref(false)
 
 // Computed
@@ -97,10 +99,11 @@ async function refreshAll(): Promise<void> {
 
 function selectNode(node: SLMNode): void {
   selectedNpuNode.value = node
+  detailsOpen.value = true
 }
 
 function closeDetailsPanel(): void {
-  selectedNpuNode.value = null
+  detailsOpen.value = false
 }
 
 async function handleRoleAssigned(): Promise<void> {
@@ -284,6 +287,7 @@ watch(() => fleetStore.nodeList, () => {
     <!-- Details Panel (shared across tabs) -->
     <NPUDetailsPanel
       v-if="selectedNpuNode"
+      :open="detailsOpen"
       :node="selectedNpuNode"
       :npu-status="fleetStore.getNpuStatus(selectedNpuNode.node_id)"
       @close="closeDetailsPanel"

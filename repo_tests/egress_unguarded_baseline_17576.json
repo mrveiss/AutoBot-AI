@@ -89,7 +89,6 @@
   "autobot-infrastructure/shared/scripts/setup/analytics/seq_auth_setup.py": 3,
   "autobot-infrastructure/shared/scripts/setup/analytics/setup_seq_analytics.py": 11,
   "autobot-infrastructure/shared/scripts/simple_populate.py": 3,
-  "autobot-infrastructure/shared/scripts/slm-agent-standalone.py": 1,
   "autobot-infrastructure/shared/scripts/startup_coordinator.py": 1,
   "autobot-infrastructure/shared/scripts/upload_docs.py": 2,
   "autobot-infrastructure/shared/scripts/utilities/demo_workflow_system.py": 5,

@@ -109,10 +109,6 @@
       "verdict": "variant",
       "why": "documented Windows NPU worker exception: docs/developer/ARCHITECTURE_EXCEPTIONS.md (#5438); the packaged worker cannot import autobot_shared"
     },
-    "SLMAgent": {
-      "verdict": "variant",
-      "why": "slm-agent-standalone.py is the standalone node-agent deploy target; the other is the SLM backend's agent daemon with a different shape (19 vs 8 statements)"
-    },
     "SearchRequest": {
       "verdict": "real",
       "issue": 12771

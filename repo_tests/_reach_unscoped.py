@@ -69,6 +69,7 @@ UNSCOPED = frozenset(
         "reduced-motion-smooth-scroll",
         "response-model-secret-scan",
         "router-auth-coverage",
+        "slm-agent-single-definition-19040",  # every tracked .py/.yml/.yaml/.j2: no prefix describes it (#19040)
         "slm-frontend-components",
         "slm-frontend-locale-keys",
         "slm-scripts-importing-services",

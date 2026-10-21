@@ -81,7 +81,6 @@ BASELINE: dict[str, tuple[int, str]] = {
     ),
     "autobot-backend/api/knowledge_debug.py": (2, f"{_DRAIN} (D5): use the canonical instance"),
     "autobot-backend/api/knowledge_eval.py": (2, f"{_DRAIN} (D5): use the canonical instance"),
-    "autobot-backend/knowledge/_composed.py": (1, f"{_DRAIN} (S2): becomes a facade over knowledge_factory"),
     "autobot-backend/utils/system_validator.py": (2, f"{_DRAIN}: validator builds a private KB"),
     "autobot-backend/agents/knowledge_retrieval_agent.py": (1, f"{_DRAIN}: agent builds a private KB"),
     "autobot-backend/agents/kb_librarian_agent.py": (1, f"{_DRAIN}: agent builds a private KB"),

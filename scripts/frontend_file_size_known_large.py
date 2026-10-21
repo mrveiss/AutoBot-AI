@@ -186,7 +186,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-frontend/src/views/AgentsView.vue": 737,
     "autobot-slm-frontend/src/views/CodeSyncView.vue": 2069,  # #18819: 2080 -> 2069
     "autobot-slm-frontend/src/views/DeploymentsView.vue": 1623,  # #18819 + #14777: 1703 -> 1623
-    "autobot-slm-frontend/src/views/FleetOverview.vue": 786,  # #18819 + #14777: 837 -> 786
+    "autobot-slm-frontend/src/views/FleetOverview.vue": 708,  # #14780: 786 -> 708
     "autobot-slm-frontend/src/views/MaintenanceView.vue": 794,  # #14777 batch 2: 817 -> 794
     "autobot-slm-frontend/src/views/OrchestrationView.vue": 2189,
     "autobot-slm-frontend/src/views/ReplicationView.vue": 706,  # #18819 + #14777: 731 -> 706

@@ -33,7 +33,6 @@
     "ProcessingResult",
     "RedisConnectionManager",
     "Role",
-    "SLMAgent",
     "SLMClient",
     "SearchRequest",
     "SearchResult",
