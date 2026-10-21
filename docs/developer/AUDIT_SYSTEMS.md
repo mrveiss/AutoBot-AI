@@ -19,7 +19,7 @@ and 10), #18285 (row 11), #18286 (row 12); row 13 stays the SLM's own node-opera
 |---|---|
 | `audit.py` | The one write path (`record`, `emit`, `emit_security`/`emit_compliance`/`emit_knowledge`, `audit_record`) and read path (`query`, `query_filtered`, `query_events`, `count_since`), plus `apply_retention` and `rebuild_projection`. Every producer reaches `record`, which also feeds threat detection (#13562), writes the `audit_logs` row, then the projection. |
 | `store.py` | The system of record: Postgres `audit_logs`. Inserts rows, answers every query (one SQL statement per question), counts. Declares `system_of_record("audit_trail")`. |
-| `taxonomy.py` | `AuditEvent`, `AuditCategory`, `AuditFilter`, and the three legacy action vocabularies (`AuditAction`, `ComplianceEventType`, `AuditEventType`). |
+| `taxonomy.py` | `AuditEvent`, `AuditCategory`, `AuditFilter`, and the action vocabularies: `AuditAction` (the canonical dotted one, see "Action vocabulary" below), `ComplianceEventType` and `AuditEventType`. |
 | `projection.py` | The Redis projection, and the only module that writes an `audit:` key: `audit:unified` plus `audit:category:<cat>`. Rebuilt from `audit_logs` by `rebuild_projection`; nothing reads it as an answer. |
 | `retention.py` | The one retention policy table (D5). |
 | `purge.py` | The one purge path, used by the nightly task and the admin cleanup endpoint. |
@@ -86,6 +86,97 @@ keeps an `audit_log.json` outside the guard's roots.
   written and the loss of the durable copy is logged and counted
   (`autobot_audit_write_failures_total`).
 * `GET /api/security/audit-log` returns newest-first.
+
+## Action vocabulary (#18716)
+
+One concept used to be stored under several spellings (login: eight), and every reader matched exactly
+one of them. The owner decision of 2026-10-20: the canonical form is the dotted `<resource>.<verb>`.
+
+**Home.** The vocabulary is `AuditAction` in `autobot-backend/services/audit/taxonomy.py`. The one
+mapping from every older spelling to it is `ACTION_ALIASES` in `autobot_shared/audit_actions.py`
+(`canonical_action()` on write, `spellings_of()` on read). The mapping lives in the shared package
+because `autobot_shared` must not import backend code; the guard fails when an alias target is not an
+`AuditAction` member. This table is a copy of `ACTION_ALIASES`; the code is the source.
+
+| Older spelling(s) | Canonical |
+|---|---|
+| `login`, `login_success`, `login_successful`, `login_attempt`, `login_attempt_locked_account`, `login_failed`, `sso_login`, `user.login` | `auth.login` |
+| `logout`, `user.logout` | `auth.logout` |
+| `config.changed`, `config.change`, `settings_updated` | `config.update` |
+| `file_delete`, `conversation_file_delete`, `document.deleted` | `file.delete` |
+| `file_upload`, `document.uploaded` | `file.upload` |
+| `file_download` | `file.download` |
+| `file_create` | `file.create` |
+| `user_created`, `user.created` | `user.create` |
+| `user_deleted` | `user.delete` |
+| `user_updated` | `user.update` |
+| `role_assigned` | `role.assign` |
+| `role_revoked` | `role.revoke` |
+| `user.role_changed` | `role.change` |
+| `password_changed` | `password.change` |
+| `api_key_created`, `api_key.created` | `api_key.create` |
+| `api_key_revoked`, `api_key.deleted` | `api_key.revoke` |
+
+**Where it is applied.**
+
+| Boundary | Direction | What |
+|---|---|---|
+| `taxonomy.action_name()` | write | every `emit_*` / `AuditEvent` built through the canonical service; `ComplianceEventType` stays the public event-log contract and is mapped here |
+| `audit_rows.audit_row()` | write | the identity services (`IdentityAuditAction` constants) and the SLM's shared `UserService`; the one boundary for `audit_logs` rows |
+| `AuditEntry.to_event()` (`services/audit_logger.py`) | write | the operation-audit adapter |
+| `AuditFilter.action_set()` | read | `action` / `actions` filters match the canonical spelling plus every alias, in Redis (`matches`) and SQL (`store.where_clauses`), so rows stored before #18716 still count |
+| `threat_detection/ingest.engine_action()` | read | canonicalises before translating to the analyzers' vocabulary; `config.update` becomes `system_configuration_change`, the only `InsiderThreatAnalyzer._HIGH_RISK_ACTIONS` name a bus event can reach (#19015 tracks the rest) |
+| SLM `api/sso.py` health query | read | `spellings_of("auth.login")` instead of `"login"` |
+
+The alias half of every read shrinks once the approved data migration (#17038) has rewritten stored
+`audit_logs` rows; code never rewrites stored rows. The SLM's own `slm_node_audit_logs` writers pass the
+canonical literal directly (the `success` column carries the outcome).
+
+**One backend login writes three `auth.login` rows (owner decision 2026-10-20, kept as distinct facts).**
+
+| # | Writer | Records |
+|---|---|---|
+| 1 | `middleware/audit_middleware.py` path map | the HTTP attempt: every status, no actor yet |
+| 2 | shared `UserService.authenticate` via `audit_row` | the credential verdict: user and org id, and the failure reason |
+| 3 | `api/auth.py` `emit_compliance` | the session issued: feeds the admin event-log view (COMPLIANCE category) |
+
+A logout writes rows 1 and 3. `auth_middleware.authenticate_user` (legacy file-user path, no production
+caller) uses the same spelling.
+
+**Not aliased, on purpose.**
+
+* The SLM key-gate request decisions `api_key_request`, `api_key_rejected`, `api_key_refused_*` are not
+  lifecycle events and stay out of `api_key.*`.
+* Bare knowledge verbs (`create`, `delete`, `update`, `view`, `search`) are `AuditEventType` values, not
+  aliases of `user.*` / `file.*`.
+* Open-ended families are data, not members: `llm_command_parser:<event_type>`, `ai_line.<outcome>`,
+  `execute_task_<task_type>`.
+
+**Failures are told apart by `outcome`, never by action.** `login_failed` and `login_success` both map to
+`auth.login` (as do `login_attempt` and `login_attempt_locked_account`). A failed login is an `auth.login`
+row with a non-`success` `outcome`, so no consumer may filter failures by action alone; read `outcome`
+(the SLM's own table carries it in the `success` column).
+
+**A known second vocabulary.** `IdentityAuditAction` (`autobot_shared/user_management/models/audit.py`) is a
+public constant set of the shared package, and only the concepts above are mapped. Its other underscore
+spellings are still stored as written: `mfa_enabled`, `mfa_disabled`, `mfa_verified`, `mfa_failed`,
+`backup_code_used`, `sso_linked`, `sso_unlinked`, `user_activated`, `user_deactivated`, `team_*`, `org_*`,
+`role_created`, `role_updated`, `role_deleted`, `api_key_used`, `account_locked`, `account_unlocked`,
+`suspicious_activity`, `permission_denied`, `password_reset_requested`, `password_reset_completed`. The
+guard lists the ones a writer passes in its baseline. Migrating them to the dotted form is tracked by #19035.
+
+**Guard and adding an action.** `repo_tests/audit_action_vocabulary_18716_test.py` scans the writer calls
+(`audit_log`, `_audit_log`, `log_action`, `audit_row`, `AuditEvent(`, `create_audit_log`,
+`audit_operation`, and the middleware path map) in the backend, the shared package and the SLM backend.
+Every spelling must be an `AuditAction` value, an open-ended family, a legacy `IdentityAuditAction` value
+passed to a boundary writer that maps it, or listed with a reason in
+`repo_tests/audit_action_vocabulary_baseline_18716.py` (shrink-only).
+
+To add an action: add the dotted member to `AuditAction` and write that. To retire an old spelling: add it
+to `ACTION_ALIASES` with the canonical target. Do not add a baseline entry for a new action.
+
+The identity services still insert `audit_row` rows in the caller's transaction, bypassing the Redis
+projection and threat analysis; routing them through the bus needs a post-commit sink (#19014).
 
 ## Data-move proposal (for the #17038 approval queue; not implemented)
 

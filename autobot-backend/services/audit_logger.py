@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Literal
 
+from autobot_shared.audit_actions import canonical_action
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.network_constants import NetworkConstants
@@ -55,7 +56,9 @@ _SENSITIVE_KEYS = frozenset(
 )
 _ENTRY_META_KEYS = ("user_role", "vm_name", "vm_source", "performance_ms")
 
-# Audit operation categories (the dashboard's filter vocabulary).
+# Audit operation categories (the dashboard's filter vocabulary). Dotted canonical
+# spellings only (#18716): a filter on one also matches the old underscore rows,
+# because ``AuditFilter`` expands it through ``autobot_shared.audit_actions``.
 OPERATION_CATEGORIES = {
     "auth.login": "Authentication",
     "auth.logout": "Authentication",
@@ -127,7 +130,7 @@ class AuditEntry:
         meta.update({k: getattr(self, k) for k in _ENTRY_META_KEYS if getattr(self, k) is not None})
         return AuditEvent(
             category=AuditCategory.SECURITY,
-            action=self.operation,
+            action=canonical_action(self.operation),
             actor_id=self.user_id or SYSTEM_ACTOR,
             id=self.id,
             resource_id=self.resource,

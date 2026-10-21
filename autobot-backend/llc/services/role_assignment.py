@@ -32,6 +32,7 @@ from user_management.models.role import Role
 from ..models.activity import ActorType
 from ..models.enums import RoleHolderType
 from ..models.role_assignment import LLCRoleAssignment
+from ._role_guard import ensure_role_in_company
 from .authz import require_company_admin
 from .base import LLCServiceBase
 
@@ -121,14 +122,8 @@ class RoleAssignmentService(LLCServiceBase):
         return assignment
 
     async def _require_role(self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID) -> None:
-        """The role must exist *in this company*.
-
-        Without this an assignment could name a role from another company, or
-        one that never existed — the orphan-reference shape fixed in #14222.
-        """
-        result = await session.execute(select(Role.id).where(Role.id == role_id, Role.org_id == company_id))
-        if result.scalar_one_or_none() is None:
-            raise ValueError(f"role {role_id} does not exist in company {company_id}")
+        """Delegates to :func:`._role_guard.ensure_role_in_company` (#18557)."""
+        await ensure_role_in_company(session, company_id, role_id)
 
     async def _current_tenure(
         self,

@@ -191,3 +191,44 @@ def test_the_reader_keeps_decorator_and_include_order(tmp_path: Path) -> None:
     assert [r.path for r in routes] == ["/api/a/{x}", "/api/a/lit", "/api/a/b"]
     assert [lit.path for lit, _ in shadowed_literals(routes)] == ["/api/a/lit", "/api/a/b"]
     assert not order.unresolved
+
+
+def _api_route_app(tmp_path: Path, body: str) -> RouteOrder:
+    (tmp_path / "api").mkdir()
+    (tmp_path / "api" / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / "api" / "p.py").write_text(
+        "from fastapi import APIRouter\nrouter = APIRouter(prefix='/p')\n" + body, encoding="utf-8"
+    )
+    (tmp_path / "main.py").write_text(
+        "from api.p import router as p_router\n" 'app.include_router(p_router, prefix="/api")\n', encoding="utf-8"
+    )
+    return RouteOrder(tmp_path)
+
+
+def test_api_route_routes_are_read_and_a_catch_all_before_the_root_is_reported(tmp_path: Path) -> None:
+    """``@router.api_route`` was invisible to the reader (#17325): the SLM personality proxy hid behind it."""
+    order = _api_route_app(
+        tmp_path,
+        '@router.api_route("/{path:path}", methods=["GET", "POST"])\ndef a(): ...\n'
+        '@router.api_route("/", methods=["GET"])\ndef b(): ...\n',
+    )
+    routes = slm_routes(order)
+    assert [(r.method, r.path) for r in routes] == [
+        ("GET", "/api/p/{path:path}"),
+        ("POST", "/api/p/{path:path}"),
+        ("GET", "/api/p/"),
+    ]
+    assert [(lit.method, lit.path) for lit, _ in shadowed_literals(routes)] == [("GET", "/api/p/")]
+
+
+def test_api_route_with_non_literal_methods_is_unresolved_not_dropped(tmp_path: Path) -> None:
+    order = _api_route_app(tmp_path, '@router.api_route("/x", methods=METHODS)\ndef a(): ...\n')
+    assert slm_routes(order) == []
+    assert any("non-literal route path or methods" in u for u in order.unresolved)
+
+
+def test_api_route_without_methods_is_a_get_route(tmp_path: Path) -> None:
+    """FastAPI defaults ``api_route`` to GET when ``methods=`` is omitted: readable, not unresolved."""
+    order = _api_route_app(tmp_path, '@router.api_route("/x")\ndef a(): ...\n')
+    assert [(r.method, r.path) for r in slm_routes(order)] == [("GET", "/api/p/x")]
+    assert not order.unresolved

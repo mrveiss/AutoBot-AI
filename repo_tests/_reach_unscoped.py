@@ -22,6 +22,9 @@ from __future__ import annotations
 UNSCOPED = frozenset(
     {
         "ansible-apt-repo-budget-override-sweep",
+        # Whole tree (#18940): every tracked test file, wherever a test lives; the population is
+        # the test suite itself, so a roots= list would only go stale as tests move.
+        "isolated-git-env",
         "ansible-inventory-shell-sweep",
         "audio-extension-allowlist",
         "blanket-skip-test-module-sweep",

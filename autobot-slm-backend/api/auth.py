@@ -104,7 +104,7 @@ async def login(
         await create_audit_log(
             audit_db,
             category="authentication",
-            action="login_failed",
+            action="auth.login",
             username=body.username,
             ip_address=client_ip,
             resource_type="session",
@@ -144,7 +144,7 @@ async def login(
     await create_audit_log(
         audit_db,
         category="authentication",
-        action="login_success",
+        action="auth.login",
         user_id=str(user.id),
         username=user.username,
         ip_address=client_ip,
@@ -297,7 +297,7 @@ async def logout(
     await create_audit_log(
         audit_db,
         category="authentication",
-        action="logout",
+        action="auth.logout",
         username=username,
         ip_address=client_ip,
         resource_type="session",

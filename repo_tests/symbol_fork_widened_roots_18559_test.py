@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 from autobot_shared.symbol_forks import FORK_ROOTS, fork_find_clusters, fork_tracked_python_files
 
 ADDED_ROOTS = (
@@ -49,7 +49,7 @@ def _backend_function_source() -> str:
 
 def _git(cwd: Path, *argv: str) -> None:
     subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", *argv], cwd=cwd, env=scrubbed_git_env(), check=True, capture_output=True, timeout=60
+        ["git", *argv], cwd=cwd, env=isolated_git_env(), check=True, capture_output=True, timeout=60
     )
 
 

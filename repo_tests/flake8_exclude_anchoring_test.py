@@ -48,7 +48,7 @@ import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 
 REPO_ROOT = repo_root()
 FLAKE8_CONFIG = REPO_ROOT / ".flake8"
@@ -97,7 +97,7 @@ def tracked_py_files() -> list[str]:
         capture_output=True,
         text=True,
         check=True,
-        env=scrubbed_git_env(),
+        env=isolated_git_env(),
     )
     paths = [line for line in completed.stdout.splitlines() if line.strip()]
     assert len(paths) >= _TRACKED_PY_FLOOR, (
@@ -290,7 +290,7 @@ def test_audit_entrypoint_fails_on_the_pre_fix_config(tmp_path):
         capture_output=True,
         text=True,
         check=True,
-        env=scrubbed_git_env(),
+        env=isolated_git_env(),
     )
     reached, problems = checker.audit_excludes(tmp_path)
 

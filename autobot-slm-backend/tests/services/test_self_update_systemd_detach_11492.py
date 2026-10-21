@@ -29,8 +29,7 @@ The fix has two parts:
      prevent. This backend tails the same log file for live progress while
      it is still alive.
 
-Loaded via importlib to dodge the conftest's session-global stubs (#11248),
-same pattern as test_dynamic_inventory_group_vars_11781.py.
+Loaded via importlib to dodge the conftest's session-global stubs (#11248); see test_dynamic_inventory_group_vars_11781.
 """
 
 from __future__ import annotations
@@ -53,6 +52,7 @@ _STUBS = [
     "services.ansible_secrets",
     "services.inventory_builder",
     "services.provision_progress",
+    "services.unit_names",
 ]
 
 
@@ -276,7 +276,7 @@ async def test_run_subprocess_wraps_file_backed_when_systemd_available(tmp_path)
     assert captured["kwargs"]["stderr"] == asyncio.subprocess.DEVNULL
     # The log file was truncated fresh for this run and locked to 0600.
     # #13125: "fresh" is the run-start stamp alone, not zero bytes.
-    assert log_path.read_text(encoding="utf-8").startswith(_pe.SELF_UPDATE_RUN_HEADER)
+    assert log_path.read_text(encoding="utf-8").startswith(_pe.SELF_UPDATE_RUN_HEADER)  # noqa: async_blocking_io
     assert oct(log_path.stat().st_mode & 0o777) == "0o600"
 
 
@@ -371,7 +371,8 @@ async def test_run_subprocess_still_detaches_via_fallback_log_path(tmp_path):
     assert captured["kwargs"]["stdout"] == asyncio.subprocess.DEVNULL
     assert captured["kwargs"]["stderr"] == asyncio.subprocess.DEVNULL
     # The fallback log file was actually created, truncated, and locked down.
-    assert fallback_log_path.read_text(encoding="utf-8").startswith(_pe.SELF_UPDATE_RUN_HEADER)
+    fallback_text = fallback_log_path.read_text(encoding="utf-8")  # noqa: async_blocking_io
+    assert fallback_text.startswith(_pe.SELF_UPDATE_RUN_HEADER)
     assert oct(fallback_log_path.stat().st_mode & 0o777) == "0o600"
 
 
@@ -432,7 +433,7 @@ async def test_run_subprocess_unwrapped_when_detach_false(tmp_path):
 @pytest.mark.asyncio
 async def test_tail_playbook_log_parses_existing_lines_then_stops(tmp_path):
     log_path = tmp_path / "self-update-ansible.log"
-    log_path.write_text(
+    log_path.write_text(  # noqa: async_blocking_io
         "PLAY [Play 1 - Update SLM Server First] ****\n" "TASK [[PLAY 1] SLM | Restart autobot-slm-backend] ****\n",
         encoding="utf-8",
     )
@@ -597,17 +598,16 @@ def _stage_dir_fixture(tmp_path, monkeypatch) -> Path:
 def _stub_staged_file_writers(tmp_path, monkeypatch) -> None:
     """Write real inventory / extra-vars files into the run's stage dir.
 
-    ``services.inventory_builder`` is a MagicMock in this module's loader, so
-    the real writers produce no file at all -- and the assertion is what the
-    ``finally`` block does to those files.
+    ``services.inventory_builder`` is a MagicMock in this module's loader, so the real writers
+    produce no file at all -- and the assertion is what the ``finally`` block does to those files.
     """
 
     async def _fake_inventory(_self, stage_dir=None):
         path = Path(stage_dir or tmp_path) / "autobot_inv_run.yml"
-        path.write_text("all:\n", encoding="utf-8")
+        path.write_text("all:\n", encoding="utf-8")  # noqa: async_blocking_io
         return path
 
-    def _fake_extra_vars(extra_vars, uid_tmp_dir=None):
+    def _fake_extra_vars(extra_vars, uid_tmp_dir=None, unsafe_keys=()):
         path = Path(uid_tmp_dir or tmp_path) / "autobot_evars_run.json"
         path.write_text(json.dumps(extra_vars), encoding="utf-8")
         return path

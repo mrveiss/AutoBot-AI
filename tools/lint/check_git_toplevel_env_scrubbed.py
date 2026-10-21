@@ -165,8 +165,12 @@ SCRUB_HELPER = "scrubbed_git_env"
 #: strictly safer than one passing ``scrubbed_git_env``.
 STRICT_SCRUB_HELPER = "strict_git_env"
 
-#: Both spellings a call may pass, and both a local wrapper may be built from.
-SCRUB_HELPERS = frozenset({SCRUB_HELPER, STRICT_SCRUB_HELPER})
+#: ``autobot_shared.isolated_git.isolated_git_env`` -- the scrub plus the global/system config cut-off
+#: for throwaway-repo fixtures (#18940). Built on :func:`scrubbed_git_env`, so accepted equally.
+ISOLATED_SCRUB_HELPER = "isolated_git_env"
+
+#: Every spelling a call may pass, and every one a local wrapper may be built from.
+SCRUB_HELPERS = frozenset({SCRUB_HELPER, STRICT_SCRUB_HELPER, ISOLATED_SCRUB_HELPER})
 
 #: The shell-side equivalent, ``scripts/lib/git-root.sh``'s function of the
 #: same shape (#15245). A ``.sh`` line naming this is read as scrubbed even

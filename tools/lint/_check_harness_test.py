@@ -18,13 +18,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _check_harness as harness  # noqa: E402
 from _scan_helpers import EmptyEnumeration, GitEnumerationFailed, tracked_modes  # noqa: E402
 
-from autobot_shared.paths import scrubbed_git_env  # noqa: E402
+from autobot_shared.isolated_git import isolated_git_env  # noqa: E402
 
 _NAME = "probe"
 
 
 def _git(repo: Path, *args: str) -> None:
-    env = {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+    env = isolated_git_env()
     subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, env=env)  # nosec B603 B607
 
 

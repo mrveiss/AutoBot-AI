@@ -421,7 +421,7 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
         await set_password_epoch(username)
 
         get_auth_middleware().security_layer.audit_log(
-            action="password_changed",
+            action="password.change",
             user=username,
             outcome="success",
             details={"ip": ip_address},

@@ -4544,7 +4544,7 @@ class TestBatch26UploadFile:
         # Should preserve audit logging
         assert "security_layer = get_security_layer(request)" in source
         assert "security_layer.audit_log(" in source
-        assert '"file_upload"' in source
+        assert '"file.upload"' in source  # #18716
 
 
 class TestBatch26MigrationStats:
@@ -4656,7 +4656,7 @@ class TestBatch27DownloadFile:
 
         source = inspect.getsource(download_file)
         assert "security_layer.audit_log(" in source
-        assert '"file_download"' in source
+        assert '"file.download"' in source  # #18716
 
 
 class TestBatch27ViewFile:

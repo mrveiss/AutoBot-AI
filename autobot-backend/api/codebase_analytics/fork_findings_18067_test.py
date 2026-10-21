@@ -24,7 +24,7 @@ from repo_tests._paths import repo_root
 from api.codebase_analytics import cross_file_analysis as xfa
 from api.codebase_analytics.fork_findings import SYMBOL_FORK_PROBLEM_TYPE, run_fork_pass
 from api.codebase_analytics.type_coverage import problem_type_coverage
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 
 _REPO = repo_root()
 _CLI = _REPO / "tools" / "lint" / "check_symbol_forks.py"
@@ -35,8 +35,8 @@ def _git_tree(root: Path, files: dict[str, str]) -> Path:
         target = root / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(body, encoding="utf-8")
-    subprocess.run(["git", "init", "-q"], cwd=root, check=True, env=scrubbed_git_env())
-    subprocess.run(["git", "add", "-A"], cwd=root, check=True, env=scrubbed_git_env())
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True, env=isolated_git_env())
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True, env=isolated_git_env())
     return root
 
 
@@ -65,7 +65,7 @@ def _ci_clusters() -> tuple[set[str], int]:
     proc = subprocess.run(
         [sys.executable, "-I", str(_CLI), "--report", "--limit", "100000"],
         cwd=_REPO,
-        env=scrubbed_git_env(),
+        env=isolated_git_env(),
         capture_output=True,
         text=True,
         check=True,
