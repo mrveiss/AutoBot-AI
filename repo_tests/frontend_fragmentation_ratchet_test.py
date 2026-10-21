@@ -107,7 +107,7 @@ BASELINE = {
     #
     # #16972/#15455: same owner-approved, one-off exception as distinct_class_names
     # directly above -- see that comment.
-    "css_rule_declarations": 9169,  # #14778: -16, the local BaseInput fork retired into the kit (on main's 9185); #18242: -3 on main's 9188 (CustomDashboard onto DashboardGrid); #18849: -30, the local BaseButton fork retired into the kit; #18819: -25 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-46);  #14776: local BaseBadge retired (9354 -> 9337), then local BaseCard + BasePanel (9337 -> 9289); #14785: density reuses the existing
+    "css_rule_declarations": 9168,  # #14780: -1, AuditLogTable's pager layout left for the kit BasePagination; #14778: -16, the local BaseInput fork retired into the kit (on main's 9185); #18242: -3 on main's 9188 (CustomDashboard onto DashboardGrid); #18849: -30, the local BaseButton fork retired into the kit; #18819: -25 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-46);  #14776: local BaseBadge retired (9354 -> 9337), then local BaseCard + BasePanel (9337 -> 9289); #14785: density reuses the existing
     # [data-layout-density] attribute (no .density-* classes), and the dead
     # assets/main.css .sr-only rule went with that file (lowered from 9379).
     # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (9371 -> 9354).

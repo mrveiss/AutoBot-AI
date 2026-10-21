@@ -1181,7 +1181,8 @@
       "trend": "Trend",
       "type": "Tipo",
       "unresolved": "Unresolved",
-      "resolvedByAt": "By {by} at {at}"
+      "resolvedByAt": "By {by} at {at}",
+      "paginationAria": "Error list pages"
     },
     "fleetMetricsCard": {
       "acrossValue0Nodes": "Across {value0} nodes",
@@ -1716,7 +1717,8 @@
       "status1": "Estado",
       "time": "Time:",
       "time1": "Time",
-      "value0TracePlural": "{value0} trace{plural}"
+      "value0TracePlural": "{value0} trace{plural}",
+      "paginationAria": "Trace list pages"
     }
   },
   "performanceView": {
@@ -2101,7 +2103,8 @@
     "uploadTLSCertificate": "Upload TLS Certificate",
     "user": "User",
     "value0Violations": "{value0} violations",
-    "whatHappensWhenYouEnableTLS": "What happens when you enable TLS?"
+    "whatHappensWhenYouEnableTLS": "What happens when you enable TLS?",
+    "paginationAria": "Security list pages"
   },
   "settings": {
     "aPISettings": {
@@ -2312,7 +2315,26 @@
         "username": "Username",
         "varLogAutobotForwardedLog": "/var/log/autobot-forwarded.log",
         "warning": "Aviso",
-        "statusUnknown": "Desconhecido"
+        "statusUnknown": "Desconhecido",
+        "leaveBlankToKeep": "Leave blank to keep the current value",
+        "loadFailed": "Failed to load destinations",
+        "toggleFailed": "Failed to toggle service",
+        "autoStartEnabled": "Auto-start enabled",
+        "autoStartDisabled": "Auto-start disabled",
+        "autoStartFailed": "Failed to update auto-start",
+        "destinationCreated": "Destination created successfully",
+        "destinationUpdated": "Destination updated successfully",
+        "saveFailed": "Failed to save destination",
+        "testSucceeded": "Connection test successful",
+        "testFailed": "Connection test failed",
+        "testAllSummary": "{healthy}/{total} destinations healthy",
+        "testAllFailed": "Failed to test destinations",
+        "destinationDeleted": "Destination deleted successfully",
+        "deleteFailed": "Failed to delete destination",
+        "removeStoredValue": "Remove the stored value",
+        "urlPlaceholderSyslog": "syslog.example.com:514",
+        "urlPlaceholderWebhook": "https://logs.example.com/ingest",
+        "urlPlaceholderElasticsearch": "http://elasticsearch.example.com:{port}"
       },
       "nPUWorkersSettings": {
         "actions": "Ações",

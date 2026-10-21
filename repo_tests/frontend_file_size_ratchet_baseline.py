@@ -52,7 +52,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/panels/CodebaseCrossLanguagePanel.vue": 656,
     "autobot-frontend/src/components/analytics/panels/CodebaseIntelligenceScoresPanel.vue": 1332,
     "autobot-frontend/src/components/analytics/panels/CodebaseOwnershipPanel.vue": 1035,
-    "autobot-frontend/src/components/audit/AuditLogTable.vue": 758,
+    "autobot-frontend/src/components/audit/AuditLogTable.vue": 741,  # #14780 BasePagination: 758 -> 741
     "autobot-frontend/src/components/browser/BrowserSessionManager.vue": 653,  # #18849: 654 -> 653
     "autobot-frontend/src/components/charts/BaseChart.vue": 602,
     "autobot-frontend/src/components/charts/FunctionCallGraph.vue": 2165,
@@ -183,7 +183,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-frontend/src/components/AddNodeModal.vue": 1067,  # #14777 batch 2: 1111 -> 1067
     "autobot-slm-frontend/src/components/fleet/DecommissionModal.vue": 619,  # #14777: 699 -> 621; 619 (#18941 review)
     "autobot-slm-frontend/src/components/fleet/NodeLifecyclePanel.vue": 984,
-    "autobot-slm-frontend/src/composables/useAutobotApi.ts": 2068,
+    "autobot-slm-frontend/src/composables/useAutobotApi.ts": 2062,  # #18734: 2068 -> 2062
     "autobot-slm-frontend/src/composables/useCodeSync.ts": 1078,
     "autobot-slm-frontend/src/composables/useOrchestrationManagement.ts": 693,
     "autobot-slm-frontend/src/composables/usePrometheusMetrics.ts": 622,
@@ -197,15 +197,15 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-frontend/src/views/MaintenanceView.vue": 794,  # #14777 batch 2: 817 -> 794
     "autobot-slm-frontend/src/views/OrchestrationView.vue": 2189,
     "autobot-slm-frontend/src/views/ReplicationView.vue": 706,  # #18819 + #14777: 731 -> 706
-    "autobot-slm-frontend/src/views/SecurityView.vue": 1386,  # #18819 + #14777: 1409 -> 1386
+    "autobot-slm-frontend/src/views/SecurityView.vue": 1374,  # #14780 BasePagination: 1386 -> 1374
     "autobot-slm-frontend/src/views/SetupWizardView.vue": 1834,
     "autobot-slm-frontend/src/views/SkillsView.vue": 633,  # #18819 + #14777: 645 -> 633
     "autobot-slm-frontend/src/views/SystemUpdatesTab.vue": 635,  # #18819: 638 -> 635
-    "autobot-slm-frontend/src/views/monitoring/ErrorMonitor.vue": 617,  # #18819 + #14777: 640 -> 617
+    "autobot-slm-frontend/src/views/monitoring/ErrorMonitor.vue": 609,  # #14780 BasePagination: 617 -> 609
     "autobot-slm-frontend/src/views/monitoring/LogViewer.vue": 602,
     "autobot-slm-frontend/src/views/settings/SecuritySettings.vue": 773,  # #18819 + #14777: 807 -> 773
     "autobot-slm-frontend/src/views/settings/admin/DataHygieneView.vue": 662,  # #18819 + #14777: 669 -> 662
-    "autobot-slm-frontend/src/views/settings/admin/LogForwardingSettings.vue": 720,  # #18819 + #14777: 736 -> 720
+    "autobot-slm-frontend/src/views/settings/admin/LogForwardingSettings.vue": 664,  # #18734: 720 -> 664
     "autobot-slm-frontend/src/views/settings/admin/NPUWorkersSettings.vue": 721,  # #18819 + #14777: 733 -> 721
     "autobot-slm-frontend/src/views/settings/admin/SSOSettings.vue": 824,  # #18819 + #14777: 869 -> 824
     "autobot-slm-frontend/src/views/settings/admin/UserManagementSettings.vue": 1088,  # #18819 + #14777: 1099 -> 1088

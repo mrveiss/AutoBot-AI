@@ -83254,12 +83254,71 @@ export interface components {
         };
         /**
          * LogForwardingDestinationItem
-         * @description Single destination entry in list/detail responses.
+         * @description One destination in list/detail responses (#18734).
          *
-         *     Shape from dest.config.to_dict_sanitized() + extra health fields.
-         *     Extra fields allowed to handle dynamic config dict.
+         *     `DestinationConfig.to_dict_sanitized()` (scripts/logging/log_forwarder.py) plus the
+         *     health fields. Every field is declared so the OpenAPI contract, and the frontends'
+         *     generated types, carry the real shape. Credentials arrive masked and are named
+         *     `*_masked`: a response model never names a stored credential (#17865).
          */
         LogForwardingDestinationItem: {
+            /** Name */
+            name: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "seq" | "elasticsearch" | "loki" | "syslog" | "webhook" | "file";
+            /** Enabled */
+            enabled: boolean;
+            /** Url */
+            url?: string | null;
+            /**
+             * Api Key Masked
+             * @description The stored API key as '****' + its last 4 characters
+             */
+            api_key_masked?: string | null;
+            /** Username */
+            username?: string | null;
+            /**
+             * Password Masked
+             * @description '****' when a password is stored
+             */
+            password_masked?: string | null;
+            /** Index */
+            index?: string | null;
+            /** File Path */
+            file_path?: string | null;
+            /** Min Level */
+            min_level: string;
+            /** Batch Size */
+            batch_size: number;
+            /** Batch Timeout */
+            batch_timeout: number;
+            /** Retry Count */
+            retry_count: number;
+            /** Retry Delay */
+            retry_delay: number;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "global" | "per_host";
+            /** Target Hosts */
+            target_hosts?: string[];
+            /**
+             * Syslog Protocol
+             * @enum {string}
+             */
+            syslog_protocol: "udp" | "tcp" | "tcp_tls";
+            /** Ssl Verify */
+            ssl_verify: boolean;
+            /** Ssl Ca Cert */
+            ssl_ca_cert?: string | null;
+            /** Ssl Client Cert */
+            ssl_client_cert?: string | null;
+            /** Ssl Client Key */
+            ssl_client_key?: string | null;
             /** Healthy */
             healthy: boolean;
             /** Last Error */
@@ -83542,7 +83601,7 @@ export interface components {
         LogFwdTestAllResponse: {
             /** Results */
             results: {
-                [key: string]: unknown;
+                [key: string]: boolean;
             };
             /** Total */
             total: number;
