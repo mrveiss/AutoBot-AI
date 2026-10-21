@@ -515,7 +515,7 @@ async def delete_conversation_file(request: Request, session_id: str, file_id: s
 
         _audit_file_operation(
             request,
-            "conversation_file_delete",
+            "file.delete",
             user_data,
             session_id,
             {"file_id": file_id},

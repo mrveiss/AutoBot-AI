@@ -407,6 +407,7 @@ sys.modules["status_enums"] = _se_mod
 _REAL_SERVICE_MODULES = (
     "ssh_utils",
     "deploy_artifacts",
+    "ansible_extra_vars",  # #19005: inventory_builder imports it, so it loads first
     "inventory_builder",
     "a2a_card_fetcher",
     "hf_token_validator",

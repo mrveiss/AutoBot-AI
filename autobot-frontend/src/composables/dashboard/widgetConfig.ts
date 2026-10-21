@@ -13,9 +13,13 @@ const HEIGHT_PROP_TYPES = new Set(WIDGET_DEFINITIONS.filter((d) => 'height' in d
 /** Whether this widget kind's visualisation takes a `height` prop. */
 export const hasHeightProp = (type: string): boolean => HEIGHT_PROP_TYPES.has(type)
 
-/** The props a widget renders with: its grid height overrides any stored `props.height`. */
+/**
+ * The props a widget renders with: its grid height overrides any stored `props.height`, and every
+ * registry component is told it is embedded, so the frame draws the one title (#16744).
+ */
 export function renderProps(w: DashboardWidget): Record<string, unknown> {
-  return hasHeightProp(w.type) ? { ...w.props, height: w.height } : w.props
+  const props = { ...w.props, embedded: true }
+  return hasHeightProp(w.type) ? { ...props, height: w.height } : props
 }
 
 /** The form's copy: the title as the reader sees it, never a raw `i18n:` key. */

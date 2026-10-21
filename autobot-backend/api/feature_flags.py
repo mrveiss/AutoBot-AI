@@ -28,6 +28,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
 from services.access_control_metrics import AccessControlMetrics, get_metrics_service
+from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
 from services.feature_flags import FeatureFlags, get_feature_flags
 
@@ -143,7 +144,7 @@ async def update_enforcement_mode(
 
         # Audit log the change
         await audit_log(
-            operation="config.update",
+            operation=AuditAction.CONFIG_UPDATE.value,
             result="success",
             user_id=admin.get("username", "admin"),
             resource="feature_flag:access_control:enforcement_mode",
@@ -205,7 +206,7 @@ async def set_endpoint_enforcement(
 
         # Audit log
         await audit_log(
-            operation="config.update",
+            operation=AuditAction.CONFIG_UPDATE.value,
             result="success",
             user_id=admin.get("username", "admin"),
             resource=f"feature_flag:endpoint:{endpoint}",

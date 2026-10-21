@@ -50,15 +50,25 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
+from autobot_shared.audit_actions import canonical_action
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
 # Bus action prefixes that are credential operations, mapped onto the engine's
-# one authentication token. Derived from `services/audit/audit_log.AuditAction`
+# one authentication token. Derived from `services/audit/taxonomy.AuditAction`
 # and read as families rather than as the exact members, so a new
-# `run_jwt.rotate` is covered the day it is added.
-AUTHENTICATION_PREFIXES = ("auth.", "login", "api_key.", "run_jwt.", "device_jwt.", "user.")
+# `run_jwt.rotate` is covered the day it is added. Matched on the canonical
+# spelling (#18716), so `login_success`, `user.login` and `api_key_created` in
+# stored rows are covered by `auth.` / `api_key.` / `user.` too.
+AUTHENTICATION_PREFIXES = ("auth.", "api_key.", "run_jwt.", "device_jwt.", "user.", "password.", "role.")
+
+# Canonical bus action -> an engine action an analyzer matches by exact string.
+# `InsiderThreatAnalyzer._HIGH_RISK_ACTIONS` compares against the *translated*
+# action, so a name there is reachable only if it is produced here (#18716).
+ENGINE_ACTION_BY_CANONICAL: Dict[str, str] = {
+    "config.update": "system_configuration_change",
+}
 
 # Bus action -> the engine's FILE_OPERATION_ACTIONS. The engine matches these by
 # exact string, so a near-miss reads as "no file operation ever happened".
@@ -95,9 +105,11 @@ def engine_action(audit_action: str) -> str:
     membership of ``FILE_OPERATION_ACTIONS``, so ``"file.upload"`` and
     ``"file_upload"`` are not near-misses, they are a silent zero.
     """
-    action = (audit_action or "").strip().lower()
+    action = canonical_action((audit_action or "").strip().lower())
     if not action:
         return DEFAULT_ENGINE_ACTION
+    if action in ENGINE_ACTION_BY_CANONICAL:
+        return ENGINE_ACTION_BY_CANONICAL[action]
     if any(action.startswith(prefix) for prefix in AUTHENTICATION_PREFIXES):
         return "authentication"
     if action.startswith("file."):

@@ -48,6 +48,7 @@ from services.service_remediation_tracker import (
     read_service_remediation,
     write_service_remediation,
 )
+from services.unit_names import discovered_unit_name_ok
 
 logger = logging.getLogger(__name__)
 
@@ -1149,14 +1150,12 @@ class ReconcilerService:
         from services.database import db_service
 
         async with db_service.session() as db:
-            # Check if auto-restart services is enabled
             auto_restart = await db.execute(select(Setting).where(Setting.key == "auto_restart_services"))
             setting = auto_restart.scalar_one_or_none()
 
             if not setting or setting.value != "true":
                 return
 
-            # Get failed services that are enabled (should be running)
             result = await db.execute(
                 select(Service).where(
                     Service.status == SystemdState.FAILED.value,
@@ -1167,6 +1166,8 @@ class ReconcilerService:
             failed_services = result.scalars().all()
 
             for service in failed_services:
+                if not discovered_unit_name_ok(service.node_id, service.service_name):
+                    continue  # #19005: a row stored before the ingest check; never handed to Ansible
                 # Check if node is in maintenance window
                 if await self._is_remediation_suppressed(db, service.node_id):
                     logger.debug(
@@ -1911,7 +1912,7 @@ class ReconcilerService:
         SAVEPOINT (#17070) so a row-level failure can't poison the session.
         """
         service_name = svc_data.get("name")
-        if not service_name:
+        if not service_name or not discovered_unit_name_ok(node_id, service_name):  # #19005
             return False
 
         try:
@@ -1928,8 +1929,7 @@ class ReconcilerService:
                 if status not in [s.value for s in SystemdState]:
                     status = SystemdState.UNKNOWN.value
 
-                # Issue #1019: Capture error context for failed services
-                error_msg = svc_data.get("error_message", "")
+                error_msg = svc_data.get("error_message", "")  # #1019: error context for failed services
                 svc_extra = {"error_message": error_msg} if error_msg else {}
                 svc_extra.update(engine_degraded_fields(svc_data))
 

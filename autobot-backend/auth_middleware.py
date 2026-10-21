@@ -325,7 +325,7 @@ class AuthenticationMiddleware:
         Handle locked account login attempt - logs and raises auth error.
         """
         self.security_layer.audit_log(
-            action="login_attempt_locked_account",
+            action="auth.login",
             user=username,
             outcome="denied",
             details={"ip": ip_address, "reason": "account_locked"},
@@ -342,7 +342,7 @@ class AuthenticationMiddleware:
         """
         self.record_failed_attempt(username, ip_address)
         self.security_layer.audit_log(
-            action="login_attempt",
+            action="auth.login",
             user=username,
             outcome="denied",
             details={"ip": ip_address, "reason": reason},
@@ -357,7 +357,7 @@ class AuthenticationMiddleware:
         user_config["last_login"] = datetime.datetime.now(tz=timezone.utc).isoformat()
 
         self.security_layer.audit_log(
-            action="login_successful",
+            action="auth.login",
             user=username,
             outcome="success",
             details={"ip": ip_address, "role": user_config.get("role", "user")},
@@ -551,7 +551,7 @@ class AuthenticationMiddleware:
             del self.active_sessions[session_id]
 
         self.security_layer.audit_log(
-            action="logout",
+            action="auth.logout",
             user=user_data.get("username", "unknown"),
             outcome="success",
             details={"session_id": session_id[:16] + "..."},  # Partial ID for audit

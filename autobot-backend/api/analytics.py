@@ -18,7 +18,6 @@ from typing import Any, Dict, List, Tuple
 import httpx
 
 # Import root cause analyzer for causal failure analysis
-from celery.result import AsyncResult
 from fastapi import (
     APIRouter,
     Depends,
@@ -64,7 +63,7 @@ from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import TimingConstants
 from services.root_cause_analyzer import RootCauseAnalyzer
 from tasks.analytics_tasks import run_dashboard_analysis
-from utils.celery_task_status import celery_result_to_status, store_latest_task_id
+from utils.celery_task_status import known_task_status_or_404, store_latest_task_id
 
 # Import existing monitoring infrastructure (extracted to monitoring_hardware.py - Issue #213)
 from .monitoring_hardware import local_hardware_monitor
@@ -1265,10 +1264,7 @@ async def start_dashboard_analysis(
 )
 async def get_dashboard_status(task_id: str, _user: Dict = Depends(get_current_user)):
     """Get dashboard overview task status (#1304, GH#8433)."""
-    status = celery_result_to_status(AsyncResult(task_id))
-    if status is None or status["status"] == "pending":
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return status
+    return known_task_status_or_404(task_id)
 
 
 add_clear_stuck_route(

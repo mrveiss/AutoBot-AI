@@ -19,8 +19,7 @@ import asyncio
 import threading
 import time
 
-from celery.result import AsyncResult
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
 from api.codebase_analytics.source_scope import SourceIdQuery, cached_task_result, source_scoped_prefix
@@ -31,7 +30,7 @@ from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import AnalyticsConfig
 from tasks.analytics_tasks import run_duplicate_analysis
 from utils.cancel_tokens import new_cancel_token, signal_cancel_token, submit_cancellable
-from utils.celery_task_status import celery_result_to_status, store_latest_task_id
+from utils.celery_task_status import known_task_status_or_404, store_latest_task_id
 from utils.io_executor import get_analytics_executor
 
 from ..duplicate_detector import DuplicateCodeDetector, detect_duplicates_async
@@ -470,10 +469,7 @@ async def start_duplicate_analysis(source_id: SourceIdQuery):
 @bounded(180.0)
 async def get_duplicate_status(task_id: str):
     """Get duplicate analysis task status."""
-    status = celery_result_to_status(AsyncResult(task_id))
-    if status is None or status["status"] == "pending":
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return status
+    return known_task_status_or_404(task_id)
 
 
 add_clear_stuck_route(router, "/duplicates/tasks/clear-stuck", name="clear_stuck_dup_tasks", bounded_s=180.0)

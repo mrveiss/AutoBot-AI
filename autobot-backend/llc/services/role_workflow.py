@@ -49,6 +49,7 @@ from user_management.models.role import Role
 
 from ..models.activity import ActorType
 from ..models.role_workflow import LLCRoleWorkflow
+from ._role_guard import ensure_role_in_company
 from .authz import require_company_admin
 from .base import LLCServiceBase
 
@@ -79,9 +80,8 @@ class RoleWorkflowService(LLCServiceBase):
         )
 
     async def _require_role(self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID) -> None:
-        result = await session.execute(select(Role.id).where(Role.id == role_id, Role.org_id == company_id))
-        if result.scalar_one_or_none() is None:
-            raise ValueError(f"role {role_id} does not exist in company {company_id}")
+        """Delegates to :func:`._role_guard.ensure_role_in_company` (#18557)."""
+        await ensure_role_in_company(session, company_id, role_id)
 
     async def _require_workflow(self, session: AsyncSession, company_id: uuid.UUID, workflow_id: str) -> None:
         """The workflow must exist and belong to this company.

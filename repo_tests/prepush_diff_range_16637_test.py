@@ -27,7 +27,7 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 
 _HOOK = repo_root() / "tools" / "git-hooks" / "pre-push"
 
@@ -59,7 +59,7 @@ def _phase_0c_range_body() -> str:
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
     """#15246: env scrubbed -- an inherited GIT_DIR would point these calls at the
     real repository instead of the throwaway one under tmp_path."""
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True, env=scrubbed_git_env())
+    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True, env=isolated_git_env())
 
 
 def _sha(repo: Path, ref: str) -> str:
@@ -95,7 +95,7 @@ def _run_phase_0c(repo: Path, *, local_sha: str, remote_sha: str) -> subprocess.
         ["bash", "-c", script],  # noqa: S607
         capture_output=True,
         text=True,
-        env=scrubbed_git_env(),
+        env=isolated_git_env(),
         check=False,
     )
 

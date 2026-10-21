@@ -18,6 +18,9 @@ Mapping rules, fixed here and nowhere else:
   that has a real user row.
 * ``resource_ref`` always carries the resource as text; ``resource_id`` (a UUID
   column) is filled too when the text is a UUID.
+* ``action`` is written in its canonical dotted spelling (#18716): the identity
+  services keep their ``IdentityAuditAction`` constants, and this is the one
+  boundary where they are mapped (``autobot_shared.audit_actions``).
 * ``action`` is capped at the column width; the full value is kept in
   ``details[ACTION_FULL_KEY]`` rather than lost.
 """
@@ -27,6 +30,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from autobot_shared.audit_actions import canonical_action
 from autobot_shared.user_management.models.audit import AuditLog
 
 #: Recorded when no actor is known.
@@ -88,7 +92,7 @@ def audit_row(
 
     *context*: ``ip_address``, ``user_agent``, ``session_id``, ``event_id``, ``occurred_at``.
     """
-    stored_action, stored_details = _capped_action(action, dict(details or {}))
+    stored_action, stored_details = _capped_action(canonical_action(action), dict(details or {}))
     return AuditLog(
         category=category,
         actor=_fit(actor or (str(user_id) if user_id else SYSTEM_ACTOR), "actor"),

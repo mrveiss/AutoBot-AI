@@ -456,7 +456,7 @@ def _log_upload_audit(
     """
     security_layer = get_security_layer(request)
     security_layer.audit_log(
-        "file_upload",
+        "file.upload",
         user_data.get("username", "unknown"),
         "success",
         {
@@ -481,7 +481,7 @@ async def _delete_file_item(target_path: Path, path: str, security_layer, user_d
     await run_in_file_executor(target_path.unlink)
 
     security_layer.audit_log(
-        "file_delete",
+        "file.delete",
         user_data.get("username", "unknown"),
         "success",
         {
@@ -514,7 +514,7 @@ async def _delete_directory_item(
         extra = {"warning": "recursive_delete_performed"}
 
     security_layer.audit_log(
-        "file_delete",
+        "file.delete",
         user_data.get("username", "unknown"),
         "success",
         {
@@ -640,7 +640,7 @@ async def download_file(request: Request, path: str):
     # Enhanced audit logging with authenticated user
     security_layer = get_security_layer(request)
     security_layer.audit_log(
-        "file_download",
+        "file.download",
         user_data.get("username", "unknown"),
         "success",
         {

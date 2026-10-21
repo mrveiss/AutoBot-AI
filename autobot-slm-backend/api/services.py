@@ -52,6 +52,7 @@ from services.service_restart import (
     run_ansible_service_action,
 )
 from services.ssh_utils import ssh_destination_args, ssh_options
+from services.unit_names import discovered_unit_name_ok
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["services"])
@@ -321,7 +322,8 @@ async def _upsert_service(
 
     Returns (created, updated) tuple.
     """
-    # Map systemd states to our status enum
+    if not discovered_unit_name_ok(node_id, service_name):  # #19005
+        return False, False
     active_state = svc_data.get("active", "unknown")
     sub_state = svc_data.get("sub", "unknown")
 
@@ -334,7 +336,6 @@ async def _upsert_service(
     else:
         status = SystemdState.UNKNOWN.value
 
-    # Check if service exists
     result = await db.execute(
         select(Service).where(
             Service.node_id == node_id,
@@ -352,7 +353,6 @@ async def _upsert_service(
         service.last_checked = now
         return False, True
     else:
-        # Create new
         category = categorize_service(service_name)
         service = Service(
             node_id=node_id,

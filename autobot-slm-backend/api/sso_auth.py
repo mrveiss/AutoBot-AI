@@ -299,7 +299,7 @@ async def oauth_callback(
             await create_audit_log(
                 audit_db,
                 category="sso",
-                action="login",
+                action="auth.login",
                 user_id=str(user.id),
                 username=user.username,
                 ip_address=client_ip,
@@ -318,7 +318,7 @@ async def oauth_callback(
             await create_audit_log(
                 audit_db,
                 category="sso",
-                action="login",
+                action="auth.login",
                 ip_address=client_ip,
                 resource_type="sso_provider",
                 resource_id=provider_id_str,
@@ -374,7 +374,7 @@ async def ldap_login(
             await create_audit_log(
                 audit_db,
                 category="sso",
-                action="login",
+                action="auth.login",
                 user_id=str(user.id),
                 username=user.username,
                 resource_type="sso_provider",
@@ -399,7 +399,7 @@ async def ldap_login(
             await create_audit_log(
                 audit_db,
                 category="sso",
-                action="login",
+                action="auth.login",
                 username=login_data.username,
                 resource_type="sso_provider",
                 resource_id=provider_id_str,
@@ -540,7 +540,7 @@ async def saml_callback(
             await create_audit_log(
                 audit_db,
                 category="sso",
-                action="login",
+                action="auth.login",
                 user_id=str(user.id),
                 username=user.username,
                 resource_type="sso_provider",
@@ -558,7 +558,7 @@ async def saml_callback(
             await create_audit_log(
                 audit_db,
                 category="sso",
-                action="login",
+                action="auth.login",
                 resource_type="sso_provider",
                 resource_id=provider_id_str,
                 success=False,

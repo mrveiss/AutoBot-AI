@@ -26,7 +26,6 @@ from pydantic import BaseModel
 from api.websocket import ws_manager
 from autobot_shared.async_compat import fire_and_forget
 from config import settings
-from services.ansible_secrets import fetch_deploy_secrets
 from services.auth import get_current_user
 from services.database import db_service
 from services.inventory_builder import _DECLARED_ONLY_GROUPS, _declared_roles, groups_for_role_tokens
@@ -1061,12 +1060,10 @@ async def _run_provisioning_task(node_ids: list[str] | None) -> None:
 
         executor = get_playbook_executor()
 
-        # Issue #3079: Pass stored secrets as Ansible extra_vars (#3778)
-        extra_vars = await fetch_deploy_secrets()
-
+        # Stored secrets (#3778) are merged, untagged, by execute_playbook itself; passing them as
+        # caller vars would tag them !unsafe (#19005).
         result = await executor.execute_playbook(
             playbook_name="playbooks/provision-fleet-roles.yml",
-            extra_vars=extra_vars,
             limit=reachability_limit,
             inventory_path=temp_inventory_path,
             progress_callback=_provision_log_callback,

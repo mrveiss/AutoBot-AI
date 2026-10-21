@@ -17,6 +17,7 @@ Celery states:   PENDING → "pending"
 from typing import Any, Dict
 
 from celery.result import AsyncResult
+from fastapi import HTTPException
 
 # ---------------------------------------------------------------------------
 # Helpers for latest-task-id tracking (replaces BackgroundTaskManager
@@ -159,3 +160,18 @@ def celery_result_to_status(result: AsyncResult) -> Dict[str, Any] | None:
         "error": error_str,
         "result": None,
     }
+
+
+def known_task_status_or_404(task_id: str) -> Dict[str, Any]:
+    """Status of a Celery task, or HTTP 404 when the ID is unknown or still bare-PENDING.
+
+    Celery reports PENDING for IDs it has never seen, so for the polling
+    endpoints that cannot tell "queued" from "never existed" a bare PENDING is
+    treated as not found. One home for the five endpoints that carried this
+    3-line check verbatim (#18557); endpoints that must return PENDING keep
+    calling :func:`celery_result_to_status` directly.
+    """
+    status = celery_result_to_status(AsyncResult(task_id))
+    if status is None or status["status"] == "pending":
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    return status

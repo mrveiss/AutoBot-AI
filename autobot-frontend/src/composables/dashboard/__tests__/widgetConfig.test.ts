@@ -15,9 +15,9 @@ describe('widgetConfig', () => {
   it('renders a height-prop widget at its grid height, whatever props.height says', () => {
     // fails if the grid resizes the card but the chart keeps its stored props.height
     expect(renderProps(agents({ height: 560 })).height).toBe(560)
-    // Contrast: a kind without a height prop renders its props untouched.
+    // Contrast: a kind without a height prop gets no height; every kind is told it is embedded (#16744).
     expect(hasHeightProp('system')).toBe(false)
-    expect(renderProps(agents({ type: 'system', props: { a: 1 } }))).toEqual({ a: 1 })
+    expect(renderProps(agents({ type: 'system', props: { a: 1 } }))).toEqual({ a: 1, embedded: true })
   })
 
   it('shows the translated title in the form, never the raw i18n key', () => {

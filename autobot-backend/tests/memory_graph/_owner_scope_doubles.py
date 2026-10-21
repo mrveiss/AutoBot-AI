@@ -9,6 +9,7 @@ from autobot_memory_graph.owner_scope import SHARED_OWNER_ID, OwnerScope, entity
 from autobot_memory_graph.queries import QueryOperationsMixin
 from autobot_memory_graph.relation_traversal import RelationTraversalMixin
 from autobot_memory_graph.relations import RelationOperationsMixin
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 ALICE_ID = "11111111-1111-1111-1111-111111111111"
 BOB_ID = "22222222-2222-2222-2222-222222222222"
@@ -35,20 +36,6 @@ BOB_UNTAGGED = _doc("n-bob", "Note bob", BOB_ID, entity_type="note", tags=("othe
 ALICE_UNTAGGED = _doc("n-alice", "Note alice", ALICE_ID, entity_type="note", tags=("other",))
 SHARED_DOC = _doc("s-1", "Conversation shared", SHARED_OWNER_ID)
 LEGACY_DOC = {k: v for k, v in _doc("c-old", "Conversation old", "x").items() if not k.startswith("owner_")}
-
-
-class _Pipe:
-    def __init__(self, redis):
-        self._redis, self._keys = redis, []
-
-    def json(self):
-        return self
-
-    def get(self, key):
-        self._keys.append(key)
-
-    async def execute(self):
-        return [self._redis.docs.get(k) for k in self._keys]
 
 
 class _Json:
@@ -83,7 +70,7 @@ class FakeRedis:
             yield key
 
     def pipeline(self):
-        return _Pipe(self)
+        return FakeAsyncPipeline(self)
 
     def json(self):
         return _Json(self)

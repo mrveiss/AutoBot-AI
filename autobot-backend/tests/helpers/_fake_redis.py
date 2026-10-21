@@ -12,13 +12,14 @@ Sync
 Async
   AsyncSimpleFakeRedis     — get / set / delete  (string keys; ``_store`` dict)
   AsyncHashFakeRedis       — hset / hget / hgetall / hdel  (hash fields; ``_store`` dict)
-  AsyncFullFakeRedis       — hashes + sorted sets + strings + pipeline
+  AsyncFullFakeRedis       — hashes + sorted sets + strings + pipeline (``testkit.fake_redis_pipeline``)
 """
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
+
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 # ---------------------------------------------------------------------------
 # Sync
@@ -135,35 +136,6 @@ class AsyncHashFakeRedis:
 # ---------------------------------------------------------------------------
 
 
-class _Pipeline:
-    """Accumulates Redis commands and replays them on ``execute()``.
-
-    Used internally by :class:`AsyncFullFakeRedis`.
-    """
-
-    def __init__(self, redis: "AsyncFullFakeRedis") -> None:
-        self._redis = redis
-        self._ops: List[Tuple[str, tuple, dict]] = []
-
-    def __getattr__(self, name: str):
-        def _op(*args, **kwargs):
-            self._ops.append((name, args, kwargs))
-            return self
-
-        return _op
-
-    async def execute(self) -> List[Any]:
-        """Replay all buffered commands and return their results."""
-        out: List[Any] = []
-        for name, args, kwargs in self._ops:
-            method = getattr(self._redis, name)
-            result = method(*args, **kwargs)
-            if asyncio.iscoroutine(result):
-                result = await result
-            out.append(result)
-        return out
-
-
 class AsyncFullFakeRedis:
     """Async in-memory stub with hashes, sorted sets, strings, and pipeline.
 
@@ -225,9 +197,9 @@ class AsyncFullFakeRedis:
 
     # -- pipeline --
 
-    def pipeline(self) -> _Pipeline:
-        """Return a buffered pipeline that replays on ``execute()``."""
-        return _Pipeline(self)
+    def pipeline(self, transaction: bool = True) -> FakeAsyncPipeline:
+        """Return the canonical pipeline (#18991): queues, then applies on ``execute()``."""
+        return FakeAsyncPipeline(self, transaction=transaction)
 
     # -- sorted set ops --
 

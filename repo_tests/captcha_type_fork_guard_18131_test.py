@@ -21,7 +21,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import ReachFloorError, declare
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 SCANNED_ROOTS = ("autobot-backend", "autobot_shared")
@@ -115,7 +115,7 @@ def test_exactly_one_captcha_result_class_exists() -> None:
 
 def test_an_empty_tree_fails_the_scan_instead_of_passing_it(tmp_path: Path) -> None:
     """A scan that reached nothing must refuse, not report 'no second class'."""
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, env=scrubbed_git_env())
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, env=isolated_git_env())
     with pytest.raises(ReachFloorError):
         _result_classes(tmp_path)
     with pytest.raises(ReachFloorError):

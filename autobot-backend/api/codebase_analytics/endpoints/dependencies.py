@@ -12,8 +12,7 @@ from pathlib import Path
 from typing import Dict, List, Set
 
 import aiofiles
-from celery.result import AsyncResult
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
 from api.codebase_analytics.source_scope import SourceIdQuery, cached_task_result, source_scoped_prefix
@@ -22,7 +21,7 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from tasks.analytics_tasks import run_dependency_analysis
-from utils.celery_task_status import celery_result_to_status, store_latest_task_id
+from utils.celery_task_status import known_task_status_or_404, store_latest_task_id
 from utils.chromadb_client import get_all_paginated
 
 from ..storage import get_code_collection
@@ -549,10 +548,7 @@ async def start_dependency_analysis(source_id: SourceIdQuery):
 @bounded(60.0)
 async def get_dependency_status(task_id: str):
     """Get dependency analysis task status."""
-    status = celery_result_to_status(AsyncResult(task_id))
-    if status is None or status["status"] == "pending":
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return status
+    return known_task_status_or_404(task_id)
 
 
 add_clear_stuck_route(router, "/analytics/dependencies/tasks/clear-stuck", name="clear_stuck_dep_tasks", bounded_s=60.0)

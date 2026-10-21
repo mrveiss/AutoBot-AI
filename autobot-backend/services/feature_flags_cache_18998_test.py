@@ -14,28 +14,10 @@ import pytest
 
 from services import feature_flags as ff
 from services.feature_flags import ENFORCEMENT_MODE_KEY, EnforcementMode, EnforcementModeUnavailable, FeatureFlags
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 ENDPOINT = "/api/chat/{session_id}"
 ENDPOINT_KEY = f"feature_flag:access_control:endpoint:{ENDPOINT}"
-
-
-class _Pipe:
-    def __init__(self, redis):
-        self.redis, self.ops = redis, []
-
-    def set(self, k, v):
-        self.ops.append(("set", k, v))
-
-    def lpush(self, *a):
-        pass
-
-    def ltrim(self, *a):
-        pass
-
-    async def execute(self, raise_on_error=True):
-        for _, k, v in self.ops:
-            self.redis.store[k] = v
-        return [True, 1, True]
 
 
 class _FakeRedis:
@@ -54,12 +36,18 @@ class _FakeRedis:
         self.store[key] = value
         return True
 
+    async def lpush(self, *args):
+        return 1
+
+    async def ltrim(self, *args):
+        return True
+
     async def delete(self, *keys):
         for k in keys:
             self.store.pop(k, None)
 
     def pipeline(self, transaction=True):
-        return _Pipe(self)
+        return FakeAsyncPipeline(self, transaction=transaction)
 
 
 @pytest.fixture

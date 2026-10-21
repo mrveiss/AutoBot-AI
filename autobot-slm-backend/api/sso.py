@@ -17,6 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.sso_deps import get_audit_db
+from autobot_shared.audit_actions import spellings_of
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.env_utils import env_int
 from models.database import SlmNodeAuditLog
@@ -139,7 +140,7 @@ async def get_providers_health(
             func.max(SlmNodeAuditLog.timestamp).filter(SlmNodeAuditLog.success.is_(True)).label("last_success_at"),
         )
         .where(SlmNodeAuditLog.category == "sso")
-        .where(SlmNodeAuditLog.action == "login")
+        .where(SlmNodeAuditLog.action.in_(sorted(spellings_of("auth.login"))))  # old rows say "login" (#18716)
         .where(SlmNodeAuditLog.timestamp >= window_start)
         .group_by(SlmNodeAuditLog.resource_id)
     )

@@ -24,7 +24,8 @@ BOUNDARY
     Scanned: tracked `.py` in `SCAN_ROOTS` that is a test file (`*_test.py`, `test_*.py`,
     `conftest.py`) OR sits under a directory named `tests` or `testkit` at any depth. That second
     arm is what brings in non-test helper modules (`tests/**/fakes.py`, `tests/**/_*.py`,
-    `testkit/*.py`). Exempt by path: the canonical fake only.
+    `testkit/*.py`). Exempt by path: the canonical fake, and the canonical Redis pipeline fake
+    (`testkit/fake_redis_pipeline.py`, #18991 -- a pipeline's `execute` is not a session's).
     NOT seen: a `MagicMock`/`AsyncMock` built inline with no class, a test double outside
     `SCAN_ROOTS`, and a helper module outside a `tests`/`testkit` directory that is not named like
     a test. Those are separate findings.
@@ -49,6 +50,8 @@ from repo_tests.hand_rolled_async_session_baseline_18883 import ALLOWLIST, FROZE
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 CANONICAL = "autobot-backend/testkit/fake_async_session.py"
+#: Also exempt by path: the canonical Redis pipeline fake (#18991), whose `execute` is the pipeline's, not a session's.
+CANONICAL_PIPELINE = "autobot-backend/testkit/fake_redis_pipeline.py"
 CANONICAL_NAME = "FakeAsyncSession"
 CANONICAL_MODULE = "testkit.fake_async_session"
 SCAN_ROOTS = ("autobot-backend", "autobot-slm-backend")
@@ -62,7 +65,7 @@ def _is_test_file(rel: str) -> bool:
 
 
 def _is_scanned(rel: str) -> bool:
-    if not rel.endswith(".py") or rel == CANONICAL:
+    if not rel.endswith(".py") or rel in (CANONICAL, CANONICAL_PIPELINE):
         return False
     return _is_test_file(rel) or bool(HELPER_DIRS & set(rel.split("/")[:-1]))
 
@@ -287,6 +290,7 @@ def test_two_same_named_classes_in_one_function_get_distinct_keys() -> None:
 
 def test_the_canonical_module_is_exempt_and_tests_and_test_helpers_are_scanned() -> None:
     assert not _is_scanned(CANONICAL)
+    assert not _is_scanned(CANONICAL_PIPELINE)
     assert _is_scanned("autobot-backend/foo/x_test.py")
     assert _is_scanned("autobot-backend/foo/test_x.py")
     assert _is_scanned("autobot-slm-backend/conftest.py")

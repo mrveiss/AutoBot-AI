@@ -529,7 +529,7 @@ def test_oauth_callback_success_writes_audit_log():
     call_kwargs = audit_mock.call_args.kwargs
     assert call_kwargs.get("success") is True
     assert call_kwargs.get("category") == "sso"
-    assert call_kwargs.get("action") == "login"
+    assert call_kwargs.get("action") == "auth.login"
     assert call_kwargs.get("username") == fake_user.username
     # provider_id must come from the tuple, not _oauth_states
     assert call_kwargs.get("resource_id") == str(fake_provider_id)
